@@ -196,6 +196,205 @@ fn clang_ast_dump_emits_local_fixed_array_index_assignment_when_enabled() {
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
 #[ignore = "requires real clang AST smoke test opt-in"]
+fn clang_ast_dump_emits_memset_local_fixed_byte_array_when_enabled() {
+    let clang_path = real_clang_ast_test_setup();
+    let source_root = unique_out_dir("clang-real-memset-local-byte-array");
+    let source_dir = source_root.join("src");
+    fs::create_dir_all(&source_dir).unwrap();
+    let source_file = source_dir.join("fill_local_prefix.c");
+    fs::write(
+        &source_file,
+        "typedef unsigned char uint8_t;\ntypedef unsigned long size_t;\nvoid *memset(void *, int, size_t);\nuint8_t fill_local_prefix(void) { uint8_t table[4] = {1, 2, 3, 4}; memset(table, 7, 3); return table[2]; }\n",
+    )
+    .unwrap();
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "demo",
+        "slice_id": "memset-local-byte-array",
+        "source_commit": "source-sha",
+        "function_name": "fill_local_prefix",
+        "c_source": "uint8_t fill_local_prefix(void) { uint8_t table[4] = {1, 2, 3, 4}; memset(table, 7, 3); return table[2]; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": source_root.to_string_lossy().replace('\\', "/"),
+        "source_file": "src/fill_local_prefix.c",
+        "source_file_hashes": {
+            "src/fill_local_prefix.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/fill_local_prefix.c",
+            "line_start": 4,
+            "line_end": 4,
+            "byte_start": 98,
+            "byte_end": 217,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": [],
+            "defines": [],
+            "target": {
+                "triple_or_abi": "x86_64-unknown-linux-gnu",
+                "endianness": "little",
+                "int_width": 32,
+                "char_width": 8,
+                "plain_char_signed": true,
+                "short_width": 16,
+                "long_width": 64,
+                "long_long_width": 64,
+                "pointer_width": 64
+            },
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "x86_64-unknown-linux-gnu",
+            "compiler_command_source": "unit-test",
+            "clang_available": true
+        }
+    }))
+    .unwrap();
+    let parse_spec = ClangParseSpec::from_slice_spec(&spec).expect("clang parse spec");
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_parse_spec_report(&environment, &parse_spec);
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl { name, .. }, IrStmt::Expr { expr, .. }, IrStmt::Return { .. }] =
+        function.body.as_slice()
+    else {
+        panic!(
+            "expected local byte array declaration, memset expression, and return, got {:?}",
+            function.body
+        );
+    };
+    assert_eq!(name, "table");
+    assert!(matches!(
+        expr,
+        IrExpr::Call { callee, args, .. }
+            if callee == "memset"
+                && matches!(args.first(), Some(IrExpr::ArrayToPointerDecay { .. }))
+    ));
+
+    let emitted = emit_rust_from_ir(function).expect("emit memset over local byte array");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn fill_local_prefix() -> u8"), "{rust}");
+    assert!(rust.contains("let mut table: [u8; 4] = ["), "{rust}");
+    assert!(rust.contains("table.get_mut(..("), "{rust}");
+    assert!(rust.contains(".fill(7u8);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-real-clang-memset-local-byte-array",
+        rust,
+        r#"
+    assert_eq!(fill_local_prefix(), 7);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
+fn clang_ast_dump_emits_memcpy_local_fixed_byte_arrays_when_enabled() {
+    let clang_path = real_clang_ast_test_setup();
+    let source_root = unique_out_dir("clang-real-memcpy-local-byte-arrays");
+    let source_dir = source_root.join("src");
+    fs::create_dir_all(&source_dir).unwrap();
+    let source_file = source_dir.join("copy_local_prefix.c");
+    fs::write(
+        &source_file,
+        "typedef unsigned char uint8_t;\ntypedef unsigned long size_t;\nvoid *memcpy(void *, const void *, size_t);\nuint8_t copy_local_prefix(void) { uint8_t src[4] = {1, 2, 3, 4}; uint8_t dst[4] = {0, 0, 0, 0}; memcpy(dst, src, 3); return dst[2]; }\n",
+    )
+    .unwrap();
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "demo",
+        "slice_id": "memcpy-local-byte-arrays",
+        "source_commit": "source-sha",
+        "function_name": "copy_local_prefix",
+        "c_source": "uint8_t copy_local_prefix(void) { uint8_t src[4] = {1, 2, 3, 4}; uint8_t dst[4] = {0, 0, 0, 0}; memcpy(dst, src, 3); return dst[2]; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": source_root.to_string_lossy().replace('\\', "/"),
+        "source_file": "src/copy_local_prefix.c",
+        "source_file_hashes": {
+            "src/copy_local_prefix.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/copy_local_prefix.c",
+            "line_start": 4,
+            "line_end": 4,
+            "byte_start": 98,
+            "byte_end": 248,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": [],
+            "defines": [],
+            "target": {
+                "triple_or_abi": "x86_64-unknown-linux-gnu",
+                "endianness": "little",
+                "int_width": 32,
+                "char_width": 8,
+                "plain_char_signed": true,
+                "short_width": 16,
+                "long_width": 64,
+                "long_long_width": 64,
+                "pointer_width": 64
+            },
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "x86_64-unknown-linux-gnu",
+            "compiler_command_source": "unit-test",
+            "clang_available": true
+        }
+    }))
+    .unwrap();
+    let parse_spec = ClangParseSpec::from_slice_spec(&spec).expect("clang parse spec");
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_parse_spec_report(&environment, &parse_spec);
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [
+        IrStmt::Decl { name: src_name, .. },
+        IrStmt::Decl { name: dst_name, .. },
+        IrStmt::Expr { expr, .. },
+        IrStmt::Return { .. },
+    ] = function.body.as_slice()
+    else {
+        panic!(
+            "expected source/destination declarations, memcpy expression, and return, got {:?}",
+            function.body
+        );
+    };
+    assert_eq!(src_name, "src");
+    assert_eq!(dst_name, "dst");
+    assert!(matches!(
+        expr,
+        IrExpr::Call { callee, args, .. }
+            if callee == "memcpy"
+                && matches!(args.first(), Some(IrExpr::ArrayToPointerDecay { .. }))
+                && matches!(args.get(1), Some(IrExpr::ArrayToPointerDecay { .. }))
+    ));
+
+    let emitted = emit_rust_from_ir(function).expect("emit memcpy over local byte arrays");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn copy_local_prefix() -> u8"), "{rust}");
+    assert!(rust.contains("let src: [u8; 4] = ["), "{rust}");
+    assert!(rust.contains("let mut dst: [u8; 4] = ["), "{rust}");
+    assert!(rust.contains("dst.get_mut(..("), "{rust}");
+    assert!(rust.contains(".copy_from_slice(src.get(..("), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-real-clang-memcpy-local-byte-arrays",
+        rust,
+        r#"
+    assert_eq!(copy_local_prefix(), 3);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_local_array_initializer_call_when_enabled() {
     let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-local-array-call-init-reject");

@@ -1,0 +1,26 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-del-c-oracle.json",
+    "sha256": "d494057362ff15f59ea5575cd7c7d440032f8d78398e3380c89da182d21e479c",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 1,
+  "fixture": "validation/l2_slices/fixtures/real-fdb-kv-del.json",
+  "fixture_sha256": "b6c956e7b0328edf45234a7e84b8c330e4639ca9ebd95be8e13a7af2f4988950",
+  "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-c-oracle-harness-draft.c",
+    "sha256": "2df704f8768a438bd64c395012592974d887c348e8a06bed62d58ef48f6bab2c",
+    "status": "draft"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-kv-del",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_slice_id": "real-fdb-kv-del",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

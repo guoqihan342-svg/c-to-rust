@@ -50,13 +50,13 @@
     "fixture_identity": "real-fdb-blob-make-fixture",
     "harness_draft_ref": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
-      "sha256": "5df9ac625310fe1b98d57777b5574c3cc8c1494f637513464b1313f849c928f0",
+      "sha256": "bb9b88d01c4f5e4d97e200a0bb207e5b603177fc18b390cfd36d74b3419457cb",
       "status": "draft"
     },
     "source_file_hashes": {
       "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320",
       "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
-      "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+      "src/fdb_utils.c": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0"
     },
     "source_span_sha256": "42934484da8b00d932a4d7a18d59f9656b7da8686cc3423f74745d15836e963e"
   },

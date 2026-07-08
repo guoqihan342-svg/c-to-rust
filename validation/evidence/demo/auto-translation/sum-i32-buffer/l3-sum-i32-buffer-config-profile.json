@@ -2,7 +2,7 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json",
-    "fixture_sha256": "95f649a00e72cb52b0f2540a3b3d2f2df4c203a202980a38635952d5f4d62149",
+    "fixture_sha256": "2ad1734fceba9c9af63d6f5d7a6a0bcc8be037c022dad86f340b8d57e9d10d3c",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
       "c_oracle": "2ad1734fceba9c9af63d6f5d7a6a0bcc8be037c022dad86f340b8d57e9d10d3c",
@@ -37,7 +37,7 @@
   },
   "cache_invalidation_keys": [
     "source_commit=demo-sum-i32-buffer-20260625",
-    "slice_spec_sha256=0dd4b316e396168d65be86fe711a81446125480fbd96c1a975ddc513fa38d35e",
+    "slice_spec_sha256=00cd9f5abff8de94eca869ba982867cbdadf44754ffdf97592d96cc9caf956f6",
     "fixture_hash=sum-i32-buffer-fixture",
     "build_profile_hash=076d32e392f6a18e19179cd801a7464482b4b049dde5d4cb339ecb3bca018b61",
     "translator_version=0.1.0",
@@ -54,7 +54,7 @@
   "config_header": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "0dd4b316e396168d65be86fe711a81446125480fbd96c1a975ddc513fa38d35e"
+    "sha256": "d993d6a4cff774d27a0b2e904d0c06328ac046ae291bdf95ba43e61529223371"
   },
   "feature_matrix": {
     "auto_translation_candidate": true
@@ -71,10 +71,10 @@
     "No support for negative len values.",
     "No support for signed overflow; fixture sums remain inside C int defined range.",
     "No support for arbitrary pointer arithmetic such as *(values + i).",
-    "No aliasing proof between values and out."
+    "No whole-program alias safety proof beyond the declared values/out noalias precondition."
   ],
   "profile_id": "demo-sum-i32-buffer-wsl-gcc",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

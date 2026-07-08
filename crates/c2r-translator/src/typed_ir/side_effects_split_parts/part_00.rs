@@ -166,11 +166,20 @@ fn emit_expr_with_prelude(
         IrExpr::Deref { ptr, ty, .. } if matches!(ptr.as_ref(), IrExpr::IncDec { .. }) => {
             emit_post_increment_byte_read_expr(ptr, ty, symbols, context, indent_level, path)
         }
-        IrExpr::Deref { ptr, ty, .. } => Ok(EmittedExpr {
-            prelude: String::new(),
-            expr: emit_readonly_pointer_deref_expr(ptr, ty, symbols, context)
-                .map_err(|detail| format!("{path} {detail}"))?,
-        }),
+        IrExpr::Deref { ptr, ty, .. } => {
+            let expr = if let Some(expr) = emit_mutable_pointer_deref_expr(ptr, ty, symbols, context)
+                .map_err(|detail| format!("{path} {detail}"))?
+            {
+                expr
+            } else {
+                emit_readonly_pointer_deref_expr(ptr, ty, symbols, context)
+                    .map_err(|detail| format!("{path} {detail}"))?
+            };
+            Ok(EmittedExpr {
+                prelude: String::new(),
+                expr,
+            })
+        }
         _ => Ok(EmittedExpr {
             prelude: String::new(),
             expr: emit_expr(expr, symbols, context).map_err(|detail| format!("{path} {detail}"))?,

@@ -1,43 +1,49 @@
 {
+  "accepted_negative_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-set-negative-diff.json",
+    "sha256": "3b552de26ebbab5d01656feaf40e2b8869e73554e67fae0339a167e3ff4e5ed2",
+    "status": "passed"
+  },
   "accepted_negative_diff_required": true,
-  "blocked_by": [
-    "schema_diff"
-  ],
+  "blocked_by": [],
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "4977b9a2b0fd62a78a4d834472577a44cda210deffe0794e3f893c6246b76515",
+    "sha256": "3d3053603ff5d9917d614a57947abb6196bae2363dbbc9ade07a3244e7491b03",
     "status": "skipped"
   },
   "expected_failure": true,
-  "mutation_detected": false,
+  "first_mismatch": {
+    "case_id": "uninit-set-value",
+    "field": "return_code",
+    "mutated_c_value": 6,
+    "rust_value": 7
+  },
+  "mutation_detected": true,
   "negative_diff_gate": "schema_aware_negative_diff",
-  "reason": "Negative diff is not run for draft-only auto-translation candidates.",
-  "reason_code": "missing_passed_schema_diff",
   "required_inputs": {
     "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "negative_diff_actual_status": "expected_failed",
+    "rust_replay_actual_status": "recorded",
     "rust_report_required_status": "passed",
-    "schema_diff_actual_status": "incomplete",
+    "schema_diff_actual_status": "passed",
     "schema_diff_required_first_mismatch": null,
     "schema_diff_required_status": "passed"
   },
-  "root_blocked_by": [
-    "c_oracle",
-    "rust_replay"
-  ],
+  "root_blocked_by": [],
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "26f1b9fe5aa1a07819b1bcc0c8d2e076cfdc65a3361eaafb4db44c53f4495134",
+    "sha256": "f49e646d3164c240f27b1d564be23de48eb1e8d0f72cf8bf90e4bdebc304a435",
     "status": "recorded"
   },
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
-  "status": "incomplete",
+  "status": "expected_failed",
   "target_id": "flashdb",
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "d59179524f3beb9dacd588a79410a9b22fee7f251ab58915a682c9f5a25e0b74",
-    "status": "incomplete"
+    "sha256": "2f0e0097663b1ee6f6cdd052e9b4a8d6ed13e88b003a351928563b3e649c3bd4",
+    "status": "passed"
   }
 }

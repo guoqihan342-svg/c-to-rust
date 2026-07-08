@@ -3,17 +3,27 @@ use std::hash::Hash;
 
 use super::{
     emit_function_pointer_param_type, emit_mutable_record_pointer_field_type, emit_scalar_type,
-    mutable_record_pointer_pointee_type, type_label, EmitContext, IrExpr, IrFunction, IrGlobal,
-    IrStmt, IrType, MutableRecordPointerFieldKey,
+    mutable_pointer_slice_element_type, mutable_record_pointer_pointee_type, type_label,
+    EmitContext, IrExpr, IrFunction, IrGlobal, IrStmt, IrType, MutablePointerSlotKey,
+    MutableRecordPointerFieldKey,
 };
 
 #[derive(Clone, Debug, Default)]
 struct DefiniteAssignmentState {
     declared: HashSet<String>,
     initialized: HashSet<String>,
+    mutable_pointer_write_params: HashSet<String>,
+    mutable_pointer_slots: HashSet<MutablePointerSlotKey>,
+    validated_mutable_pointer_read_slots: HashSet<MutablePointerSlotKey>,
     mutable_record_pointer_write_params: HashSet<String>,
     mutable_record_pointer_fields: HashSet<MutableRecordPointerFieldKey>,
     validated_mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(super) struct DefiniteAssignmentEvidence {
+    pub(super) mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
+    pub(super) mutable_pointer_read_slots: HashSet<MutablePointerSlotKey>,
 }
 
 impl DefiniteAssignmentState {
@@ -23,6 +33,7 @@ impl DefiniteAssignmentState {
         context: &EmitContext,
     ) -> Self {
         let mut state = Self::default();
+        state.mutable_pointer_write_params = context.mutable_pointer_write_params.clone();
         state.mutable_record_pointer_write_params =
             context.mutable_record_pointer_write_params.clone();
         for param in &function.params {
@@ -65,6 +76,25 @@ impl DefiniteAssignmentState {
         Ok(())
     }
 
+    fn assign_mutable_pointer_slot(&mut self, key: MutablePointerSlotKey) {
+        self.mutable_pointer_slots.insert(key);
+    }
+
+    fn require_mutable_pointer_slot_initialized(
+        &mut self,
+        key: &MutablePointerSlotKey,
+    ) -> Result<(), String> {
+        if !self.mutable_pointer_slots.contains(key) {
+            return Err(format!(
+                "mutable pointer slot {}[0] is read before definite assignment",
+                key.base
+            ));
+        }
+        self.validated_mutable_pointer_read_slots
+            .insert(key.clone());
+        Ok(())
+    }
+
     fn assign_mutable_record_pointer_field(&mut self, key: MutableRecordPointerFieldKey) {
         self.mutable_record_pointer_fields.insert(key);
     }
@@ -89,10 +119,13 @@ pub(super) fn validate_definite_assignment(
     function: &IrFunction,
     globals: &[IrGlobal],
     context: &EmitContext,
-) -> Result<HashSet<MutableRecordPointerFieldKey>, String> {
+) -> Result<DefiniteAssignmentEvidence, String> {
     let mut state = DefiniteAssignmentState::from_function_and_globals(function, globals, context);
     validate_definite_assignment_body(&function.body, &mut state)?;
-    Ok(state.validated_mutable_record_pointer_read_fields)
+    Ok(DefiniteAssignmentEvidence {
+        mutable_record_pointer_read_fields: state.validated_mutable_record_pointer_read_fields,
+        mutable_pointer_read_slots: state.validated_mutable_pointer_read_slots,
+    })
 }
 
 fn validate_definite_assignment_body(
@@ -191,6 +224,8 @@ fn validate_definite_assignment_stmt(
             state.declare(name, init.is_some())
         }
         IrStmt::Assign { target, value, .. } => {
+            let mutable_pointer_target =
+                mutable_pointer_slot_key_for_definite_assignment(target, state)?;
             let mutable_record_pointer_target =
                 mutable_record_pointer_field_key_for_definite_assignment(target, state)?;
             let assigned_var = validate_definite_assignment_target(target, state)?;
@@ -204,6 +239,9 @@ fn validate_definite_assignment_stmt(
             }
             if let Some(name) = assigned_var {
                 state.assign(&name)?;
+            }
+            if let Some(key) = mutable_pointer_target {
+                state.assign_mutable_pointer_slot(key);
             }
             if let Some(key) = mutable_record_pointer_target {
                 state.assign_mutable_record_pointer_field(key);
@@ -253,12 +291,25 @@ fn validate_definite_assignment_stmt(
                 &else_state.mutable_record_pointer_fields,
                 else_returns,
             );
+            state.mutable_pointer_slots = merge_definite_branch_set(
+                &before.mutable_pointer_slots,
+                &then_state.mutable_pointer_slots,
+                then_returns,
+                &else_state.mutable_pointer_slots,
+                else_returns,
+            );
             state
                 .validated_mutable_record_pointer_read_fields
                 .extend(then_state.validated_mutable_record_pointer_read_fields);
             state
                 .validated_mutable_record_pointer_read_fields
                 .extend(else_state.validated_mutable_record_pointer_read_fields);
+            state
+                .validated_mutable_pointer_read_slots
+                .extend(then_state.validated_mutable_pointer_read_slots);
+            state
+                .validated_mutable_pointer_read_slots
+                .extend(else_state.validated_mutable_pointer_read_slots);
             Ok(())
         }
         IrStmt::While {
@@ -271,6 +322,9 @@ fn validate_definite_assignment_stmt(
             state
                 .validated_mutable_record_pointer_read_fields
                 .extend(body_state.validated_mutable_record_pointer_read_fields);
+            state
+                .validated_mutable_pointer_read_slots
+                .extend(body_state.validated_mutable_pointer_read_slots);
             Ok(())
         }
         IrStmt::DoWhile {
@@ -283,6 +337,9 @@ fn validate_definite_assignment_stmt(
             state
                 .validated_mutable_record_pointer_read_fields
                 .extend(body_state.validated_mutable_record_pointer_read_fields);
+            state
+                .validated_mutable_pointer_read_slots
+                .extend(body_state.validated_mutable_pointer_read_slots);
             Ok(())
         }
         IrStmt::For {
@@ -304,14 +361,21 @@ fn validate_definite_assignment_stmt(
             let loop_reads = loop_state
                 .validated_mutable_record_pointer_read_fields
                 .clone();
+            let loop_pointer_reads = loop_state.validated_mutable_pointer_read_slots.clone();
             let mut body_state = loop_state.clone();
             validate_definite_assignment_labeled_body(body, &mut body_state, "for body")?;
             state
                 .validated_mutable_record_pointer_read_fields
                 .extend(loop_reads);
             state
+                .validated_mutable_pointer_read_slots
+                .extend(loop_pointer_reads);
+            state
                 .validated_mutable_record_pointer_read_fields
                 .extend(body_state.validated_mutable_record_pointer_read_fields);
+            state
+                .validated_mutable_pointer_read_slots
+                .extend(body_state.validated_mutable_pointer_read_slots);
             if let Some(step) = step {
                 let mut step_state = loop_state;
                 validate_definite_assignment_stmt(step, &mut step_state)
@@ -319,6 +383,9 @@ fn validate_definite_assignment_stmt(
                 state
                     .validated_mutable_record_pointer_read_fields
                     .extend(step_state.validated_mutable_record_pointer_read_fields);
+                state
+                    .validated_mutable_pointer_read_slots
+                    .extend(step_state.validated_mutable_pointer_read_slots);
             }
             Ok(())
         }
@@ -455,8 +522,14 @@ fn validate_definite_assignment_expr(
         }
         IrExpr::IncDec { target, .. } => validate_definite_assignment_expr(target, state)
             .map_err(|detail| format!("inc/dec target {detail}")),
-        IrExpr::Deref { ptr, .. } => validate_definite_assignment_expr(ptr, state)
-            .map_err(|detail| format!("deref pointer {detail}")),
+        IrExpr::Deref { ptr, .. } => {
+            validate_definite_assignment_expr(ptr, state)
+                .map_err(|detail| format!("deref pointer {detail}"))?;
+            if let Some(key) = mutable_pointer_slot_key_for_definite_assignment(expr, state)? {
+                state.require_mutable_pointer_slot_initialized(&key)?;
+            }
+            Ok(())
+        }
         IrExpr::AddrOf { operand, .. } => validate_definite_assignment_expr(operand, state)
             .map_err(|detail| format!("address-of operand {detail}")),
         IrExpr::LitInt { .. } | IrExpr::NullPtr { .. } | IrExpr::Unsupported { .. } => Ok(()),
@@ -498,6 +571,40 @@ fn mutable_record_pointer_field_key_for_definite_assignment(
         base: name.clone(),
         field: field.clone(),
     }))
+}
+
+fn mutable_pointer_slot_key_for_definite_assignment(
+    expr: &IrExpr,
+    state: &DefiniteAssignmentState,
+) -> Result<Option<MutablePointerSlotKey>, String> {
+    let IrExpr::Deref { ptr, ty, .. } = expr else {
+        return Ok(None);
+    };
+    let IrExpr::Var {
+        name, ty: base_ty, ..
+    } = ptr.as_ref()
+    else {
+        return Ok(None);
+    };
+    if !state.mutable_pointer_write_params.contains(name) {
+        return Ok(None);
+    }
+    let element_ty = mutable_pointer_slice_element_type(base_ty).ok_or_else(|| {
+        format!(
+            "mutable pointer slot {name}[0] has unsupported base type {}",
+            type_label(base_ty)
+        )
+    })?;
+    let element = emit_scalar_type(element_ty)
+        .map_err(|detail| format!("mutable pointer slot {name}[0] element has {detail}"))?;
+    let result = emit_scalar_type(ty)
+        .map_err(|detail| format!("mutable pointer slot {name}[0] result has {detail}"))?;
+    if element != result {
+        return Err(format!(
+            "mutable pointer slot {name}[0] result type {result} does not match element type {element}"
+        ));
+    }
+    Ok(Some(MutablePointerSlotKey { base: name.clone() }))
 }
 
 fn should_track_definite_assignment_type(ty: &IrType) -> bool {

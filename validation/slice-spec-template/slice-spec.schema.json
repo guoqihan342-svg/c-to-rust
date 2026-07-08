@@ -459,6 +459,7 @@
           "enum": [
             "type",
             "macro",
+            "constant",
             "global",
             "callee",
             "config"

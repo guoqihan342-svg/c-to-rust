@@ -109,7 +109,7 @@ fn collect_opaque_pointer_call_arg_params_from_expr(
             for arg in args {
                 if let IrExpr::Var { name, ty, .. } = arg {
                     if let Some(param_ty) = param_types.get(name.as_str()) {
-                        if *param_ty == ty && emit_opaque_void_pointer_type(ty).is_some() {
+                        if opaque_void_pointer_call_arg_types_match(param_ty, ty) {
                             call_arg_params.insert(name.clone());
                         }
                     }
@@ -174,6 +174,16 @@ fn collect_opaque_pointer_call_arg_params_from_expr(
         | IrExpr::Var { .. }
         | IrExpr::Unsupported { .. } => {}
     }
+}
+
+fn opaque_void_pointer_call_arg_types_match(param_ty: &IrType, arg_ty: &IrType) -> bool {
+    emit_opaque_void_pointer_type(param_ty).is_some()
+        && emit_opaque_void_pointer_type(arg_ty).is_some()
+        && pointer_types_match_ignoring_spelling(param_ty, arg_ty)
+}
+
+fn pointer_types_match_ignoring_spelling(lhs: &IrType, rhs: &IrType) -> bool {
+    lhs.canonical == rhs.canonical && lhs.kind == rhs.kind && lhs.is_const == rhs.is_const
 }
 
 fn collect_raw_direct_call_pointer_params(body: &[IrStmt], params: &[IrParam]) -> HashSet<String> {
@@ -419,12 +429,19 @@ fn collect_mutable_record_pointer_write_params(
         .collect::<HashSet<_>>();
     let record_pointer_field_value_params =
         collect_record_pointer_field_value_params(body, params, &mutable_record_pointer_param_names)?;
+    let readonly_pointer_uses = collect_readonly_pointer_param_uses(body, params)?;
     let pointer_param_count = params
         .iter()
         .filter(|param| {
             matches!(param.ty.kind, IrTypeKind::Pointer { .. })
                 && emit_opaque_void_pointer_type(&param.ty).is_none()
                 && !record_pointer_field_value_params.contains(&param.name)
+                && !is_unused_readonly_8_bit_pointer_param(
+                    &param.name,
+                    &param.ty,
+                    &readonly_pointer_uses.read_params,
+                    &readonly_pointer_uses.mentioned_params,
+                )
         })
         .count();
     let mutable_record_pointer_params = params

@@ -5,12 +5,102 @@
     "compiler_command_source": "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py",
     "defines": [],
     "include_paths": [],
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
     "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "pointer_contract": {
+      "aliasing_proven": false,
+      "input_buffers": [
+        {
+          "c_type": "const int*",
+          "length_companion": "len",
+          "loop_bound": "0 <= i < len",
+          "name": "values",
+          "read_effects": [
+            "values[i]"
+          ]
+        }
+      ],
+      "noalias_required": [
+        [
+          "values",
+          "out"
+        ]
+      ],
+      "output_pointers": [
+        {
+          "c_type": "int*",
+          "name": "out",
+          "write_effects": [
+            "out[0]"
+          ]
+        }
+      ]
+    },
+    "signatures": [
+      {
+        "c_source": "int sum_i32_buffer(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + values[i]; } out[0] = total; return 0; }",
+        "function": "sum_i32_buffer",
+        "parameters": [
+          {
+            "buffer_length_parameter": "len",
+            "c_type": "const int*",
+            "direction": "input",
+            "name": "values"
+          },
+          {
+            "bounds": {
+              "maximum": "fixture-bound",
+              "minimum": 0
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "len"
+          },
+          {
+            "c_type": "int*",
+            "direction": "output",
+            "name": "out"
+          }
+        ],
+        "return_type": "int"
+      }
+    ]
   },
   "c_source": "int sum_i32_buffer(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + values[i]; } out[0] = total; return 0; }",
   "fixture_hash": "sum-i32-buffer-fixture",
   "function_name": "sum_i32_buffer",
   "slice_id": "sum-i32-buffer",
   "source_commit": "demo-sum-i32-buffer-20260625",
+  "source_file": "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json": "2ad1734fceba9c9af63d6f5d7a6a0bcc8be037c022dad86f340b8d57e9d10d3c",
+    "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py": "947b4eee8403ddc7f6165b1e324628838b1dd0920ba099894193005a00bc0e7f"
+  },
+  "source_files": [
+    {
+      "path": "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py",
+      "role": "source"
+    },
+    {
+      "path": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json",
+      "role": "fixture"
+    }
+  ],
+  "source_root": "<demo-slice>",
   "target_id": "demo"
 }

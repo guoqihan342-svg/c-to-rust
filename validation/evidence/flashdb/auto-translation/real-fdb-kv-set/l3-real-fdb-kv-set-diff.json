@@ -1,12 +1,14 @@
 {
+  "accepted_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-set-diff.json",
+    "sha256": "69f18cade3382380bfab9aa0e29673a10737878bb26b22e1598e6f35900045fe",
+    "status": "passed"
+  },
   "accepted_diff_required": true,
-  "blocked_by": [
-    "c_oracle",
-    "rust_replay"
-  ],
+  "blocked_by": [],
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "4977b9a2b0fd62a78a4d834472577a44cda210deffe0794e3f893c6246b76515",
+    "sha256": "3d3053603ff5d9917d614a57947abb6196bae2363dbbc9ade07a3244e7491b03",
     "status": "skipped"
   },
   "compared_fields": [
@@ -14,33 +16,30 @@
   ],
   "diff_gate": "schema_aware_c_rust_diff",
   "first_mismatch": null,
-  "generated_candidate_diff_pass": false,
-  "reason": "Schema-aware diff requires accepted C oracle and Rust replay reports.",
-  "reason_code": "missing_accepted_c_oracle_and_rust_replay",
   "required_inputs": {
-    "c_oracle_actual_status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
-    "c_oracle_actual_toolchain_status": "DRAFT_NOT_EXECUTED",
-    "c_oracle_output_gate_actual_status": "missing",
+    "c_oracle_actual_status": "C_ORACLE_GENERATED",
+    "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
     "c_oracle_required_status": "C_ORACLE_GENERATED",
     "rust_replay_actual_status": "recorded",
-    "rust_report_actual_status": "incomplete",
-    "rust_report_required_status": "passed"
+    "rust_report_actual_status": "passed",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed"
   },
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "26f1b9fe5aa1a07819b1bcc0c8d2e076cfdc65a3361eaafb4db44c53f4495134",
+    "sha256": "f49e646d3164c240f27b1d564be23de48eb1e8d0f72cf8bf90e4bdebc304a435",
     "status": "recorded"
   },
   "schema_version": 1,
-  "semantic_pass": false,
+  "semantic_pass": true,
   "slice_id": "real-fdb-kv-set",
-  "status": "incomplete",
+  "status": "passed",
   "target_id": "flashdb",
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "d59179524f3beb9dacd588a79410a9b22fee7f251ab58915a682c9f5a25e0b74",
-    "status": "incomplete"
+    "sha256": "2f0e0097663b1ee6f6cdd052e9b4a8d6ed13e88b003a351928563b3e649c3bd4",
+    "status": "passed"
   }
 }

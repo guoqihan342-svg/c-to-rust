@@ -318,10 +318,11 @@ pub(crate) fn write_clang_lowering_report_artifact(
             } else {
                 let environment = crate::clang_lowered_translation::collect_environment_lossy();
                 owned_report =
-                    crate::clang_lowered_translation::lower_parse_spec_report_with_optional_ast_fixture(
+                    crate::clang_lowered_translation::lower_parse_spec_report_with_optional_ast_fixture_and_slice_source(
                     &environment,
                     &parse_spec,
                     spec.build_profile.clang_ast_fixture.as_deref(),
+                    Some(spec),
                 );
                 &owned_report
             };

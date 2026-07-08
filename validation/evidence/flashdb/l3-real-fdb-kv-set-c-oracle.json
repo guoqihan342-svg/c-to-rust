@@ -1,0 +1,72 @@
+{
+  "accepted_boundary": "Accepted C oracle report is bound to the uninitialized-DB fixture cases and WSL compile/harness evidence captured by the auto-translation oracle draft; generated Rust draft remains non-authoritative.",
+  "case_count": 2,
+  "cases": [
+    {
+      "id": "uninit-set-value",
+      "return_code": 7,
+      "status": "passed"
+    },
+    {
+      "id": "uninit-delete-null",
+      "return_code": 7,
+      "status": "passed"
+    }
+  ],
+  "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+  "compared_fields": [
+    "return_code"
+  ],
+  "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+  "generator": "validation/l2_slices/src/bin/emit_reports.rs::emit_real_fdb_kv_set",
+  "level": "L3",
+  "provenance": {
+    "compile_execution": {
+      "semantic_pass": true,
+      "status": "C_ORACLE_GENERATED",
+      "toolchain_adapter": "accepted_evidence",
+      "toolchain_status_after_attempt": "C_ORACLE_GENERATED"
+    },
+    "cycle_boundary": "This provenance intentionally omits the root c-oracle self hash; auto-translation evidence records the accepted c-oracle hash after regeneration.",
+    "evidence_refs": {
+      "c_oracle_status": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-status.json",
+      "evidence_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-evidence-manifest.json",
+      "slice_spec": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
+      "version_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-version-manifest.json"
+    },
+    "fixture_sha256": "4faa387d7feeb22c3c1ad0031ca116713b87baaf3f63fa1268bfaa5b31e056ae",
+    "harness_draft_ref": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
+      "sha256": "3f14942b5d4564cea99aa489c51a5014995fa1afcd89241fc4be66fce0381617",
+      "status": "draft"
+    },
+    "source_file_hashes": {
+      "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320",
+      "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+      "src/fdb.c": "b328b568d5f11accf83609d14809b14ecde204496d661f6baff31a65675aac8e",
+      "src/fdb_file.c": "c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d",
+      "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+      "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+    },
+    "source_span_sha256": "c71859844c82437b87ee6d52739f623d82771252a0eb2b29dc373d6a8ce4dd95"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-kv-set",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c",
+      "src/fdb_utils.c",
+      "inc/fdb_def.h",
+      "inc/flashdb.h"
+    ],
+    "functions": [
+      "fdb_kv_set"
+    ],
+    "signature": "fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value)"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

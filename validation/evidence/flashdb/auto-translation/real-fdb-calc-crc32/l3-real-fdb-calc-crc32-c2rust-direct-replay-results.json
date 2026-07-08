@@ -1,1 +1,19 @@
-{"schema_version":1,"case_count":2,"all_matched":true,"cases":[{"id":"empty-crc-zero","expected_return_code":0,"actual_return_code":0,"matched":true},{"id":"ascii-123456789-crc-zero","expected_return_code":3421780262,"actual_return_code":3421780262,"matched":true}]}
+{
+  "schema_version": 1,
+  "case_count": 2,
+  "all_matched": true,
+  "cases": [
+    {
+      "id": "empty-crc-zero",
+      "expected_return_code": 0,
+      "actual_return_code": 0,
+      "matched": true
+    },
+    {
+      "id": "ascii-123456789-crc-zero",
+      "expected_return_code": 3421780262,
+      "actual_return_code": 3421780262,
+      "matched": true
+    }
+  ]
+}

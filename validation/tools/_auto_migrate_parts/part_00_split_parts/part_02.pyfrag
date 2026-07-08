@@ -54,6 +54,44 @@ def enrich_clang_lowering_report(
     write_json(report_path, report)
 
 
+def refresh_generated_rust_draft_binding(
+    evidence_dir: Path,
+    prefix: str,
+    route_decision: dict[str, Any],
+) -> dict[str, Any]:
+    draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
+    if not draft_path.exists():
+        return route_decision
+    draft_sha = sha256(draft_path)
+    report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+    report_ref: dict[str, Any] | None = None
+    if report_path.exists():
+        report = read_json(report_path)
+        typed_ir_candidate = report.get("typed_ir_candidate")
+        if isinstance(typed_ir_candidate, dict) and typed_ir_candidate.get("rust_draft_generated") is True:
+            typed_ir_candidate["rust_draft_sha256"] = draft_sha
+        durable = report.get("durable_evidence")
+        if isinstance(durable, dict):
+            durable["rust_draft_sha256"] = draft_sha
+        write_json(report_path, report)
+        report_status = str(read_json(report_path).get("status", "recorded"))
+        report_ref = evidence_ref(report_path, report_status)
+
+    candidate_generation = route_decision.get("candidate_generation")
+    typed_ir = candidate_generation.get("typed_ir") if isinstance(candidate_generation, dict) else None
+    if isinstance(typed_ir, dict) and typed_ir.get("rust_draft_generated") is True:
+        typed_ir["rust_draft_sha256"] = draft_sha
+        if report_ref is not None and isinstance(typed_ir.get("source_artifact"), dict):
+            typed_ir["source_artifact"] = dict(report_ref)
+    source_artifacts = route_decision.get("source_artifacts")
+    if isinstance(source_artifacts, dict) and report_ref is not None:
+        source_artifacts["clang_lowering_report"] = dict(report_ref)
+    route_path = evidence_dir / f"{prefix}-route-decision.json"
+    if route_path.exists():
+        write_json(route_path, route_decision)
+    return route_decision
+
+
 def unsupported_control_flow_kind(label: str) -> str:
     prefix = str(label).split(":", 1)[0]
     if prefix in {
@@ -103,6 +141,29 @@ def structured_control_flow_recovery_evidence(
     }
 
 
+def cfg_basic_blocks_with_pointer_contract(
+    raw_blocks: list[Any], spec: dict[str, Any]
+) -> list[dict[str, Any]]:
+    blocks = cfg_basic_blocks(raw_blocks)
+    if not blocks:
+        return blocks
+    statement_kinds = pointer_contract_statement_kinds(spec)
+    lvalue_kinds = pointer_contract_lvalue_kinds(spec)
+    if not statement_kinds and not lvalue_kinds:
+        return blocks
+
+    entry = blocks[0]
+    statements = [str(item) for item in entry.get("statements", [])]
+    entry["statement_kinds"] = stable_unique_strings(
+        list_of_strings(entry.get("statement_kinds")) + statement_kinds
+    )
+    entry["lvalue_kinds"] = stable_unique_strings(
+        list_of_strings(entry.get("lvalue_kinds")) + lvalue_kinds
+    )
+    entry["lvalue_decisions"] = lvalue_decisions(statements, entry["lvalue_kinds"])
+    return blocks
+
+
 def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path, evidence_dir: Path) -> None:
     """Rewrite raw translator output into schema-bound candidate evidence.
 
@@ -124,16 +185,21 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
     }
 
     raw_type = read_json(evidence_dir / f"{prefix}-type-map.json")
+    type_overrides = pointer_contract_rust_type_overrides(spec)
     mappings = [
         {
             "id": f"type-{idx + 1}",
             "kind": type_mapping_kind(item.get("c_type", "")),
             "c_name": item.get("symbol", ""),
             "c_type": item.get("c_type", ""),
-            "rust_type": item.get("rust_type", ""),
+            "rust_type": type_overrides.get(str(item.get("symbol", "")), item.get("rust_type", "")),
             "confidence": "proven",
             "source": "translator_rule",
-            "translation_rule_id": item.get("reason", "supported MVP C subset mapping"),
+            "translation_rule_id": (
+                "pointer-contract safe Rust boundary"
+                if str(item.get("symbol", "")) in type_overrides
+                else item.get("reason", "supported MVP C subset mapping")
+            ),
         }
         for idx, item in enumerate(raw_type.get("type_map", {}).get("mappings", []))
     ]
@@ -193,7 +259,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 "source_span": source_span(),
                 "entry_block": "entry",
                 "exit_blocks": ["return"] if blocks and blocks[0].get("terminator") == "return" else ["exit"],
-                "basic_blocks": cfg_basic_blocks(blocks),
+                "basic_blocks": cfg_basic_blocks_with_pointer_contract(blocks, spec),
                 "edges": cfg_edges(blocks),
                 "branches": [],
                 "returns": [
@@ -352,6 +418,10 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
         for kind in block.get("lvalue_kinds", [])
         if kind != "none"
     )
+    translation_rule_ids = stable_unique_strings(
+        list_of_strings(raw_plan.get("plan", {}).get("translation_rule_ids", []))
+        + [lvalue_translation_rule(kind) for kind in pointer_contract_lvalue_kinds(spec)]
+    )
     pointer_boundary_decision_counts = count_occurrences(
         decision
         for node in pointer_nodes
@@ -388,7 +458,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 generated_artifact(evidence_dir / f"{prefix}-rust-replay-test-draft.rs", "rust_replay_test"),
             ],
             "translation_summary": {
-                "translation_rule_ids": raw_plan.get("plan", {}).get("translation_rule_ids", []),
+                "translation_rule_ids": translation_rule_ids,
                 "unsupported_node_count": raw_plan.get("plan", {}).get("unsupported_node_count", 0),
                 "unsafe_candidate_count": raw_plan.get("plan", {}).get("unsafe_candidate_count", 0),
                 "safe_public_api": True,

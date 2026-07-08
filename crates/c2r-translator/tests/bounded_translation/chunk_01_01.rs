@@ -279,6 +279,59 @@ fn typed_ir_emits_readonly_global_fixed_array_decay_as_direct_call_argument() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_byte_string_literal_decay_as_direct_call_argument() {
+    let u8_ty = ir_u8();
+    let i8_ty = ir_integer("char", "char", true, 8);
+    let void_ty = ir_void();
+    let array_ty = ir_array(u8_ty.clone(), 4);
+    let pointer_ty = ir_pointer("char *", "char *", i8_ty, false);
+    let ir = IrFunction {
+        name: "observe_string_literal".to_string(),
+        return_type: void_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "observe".to_string(),
+                args: vec![IrExpr::ArrayToPointerDecay {
+                    target: pointer_ty,
+                    expr: Box::new(IrExpr::ArrayLiteral {
+                        elements: vec![
+                            ir_lit(107, "107", u8_ty.clone()),
+                            ir_lit(118, "118", u8_ty.clone()),
+                            ir_lit(10, "10", u8_ty.clone()),
+                            ir_lit(0, "0", u8_ty.clone()),
+                        ],
+                        ty: array_ty,
+                        source_span: None,
+                    }),
+                    source_span: None,
+                }],
+                ty: void_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit byte string literal decay call argument");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn observe_string_literal()"), "{rust}");
+    assert!(
+        rust.contains("observe(b\"kv\\n\\0\".as_ptr().cast::<i8>());"),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles(
+        "typed-ir-byte-string-literal-decay-call-arg",
+        &format!("fn observe(_: *const i8) {{}}\n{rust}"),
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_unbound_global_array_decay_direct_call_argument() {
     let u32_ty = ir_u32();
     let void_ty = ir_void();

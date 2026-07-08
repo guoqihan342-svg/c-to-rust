@@ -298,6 +298,87 @@ fn typed_ir_emits_memset_byte_literal_for_mutable_byte_slice_statement() {
 "#,
     );
 }
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_memset_for_local_fixed_byte_array_decay_statement() {
+    let usize_ty = ir_usize();
+    let void_ty = ir_void();
+    let i32_ty = ir_i32();
+    let u8_ty = ir_u8();
+    let array_ty = ir_array(ir_u8(), 4);
+    let mutable_u8_ptr_ty = ir_pointer("uint8_t *", "unsigned char *", ir_u8(), false);
+    let ir = IrFunction {
+        name: "fill_local_prefix".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "table".to_string(),
+                ty: array_ty.clone(),
+                init: Some(IrExpr::ArrayLiteral {
+                    elements: vec![
+                        ir_lit(1, "1", ir_u8()),
+                        ir_lit(2, "2", ir_u8()),
+                        ir_lit(3, "3", ir_u8()),
+                        ir_lit(4, "4", ir_u8()),
+                    ],
+                    ty: array_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+            IrStmt::Expr {
+                expr: IrExpr::Call {
+                    callee: "memset".to_string(),
+                    args: vec![
+                        IrExpr::ArrayToPointerDecay {
+                            target: mutable_u8_ptr_ty,
+                            expr: Box::new(ir_var("table", array_ty.clone())),
+                            source_span: None,
+                        },
+                        ir_lit(7, "7", i32_ty.clone()),
+                        ir_lit(3, "3", usize_ty),
+                    ],
+                    ty: void_ty,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Index {
+                    base: Box::new(ir_var("table", array_ty)),
+                    index: Box::new(ir_lit(2, "2", i32_ty.clone())),
+                    ty: u8_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit modeled C memset over local fixed byte array decay");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains("let mut table: [u8; 4] = [1u8, 2u8, 3u8, 4u8];"),
+        "{rust}"
+    );
+    assert!(rust.contains("table.get_mut(..(3usize as usize))"), "{rust}");
+    assert!(rust.contains(".fill(7u8);"), "{rust}");
+    assert!(!rust.contains("memset(table, 7, 3)"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-memset-local-fixed-byte-array-decay",
+        rust,
+        r#"
+    assert_eq!(fill_local_prefix(), 7);
+"#,
+    );
+}
+
 #[cfg(feature = "typed-ir")]
 #[test]
 fn typed_ir_rejects_memset_calls_outside_minimal_statement_model() {

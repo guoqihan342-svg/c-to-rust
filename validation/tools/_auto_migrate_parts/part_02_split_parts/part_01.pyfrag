@@ -101,6 +101,8 @@ def generate_rust_replay_test_draft(
 
 
 def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    if fdb_kv_del_replay_supported(spec):
+        return rust_replay_fdb_kv_del_cases_source(spec, fixture_binding)
     if fdb_kv_set_replay_supported(spec):
         return rust_replay_fdb_kv_set_cases_source(spec, fixture_binding)
     if behavior_fields(spec) != ["return_code"]:
@@ -118,6 +120,8 @@ def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict
             return rust_replay_single_i32_out0_report_cases_source(spec, fixture_binding)
         if i32_slice_output_report_replay_supported(spec):
             return rust_replay_i32_slice_output_report_cases_source(spec, fixture_binding)
+        if i32_input_buffer_out0_sum_report_replay_supported(spec):
+            return rust_replay_i32_input_buffer_out0_sum_report_cases_source(spec, fixture_binding)
         if single_i32_call_metadata_replay_supported(spec):
             return rust_replay_single_i32_call_metadata_cases_source(spec, fixture_binding)
         return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
@@ -180,6 +184,81 @@ def fdb_kv_set_replay_supported(spec: dict[str, Any]) -> bool:
     return required_str(spec, "function_name") == "fdb_kv_set" and behavior_fields(spec) == [
         "return_code",
     ]
+
+
+def fdb_kv_del_replay_supported(spec: dict[str, Any]) -> bool:
+    return required_str(spec, "function_name") == "fdb_kv_del" and behavior_fields(spec) == [
+        "return_code",
+    ]
+
+
+def rust_replay_fdb_kv_del_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_fdb_kv_del_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by the fdb_kv_del replay draft generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fdb_kv_del fixture cases to generated Rust API assertions.\n"
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        key: &'static [u8],\n",
+        "        return_code: i32,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            "        let mut db_marker = 0u8;\n",
+            "        let db = (&mut db_marker as *mut u8).cast::<core::ffi::c_void>();\n",
+            f"        let actual = {function_name}(db, case.key.as_ptr().cast::<core::ffi::c_void>());\n",
+            '        assert_eq!(actual, case.return_code, "{} return_code drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_fdb_kv_del_case_literal(
+    spec: dict[str, Any],
+    case_binding: dict[str, Any],
+) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(case_payload, dict) or not isinstance(expected_outputs, dict):
+        return None
+    if case_payload.get("db_state") != "uninitialized_named":
+        return None
+    case_id = str(case_binding.get("id") or case_payload.get("id") or "unknown-case")
+    if "return_code" not in expected_outputs:
+        return None
+    key = case_payload.get("key")
+    if key is None:
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_id)}, "
+        f"key: {rust_u8_nul_terminated_slice_literal(key)}, "
+        f"return_code: {rust_i32_literal(int(expected_outputs['return_code']))} "
+        "},\n"
+    )
 
 
 def rust_replay_fdb_kv_set_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
@@ -956,6 +1035,198 @@ def rust_replay_i32_slice_output_report_case_literal(
     )
 
 
+def i32_input_buffer_out0_sum_report_replay_supported(spec: dict[str, Any]) -> bool:
+    if behavior_fields(spec) != [
+        "return_code",
+        "status",
+        "len",
+        "sum",
+        "source_reads",
+        "source_write",
+    ]:
+        return False
+    signature = c_function_signature(spec)
+    if normalize_c_type(str(signature.get("return_type") or "")) != "int":
+        return False
+    return i32_input_buffer_out0_sum_parameters(spec) is not None
+
+
+def i32_input_buffer_out0_sum_parameters(spec: dict[str, Any]) -> dict[str, Any] | None:
+    signature = c_function_signature(spec)
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 3:
+        return None
+    length_parameters = [
+        item
+        for item in parameters
+        if item.get("direction") == "input" and normalize_c_type(str(item.get("c_type") or "")) == "int"
+    ]
+    input_buffers = [
+        item
+        for item in parameters
+        if item.get("direction") == "input"
+        and normalize_c_type(str(item.get("c_type") or "")) == "const int *"
+        and item.get("buffer_length_parameter")
+    ]
+    output_pointers = [
+        item
+        for item in parameters
+        if item.get("direction") == "output" and normalize_c_type(str(item.get("c_type") or "")) == "int *"
+    ]
+    if len(length_parameters) != 1 or len(input_buffers) != 1 or len(output_pointers) != 1:
+        return None
+    length = length_parameters[0]
+    length_name = str(length.get("name") or "")
+    if str(input_buffers[0].get("buffer_length_parameter") or "") != length_name:
+        return None
+    return {
+        "input": input_buffers[0],
+        "length": length,
+        "output": output_pointers[0],
+        "ordered": parameters,
+    }
+
+
+def rust_replay_i32_input_buffer_out0_sum_report_cases_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    parameters = i32_input_buffer_out0_sum_parameters(spec)
+    if parameters is None:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+    input_param_name = str(parameters["input"].get("name") or "values")
+    length_param_name = str(parameters["length"].get("name") or "len")
+    output_param_name = str(parameters["output"].get("name") or "out")
+    input_name = safe_ident(input_param_name)
+    length_name = safe_ident(length_param_name)
+    expected_source_reads = f"{input_param_name}[i] under i < {length_param_name}"
+    expected_source_write = f"{output_param_name}[0]"
+    call_args = i32_input_buffer_out0_sum_call_arguments(spec)
+    if call_args is None:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_i32_input_buffer_out0_sum_report_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this i32 input-buffer out0 replay generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        f"        {input_name}: &'static [i32],\n",
+        f"        {length_name}: i32,\n",
+        "        return_code: i32,\n",
+        "        status: &'static str,\n",
+        "        sum: i32,\n",
+        "        source_reads: &'static str,\n",
+        "        source_write: &'static str,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            f"        assert_eq!(case.{input_name}.len(), case.{length_name} as usize, \"{{}} input length drifted\", case.id);\n",
+            "        let mut out = [0i32; 1];\n",
+            f"        let actual = {function_name}({', '.join(call_args)});\n",
+            '        assert_eq!(actual, case.return_code, "{} return_code drifted", case.id);\n',
+            '        assert_eq!(case.status, "ok", "{} fixture status drifted", case.id);\n',
+            '        assert_eq!(out[0], case.sum, "{} sum drifted", case.id);\n',
+            f"        assert_eq!(case.source_reads, {rust_string_literal(expected_source_reads)}, \"{{}} source_reads drifted\", case.id);\n",
+            f"        assert_eq!(case.source_write, {rust_string_literal(expected_source_write)}, \"{{}} source_write drifted\", case.id);\n",
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_i32_input_buffer_out0_sum_report_case_literal(
+    spec: dict[str, Any], case_binding: dict[str, Any]
+) -> str | None:
+    parameters = i32_input_buffer_out0_sum_parameters(spec)
+    if parameters is None:
+        return None
+    input_param_name = str(parameters["input"].get("name") or "values")
+    length_param_name = str(parameters["length"].get("name") or "len")
+    input_name = safe_ident(input_param_name)
+    length_name = safe_ident(length_param_name)
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    input_values = case_payload.get(input_param_name)
+    length = case_payload.get(length_param_name)
+    expected_return = expected_outputs.get("return_code")
+    status = expected_outputs.get("status")
+    sum_value = expected_outputs.get("sum")
+    source_reads = expected_outputs.get("source_reads")
+    source_write = expected_outputs.get("source_write")
+    if not is_i32_list(input_values):
+        return None
+    if not is_i32_value(length) or int(length) < 0:
+        return None
+    if int(length) != len(input_values):
+        return None
+    if not is_i32_value(expected_return) or not is_i32_value(sum_value) or status != "ok":
+        return None
+    if not isinstance(source_reads, str) or not isinstance(source_write, str):
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"{input_name}: {rust_i32_slice_literal(input_values)}, "
+        f"{length_name}: {rust_i32_literal(int(length))}, "
+        f"return_code: {rust_i32_literal(int(expected_return))}, "
+        f"status: {rust_string_literal(status)}, "
+        f"sum: {rust_i32_literal(int(sum_value))}, "
+        f"source_reads: {rust_string_literal(source_reads)}, "
+        f"source_write: {rust_string_literal(source_write)} "
+        "},\n"
+    )
+
+
+def i32_input_buffer_out0_sum_call_arguments(spec: dict[str, Any]) -> list[str] | None:
+    parameters = i32_input_buffer_out0_sum_parameters(spec)
+    if parameters is None:
+        return None
+    input_param_name = str(parameters["input"].get("name") or "values")
+    length_param_name = str(parameters["length"].get("name") or "len")
+    output_param_name = str(parameters["output"].get("name") or "out")
+    input_name = safe_ident(input_param_name)
+    length_name = safe_ident(length_param_name)
+    arguments: list[str] = []
+    for parameter in parameters["ordered"]:
+        parameter_name = str(parameter.get("name") or "")
+        if parameter_name == input_param_name:
+            arguments.append(f"case.{input_name}")
+        elif parameter_name == length_param_name:
+            arguments.append(f"case.{length_name}")
+        elif parameter_name == output_param_name:
+            arguments.append("&mut out")
+        else:
+            return None
+    return arguments
+
+
 def single_i32_call_metadata_replay_supported(spec: dict[str, Any]) -> bool:
     if behavior_fields(spec) != [
         "return_value",
@@ -1278,7 +1549,18 @@ def run_generated_rust_replay(
         return replay
     if not generated_rust_replay_supported(spec, evidence_dir):
         return replay
-    result = run_generated_rust_replay_once(draft_path, replay_path)
+    external_context = external_direct_callee_context(
+        spec,
+        load_plan_call_expressions(evidence_dir, slice_id),
+    )
+    if external_context["status"] == "recorded":
+        with tempfile.TemporaryDirectory(prefix="c2r-generated-replay-input-") as replay_input_dir:
+            replay_draft_path = Path(replay_input_dir) / draft_path.name
+            replay_draft_path.write_text(draft_path.read_text(encoding="utf-8-sig"), encoding="utf-8")
+            inject_external_callee_stubs(replay_draft_path, external_context, spec)
+            result = run_generated_rust_replay_once(replay_draft_path, replay_path)
+    else:
+        result = run_generated_rust_replay_once(draft_path, replay_path)
     write_text(evidence_dir / "generated-rust-replay-compile.stdout.log", result["compile_stdout"])
     write_text(evidence_dir / "generated-rust-replay-compile.stderr.jsonl", result["compile_stderr"])
     write_text(evidence_dir / "generated-rust-replay.stdout.log", result["run_stdout"])
@@ -1312,7 +1594,11 @@ def rust_check_has_harness_only_external_bindings(rust_check: dict[str, Any]) ->
     if not isinstance(report, dict):
         return False
     return any(
-        isinstance(binding, dict) and binding.get("status") == "harness_only"
+        isinstance(binding, dict)
+        and (
+            binding.get("status") in {"harness_only", "generated_compile_only"}
+            or binding.get("allowed_use") == "rustc_compile_only"
+        )
         for binding in report.get("bindings", [])
     )
 
@@ -1327,6 +1613,7 @@ def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) ->
         and not single_u64_return_value_replay_supported(spec)
         and not single_i32_out0_report_replay_supported(spec)
         and not i32_slice_output_report_replay_supported(spec)
+        and not i32_input_buffer_out0_sum_report_replay_supported(spec)
         and not single_i32_call_metadata_replay_supported(spec)
     ):
         return False
@@ -1480,6 +1767,20 @@ def generated_rust_report_cases(spec: dict[str, Any]) -> list[dict[str, Any]]:
                 "canonical_writes": expected_outputs.get("canonical_writes"),
                 "write_count": expected_outputs.get("write_count"),
             }
+        elif i32_input_buffer_out0_sum_report_replay_supported(spec):
+            parameters = i32_input_buffer_out0_sum_parameters(spec)
+            input_param_name = str(parameters["input"].get("name") or "values") if parameters else "values"
+            length_param_name = str(parameters["length"].get("name") or "len") if parameters else "len"
+            case = {
+                "id": case_binding.get("id"),
+                input_param_name: case_payload.get(input_param_name),
+                length_param_name: case_payload.get(length_param_name),
+                "return_code": expected_outputs.get("return_code"),
+                "status": expected_outputs.get("status"),
+                "sum": expected_outputs.get("sum"),
+                "source_reads": expected_outputs.get("source_reads"),
+                "source_write": expected_outputs.get("source_write"),
+            }
         elif single_i32_call_metadata_replay_supported(spec):
             input_value = case_payload.get("input_value")
             if input_value is None:
@@ -1515,15 +1816,19 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
         }
         patch = write_no_patch_required(spec, evidence_dir, path)
     else:
-        if external_context["status"] == "recorded":
-            inject_external_callee_stubs(path, external_context, spec)
-        first = rust_check_once(path)
-        write_log_text(evidence_dir / "rust-check-initial.stdout.log", first["stdout"])
-        write_log_text(evidence_dir / "rust-check-initial.stderr.jsonl", first["stderr"])
+        original_draft = path.read_text(encoding="utf-8")
+        try:
+            if external_context["status"] == "recorded":
+                inject_external_callee_stubs(path, external_context, spec)
+            first = rust_check_once(path)
+            write_log_text(evidence_dir / "rust-check-initial.stdout.log", first["stdout"])
+            write_log_text(evidence_dir / "rust-check-initial.stderr.jsonl", first["stderr"])
+            final = first
+        finally:
+            path.write_text(original_draft, encoding="utf-8")
         patch = write_no_patch_required(spec, evidence_dir, path)
-        final = first
-        if first["returncode"] != 0:
-            final, patch = run_safe_self_heal_loop(spec, evidence_dir, path, first)
+        if final["returncode"] != 0:
+            final, patch = run_safe_self_heal_loop(spec, evidence_dir, path, final)
         if final["returncode"] != 0 and patch["status"] != "blocked":
             patch = write_blocked_patch(
                 spec,

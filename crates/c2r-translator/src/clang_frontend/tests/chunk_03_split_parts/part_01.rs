@@ -423,6 +423,39 @@
     }
 
     #[test]
+    fn function_decl_return_type_uses_typedef_inventory_when_clang_omits_desugaring() {
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                {
+                    "kind": "TypedefDecl",
+                    "name": "fdb_err_t",
+                    "type": { "qualType": "int" }
+                },
+                {
+                    "kind": "FunctionDecl",
+                    "name": "fdb_kv_del",
+                    "type": { "qualType": "fdb_err_t (void)" },
+                    "inner": [
+                        { "kind": "CompoundStmt", "inner": [] }
+                    ]
+                }
+            ]
+        });
+
+        let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "fdb_kv_del")
+            .expect("typedef return should lower through inventory");
+
+        assert!(matches!(
+            lowered.function_ir.return_type.kind,
+            IrTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+    }
+
+    #[test]
     fn type_from_qual_type_maps_signed_char_scalar() {
         let ty = type_from_qual_type("signed char").expect("signed char type");
 
@@ -435,6 +468,22 @@
                 width: 8
             }
         ));
+    }
+
+    #[test]
+    fn type_from_qual_type_maps_c_bool_scalars() {
+        for spelling in ["bool", "_Bool"] {
+            let ty = type_from_qual_type(spelling).expect("C bool type");
+
+            assert_eq!(ty.spelled, spelling);
+            assert!(matches!(
+                ty.kind,
+                ClangTypeKind::Integer {
+                    signed: false,
+                    width: 8
+                }
+            ));
+        }
     }
 
     #[test]

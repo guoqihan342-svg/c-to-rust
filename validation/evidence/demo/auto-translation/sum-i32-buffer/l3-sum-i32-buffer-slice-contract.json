@@ -33,6 +33,12 @@
           ]
         }
       ],
+      "noalias_required": [
+        [
+          "values",
+          "out"
+        ]
+      ],
       "output_pointers": [
         {
           "c_type": "int*",
@@ -87,7 +93,7 @@
       "No support for negative len values.",
       "No support for signed overflow; fixture sums remain inside C int defined range.",
       "No support for arbitrary pointer arithmetic such as *(values + i).",
-      "No aliasing proof between values and out."
+      "No whole-program alias safety proof beyond the declared values/out noalias precondition."
     ]
   },
   "fixture": {

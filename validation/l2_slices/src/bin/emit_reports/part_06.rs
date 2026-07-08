@@ -4,10 +4,63 @@ fn write_json(path: &Path, value: &Value) -> Result<(), Box<dyn Error>> {
 }
 
 fn sha256_hex(path: &Path) -> Result<String, Box<dyn Error>> {
-    let bytes = fs::read(path)?;
+    let bytes = lf_stable_file_bytes(path)?;
     let mut digest = Sha256::new();
     digest.update(bytes);
     Ok(format!("{:x}", digest.finalize()))
+}
+
+fn lf_stable_file_bytes(path: &Path) -> Result<Vec<u8>, Box<dyn Error>> {
+    let bytes = fs::read(path)?;
+    if !should_normalize_lf_for_hash(path) {
+        return Ok(bytes);
+    }
+    let mut normalized = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'\r' {
+            normalized.push(b'\n');
+            if bytes.get(index + 1) == Some(&b'\n') {
+                index += 2;
+            } else {
+                index += 1;
+            }
+        } else {
+            normalized.push(bytes[index]);
+            index += 1;
+        }
+    }
+    Ok(normalized)
+}
+
+fn should_normalize_lf_for_hash(path: &Path) -> bool {
+    let suffix_matches = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "c" | "h"
+                    | "json"
+                    | "jsonl"
+                    | "lock"
+                    | "md"
+                    | "conf"
+                    | "rs"
+                    | "sh"
+                    | "toml"
+                    | "txt"
+                    | "yaml"
+                    | "yml"
+            )
+        })
+        .unwrap_or(false);
+    let name_matches = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| matches!(name, ".npmrc" | "sources.list"))
+        .unwrap_or(false);
+    suffix_matches || name_matches
 }
 
 fn compare_field(

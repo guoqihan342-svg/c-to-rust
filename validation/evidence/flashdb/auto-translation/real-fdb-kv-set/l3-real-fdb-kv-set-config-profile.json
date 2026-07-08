@@ -1,10 +1,37 @@
 {
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+    "fixture_sha256": "4faa387d7feeb22c3c1ad0031ca116713b87baaf3f63fa1268bfaa5b31e056ae",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "03a7b5dfc20678c09cc9948f3bc99d5dc21a3fcb69ed6ad85911d243dabc0945",
+      "diff": "69f18cade3382380bfab9aa0e29673a10737878bb26b22e1598e6f35900045fe",
+      "negative_diff": "3b552de26ebbab5d01656feaf40e2b8869e73554e67fae0339a167e3ff4e5ed2",
+      "rust_report": "720ec308798ebfad87a670c2fccb9e0e4783af301eac4b9adbc129faf9743256",
+      "unsafe_ledger": "2c5d7304b360d9a7fba3726af35baa587860eaffd38016c7a31cb67dd1ac7dc6",
+      "unsafe_scan": "4dd3cbe3b4d88e53444a4de87d94de24e9300caac9b1e8bb1b97f7f92b606d6d"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-set-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-kv-set-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-set-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-set-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-kv-set",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
   "c_defines": {
     "none": true
   },
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=f6f09fc60995b2284848de11341faa0973634e602ac291812aab83a8734dddbd",
+    "slice_spec_sha256=5484bfe9c6e68fdaa20c41bd120d049ee8c7470979c25b3dbab16eacf20bede2",
     "fixture_hash=real-fdb-kv-set-fixture",
     "build_profile_hash=c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
     "translator_version=0.1.0",
@@ -24,7 +51,7 @@
   "config_header": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "5a8b1352c0973b3275697d63dd00930e7f58dc24b7d69ef6c6e16967719cc0ba"
+    "sha256": "8233d6716757d769dee86b887030433092cbcf8d8b3c7aa6b22cecea8eebb6c5"
   },
   "feature_matrix": {
     "auto_translation_candidate": true
@@ -41,7 +68,7 @@
     "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
   ],
   "profile_id": "flashdb-real-fdb-kv-set-real-source",
-  "repo_commit": "88aba8575d9a380017bdf11874cad87828dcd02e",
+  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],
@@ -51,7 +78,7 @@
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-  "status": "incomplete",
+  "status": "recorded",
   "target_id": "flashdb",
   "toolchain": {
     "cargo_version": "captured_by_validation",

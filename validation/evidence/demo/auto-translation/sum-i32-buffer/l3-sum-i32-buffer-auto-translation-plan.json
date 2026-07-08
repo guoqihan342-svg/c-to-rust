@@ -1,19 +1,21 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
-    "sha256": "45fd1fd317faf551a593c058bfeccd8b2c504d16fb04d363ed409f8ae3078009",
+    "sha256": "733f134bb5303d17281371125f60bf4d447eeeeff8e46a0c8598ae56906e711e",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
     "source_commit=demo-sum-i32-buffer-20260625",
-    "slice_spec_sha256=5f1cda9a0ca58bac78b28cbd7c2e22f299126e58472e54b7fb88c36b313df845",
+    "slice_spec_sha256=00cd9f5abff8de94eca869ba982867cbdadf44754ffdf97592d96cc9caf956f6",
     "fixture_hash=sum-i32-buffer-fixture",
     "build_profile_hash=076d32e392f6a18e19179cd801a7464482b4b049dde5d4cb339ecb3bca018b61",
     "translator_version=0.1.0",
     "schema_version=1",
     "alias_gate=requires_noalias_contract",
     "alias_risk_count=1",
-    "aliasing_proven=false"
+    "aliasing_proven=false",
+    "effect_graph",
+    "effect_graph_sha256=82920c7e26be73d7c18c11c59cdc6863a131cc111dcbb86b2639c73fa573c4e5"
   ],
   "generated_artifacts": [
     {
@@ -91,13 +93,21 @@
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-cfg.json",
       "status": "recorded"
     },
+    "external_callee_context": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-context-pack.json",
+      "status": "not_applicable"
+    },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-pointer-graph.json",
       "status": "recorded"
     },
     "slice_spec": {
       "path": "validation/slice-specs/demo-sum-i32-buffer.json",
-      "sha256": "5f1cda9a0ca58bac78b28cbd7c2e22f299126e58472e54b7fb88c36b313df845",
+      "sha256": "00cd9f5abff8de94eca869ba982867cbdadf44754ffdf97592d96cc9caf956f6",
       "status": "ready"
     },
     "type_map": {
@@ -106,11 +116,11 @@
     }
   },
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
   "route_decision": {
-    "level": "L2",
+    "level": "L1",
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-route-decision.json",
-    "sha256": "eafd512cdd7c0857c0b6b4067b9dc8dc824cc1e52563ff473a71a5b398bc29b3",
+    "sha256": "83c89f724533f22c078820d506f00120b1f65da77edd61fdbfda58fdb2ffe1d6",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -118,6 +128,9 @@
   "source_commit": "demo-sum-i32-buffer-20260625",
   "status": "draft_generated",
   "target_id": "demo",
+  "translation_source": {
+    "selected": "clang-lowered-typed-ir"
+  },
   "translation_summary": {
     "alias_gate": {
       "complete_alias_safety": false,
@@ -127,6 +140,10 @@
       "risk_count": 1,
       "risk_level": "unknown_alias"
     },
+    "call_expressions": [],
+    "external_direct_callee_blocks": [],
+    "external_direct_callee_declarations": [],
+    "external_direct_callees": [],
     "lvalue_decision_counts": {
       "bounded_input_buffer": 1,
       "bounded_pointer_index": 1
@@ -137,13 +154,9 @@
     },
     "safe_public_api": true,
     "translation_rule_ids": [
-      "safe-wrapper-for-pointer-out-param",
-      "primitive-declaration",
+      "clang-lowered-typed-ir",
       "bounded-input-buffer-read",
-      "structured-for",
-      "pointer-write-recorded",
-      "bounded-pointer-index-write",
-      "structured-return-expression"
+      "bounded-pointer-index-write"
     ],
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
@@ -151,8 +164,8 @@
   },
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-validation-profile.json",
-    "profile": "L2-dev",
-    "sha256": "00c9a56a63c46e6bb22e847fa6942ea9dcb267b5d49c3b41eba009aac1792c09",
+    "profile": "L1-dev",
+    "sha256": "66497bad567b9ef98bcf720462d94692d5394ad5e9e60c42c884b22077497fac",
     "status": "passed"
   },
   "verification_plan": [

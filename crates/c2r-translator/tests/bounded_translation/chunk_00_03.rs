@@ -272,57 +272,86 @@ fn clang_ast_fixture_lowers_enum_constant_in_readonly_global_initializer_without
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_fixture_rejects_implicit_enum_constant_in_readonly_global_initializer_without_clang() {
+fn clang_ast_fixture_lowers_implicit_enum_constant_in_readonly_global_initializer_without_clang() {
     let ast: Value =
         serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
             .expect("fixture JSON");
 
     let lowered =
         lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_pending_status_table")
-            .expect("function shape should lower before unsupported enum global is emitted");
-    assert!(
+            .expect("lower implicit enum global initializer fixture without invoking clang");
+    assert_eq!(
         lowered
             .globals
             .iter()
-            .all(|global| global.name != "pending_status_table"),
-        "implicit enum global initializer must not be collected"
+            .find(|global| global.name == "pending_status_table")
+            .map(|global| &global.init),
+        Some(&IrGlobalInit::IntegerArray(vec![8]))
     );
 
-    let error = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
-        .expect_err("referenced implicit enum global initializer must fail closed");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from implicit enum global initializer fixture");
+    let rust = &emitted.rust;
     assert!(
-        error
-            .reason
-            .contains("index base pending_status_table is not declared"),
-        "unexpected error: {error:?}"
+        rust.contains("const PENDING_STATUS_TABLE: [i32; 1] = [8i32];"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("return PENDING_STATUS_TABLE[0i32 as usize];"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-implicit-enum-global-initializer",
+        rust,
+        "assert_eq!(lookup_pending_status_table(), 8);",
     );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_fixture_rejects_enum_constant_without_explicit_value_without_clang() {
+fn clang_ast_fixture_replays_implicit_enum_constant_without_clang() {
     let ast: Value =
         serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
             .expect("fixture JSON");
 
-    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, "implicit_status_code")
-        .expect_err("implicit enum constant without explicit ConstantExpr must fail closed");
-    assert_eq!(error.kind, "unsupported_clang_expr");
-    assert!(
-        error.message.contains("EnumConstantDecl STATUS_PENDING"),
-        "{}",
-        error.message
-    );
-    assert!(
-        error.message.contains("explicit ConstantExpr value"),
-        "{}",
-        error.message
-    );
+    let status_code = lower_function_and_globals_from_clang_ast_json_value(&ast, "implicit_status_code")
+        .expect("lower implicit enum constant fixture without invoking clang");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::LitInt {
+                value,
+                spelling,
+                ty,
+                ..
+            }),
+        ..
+    }] = status_code.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected implicit enum constant return literal, got {:?}",
+            status_code.function_ir.body
+        );
+    };
+    assert_eq!(*value, 8);
+    assert_eq!(spelling, "8");
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let emitted = emit_rust_from_ir_with_globals(&status_code.function_ir, &status_code.globals)
+        .expect("emit Rust from implicit enum constant fixture");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn implicit_status_code() -> i32"), "{rust}");
+    assert!(rust.contains("return 8i32;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-implicit-enum-constant", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_fixture_keeps_enum_typed_function_unsupported_without_clang() {
+fn clang_ast_fixture_lowers_enum_typed_function_with_target_abi_without_clang() {
     let ast: Value =
         serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
             .expect("fixture JSON");
@@ -339,23 +368,63 @@ fn clang_ast_fixture_keeps_enum_typed_function_unsupported_without_clang() {
         ..TargetAbiProfile::default()
     };
 
-    let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
         &ast,
         "identity_status",
         Some(&target_abi),
     )
-    .expect_err("enum-typed functions remain unsupported");
-    assert_eq!(error.kind, "unsupported_clang_type");
+    .expect("lower target-ABI-bound enum-typed function fixture without invoking clang");
+    assert!(matches!(
+        lowered.function_ir.return_type.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    assert!(matches!(
+        lowered.function_ir.params.as_slice(),
+        [IrParam {
+            name,
+            ty:
+                IrType {
+                    kind:
+                        IrTypeKind::Integer {
+                            signed: true,
+                            width: 32
+                        },
+                    ..
+                },
+            ..
+        }] if name == "value"
+    ));
+    let [IrStmt::Return {
+        value: Some(IrExpr::Var { name, ty, .. }),
+        ..
+    }] = lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected enum typed identity return variable, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert_eq!(name, "value");
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from target-ABI-bound enum typed fixture");
+    let rust = &emitted.rust;
     assert!(
-        error.message.contains("EnumConstantDecl STATUS_PENDING"),
-        "{}",
-        error.message
+        rust.contains("pub fn identity_status(value: i32) -> i32"),
+        "{rust}"
     );
-    assert!(
-        error.message.contains("explicit ConstantExpr value"),
-        "{}",
-        error.message
-    );
+    assert!(rust.contains("return value;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-enum-typed-status", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

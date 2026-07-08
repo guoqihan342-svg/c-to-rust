@@ -1,0 +1,802 @@
+{
+  "artifact_kind": "clang-lowering-report",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "diagnostics": [
+    "clang lowering used slice-spec c_source with declared external callee prototypes; project macros were not expanded"
+  ],
+  "durable_evidence": {
+    "clang_path": "/usr/bin/clang",
+    "clang_version": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+    "competition_environment": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "frontend": "clang_ast_dump_json",
+    "hash_algorithm": "sha256",
+    "rust_draft_sha256": "eb61ae031fa0977db13f578739af77cbd9caf9463b71515c583c72452b5d4964",
+    "typed_ir_sha256": "52896ed935360a96d5a51dc7216a2a144d7046d661653fd90cdff040af131612"
+  },
+  "errors": [],
+  "fixture_hash": "sum-i32-buffer-fixture",
+  "frontend": "clang",
+  "function_name": "sum_i32_buffer",
+  "lowering_report": {
+    "arguments": [
+      "--slice-source-from-spec",
+      "<host>/c2r-slice-source-demo-sum-i32-buffer-65711.c",
+      "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py"
+    ],
+    "clang_path": "<host>/clang",
+    "diagnostics": [
+      "clang lowering used slice-spec c_source with declared external callee prototypes; project macros were not expanded"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "errors": [],
+    "frontend": "clang_slice_source",
+    "function_ir": {
+      "body": [
+        {
+          "Decl": {
+            "init": {
+              "LitInt": {
+                "source_span": null,
+                "spelling": "0",
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                },
+                "value": 0
+              }
+            },
+            "name": "total",
+            "source_span": null,
+            "ty": {
+              "canonical": "int",
+              "is_const": false,
+              "kind": {
+                "Integer": {
+                  "signed": true,
+                  "width": 32
+                }
+              },
+              "source_span": null,
+              "spelled": "int",
+              "width_bits": 32
+            }
+          }
+        },
+        {
+          "For": {
+            "body": [
+              {
+                "Assign": {
+                  "source_span": null,
+                  "target": {
+                    "Var": {
+                      "name": "total",
+                      "source_span": null,
+                      "ty": {
+                        "canonical": "int",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": true,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "int",
+                        "width_bits": 32
+                      }
+                    }
+                  },
+                  "value": {
+                    "Binary": {
+                      "lhs": {
+                        "LValueToRValue": {
+                          "expr": {
+                            "Var": {
+                              "name": "total",
+                              "source_span": null,
+                              "ty": {
+                                "canonical": "int",
+                                "is_const": false,
+                                "kind": {
+                                  "Integer": {
+                                    "signed": true,
+                                    "width": 32
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "int",
+                                "width_bits": 32
+                              }
+                            }
+                          },
+                          "source_span": null,
+                          "target": {
+                            "canonical": "int",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": true,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "int",
+                            "width_bits": 32
+                          }
+                        }
+                      },
+                      "op": "Add",
+                      "rhs": {
+                        "LValueToRValue": {
+                          "expr": {
+                            "Index": {
+                              "base": {
+                                "Var": {
+                                  "name": "values",
+                                  "source_span": null,
+                                  "ty": {
+                                    "canonical": "int *",
+                                    "is_const": false,
+                                    "kind": {
+                                      "Pointer": {
+                                        "pointee": {
+                                          "canonical": "int",
+                                          "is_const": true,
+                                          "kind": {
+                                            "Integer": {
+                                              "signed": true,
+                                              "width": 32
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "const int",
+                                          "width_bits": 32
+                                        }
+                                      }
+                                    },
+                                    "source_span": null,
+                                    "spelled": "const int *",
+                                    "width_bits": null
+                                  }
+                                }
+                              },
+                              "index": {
+                                "LValueToRValue": {
+                                  "expr": {
+                                    "Var": {
+                                      "name": "i",
+                                      "source_span": null,
+                                      "ty": {
+                                        "canonical": "int",
+                                        "is_const": false,
+                                        "kind": {
+                                          "Integer": {
+                                            "signed": true,
+                                            "width": 32
+                                          }
+                                        },
+                                        "source_span": null,
+                                        "spelled": "int",
+                                        "width_bits": 32
+                                      }
+                                    }
+                                  },
+                                  "source_span": null,
+                                  "target": {
+                                    "canonical": "int",
+                                    "is_const": false,
+                                    "kind": {
+                                      "Integer": {
+                                        "signed": true,
+                                        "width": 32
+                                      }
+                                    },
+                                    "source_span": null,
+                                    "spelled": "int",
+                                    "width_bits": 32
+                                  }
+                                }
+                              },
+                              "source_span": null,
+                              "ty": {
+                                "canonical": "int",
+                                "is_const": true,
+                                "kind": {
+                                  "Integer": {
+                                    "signed": true,
+                                    "width": 32
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "const int",
+                                "width_bits": 32
+                              }
+                            }
+                          },
+                          "source_span": null,
+                          "target": {
+                            "canonical": "int",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": true,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "int",
+                            "width_bits": 32
+                          }
+                        }
+                      },
+                      "source_span": null,
+                      "ty": {
+                        "canonical": "int",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": true,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "int",
+                        "width_bits": 32
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "condition": {
+              "Binary": {
+                "lhs": {
+                  "LValueToRValue": {
+                    "expr": {
+                      "Var": {
+                        "name": "i",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        }
+                      }
+                    },
+                    "source_span": null,
+                    "target": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "op": "Lt",
+                "rhs": {
+                  "LValueToRValue": {
+                    "expr": {
+                      "Var": {
+                        "name": "len",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        }
+                      }
+                    },
+                    "source_span": null,
+                    "target": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "source_span": null,
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            },
+            "init": [
+              {
+                "Decl": {
+                  "init": {
+                    "LitInt": {
+                      "source_span": null,
+                      "spelling": "0",
+                      "ty": {
+                        "canonical": "int",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": true,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "int",
+                        "width_bits": 32
+                      },
+                      "value": 0
+                    }
+                  },
+                  "name": "i",
+                  "source_span": null,
+                  "ty": {
+                    "canonical": "int",
+                    "is_const": false,
+                    "kind": {
+                      "Integer": {
+                        "signed": true,
+                        "width": 32
+                      }
+                    },
+                    "source_span": null,
+                    "spelled": "int",
+                    "width_bits": 32
+                  }
+                }
+              }
+            ],
+            "source_span": null,
+            "step": {
+              "Assign": {
+                "source_span": null,
+                "target": {
+                  "Var": {
+                    "name": "i",
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "value": {
+                  "Binary": {
+                    "lhs": {
+                      "Var": {
+                        "name": "i",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        }
+                      }
+                    },
+                    "op": "Add",
+                    "rhs": {
+                      "LitInt": {
+                        "source_span": null,
+                        "spelling": "1",
+                        "ty": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        },
+                        "value": 1
+                      }
+                    },
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "Assign": {
+            "source_span": null,
+            "target": {
+              "Index": {
+                "base": {
+                  "Var": {
+                    "name": "out",
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "int *",
+                      "is_const": false,
+                      "kind": {
+                        "Pointer": {
+                          "pointee": {
+                            "canonical": "int",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": true,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "int",
+                            "width_bits": 32
+                          }
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int *",
+                      "width_bits": null
+                    }
+                  }
+                },
+                "index": {
+                  "LitInt": {
+                    "source_span": null,
+                    "spelling": "0",
+                    "ty": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    },
+                    "value": 0
+                  }
+                },
+                "source_span": null,
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            },
+            "value": {
+              "LValueToRValue": {
+                "expr": {
+                  "Var": {
+                    "name": "total",
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "source_span": null,
+                "target": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            }
+          }
+        },
+        {
+          "Return": {
+            "source_span": null,
+            "value": {
+              "LitInt": {
+                "source_span": null,
+                "spelling": "0",
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                },
+                "value": 0
+              }
+            }
+          }
+        }
+      ],
+      "name": "sum_i32_buffer",
+      "params": [
+        {
+          "name": "values",
+          "source_span": null,
+          "ty": {
+            "canonical": "int *",
+            "is_const": false,
+            "kind": {
+              "Pointer": {
+                "pointee": {
+                  "canonical": "int",
+                  "is_const": true,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "const int",
+                  "width_bits": 32
+                }
+              }
+            },
+            "source_span": null,
+            "spelled": "const int *",
+            "width_bits": null
+          }
+        },
+        {
+          "name": "len",
+          "source_span": null,
+          "ty": {
+            "canonical": "int",
+            "is_const": false,
+            "kind": {
+              "Integer": {
+                "signed": true,
+                "width": 32
+              }
+            },
+            "source_span": null,
+            "spelled": "int",
+            "width_bits": 32
+          }
+        },
+        {
+          "name": "out",
+          "source_span": null,
+          "ty": {
+            "canonical": "int *",
+            "is_const": false,
+            "kind": {
+              "Pointer": {
+                "pointee": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            },
+            "source_span": null,
+            "spelled": "int *",
+            "width_bits": null
+          }
+        }
+      ],
+      "return_type": {
+        "canonical": "int",
+        "is_const": false,
+        "kind": {
+          "Integer": {
+            "signed": true,
+            "width": 32
+          }
+        },
+        "source_span": null,
+        "spelled": "int",
+        "width_bits": 32
+      },
+      "source_span": null
+    },
+    "function_name": "sum_i32_buffer",
+    "globals": [],
+    "source_file": "<demo-slice>/validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py",
+    "status": "lowered"
+  },
+  "metadata": {
+    "clang_ast_fixture": null,
+    "compile_commands": null,
+    "function_source_span": null,
+    "logical_source_file": "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json": "2ad1734fceba9c9af63d6f5d7a6a0bcc8be037c022dad86f340b8d57e9d10d3c",
+      "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py": "947b4eee8403ddc7f6165b1e324628838b1dd0920ba099894193005a00bc0e7f"
+    },
+    "source_root": "<demo-slice>"
+  },
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "source_file": "<demo-slice>/validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py",
+  "status": "lowered",
+  "target_id": "demo",
+  "typed_ir_candidate": {
+    "candidate_route": {
+      "candidate_generator": "GenericTypedIrEmitter",
+      "delete_when": [],
+      "deprecated": false,
+      "fallback": null,
+      "reasons": [
+        {
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
+        }
+      ],
+      "replacement": null,
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
+      "suggested_required_gates": [
+        "rustc_smoke",
+        "typed_ir_contract_tests"
+      ],
+      "token_cost": 0
+    },
+    "readonly_globals": [],
+    "runtime_preconditions": [
+      {
+        "code": "signed_add_no_overflow",
+        "detail": "C signed addition must not overflow unless the slice contract declares a wrapping profile",
+        "ir_node": "IrExpr::Binary.Add",
+        "source_span": null,
+        "type": {
+          "canonical": "int",
+          "kind": "integer",
+          "signed": true,
+          "spelled": "int",
+          "width": 32
+        }
+      },
+      {
+        "code": "signed_add_no_overflow",
+        "detail": "C signed addition must not overflow unless the slice contract declares a wrapping profile",
+        "ir_node": "IrExpr::Binary.Add",
+        "source_span": null,
+        "type": {
+          "canonical": "int",
+          "kind": "integer",
+          "signed": true,
+          "spelled": "int",
+          "width": 32
+        }
+      }
+    ],
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "eb61ae031fa0977db13f578739af77cbd9caf9463b71515c583c72452b5d4964",
+    "semantic_pass": false,
+    "status": "generated",
+    "typed_ir_sha256": "52896ed935360a96d5a51dc7216a2a144d7046d661653fd90cdff040af131612"
+  }
+}

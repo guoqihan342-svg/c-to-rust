@@ -208,14 +208,15 @@ def c_oracle_harness_execution(
         payload["output_gate"] = c_oracle_harness_output_gate(spec, fixture_binding, payload)
         return payload
 
+    absolute_evidence_dir = c_oracle_absolute_evidence_dir(evidence_dir)
     execution_argv = [str(executable_path)]
-    execution_cwd: Path | None = evidence_dir
+    execution_cwd: Path | None = absolute_evidence_dir
     adapter = None
     if compiler_resolution and compiler_resolution.get("adapter") == "wsl":
         adapter = "wsl"
         launcher = str(compiler_resolution["launcher"])
         try:
-            wsl_cwd = wsl_path(evidence_dir, launcher)
+            wsl_cwd = wsl_path(absolute_evidence_dir, launcher)
             wsl_executable = wsl_path(executable_path, launcher)
             execution_argv = [
                 launcher,
@@ -389,7 +390,7 @@ def c_oracle_output_executable(argv: list[str], evidence_dir: Path) -> Path | No
         return None
     output_path = Path(argv[output_index])
     if not output_path.is_absolute():
-        output_path = evidence_dir / output_path
+        output_path = c_oracle_absolute_evidence_dir(evidence_dir) / output_path
     return output_path
 
 

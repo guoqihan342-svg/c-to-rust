@@ -328,11 +328,11 @@ fn collect_nullable_pointer_condition_param(
     readonly_pointer_params: &HashMap<&str, &IrType>,
     nullable_params: &mut HashSet<String>,
 ) {
-    let IrExpr::Var { name, ty, .. } = condition else {
+    let Some((name, ty)) = nullable_pointer_truthiness_var_parts(condition) else {
         return;
     };
     if readonly_pointer_params
-        .get(name.as_str())
+        .get(name)
         .is_some_and(|param_ty| *param_ty == ty)
     {
         nullable_params.insert(name.to_string());

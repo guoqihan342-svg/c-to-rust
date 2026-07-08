@@ -1,0 +1,34 @@
+{
+  "ai_required_for_default_pipeline": false,
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-c2rust-baseline-manifest.json",
+    "sha256": "87d3038cc54308c503cb9df3ba37325270e4464be8ab7eab46c9c43994d48561",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=9c573e05c56d3e7c42343f1259b5700764164375912ba62603373ac6f388c6f1",
+    "fixture_hash=real-fdb-kv-del-fixture",
+    "build_profile_hash=968c0f247f9cf881e44d016933ba320d59d3d56c53dfcd73184c9a8ab51468d3",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "candidates": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-route-decision.json",
+    "sha256": "899f3a023adb2590babd3530d82dcd6a09de7d976a36e67dd60d5a1e0614901d",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "slice_id": "real-fdb-kv-del",
+  "status": "not_used",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "2787be14230af553736baed3ea5078ed9506d92ced819bbf09c2acdcef6bb3bf",
+    "status": "passed"
+  }
+}

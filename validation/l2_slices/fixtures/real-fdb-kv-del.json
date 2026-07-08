@@ -1,0 +1,38 @@
+{
+  "case_count": 1,
+  "cases": [
+    {
+      "coverage_kind": "uninitialized-db-delete",
+      "db_name": "unit-kv",
+      "db_state": "uninitialized_named",
+      "expected_outputs": {
+        "return_code": 7
+      },
+      "id": "uninit-delete",
+      "key": "boot_count",
+      "return_code": 7,
+      "status": "draft_expected_from_flashdb_init_guard"
+    }
+  ],
+  "compared_fields": [
+    "return_code"
+  ],
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-del",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c",
+      "inc/fdb_def.h",
+      "inc/flashdb.h"
+    ],
+    "functions": [
+      "fdb_kv_del"
+    ],
+    "signature": "fdb_err_t fdb_kv_del(fdb_kvdb_t db, const char *key)"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "fixture_only",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_DRAFT_FIXTURE_ONLY"
+}

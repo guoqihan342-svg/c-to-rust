@@ -23,6 +23,5 @@
   "registered_unsafe": [],
   "scan_report": "validation/evidence/l2-slices/unsafe-scan.json",
   "schema_version": 1,
-  "status": "passed",
   "scope": "first-party non-test Rust source under validation/l2_slices/src"
 }

@@ -110,6 +110,123 @@
     }
 
     #[test]
+    fn expr_skeleton_from_ast_allows_void_bitcast_record_address_direct_call_arg() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "struct fdb_blob *" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "struct fdb_blob *(*)(void *, const void *, size_t)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "struct fdb_blob *(void *, const void *, size_t)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "make_record"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "BitCast",
+                    "type": { "qualType": "void *" },
+                    "inner": [
+                        {
+                            "kind": "UnaryOperator",
+                            "opcode": "&",
+                            "type": { "qualType": "struct fdb_blob *" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "struct fdb_blob" },
+                                    "referencedDecl": { "name": "blob" }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "BitCast",
+                    "type": { "qualType": "const void *" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "const char *" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "const char *" },
+                                    "referencedDecl": { "name": "value" }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "CallExpr",
+                    "type": { "qualType": "size_t" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "FunctionToPointerDecay",
+                            "type": { "qualType": "size_t (*)(const char *)" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "size_t (const char *)" },
+                                    "referencedDecl": {
+                                        "kind": "FunctionDecl",
+                                        "name": "strlen"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "const char *" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "const char *" },
+                                    "referencedDecl": { "name": "value" }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton =
+            expr_skeleton_from_ast(&expr).expect("mutable void record-address bitcast skeleton");
+        let ClangExprSkeleton::Call { callee, args, .. } = &skeleton else {
+            panic!("expected make_record call skeleton, got {skeleton:?}");
+        };
+        assert_eq!(callee, "make_record");
+        let [ClangExprSkeleton::AddrOf { operand, .. }, ClangExprSkeleton::DeclRef { name, .. }, ClangExprSkeleton::Call {
+            callee: strlen,
+            ..
+        }] = args.as_slice()
+        else {
+            panic!("expected record address, bitcast-stripped value, and strlen args, got {args:?}");
+        };
+        assert!(matches!(
+            operand.as_ref(),
+            ClangExprSkeleton::DeclRef { name, .. } if name == "blob"
+        ));
+        assert_eq!(name, "value");
+        assert_eq!(strlen, "strlen");
+        assert_eq!(bounded_call_args_rejection_reason(&[skeleton]), None);
+    }
+
+    #[test]
     fn bounded_call_args_allow_record_pointer_constructor_with_strlen_leaf() {
         let i32_ty = ClangTypeSkeleton {
             spelled: "int".to_string(),
@@ -255,6 +372,167 @@
             ty: i32_ty,
         };
         assert_eq!(bounded_call_args_rejection_reason(&[non_nested]), None);
+    }
+
+    #[test]
+    fn bounded_call_args_allow_direct_null_pointer_arg() {
+        let void_ty = ClangTypeSkeleton {
+            spelled: "void".to_string(),
+            canonical: "void".to_string(),
+            kind: ClangTypeKind::Void,
+        };
+        let void_ptr_ty = ClangTypeSkeleton {
+            spelled: "void *".to_string(),
+            canonical: "void *".to_string(),
+            kind: ClangTypeKind::Pointer {
+                pointee: Box::new(void_ty),
+                width: Some(64),
+            },
+        };
+        let null_arg = ClangExprSkeleton::NullPtr { ty: void_ptr_ty };
+
+        assert_eq!(bounded_call_args_rejection_reason(&[null_arg]), None);
+    }
+
+    #[test]
+    fn integral_to_boolean_literal_cast_becomes_bool_integer_literal() {
+        let expr = serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "castKind": "IntegralToBoolean",
+            "type": { "qualType": "bool" },
+            "inner": [
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "42"
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("integral-to-bool literal skeleton");
+        let ClangExprSkeleton::IntegerLiteral { value, spelling, ty } = skeleton else {
+            panic!("expected bool integer literal, got {skeleton:?}");
+        };
+        assert_eq!(value, 1);
+        assert_eq!(spelling, "1");
+        assert_eq!(ty.canonical, "_Bool");
+        assert_eq!(bounded_call_args_rejection_reason(&[
+            ClangExprSkeleton::IntegerLiteral { value, spelling, ty }
+        ]), None);
+    }
+
+    #[test]
+    fn bounded_call_args_allow_record_pointer_constructor_with_unbound_unsigned_long_strlen_leaf() {
+        let const_char_ty = ClangTypeSkeleton {
+            spelled: "const char".to_string(),
+            canonical: "char".to_string(),
+            kind: ClangTypeKind::Unsupported {
+                reason: "char requires target ABI width provenance before typed IR lowering"
+                    .to_string(),
+            },
+        };
+        let const_char_ptr_ty = ClangTypeSkeleton {
+            spelled: "const char *".to_string(),
+            canonical: "char *".to_string(),
+            kind: ClangTypeKind::Pointer {
+                pointee: Box::new(const_char_ty),
+                width: None,
+            },
+        };
+        let blob_ty = ClangTypeSkeleton {
+            spelled: "struct fdb_blob".to_string(),
+            canonical: "struct fdb_blob".to_string(),
+            kind: ClangTypeKind::Record {
+                name: "fdb_blob".to_string(),
+            },
+        };
+        let blob_ptr_ty = ClangTypeSkeleton {
+            spelled: "struct fdb_blob *".to_string(),
+            canonical: "struct fdb_blob *".to_string(),
+            kind: ClangTypeKind::Pointer {
+                pointee: Box::new(blob_ty.clone()),
+                width: None,
+            },
+        };
+        let strlen_unbound_size_t_ty = ClangTypeSkeleton {
+            spelled: "unsigned long".to_string(),
+            canonical: "unsigned long".to_string(),
+            kind: ClangTypeKind::Unsupported {
+                reason:
+                    "unsigned long requires target ABI width provenance before typed IR lowering"
+                        .to_string(),
+            },
+        };
+        let nested = ClangExprSkeleton::Call {
+            callee: "fdb_blob_make".to_string(),
+            args: vec![
+                ClangExprSkeleton::AddrOf {
+                    operand: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "blob".to_string(),
+                        ty: blob_ty,
+                    }),
+                    ty: blob_ptr_ty.clone(),
+                },
+                ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: const_char_ptr_ty.clone(),
+                },
+                ClangExprSkeleton::Call {
+                    callee: "strlen".to_string(),
+                    args: vec![ClangExprSkeleton::DeclRef {
+                        name: "value".to_string(),
+                        ty: const_char_ptr_ty,
+                    }],
+                    ty: strlen_unbound_size_t_ty,
+                },
+            ],
+            ty: blob_ptr_ty,
+        };
+
+        assert_eq!(bounded_call_args_rejection_reason(&[nested]), None);
+    }
+
+    #[test]
+    fn bounded_call_args_allow_immediate_nested_pointer_return_call() {
+        let void_ty = ClangTypeSkeleton {
+            spelled: "void".to_string(),
+            canonical: "void".to_string(),
+            kind: ClangTypeKind::Void,
+        };
+        let db_ty = ClangTypeSkeleton {
+            spelled: "fdb_kvdb_t".to_string(),
+            canonical: "void *".to_string(),
+            kind: ClangTypeKind::Pointer {
+                pointee: Box::new(void_ty),
+                width: None,
+            },
+        };
+        let const_char_ty = ClangTypeSkeleton {
+            spelled: "const char".to_string(),
+            canonical: "char".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: true,
+                width: 8,
+            },
+        };
+        let const_char_ptr_ty = ClangTypeSkeleton {
+            spelled: "const char *".to_string(),
+            canonical: "char *".to_string(),
+            kind: ClangTypeKind::Pointer {
+                pointee: Box::new(const_char_ty),
+                width: None,
+            },
+        };
+        let nested = ClangExprSkeleton::Call {
+            callee: "db_name".to_string(),
+            args: vec![ClangExprSkeleton::DeclRef {
+                name: "db".to_string(),
+                ty: db_ty,
+            }],
+            ty: const_char_ptr_ty,
+        };
+
+        assert_eq!(bounded_call_args_rejection_reason(&[nested]), None);
     }
 
     #[test]

@@ -18,29 +18,35 @@ impl ClangParseSpec {
                     .to_string(),
             });
         }
-        let function_source_span =
-            spec.function_source_span
-                .clone()
-                .ok_or_else(|| ClangFrontendError {
+        let function_source_span = match spec.function_source_span.clone() {
+            Some(function_source_span) => {
+                if normalized_metadata_path(&function_source_span.file) != source_file_key {
+                    return Err(ClangFrontendError {
+                        kind: "function_span_source_file_mismatch".to_string(),
+                        message: format!(
+                            "function_source_span.file must match source_file: {} != {}",
+                            function_source_span.file,
+                            source_file.to_string_lossy()
+                        ),
+                    });
+                }
+                if function_source_span.sha256.trim().is_empty() {
+                    return Err(ClangFrontendError {
+                        kind: "missing_function_source_span_hash".to_string(),
+                        message: "clang frontend dry-run requires function_source_span.sha256"
+                            .to_string(),
+                    });
+                }
+                Some(function_source_span)
+            }
+            None if !spec.c_source.trim().is_empty() => None,
+            None => {
+                return Err(ClangFrontendError {
                     kind: "missing_function_source_span".to_string(),
                     message: "clang frontend dry-run requires function_source_span".to_string(),
-                })?;
-        if normalized_metadata_path(&function_source_span.file) != source_file_key {
-            return Err(ClangFrontendError {
-                kind: "function_span_source_file_mismatch".to_string(),
-                message: format!(
-                    "function_source_span.file must match source_file: {} != {}",
-                    function_source_span.file,
-                    source_file.to_string_lossy()
-                ),
-            });
-        }
-        if function_source_span.sha256.trim().is_empty() {
-            return Err(ClangFrontendError {
-                kind: "missing_function_source_span_hash".to_string(),
-                message: "clang frontend dry-run requires function_source_span.sha256".to_string(),
-            });
-        }
+                });
+            }
+        };
 
         Ok(Self {
             source_root,
@@ -51,7 +57,7 @@ impl ClangParseSpec {
             target_abi: spec.build_profile.resolved_target_abi(),
             compile_commands: spec.compile_commands.as_ref().map(PathBuf::from),
             source_file_hashes: spec.source_file_hashes.clone(),
-            function_source_span: Some(function_source_span),
+            function_source_span,
         })
     }
 

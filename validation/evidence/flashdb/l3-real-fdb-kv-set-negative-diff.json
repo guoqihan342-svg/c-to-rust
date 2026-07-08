@@ -1,0 +1,18 @@
+{
+  "case_id": "uninit-set-value",
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "uninit-set-value",
+    "field": "return_code",
+    "mutated_c_value": 6,
+    "rust_value": 7
+  },
+  "level": "L3",
+  "mutation": "first oracle case return_code is changed by saturating -1",
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-set",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "expected_failed",
+  "target_id": "flashdb"
+}

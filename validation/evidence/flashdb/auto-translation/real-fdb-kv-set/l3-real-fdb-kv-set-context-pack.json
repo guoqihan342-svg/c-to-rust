@@ -1,7 +1,7 @@
 {
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=f6f09fc60995b2284848de11341faa0973634e602ac291812aab83a8734dddbd",
+    "slice_spec_sha256=5484bfe9c6e68fdaa20c41bd120d049ee8c7470979c25b3dbab16eacf20bede2",
     "fixture_hash=real-fdb-kv-set-fixture",
     "build_profile_hash=c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
     "translator_version=0.1.0",
@@ -170,10 +170,11 @@
     {
       "accepted_named_slice_evidence": {
         "accepted_evidence_authoritative": true,
-        "boundary": "This validates the named fdb_blob_make slice through accepted evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
+        "boundary": "This validates fdb_blob_make through accepted named-slice evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
+        "callee": "fdb_blob_make",
         "final_verification_path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
-        "final_verification_sha256": "812edc7b2f7ccafc486286c1380774414f943e472984e9e4929fdd78df003ce5",
-        "generated_draft_semantic_pass": false,
+        "final_verification_sha256": "e6ca1c952592ee3dc121193e3db51a01b2abf6b96466575f2f5495014c482273",
+        "generated_draft_semantic_pass": true,
         "kind": "accepted_named_slice_evidence",
         "semantic_pass": true,
         "slice_id": "real-fdb-blob-make",
@@ -181,22 +182,26 @@
       },
       "definition_status": "real_source_bound",
       "header_files": [],
-      "model_contract": "fdb_blob_make_named_slice_accepted_evidence",
+      "model_contract": "accepted_named_slice_evidence",
       "name": "fdb_blob_make",
       "parameters": [
         {
           "c_type": "fdb_blob_t",
-          "name": "blob"
+          "name": "blob",
+          "rust_type": "*mut core::ffi::c_void"
         },
         {
           "c_type": "const void*",
-          "name": "value_buf"
+          "name": "value_buf",
+          "rust_type": "*const core::ffi::c_void"
         },
         {
           "c_type": "size_t",
-          "name": "buf_len"
+          "name": "buf_len",
+          "rust_type": "*mut core::ffi::c_void"
         }
       ],
+      "return_rust_type": "*mut core::ffi::c_void",
       "return_type": "fdb_blob_t",
       "semantics_verified": false,
       "signature_ref": "sig-fdb-blob-make",
@@ -216,7 +221,7 @@
     {
       "definition_status": "real_source_bound",
       "header_files": [],
-      "model_contract": "flashdb_external_direct_callee_signature_context",
+      "model_contract": "declared_external_direct_callee_signature_context",
       "name": "fdb_kv_del",
       "parameters": [
         {
@@ -241,8 +246,8 @@
         }
       ],
       "source_ref": "src/fdb_kvdb.c#fdb_kv_del",
-      "stub_boundary": "flashdb_external_direct_callee_context_only",
-      "stub_generation": "not_emitted_flashdb_signature_context",
+      "stub_boundary": "declared_external_direct_callee_context_only",
+      "stub_generation": "not_emitted_declared_signature_context",
       "stub_kind": "compile_only",
       "supported": true,
       "unsupported_reasons": []
@@ -250,7 +255,7 @@
     {
       "definition_status": "real_source_bound",
       "header_files": [],
-      "model_contract": "flashdb_external_direct_callee_signature_context",
+      "model_contract": "declared_external_direct_callee_signature_context",
       "name": "fdb_kv_set_blob",
       "parameters": [
         {
@@ -280,8 +285,8 @@
         }
       ],
       "source_ref": "src/fdb_kvdb.c#fdb_kv_set_blob",
-      "stub_boundary": "flashdb_external_direct_callee_context_only",
-      "stub_generation": "not_emitted_flashdb_signature_context",
+      "stub_boundary": "declared_external_direct_callee_context_only",
+      "stub_generation": "not_emitted_declared_signature_context",
       "stub_kind": "compile_only",
       "supported": true,
       "unsupported_reasons": []
@@ -318,10 +323,11 @@
     {
       "accepted_named_slice_evidence": {
         "accepted_evidence_authoritative": true,
-        "boundary": "This validates the named fdb_blob_make slice through accepted evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
+        "boundary": "This validates fdb_blob_make through accepted named-slice evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
+        "callee": "fdb_blob_make",
         "final_verification_path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
-        "final_verification_sha256": "812edc7b2f7ccafc486286c1380774414f943e472984e9e4929fdd78df003ce5",
-        "generated_draft_semantic_pass": false,
+        "final_verification_sha256": "e6ca1c952592ee3dc121193e3db51a01b2abf6b96466575f2f5495014c482273",
+        "generated_draft_semantic_pass": true,
         "kind": "accepted_named_slice_evidence",
         "semantic_pass": true,
         "slice_id": "real-fdb-blob-make",
@@ -329,22 +335,26 @@
       },
       "definition_status": "real_source_bound",
       "header_files": [],
-      "model_contract": "fdb_blob_make_named_slice_accepted_evidence",
+      "model_contract": "accepted_named_slice_evidence",
       "name": "fdb_blob_make",
       "parameters": [
         {
           "c_type": "fdb_blob_t",
-          "name": "blob"
+          "name": "blob",
+          "rust_type": "*mut core::ffi::c_void"
         },
         {
           "c_type": "const void*",
-          "name": "value_buf"
+          "name": "value_buf",
+          "rust_type": "*const core::ffi::c_void"
         },
         {
           "c_type": "size_t",
-          "name": "buf_len"
+          "name": "buf_len",
+          "rust_type": "*mut core::ffi::c_void"
         }
       ],
+      "return_rust_type": "*mut core::ffi::c_void",
       "return_type": "fdb_blob_t",
       "semantics_verified": false,
       "signature_ref": "sig-fdb-blob-make",
@@ -364,7 +374,7 @@
     {
       "definition_status": "real_source_bound",
       "header_files": [],
-      "model_contract": "flashdb_external_direct_callee_signature_context",
+      "model_contract": "declared_external_direct_callee_signature_context",
       "name": "fdb_kv_del",
       "parameters": [
         {
@@ -389,8 +399,8 @@
         }
       ],
       "source_ref": "src/fdb_kvdb.c#fdb_kv_del",
-      "stub_boundary": "flashdb_external_direct_callee_context_only",
-      "stub_generation": "not_emitted_flashdb_signature_context",
+      "stub_boundary": "declared_external_direct_callee_context_only",
+      "stub_generation": "not_emitted_declared_signature_context",
       "stub_kind": "compile_only",
       "supported": true,
       "unsupported_reasons": []
@@ -398,7 +408,7 @@
     {
       "definition_status": "real_source_bound",
       "header_files": [],
-      "model_contract": "flashdb_external_direct_callee_signature_context",
+      "model_contract": "declared_external_direct_callee_signature_context",
       "name": "fdb_kv_set_blob",
       "parameters": [
         {
@@ -428,8 +438,8 @@
         }
       ],
       "source_ref": "src/fdb_kvdb.c#fdb_kv_set_blob",
-      "stub_boundary": "flashdb_external_direct_callee_context_only",
-      "stub_generation": "not_emitted_flashdb_signature_context",
+      "stub_boundary": "declared_external_direct_callee_context_only",
+      "stub_generation": "not_emitted_declared_signature_context",
       "stub_kind": "compile_only",
       "supported": true,
       "unsupported_reasons": []
@@ -465,7 +475,7 @@
   "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
   "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "88aba8575d9a380017bdf11874cad87828dcd02e",
+  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
   "schema_version": 1,
   "signature_bindings": [
     {
@@ -500,7 +510,7 @@
   "slice_id": "real-fdb-kv-set",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-    "sha256": "bf49e63a9695730fb43e47dae0f3fb2439da286d023a54f427f5c94edcfda5da"
+    "sha256": "5484bfe9c6e68fdaa20c41bd120d049ee8c7470979c25b3dbab16eacf20bede2"
   },
   "source_boundary": {
     "direct_call_edges": [],

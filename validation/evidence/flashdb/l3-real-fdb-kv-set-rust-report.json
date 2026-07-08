@@ -1,0 +1,46 @@
+{
+  "case_count": 2,
+  "cases": [
+    {
+      "coverage_kind": "uninitialized-db-set-value",
+      "db_name": "unit-kv",
+      "db_state": "uninitialized_named",
+      "id": "uninit-set-value",
+      "key": "boot_count",
+      "return_code": 7,
+      "status": "draft_expected_from_flashdb_init_guard",
+      "value": "123"
+    },
+    {
+      "coverage_kind": "uninitialized-db-delete-null",
+      "db_name": "unit-kv",
+      "db_state": "uninitialized_named",
+      "id": "uninit-delete-null",
+      "key": "boot_count",
+      "return_code": 7,
+      "status": "draft_expected_from_flashdb_init_guard",
+      "value": null
+    }
+  ],
+  "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+  "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/fdb_kv_set.rs",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-set",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c",
+      "src/fdb_utils.c",
+      "inc/fdb_def.h",
+      "inc/flashdb.h"
+    ],
+    "functions": [
+      "fdb_kv_set"
+    ],
+    "signature": "fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value)"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb"
+}

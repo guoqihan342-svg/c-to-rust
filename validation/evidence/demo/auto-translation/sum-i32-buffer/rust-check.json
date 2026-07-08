@@ -1,12 +1,44 @@
 {
-  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-8bujxxea C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\sum-i32-buffer\\l3-sum-i32-buffer-rust-draft.rs",
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
+    "sha256": "733f134bb5303d17281371125f60bf4d447eeeeff8e46a0c8598ae56906e711e",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir /tmp/c2r-rust-check-e6gk71vj validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-rust-draft.rs",
   "error_count": 0,
   "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [],
+    "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
+    "status": "not_applicable"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-route-decision.json",
+    "sha256": "83c89f724533f22c078820d506f00120b1f65da77edd61fdbfda58fdb2ffe1d6",
+    "status": "recorded"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "mixed",
+    "bindings": [],
+    "semantics_verified": false,
+    "status": "none"
+  },
   "schema_version": 1,
   "self_healing": {
     "blocked_repairs": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-self-healing-blocked-repairs.json",
     "patch_events": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-patch-events.jsonl",
     "status": "none"
   },
-  "status": "passed"
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "66497bad567b9ef98bcf720462d94692d5394ad5e9e60c42c884b22077497fac",
+    "status": "passed"
+  }
 }

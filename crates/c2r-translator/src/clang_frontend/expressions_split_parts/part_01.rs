@@ -36,6 +36,50 @@ fn null_pointer_skeleton_from_cast(
 }
 
 #[cfg(feature = "typed-ir")]
+fn integral_to_boolean_literal_skeleton_from_cast(
+    expr: &Value,
+    operand: &ClangExprSkeleton,
+    node: &str,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    let target = expr_type(expr)?;
+    if !is_bool_type_skeleton(&target) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: node.to_string(),
+            reason: format!(
+                "castKind IntegralToBoolean target {} is outside the current clang lowering skeleton",
+                target.spelled
+            ),
+        });
+    }
+    let ClangExprSkeleton::IntegerLiteral { value, .. } = operand else {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: node.to_string(),
+            reason:
+                "castKind IntegralToBoolean with non-literal operand is outside the bounded boolean literal subset"
+                    .to_string(),
+        });
+    };
+    let value = u64::from(*value != 0);
+    Ok(ClangExprSkeleton::IntegerLiteral {
+        value,
+        spelling: value.to_string(),
+        ty: target,
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_bool_type_skeleton(ty: &ClangTypeSkeleton) -> bool {
+    ty.canonical == "_Bool"
+        && matches!(
+            ty.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 8
+            }
+        )
+}
+
+#[cfg(feature = "typed-ir")]
 fn array_subscript_base_skeleton_from_ast(
     base: &Value,
     preserve_integral_casts: bool,

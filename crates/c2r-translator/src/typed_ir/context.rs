@@ -7,11 +7,13 @@ struct EmitContext {
     nullable_pointer_params: HashSet<String>,
     readonly_pointer_read_params: HashSet<String>,
     readonly_pointer_mentioned_params: HashSet<String>,
+    mutable_pointer_write_params: HashSet<String>,
     opaque_pointer_call_arg_params: HashSet<String>,
     raw_direct_call_pointer_params: HashSet<String>,
     mutable_record_pointer_write_params: HashSet<String>,
     record_pointer_field_value_params: HashSet<String>,
     mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
+    mutable_pointer_read_slots: HashSet<MutablePointerSlotKey>,
     zero_initialized_record_locals: HashSet<String>,
     readonly_globals: HashMap<String, IrGlobal>,
 }
@@ -32,6 +34,11 @@ struct RecordFieldUse<'a> {
 struct MutableRecordPointerFieldKey {
     base: String,
     field: String,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct MutablePointerSlotKey {
+    base: String,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -70,6 +77,18 @@ impl EmitContext {
             &readonly_pointer_uses.mentioned_params,
         )?;
         validate_mutable_pointer_write_alias_boundary(&function.body, &function.params, &policy)?;
+        let mutable_pointer_params = function
+            .params
+            .iter()
+            .filter(|param| mutable_pointer_slice_element_type(&param.ty).is_some())
+            .map(|param| (param.name.as_str(), &param.ty))
+            .collect::<HashMap<_, _>>();
+        let mut mutable_pointer_write_params = HashSet::new();
+        collect_mutable_pointer_write_params_from_body(
+            &function.body,
+            &mutable_pointer_params,
+            &mut mutable_pointer_write_params,
+        )?;
         let opaque_pointer_call_arg_params =
             collect_opaque_pointer_call_arg_params(&function.body, &function.params);
         let raw_direct_call_pointer_params =
@@ -104,11 +123,13 @@ impl EmitContext {
             nullable_pointer_params,
             readonly_pointer_read_params: readonly_pointer_uses.read_params,
             readonly_pointer_mentioned_params: readonly_pointer_uses.mentioned_params,
+            mutable_pointer_write_params,
             opaque_pointer_call_arg_params,
             raw_direct_call_pointer_params,
             mutable_record_pointer_write_params,
             record_pointer_field_value_params,
             mutable_record_pointer_read_fields: HashSet::new(),
+            mutable_pointer_read_slots: HashSet::new(),
             zero_initialized_record_locals,
             readonly_globals,
         })
@@ -138,6 +159,10 @@ impl EmitContext {
         self.readonly_pointer_mentioned_params.contains(name)
     }
 
+    fn is_mutable_pointer_write_param(&self, name: &str) -> bool {
+        self.mutable_pointer_write_params.contains(name)
+    }
+
     fn is_mutable_record_pointer_write_param(&self, name: &str) -> bool {
         self.mutable_record_pointer_write_params.contains(name)
     }
@@ -163,6 +188,13 @@ impl EmitContext {
             .contains(&MutableRecordPointerFieldKey {
                 base: name.to_string(),
                 field: field.to_string(),
+            })
+    }
+
+    fn is_mutable_pointer_read_slot(&self, name: &str) -> bool {
+        self.mutable_pointer_read_slots
+            .contains(&MutablePointerSlotKey {
+                base: name.to_string(),
             })
     }
 

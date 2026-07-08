@@ -1,4 +1,5 @@
     use super::*;
+    use crate::{CBoundary, CDirectDependency, CParameter, CSignature};
     use crate::typed_ir::{
         IrBinOp, IrExpr, IrFunction, IrIncDecOp, IrParam, IrStmt, IrType, IrTypeKind, SourceSpan,
     };
@@ -148,6 +149,256 @@
             .diagnostics
             .iter()
             .any(|diagnostic| diagnostic.contains("external clang AST dump was not invoked")));
+    }
+
+    #[test]
+    fn slice_source_translation_unit_declares_external_boundaries_without_project_macros() {
+        let spec = SliceSpec {
+            target_id: "flashdb".to_string(),
+            slice_id: "real-fdb-kv-del".to_string(),
+            function_name: "fdb_kv_del".to_string(),
+            c_source: "fdb_err_t fdb_kv_del(fdb_kvdb_t db, const char *key) { fdb_err_t result = FDB_NO_ERR; if (!db_init_ok(db)) { FDB_INFO(\"bad %s\\n\", db_name(db)); return FDB_INIT_FAILED; } return result; }".to_string(),
+            c_boundary: CBoundary {
+                signatures: vec![
+                    CSignature {
+                        function: "fdb_kv_del".to_string(),
+                        return_type: "fdb_err_t".to_string(),
+                        parameters: vec![
+                            CParameter {
+                                name: "db".to_string(),
+                                c_type: "fdb_kvdb_t".to_string(),
+                                ..CParameter::default()
+                            },
+                            CParameter {
+                                name: "key".to_string(),
+                                c_type: "const char *".to_string(),
+                                ..CParameter::default()
+                            },
+                        ],
+                        ..CSignature::default()
+                    },
+                    CSignature {
+                        role: "external_direct_callee".to_string(),
+                        function: "db_init_ok".to_string(),
+                        return_type: "bool".to_string(),
+                        parameters: vec![CParameter {
+                            name: "db".to_string(),
+                            c_type: "fdb_kvdb_t".to_string(),
+                            ..CParameter::default()
+                        }],
+                        ..CSignature::default()
+                    },
+                    CSignature {
+                        role: "external_direct_callee".to_string(),
+                        function: "FDB_INFO".to_string(),
+                        return_type: "void".to_string(),
+                        parameters: vec![
+                            CParameter {
+                                name: "fmt".to_string(),
+                                c_type: "const char *".to_string(),
+                                ..CParameter::default()
+                            },
+                            CParameter {
+                                name: "name".to_string(),
+                                c_type: "const char *".to_string(),
+                                ..CParameter::default()
+                            },
+                        ],
+                        ..CSignature::default()
+                    },
+                    CSignature {
+                        role: "external_direct_callee".to_string(),
+                        function: "db_name".to_string(),
+                        return_type: "const char *".to_string(),
+                        parameters: vec![CParameter {
+                            name: "db".to_string(),
+                            c_type: "fdb_kvdb_t".to_string(),
+                            ..CParameter::default()
+                        }],
+                        ..CSignature::default()
+                    },
+                ],
+                direct_dependencies: vec![CDirectDependency {
+                    kind: "constant".to_string(),
+                    name: "FDB_INIT_FAILED".to_string(),
+                    value: Some(serde_json::json!(7)),
+                    ..CDirectDependency::default()
+                }],
+                ..CBoundary::default()
+            },
+            ..SliceSpec::default()
+        };
+
+        let source = slice_source_translation_unit(&spec);
+
+        assert!(source.contains("typedef int fdb_err_t;"), "{source}");
+        assert!(source.contains("typedef void *fdb_kvdb_t;"), "{source}");
+        assert!(source.contains("enum { FDB_INIT_FAILED = 7 };"), "{source}");
+        assert!(source.contains("enum { FDB_NO_ERR = 0 };"), "{source}");
+        assert!(source.contains("bool db_init_ok(fdb_kvdb_t db);"), "{source}");
+        assert!(
+            source.contains("void FDB_INFO(const char * fmt, const char * name);"),
+            "{source}"
+        );
+        assert!(!source.contains("flashdb.h"), "{source}");
+    }
+
+    #[test]
+    fn slice_source_translation_unit_binds_record_pointer_typedef_alias_when_struct_is_known() {
+        let spec = SliceSpec {
+            target_id: "flashdb".to_string(),
+            slice_id: "record-constructor".to_string(),
+            function_name: "set_blob".to_string(),
+            c_source: "int set_blob(struct fdb_blob *slot, const char *value) { struct fdb_blob blob; return consume_blob(fdb_blob_make(&blob, value, strlen(value))); }".to_string(),
+            c_boundary: CBoundary {
+                signatures: vec![
+                    CSignature {
+                        function: "set_blob".to_string(),
+                        return_type: "int".to_string(),
+                        parameters: vec![
+                            CParameter {
+                                name: "slot".to_string(),
+                                c_type: "struct fdb_blob *".to_string(),
+                                ..CParameter::default()
+                            },
+                            CParameter {
+                                name: "value".to_string(),
+                                c_type: "const char *".to_string(),
+                                ..CParameter::default()
+                            },
+                        ],
+                        ..CSignature::default()
+                    },
+                    CSignature {
+                        role: "external_direct_callee".to_string(),
+                        function: "fdb_blob_make".to_string(),
+                        return_type: "fdb_blob_t".to_string(),
+                        parameters: vec![
+                            CParameter {
+                                name: "blob".to_string(),
+                                c_type: "fdb_blob_t".to_string(),
+                                ..CParameter::default()
+                            },
+                            CParameter {
+                                name: "value".to_string(),
+                                c_type: "const void *".to_string(),
+                                ..CParameter::default()
+                            },
+                            CParameter {
+                                name: "len".to_string(),
+                                c_type: "size_t".to_string(),
+                                ..CParameter::default()
+                            },
+                        ],
+                        ..CSignature::default()
+                    },
+                ],
+                ..CBoundary::default()
+            },
+            ..SliceSpec::default()
+        };
+
+        let source = slice_source_translation_unit(&spec);
+
+        assert!(source.contains("struct fdb_blob { unsigned char _c2r_opaque; };"), "{source}");
+        assert!(source.contains("typedef struct fdb_blob *fdb_blob_t;"), "{source}");
+        assert!(!source.contains("typedef void *fdb_blob_t;"), "{source}");
+    }
+
+    #[test]
+    fn slice_source_translation_unit_declares_signature_pointer_member_fields() {
+        let spec = SliceSpec {
+            target_id: "libuv".to_string(),
+            slice_id: "ip4-addr".to_string(),
+            function_name: "uv_ip4_addr".to_string(),
+            c_source: "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) { addr->sin_family = AF_INET; return 0; }".to_string(),
+            c_boundary: CBoundary {
+                signatures: vec![CSignature {
+                    function: "uv_ip4_addr".to_string(),
+                    return_type: "int".to_string(),
+                    parameters: vec![
+                        CParameter {
+                            name: "ip".to_string(),
+                            c_type: "const char*".to_string(),
+                            ..CParameter::default()
+                        },
+                        CParameter {
+                            name: "port".to_string(),
+                            c_type: "int".to_string(),
+                            ..CParameter::default()
+                        },
+                        CParameter {
+                            name: "addr".to_string(),
+                            c_type: "struct sockaddr_in*".to_string(),
+                            ..CParameter::default()
+                        },
+                    ],
+                    ..CSignature::default()
+                }],
+                direct_dependencies: vec![CDirectDependency {
+                    kind: "constant".to_string(),
+                    name: "AF_INET".to_string(),
+                    value: Some(serde_json::json!(2)),
+                    ..CDirectDependency::default()
+                }],
+                ..CBoundary::default()
+            },
+            ..SliceSpec::default()
+        };
+
+        let source = slice_source_translation_unit(&spec);
+
+        assert!(
+            source.contains("struct sockaddr_in {\n    int sin_family;\n    unsigned char _c2r_opaque;\n};"),
+            "{source}"
+        );
+        assert!(source.contains("enum { AF_INET = 2 };"), "{source}");
+    }
+
+    #[test]
+    fn slice_source_translation_unit_does_not_redeclare_build_profile_defines() {
+        let spec = SliceSpec {
+            target_id: "libuv".to_string(),
+            slice_id: "ip4-addr".to_string(),
+            function_name: "uv_ip4_addr".to_string(),
+            c_source: "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) { addr->sin_family = AF_INET; return 0; }".to_string(),
+            c_boundary: CBoundary {
+                signatures: vec![CSignature {
+                    function: "uv_ip4_addr".to_string(),
+                    return_type: "int".to_string(),
+                    parameters: vec![CParameter {
+                        name: "addr".to_string(),
+                        c_type: "struct sockaddr_in*".to_string(),
+                        ..CParameter::default()
+                    }],
+                    ..CSignature::default()
+                }],
+                ..CBoundary::default()
+            },
+            build_profile: BuildProfile {
+                defines: vec!["AF_INET=2".to_string()],
+                ..test_profile()
+            },
+            ..SliceSpec::default()
+        };
+
+        let source = slice_source_translation_unit(&spec);
+
+        assert!(!source.contains("enum { AF_INET"), "{source}");
+        assert!(source.contains("addr->sin_family = AF_INET"), "{source}");
+    }
+
+    #[test]
+    fn slice_source_constant_scan_ignores_null_strings_and_comments() {
+        let names = collect_object_like_uppercase_identifiers(
+            "int sample(void) { /* SKIP_COMMENT */ const char *msg = \"KV OK\"; return VALUE + (NULL == 0); }",
+        );
+
+        assert!(names.contains("VALUE"));
+        assert!(!names.contains("NULL"));
+        assert!(!names.contains("KV"));
+        assert!(!names.contains("OK"));
+        assert!(!names.contains("SKIP_COMMENT"));
     }
 
     #[test]
@@ -532,4 +783,85 @@
             "{:?}",
             buf.boundary_decisions
         );
+    }
+
+    #[test]
+    fn clang_lowered_type_map_records_unused_readonly_8_bit_pointer_as_raw_candidate() {
+        let i32_ty = signed_ty("int", "int", 32);
+        let mut const_char_ty = signed_ty("char", "char", 8);
+        const_char_ty.is_const = true;
+        let const_char_ptr = pointer_ty("const char *", "const char *", const_char_ty, false);
+        let sockaddr_ptr = pointer_ty(
+            "struct sockaddr_in *",
+            "struct sockaddr_in *",
+            record_ty("sockaddr_in"),
+            false,
+        );
+        let function = IrFunction {
+            name: "uv_ip4_addr".to_string(),
+            return_type: i32_ty.clone(),
+            params: vec![
+                param("ip", const_char_ptr),
+                param("port", i32_ty.clone()),
+                param("addr", sockaddr_ptr.clone()),
+            ],
+            body: vec![
+                IrStmt::Assign {
+                    target: IrExpr::Member {
+                        base: Box::new(var("addr", sockaddr_ptr)),
+                        field: "sin_family".to_string(),
+                        ty: i32_ty.clone(),
+                        is_arrow: true,
+                        source_span: None,
+                    },
+                    value: IrExpr::LitInt {
+                        value: 2,
+                        spelling: "2".to_string(),
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    source_span: None,
+                },
+                IrStmt::Return {
+                    value: Some(IrExpr::LitInt {
+                        value: 0,
+                        spelling: "0".to_string(),
+                        ty: i32_ty,
+                        source_span: None,
+                    }),
+                    source_span: None,
+                },
+            ],
+            source_span: None,
+        };
+        let spec = SliceSpec {
+            target_id: "libuv".to_string(),
+            slice_id: "ip4-addr".to_string(),
+            source_commit: "5e7d51a".to_string(),
+            function_name: "uv_ip4_addr".to_string(),
+            build_profile: test_profile(),
+            ..SliceSpec::default()
+        };
+        let mut result = TranslationResult::default();
+
+        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
+
+        let ip_mapping = result
+            .type_map
+            .mappings
+            .iter()
+            .find(|mapping| mapping.symbol == "ip")
+            .expect("ip type mapping");
+        assert_eq!(ip_mapping.rust_type, "*const core::ffi::c_void");
+        let ip_pointer = result
+            .pointer_graph
+            .nodes
+            .iter()
+            .find(|node| node.id == "ip")
+            .expect("ip pointer node");
+        assert_eq!(ip_pointer.rust_boundary, "*const core::ffi::c_void");
+        assert!(ip_pointer.read_effects.is_empty());
+        assert!(ip_pointer
+            .boundary_decisions
+            .contains(&"unused_readonly_8_bit_pointer_raw_candidate".to_string()));
     }

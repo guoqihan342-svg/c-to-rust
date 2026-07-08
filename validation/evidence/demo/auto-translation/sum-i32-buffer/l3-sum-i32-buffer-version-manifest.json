@@ -2,7 +2,7 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json",
-    "fixture_sha256": "95f649a00e72cb52b0f2540a3b3d2f2df4c203a202980a38635952d5f4d62149",
+    "fixture_sha256": "2ad1734fceba9c9af63d6f5d7a6a0bcc8be037c022dad86f340b8d57e9d10d3c",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
       "c_oracle": "2ad1734fceba9c9af63d6f5d7a6a0bcc8be037c022dad86f340b8d57e9d10d3c",
@@ -43,33 +43,122 @@
       "risk_level": "unknown_alias"
     },
     "build_profile_hash": "076d32e392f6a18e19179cd801a7464482b4b049dde5d4cb339ecb3bca018b61",
+    "c2rust_baseline_identity": {
+      "sha256": "385a10055d5cbae35b39e7014c160fdbd4ec2d50c225287e476851b9a6c812e1",
+      "status": "skipped"
+    },
+    "c_oracle_harness_identity": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c-oracle-harness-draft.c",
+      "sha256": "75ca200f45f3b8a4bac665c6158c1c02f5f4809e8ea9788a0787437efa59e984",
+      "status": "draft"
+    },
     "cache_input_fields": [
       "source_commit",
       "source_file_hashes",
       "slice_spec_sha256",
       "fixture_hash",
       "build_profile_hash",
+      "competition_environment_identity",
       "cargo_lock_hash",
       "tool_versions",
       "schema_versions",
       "translator_version",
       "translator_manifest_sha256",
       "command_arguments",
-      "alias_gate_identity"
+      "alias_gate_identity",
+      "effect_graph_identity",
+      "scalar_ub_contract_identity",
+      "oracle_boundary_contract_identity",
+      "c2rust_baseline_identity",
+      "route_decision_identity",
+      "validation_profile_identity",
+      "global_dependency_identity",
+      "c_oracle_harness_identity",
+      "translator_feature_set",
+      "clang_lowering_identity"
     ],
     "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "clang_lowering_identity": {
+      "clang_path": "/usr/bin/clang",
+      "clang_path_status": "configured",
+      "clang_version": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+      "enabled": true,
+      "features": [
+        "clang-lowering-report"
+      ],
+      "frontend": "clang_ast_dump_json",
+      "ignored_env_for_ast_dump": {
+        "LIBCLANG_PATH": {
+          "reason": "ignored_for_ast_dump",
+          "status": "not_configured",
+          "value": ""
+        }
+      },
+      "requires_env": [
+        "CLANG_PATH"
+      ]
+    },
     "command_arguments": [
       "auto_migrate.py",
       "--slice-spec",
       "validation/slice-specs/demo-sum-i32-buffer.json",
-      "--accept-existing-evidence"
+      "--accept-existing-evidence",
+      "--emit-clang-dry-run",
+      "--emit-clang-lowering-report"
     ],
+    "competition_environment_identity": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "dependent_artifacts": {
+      "c2rust_baseline": {
+        "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
+        "sha256": "733f134bb5303d17281371125f60bf4d447eeeeff8e46a0c8598ae56906e711e",
+        "status": "skipped"
+      },
+      "route_decision": {
+        "level": "L1",
+        "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-route-decision.json",
+        "sha256": "83c89f724533f22c078820d506f00120b1f65da77edd61fdbfda58fdb2ffe1d6",
+        "status": "recorded"
+      },
+      "validation_profile": {
+        "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-validation-profile.json",
+        "profile": "L1-dev",
+        "sha256": "66497bad567b9ef98bcf720462d94692d5394ad5e9e60c42c884b22077497fac",
+        "status": "passed"
+      }
+    },
+    "effect_graph_identity": {
+      "alias_gate_decision": "requires_noalias_contract",
+      "alias_sensitive": true,
+      "read_effect_count": 1,
+      "read_nodes": [
+        "values"
+      ],
+      "schema_version": 2,
+      "sha256": "82920c7e26be73d7c18c11c59cdc6863a131cc111dcbb86b2639c73fa573c4e5",
+      "write_effect_count": 1,
+      "write_nodes": [
+        "out"
+      ]
+    },
     "fixture_hash": "sum-i32-buffer-fixture",
+    "global_dependency_identity": {
+      "count": 0,
+      "names": [],
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
     "invalidates": [
       "context_pack",
       "type_map",
       "cfg",
       "pointer_graph",
+      "c2rust_baseline",
+      "route_decision",
+      "validation_profile",
       "rust_draft",
       "patch_plan",
       "ai_candidate",
@@ -79,35 +168,56 @@
       "negative_diff",
       "unsafe_ledger",
       "final_verification",
+      "auto_translation_manifest",
       "summary"
     ],
+    "oracle_boundary_contract_identity": {
+      "sha256": "f7f7a243050aa4dc6e990d7f49d3decb095b2367f088d811d30bf1f62d163e1d",
+      "status": "sufficient_for_semantic_pass"
+    },
+    "route_decision_identity": {
+      "sha256": "5bd97fb1f83cdbe0c4ce73d017818cd32d9288b863bacc90b08db01b89e4320c",
+      "status": "recorded"
+    },
+    "scalar_ub_contract_identity": {
+      "sha256": "6b4d81fc1b6e2125a3fa029ff92ad5a1fc2e8c669c55887f29105c48304dc5bc",
+      "status": "recorded"
+    },
     "schema_version": 1,
     "schema_versions": {
       "auto_cache_metadata": 1,
       "auto_translation_plan": 1,
       "cfg": 1,
       "evidence_manifest": 1,
-      "pointer_graph": 1,
+      "pointer_graph": 2,
       "type_map": 1
     },
     "slice_id": "sum-i32-buffer",
-    "slice_spec_sha256": "5f1cda9a0ca58bac78b28cbd7c2e22f299126e58472e54b7fb88c36b313df845",
+    "slice_spec_sha256": "00cd9f5abff8de94eca869ba982867cbdadf44754ffdf97592d96cc9caf956f6",
     "source_commit": "demo-sum-i32-buffer-20260625",
     "source_file_hashes": {
-      "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json": "95f649a00e72cb52b0f2540a3b3d2f2df4c203a202980a38635952d5f4d62149",
+      "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json": "2ad1734fceba9c9af63d6f5d7a6a0bcc8be037c022dad86f340b8d57e9d10d3c",
       "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py": "947b4eee8403ddc7f6165b1e324628838b1dd0920ba099894193005a00bc0e7f"
     },
     "target_id": "demo",
     "tool_versions": {
       "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
-      "openspec": "1.4.1",
-      "python": "Python 3.14.2",
+      "openspec": "1.3.1",
+      "python": "Python 3.12.3",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
-    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
-    "translator_version": "0.1.0"
+    "translator_feature_set": [
+      "clang-frontend",
+      "clang-lowering-report"
+    ],
+    "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
+    "translator_version": "0.1.0",
+    "validation_profile_identity": {
+      "sha256": "e80f853817391ab7cf2e1308947516f4042469ca171996f436ae9c94faa749bd",
+      "status": "passed"
+    }
   },
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
   "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
   "schema_version": 1,
   "semantic_pass": true,

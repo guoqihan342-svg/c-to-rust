@@ -92,6 +92,12 @@
           ]
         }
       ],
+      "noalias_required": [
+        [
+          "values",
+          "out"
+        ]
+      ],
       "aliasing_proven": false
     }
   },
@@ -201,7 +207,7 @@
       "No support for negative len values.",
       "No support for signed overflow; fixture sums remain inside C int defined range.",
       "No support for arbitrary pointer arithmetic such as *(values + i).",
-      "No aliasing proof between values and out."
+      "No whole-program alias safety proof beyond the declared values/out noalias precondition."
     ],
     "must_not_claim": [
       "full automatic C99/C11 translation",
@@ -217,7 +223,7 @@
     "No support for negative len values.",
     "No support for signed overflow; fixture sums remain inside C int defined range.",
     "No support for arbitrary pointer arithmetic such as *(values + i).",
-    "No aliasing proof between values and out."
+    "No whole-program alias safety proof beyond the declared values/out noalias precondition."
   ],
   "cache_invalidation_keys": [
     "source.source_commit",
@@ -225,6 +231,8 @@
     "fixture_contract.hash",
     "build_profile.profile_id",
     "rust_boundary.module",
+    "c_boundary.pointer_contract.aliasing_proven",
+    "c_boundary.pointer_contract.noalias_required",
     "translator_version"
   ]
 }

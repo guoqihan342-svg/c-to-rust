@@ -10,8 +10,8 @@
   },
   "build_profile_hash": "37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
   "c2rust_baseline_identity": {
-    "sha256": "65ef2580b0e627be080b0ca19951d67b9f86a494ca4c545d60e579c2f825c57d",
-    "status": "skipped"
+    "status": "skipped",
+    "sha256": "65ef2580b0e627be080b0ca19951d67b9f86a494ca4c545d60e579c2f825c57d"
   },
   "c_oracle_harness_identity": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
@@ -93,7 +93,7 @@
     "validation_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
       "profile": "L4-accepted-evidence",
-      "sha256": "a95504d3e4a836553a659740136e0f344470267267255ce4656341d36acbb3d0",
+      "sha256": "79f3880cb5d80fbe879104cb55c9e639331d16198398d2b61e316f492752ad0a",
       "status": "passed"
     }
   },
@@ -136,12 +136,12 @@
     "summary"
   ],
   "oracle_boundary_contract_identity": {
-    "sha256": "f3900ed76a7396483d36fa2d88467336b40f06a7960fa7dde5e7463f57cf1ea3",
-    "status": "sufficient_for_semantic_pass"
+    "status": "sufficient_for_semantic_pass",
+    "sha256": "f3900ed76a7396483d36fa2d88467336b40f06a7960fa7dde5e7463f57cf1ea3"
   },
   "route_decision_identity": {
-    "sha256": "7da1e5bf1107fc837a76d4d0a1fce65f219b9094a7c0eb374a60e7d93b6d0f81",
-    "status": "refused"
+    "status": "refused",
+    "sha256": "7da1e5bf1107fc837a76d4d0a1fce65f219b9094a7c0eb374a60e7d93b6d0f81"
   },
   "scalar_ub_contract_identity": {
     "sha256": "60ada53078da7f03f76b70dabcd8cb4474838569e1381c9d45dc8b2d7501f764",
@@ -176,7 +176,7 @@
   "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "2e4af2417e1fc62fa037e5e73fbd157a4d96ebd0cb6b5040c6ee9a2e979bf2c9",
-    "status": "passed"
+    "status": "passed",
+    "sha256": "8b6cfdf3871b1a138e05dbc8f9c86d395fd04273f83511a5e5114bd44d030916"
   }
 }

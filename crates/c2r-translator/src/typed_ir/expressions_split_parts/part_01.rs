@@ -65,6 +65,11 @@ fn emit_call_arg_expr(
         } if mutable_record_pointer_pointee_type(ty).is_some() => {
             emit_record_pointer_return_call_arg_expr(callee, args, ty, symbols, context)
         }
+        IrExpr::Call {
+            callee, args, ty, ..
+        } if pointer_return_nested_call_arg_type_allowed(ty) => {
+            emit_pointer_return_nested_call_arg_expr(callee, args, ty, symbols, context)
+        }
         IrExpr::Var { name, ty, .. } if emit_opaque_void_pointer_type(ty).is_some() => {
             emit_opaque_pointer_call_arg_var(name, symbols, context)
         }
@@ -73,10 +78,47 @@ fn emit_call_arg_expr(
         {
             emit_raw_direct_call_pointer_arg_var(name, ty, symbols, context)
         }
+        IrExpr::NullPtr { ty, .. } => emit_null_pointer_call_arg_expr(ty),
         IrExpr::AddrOf { operand, ty, .. } => {
             emit_local_record_address_call_arg(operand, ty, symbols)
         }
         _ => emit_expr(arg, symbols, context),
+    }
+}
+
+fn emit_pointer_return_nested_call_arg_expr(
+    callee: &str,
+    args: &[IrExpr],
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    validate_pointer_return_nested_call_arg(callee, args, ty, Some(context))?;
+    let callee = emit_identifier(callee, "pointer return nested call callee")?;
+    let args = args
+        .iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            emit_call_arg_expr(arg, symbols, context).map_err(|detail| {
+                format!("pointer return nested call arg[{index}] {detail}")
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .join(", ");
+    Ok(format!("{callee}({args})"))
+}
+
+fn emit_null_pointer_call_arg_expr(ty: &IrType) -> Result<String, String> {
+    let IrTypeKind::Pointer { pointee } = &ty.kind else {
+        return Err(format!(
+            "null pointer call argument type {} is not a pointer",
+            type_label(ty)
+        ));
+    };
+    if pointee.is_const {
+        Ok("core::ptr::null()".to_string())
+    } else {
+        Ok("core::ptr::null_mut()".to_string())
     }
 }
 
@@ -86,7 +128,12 @@ fn emit_array_decay_call_arg_expr(
     symbols: &HashSet<String>,
     context: &EmitContext,
 ) -> Result<String, String> {
-    let name = validate_array_decay_direct_call_arg(target, expr)?;
+    let name = match validate_array_decay_direct_call_arg(target, expr)? {
+        ArrayDecayDirectCallArg::Binding(name) => name,
+        ArrayDecayDirectCallArg::ByteStringLiteral(bytes) => {
+            return emit_byte_string_literal_decay_call_arg(target, &bytes);
+        }
+    };
     if !symbols.contains(name) {
         if let IrExpr::Var { ty, .. } = expr {
             if let Some(global) = context.readonly_global(name) {
@@ -101,6 +148,38 @@ fn emit_array_decay_call_arg_expr(
     }
     let name = emit_identifier(name, "array-to-pointer decay call argument")?;
     Ok(format!("&{name}"))
+}
+
+fn emit_byte_string_literal_decay_call_arg(
+    target: &IrType,
+    bytes: &[u8],
+) -> Result<String, String> {
+    let target_element = byte_string_pointer_element_type(target)?;
+    let target = emit_scalar_type(target_element)
+        .map_err(|detail| format!("string literal pointer target has {detail}"))?;
+    Ok(format!(
+        "{}.as_ptr().cast::<{}>()",
+        emit_rust_byte_string_literal(bytes),
+        target
+    ))
+}
+
+fn emit_rust_byte_string_literal(bytes: &[u8]) -> String {
+    let mut literal = String::from("b\"");
+    for byte in bytes {
+        match *byte {
+            b'\n' => literal.push_str("\\n"),
+            b'\r' => literal.push_str("\\r"),
+            b'\t' => literal.push_str("\\t"),
+            b'\\' => literal.push_str("\\\\"),
+            b'"' => literal.push_str("\\\""),
+            0 => literal.push_str("\\0"),
+            0x20..=0x7e => literal.push(*byte as char),
+            byte => literal.push_str(&format!("\\x{byte:02x}")),
+        }
+    }
+    literal.push('"');
+    literal
 }
 
 fn emit_record_pointer_return_call_arg_expr(

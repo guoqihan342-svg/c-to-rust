@@ -9,6 +9,21 @@ class _ValidateAutoTranslationEvidenceTestsPart00:
 
             self.assertEqual(module.sha256(path), expected)
 
+    def test_slice_spec_schema_accepts_constant_direct_dependency(self) -> None:
+        module = load_validator_module()
+        schema = module.load_json(REPO_ROOT / "validation/slice-spec-template/slice-spec.schema.json")
+        dependency_schema = schema["definitions"]["dependency"]
+
+        jsonschema.validate(
+            {
+                "kind": "constant",
+                "name": "FDB_INIT_FAILED",
+                "source": "inc/fdb_def.h#fdb_err_t",
+                "value": 7,
+            },
+            dependency_schema,
+        )
+
     def _c2rust_compile_fixture(self, tmp_path: Path) -> tuple[dict, dict, Path]:
         output_file = tmp_path / "c2rust-baseline-output.rs"
         artifact_file = tmp_path / "c2rust-baseline-output.rlib"

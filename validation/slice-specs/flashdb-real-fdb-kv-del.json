@@ -1,0 +1,457 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-del",
+  "level": "L3",
+  "status": "draft",
+  "function_name": "fdb_kv_del",
+  "c_source": "fdb_err_t fdb_kv_del(fdb_kvdb_t db, const char *key)\n{\n    fdb_err_t result = FDB_NO_ERR;\n\n    if (!db_init_ok(db)) {\n        FDB_INFO(\"Error: KV (%s) isn't initialize OK.\\n\", db_name(db));\n        return FDB_INIT_FAILED;\n    }\n\n    /* lock the KV cache */\n    db_lock(db);\n\n    result = del_kv(db, key, NULL, true);\n\n    /* unlock the KV cache */\n    db_unlock(db);\n\n    return result;\n}",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "fixture_hash": "real-fdb-kv-del-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/flashdb/l1-native-build.json",
+    "status": "required",
+    "accepted": false
+  },
+  "source": {
+    "source_root": "sources/FlashDB",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "repo_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+      "src/fdb.c": "b328b568d5f11accf83609d14809b14ecde204496d661f6baff31a65675aac8e",
+      "src/fdb_file.c": "c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d",
+      "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc",
+      "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+      "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320"
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_branch": "competition"
+  },
+  "c_boundary": {
+    "files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "functions": [
+      "fdb_kv_del"
+    ],
+    "signatures": [
+      {
+        "function": "fdb_kv_del",
+        "return_type": "fdb_err_t",
+        "parameters": [
+          {
+            "name": "db",
+            "c_type": "fdb_kvdb_t",
+            "direction": "input"
+          },
+          {
+            "name": "key",
+            "c_type": "const char *",
+            "direction": "input"
+          }
+        ],
+        "c_source": "fdb_err_t fdb_kv_del(fdb_kvdb_t db, const char *key)\n{\n    fdb_err_t result = FDB_NO_ERR;\n\n    if (!db_init_ok(db)) {\n        FDB_INFO(\"Error: KV (%s) isn't initialize OK.\\n\", db_name(db));\n        return FDB_INIT_FAILED;\n    }\n\n    /* lock the KV cache */\n    db_lock(db);\n\n    result = del_kv(db, key, NULL, true);\n\n    /* unlock the KV cache */\n    db_unlock(db);\n\n    return result;\n}",
+        "source_span": {
+          "file": "src/fdb_kvdb.c",
+          "line_start": 1275,
+          "line_end": 1293,
+          "byte_start": 48345,
+          "byte_end": 48751,
+          "sha256": "7b84bb3061b770b0a75bc8560b4059502f48ce1e87e1fee16f32c698bed09185"
+        },
+        "definition_status": "real_source_bound",
+        "id": "sig-fdb-kv-del"
+      },
+      {
+        "id": "sig-db-init-ok",
+        "role": "external_direct_callee",
+        "function": "db_init_ok",
+        "return_type": "bool",
+        "parameters": [
+          {
+            "name": "db",
+            "c_type": "fdb_kvdb_t",
+            "direction": "input"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#db_init_ok",
+        "definition_status": "declared_external_direct_callee",
+        "c_source": "#define db_init_ok(db) (((fdb_db_t)db)->init_ok)"
+      },
+      {
+        "id": "sig-fdb-info",
+        "role": "external_direct_callee",
+        "function": "FDB_INFO",
+        "return_type": "void",
+        "parameters": [
+          {
+            "name": "fmt",
+            "c_type": "const char *",
+            "direction": "input"
+          },
+          {
+            "name": "name",
+            "c_type": "const char *",
+            "direction": "input"
+          }
+        ],
+        "source_ref": "inc/fdb_def.h#FDB_INFO",
+        "definition_status": "declared_external_direct_callee",
+        "c_source": "#define FDB_INFO(...) FDB_LOG_PREFIX();FDB_PRINT(__VA_ARGS__)"
+      },
+      {
+        "id": "sig-db-name",
+        "role": "external_direct_callee",
+        "function": "db_name",
+        "return_type": "const char *",
+        "parameters": [
+          {
+            "name": "db",
+            "c_type": "fdb_kvdb_t",
+            "direction": "input"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#db_name",
+        "definition_status": "declared_external_direct_callee",
+        "c_source": "#define db_name(db) (((fdb_db_t)db)->name)"
+      },
+      {
+        "id": "sig-db-lock",
+        "role": "external_direct_callee",
+        "function": "db_lock",
+        "return_type": "void",
+        "parameters": [
+          {
+            "name": "db",
+            "c_type": "fdb_kvdb_t",
+            "direction": "input"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#db_lock",
+        "definition_status": "declared_external_direct_callee",
+        "c_source": "#define db_lock(db) do { if (((fdb_db_t)db)->lock) ((fdb_db_t)db)->lock((fdb_db_t)db); } while(0)"
+      },
+      {
+        "id": "sig-del-kv",
+        "role": "external_direct_callee",
+        "function": "del_kv",
+        "return_type": "fdb_err_t",
+        "parameters": [
+          {
+            "name": "db",
+            "c_type": "fdb_kvdb_t",
+            "direction": "input"
+          },
+          {
+            "name": "key",
+            "c_type": "const char *",
+            "direction": "input"
+          },
+          {
+            "name": "old_kv",
+            "c_type": "fdb_kv_t",
+            "direction": "input"
+          },
+          {
+            "name": "complete_del",
+            "c_type": "bool",
+            "direction": "input"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#del_kv",
+        "definition_status": "real_source_bound",
+        "c_source": "static fdb_err_t del_kv(fdb_kvdb_t db, const char *key, fdb_kv_t old_kv, bool complete_del);"
+      },
+      {
+        "id": "sig-db-unlock",
+        "role": "external_direct_callee",
+        "function": "db_unlock",
+        "return_type": "void",
+        "parameters": [
+          {
+            "name": "db",
+            "c_type": "fdb_kvdb_t",
+            "direction": "input"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#db_unlock",
+        "definition_status": "declared_external_direct_callee",
+        "c_source": "#define db_unlock(db) do { if (((fdb_db_t)db)->unlock) ((fdb_db_t)db)->unlock((fdb_db_t)db); } while(0)"
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "fdb_err_t",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "type",
+        "name": "fdb_kvdb_t",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "type",
+        "name": "char",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "constant",
+        "name": "FDB_INIT_FAILED",
+        "source": "inc/fdb_def.h#fdb_err_t",
+        "value": 7
+      },
+      {
+        "kind": "callee",
+        "name": "db_init_ok",
+        "source": "src/fdb_kvdb.c#db_init_ok"
+      },
+      {
+        "kind": "callee",
+        "name": "FDB_INFO",
+        "source": "inc/fdb_def.h#FDB_INFO"
+      },
+      {
+        "kind": "callee",
+        "name": "db_name",
+        "source": "src/fdb_kvdb.c#db_name"
+      },
+      {
+        "kind": "callee",
+        "name": "db_lock",
+        "source": "src/fdb_kvdb.c#db_lock"
+      },
+      {
+        "kind": "callee",
+        "name": "del_kv",
+        "source": "src/fdb_kvdb.c#del_kv"
+      },
+      {
+        "kind": "callee",
+        "name": "db_unlock",
+        "source": "src/fdb_kvdb.c#db_unlock"
+      }
+    ],
+    "external_direct_callees": [
+      {
+        "name": "db_init_ok",
+        "signature_ref": "sig-db-init-ok",
+        "source_ref": "src/fdb_kvdb.c#db_init_ok",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "definition_status": "declared_external_direct_callee",
+        "stub_boundary": "fixture_model_uninitialized_db_only"
+      },
+      {
+        "name": "FDB_INFO",
+        "signature_ref": "sig-fdb-info",
+        "source_ref": "inc/fdb_def.h#FDB_INFO",
+        "source_files": [
+          {
+            "path": "inc/fdb_def.h",
+            "sha256": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320"
+          }
+        ],
+        "definition_status": "declared_external_direct_callee",
+        "stub_boundary": "log_side_effect_ignored_for_return_code_fixture",
+        "replay_contract": {
+          "kind": "ignored_non_observable_void",
+          "observable_outputs": [
+            "return_code"
+          ],
+          "reason": "FDB_INFO writes diagnostics only; this fixture compares fdb_kv_del return_code."
+        }
+      },
+      {
+        "name": "db_name",
+        "signature_ref": "sig-db-name",
+        "source_ref": "src/fdb_kvdb.c#db_name",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "definition_status": "declared_external_direct_callee",
+        "stub_boundary": "fixture_model_uninitialized_db_only"
+      },
+      {
+        "name": "db_lock",
+        "signature_ref": "sig-db-lock",
+        "source_ref": "src/fdb_kvdb.c#db_lock",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "definition_status": "declared_external_direct_callee",
+        "stub_boundary": "fixture_model_uninitialized_db_only"
+      },
+      {
+        "name": "del_kv",
+        "signature_ref": "sig-del-kv",
+        "source_ref": "src/fdb_kvdb.c#del_kv",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "definition_status": "real_source_bound",
+        "stub_boundary": "blocked_until_delete_semantics_verified"
+      },
+      {
+        "name": "db_unlock",
+        "signature_ref": "sig-db-unlock",
+        "source_ref": "src/fdb_kvdb.c#db_unlock",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "definition_status": "declared_external_direct_callee",
+        "stub_boundary": "fixture_model_uninitialized_db_only"
+      }
+    ],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py",
+      "frontend": "bounded-c-source-scanner",
+      "semantic_status": "syntax-indexed; compile-profile evidence required before accepted translation"
+    }
+  },
+  "build_profile": {
+    "profile_id": "flashdb-real-fdb-kv-del-real-source",
+    "compiler_command_source": "tests/Makefile",
+    "include_paths": [
+      "inc",
+      "tests"
+    ],
+    "oracle_harness_includes": [
+      "flashdb.h"
+    ],
+    "link_source_files": [
+      {
+        "path": "src/fdb.c",
+        "role": "link_dependency",
+        "sha256": "b328b568d5f11accf83609d14809b14ecde204496d661f6baff31a65675aac8e"
+      },
+      {
+        "path": "src/fdb_file.c",
+        "role": "link_dependency",
+        "sha256": "c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d"
+      },
+      {
+        "path": "src/fdb_utils.c",
+        "role": "link_dependency",
+        "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+      }
+    ],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "char_width": 8,
+      "plain_char_signed": true,
+      "short_width": 16,
+      "long_width": 64,
+      "long_long_width": 64,
+      "pointer_width": 64
+    },
+    "preprocessing_mode": "manual_flags",
+    "tool_versions": {
+      "extract_source_slice": "0.1.0"
+    },
+    "clang_type_extraction": {
+      "available": false,
+      "diagnostics": [
+        "syntax-indexed real source slice; CLANG_PATH-driven clang AST dump JSON or compile_commands semantic evidence required for accepted translation"
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "real-fdb-kv-del-fixture",
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-del.json",
+    "hash": "real-fdb-kv-del-fixture",
+    "cases": [
+      {
+        "expected_outputs": {
+          "return_code": 7
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-del.json",
+        "id": "uninit-delete",
+        "input_ref": "cases[0]"
+      }
+    ],
+    "observable_outputs": [
+      "return_code"
+    ],
+    "behavior_fields": [
+      "return_code"
+    ],
+    "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-del-c-oracle.json",
+    "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-del-rust-report.json",
+    "diff": "validation/evidence/flashdb/l3-real-fdb-kv-del-diff.json",
+    "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-del-negative-diff.json",
+    "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-unsafe-ledger.json"
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/fdb_kv_del.rs",
+    "public_api": [
+      {
+        "name": "fdb_kv_del",
+        "visibility": "public",
+        "boundary_kind": "internal_ffi"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    }
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+      "No claim that fixture-mode macro/external callee models prove full delete semantics.",
+      "No claim that the initialized-db del_kv path is covered by the uninitialized DB fixture."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-project migration",
+      "semantic equivalence without C oracle and Rust replay evidence",
+      "fdb_kv_del semantic pass before committed route/profile/final verification evidence exists",
+      "initialized KV delete, GC, tombstone, or flash write equivalence"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No full project migration claim.",
+    "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+    "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.source_file_hashes",
+    "c_boundary.signatures[0].source_span.sha256",
+    "build_profile.profile_id",
+    "translator_version",
+    "source.source_repository",
+    "source.source_branch"
+  ]
+}

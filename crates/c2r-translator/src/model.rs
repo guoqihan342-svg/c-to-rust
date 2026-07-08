@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BuildProfile {
@@ -19,7 +20,18 @@ pub struct BuildProfile {
 impl BuildProfile {
     pub fn resolved_target_abi(&self) -> Option<TargetAbiProfile> {
         if let Some(target) = &self.target {
-            return Some(target.clone());
+            let inferred = known_target_abi_profile(
+                self.target_triple
+                    .as_deref()
+                    .or_else(|| non_empty_str(&target.triple_or_abi)),
+                self.abi
+                    .as_deref()
+                    .or_else(|| non_empty_str(&target.triple_or_abi)),
+            );
+            return Some(match inferred {
+                Some(inferred) => merge_target_abi_profile(target, &inferred),
+                None => target.clone(),
+            });
         }
         known_target_abi_profile(self.target_triple.as_deref(), self.abi.as_deref())
     }
@@ -87,6 +99,64 @@ fn known_target_abi_profile(
     None
 }
 
+fn non_empty_str(value: &str) -> Option<&str> {
+    let value = value.trim();
+    (!value.is_empty()).then_some(value)
+}
+
+fn merge_target_abi_profile(
+    explicit: &TargetAbiProfile,
+    inferred: &TargetAbiProfile,
+) -> TargetAbiProfile {
+    let mut merged = explicit.clone();
+    if merged.triple_or_abi.trim().is_empty() {
+        merged.triple_or_abi = inferred.triple_or_abi.clone();
+    }
+    if merged.endianness.is_none() {
+        merged.endianness = inferred.endianness.clone();
+    }
+    if merged.int_width == 0 {
+        merged.int_width = inferred.int_width;
+    }
+    if merged.int_align == 0 {
+        merged.int_align = inferred.int_align;
+    }
+    if merged.char_width == 0 {
+        merged.char_width = inferred.char_width;
+    }
+    if merged.char_align == 0 {
+        merged.char_align = inferred.char_align;
+    }
+    if merged.plain_char_signed.is_none() {
+        merged.plain_char_signed = inferred.plain_char_signed;
+    }
+    if merged.short_width == 0 {
+        merged.short_width = inferred.short_width;
+    }
+    if merged.short_align == 0 {
+        merged.short_align = inferred.short_align;
+    }
+    if merged.long_width == 0 {
+        merged.long_width = inferred.long_width;
+    }
+    if merged.long_align == 0 {
+        merged.long_align = inferred.long_align;
+    }
+    if merged.long_long_width == 0 {
+        merged.long_long_width = inferred.long_long_width;
+    }
+    if merged.long_long_align == 0 {
+        merged.long_long_align = inferred.long_long_align;
+    }
+    if merged.pointer_width == 0 {
+        merged.pointer_width = inferred.pointer_width;
+    }
+    if merged.pointer_align == 0 {
+        merged.pointer_align = inferred.pointer_align;
+    }
+    merged
+}
+
 fn inferred_target_abi_profile(
     triple_or_abi: &str,
     long_width: u16,
@@ -108,6 +178,39 @@ fn inferred_target_abi_profile(
         long_long_align: 64,
         pointer_width: 64,
         pointer_align: 64,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolved_target_abi_fills_missing_char_fields_from_known_explicit_target() {
+        let profile = BuildProfile {
+            target: Some(TargetAbiProfile {
+                triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+                endianness: Some("big".to_string()),
+                int_width: 32,
+                long_width: 64,
+                pointer_width: 64,
+                ..TargetAbiProfile::default()
+            }),
+            ..BuildProfile::default()
+        };
+
+        let abi = profile
+            .resolved_target_abi()
+            .expect("known explicit target");
+
+        assert_eq!(abi.triple_or_abi, "x86_64-unknown-linux-gnu");
+        assert_eq!(abi.endianness.as_deref(), Some("big"));
+        assert_eq!(abi.int_width, 32);
+        assert_eq!(abi.long_width, 64);
+        assert_eq!(abi.pointer_width, 64);
+        assert_eq!(abi.char_width, 8);
+        assert_eq!(abi.char_align, 8);
+        assert_eq!(abi.plain_char_signed, Some(true));
     }
 }
 
@@ -142,6 +245,46 @@ pub struct CBoundary {
     pub scalar_arithmetic_contract: ScalarArithmeticContract,
     #[serde(default)]
     pub pointer_contract: PointerContract,
+    #[serde(default)]
+    pub signatures: Vec<CSignature>,
+    #[serde(default)]
+    pub direct_dependencies: Vec<CDirectDependency>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CSignature {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub role: String,
+    #[serde(default)]
+    pub function: String,
+    #[serde(default)]
+    pub return_type: String,
+    #[serde(default)]
+    pub parameters: Vec<CParameter>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CParameter {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub c_type: String,
+    #[serde(default)]
+    pub direction: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CDirectDependency {
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub value: Option<JsonValue>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

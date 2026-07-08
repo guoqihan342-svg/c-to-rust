@@ -122,6 +122,9 @@ fn emit_expr(
         } => emit_call_expr(callee, args, ty, symbols, context),
         IrExpr::IncDec { .. } => Err("inc/dec expression is unsupported".to_string()),
         IrExpr::Deref { ptr, ty, .. } => {
+            if let Some(expr) = emit_mutable_pointer_deref_expr(ptr, ty, symbols, context)? {
+                return Ok(expr);
+            }
             emit_readonly_pointer_deref_expr(ptr, ty, symbols, context)
         }
         IrExpr::AddrOf { .. } => Err("address-of expression is unsupported".to_string()),
@@ -129,6 +132,55 @@ fn emit_expr(
             Err(format!("unsupported expression {node}: {reason}"))
         }
     }
+}
+
+fn emit_mutable_pointer_deref_expr(
+    ptr: &IrExpr,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Var {
+        name: ptr_name,
+        ty: ptr_ty,
+        ..
+    } = ptr
+    else {
+        return Ok(None);
+    };
+    if !context.is_mutable_pointer_write_param(ptr_name) {
+        return Ok(None);
+    }
+    if !symbols.contains(ptr_name) {
+        return Err(format!("mutable deref pointer {ptr_name} is not declared"));
+    }
+    if context.is_nullable_pointer_param(ptr_name) {
+        return Err(format!(
+            "nullable pointer param {ptr_name} cannot be dereferenced in the bounded emitter"
+        ));
+    }
+    let element_ty = mutable_pointer_slice_element_type(ptr_ty).ok_or_else(|| {
+        format!(
+            "mutable deref pointer {ptr_name} has unsupported type {}",
+            type_label(ptr_ty)
+        )
+    })?;
+    let element_ty =
+        emit_scalar_type(element_ty).map_err(|detail| format!("mutable deref element has {detail}"))?;
+    let deref_ty =
+        emit_scalar_type(ty).map_err(|detail| format!("mutable deref result has {detail}"))?;
+    if deref_ty != element_ty {
+        return Err(format!(
+            "mutable deref result type {deref_ty} does not match pointer element type {element_ty}"
+        ));
+    }
+    if !context.is_mutable_pointer_read_slot(ptr_name) {
+        return Err(format!(
+            "mutable pointer slot {ptr_name}[0] lacks definite assignment evidence"
+        ));
+    }
+    let ptr_name = emit_identifier(ptr_name, "mutable deref pointer")?;
+    Ok(Some(format!("{ptr_name}[0usize]")))
 }
 
 fn emit_readonly_pointer_deref_expr(

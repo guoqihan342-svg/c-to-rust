@@ -16,8 +16,8 @@ The Chinese source currently contains these major headings:
 
 ## Current FlashDB Evidence Summary
 
-- Accepted evidence: `real-fdb-calc-crc32` and `real-fdb-blob-make`. Both are L4 accepted-evidence-authoritative semantic bindings; generated drafts are still not semantic pass.
-- Blocked evidence: `real-fdb-kv-set`; external direct callee shim/model/oracle semantics are not closed.
+- Accepted evidence: `real-fdb-calc-crc32`, `real-fdb-blob-make`, `real-fdb-kv-del`, and `real-fdb-kv-set`. `real-fdb-kv-set` is an exact typed-IR generated draft acceptance for the uninitialized-DB `return_code=FDB_INIT_FAILED` fixture.
+- Open semantics: initialized `fdb_kv_set`/delete paths, blob persistence, `fdb_kv_set_blob`, and complete external-callee semantics remain open.
 
 ## Maintenance Notes
 

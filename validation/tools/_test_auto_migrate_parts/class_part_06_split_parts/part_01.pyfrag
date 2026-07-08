@@ -100,6 +100,77 @@
                 "runtime_precondition_in_range",
             )
 
+    def test_translator_input_preserves_declared_slice_source_boundaries(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            external_signature = {
+                "id": "sig-db-init-ok",
+                "role": "external_direct_callee",
+                "function": "db_init_ok",
+                "return_type": "bool",
+                "parameters": [
+                    {
+                        "name": "db",
+                        "c_type": "fdb_kvdb_t",
+                        "direction": "in",
+                    }
+                ],
+            }
+            constant_dependency = {
+                "kind": "constant",
+                "name": "FDB_INIT_FAILED",
+                "source": "declared_slice_boundary",
+                "value": 7,
+            }
+            spec = {
+                "target_id": "flashdb",
+                "slice_id": "real-fdb-kv-del",
+                "source_commit": "1234567",
+                "function_name": "fdb_kv_del",
+                "c_source": "fdb_err_t fdb_kv_del(fdb_kvdb_t db, const char *key) { return FDB_INIT_FAILED; }",
+                "fixture_hash": "fixture-sha",
+                "c_boundary": {
+                    "signatures": [
+                        {
+                            "id": "sig-fdb-kv-del",
+                            "function": "fdb_kv_del",
+                            "return_type": "fdb_err_t",
+                            "parameters": [
+                                {
+                                    "name": "db",
+                                    "c_type": "fdb_kvdb_t",
+                                    "direction": "in",
+                                },
+                                {
+                                    "name": "key",
+                                    "c_type": "const char *",
+                                    "direction": "in",
+                                },
+                            ],
+                        },
+                        external_signature,
+                    ],
+                    "direct_dependencies": [constant_dependency],
+                },
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "compiler_command_source": "unit-test",
+                },
+            }
+            spec_path = Path(tmp) / "slice.json"
+
+            translator_spec = module.write_translator_spec(spec, spec_path, evidence_dir)
+            translator_input = json.loads(translator_spec.read_text(encoding="utf-8"))
+
+            self.assertEqual(translator_input["c_boundary"]["signatures"][1], external_signature)
+            self.assertEqual(
+                translator_input["c_boundary"]["direct_dependencies"],
+                [constant_dependency],
+            )
+
     def test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature(self) -> None:
         module = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
@@ -405,3 +476,68 @@
                 enriched["durable_evidence"]["competition_environment"],
                 module.competition_environment_identity(),
             )
+
+    def test_refresh_generated_rust_draft_binding_updates_route_after_stub_injection(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-demo"
+            report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+            route_path = evidence_dir / f"{prefix}-route-decision.json"
+            draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
+            old_hash = "0" * 64
+            report_path.write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "rust_draft_generated": True,
+                            "rust_draft_sha256": old_hash,
+                        },
+                        "durable_evidence": {
+                            "hash_algorithm": "sha256",
+                            "rust_draft_sha256": old_hash,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            route_decision = {
+                "candidate_generation": {
+                    "typed_ir": {
+                        "status": "generated",
+                        "rust_draft_generated": True,
+                        "rust_draft_sha256": old_hash,
+                        "source_artifact": {
+                            "path": report_path.as_posix(),
+                            "sha256": old_hash,
+                            "status": "lowered",
+                        },
+                    }
+                },
+                "source_artifacts": {
+                    "clang_lowering_report": {
+                        "path": report_path.as_posix(),
+                        "sha256": old_hash,
+                        "status": "lowered",
+                    }
+                },
+            }
+            route_path.write_text(json.dumps(route_decision), encoding="utf-8")
+            draft_path.write_text("pub fn demo() -> i32 { 1 }\n// injected stub\n", encoding="utf-8")
+
+            refreshed = module.refresh_generated_rust_draft_binding(evidence_dir, prefix, route_decision)
+
+            expected_hash = module.sha256(draft_path)
+            expected_report_ref = module.evidence_ref(report_path, "lowered")
+            self.assertEqual(refreshed["candidate_generation"]["typed_ir"]["rust_draft_sha256"], expected_hash)
+            self.assertEqual(refreshed["candidate_generation"]["typed_ir"]["source_artifact"], expected_report_ref)
+            self.assertEqual(refreshed["source_artifacts"]["clang_lowering_report"], expected_report_ref)
+            route_on_disk = json.loads(route_path.read_text(encoding="utf-8"))
+            report_on_disk = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(route_on_disk["candidate_generation"]["typed_ir"]["rust_draft_sha256"], expected_hash)
+            self.assertEqual(route_on_disk["candidate_generation"]["typed_ir"]["source_artifact"], expected_report_ref)
+            self.assertEqual(route_on_disk["source_artifacts"]["clang_lowering_report"], expected_report_ref)
+            self.assertEqual(report_on_disk["typed_ir_candidate"]["rust_draft_sha256"], expected_hash)
+            self.assertEqual(report_on_disk["durable_evidence"]["rust_draft_sha256"], expected_hash)

@@ -42,13 +42,77 @@ def pointer_node_kind(node: dict[str, Any]) -> str:
         return "buffer"
     if "bounded_pointer_arithmetic_output_write" in node.get("boundary_decisions", []):
         return "buffer"
+    if "bounded_pointer_index" in boundary_decisions:
+        return "buffer"
     if node.get("role") == "out_param":
         return "struct_pointer"
-    if str(node.get("c_type", "")).strip() == "const int*":
+    if c_type == "constint*":
         return "buffer"
     if c_type in {"constvoid*", "constuint8_t*"}:
         return "buffer"
     return "raw_pointer"
+
+
+def pointer_contract_rust_type_overrides(spec: dict[str, Any]) -> dict[str, str]:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    if not isinstance(pointer_contract, dict):
+        return {}
+    overrides: dict[str, str] = {}
+    for item in pointer_contract.get("input_buffers", []):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        rust_type = rust_slice_type_from_c_pointer(str(item.get("c_type") or ""), mutable=False)
+        if name and rust_type:
+            overrides[name] = rust_type
+    for item in pointer_contract.get("output_pointers", []):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        rust_type = rust_slice_type_from_c_pointer(str(item.get("c_type") or ""), mutable=True)
+        if name and rust_type:
+            overrides[name] = rust_type
+    return overrides
+
+
+def rust_slice_type_from_c_pointer(c_type: str, *, mutable: bool) -> str | None:
+    normalized = "".join(str(c_type).split())
+    type_map = {
+        "constint*": "i32",
+        "int*": "i32",
+        "constuint8_t*": "u8",
+        "uint8_t*": "u8",
+        "constunsignedchar*": "u8",
+        "unsignedchar*": "u8",
+    }
+    inner = type_map.get(normalized)
+    if inner is None:
+        return None
+    return f"&mut [{inner}]" if mutable else f"&[{inner}]"
+
+
+def pointer_contract_lvalue_kinds(spec: dict[str, Any]) -> list[str]:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    if not isinstance(pointer_contract, dict):
+        return []
+    kinds: list[str] = []
+    for item in pointer_contract.get("input_buffers", []):
+        if isinstance(item, dict) and list_of_strings(item.get("read_effects")):
+            kinds.append("bounded_input_buffer")
+    for item in pointer_contract.get("output_pointers", []):
+        if isinstance(item, dict) and list_of_strings(item.get("write_effects")):
+            kinds.append("bounded_pointer_index")
+    return stable_unique_strings(kinds)
+
+
+def pointer_contract_statement_kinds(spec: dict[str, Any]) -> list[str]:
+    return [
+        {
+            "bounded_input_buffer": "bounded_input_buffer_read",
+            "bounded_pointer_index": "bounded_pointer_index_write",
+        }.get(kind, kind)
+        for kind in pointer_contract_lvalue_kinds(spec)
+    ]
 
 
 def pointer_contract_nodes_by_name(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -58,7 +122,7 @@ def pointer_contract_nodes_by_name(spec: dict[str, Any]) -> dict[str, dict[str, 
     nodes: dict[str, dict[str, Any]] = {}
     for section, role, default_decision in [
         ("input_buffers", "borrowed_input", "bounded_input_buffer"),
-        ("output_pointers", "out_param", ""),
+        ("output_pointers", "out_param", "bounded_pointer_index"),
         ("inout_pointers", "inout_param", ""),
     ]:
         for item in pointer_contract.get(section, []):

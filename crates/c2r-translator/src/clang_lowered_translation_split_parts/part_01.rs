@@ -398,9 +398,15 @@ fn emit_ir_pointer_graph(function: &typed_ir::IrFunction, result: &mut Translati
         let is_const_input = c_type.starts_with("const ") || ir_pointer_is_const(&param.ty);
         let mut boundary_decisions = Vec::new();
         let mut read_effects = Vec::new();
-        if ir_has_byte_cursor_read(function, &param.name) {
+        let has_byte_cursor_read = ir_has_byte_cursor_read(function, &param.name);
+        let is_unused_readonly_8_bit_pointer =
+            ir_param_is_unused_readonly_8_bit_pointer(function, param);
+        if has_byte_cursor_read {
             boundary_decisions.push("byte_cursor_post_increment_read".to_string());
             read_effects.push("*p++".to_string());
+        }
+        if is_unused_readonly_8_bit_pointer {
+            boundary_decisions.push("unused_readonly_8_bit_pointer_raw_candidate".to_string());
         }
         result.pointer_graph.nodes.push(PointerNode {
             id: param.name.clone(),
@@ -410,7 +416,11 @@ fn emit_ir_pointer_graph(function: &typed_ir::IrFunction, result: &mut Translati
             } else {
                 "out_param".to_string()
             },
-            rust_boundary: if param.name == "buf" || is_const_input {
+            rust_boundary: if has_byte_cursor_read {
+                "&[u8]".to_string()
+            } else if is_unused_readonly_8_bit_pointer {
+                "*const core::ffi::c_void".to_string()
+            } else if param.name == "buf" || is_const_input {
                 "&[u8]".to_string()
             } else {
                 "owned safe report".to_string()
@@ -419,6 +429,19 @@ fn emit_ir_pointer_graph(function: &typed_ir::IrFunction, result: &mut Translati
             write_effects: Vec::new(),
             boundary_decisions,
         });
+    }
+}
+
+fn ir_param_type_map_rust_override(
+    function: &typed_ir::IrFunction,
+    param: &typed_ir::IrParam,
+) -> Option<String> {
+    if ir_has_byte_cursor_read(function, &param.name) {
+        Some("&[u8]".to_string())
+    } else if ir_param_is_unused_readonly_8_bit_pointer(function, param) {
+        Some("*const core::ffi::c_void".to_string())
+    } else {
+        None
     }
 }
 
@@ -431,6 +454,123 @@ fn ir_has_byte_cursor_read(function: &typed_ir::IrFunction, param_name: &str) ->
     cursor_sources.iter().any(|(cursor, source)| {
         source == param_name && post_increment_reads.iter().any(|item| item == cursor)
     })
+}
+
+fn ir_param_is_unused_readonly_8_bit_pointer(
+    function: &typed_ir::IrFunction,
+    param: &typed_ir::IrParam,
+) -> bool {
+    ir_is_readonly_8_bit_pointer_type(&param.ty) && !ir_body_mentions_var(&function.body, &param.name)
+}
+
+fn ir_is_readonly_8_bit_pointer_type(ty: &typed_ir::IrType) -> bool {
+    let typed_ir::IrTypeKind::Pointer { pointee } = &ty.kind else {
+        return false;
+    };
+    pointee.is_const
+        && matches!(
+            pointee.kind,
+            typed_ir::IrTypeKind::Integer {
+                signed: _,
+                width: 8
+            }
+        )
+}
+
+fn ir_body_mentions_var(statements: &[typed_ir::IrStmt], expected: &str) -> bool {
+    statements
+        .iter()
+        .any(|statement| ir_stmt_mentions_var(statement, expected))
+}
+
+fn ir_stmt_mentions_var(statement: &typed_ir::IrStmt, expected: &str) -> bool {
+    match statement {
+        typed_ir::IrStmt::Decl { init, .. } => init
+            .as_ref()
+            .is_some_and(|init| ir_expr_mentions_var(init, expected)),
+        typed_ir::IrStmt::Assign { target, value, .. } => {
+            ir_expr_mentions_var(target, expected) || ir_expr_mentions_var(value, expected)
+        }
+        typed_ir::IrStmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            ir_expr_mentions_var(condition, expected)
+                || ir_body_mentions_var(then_body, expected)
+                || ir_body_mentions_var(else_body, expected)
+        }
+        typed_ir::IrStmt::While {
+            condition, body, ..
+        } => ir_expr_mentions_var(condition, expected) || ir_body_mentions_var(body, expected),
+        typed_ir::IrStmt::DoWhile {
+            body, condition, ..
+        } => ir_body_mentions_var(body, expected) || ir_expr_mentions_var(condition, expected),
+        typed_ir::IrStmt::For {
+            init,
+            condition,
+            step,
+            body,
+            ..
+        } => {
+            ir_body_mentions_var(init, expected)
+                || condition
+                    .as_ref()
+                    .is_some_and(|condition| ir_expr_mentions_var(condition, expected))
+                || step
+                    .as_deref()
+                    .is_some_and(|step| ir_stmt_mentions_var(step, expected))
+                || ir_body_mentions_var(body, expected)
+        }
+        typed_ir::IrStmt::Return { value, .. } => value
+            .as_ref()
+            .is_some_and(|value| ir_expr_mentions_var(value, expected)),
+        typed_ir::IrStmt::Expr { expr, .. } => ir_expr_mentions_var(expr, expected),
+        typed_ir::IrStmt::Break { .. }
+        | typed_ir::IrStmt::Continue { .. }
+        | typed_ir::IrStmt::Unsupported { .. } => false,
+    }
+}
+
+fn ir_expr_mentions_var(expr: &typed_ir::IrExpr, expected: &str) -> bool {
+    match expr {
+        typed_ir::IrExpr::Var { name, .. } => name == expected,
+        typed_ir::IrExpr::Binary { lhs, rhs, .. } => {
+            ir_expr_mentions_var(lhs, expected) || ir_expr_mentions_var(rhs, expected)
+        }
+        typed_ir::IrExpr::Unary { operand, .. }
+        | typed_ir::IrExpr::Cast { expr: operand, .. }
+        | typed_ir::IrExpr::LValueToRValue { expr: operand, .. }
+        | typed_ir::IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | typed_ir::IrExpr::FunctionToPointerDecay { expr: operand, .. }
+        | typed_ir::IrExpr::Member { base: operand, .. }
+        | typed_ir::IrExpr::IncDec { target: operand, .. }
+        | typed_ir::IrExpr::Deref { ptr: operand, .. }
+        | typed_ir::IrExpr::AddrOf { operand, .. } => ir_expr_mentions_var(operand, expected),
+        typed_ir::IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            ir_expr_mentions_var(condition, expected)
+                || ir_expr_mentions_var(then_expr, expected)
+                || ir_expr_mentions_var(else_expr, expected)
+        }
+        typed_ir::IrExpr::Index { base, index, .. } => {
+            ir_expr_mentions_var(base, expected) || ir_expr_mentions_var(index, expected)
+        }
+        typed_ir::IrExpr::ArrayLiteral { elements, .. } => elements
+            .iter()
+            .any(|element| ir_expr_mentions_var(element, expected)),
+        typed_ir::IrExpr::Call { args, .. } => args
+            .iter()
+            .any(|arg| ir_expr_mentions_var(arg, expected)),
+        typed_ir::IrExpr::LitInt { .. }
+        | typed_ir::IrExpr::NullPtr { .. }
+        | typed_ir::IrExpr::Unsupported { .. } => false,
+    }
 }
 
 fn collect_ir_pointer_cursor_sources(

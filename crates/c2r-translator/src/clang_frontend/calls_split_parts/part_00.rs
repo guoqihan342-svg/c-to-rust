@@ -39,7 +39,12 @@ fn call_expr_skeleton_from_ast_with_memory_statement_args(
         };
         args.push(arg);
     }
-    if let Some(reason) = bounded_call_args_rejection_reason(&args) {
+    let rejection_reason = match (allow_memory_statement_args, callee.as_str()) {
+        (true, "memset") => bounded_memset_statement_args_rejection_reason(&args),
+        (true, "memcpy") => bounded_memcpy_statement_args_rejection_reason(&args),
+        _ => bounded_call_args_rejection_reason(&args),
+    };
+    if let Some(reason) = rejection_reason {
         return Ok(ClangExprSkeleton::Unsupported {
             node: "CallExpr".to_string(),
             reason,
@@ -61,7 +66,9 @@ fn direct_call_arg_skeleton_from_ast(arg: &Value) -> Result<ClangExprSkeleton, C
     }
 
     let target = expr_type(arg)?;
-    if !clang_type_is_const_void_pointer(&target) {
+    let target_is_const_void_pointer = clang_type_is_const_void_pointer(&target);
+    let target_is_mutable_void_pointer = clang_type_is_mutable_void_pointer(&target);
+    if !target_is_const_void_pointer && !target_is_mutable_void_pointer {
         return Ok(ClangExprSkeleton::Unsupported {
             node: "ImplicitCastExpr".to_string(),
             reason: format!(
@@ -76,28 +83,80 @@ fn direct_call_arg_skeleton_from_ast(arg: &Value) -> Result<ClangExprSkeleton, C
         message: "ImplicitCastExpr BitCast is missing operand".to_string(),
     })?;
     let operand = expr_skeleton_from_ast_with_options(operand, true)?;
+    if target_is_const_void_pointer {
+        return match &operand {
+            ClangExprSkeleton::DeclRef { ty, .. }
+                if clang_type_is_readonly_8_bit_pointer(ty)
+                    || clang_type_is_const_char_pointer_spelling(ty) =>
+            {
+                Ok(operand)
+            }
+            ClangExprSkeleton::DeclRef { ty, .. } => Ok(ClangExprSkeleton::Unsupported {
+                node: "ImplicitCastExpr".to_string(),
+                reason: format!(
+                    "direct-call argument BitCast operand {} is not a readonly 8-bit pointer",
+                    ty.spelled
+                ),
+            }),
+            ClangExprSkeleton::Unsupported { node, reason } => Ok(ClangExprSkeleton::Unsupported {
+                node: node.clone(),
+                reason: reason.clone(),
+            }),
+            _ => Ok(ClangExprSkeleton::Unsupported {
+                node: "ImplicitCastExpr".to_string(),
+                reason: "direct-call argument BitCast operand must be a direct pointer parameter"
+                    .to_string(),
+            }),
+        };
+    }
+
     match &operand {
-        ClangExprSkeleton::DeclRef { ty, .. }
-            if clang_type_is_readonly_8_bit_pointer(ty)
-                || clang_type_is_const_char_pointer_spelling(ty) =>
-        {
-            Ok(operand)
+        ClangExprSkeleton::AddrOf {
+            operand: addr_operand,
+            ty,
+        } => {
+            let Some(address_record) = clang_mutable_record_pointer_record_name(ty) else {
+                return Ok(ClangExprSkeleton::Unsupported {
+                    node: "ImplicitCastExpr".to_string(),
+                    reason: format!(
+                        "direct-call argument mutable void * BitCast address target {} is not a mutable record pointer",
+                        ty.spelled
+                    ),
+                });
+            };
+            let ClangExprSkeleton::DeclRef {
+                ty: operand_ty, ..
+            } = addr_operand.as_ref()
+            else {
+                return Ok(ClangExprSkeleton::Unsupported {
+                    node: "ImplicitCastExpr".to_string(),
+                    reason:
+                        "direct-call argument mutable void * BitCast operand must address a direct record variable"
+                            .to_string(),
+                });
+            };
+            if matches!(&operand_ty.kind, ClangTypeKind::Record { name } if name == address_record)
+            {
+                Ok(operand)
+            } else {
+                Ok(ClangExprSkeleton::Unsupported {
+                    node: "ImplicitCastExpr".to_string(),
+                    reason: format!(
+                        "direct-call argument mutable void * BitCast operand {} does not match address target record {address_record}",
+                        operand_ty.spelled
+                    ),
+                })
+            }
         }
-        ClangExprSkeleton::DeclRef { ty, .. } => Ok(ClangExprSkeleton::Unsupported {
-            node: "ImplicitCastExpr".to_string(),
-            reason: format!(
-                "direct-call argument BitCast operand {} is not a readonly 8-bit pointer",
-                ty.spelled
-            ),
-        }),
         ClangExprSkeleton::Unsupported { node, reason } => Ok(ClangExprSkeleton::Unsupported {
             node: node.clone(),
             reason: reason.clone(),
         }),
         _ => Ok(ClangExprSkeleton::Unsupported {
             node: "ImplicitCastExpr".to_string(),
-            reason: "direct-call argument BitCast operand must be a direct pointer parameter"
-                .to_string(),
+            reason:
+                "direct-call argument mutable void * BitCast operand must be address-of local record"
+                    .to_string(),
         }),
     }
 }
@@ -134,6 +193,20 @@ fn memory_destination_arg_skeleton_from_ast(
             if clang_type_is_mutable_unsigned_8_bit_pointer(ty) =>
         {
             Ok(operand)
+        }
+        ClangExprSkeleton::ArrayToPointerDecay { target, expr }
+            if callee == "memset" || callee == "memcpy" =>
+        {
+            if let Some(reason) =
+                clang_memory_destination_array_decay_rejection_reason(callee, target, expr)
+            {
+                Ok(ClangExprSkeleton::Unsupported {
+                    node: "ImplicitCastExpr".to_string(),
+                    reason,
+                })
+            } else {
+                Ok(operand)
+            }
         }
         ClangExprSkeleton::DeclRef { ty, .. } => Ok(ClangExprSkeleton::Unsupported {
             node: "ImplicitCastExpr".to_string(),
@@ -186,6 +259,16 @@ fn memcpy_source_arg_skeleton_from_ast(
             if clang_type_is_readonly_unsigned_8_bit_pointer(ty) =>
         {
             Ok(operand)
+        }
+        ClangExprSkeleton::ArrayToPointerDecay { target, expr } => {
+            if let Some(reason) = clang_memcpy_source_array_decay_rejection_reason(target, expr) {
+                Ok(ClangExprSkeleton::Unsupported {
+                    node: "ImplicitCastExpr".to_string(),
+                    reason,
+                })
+            } else {
+                Ok(operand)
+            }
         }
         ClangExprSkeleton::DeclRef { ty, .. } => Ok(ClangExprSkeleton::Unsupported {
             node: "ImplicitCastExpr".to_string(),
@@ -265,7 +348,14 @@ fn clang_type_is_const_char_pointer_spelling(ty: &ClangTypeSkeleton) -> bool {
 fn clang_type_is_size_t_spelling(ty: &ClangTypeSkeleton) -> bool {
     matches!(
         (ty.spelled.trim(), ty.canonical.trim()),
-        ("size_t", _) | (_, "size_t") | ("__size_t", _) | (_, "__size_t")
+        ("size_t", _)
+            | (_, "size_t")
+            | ("__size_t", _)
+            | (_, "__size_t")
+            | ("unsigned long", _)
+            | (_, "unsigned long")
+            | ("unsigned long long", _)
+            | (_, "unsigned long long")
     )
 }
 
@@ -378,6 +468,248 @@ fn bounded_call_args_rejection_reason(args: &[ClangExprSkeleton]) -> Option<Stri
         if let Some(reason) = bounded_call_arg_rejection_reason(arg, true) {
             return Some(format!("argument {index}: {reason}"));
         }
+    }
+    None
+}
+
+#[cfg(feature = "typed-ir")]
+fn bounded_memset_statement_args_rejection_reason(args: &[ClangExprSkeleton]) -> Option<String> {
+    let nested_call_count = args
+        .iter()
+        .filter(|arg| matches!(arg, ClangExprSkeleton::Call { .. }))
+        .count();
+    if nested_call_count > 1 {
+        return Some(
+            "multiple nested call arguments are outside the bounded call subset".to_string(),
+        );
+    }
+    let side_effect_args = match clang_side_effect_call_args(args) {
+        Ok(side_effect_args) => side_effect_args,
+        Err(reason) => return Some(reason),
+    };
+    if !side_effect_args.is_empty() {
+        for (side_effect_index, assigned_var) in &side_effect_args {
+            for (index, arg) in args.iter().enumerate() {
+                if index == *side_effect_index {
+                    continue;
+                }
+                if clang_expr_mentions_decl(arg, assigned_var) {
+                    return Some(format!(
+                        "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
+                    ));
+                }
+            }
+        }
+        for (index, arg) in args.iter().enumerate() {
+            if side_effect_args
+                .iter()
+                .any(|(side_effect_index, _)| *side_effect_index == index)
+            {
+                continue;
+            }
+            if let Some(reason) = bounded_memset_statement_arg_rejection_reason(index, arg, false) {
+                return Some(format!("argument {index}: {reason}"));
+            }
+        }
+        return None;
+    }
+    for (index, arg) in args.iter().enumerate() {
+        if let Some(reason) = bounded_memset_statement_arg_rejection_reason(index, arg, true) {
+            return Some(format!("argument {index}: {reason}"));
+        }
+    }
+    None
+}
+
+#[cfg(feature = "typed-ir")]
+fn bounded_memset_statement_arg_rejection_reason(
+    index: usize,
+    arg: &ClangExprSkeleton,
+    allow_immediate_nested_call: bool,
+) -> Option<String> {
+    if index == 0 {
+        if let ClangExprSkeleton::ArrayToPointerDecay { target, expr } = arg {
+            return clang_memory_destination_array_decay_rejection_reason("memset", target, expr);
+        }
+    }
+    bounded_call_arg_rejection_reason(arg, allow_immediate_nested_call)
+}
+
+#[cfg(feature = "typed-ir")]
+fn bounded_memcpy_statement_args_rejection_reason(args: &[ClangExprSkeleton]) -> Option<String> {
+    let nested_call_count = args
+        .iter()
+        .filter(|arg| matches!(arg, ClangExprSkeleton::Call { .. }))
+        .count();
+    if nested_call_count > 1 {
+        return Some(
+            "multiple nested call arguments are outside the bounded call subset".to_string(),
+        );
+    }
+    let side_effect_args = match clang_side_effect_call_args(args) {
+        Ok(side_effect_args) => side_effect_args,
+        Err(reason) => return Some(reason),
+    };
+    if !side_effect_args.is_empty() {
+        for (side_effect_index, assigned_var) in &side_effect_args {
+            for (index, arg) in args.iter().enumerate() {
+                if index == *side_effect_index {
+                    continue;
+                }
+                if clang_expr_mentions_decl(arg, assigned_var) {
+                    return Some(format!(
+                        "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
+                    ));
+                }
+            }
+        }
+        for (index, arg) in args.iter().enumerate() {
+            if side_effect_args
+                .iter()
+                .any(|(side_effect_index, _)| *side_effect_index == index)
+            {
+                continue;
+            }
+            if let Some(reason) = bounded_memcpy_statement_arg_rejection_reason(index, arg, false) {
+                return Some(format!("argument {index}: {reason}"));
+            }
+        }
+        return None;
+    }
+    for (index, arg) in args.iter().enumerate() {
+        if let Some(reason) = bounded_memcpy_statement_arg_rejection_reason(index, arg, true) {
+            return Some(format!("argument {index}: {reason}"));
+        }
+    }
+    None
+}
+
+#[cfg(feature = "typed-ir")]
+fn bounded_memcpy_statement_arg_rejection_reason(
+    index: usize,
+    arg: &ClangExprSkeleton,
+    allow_immediate_nested_call: bool,
+) -> Option<String> {
+    if index == 0 {
+        if let ClangExprSkeleton::ArrayToPointerDecay { target, expr } = arg {
+            return clang_memory_destination_array_decay_rejection_reason("memcpy", target, expr);
+        }
+    }
+    if index == 1 {
+        if let ClangExprSkeleton::ArrayToPointerDecay { target, expr } = arg {
+            return clang_memcpy_source_array_decay_rejection_reason(target, expr);
+        }
+    }
+    bounded_call_arg_rejection_reason(arg, allow_immediate_nested_call)
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_memory_destination_array_decay_rejection_reason(
+    callee: &str,
+    target: &ClangTypeSkeleton,
+    expr: &ClangExprSkeleton,
+) -> Option<String> {
+    let target_element = match &target.kind {
+        ClangTypeKind::Pointer { pointee, .. }
+            if !clang_type_is_const(pointee)
+                && matches!(&pointee.kind, ClangTypeKind::Integer { signed: false, width: 8 }) =>
+        {
+            pointee.as_ref()
+        }
+        _ => {
+            return Some(format!(
+                "{callee} destination array-to-pointer decay target {} must be a mutable unsigned 8-bit pointer",
+                target.spelled
+            ));
+        }
+    };
+    let ClangExprSkeleton::DeclRef { name, ty: array_ty } = expr else {
+        return Some(format!(
+            "{callee} destination array-to-pointer decay must be a direct fixed byte array variable"
+        ));
+    };
+    let ClangTypeKind::Array {
+        element,
+        len: Some(_),
+    } = &array_ty.kind
+    else {
+        return Some(format!(
+            "{callee} destination array-to-pointer decay {name} has unsupported array type {}",
+            array_ty.spelled
+        ));
+    };
+    if !matches!(
+        &element.kind,
+        ClangTypeKind::Integer {
+            signed: false,
+            width: 8
+        }
+    ) {
+        return Some(format!(
+            "{callee} destination array-to-pointer decay {name} must be a fixed unsigned 8-bit integer array, got {}",
+            array_ty.spelled
+        ));
+    }
+    if element.spelled != target_element.spelled && element.canonical != target_element.canonical {
+        return Some(format!(
+            "{callee} destination array-to-pointer decay element type {} does not match target element type {}",
+            element.spelled, target_element.spelled
+        ));
+    }
+    None
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_memcpy_source_array_decay_rejection_reason(
+    target: &ClangTypeSkeleton,
+    expr: &ClangExprSkeleton,
+) -> Option<String> {
+    let target_element = match &target.kind {
+        ClangTypeKind::Pointer { pointee, .. }
+            if matches!(&pointee.kind, ClangTypeKind::Integer { signed: false, width: 8 }) =>
+        {
+            pointee.as_ref()
+        }
+        _ => {
+            return Some(format!(
+                "memcpy source array-to-pointer decay target {} must be an unsigned 8-bit pointer",
+                target.spelled
+            ));
+        }
+    };
+    let ClangExprSkeleton::DeclRef { name, ty: array_ty } = expr else {
+        return Some(
+            "memcpy source array-to-pointer decay must be a direct fixed byte array variable"
+                .to_string(),
+        );
+    };
+    let ClangTypeKind::Array {
+        element,
+        len: Some(_),
+    } = &array_ty.kind
+    else {
+        return Some(format!(
+            "memcpy source array-to-pointer decay {name} has unsupported array type {}",
+            array_ty.spelled
+        ));
+    };
+    if !matches!(
+        &element.kind,
+        ClangTypeKind::Integer {
+            signed: false,
+            width: 8
+        }
+    ) {
+        return Some(format!(
+            "memcpy source array-to-pointer decay {name} must be a fixed unsigned 8-bit integer array, got {}",
+            array_ty.spelled
+        ));
+    }
+    if element.spelled != target_element.spelled && element.canonical != target_element.canonical {
+        return Some(format!(
+            "memcpy source array-to-pointer decay element type {} does not match target element type {}",
+            element.spelled, target_element.spelled
+        ));
     }
     None
 }

@@ -1,0 +1,659 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-c2rust-baseline-manifest.json",
+    "sha256": "87d3038cc54308c503cb9df3ba37325270e4464be8ab7eab46c9c43994d48561",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=9c573e05c56d3e7c42343f1259b5700764164375912ba62603373ac6f388c6f1",
+    "fixture_hash=real-fdb-kv-del-fixture",
+    "build_profile_hash=968c0f247f9cf881e44d016933ba320d59d3d56c53dfcd73184c9a8ab51468d3",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
+  ],
+  "generated_artifacts": [
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-rust-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_draft",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-rust-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-c-oracle-harness-draft.c",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "c_oracle_harness",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-c-oracle-harness-draft.c",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-rust-replay-test-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_replay_test",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-rust-replay-test-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    }
+  ],
+  "inputs": {
+    "cfg": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-cfg.json",
+      "status": "recorded"
+    },
+    "external_callee_context": {
+      "blocked_count": 0,
+      "declared_count": 6,
+      "declared_spec_count": 6,
+      "declared_spec_names": [
+        "FDB_INFO",
+        "db_init_ok",
+        "db_lock",
+        "db_name",
+        "db_unlock",
+        "del_kv"
+      ],
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-context-pack.json",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-pointer-graph.json",
+      "status": "recorded"
+    },
+    "slice_spec": {
+      "path": "validation/slice-specs/flashdb-real-fdb-kv-del.json",
+      "sha256": "9c573e05c56d3e7c42343f1259b5700764164375912ba62603373ac6f388c6f1",
+      "status": "ready"
+    },
+    "type_map": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-type-map.json",
+      "status": "recorded"
+    }
+  },
+  "level": "L3",
+  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-route-decision.json",
+    "sha256": "899f3a023adb2590babd3530d82dcd6a09de7d976a36e67dd60d5a1e0614901d",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-del",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "draft_generated",
+  "target_id": "flashdb",
+  "translation_source": {
+    "selected": "clang-lowered-typed-ir"
+  },
+  "translation_summary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "reason": "slice has no input/output pointer alias surface",
+      "requires_noalias": false,
+      "risk_level": "none"
+    },
+    "call_expressions": [
+      {
+        "arguments": [
+          "array_to_pointer_decay([69, 114, 114, 111, 114, 58, 32, 75, 86, 32, 40, 37, 115, 41, 32, 105, 115, 110, 39, 116, 32, 105, 110, 105, 116, 105, 97, 108, 105, 122, 101, 32, 79, 75, 46, 10, 0])",
+          "db_name(db)"
+        ],
+        "callee": "FDB_INFO",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-fdb-info",
+        "callee_source_ref": "inc/fdb_def.h#FDB_INFO",
+        "definition_status": "declared_external_direct_callee",
+        "source_expression": "FDB_INFO(array_to_pointer_decay([69, 114, 114, 111, 114, 58, 32, 75, 86, 32, 40, 37, 115, 41, 32, 105, 115, 110, 39, 116, 32, 105, 110, 105, 116, 105, 97, 108, 105, 122, 101, 32, 79, 75, 46, 10, 0]), db_name(db))",
+        "statement_context": "expression",
+        "stub_status": "compile_only"
+      },
+      {
+        "arguments": [
+          "db"
+        ],
+        "callee": "db_name",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-db-name",
+        "callee_source_ref": "src/fdb_kvdb.c#db_name",
+        "definition_status": "declared_external_direct_callee",
+        "source_expression": "db_name(db)",
+        "statement_context": "expression",
+        "stub_status": "compile_only"
+      },
+      {
+        "arguments": [
+          "db"
+        ],
+        "callee": "db_lock",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-db-lock",
+        "callee_source_ref": "src/fdb_kvdb.c#db_lock",
+        "definition_status": "declared_external_direct_callee",
+        "source_expression": "db_lock(db)",
+        "statement_context": "expression",
+        "stub_status": "compile_only"
+      },
+      {
+        "arguments": [
+          "db",
+          "key",
+          "NULL",
+          "1"
+        ],
+        "callee": "del_kv",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-del-kv",
+        "callee_source_ref": "src/fdb_kvdb.c#del_kv",
+        "definition_status": "real_source_bound",
+        "source_expression": "del_kv(db, key, NULL, 1)",
+        "statement_context": "assignment",
+        "stub_status": "compile_only"
+      },
+      {
+        "arguments": [
+          "db"
+        ],
+        "callee": "db_unlock",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-db-unlock",
+        "callee_source_ref": "src/fdb_kvdb.c#db_unlock",
+        "definition_status": "declared_external_direct_callee",
+        "source_expression": "db_unlock(db)",
+        "statement_context": "expression",
+        "stub_status": "compile_only"
+      }
+    ],
+    "external_direct_callee_blocks": [],
+    "external_direct_callee_declarations": [
+      {
+        "definition_status": "declared_external_direct_callee",
+        "header_files": [],
+        "model_contract": "declared_external_direct_callee_signature_context",
+        "name": "FDB_INFO",
+        "parameters": [
+          {
+            "c_type": "const char *",
+            "name": "fmt",
+            "rust_type": "*const core::ffi::c_char"
+          },
+          {
+            "c_type": "const char *",
+            "name": "name",
+            "rust_type": "*const core::ffi::c_char"
+          }
+        ],
+        "replay_contract": {
+          "kind": "ignored_non_observable_void",
+          "observable_outputs": [
+            "return_code"
+          ],
+          "reason": "FDB_INFO writes diagnostics only; this fixture compares fdb_kv_del return_code."
+        },
+        "return_rust_type": "()",
+        "return_type": "void",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-info",
+        "source_files": [
+          {
+            "path": "inc/fdb_def.h",
+            "sha256": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320"
+          }
+        ],
+        "source_ref": "inc/fdb_def.h#FDB_INFO",
+        "stub_boundary": "declared_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_declared_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "declared_external_direct_callee",
+        "header_files": [],
+        "model_contract": "declared_external_direct_callee_signature_context",
+        "name": "db_init_ok",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          }
+        ],
+        "return_rust_type": "bool",
+        "return_type": "bool",
+        "semantics_verified": false,
+        "signature_ref": "sig-db-init-ok",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#db_init_ok",
+        "stub_boundary": "declared_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_declared_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "declared_external_direct_callee",
+        "header_files": [],
+        "model_contract": "declared_external_direct_callee_signature_context",
+        "name": "db_lock",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          }
+        ],
+        "return_rust_type": "()",
+        "return_type": "void",
+        "semantics_verified": false,
+        "signature_ref": "sig-db-lock",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#db_lock",
+        "stub_boundary": "declared_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_declared_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "declared_external_direct_callee",
+        "header_files": [],
+        "model_contract": "declared_external_direct_callee_signature_context",
+        "name": "db_name",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          }
+        ],
+        "return_rust_type": "*const core::ffi::c_char",
+        "return_type": "const char *",
+        "semantics_verified": false,
+        "signature_ref": "sig-db-name",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#db_name",
+        "stub_boundary": "declared_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_declared_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "declared_external_direct_callee",
+        "header_files": [],
+        "model_contract": "declared_external_direct_callee_signature_context",
+        "name": "db_unlock",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          }
+        ],
+        "return_rust_type": "()",
+        "return_type": "void",
+        "semantics_verified": false,
+        "signature_ref": "sig-db-unlock",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#db_unlock",
+        "stub_boundary": "declared_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_declared_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "real_source_bound",
+        "header_files": [],
+        "model_contract": "declared_external_direct_callee_signature_context",
+        "name": "del_kv",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          },
+          {
+            "c_type": "const char *",
+            "name": "key",
+            "rust_type": "*const core::ffi::c_char"
+          },
+          {
+            "c_type": "fdb_kv_t",
+            "name": "old_kv",
+            "rust_type": "*mut core::ffi::c_void"
+          },
+          {
+            "c_type": "bool",
+            "name": "complete_del",
+            "rust_type": "bool"
+          }
+        ],
+        "return_rust_type": "i32",
+        "return_type": "fdb_err_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-del-kv",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#del_kv",
+        "stub_boundary": "declared_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_declared_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      }
+    ],
+    "external_direct_callees": [
+      {
+        "definition_status": "declared_external_direct_callee",
+        "header_files": [],
+        "model_contract": "declared_external_direct_callee_signature_context",
+        "name": "FDB_INFO",
+        "parameters": [
+          {
+            "c_type": "const char *",
+            "name": "fmt",
+            "rust_type": "*const core::ffi::c_char"
+          },
+          {
+            "c_type": "const char *",
+            "name": "name",
+            "rust_type": "*const core::ffi::c_char"
+          }
+        ],
+        "replay_contract": {
+          "kind": "ignored_non_observable_void",
+          "observable_outputs": [
+            "return_code"
+          ],
+          "reason": "FDB_INFO writes diagnostics only; this fixture compares fdb_kv_del return_code."
+        },
+        "return_rust_type": "()",
+        "return_type": "void",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-info",
+        "source_files": [
+          {
+            "path": "inc/fdb_def.h",
+            "sha256": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320"
+          }
+        ],
+        "source_ref": "inc/fdb_def.h#FDB_INFO",
+        "stub_boundary": "declared_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_declared_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "declared_external_direct_callee",
+        "header_files": [],
+        "model_contract": "declared_external_direct_callee_signature_context",
+        "name": "db_init_ok",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          }
+        ],
+        "return_rust_type": "bool",
+        "return_type": "bool",
+        "semantics_verified": false,
+        "signature_ref": "sig-db-init-ok",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#db_init_ok",
+        "stub_boundary": "declared_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_declared_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "declared_external_direct_callee",
+        "header_files": [],
+        "model_contract": "declared_external_direct_callee_signature_context",
+        "name": "db_lock",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          }
+        ],
+        "return_rust_type": "()",
+        "return_type": "void",
+        "semantics_verified": false,
+        "signature_ref": "sig-db-lock",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#db_lock",
+        "stub_boundary": "declared_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_declared_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "declared_external_direct_callee",
+        "header_files": [],
+        "model_contract": "declared_external_direct_callee_signature_context",
+        "name": "db_name",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          }
+        ],
+        "return_rust_type": "*const core::ffi::c_char",
+        "return_type": "const char *",
+        "semantics_verified": false,
+        "signature_ref": "sig-db-name",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#db_name",
+        "stub_boundary": "declared_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_declared_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "declared_external_direct_callee",
+        "header_files": [],
+        "model_contract": "declared_external_direct_callee_signature_context",
+        "name": "db_unlock",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          }
+        ],
+        "return_rust_type": "()",
+        "return_type": "void",
+        "semantics_verified": false,
+        "signature_ref": "sig-db-unlock",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#db_unlock",
+        "stub_boundary": "declared_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_declared_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "real_source_bound",
+        "header_files": [],
+        "model_contract": "declared_external_direct_callee_signature_context",
+        "name": "del_kv",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          },
+          {
+            "c_type": "const char *",
+            "name": "key",
+            "rust_type": "*const core::ffi::c_char"
+          },
+          {
+            "c_type": "fdb_kv_t",
+            "name": "old_kv",
+            "rust_type": "*mut core::ffi::c_void"
+          },
+          {
+            "c_type": "bool",
+            "name": "complete_del",
+            "rust_type": "bool"
+          }
+        ],
+        "return_rust_type": "i32",
+        "return_type": "fdb_err_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-del-kv",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#del_kv",
+        "stub_boundary": "declared_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_declared_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      }
+    ],
+    "lvalue_decision_counts": {},
+    "pointer_boundary_decision_counts": {},
+    "safe_public_api": true,
+    "translation_rule_ids": [
+      "clang-lowered-typed-ir",
+      "bounded-call-expression"
+    ],
+    "unsafe_candidate_count": 0,
+    "unsupported_lvalue_count": 0,
+    "unsupported_node_count": 0
+  },
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "2787be14230af553736baed3ea5078ed9506d92ced819bbf09c2acdcef6bb3bf",
+    "status": "passed"
+  },
+  "verification_plan": [
+    {
+      "command": "rustc --error-format=json <draft>",
+      "gate": "rust_check",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "generate accepted C oracle",
+      "gate": "c_oracle",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "emit L3 evidence manifest",
+      "gate": "l3_manifest",
+      "required_before_acceptance": true
+    }
+  ]
+}

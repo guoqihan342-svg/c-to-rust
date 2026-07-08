@@ -491,6 +491,121 @@ fn typed_ir_rejects_mutable_record_pointer_arrow_field_assignment_with_multiple_
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_mutable_record_pointer_arrow_field_assignment_with_unused_readonly_8_bit_pointer_param(
+) {
+    let i32_ty = ir_i32();
+    let char_ty = ir_integer("char", "char", true, 8);
+    let const_char_ptr_ty = ir_pointer("const char *", "char *", ir_const(char_ty), false);
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "set_point_x_ignoring_name".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "name".to_string(),
+                ty: const_char_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Assign {
+            target: IrExpr::Member {
+                base: Box::new(ir_var("p", point_ptr_ty)),
+                field: "x".to_string(),
+                ty: i32_ty.clone(),
+                is_arrow: true,
+                source_span: None,
+            },
+            value: ir_lit(1, "1", i32_ty),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("unused readonly 8-bit pointer must not block record field assignment candidate");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("name: *const core::ffi::c_void"), "{rust}");
+    assert!(rust.contains("mut p: &mut Point"), "{rust}");
+    assert!(rust.contains("p.x = 1i32;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-record-field-assignment-unused-readonly-8-bit-pointer",
+        rust,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_arrow_field_assignment_with_read_readonly_pointer_param(
+) {
+    let i32_ty = ir_i32();
+    let usize_ty = ir_usize();
+    let char_ty = ir_integer("char", "char", true, 8);
+    let const_char_ptr_ty = ir_pointer("const char *", "char *", ir_const(char_ty), false);
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "set_point_x_and_read_name".to_string(),
+        return_type: usize_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "name".to_string(),
+                ty: const_char_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ptr_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: ir_lit(1, "1", i32_ty),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "strlen".to_string(),
+                    args: vec![ir_var("name", const_char_ptr_ty)],
+                    ty: usize_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("read readonly pointer plus record field write still needs alias proof");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("requires exactly one pointer param for alias proof"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_mutable_record_pointer_arrow_non_scalar_field_assignment() {
     let i32_ty = ir_i32();
     let child_ty = ir_record_with_fields("child", vec![("value", i32_ty.clone())]);

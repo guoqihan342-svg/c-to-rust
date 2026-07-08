@@ -5,12 +5,12 @@
     "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "8d2572f0c83fe99484d23d8d70af776eb6206f74c8660e37afd4866cb5b7478b",
+      "c_oracle": "39cff16e69ca769ca956972c41224e55ce04b4031c1f1e1471a430ee59ff4c61",
       "diff": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
       "negative_diff": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
       "rust_report": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
-      "unsafe_ledger": "f62deeece7aae093e662d0128b3e8c8d528717af7484fd96d77610e3cf48d2a1",
-      "unsafe_scan": "40fd7828b4f069d8eee8d3c9b493829425fe6de659b996fd0572350add437d2d"
+      "unsafe_ledger": "2c0c2694b3845e54efe6c95e4f0f98725c65b5587ae07b133f268e367eebca6b",
+      "unsafe_scan": "7bf1372a171d455f2fbfb595d683113c00a1e03b3f0a40c2f9d948ea015b8ef7"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -52,7 +52,7 @@
   "direct_c2rust_replay": {
     "artifact": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-direct-replay.json",
-      "sha256": "1234065f3c6b276d9d3df46a3e135cf53eb4ac8461c6366fa271d6e2e893041e",
+      "sha256": "de1bf3c4284d8c17e351195eb5260b6eb3dfac68b29e45becb74c8d66a980a93",
       "status": "passed"
     },
     "c2rust_output": {
@@ -78,7 +78,7 @@
   "gate_refs": {
     "c_oracle": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-status.json",
-      "sha256": "b5b9ec17cfceaa785f5732bcea9cb511ab892e9b3662671b3c5dc1b3b2202e95",
+      "sha256": "d008f489c1f3faf12f92270bd782298c4fa94ea27c105c208adb2bc65e6f20b0",
       "status": "C_ORACLE_GENERATED"
     },
     "final_verification": {
@@ -87,27 +87,27 @@
     },
     "negative_diff": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-negative-diff.json",
-      "sha256": "90c557c53cb866783f2cd0e439911939f4c6381409f108948249aea4ff9b9044",
+      "sha256": "17d22d2cd3df4c115c2f0532619d51562eca0124b71a29c110b99ad92a603600",
       "status": "passed"
     },
     "rust_replay": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-report.json",
-      "sha256": "a59a579a833b1be090602c986a1b3003500ac4199e56807f45aedd76d3820a5d",
+      "sha256": "23cf8bdc8b2be0ed1436cf5267d048788293bf3f5dd685ea02f2d69f0ba2b888",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json",
-      "sha256": "ef2147625f7acc935c08cedb42ba0c84e58e6d265bd68f976c649e188887720f",
+      "sha256": "4ec0b9d32a29577127ba1552c3f904e0b077d1008dc056f4ca1a9c4617647d55",
       "status": "passed"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
-      "sha256": "9824d6a52076c9053468197bec85057d766ddd8836b13b7040fdf8efab6c101a",
+      "sha256": "2c0c2694b3845e54efe6c95e4f0f98725c65b5587ae07b133f268e367eebca6b",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json",
-      "sha256": "091ad3c697ee20a7a698bf98c92f148d0500be3dc928b7e93eec3dac490b739b",
+      "sha256": "7bf1372a171d455f2fbfb595d683113c00a1e03b3f0a40c2f9d948ea015b8ef7",
       "status": "passed"
     }
   },
@@ -132,7 +132,7 @@
         "status": "compiled"
       },
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-status.json",
-      "sha256": "b5b9ec17cfceaa785f5732bcea9cb511ab892e9b3662671b3c5dc1b3b2202e95",
+      "sha256": "d008f489c1f3faf12f92270bd782298c4fa94ea27c105c208adb2bc65e6f20b0",
       "status": "C_ORACLE_GENERATED"
     },
     "final_verification": {
@@ -164,7 +164,7 @@
         "status": "compiled"
       },
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-negative-diff.json",
-      "sha256": "90c557c53cb866783f2cd0e439911939f4c6381409f108948249aea4ff9b9044",
+      "sha256": "17d22d2cd3df4c115c2f0532619d51562eca0124b71a29c110b99ad92a603600",
       "status": "expected_failed"
     },
     "rust_replay": {
@@ -182,7 +182,7 @@
       "correctness_role": "direct_replay_evidence",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-direct-replay.json",
       "replay_kind": "direct_c2rust_output_replay",
-      "sha256": "1234065f3c6b276d9d3df46a3e135cf53eb4ac8461c6366fa271d6e2e893041e",
+      "sha256": "de1bf3c4284d8c17e351195eb5260b6eb3dfac68b29e45becb74c8d66a980a93",
       "status": "passed"
     },
     "schema_diff": {
@@ -198,7 +198,7 @@
         "status": "compiled"
       },
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json",
-      "sha256": "ef2147625f7acc935c08cedb42ba0c84e58e6d265bd68f976c649e188887720f",
+      "sha256": "4ec0b9d32a29577127ba1552c3f904e0b077d1008dc056f4ca1a9c4617647d55",
       "status": "passed"
     },
     "unsafe_ledger": {
@@ -214,7 +214,7 @@
         "status": "compiled"
       },
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
-      "sha256": "9824d6a52076c9053468197bec85057d766ddd8836b13b7040fdf8efab6c101a",
+      "sha256": "2c0c2694b3845e54efe6c95e4f0f98725c65b5587ae07b133f268e367eebca6b",
       "status": "passed"
     },
     "unsafe_scan": {
@@ -230,7 +230,7 @@
         "status": "compiled"
       },
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json",
-      "sha256": "091ad3c697ee20a7a698bf98c92f148d0500be3dc928b7e93eec3dac490b739b",
+      "sha256": "7bf1372a171d455f2fbfb595d683113c00a1e03b3f0a40c2f9d948ea015b8ef7",
       "status": "passed"
     }
   },
@@ -244,7 +244,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "abf3c47340f81152f4207303877ac7a11f1ae89b93f0890e940fa017e7dbb30a",
+    "sha256": "8f6092c5cce9b7437e42a35a6bac628c822f9bf1a8af0fde76bed661c420e258",
     "status": "passed"
   }
 }

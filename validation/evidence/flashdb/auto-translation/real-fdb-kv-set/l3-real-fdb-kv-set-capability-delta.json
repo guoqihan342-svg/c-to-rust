@@ -1,5 +1,5 @@
 {
-  "boundary": "This ledger records P0 capability/refusal deltas only; it does not accept generated Rust semantics.",
+  "boundary": "This ledger records P0 capability/refusal deltas; semantic_pass=true only when validation_profile.generated_draft_acceptance accepts the exact generated Rust draft.",
   "capability_delta": [
     {
       "blocked_callees": [],
@@ -18,7 +18,7 @@
         }
       ],
       "real_c_slice": "real-fdb-kv-set",
-      "semantic_pass": false
+      "semantic_pass": true
     }
   ],
   "governance_delta": [

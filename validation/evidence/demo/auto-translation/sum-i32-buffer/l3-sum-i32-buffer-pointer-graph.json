@@ -47,24 +47,58 @@
   },
   "cache_invalidation_keys": [
     "source_commit=demo-sum-i32-buffer-20260625",
-    "slice_spec_sha256=5f1cda9a0ca58bac78b28cbd7c2e22f299126e58472e54b7fb88c36b313df845",
+    "slice_spec_sha256=00cd9f5abff8de94eca869ba982867cbdadf44754ffdf97592d96cc9caf956f6",
     "fixture_hash=sum-i32-buffer-fixture",
     "build_profile_hash=076d32e392f6a18e19179cd801a7464482b4b049dde5d4cb339ecb3bca018b61",
     "translator_version=0.1.0",
     "schema_version=1",
     "alias_gate=requires_noalias_contract",
     "alias_risk_count=1",
-    "aliasing_proven=false"
+    "aliasing_proven=false",
+    "effect_graph",
+    "effect_graph_sha256=82920c7e26be73d7c18c11c59cdc6863a131cc111dcbb86b2639c73fa573c4e5"
   ],
   "context_pack_ref": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-context-pack.json",
-  "dependency_edges": [
-    {
-      "evidence": "input_influences_output",
-      "from": "values",
-      "relationship": "writes_through",
-      "to": "out"
+  "dependency_edges": [],
+  "effect_graph": {
+    "edges": [
+      {
+        "evidence": "alias-risk-1 covers values/out",
+        "from_effect": "effect-1",
+        "relationship": "requires_noalias",
+        "to_effect": "effect-2"
+      }
+    ],
+    "effects": [
+      {
+        "expression": "values[i]",
+        "id": "effect-1",
+        "kind": "read",
+        "pointer_node": "values",
+        "source": "pointer_nodes.read_effects"
+      },
+      {
+        "expression": "out[0]",
+        "id": "effect-2",
+        "kind": "write",
+        "pointer_node": "out",
+        "source": "pointer_nodes.write_effects"
+      }
+    ],
+    "summary": {
+      "alias_gate_decision": "requires_noalias_contract",
+      "alias_sensitive": true,
+      "external_state": [],
+      "read_count": 1,
+      "reads": [
+        "values"
+      ],
+      "write_count": 1,
+      "writes": [
+        "out"
+      ]
     }
-  ],
+  },
   "level": "L3",
   "pointer_decisions": [
     {
@@ -104,7 +138,7 @@
         "bounded_input_buffer"
       ],
       "buffer_role": "input",
-      "c_type": "const int*",
+      "c_type": "const int *",
       "id": "values",
       "kind": "buffer",
       "length_companion": "len",
@@ -121,22 +155,22 @@
       "boundary_decisions": [
         "bounded_pointer_index"
       ],
-      "c_type": "int*",
+      "buffer_role": "output",
+      "c_type": "int *",
       "id": "out",
-      "kind": "struct_pointer",
+      "kind": "buffer",
+      "length_companion": "len",
       "mutability": "write_only",
       "nullability": "unknown",
       "ownership_role": "out_param",
-      "read_effects": [
-        "out[0] = total"
-      ],
+      "read_effects": [],
       "symbol": "out",
       "write_effects": [
         "out[0]"
       ]
     }
   ],
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
   "risk_summary": {
     "alias_gate": {
       "complete_alias_safety": false,
@@ -155,7 +189,7 @@
       "No support for negative len values.",
       "No support for signed overflow; fixture sums remain inside C int defined range.",
       "No support for arbitrary pointer arithmetic such as *(values + i).",
-      "No aliasing proof between values and out."
+      "No whole-program alias safety proof beyond the declared values/out noalias precondition."
     ],
     "unsafe_expected": false
   },
@@ -185,7 +219,7 @@
       "required": true
     }
   ],
-  "schema_version": 1,
+  "schema_version": 2,
   "slice_id": "sum-i32-buffer",
   "source_boundary": {
     "direct_call_edges": [],

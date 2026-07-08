@@ -81,8 +81,10 @@ fn emit_scalar_rust_from_ir_with_globals_and_policy(
         return Err("non-void function must end with a return value".to_string());
     }
     let mut context = EmitContext::from_function_and_globals_and_policy(function, globals, policy)?;
+    let definite_assignment = validate_definite_assignment(function, globals, &context)?;
     context.mutable_record_pointer_read_fields =
-        validate_definite_assignment(function, globals, &context)?;
+        definite_assignment.mutable_record_pointer_read_fields;
+    context.mutable_pointer_read_slots = definite_assignment.mutable_pointer_read_slots;
     let function_name = emit_identifier(&function.name, "function")?;
     let params = function
         .params

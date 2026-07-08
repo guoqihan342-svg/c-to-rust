@@ -1,0 +1,72 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-translator-input.json",
+    "sha256": "e78ba0b880f85169cd541a1dc6b4aa84d4f3a59a4fc91799ad523489d0cce8ad",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=9c573e05c56d3e7c42343f1259b5700764164375912ba62603373ac6f388c6f1",
+    "fixture_hash=real-fdb-kv-del-fixture",
+    "build_profile_hash=968c0f247f9cf881e44d016933ba320d59d3d56c53dfcd73184c9a8ab51468d3",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "fdb_err_t",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "unsupported",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "db",
+      "c_type": "fdb_kvdb_t",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "unsupported",
+      "rust_type": "*mut core::ffi::c_void",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "key",
+      "c_type": "const char *",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "pointer",
+      "rust_type": "*const i8",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "result",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-4",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-del",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-kv-del.json",
+    "sha256": "9c573e05c56d3e7c42343f1259b5700764164375912ba62603373ac6f388c6f1",
+    "status": "ready"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

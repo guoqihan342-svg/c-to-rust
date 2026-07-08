@@ -1,12 +1,12 @@
 {
   "build_profile_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-translator-input.json",
-    "sha256": "5a8b1352c0973b3275697d63dd00930e7f58dc24b7d69ef6c6e16967719cc0ba",
+    "sha256": "8233d6716757d769dee86b887030433092cbcf8d8b3c7aa6b22cecea8eebb6c5",
     "status": "recorded"
   },
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=f6f09fc60995b2284848de11341faa0973634e602ac291812aab83a8734dddbd",
+    "slice_spec_sha256=5484bfe9c6e68fdaa20c41bd120d049ee8c7470979c25b3dbab16eacf20bede2",
     "fixture_hash=real-fdb-kv-set-fixture",
     "build_profile_hash=c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
     "translator_version=0.1.0",
@@ -17,7 +17,7 @@
   "mappings": [
     {
       "c_name": "return",
-      "c_type": "enum fdb_err_t",
+      "c_type": "fdb_err_t",
       "confidence": "proven",
       "id": "type-1",
       "kind": "unsupported",
@@ -27,11 +27,11 @@
     },
     {
       "c_name": "db",
-      "c_type": "struct fdb_kvdb *",
+      "c_type": "fdb_kvdb_t",
       "confidence": "proven",
       "id": "type-2",
-      "kind": "pointer",
-      "rust_type": "&mut FdbKvdb",
+      "kind": "unsupported",
+      "rust_type": "*mut core::ffi::c_void",
       "source": "translator_rule",
       "translation_rule_id": "clang-lowered typed IR mapping"
     },
@@ -66,12 +66,12 @@
       "translation_rule_id": "clang-lowered typed IR mapping"
     }
   ],
-  "repo_commit": "88aba8575d9a380017bdf11874cad87828dcd02e",
+  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
   "slice_spec_ref": {
     "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-    "sha256": "bf49e63a9695730fb43e47dae0f3fb2439da286d023a54f427f5c94edcfda5da",
+    "sha256": "5484bfe9c6e68fdaa20c41bd120d049ee8c7470979c25b3dbab16eacf20bede2",
     "status": "ready"
   },
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",

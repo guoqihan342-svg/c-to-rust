@@ -114,7 +114,7 @@
     "harness_root": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-direct-replay-harness",
     "results_ref": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-direct-replay-results.json",
-      "sha256": "d9be107ff17858c54188ef55178a4e3179cb57b54ede8a8a6466abcae7615030",
+      "sha256": "a003cfc1ee505a67112bf2f867d497829fea4d38bb49941fec735b9e6c7c7d90",
       "status": "recorded"
     },
     "returncode": 0,

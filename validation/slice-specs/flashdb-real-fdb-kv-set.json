@@ -222,6 +222,12 @@
         "name": "fdb_blob_make",
         "signature_ref": "sig-fdb-blob-make",
         "source_ref": "src/fdb_utils.c#fdb_blob_make",
+        "accepted_named_slice_evidence": {
+          "target_id": "flashdb",
+          "slice_id": "real-fdb-blob-make",
+          "final_verification": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
+          "boundary": "This validates fdb_blob_make through accepted named-slice evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft."
+        },
         "source_files": [
           {
             "path": "src/fdb_utils.c",
@@ -336,7 +342,13 @@
     ],
     "behavior_fields": [
       "return_code"
-    ]
+    ],
+    "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-set-c-oracle.json",
+    "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-set-rust-report.json",
+    "diff": "validation/evidence/flashdb/l3-real-fdb-kv-set-diff.json",
+    "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-set-negative-diff.json",
+    "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-unsafe-ledger.json"
   },
   "rust_boundary": {
     "crate": "validation/l2_slices",

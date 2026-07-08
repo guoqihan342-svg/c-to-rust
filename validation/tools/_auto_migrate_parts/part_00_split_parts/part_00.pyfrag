@@ -143,6 +143,7 @@ def main() -> int:
     oracle = generate_oracle_harness_draft(spec, evidence_dir, args.skip_c_oracle)
     replay = generate_rust_replay_test_draft(spec, evidence_dir, args.slice_spec, route_decision)
     rust_check, patch = run_rust_check(evidence_dir, args.skip_rust_check, spec)
+    route_decision = refresh_generated_rust_draft_binding(evidence_dir, f"l3-{slice_id}", route_decision)
     accepted = resolve_accepted_evidence(spec) if args.accept_existing_evidence else None
     if accepted is not None:
         replay = run_generated_rust_replay(spec, evidence_dir, replay, rust_check)
@@ -247,6 +248,12 @@ def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_di
     pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
     if pointer_contract:
         c_boundary["pointer_contract"] = pointer_contract
+    declared_signatures = spec.get("c_boundary", {}).get("signatures", [])
+    if declared_signatures:
+        c_boundary["signatures"] = declared_signatures
+    direct_dependencies = spec.get("c_boundary", {}).get("direct_dependencies", [])
+    if direct_dependencies:
+        c_boundary["direct_dependencies"] = direct_dependencies
     if c_boundary:
         translator_spec["c_boundary"] = c_boundary
     compile_commands = build_profile.get("compile_commands") or build_profile.get("compile_commands_path")
@@ -324,6 +331,8 @@ def primitive_rust_type(c_type: str) -> str | None:
         "long int": "i64",
         "unsigned long": "u64",
         "unsigned long int": "u64",
+        "bool": "bool",
+        "_Bool": "bool",
     }.get(normalized)
 
 
@@ -345,93 +354,94 @@ def is_modeled_strlen_contract(
     return compact_c_type(parameters[0]["c_type"]) in {"constchar*", "charconst*"}
 
 
-def is_flashdb_kv_external_context_callee(spec: dict[str, Any], name: str) -> bool:
-    return (
-        spec.get("target_id") == "flashdb"
-        and spec.get("slice_id") == "real-fdb-kv-set"
-        and name in {"fdb_kv_del", "fdb_kv_set_blob"}
-    )
-
-
 def is_const_char_pointer_type(c_type: str) -> bool:
     return compact_c_type(c_type) in {"constchar*", "charconst*"}
 
 
-def is_flashdb_kv_external_context_signature(
-    spec: dict[str, Any],
+def declared_external_context_rust_type(c_type: str, *, position: str) -> str | None:
+    primitive = primitive_rust_type(c_type)
+    if primitive is not None:
+        return primitive
+    normalized = compact_c_type(c_type)
+    if position == "return" and normalized == "void":
+        return "()"
+    if normalized in {"char*", "signedchar*"}:
+        return "*mut core::ffi::c_char"
+    if normalized in {"constchar*", "charconst*"}:
+        return "*const core::ffi::c_char"
+    if normalized in {"void*", "structvoid*"}:
+        return "*mut core::ffi::c_void"
+    if normalized in {"constvoid*", "voidconst*", "structvoidconst*"}:
+        return "*const core::ffi::c_void"
+    if normalized.endswith("*"):
+        return "*const core::ffi::c_void" if normalized.startswith("const") else "*mut core::ffi::c_void"
+    if position == "return" and (normalized.endswith("err_t") or normalized.endswith("error_t")):
+        return "i32"
+    if normalized.endswith("_t"):
+        return "*mut core::ffi::c_void"
+    return None
+
+
+def is_declared_external_context_signature(
     item: dict[str, Any],
     signature: dict[str, Any],
     name: str,
     return_type: str,
     parameters: list[dict[str, str]],
 ) -> bool:
-    if not is_flashdb_kv_external_context_callee(spec, name):
-        return False
     definition_status = item.get("definition_status") or signature.get("definition_status")
-    if definition_status != "real_source_bound":
+    if definition_status not in {"real_source_bound", "declared_external_direct_callee"}:
         return False
-    source_ref = str(item.get("source_ref") or signature.get("source_ref") or "")
-    if source_ref != f"src/fdb_kvdb.c#{name}":
+    if not name or not return_type or not parameters:
         return False
-    if compact_c_type(return_type) != "fdb_err_t":
+    if declared_external_context_rust_type(return_type, position="return") is None:
         return False
-    if name == "fdb_kv_del":
-        return (
-            len(parameters) == 2
-            and parameters[0]["name"] == "db"
-            and compact_c_type(parameters[0]["c_type"]) == "fdb_kvdb_t"
-            and parameters[1]["name"] == "key"
-            and is_const_char_pointer_type(parameters[1]["c_type"])
-        )
+    if not all(
+        declared_external_context_rust_type(param["c_type"], position="param") is not None
+        for param in parameters
+    ):
+        return False
     return (
-        len(parameters) == 3
-        and parameters[0]["name"] == "db"
-        and compact_c_type(parameters[0]["c_type"]) == "fdb_kvdb_t"
-        and parameters[1]["name"] == "key"
-        and is_const_char_pointer_type(parameters[1]["c_type"])
-        and parameters[2]["name"] == "blob"
-        and compact_c_type(parameters[2]["c_type"]) == "fdb_blob_t"
+        primitive_rust_type(return_type) is None
+        or any(primitive_rust_type(param["c_type"]) is None for param in parameters)
     )
 
 
-def flashdb_kv_external_context_rust_type(
+def accepted_named_slice_evidence_for_callee(
     spec: dict[str, Any],
+    item: dict[str, Any],
+    signature: dict[str, Any],
     name: str,
-    c_type: str,
-) -> str | None:
-    primitive = primitive_rust_type(c_type)
-    if primitive is not None:
-        return primitive
-    if not is_flashdb_kv_external_context_callee(spec, name):
+) -> dict[str, Any] | None:
+    binding = item.get("accepted_named_slice_evidence") or signature.get("accepted_named_slice_evidence")
+    if not isinstance(binding, dict):
         return None
-    return {
-        "fdb_err_t": "i32",
-        "fdb_kvdb_t": "*mut core::ffi::c_void",
-        "constchar*": "*const core::ffi::c_char",
-        "charconst*": "*const core::ffi::c_char",
-        "fdb_blob_t": "*mut core::ffi::c_void",
-    }.get(compact_c_type(c_type))
-
-
-def accepted_named_slice_evidence_for_callee(spec: dict[str, Any], name: str) -> dict[str, Any] | None:
-    if spec.get("target_id") != "flashdb" or name != "fdb_blob_make":
+    target_id = str(binding.get("target_id") or spec.get("target_id") or "")
+    slice_id = str(binding.get("slice_id") or "")
+    final_path = binding.get("final_verification")
+    if final_path:
+        final_verification = Path(str(final_path))
+        if not final_verification.is_absolute():
+            final_verification = REPO_ROOT / final_verification
+    elif target_id and slice_id:
+        final_verification = (
+            REPO_ROOT
+            / "validation"
+            / "evidence"
+            / target_id
+            / "auto-translation"
+            / slice_id
+            / f"l3-{slice_id}-final-verification.json"
+        )
+    else:
         return None
-    final_verification = (
-        REPO_ROOT
-        / "validation"
-        / "evidence"
-        / "flashdb"
-        / "auto-translation"
-        / "real-fdb-blob-make"
-        / "l3-real-fdb-blob-make-final-verification.json"
-    )
     if not final_verification.exists():
         return None
     try:
         final = json.loads(final_verification.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return None
-    if final.get("target_id") != "flashdb" or final.get("slice_id") != "real-fdb-blob-make":
+    if final.get("target_id") != target_id or final.get("slice_id") != slice_id:
         return None
     if final.get("semantic_pass") is not True:
         return None
@@ -439,16 +449,20 @@ def accepted_named_slice_evidence_for_callee(spec: dict[str, Any], name: str) ->
         return None
     return {
         "kind": "accepted_named_slice_evidence",
-        "target_id": "flashdb",
-        "slice_id": "real-fdb-blob-make",
+        "target_id": target_id,
+        "slice_id": slice_id,
+        "callee": name,
         "final_verification_path": rel(final_verification),
         "final_verification_sha256": sha256(final_verification),
         "semantic_pass": True,
         "accepted_evidence_authoritative": True,
         "generated_draft_semantic_pass": bool(final.get("generated_draft_semantic_pass") is True),
-        "boundary": (
-            "This validates the named fdb_blob_make slice through accepted evidence only; "
-            "it does not validate the fdb_kv_set caller or its generated Rust draft."
+        "boundary": str(
+            binding.get("boundary")
+            or (
+                f"This validates external callee {name} through accepted named-slice evidence only; "
+                "it does not validate the caller or its generated Rust draft."
+            )
         ),
     }
 

@@ -89,6 +89,13 @@ fn emit_integer_literal_suffix(ty: &IrType) -> Result<String, String> {
 
 fn emit_integer_literal(value: u64, ty: &IrType) -> Result<String, String> {
     validate_integer_literal_range(value, ty)?;
+    if is_c_bool_type(ty) {
+        return Ok(if value == 0 {
+            "false".to_string()
+        } else {
+            "true".to_string()
+        });
+    }
     let suffix = emit_integer_literal_suffix(ty)?;
     Ok(format!("{value}{suffix}"))
 }

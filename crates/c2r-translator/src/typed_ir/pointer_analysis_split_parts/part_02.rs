@@ -297,6 +297,14 @@ fn validate_readonly_pointer_slice_lowering_evidence(
             && !readonly_pointer_read_params.contains(&param.name)
             && !readonly_pointer_mentioned_params.contains(&param.name)
         {
+            if is_unused_readonly_8_bit_pointer_param(
+                &param.name,
+                &param.ty,
+                readonly_pointer_read_params,
+                readonly_pointer_mentioned_params,
+            ) {
+                continue;
+            }
             return Err(format!(
                 "readonly pointer param {} requires pointer-to-slice lowering evidence before lowering {} to &[T]",
                 param.name,

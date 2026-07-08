@@ -1,8 +1,10 @@
 {
-  "reason": "Performance is not evaluated for draft-only auto-translation candidates.",
+  "accepted_performance_smoke": {
+    "status": "not_applicable"
+  },
   "schema_version": 1,
   "secondary_only": true,
-  "semantic_pass": false,
+  "semantic_pass": true,
   "slice_id": "real-fdb-kv-set",
   "status": "recorded",
   "target_id": "flashdb"

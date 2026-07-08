@@ -52,6 +52,12 @@
         "stub_boundary": "blocked_until_readonly_string_contract"
       },
       {
+        "accepted_named_slice_evidence": {
+          "boundary": "This validates fdb_blob_make through accepted named-slice evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
+          "final_verification": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
+          "slice_id": "real-fdb-blob-make",
+          "target_id": "flashdb"
+        },
         "definition_status": "real_source_bound",
         "name": "fdb_blob_make",
         "signature_ref": "sig-fdb-blob-make",

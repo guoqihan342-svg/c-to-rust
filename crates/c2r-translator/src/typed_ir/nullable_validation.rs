@@ -74,12 +74,14 @@ fn validate_nullable_pointer_param_uses_in_stmt(
                 then_body,
                 nullable_params,
                 &mut then_nonnull_params,
-            )?;
+            )
+            .map_err(|detail| format!("if then branch {detail}"))?;
             validate_nullable_pointer_param_uses_in_body(
                 else_body,
                 nullable_params,
                 &mut else_nonnull_params,
-            )?;
+            )
+            .map_err(|detail| format!("if else branch {detail}"))?;
         }
         IrStmt::While {
             condition, body, ..
@@ -293,33 +295,44 @@ fn validate_nullable_pointer_param_uses_in_expr(
             ) {
                 return Ok(());
             }
-            if mutable_record_pointer_pointee_type(ty).is_some()
-                && validate_record_pointer_return_nested_call_arg(callee, args, ty, None).is_ok()
-            {
-                for (index, arg) in args.iter().enumerate() {
-                    if index > 0
-                        && nullable_record_pointer_return_call_inner_arg_is_proven_nonnull(
-                            arg,
-                            nullable_params,
-                            proven_nonnull_params,
-                        )
-                    {
-                        continue;
+            if mutable_record_pointer_pointee_type(ty).is_some() {
+                match validate_record_pointer_return_nested_call_arg(callee, args, ty, None) {
+                    Ok(()) => {
+                        for (index, arg) in args.iter().enumerate() {
+                            if index > 0
+                                && nullable_record_pointer_return_call_inner_arg_is_proven_nonnull(
+                                    arg,
+                                    nullable_params,
+                                    proven_nonnull_params,
+                                )
+                            {
+                                continue;
+                            }
+                            validate_nullable_pointer_param_uses_in_expr(
+                                arg,
+                                nullable_params,
+                                proven_nonnull_params,
+                            )
+                            .map_err(|detail| {
+                                format!("record pointer return call {callee} arg[{index}] {detail}")
+                            })?;
+                        }
+                        return Ok(());
                     }
-                    validate_nullable_pointer_param_uses_in_expr(
-                        arg,
-                        nullable_params,
-                        proven_nonnull_params,
-                    )?;
+                    Err(detail) => {
+                        return Err(format!(
+                            "record pointer return call {callee} failed validation before nullable arg handling: {detail}"
+                        ));
+                    }
                 }
-                return Ok(());
             }
-            for arg in args {
+            for (index, arg) in args.iter().enumerate() {
                 validate_nullable_pointer_param_uses_in_expr(
                     arg,
                     nullable_params,
                     proven_nonnull_params,
-                )?;
+                )
+                .map_err(|detail| format!("call {callee} arg[{index}] {detail}"))?;
             }
             Ok(())
         }
@@ -445,10 +458,20 @@ fn nullable_pointer_truthiness_var<'a>(
     condition: &'a IrExpr,
     nullable_params: &HashSet<String>,
 ) -> Option<&'a str> {
-    let IrExpr::Var { name, .. } = condition else {
-        return None;
-    };
-    nullable_params.contains(name).then_some(name.as_str())
+    let (name, _) = nullable_pointer_truthiness_var_parts(condition)?;
+    nullable_params.contains(name).then_some(name)
+}
+
+fn nullable_pointer_truthiness_var_parts(expr: &IrExpr) -> Option<(&str, &IrType)> {
+    match expr {
+        IrExpr::Var { name, ty, .. } => Some((name.as_str(), ty)),
+        IrExpr::LValueToRValue { expr, target, .. } | IrExpr::Cast { expr, target, .. }
+            if matches!(target.kind, IrTypeKind::Pointer { .. }) =>
+        {
+            nullable_pointer_truthiness_var_parts(expr)
+        }
+        _ => None,
+    }
 }
 
 fn nullable_record_pointer_arrow_read_is_proven_nonnull(

@@ -33,6 +33,36 @@ fn typed_ir_rejects_unused_readonly_pointer_param_without_slice_evidence() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_unused_readonly_8_bit_pointer_param_as_raw_candidate() {
+    let i32_ty = ir_i32();
+    let char_ty = ir_integer("char", "char", true, 8);
+    let const_char_ptr_ty = ir_pointer("const char *", "char *", ir_const(char_ty), false);
+    let ir = IrFunction {
+        name: "ignore_name".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "name".to_string(),
+            ty: const_char_ptr_ty,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_lit(0, "0", i32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit unused readonly 8-bit pointer raw candidate");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn ignore_name(name: *const core::ffi::c_void) -> i32"));
+    assert!(rust.contains("return 0i32;"));
+    assert_rust_snippet_compiles("typed-ir-unused-readonly-8-bit-pointer-param", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_readonly_pointer_deref_read_as_slice_zero_index() {
     let u8_ty = ir_u8();
     let const_u8_ty = ir_const(u8_ty.clone());

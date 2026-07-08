@@ -1,34 +1,39 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "4977b9a2b0fd62a78a4d834472577a44cda210deffe0794e3f893c6246b76515",
+    "sha256": "3d3053603ff5d9917d614a57947abb6196bae2363dbbc9ade07a3244e7491b03",
     "status": "skipped"
   },
-  "command": null,
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir /tmp/c2r-rust-check-0vpgrvcr validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
+  "error_count": 0,
   "errors": [],
   "external_callee_context": {
     "blocked_callees": [],
     "blocked_count": 0,
     "declared_callees": [
       {
+        "binding_status": "fixture_model",
         "name": "fdb_blob_make",
         "semantics_verified": false,
         "signature_ref": "sig-fdb-blob-make",
         "stub_kind": "accepted_named_slice_evidence"
       },
       {
+        "binding_status": "fixture_model",
         "name": "fdb_kv_del",
         "semantics_verified": false,
         "signature_ref": "sig-fdb-kv-del",
         "stub_kind": "compile_only"
       },
       {
+        "binding_status": "fixture_model",
         "name": "fdb_kv_set_blob",
         "semantics_verified": false,
         "signature_ref": "sig-fdb-kv-set-blob",
         "stub_kind": "compile_only"
       },
       {
+        "binding_status": "not_emitted",
         "name": "strlen",
         "semantics_verified": false,
         "signature_ref": "sig-stdlib-strlen",
@@ -48,15 +53,48 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "26f1b9fe5aa1a07819b1bcc0c8d2e076cfdc65a3361eaafb4db44c53f4495134",
+    "sha256": "f49e646d3164c240f27b1d564be23de48eb1e8d0f72cf8bf90e4bdebc304a435",
     "status": "recorded"
   },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "fixture_bound_rust_replay_only",
+    "bindings": [
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "name": "fdb_blob_make",
+        "semantics_verified": false,
+        "signature": "pub fn fdb_blob_make(blob: &mut FdbBlob, value_buf: *const core::ffi::c_void, buf_len: usize) -> &mut FdbBlob",
+        "status": "fixture_model"
+      },
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "name": "fdb_kv_del",
+        "semantics_verified": false,
+        "signature": "pub fn fdb_kv_del(db: *mut core::ffi::c_void, key: *const core::ffi::c_void) -> i32",
+        "status": "fixture_model"
+      },
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "name": "fdb_kv_set_blob",
+        "semantics_verified": false,
+        "signature": "pub fn fdb_kv_set_blob(db: *mut core::ffi::c_void, key: *const core::ffi::c_void, blob: &mut FdbBlob) -> i32",
+        "status": "fixture_model"
+      }
+    ],
+    "semantics_verified": false,
+    "status": "emitted"
+  },
   "schema_version": 1,
-  "status": "skipped",
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed",
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "d59179524f3beb9dacd588a79410a9b22fee7f251ab58915a682c9f5a25e0b74",
-    "status": "incomplete"
+    "sha256": "2f0e0097663b1ee6f6cdd052e9b4a8d6ed13e88b003a351928563b3e649c3bd4",
+    "status": "passed"
   }
 }

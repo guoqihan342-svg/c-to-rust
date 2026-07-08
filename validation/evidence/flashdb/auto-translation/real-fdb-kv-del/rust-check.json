@@ -1,0 +1,138 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-c2rust-baseline-manifest.json",
+    "sha256": "87d3038cc54308c503cb9df3ba37325270e4464be8ab7eab46c9c43994d48561",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir /tmp/c2r-rust-check-8hh3_ule validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-rust-draft.rs",
+  "error_count": 0,
+  "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [
+      {
+        "binding_status": "declared_ignored_non_observable_void",
+        "name": "FDB_INFO",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-info",
+        "stub_kind": "compile_only"
+      },
+      {
+        "binding_status": "fixture_model",
+        "name": "db_init_ok",
+        "semantics_verified": false,
+        "signature_ref": "sig-db-init-ok",
+        "stub_kind": "compile_only"
+      },
+      {
+        "binding_status": "fixture_model",
+        "name": "db_lock",
+        "semantics_verified": false,
+        "signature_ref": "sig-db-lock",
+        "stub_kind": "compile_only"
+      },
+      {
+        "binding_status": "fixture_model",
+        "name": "db_name",
+        "semantics_verified": false,
+        "signature_ref": "sig-db-name",
+        "stub_kind": "compile_only"
+      },
+      {
+        "binding_status": "fixture_model",
+        "name": "db_unlock",
+        "semantics_verified": false,
+        "signature_ref": "sig-db-unlock",
+        "stub_kind": "compile_only"
+      },
+      {
+        "binding_status": "fixture_model",
+        "name": "del_kv",
+        "semantics_verified": false,
+        "signature_ref": "sig-del-kv",
+        "stub_kind": "compile_only"
+      }
+    ],
+    "declared_count": 6,
+    "declared_spec_count": 6,
+    "declared_spec_names": [
+      "FDB_INFO",
+      "db_init_ok",
+      "db_lock",
+      "db_name",
+      "db_unlock",
+      "del_kv"
+    ],
+    "status": "recorded"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-route-decision.json",
+    "sha256": "899f3a023adb2590babd3530d82dcd6a09de7d976a36e67dd60d5a1e0614901d",
+    "status": "recorded"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "fixture_bound_rust_replay_only",
+    "bindings": [
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "name": "FDB_INFO",
+        "replay_contract_kind": "ignored_non_observable_void",
+        "semantics_verified": false,
+        "signature": "fn FDB_INFO(fmt: *const core::ffi::c_char, name: *const core::ffi::c_char) -> ()",
+        "status": "declared_ignored_non_observable_void"
+      },
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "name": "db_init_ok",
+        "semantics_verified": false,
+        "signature": "pub fn db_init_ok(db: *mut core::ffi::c_void) -> bool",
+        "status": "fixture_model"
+      },
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "name": "db_lock",
+        "semantics_verified": false,
+        "signature": "pub fn db_lock(db: *mut core::ffi::c_void)",
+        "status": "fixture_model"
+      },
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "name": "db_name",
+        "semantics_verified": false,
+        "signature": "pub fn db_name(db: *mut core::ffi::c_void) -> *const core::ffi::c_char",
+        "status": "fixture_model"
+      },
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "name": "db_unlock",
+        "semantics_verified": false,
+        "signature": "pub fn db_unlock(db: *mut core::ffi::c_void)",
+        "status": "fixture_model"
+      },
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "name": "del_kv",
+        "semantics_verified": false,
+        "signature": "pub fn del_kv(db: *mut core::ffi::c_void, key: *const core::ffi::c_void, old_kv: *mut core::ffi::c_void, complete_del: bool) -> i32",
+        "status": "fixture_model"
+      }
+    ],
+    "semantics_verified": false,
+    "status": "emitted"
+  },
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "2787be14230af553736baed3ea5078ed9506d92ced819bbf09c2acdcef6bb3bf",
+    "status": "passed"
+  }
+}

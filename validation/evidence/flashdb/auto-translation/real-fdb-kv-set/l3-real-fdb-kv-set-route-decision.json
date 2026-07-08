@@ -3,7 +3,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "4977b9a2b0fd62a78a4d834472577a44cda210deffe0794e3f893c6246b76515",
+        "sha256": "3d3053603ff5d9917d614a57947abb6196bae2363dbbc9ade07a3244e7491b03",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -35,7 +35,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-          "sha256": "4977b9a2b0fd62a78a4d834472577a44cda210deffe0794e3f893c6246b76515",
+          "sha256": "3d3053603ff5d9917d614a57947abb6196bae2363dbbc9ade07a3244e7491b03",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -147,7 +147,7 @@
       },
       "runtime_preconditions": [],
       "rust_draft_generated": true,
-      "rust_draft_sha256": "f61e90564dc4ae008b79c206d69aaf658d1baa95adc8247388aceb052b128ccd",
+      "rust_draft_sha256": "255abf2007c398e8da99bf4178435478278d4fe1789db57441f454f9e6451dff",
       "scalar_admission": {
         "contract_status": "recorded",
         "covered": [],
@@ -158,11 +158,11 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json",
-        "sha256": "df860d7cd7f3304bf6dddf2eef04f7324caef4662c421c47ebc5de7227c2a5b4",
+        "sha256": "3855cc46c69c53984ca45e64a4d928d77df959661a72c74ea5d3e99b560e7218",
         "status": "lowered"
       },
       "status": "generated",
-      "typed_ir_sha256": "97287a4bd2b4825337ec9ccd4a5762620bd8ceade3dee5e343616fed7c5c973f"
+      "typed_ir_sha256": "3fe5a667001397aad5d38f39e2e52774fefab72290a0274941b23c2f6fc33f16"
     }
   },
   "level": "L1",
@@ -184,6 +184,8 @@
       "division_by_zero": "not_declared",
       "shift_count": "not_declared",
       "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
       "signed_overflow": "not_declared",
       "signed_right_shift": "not_declared",
       "wrapping_profile": "not_declared"
@@ -208,22 +210,22 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-      "sha256": "4977b9a2b0fd62a78a4d834472577a44cda210deffe0794e3f893c6246b76515",
+      "sha256": "3d3053603ff5d9917d614a57947abb6196bae2363dbbc9ade07a3244e7491b03",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-cfg.json",
-      "sha256": "9295a98bf9401d9e16867508b864c8dd33a419b8ba55985f2ece735e6872b7a1",
+      "sha256": "ef4cfa6a5c4c8865c6d272f9857de161b67d046963310669e7bf511d0acba91f",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json",
-      "sha256": "df860d7cd7f3304bf6dddf2eef04f7324caef4662c421c47ebc5de7227c2a5b4",
+      "sha256": "3855cc46c69c53984ca45e64a4d928d77df959661a72c74ea5d3e99b560e7218",
       "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-pointer-graph.json",
-      "sha256": "e246a5762c300ffa4f563874bbecb4c4d2127530d1ff9347eb52cdc6de781b43",
+      "sha256": "8a3b24356763d9da584252ca7aa42a4fa6c29d6c8d3300b08ec8e247c005a2cc",
       "status": "recorded"
     },
     "translation_plan": {
@@ -232,7 +234,7 @@
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-type-map.json",
-      "sha256": "9284c5d822cf4a77b8ed391909dc8bb0f45f03d5de13fa2863e3c94704014e5a",
+      "sha256": "7ca561bf5ea2f5586d2b50d7c273c03faa00223aadc3eecdaa53568ecc643c35",
       "status": "recorded"
     }
   },

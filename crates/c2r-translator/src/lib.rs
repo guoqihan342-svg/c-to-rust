@@ -12,11 +12,11 @@ pub mod translation_route;
 pub mod typed_ir;
 
 pub use model::{
-    ArtifactManifest, BuildProfile, CBoundary, CallExpressionEvidence, CfgBlock, CfgEvidence,
-    CfgFunction, PointerEdge, PointerGraphEvidence, PointerNode, ScalarArithmeticContract,
-    SliceSpec, SourceFileRef, SourceSpanRef, StructuredControlFlowEvidence, TargetAbiProfile,
-    TranslationError, TranslationPlan, TranslationResult, TranslationSource, TypeMapEvidence,
-    TypeMapping, TypeUncertainty,
+    ArtifactManifest, BuildProfile, CBoundary, CDirectDependency, CParameter, CSignature,
+    CallExpressionEvidence, CfgBlock, CfgEvidence, CfgFunction, PointerEdge, PointerGraphEvidence,
+    PointerNode, ScalarArithmeticContract, SliceSpec, SourceFileRef, SourceSpanRef,
+    StructuredControlFlowEvidence, TargetAbiProfile, TranslationError, TranslationPlan,
+    TranslationResult, TranslationSource, TypeMapEvidence, TypeMapping, TypeUncertainty,
 };
 
 pub use artifacts::write_translation_artifacts;

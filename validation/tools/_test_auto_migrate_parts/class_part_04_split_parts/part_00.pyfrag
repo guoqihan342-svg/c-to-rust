@@ -164,6 +164,111 @@ class _AutoMigrateTestsPart04:
                 "declared_not_executed",
             )
 
+    def test_real_fdb_kv_del_oracle_harness_binds_uninitialized_return_code_case(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "schema_version": 1,
+            "target_id": "flashdb",
+            "slice_id": "real-fdb-kv-del",
+            "level": "L3",
+            "function_name": "fdb_kv_del",
+            "fixture_hash": "real-fdb-kv-del-fixture",
+            "fixture_contract": {
+                "observable_outputs": ["return_code"],
+                "cases": [
+                    {
+                        "id": "uninit-delete",
+                        "input_ref": "inline",
+                        "expected_ref": "inline",
+                        "inputs": {
+                            "db_state": "uninitialized_named",
+                            "db_name": "unit-kv",
+                            "key": "boot_count",
+                        },
+                        "expected_outputs": {"return_code": 7},
+                    }
+                ],
+            },
+            "c_boundary": {
+                "signatures": [
+                    {
+                        "function": "fdb_kv_del",
+                        "return_type": "fdb_err_t",
+                        "parameters": [
+                            {"name": "db", "c_type": "fdb_kvdb_t", "direction": "input"},
+                            {"name": "key", "c_type": "const char *", "direction": "input"},
+                        ],
+                    }
+                ]
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-kv-del-oracle-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+
+            module.generate_oracle_harness_draft(spec, evidence_dir, skip=True)
+
+            harness = (evidence_dir / "l3-real-fdb-kv-del-c-oracle-harness-draft.c").read_text(
+                encoding="utf-8"
+            )
+            oracle = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-del-c-oracle-status.json").read_text(encoding="utf-8")
+            )
+            self.assertNotIn("TODO: fixture case", harness)
+            self.assertIn("struct fdb_kvdb uninit_delete_db = {0};", harness)
+            self.assertIn("uninit_delete_db.parent.name", harness)
+            self.assertIn("fdb_kv_del(&uninit_delete_db, uninit_delete_key)", harness)
+            self.assertIn("fixture case uninit-delete return_code matched", harness)
+            self.assertEqual(oracle["fixture_binding"]["case_count"], 1)
+            self.assertEqual(
+                oracle["fixture_binding"]["expected_output_status"],
+                "declared_not_executed",
+            )
+
+    def test_c_oracle_harness_execution_uses_absolute_paths_for_relative_evidence_dir(self) -> None:
+        module = load_auto_migrate_module()
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix="auto-migrate-c-oracle-exec-",
+            dir=target_dir,
+        ) as tmp:
+            evidence_dir = Path(tmp).resolve().relative_to(REPO_ROOT)
+            executable = REPO_ROOT / evidence_dir / "harness.exe"
+            executable.write_text("placeholder", encoding="utf-8")
+            spec = {"fixture_contract": {"behavior_fields": ["return_code"]}}
+            fixture_binding = {
+                "expected_output_status": "executed",
+                "case_bindings": [
+                    {
+                        "id": "demo",
+                        "expected_outputs": {"return_code": 7},
+                    }
+                ],
+            }
+            completed = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="fixture case demo return_code matched\n",
+                stderr="",
+            )
+
+            with mock.patch.object(module.subprocess, "run", return_value=completed) as run:
+                payload = module.c_oracle_harness_execution(
+                    ["cc", "-o", "harness.exe"],
+                    evidence_dir,
+                    spec,
+                    fixture_binding,
+                    {"adapter": "local"},
+                )
+
+            execution_argv = run.call_args.args[0]
+            execution_cwd = run.call_args.kwargs["cwd"]
+            self.assertTrue(Path(execution_argv[0]).is_absolute(), execution_argv)
+            self.assertTrue(Path(execution_cwd).is_absolute(), execution_cwd)
+            self.assertEqual(payload["status"], "exited_zero_not_oracle")
+            self.assertEqual(payload["output_gate"]["status"], "matched_not_oracle")
+
     def test_modeled_strlen_external_callee_does_not_emit_fake_i32_stub(self) -> None:
         module = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-stdlib-stub-") as tmp:

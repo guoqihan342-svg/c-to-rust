@@ -212,6 +212,37 @@ mod clang_dry_run_artifact_tests {
     }
 
     #[test]
+    fn clang_dry_run_artifact_allows_inline_slice_source_without_function_span() {
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "inline-add-one".to_string(),
+            source_commit: "1234567".to_string(),
+            function_name: "add_one".to_string(),
+            c_source: "int add_one(int value) { return value + 1; }".to_string(),
+            fixture_hash: "fixture-sha".to_string(),
+            source_root: Some("<pinned-demo-root>".to_string()),
+            source_file: Some("src/add_one.c".to_string()),
+            source_file_hashes: BTreeMap::from([(
+                "src/add_one.c".to_string(),
+                "source-sha".to_string(),
+            )]),
+            build_profile: profile(),
+            ..SliceSpec::default()
+        };
+        let out_dir = unique_out_dir("clang-dry-run-inline-source");
+        fs::create_dir_all(&out_dir).unwrap();
+
+        let path = write_clang_dry_run_artifact(&spec, &out_dir, "l3-inline-add-one").unwrap();
+        let value: Value = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+
+        assert_eq!(value["artifact_kind"], "clang-dry-run");
+        assert_eq!(value["status"], "diagnostic_only");
+        assert_eq!(value["errors"], Value::Array(Vec::new()));
+        assert_eq!(value["metadata"]["function_source_span"], Value::Null);
+        assert_eq!(value["dry_run"]["function_name"], "add_one");
+    }
+
+    #[test]
     fn clang_dry_run_artifact_marks_libclang_as_diagnostic_only() {
         let spec = SliceSpec {
             target_id: "demo".to_string(),

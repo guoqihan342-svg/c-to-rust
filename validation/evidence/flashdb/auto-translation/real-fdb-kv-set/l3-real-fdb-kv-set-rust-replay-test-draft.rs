@@ -8,20 +8,20 @@ fn replay_real_fdb_kv_set_fixture_contract() {
     const GENERATED_DRAFT_SEMANTIC_PASS: bool = false;
     struct FixtureCase {
         id: &'static str,
-        crc: u32,
-        buf: &'static [u8],
-        size: usize,
-        return_code: u32,
+        key: &'static [u8],
+        value: Option<&'static [i8]>,
+        return_code: i32,
     }
 
     let fixture_cases: &[FixtureCase] = &[
+        FixtureCase { id: "uninit-set-value", key: &[98u8, 111u8, 111u8, 116u8, 95u8, 99u8, 111u8, 117u8, 110u8, 116u8, 0u8], value: Some(&[49i8, 50i8, 51i8, 0i8]), return_code: 7i32 },
+        FixtureCase { id: "uninit-delete-null", key: &[98u8, 111u8, 111u8, 116u8, 95u8, 99u8, 111u8, 117u8, 110u8, 116u8, 0u8], value: None, return_code: 7i32 },
     ];
     assert_eq!(fixture_cases.len(), 2usize, "fixture case count drifted");
     for case in fixture_cases {
-        assert_eq!(case.buf.len(), case.size, "{} fixture size must match byte buffer length", case.id);
-        let actual = fdb_kv_set(case.crc, case.buf, case.size);
+        let mut db_marker = 0u8;
+        let db = (&mut db_marker as *mut u8).cast::<core::ffi::c_void>();
+        let actual = fdb_kv_set(db, case.key.as_ptr().cast::<core::ffi::c_void>(), case.value);
         assert_eq!(actual, case.return_code, "{} return_code drifted", case.id);
     }
-    // TODO: fixture case uninit-set-value is not supported by this replay draft generator.
-    // TODO: fixture case uninit-delete-null is not supported by this replay draft generator.
 }

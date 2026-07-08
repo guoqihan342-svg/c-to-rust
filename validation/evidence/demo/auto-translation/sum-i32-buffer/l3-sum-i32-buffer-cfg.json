@@ -1,7 +1,7 @@
 {
   "cache_invalidation_keys": [
     "source_commit=demo-sum-i32-buffer-20260625",
-    "slice_spec_sha256=5f1cda9a0ca58bac78b28cbd7c2e22f299126e58472e54b7fb88c36b313df845",
+    "slice_spec_sha256=00cd9f5abff8de94eca869ba982867cbdadf44754ffdf97592d96cc9caf956f6",
     "fixture_hash=sum-i32-buffer-fixture",
     "build_profile_hash=076d32e392f6a18e19179cd801a7464482b4b049dde5d4cb339ecb3bca018b61",
     "translator_version=0.1.0",
@@ -22,8 +22,8 @@
                 "line_end": 1,
                 "line_start": 1
               },
-              "source_statement": "for (int i = 0; i < len; i++) { total = total + values[i]; }",
-              "statement_index": 1,
+              "source_statement": "decl total",
+              "statement_index": 0,
               "translation_rule_id": "bounded-input-buffer-read"
             },
             {
@@ -34,13 +34,12 @@
                 "line_end": 1,
                 "line_start": 1
               },
-              "source_statement": "out[0] = total",
-              "statement_index": 2,
+              "source_statement": "for",
+              "statement_index": 1,
               "translation_rule_id": "bounded-pointer-index-write"
             }
           ],
           "lvalue_kinds": [
-            "none",
             "bounded_input_buffer",
             "bounded_pointer_index"
           ],
@@ -52,20 +51,32 @@
           "statement_kinds": [
             "primitive_declaration",
             "for",
+            "assignment",
+            "return",
             "bounded_input_buffer_read",
-            "pointer_write",
-            "return"
+            "bounded_pointer_index_write"
           ],
           "statements": [
-            "int total = 0",
-            "for (int i = 0; i < len; i++) { total = total + values[i]; }",
-            "out[0] = total",
-            "return 0"
-          ]
+            "decl total",
+            "for",
+            "assign index",
+            "return"
+          ],
+          "terminator": "return"
         }
       ],
       "branches": [],
       "edges": [
+        {
+          "from": "entry",
+          "kind": "unsupported",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "for-1"
+        },
         {
           "from": "entry",
           "kind": "return",
@@ -74,7 +85,7 @@
             "line_end": 1,
             "line_start": 1
           },
-          "to": "return"
+          "to": "return-3"
         }
       ],
       "entry_block": "entry",
@@ -85,7 +96,7 @@
       "returns": [
         {
           "block": "entry",
-          "expression": "0",
+          "expression": "",
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -104,17 +115,21 @@
         "has_switch": false,
         "if_count": 0,
         "loop_count": 1,
-        "relooper_required": false
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
       }
     }
   ],
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
   "schema_version": 1,
   "slice_id": "sum-i32-buffer",
   "slice_spec_ref": {
     "path": "validation/slice-specs/demo-sum-i32-buffer.json",
-    "sha256": "5f1cda9a0ca58bac78b28cbd7c2e22f299126e58472e54b7fb88c36b313df845",
+    "sha256": "00cd9f5abff8de94eca869ba982867cbdadf44754ffdf97592d96cc9caf956f6",
     "status": "ready"
   },
   "source_commit": "demo-sum-i32-buffer-20260625",

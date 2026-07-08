@@ -107,6 +107,9 @@ fn emit_direct_record_pointer_field_return_type(
 }
 
 fn emit_scalar_type(ty: &IrType) -> Result<String, String> {
+    if is_c_bool_type(ty) {
+        return Ok("bool".to_string());
+    }
     match &ty.kind {
         IrTypeKind::Integer { signed, width } => {
             if is_size_t_type(ty) {

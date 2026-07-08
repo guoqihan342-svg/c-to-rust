@@ -1,6 +1,8 @@
 #[cfg(feature = "typed-ir")]
-fn function_skeleton_from_ast(
+fn function_skeleton_from_ast_with_aliases(
     function: &Value,
+    aliases: &TypeAliasInventory,
+    target_abi: Option<&TargetAbiProfile>,
 ) -> Result<ClangFunctionSkeleton, ClangFrontendError> {
     let name = string_field(function, "name").ok_or_else(|| ClangFrontendError {
         kind: "invalid_function_decl".to_string(),
@@ -10,12 +12,13 @@ fn function_skeleton_from_ast(
         kind: "invalid_function_decl".to_string(),
         message: format!("FunctionDecl {name} is missing qualType"),
     })?;
-    let return_type = function_return_type_from_type_object(function_type)?;
+    let return_type =
+        function_return_type_from_type_object_with_aliases(function_type, aliases, target_abi)?;
     let children = inner(function);
     let params = children
         .iter()
         .filter(|child| string_field(child, "kind").as_deref() == Some("ParmVarDecl"))
-        .map(param_skeleton_from_ast)
+        .map(|param| param_skeleton_from_ast_with_aliases(param, aliases, target_abi))
         .collect::<Result<Vec<_>, ClangFrontendError>>()?;
     let compound = children
         .iter()
@@ -35,7 +38,11 @@ fn function_skeleton_from_ast(
 }
 
 #[cfg(feature = "typed-ir")]
-fn param_skeleton_from_ast(param: &Value) -> Result<ClangParamSkeleton, ClangFrontendError> {
+fn param_skeleton_from_ast_with_aliases(
+    param: &Value,
+    aliases: &TypeAliasInventory,
+    target_abi: Option<&TargetAbiProfile>,
+) -> Result<ClangParamSkeleton, ClangFrontendError> {
     let name = string_field(param, "name").ok_or_else(|| ClangFrontendError {
         kind: "invalid_param_decl".to_string(),
         message: "ParmVarDecl is missing name".to_string(),
@@ -46,7 +53,9 @@ fn param_skeleton_from_ast(param: &Value) -> Result<ClangParamSkeleton, ClangFro
             kind: "invalid_param_decl".to_string(),
             message: format!("ParmVarDecl {name} is missing qualType"),
         })
-        .and_then(|type_object| type_from_ast_type_object(type_object, None))?;
+        .and_then(|type_object| {
+            type_from_ast_type_object_with_aliases(type_object, target_abi, aliases)
+        })?;
 
     Ok(ClangParamSkeleton { name, ty })
 }

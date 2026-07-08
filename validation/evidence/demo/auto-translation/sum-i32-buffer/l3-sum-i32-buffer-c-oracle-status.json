@@ -7,8 +7,13 @@
   "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
   "case_count": 6,
   "fixture": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json",
-  "fixture_sha256": "95f649a00e72cb52b0f2540a3b3d2f2df4c203a202980a38635952d5f4d62149",
+  "fixture_sha256": "2ad1734fceba9c9af63d6f5d7a6a0bcc8be037c022dad86f340b8d57e9d10d3c",
   "harness_draft": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c-oracle-harness-draft.c",
+    "sha256": "75ca200f45f3b8a4bac665c6158c1c02f5f4809e8ea9788a0787437efa59e984",
+    "status": "draft"
+  },
   "schema_version": 1,
   "semantic_pass": true,
   "slice_id": "sum-i32-buffer",

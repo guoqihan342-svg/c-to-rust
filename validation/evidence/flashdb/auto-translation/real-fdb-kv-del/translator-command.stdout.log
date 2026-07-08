@@ -1,0 +1,17 @@
+{
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-del",
+  "status": "generated",
+  "artifact_paths": [
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-auto-translation-plan.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-auto-translation-events.jsonl",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-type-map.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-cfg.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-pointer-graph.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-ai-candidate-manifest.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-blocked-repairs.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-rust-draft.rs",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-clang-dry-run.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-clang-lowering-report.json"
+  ]
+}

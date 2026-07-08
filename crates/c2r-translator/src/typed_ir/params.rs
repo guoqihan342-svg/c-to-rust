@@ -25,6 +25,14 @@ fn emit_param(
                 type_label(&param.ty)
             )
         })?
+    } else if should_emit_unused_readonly_8_bit_pointer_param(&param.name, &param.ty, context) {
+        emit_unused_readonly_8_bit_pointer_param_type(&param.ty).ok_or_else(|| {
+            format!(
+                "param {} has unused readonly 8-bit pointer type {} unsupported",
+                param.name,
+                type_label(&param.ty)
+            )
+        })?
     } else if readonly_pointer_slice_element_type(&param.ty).is_some()
         && !context.is_readonly_pointer_read_param(&param.name)
         && !context.is_readonly_pointer_mentioned_param(&param.name)
@@ -192,6 +200,34 @@ fn should_emit_raw_direct_call_pointer_param(
     context.is_raw_direct_call_pointer_param(name)
         && emit_raw_direct_call_pointer_param_type(ty).is_some()
         && !(is_readonly_8_bit_pointer_type(ty) && context.is_readonly_pointer_read_param(name))
+}
+
+fn should_emit_unused_readonly_8_bit_pointer_param(
+    name: &str,
+    ty: &IrType,
+    context: &EmitContext,
+) -> bool {
+    is_unused_readonly_8_bit_pointer_param(
+        name,
+        ty,
+        &context.readonly_pointer_read_params,
+        &context.readonly_pointer_mentioned_params,
+    ) && emit_unused_readonly_8_bit_pointer_param_type(ty).is_some()
+}
+
+fn is_unused_readonly_8_bit_pointer_param(
+    name: &str,
+    ty: &IrType,
+    readonly_pointer_read_params: &HashSet<String>,
+    readonly_pointer_mentioned_params: &HashSet<String>,
+) -> bool {
+    is_readonly_8_bit_pointer_type(ty)
+        && !readonly_pointer_read_params.contains(name)
+        && !readonly_pointer_mentioned_params.contains(name)
+}
+
+fn emit_unused_readonly_8_bit_pointer_param_type(ty: &IrType) -> Option<String> {
+    is_readonly_8_bit_pointer_type(ty).then(|| "*const core::ffi::c_void".to_string())
 }
 
 fn emit_record_field_type(ty: &IrType) -> Result<String, String> {

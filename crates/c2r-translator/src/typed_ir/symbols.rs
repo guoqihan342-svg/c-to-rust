@@ -196,6 +196,10 @@ fn c_memset_assigned_var_name(expr: &IrExpr) -> Option<&String> {
     }
     match &args[0] {
         IrExpr::Var { name, .. } => Some(name),
+        IrExpr::ArrayToPointerDecay { expr, .. } => match expr.as_ref() {
+            IrExpr::Var { name, .. } => Some(name),
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -209,6 +213,10 @@ fn c_memcpy_assigned_var_name(expr: &IrExpr) -> Option<&String> {
     }
     match &args[0] {
         IrExpr::Var { name, .. } => Some(name),
+        IrExpr::ArrayToPointerDecay { expr, .. } => match expr.as_ref() {
+            IrExpr::Var { name, .. } => Some(name),
+            _ => None,
+        },
         _ => None,
     }
 }

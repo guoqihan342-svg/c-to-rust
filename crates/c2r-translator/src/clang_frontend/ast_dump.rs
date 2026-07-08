@@ -49,13 +49,15 @@ pub fn lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
     let record_inventory = record_inventory_from_ast_with_target_abi(&ast, target_abi);
     let enum_constant_inventory = enum_constant_inventory_from_ast(&ast);
     let enum_type_inventory = enum_type_inventory_from_ast(&ast, target_abi);
+    let type_alias_inventory = type_alias_inventory_from_ast(&ast, target_abi);
     let function = find_function_decl(&ast, function_name).ok_or_else(|| ClangFrontendError {
         kind: "missing_function_decl".to_string(),
         message: format!("clang AST JSON does not contain FunctionDecl named {function_name}"),
     })?;
     let mut function = function.clone();
     rewrite_enum_constant_decl_refs_to_integer_literals(&mut function, &enum_constant_inventory)?;
-    let mut skeleton = function_skeleton_from_ast(&function)?;
+    let mut skeleton =
+        function_skeleton_from_ast_with_aliases(&function, &type_alias_inventory, target_abi)?;
     rewrite_supported_enum_types_in_function_skeleton(&mut skeleton, &enum_type_inventory)?;
     if let Some(target_abi) = target_abi {
         bind_target_abi_to_function_skeleton(&mut skeleton, target_abi);

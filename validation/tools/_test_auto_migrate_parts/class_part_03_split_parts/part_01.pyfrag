@@ -23,8 +23,14 @@
             )
 
             self.assertEqual(manifest["rust_check"]["status"], "passed")
-            self.assertIn("fn helper_add_one(value: i32) -> i32", draft)
-            self.assertIn("external callee context stub: helper_add_one", draft)
+            self.assertNotIn("fn helper_add_one(value: i32) -> i32", draft)
+            self.assertNotIn("external callee context stub: helper_add_one", draft)
+            rust_check_bindings = {
+                item["name"]: item
+                for item in manifest["rust_check"]["rust_check_harness_only_bindings"]["bindings"]
+            }
+            self.assertEqual(rust_check_bindings["helper_add_one"]["status"], "generated_compile_only")
+            self.assertEqual(rust_check_bindings["helper_add_one"]["allowed_use"], "rustc_compile_only")
             external_callee = plan["translation_summary"]["external_direct_callees"][0]
             self.assertEqual(external_callee["name"], "helper_add_one")
             self.assertEqual(external_callee["signature_ref"], "sig-helper-add-one")
@@ -145,6 +151,27 @@
                 plan["translation_summary"]["external_direct_callee_blocks"][0]["reason"],
                 "missing_declared_external_direct_callee",
             )
+
+    def test_dependency_only_undeclared_callee_does_not_create_external_context_block(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "dependency-only-callee",
+            "function_name": "uses_no_helper",
+            "fixture_hash": "fixture",
+            "c_boundary": {
+                "direct_dependencies": [
+                    {"kind": "callee", "name": "helper_unused"},
+                ],
+            },
+        }
+
+        context = module.external_direct_callee_context(spec, [])
+
+        self.assertEqual(context["status"], "not_applicable")
+        self.assertEqual(context["declared_count"], 0)
+        self.assertEqual(context["blocked_count"], 0)
+        self.assertEqual(context["blocked"], [])
 
     def test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
@@ -274,17 +301,17 @@
                 self.assertEqual(modeled_callees[name]["stub_kind"], "compile_only")
                 self.assertEqual(
                     modeled_callees[name]["stub_boundary"],
-                    "flashdb_external_direct_callee_context_only",
+                    "declared_external_direct_callee_context_only",
                 )
                 self.assertEqual(
                     modeled_callees[name]["model_contract"],
-                    "flashdb_external_direct_callee_signature_context",
+                    "declared_external_direct_callee_signature_context",
                 )
                 self.assertFalse(modeled_callees[name]["semantics_verified"])
                 self.assertEqual(modeled_callees[name]["unsupported_reasons"], [])
                 self.assertEqual(
                     modeled_callees[name]["stub_generation"],
-                    "not_emitted_flashdb_signature_context",
+                    "not_emitted_declared_signature_context",
                 )
             self.assertEqual(route["level"], "L4")
             self.assertEqual(route["status"], "refused")
@@ -340,19 +367,152 @@
             self.assertEqual(declared[name]["stub_kind"], "compile_only")
             self.assertEqual(
                 declared[name]["stub_boundary"],
-                "flashdb_external_direct_callee_context_only",
+                "declared_external_direct_callee_context_only",
             )
             self.assertEqual(
                 declared[name]["model_contract"],
-                "flashdb_external_direct_callee_signature_context",
+                "declared_external_direct_callee_signature_context",
             )
             self.assertFalse(declared[name]["semantics_verified"])
             self.assertEqual(declared[name]["unsupported_reasons"], [])
             self.assertEqual(
                 declared[name]["stub_generation"],
-                "not_emitted_flashdb_signature_context",
+                "not_emitted_declared_signature_context",
             )
             self.assertNotIn("accepted_named_slice_evidence", declared[name])
+
+    def test_declared_external_callees_accept_project_agnostic_opaque_signatures(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "otherdb",
+            "slice_id": "opaque-set",
+            "function_name": "opaque_set",
+            "fixture_hash": "opaque-set-fixture",
+            "c_boundary": {
+                "direct_dependencies": [
+                    {"kind": "callee", "name": "otherdb_set_blob"},
+                    {"kind": "callee", "name": "otherdb_del"},
+                ],
+                "signatures": [
+                    {
+                        "id": "sig-otherdb-set-blob",
+                        "role": "external_direct_callee",
+                        "function": "otherdb_set_blob",
+                        "return_type": "other_err_t",
+                        "definition_status": "real_source_bound",
+                        "source_ref": "src/otherdb.c#otherdb_set_blob",
+                        "parameters": [
+                            {"name": "db", "c_type": "otherdb_t"},
+                            {"name": "key", "c_type": "const char*"},
+                            {"name": "blob", "c_type": "other_blob_t"},
+                        ],
+                    },
+                    {
+                        "id": "sig-otherdb-del",
+                        "role": "external_direct_callee",
+                        "function": "otherdb_del",
+                        "return_type": "other_err_t",
+                        "definition_status": "real_source_bound",
+                        "source_ref": "src/otherdb.c#otherdb_del",
+                        "parameters": [
+                            {"name": "db", "c_type": "otherdb_t"},
+                            {"name": "key", "c_type": "const char*"},
+                        ],
+                    },
+                ],
+            },
+        }
+
+        context = module.external_direct_callee_context(spec, None)
+
+        self.assertEqual(context["status"], "recorded")
+        self.assertEqual(context["declared_count"], 2)
+        self.assertEqual(context["blocked_count"], 0)
+        declared = {item["name"]: item for item in context["declared"]}
+        for name in ("otherdb_set_blob", "otherdb_del"):
+            self.assertEqual(declared[name]["stub_kind"], "compile_only")
+            self.assertEqual(
+                declared[name]["stub_boundary"],
+                "declared_external_direct_callee_context_only",
+            )
+            self.assertEqual(
+                declared[name]["stub_generation"],
+                "not_emitted_declared_signature_context",
+            )
+            self.assertEqual(declared[name]["return_rust_type"], "i32")
+            self.assertEqual(declared[name]["unsupported_reasons"], [])
+        self.assertEqual(
+            declared["otherdb_set_blob"]["parameters"][0]["rust_type"],
+            "*mut core::ffi::c_void",
+        )
+        self.assertEqual(
+            declared["otherdb_set_blob"]["parameters"][1]["rust_type"],
+            "*const core::ffi::c_char",
+        )
+        self.assertEqual(
+            declared["otherdb_set_blob"]["parameters"][2]["rust_type"],
+            "*mut core::ffi::c_void",
+        )
+
+    def test_declared_external_callee_binds_spec_declared_named_slice_evidence(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "otherdb",
+            "slice_id": "opaque-set",
+            "function_name": "opaque_set",
+            "fixture_hash": "opaque-set-fixture",
+            "c_boundary": {
+                "direct_dependencies": [
+                    {"kind": "callee", "name": "make_blob"},
+                ],
+                "external_direct_callees": [
+                    {
+                        "name": "make_blob",
+                        "signature_ref": "sig-make-blob",
+                        "source_ref": "src/otherdb.c#make_blob",
+                        "definition_status": "real_source_bound",
+                        "accepted_named_slice_evidence": {
+                            "target_id": "flashdb",
+                            "slice_id": "real-fdb-blob-make",
+                            "final_verification": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
+                        },
+                    }
+                ],
+                "signatures": [
+                    {
+                        "id": "sig-make-blob",
+                        "role": "external_direct_callee",
+                        "function": "make_blob",
+                        "return_type": "other_blob_t",
+                        "definition_status": "real_source_bound",
+                        "source_ref": "src/otherdb.c#make_blob",
+                        "parameters": [
+                            {"name": "blob", "c_type": "other_blob_t"},
+                            {"name": "value", "c_type": "const void*"},
+                            {"name": "len", "c_type": "size_t"},
+                        ],
+                    }
+                ],
+            },
+        }
+
+        context = module.external_direct_callee_context(spec, None)
+
+        self.assertEqual(context["status"], "recorded")
+        self.assertEqual(context["blocked_count"], 0)
+        callee = context["declared"][0]
+        self.assertEqual(callee["name"], "make_blob")
+        self.assertEqual(callee["stub_kind"], "accepted_named_slice_evidence")
+        self.assertEqual(callee["stub_boundary"], "accepted_named_slice_context_only")
+        self.assertEqual(
+            callee["model_contract"],
+            "accepted_named_slice_evidence",
+        )
+        accepted = callee["accepted_named_slice_evidence"]
+        self.assertEqual(accepted["target_id"], "flashdb")
+        self.assertEqual(accepted["slice_id"], "real-fdb-blob-make")
+        self.assertTrue(accepted["semantic_pass"])
+        self.assertTrue(accepted["accepted_evidence_authoritative"])
 
     def test_real_fdb_kv_set_rust_check_uses_harness_only_external_bindings(self) -> None:
         module = load_auto_migrate_module()
@@ -481,6 +641,60 @@
                 },
             )
 
+            self.assertEqual(rust_check["returncode"], 0, rust_check["stderr"])
+            bindings = {
+                item["name"]: item
+                for item in module.rust_check_external_binding_report(context)["bindings"]
+            }
+            statuses = {
+                name: bindings[name]["status"]
+                for name in ("fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del")
+            }
+            self.assertEqual(
+                changed,
+                any(status == "fixture_model" for status in statuses.values()),
+            )
+            for name, status in statuses.items():
+                self.assertIn(status, {"fixture_model", "already_present"})
+                self.assertEqual(
+                    bindings[name]["allowed_use"],
+                    "fixture_bound_rust_replay_only",
+                )
+            replay_source = (
+                evidence_dir / "l3-real-fdb-kv-set-rust-replay-test-draft.rs"
+            ).read_text(encoding="utf-8")
+            self.assertIn("value: Option<&'static [i8]>", replay_source)
+            self.assertIn("Some(&[49i8, 50i8, 51i8, 0i8])", replay_source)
+            self.assertEqual(replay["status"], "passed")
+            self.assertTrue(replay["generated_draft_replay_pass"])
+            self.assertFalse(replay["generated_draft_semantic_pass"])
+
+    def test_real_fdb_kv_set_fixture_model_rust_checks_with_opaque_blob_record(self) -> None:
+        module = load_auto_migrate_module()
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        draft = """#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FdbBlob {
+    pub _c2r_opaque: u8,
+}
+
+pub fn fdb_kv_set(db: *mut core::ffi::c_void, key: *const core::ffi::c_void, value: Option<&[i8]>) -> i32 {
+    let mut blob: FdbBlob = FdbBlob { _c2r_opaque: 0u8 };
+    if value.is_some() {
+        return fdb_kv_set_blob(db, key, fdb_blob_make(&mut blob, value.unwrap().as_ptr() as *const core::ffi::c_void, value.unwrap().iter().position(|&byte| byte == 0).expect("C strlen precondition violated")));
+    } else {
+        return fdb_kv_del(db, key);
+    }
+}
+"""
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-kv-set-opaque-blob-") as tmp:
+            draft_path = Path(tmp) / "l3-real-fdb-kv-set-rust-draft.rs"
+            draft_path.write_text(draft, encoding="utf-8")
+            context = module.external_direct_callee_context(spec, None)
+
+            changed = module.inject_external_callee_stubs(draft_path, context, spec)
+            rust_check = module.rust_check_once(draft_path)
+
             self.assertTrue(changed)
             self.assertEqual(rust_check["returncode"], 0, rust_check["stderr"])
             bindings = {
@@ -490,11 +704,419 @@
             self.assertEqual(bindings["fdb_blob_make"]["status"], "fixture_model")
             self.assertEqual(bindings["fdb_kv_set_blob"]["status"], "fixture_model")
             self.assertEqual(bindings["fdb_kv_del"]["status"], "fixture_model")
+
+    def test_declared_external_context_generates_compile_only_stub_when_fixture_model_absent(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "schema_version": 1,
+            "target_id": "flashdb",
+            "slice_id": "real-fdb-kv-del",
+            "level": "L3",
+            "function_name": "fdb_kv_del",
+            "fixture_hash": "real-fdb-kv-del-fixture",
+            "c_boundary": {
+                "direct_dependencies": [
+                    {"kind": "callee", "name": "FDB_INFO"},
+                    {"kind": "callee", "name": "db_name"},
+                ],
+                "signatures": [
+                    {
+                        "function": "fdb_kv_del",
+                        "return_type": "fdb_err_t",
+                        "parameters": [
+                            {"name": "db", "c_type": "fdb_kvdb_t", "direction": "input"},
+                            {"name": "key", "c_type": "const char *", "direction": "input"},
+                        ],
+                    },
+                    {
+                        "id": "sig-fdb-info",
+                        "role": "external_direct_callee",
+                        "function": "FDB_INFO",
+                        "return_type": "void",
+                        "definition_status": "declared_external_direct_callee",
+                        "parameters": [
+                            {"name": "fmt", "c_type": "const char *"},
+                            {"name": "name", "c_type": "const char *"},
+                        ],
+                    },
+                    {
+                        "id": "sig-db-name",
+                        "role": "external_direct_callee",
+                        "function": "db_name",
+                        "return_type": "const char *",
+                        "definition_status": "real_source_bound",
+                        "parameters": [{"name": "db", "c_type": "fdb_kvdb_t"}],
+                    },
+                ],
+            },
+        }
+        draft = """\
+pub fn fdb_kv_del(db: *mut core::ffi::c_void, _key: *const core::ffi::c_void) -> i32 {
+    FDB_INFO(b"bad\\0".as_ptr().cast::<core::ffi::c_char>(), db_name(db));
+    7i32
+}
+"""
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-declared-external-stub-") as tmp:
+            draft_path = Path(tmp) / "l3-real-fdb-kv-del-rust-draft.rs"
+            draft_path.write_text(draft, encoding="utf-8")
+            context = module.external_direct_callee_context(spec, None)
+
+            changed = module.inject_external_callee_stubs(draft_path, context, spec)
+            rust_check = module.rust_check_once(draft_path)
+
+            self.assertTrue(changed)
+            self.assertEqual(rust_check["returncode"], 0, rust_check["stderr"])
+            updated = draft_path.read_text(encoding="utf-8")
+            self.assertIn(
+                "fn FDB_INFO(fmt: *const core::ffi::c_char, name: *const core::ffi::c_char) -> ()",
+                updated,
+            )
+            bindings = {
+                item["name"]: item
+                for item in module.rust_check_external_binding_report(context)["bindings"]
+            }
+            self.assertEqual(bindings["FDB_INFO"]["status"], "generated_compile_only")
+            self.assertEqual(bindings["FDB_INFO"]["allowed_use"], "rustc_compile_only")
+            self.assertFalse(bindings["FDB_INFO"]["semantics_verified"])
+
+    def test_mixed_generated_compile_only_external_binding_skips_replay(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "schema_version": 1,
+            "target_id": "otherdb",
+            "slice_id": "mixed-external",
+            "level": "L3",
+            "function_name": "mixed_external",
+            "fixture_hash": "mixed-external-fixture",
+            "fixture_contract": {
+                "observable_outputs": ["return_code"],
+                "cases": [],
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-mixed-compile-only-replay-") as tmp:
+            evidence_dir = Path(tmp)
+            (evidence_dir / "l3-mixed-external-rust-draft.rs").write_text(
+                """\
+fn FDB_INFO() { unimplemented!("compile-only external callee") }
+pub fn mixed_external() -> i32 {
+    FDB_INFO();
+    7i32
+}
+""",
+                encoding="utf-8",
+            )
+            (evidence_dir / "l3-mixed-external-rust-replay-test-draft.rs").write_text(
+                """\
+#[test]
+fn replay_mixed_external_fixture_contract() {
+    assert_eq!(mixed_external(), 7i32);
+}
+""",
+                encoding="utf-8",
+            )
+            (evidence_dir / "l3-mixed-external-auto-translation-plan.json").write_text(
+                json.dumps({"translation_summary": {"translation_rule_ids": ["clang-lowered-typed-ir"]}}),
+                encoding="utf-8",
+            )
+            replay = {
+                "schema_version": 1,
+                "status": "recorded",
+                "generated_draft_replay_pass": False,
+                "generated_draft_semantic_pass": False,
+            }
+
+            skipped_replay = module.run_generated_rust_replay(
+                spec,
+                evidence_dir,
+                replay,
+                {
+                    "status": "passed",
+                    "rust_check_harness_only_bindings": {
+                        "status": "emitted",
+                        "allowed_use": "mixed",
+                        "semantics_verified": False,
+                        "bindings": [
+                            {
+                                "name": "FDB_INFO",
+                                "status": "generated_compile_only",
+                                "allowed_use": "rustc_compile_only",
+                                "signature": "fn FDB_INFO() -> ()",
+                                "semantics_verified": False,
+                            },
+                            {
+                                "name": "fixture_model_call",
+                                "status": "fixture_model",
+                                "allowed_use": "fixture_bound_rust_replay_only",
+                                "signature": "fn fixture_model_call() -> i32",
+                                "semantics_verified": False,
+                            },
+                        ],
+                    },
+                },
+            )
+
+            self.assertEqual(skipped_replay["status"], "not_applicable")
+            self.assertEqual(
+                skipped_replay["skip_reason"],
+                "compile_only_external_bindings_not_executable",
+            )
+            self.assertFalse(skipped_replay["generated_draft_replay_pass"])
+            self.assertFalse(skipped_replay["generated_draft_semantic_pass"])
+
+    def test_explicit_ignored_non_observable_void_contract_replay_runs(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "schema_version": 1,
+            "target_id": "otherdb",
+            "slice_id": "void-log-replay-contract",
+            "level": "L3",
+            "function_name": "delete_key",
+            "fixture_hash": "void-log-replay-contract-fixture",
+            "fixture_contract": {
+                "observable_outputs": ["return_code"],
+                "cases": [
+                    {
+                        "id": "returns-seven",
+                        "input_ref": "inline",
+                        "expected_ref": "inline",
+                        "inputs": {"crc": 0, "buf": [1, 2, 3], "size": 3},
+                        "expected_outputs": {"return_code": 7},
+                    }
+                ],
+            },
+            "c_boundary": {
+                "direct_dependencies": [
+                    {"kind": "callee", "name": "LOG_INFO"},
+                ],
+                "external_direct_callees": [
+                    {
+                        "name": "LOG_INFO",
+                        "signature_ref": "sig-log-info",
+                        "definition_status": "declared_external_direct_callee",
+                        "replay_contract": {
+                            "kind": "ignored_non_observable_void",
+                            "observable_outputs": ["return_code"],
+                            "reason": "logging is outside this fixture's observable output contract",
+                        },
+                    }
+                ],
+                "signatures": [
+                    {
+                        "function": "delete_key",
+                        "return_type": "unsigned int",
+                        "parameters": [
+                            {"name": "crc", "c_type": "unsigned int", "direction": "input"},
+                            {"name": "buf", "c_type": "const unsigned char *", "direction": "input"},
+                            {"name": "size", "c_type": "size_t", "direction": "input"},
+                        ],
+                    },
+                    {
+                        "id": "sig-log-info",
+                        "role": "external_direct_callee",
+                        "function": "LOG_INFO",
+                        "return_type": "void",
+                        "definition_status": "declared_external_direct_callee",
+                        "parameters": [
+                            {"name": "message", "c_type": "const char *"},
+                        ],
+                    },
+                ],
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-explicit-void-noop-replay-") as tmp:
+            evidence_dir = Path(tmp)
+            spec_path = evidence_dir / "void-log-replay-contract.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            draft_path = evidence_dir / "l3-void-log-replay-contract-rust-draft.rs"
+            draft_path.write_text(
+                """\
+pub fn delete_key(crc: u32, buf: &'static [u8], size: usize) -> u32 {
+    let _ = (crc, buf, size);
+    LOG_INFO(b"ignored\\0".as_ptr().cast::<core::ffi::c_char>());
+    7u32
+}
+""",
+                encoding="utf-8",
+            )
+            (evidence_dir / "l3-void-log-replay-contract-auto-translation-plan.json").write_text(
+                json.dumps({"translation_summary": {"translation_rule_ids": ["clang-lowered-typed-ir"]}}),
+                encoding="utf-8",
+            )
+            context = module.external_direct_callee_context(spec, None)
+
+            changed = module.inject_external_callee_stubs(draft_path, context, spec)
+            rust_check = module.rust_check_once(draft_path)
+            replay = module.generate_rust_replay_test_draft(spec, evidence_dir, spec_path)
+            replay = module.run_generated_rust_replay(
+                spec,
+                evidence_dir,
+                replay,
+                {
+                    "status": "passed",
+                    "rust_check_harness_only_bindings": module.rust_check_external_binding_report(context),
+                },
+            )
+
+            self.assertTrue(changed)
+            self.assertEqual(rust_check["returncode"], 0, rust_check["stderr"])
+            draft = draft_path.read_text(encoding="utf-8")
+            self.assertIn("fn LOG_INFO(message: *const core::ffi::c_char) -> ()", draft)
+            self.assertIn("ignored non-observable void external callee", draft)
+            bindings = {
+                item["name"]: item
+                for item in module.rust_check_external_binding_report(context)["bindings"]
+            }
+            self.assertEqual(bindings["LOG_INFO"]["status"], "declared_ignored_non_observable_void")
+            self.assertEqual(bindings["LOG_INFO"]["allowed_use"], "fixture_bound_rust_replay_only")
+            self.assertFalse(bindings["LOG_INFO"]["semantics_verified"])
+            self.assertEqual(replay["status"], "passed")
+            self.assertTrue(replay["generated_draft_replay_pass"])
+            self.assertFalse(replay["generated_draft_semantic_pass"])
+
+    def test_real_fdb_kv_del_fixture_bound_external_model_replay_runs(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "schema_version": 1,
+            "target_id": "flashdb",
+            "slice_id": "real-fdb-kv-del",
+            "level": "L3",
+            "function_name": "fdb_kv_del",
+            "fixture_hash": "real-fdb-kv-del-fixture",
+            "fixture_contract": {
+                "observable_outputs": ["return_code"],
+                "cases": [
+                    {
+                        "id": "uninit-delete",
+                        "input_ref": "inline",
+                        "expected_ref": "inline",
+                        "inputs": {
+                            "db_state": "uninitialized_named",
+                            "db_name": "unit-kv",
+                            "key": "boot_count",
+                        },
+                        "expected_outputs": {"return_code": 7},
+                    }
+                ],
+            },
+            "c_boundary": {
+                "direct_dependencies": [
+                    {"kind": "callee", "name": "db_init_ok"},
+                    {"kind": "callee", "name": "db_name"},
+                    {"kind": "callee", "name": "db_lock"},
+                    {"kind": "callee", "name": "del_kv"},
+                    {"kind": "callee", "name": "db_unlock"},
+                ],
+                "signatures": [
+                    {
+                        "function": "fdb_kv_del",
+                        "return_type": "fdb_err_t",
+                        "parameters": [
+                            {"name": "db", "c_type": "fdb_kvdb_t", "direction": "input"},
+                            {"name": "key", "c_type": "const char *", "direction": "input"},
+                        ],
+                    },
+                    {
+                        "id": "sig-db-init-ok",
+                        "role": "external_direct_callee",
+                        "function": "db_init_ok",
+                        "return_type": "bool",
+                        "definition_status": "real_source_bound",
+                        "parameters": [{"name": "db", "c_type": "fdb_kvdb_t"}],
+                    },
+                    {
+                        "id": "sig-db-name",
+                        "role": "external_direct_callee",
+                        "function": "db_name",
+                        "return_type": "const char *",
+                        "definition_status": "real_source_bound",
+                        "parameters": [{"name": "db", "c_type": "fdb_kvdb_t"}],
+                    },
+                    {
+                        "id": "sig-db-lock",
+                        "role": "external_direct_callee",
+                        "function": "db_lock",
+                        "return_type": "void",
+                        "definition_status": "real_source_bound",
+                        "parameters": [{"name": "db", "c_type": "fdb_kvdb_t"}],
+                    },
+                    {
+                        "id": "sig-del-kv",
+                        "role": "external_direct_callee",
+                        "function": "del_kv",
+                        "return_type": "fdb_err_t",
+                        "definition_status": "real_source_bound",
+                        "parameters": [
+                            {"name": "db", "c_type": "fdb_kvdb_t"},
+                            {"name": "key", "c_type": "const char *"},
+                            {"name": "old_kv", "c_type": "fdb_kv_t"},
+                            {"name": "complete_del", "c_type": "bool"},
+                        ],
+                    },
+                    {
+                        "id": "sig-db-unlock",
+                        "role": "external_direct_callee",
+                        "function": "db_unlock",
+                        "return_type": "void",
+                        "definition_status": "real_source_bound",
+                        "parameters": [{"name": "db", "c_type": "fdb_kvdb_t"}],
+                    },
+                ],
+            },
+        }
+        draft = """\
+pub fn fdb_kv_del(db: *mut core::ffi::c_void, key: *const core::ffi::c_void) -> i32 {
+    if !db_init_ok(db) {
+        let _ = db_name(db);
+        return 7i32;
+    }
+    db_lock(db);
+    let result = del_kv(db, key, core::ptr::null_mut(), true);
+    db_unlock(db);
+    result
+}
+"""
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-kv-del-fixture-replay-") as tmp:
+            evidence_dir = Path(tmp)
+            spec_path = evidence_dir / "flashdb-real-fdb-kv-del.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            draft_path = evidence_dir / "l3-real-fdb-kv-del-rust-draft.rs"
+            draft_path.write_text(draft, encoding="utf-8")
+            (evidence_dir / "l3-real-fdb-kv-del-auto-translation-plan.json").write_text(
+                json.dumps({"translation_summary": {"translation_rule_ids": ["clang-lowered-typed-ir"]}}),
+                encoding="utf-8",
+            )
+            context = module.external_direct_callee_context(spec, None)
+
+            changed = module.inject_external_callee_stubs(draft_path, context, spec)
+            rust_check = module.rust_check_once(draft_path)
+            replay = module.generate_rust_replay_test_draft(spec, evidence_dir, spec_path)
+            replay = module.run_generated_rust_replay(
+                spec,
+                evidence_dir,
+                replay,
+                {
+                    "status": "passed",
+                    "rust_check_harness_only_bindings": module.rust_check_external_binding_report(context),
+                },
+            )
+
+            self.assertTrue(changed)
+            self.assertEqual(context["blocked_count"], 0)
+            self.assertEqual(rust_check["returncode"], 0, rust_check["stderr"])
+            bindings = {
+                item["name"]: item
+                for item in module.rust_check_external_binding_report(context)["bindings"]
+            }
+            self.assertEqual(bindings["db_init_ok"]["status"], "fixture_model")
+            self.assertEqual(bindings["db_name"]["status"], "fixture_model")
+            self.assertEqual(bindings["db_lock"]["status"], "fixture_model")
+            self.assertEqual(bindings["del_kv"]["status"], "fixture_model")
+            self.assertEqual(bindings["db_unlock"]["status"], "fixture_model")
             replay_source = (
-                evidence_dir / "l3-real-fdb-kv-set-rust-replay-test-draft.rs"
+                evidence_dir / "l3-real-fdb-kv-del-rust-replay-test-draft.rs"
             ).read_text(encoding="utf-8")
-            self.assertIn("value: Option<&'static [i8]>", replay_source)
-            self.assertIn("Some(&[49i8, 50i8, 51i8, 0i8])", replay_source)
+            self.assertIn("key: &'static [u8]", replay_source)
+            self.assertIn("fdb_kv_del(db, case.key.as_ptr().cast::<core::ffi::c_void>())", replay_source)
             self.assertEqual(replay["status"], "passed")
             self.assertTrue(replay["generated_draft_replay_pass"])
             self.assertFalse(replay["generated_draft_semantic_pass"])

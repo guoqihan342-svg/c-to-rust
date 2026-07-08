@@ -137,23 +137,40 @@ fn typedef_enum_alias_decl<'a>(
     {
         return Some((alias, enum_decl, true));
     }
-    let enum_decl_id = inner(typedef_decl)
-        .iter()
-        .find(|child| string_field(child, "kind").as_deref() == Some("EnumType"))
-        .and_then(|enum_type| enum_type.get("decl"))
-        .and_then(|decl| {
-            if string_field(decl, "kind").as_deref() == Some("EnumDecl") {
-                string_field(decl, "id")
-            } else {
-                None
-            }
-        })?;
+    let enum_decl_id = nested_enum_type_decl_id(typedef_decl)?;
     find_decl_by_id(ast, &enum_decl_id)
         .filter(|decl| string_field(decl, "kind").as_deref() == Some("EnumDecl"))
         .map(|decl| {
             let allow_missing_complete_definition = enum_decl_name(decl).is_none();
             (alias, decl, allow_missing_complete_definition)
         })
+}
+
+#[cfg(feature = "typed-ir")]
+fn nested_enum_type_decl_id(node: &Value) -> Option<String> {
+    if string_field(node, "kind").as_deref() == Some("EnumType") {
+        if let Some(enum_decl_id) = node.get("decl").and_then(|decl| {
+            if string_field(decl, "kind").as_deref() == Some("EnumDecl") {
+                string_field(decl, "id")
+            } else {
+                None
+            }
+        }) {
+            return Some(enum_decl_id);
+        }
+    }
+    if let Some(enum_decl_id) = node.get("ownedTagDecl").and_then(|decl| {
+        if string_field(decl, "kind").as_deref() == Some("EnumDecl") {
+            string_field(decl, "id")
+        } else {
+            None
+        }
+    }) {
+        return Some(enum_decl_id);
+    }
+    inner(node)
+        .iter()
+        .find_map(|child| nested_enum_type_decl_id(child))
 }
 
 #[cfg(feature = "typed-ir")]
@@ -227,16 +244,7 @@ fn enum_type_from_decl_with_options(
         ));
     }
 
-    let infer_sequential_values = allow_missing_complete_definition
-        && constants
-            .iter()
-            .all(|constant| !enum_constant_has_constant_expr(constant));
-
-    for (index, constant) in constants.iter().enumerate() {
-        let literal = enum_constant_literal_from_decl_with_inferred_value(
-            constant,
-            infer_sequential_values.then_some(index as u64),
-        )?;
+    for literal in enum_constant_literals_from_ordered_decls(&constants)? {
         if !matches!(
             literal.ty.kind,
             ClangTypeKind::Integer {
@@ -269,35 +277,98 @@ fn enum_type_from_decl_with_options(
 
 #[cfg(feature = "typed-ir")]
 fn collect_enum_constant_inventory_from_ast(node: &Value, inventory: &mut EnumConstantInventory) {
+    if string_field(node, "kind").as_deref() == Some("EnumDecl") {
+        collect_enum_constant_inventory_from_enum_decl(node, inventory);
+        for child in inner(node) {
+            if string_field(child, "kind").as_deref() != Some("EnumConstantDecl") {
+                collect_enum_constant_inventory_from_ast(child, inventory);
+            }
+        }
+        return;
+    }
     if string_field(node, "kind").as_deref() == Some("EnumConstantDecl") {
         let entry = enum_constant_literal_from_decl(node);
-        if let Some(id) = string_field(node, "id") {
-            match inventory.by_id.entry(id) {
-                std::collections::btree_map::Entry::Vacant(slot) => {
-                    slot.insert(entry.clone());
-                }
-                std::collections::btree_map::Entry::Occupied(mut slot) => {
-                    let _previous = slot.insert(Err(
-                    "duplicate EnumConstantDecl id in clang AST; enum constant lowering requires a unique declaration id"
-                        .to_string(),
-                ));
-                }
-            }
-        }
-        if let Some(name) = enum_constant_decl_name(node) {
-            match inventory.by_name.entry(name) {
-                std::collections::btree_map::Entry::Vacant(slot) => {
-                    slot.insert(Some(entry));
-                }
-                std::collections::btree_map::Entry::Occupied(mut slot) => {
-                    slot.insert(None);
-                }
-            }
-        }
+        insert_enum_constant_inventory_entry(inventory, node, entry);
     }
     for child in inner(node) {
         collect_enum_constant_inventory_from_ast(child, inventory);
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn collect_enum_constant_inventory_from_enum_decl(
+    node: &Value,
+    inventory: &mut EnumConstantInventory,
+) {
+    let constants = inner(node)
+        .iter()
+        .filter(|child| string_field(child, "kind").as_deref() == Some("EnumConstantDecl"))
+        .collect::<Vec<_>>();
+    let mut next_value = Some(0u64);
+    for constant in constants {
+        let inferred_value = if enum_constant_has_constant_expr(constant) {
+            None
+        } else {
+            next_value
+        };
+        let entry = enum_constant_literal_from_decl_with_inferred_value(constant, inferred_value);
+        if let Ok(literal) = &entry {
+            next_value = literal.value.checked_add(1);
+        } else {
+            next_value = None;
+        }
+        insert_enum_constant_inventory_entry(inventory, constant, entry);
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn insert_enum_constant_inventory_entry(
+    inventory: &mut EnumConstantInventory,
+    node: &Value,
+    entry: Result<ClangEnumConstantLiteral, String>,
+) {
+    if let Some(id) = string_field(node, "id") {
+        match inventory.by_id.entry(id) {
+            std::collections::btree_map::Entry::Vacant(slot) => {
+                slot.insert(entry.clone());
+            }
+            std::collections::btree_map::Entry::Occupied(mut slot) => {
+                let _previous = slot.insert(Err(
+                    "duplicate EnumConstantDecl id in clang AST; enum constant lowering requires a unique declaration id"
+                        .to_string(),
+                ));
+            }
+        }
+    }
+    if let Some(name) = enum_constant_decl_name(node) {
+        match inventory.by_name.entry(name) {
+            std::collections::btree_map::Entry::Vacant(slot) => {
+                slot.insert(Some(entry));
+            }
+            std::collections::btree_map::Entry::Occupied(mut slot) => {
+                slot.insert(None);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_constant_literals_from_ordered_decls(
+    constants: &[&Value],
+) -> Result<Vec<ClangEnumConstantLiteral>, String> {
+    let mut literals = Vec::new();
+    let mut next_value = Some(0u64);
+    for constant in constants {
+        let inferred_value = if enum_constant_has_constant_expr(constant) {
+            None
+        } else {
+            next_value
+        };
+        let literal = enum_constant_literal_from_decl_with_inferred_value(constant, inferred_value)?;
+        next_value = literal.value.checked_add(1);
+        literals.push(literal);
+    }
+    Ok(literals)
 }
 
 #[cfg(feature = "typed-ir")]

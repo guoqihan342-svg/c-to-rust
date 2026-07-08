@@ -146,6 +146,173 @@
     }
 
     #[test]
+    fn stmt_skeleton_from_ast_preserves_memset_local_array_decay_destination() {
+        let stmt = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "void *" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "void *(*)(void *, int, uint64_t)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "void *(void *, int, uint64_t)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "memset"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "BitCast",
+                    "type": { "qualType": "void *" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "ArrayToPointerDecay",
+                            "type": { "qualType": "unsigned char *" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "unsigned char[4]" },
+                                    "referencedDecl": { "name": "table" }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "7"
+                },
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "uint64_t" },
+                    "value": "3"
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("memset call statement skeleton");
+        let ir = lower_stmt(&skeleton).expect("lower memset local array decay statement");
+
+        let IrStmt::Expr {
+            expr: IrExpr::Call { callee, args, .. },
+            ..
+        } = ir
+        else {
+            panic!("expected memset call expression statement, got {ir:?}");
+        };
+        assert_eq!(callee, "memset");
+        let [first, ..] = args.as_slice() else {
+            panic!("expected memset arguments, got {args:?}");
+        };
+        assert!(matches!(
+            first,
+            IrExpr::ArrayToPointerDecay { expr, .. }
+                if matches!(expr.as_ref(), IrExpr::Var { name, .. } if name == "table")
+        ));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_memcpy_local_array_decay_arguments() {
+        let stmt = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "void *" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "void *(*)(void *, const void *, uint64_t)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "void *(void *, const void *, uint64_t)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "memcpy"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "BitCast",
+                    "type": { "qualType": "void *" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "ArrayToPointerDecay",
+                            "type": { "qualType": "unsigned char *" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "unsigned char[4]" },
+                                    "referencedDecl": { "name": "dst" }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "BitCast",
+                    "type": { "qualType": "const void *" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "ArrayToPointerDecay",
+                            "type": { "qualType": "unsigned char *" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "unsigned char[4]" },
+                                    "referencedDecl": { "name": "src" }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "uint64_t" },
+                    "value": "3"
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("memcpy call statement skeleton");
+        let ir = lower_stmt(&skeleton).expect("lower memcpy local array decay statement");
+
+        let IrStmt::Expr {
+            expr: IrExpr::Call { callee, args, .. },
+            ..
+        } = ir
+        else {
+            panic!("expected memcpy call expression statement, got {ir:?}");
+        };
+        assert_eq!(callee, "memcpy");
+        let [dest, src, ..] = args.as_slice() else {
+            panic!("expected memcpy arguments, got {args:?}");
+        };
+        assert!(matches!(
+            dest,
+            IrExpr::ArrayToPointerDecay { expr, .. }
+                if matches!(expr.as_ref(), IrExpr::Var { name, .. } if name == "dst")
+        ));
+        assert!(matches!(
+            src,
+            IrExpr::ArrayToPointerDecay { expr, .. }
+                if matches!(expr.as_ref(), IrExpr::Var { name, .. } if name == "src")
+        ));
+    }
+
+    #[test]
     fn expr_skeleton_from_ast_lowers_signed_unary_minus() {
         let expr = serde_json::json!({
             "kind": "UnaryOperator",
@@ -436,6 +603,67 @@
             panic!("expected one direct call argument, got {args:?}");
         };
         assert_ir_lvalue_to_rvalue_var(arg, "value", true, 32);
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_string_literal_as_array_decay_call_arg() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "void" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "void (*)(const char *)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "void (const char *)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "observe"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "ArrayToPointerDecay",
+                    "type": { "qualType": "char *" },
+                    "inner": [
+                        {
+                            "kind": "StringLiteral",
+                            "type": { "qualType": "char[4]" },
+                            "value": "\"kv\\n\""
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("string literal call skeleton");
+        let ClangExprSkeleton::Call { args, .. } = skeleton else {
+            panic!("expected call skeleton, got {skeleton:?}");
+        };
+        let [ClangExprSkeleton::ArrayToPointerDecay { expr, .. }] = args.as_slice() else {
+            panic!("expected string literal array decay arg, got {args:?}");
+        };
+        let ClangExprSkeleton::ArrayLiteral { elements, ty } = expr.as_ref() else {
+            panic!("expected string literal to lower as byte array literal, got {expr:?}");
+        };
+        let values: Vec<u64> = elements
+            .iter()
+            .map(|element| match element {
+                ClangExprSkeleton::IntegerLiteral { value, .. } => *value,
+                other => panic!("expected byte literal element, got {other:?}"),
+            })
+            .collect();
+
+        assert_eq!(values, vec![107, 118, 10, 0]);
+        assert!(matches!(
+            ty.kind,
+            ClangTypeKind::Array { len: Some(4), .. }
+        ));
     }
 
     #[test]

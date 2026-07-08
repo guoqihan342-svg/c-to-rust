@@ -209,6 +209,17 @@ pub(super) fn is_c_int_type(ty: &IrType) -> bool {
     )
 }
 
+pub(super) fn is_c_bool_type(ty: &IrType) -> bool {
+    ty.canonical == "_Bool"
+        && matches!(
+            ty.kind,
+            IrTypeKind::Integer {
+                signed: false,
+                width: 8
+            }
+        )
+}
+
 pub(super) fn is_void_type(ty: &IrType) -> bool {
     matches!(ty.kind, IrTypeKind::Void)
 }
@@ -425,7 +436,17 @@ pub(super) fn is_c_strlen_result_type(ty: &IrType) -> bool {
 }
 
 pub(super) fn is_c_size_argument_type(ty: &IrType) -> bool {
-    is_size_t_type(ty)
+    is_size_t_type(ty) || is_desugared_c_size_integer_type(ty)
+}
+
+fn is_desugared_c_size_integer_type(ty: &IrType) -> bool {
+    matches!(ty.kind, IrTypeKind::Integer { signed: false, .. })
+        && (is_desugared_c_size_integer_type_name(&ty.spelled)
+            || is_desugared_c_size_integer_type_name(&ty.canonical))
+}
+
+fn is_desugared_c_size_integer_type_name(name: &str) -> bool {
+    matches!(name, "unsigned long" | "unsigned long long")
 }
 
 pub(super) fn is_u8_pointer(ty: &IrType) -> bool {

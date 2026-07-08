@@ -95,9 +95,6 @@ fn emit_condition_expr(
     symbols: &HashSet<String>,
     context: &EmitContext,
 ) -> Result<String, String> {
-    if let Some(callee) = find_call_callee(expr) {
-        return Err(format!("call expression {callee} is unsupported"));
-    }
     if matches!(expr, IrExpr::Conditional { .. }) {
         return Err("conditional expression is unsupported in condition positions".to_string());
     }
@@ -109,6 +106,17 @@ fn emit_condition_expr(
     } = expr
     {
         return emit_logical_not_condition_expr(operand, ty, symbols, context);
+    }
+    if let Some(condition) = emit_direct_call_truthiness_condition_expr(
+        expr,
+        symbols,
+        context,
+        DirectCallConditionPolarity::Positive,
+    )? {
+        return Ok(condition);
+    }
+    if let Some(callee) = find_call_callee(expr) {
+        return Err(format!("call expression {callee} is unsupported"));
     }
     if let IrExpr::Binary {
         op, lhs, rhs, ty, ..
@@ -132,12 +140,44 @@ fn emit_condition_expr(
     Ok(format!("{expr} != {zero}"))
 }
 
+#[derive(Clone, Copy)]
+enum DirectCallConditionPolarity {
+    Positive,
+    Negated,
+}
+
+fn emit_direct_call_truthiness_condition_expr(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+    polarity: DirectCallConditionPolarity,
+) -> Result<Option<String>, String> {
+    let IrExpr::Call {
+        callee, args, ty, ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    if !is_c_bool_type(ty) {
+        return Ok(None);
+    }
+    let zero =
+        zero_literal_for_type(ty).map_err(|detail| format!("condition call zero {detail}"))?;
+    let call = emit_call_expr(callee, args, ty, symbols, context)
+        .map_err(|detail| format!("condition call {detail}"))?;
+    let op = match polarity {
+        DirectCallConditionPolarity::Positive => "!=",
+        DirectCallConditionPolarity::Negated => "==",
+    };
+    Ok(Some(format!("{call} {op} {zero}")))
+}
+
 fn emit_nullable_pointer_truthiness_condition(
     expr: &IrExpr,
     symbols: &HashSet<String>,
     context: &EmitContext,
 ) -> Result<Option<String>, String> {
-    let IrExpr::Var { name, ty, .. } = expr else {
+    let Some((name, ty)) = nullable_pointer_truthiness_var_parts(expr) else {
         return Ok(None);
     };
     if !context.is_nullable_pointer_param(name) {
@@ -404,6 +444,14 @@ fn emit_logical_not_condition_expr(
             "logical not result type must be C int, got {}",
             type_label(result_ty)
         ));
+    }
+    if let Some(condition) = emit_direct_call_truthiness_condition_expr(
+        operand,
+        symbols,
+        context,
+        DirectCallConditionPolarity::Negated,
+    )? {
+        return Ok(condition);
     }
     if let Some(callee) = find_call_callee(operand) {
         return Err(format!(

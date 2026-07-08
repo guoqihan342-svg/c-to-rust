@@ -132,9 +132,7 @@ fn validate_bounded_call_arg_with_context(
             emit_scalar_type(ty)?;
             Ok(())
         }
-        IrExpr::NullPtr { .. } => {
-            Err("null pointer call arguments are outside the bounded call subset".to_string())
-        }
+        IrExpr::NullPtr { ty, .. } => validate_null_pointer_call_arg(ty),
         IrExpr::Binary { lhs, rhs, .. } => {
             validate_bounded_call_arg_with_context(lhs, false, context)?;
             validate_bounded_call_arg_with_context(rhs, false, context)
@@ -186,6 +184,16 @@ fn validate_bounded_call_arg_with_context(
     }
 }
 
+fn validate_null_pointer_call_arg(ty: &IrType) -> Result<(), String> {
+    if matches!(&ty.kind, IrTypeKind::Pointer { .. }) {
+        return Ok(());
+    }
+    Err(format!(
+        "null pointer call argument type {} is not a pointer",
+        type_label(ty)
+    ))
+}
+
 fn validate_raw_direct_call_pointer_arg(
     name: &str,
     ty: &IrType,
@@ -208,7 +216,16 @@ fn validate_raw_direct_call_pointer_arg(
 fn validate_array_decay_direct_call_arg<'a>(
     target: &IrType,
     expr: &'a IrExpr,
-) -> Result<&'a str, String> {
+) -> Result<ArrayDecayDirectCallArg<'a>, String> {
+    if matches!(expr, IrExpr::ArrayLiteral { .. }) {
+        let bytes = byte_string_array_literal_values(expr)?;
+        let target_element = byte_string_pointer_element_type(target)?;
+        emit_scalar_type(target_element).map_err(|detail| {
+            format!("string literal array-to-pointer decay target element has {detail}")
+        })?;
+        return Ok(ArrayDecayDirectCallArg::ByteStringLiteral(bytes));
+    }
+
     let target_element = readonly_pointer_slice_element_type(target).ok_or_else(|| {
         format!(
             "array-to-pointer decay call argument target {} must be a readonly integer pointer",
@@ -243,7 +260,85 @@ fn validate_array_decay_direct_call_arg<'a>(
             "array-to-pointer decay call argument element type {array_element} does not match target element type {target_element}"
         ));
     }
-    Ok(name)
+    Ok(ArrayDecayDirectCallArg::Binding(name))
+}
+
+enum ArrayDecayDirectCallArg<'a> {
+    Binding(&'a str),
+    ByteStringLiteral(Vec<u8>),
+}
+
+fn byte_string_pointer_element_type(target: &IrType) -> Result<&IrType, String> {
+    let IrTypeKind::Pointer { pointee } = &target.kind else {
+        return Err(format!(
+            "string literal array-to-pointer decay target {} must be an 8-bit integer pointer",
+            type_label(target)
+        ));
+    };
+    if !is_8_bit_integer_type(pointee) {
+        return Err(format!(
+            "string literal array-to-pointer decay target element {} is unsupported",
+            type_label(pointee)
+        ));
+    }
+    Ok(pointee)
+}
+
+fn byte_string_array_literal_values(expr: &IrExpr) -> Result<Vec<u8>, String> {
+    let IrExpr::ArrayLiteral { elements, ty, .. } = expr else {
+        return Err(
+            "string literal array-to-pointer decay requires a byte array literal".to_string(),
+        );
+    };
+    let IrTypeKind::Array {
+        element,
+        len: Some(len),
+    } = &ty.kind
+    else {
+        return Err(format!(
+            "string literal array-to-pointer decay source {} must be a complete byte array",
+            type_label(ty)
+        ));
+    };
+    if *len != elements.len() {
+        return Err(format!(
+            "string literal array-to-pointer decay source {} length does not match element count",
+            type_label(ty)
+        ));
+    }
+    if !is_8_bit_integer_type(element) {
+        return Err(format!(
+            "string literal array-to-pointer decay element type {} is unsupported",
+            type_label(element)
+        ));
+    }
+
+    let mut bytes = Vec::with_capacity(elements.len());
+    for element in elements {
+        let IrExpr::LitInt { value, ty, .. } = element else {
+            return Err(
+                "string literal array-to-pointer decay requires integer literal elements"
+                    .to_string(),
+            );
+        };
+        if !is_8_bit_integer_type(ty) {
+            return Err(format!(
+                "string literal array-to-pointer decay element literal type {} is unsupported",
+                type_label(ty)
+            ));
+        }
+        let byte = u8::try_from(*value).map_err(|_| {
+            format!("string literal array-to-pointer decay element value {value} exceeds u8")
+        })?;
+        bytes.push(byte);
+    }
+    if bytes.last().copied() != Some(0) {
+        return Err(
+            "string literal array-to-pointer decay byte array must be NUL terminated"
+                .to_string(),
+        );
+    }
+    Ok(bytes)
 }
 
 fn validate_local_record_address_call_arg<'a>(
@@ -303,7 +398,37 @@ fn validate_bounded_nested_call_arg(
     if mutable_record_pointer_pointee_type(ty).is_some() {
         return validate_record_pointer_return_nested_call_arg(callee, args, ty, context);
     }
+    if pointer_return_nested_call_arg_type_allowed(ty) {
+        return validate_pointer_return_nested_call_arg(callee, args, ty, context);
+    }
     emit_scalar_type(ty).map_err(|detail| format!("nested call result has {detail}"))?;
+    validate_bounded_nested_call_plain_args(args, context)
+}
+
+fn pointer_return_nested_call_arg_type_allowed(ty: &IrType) -> bool {
+    is_readonly_8_bit_pointer_type(ty) || emit_opaque_void_pointer_type(ty).is_some()
+}
+
+fn validate_pointer_return_nested_call_arg(
+    callee: &str,
+    args: &[IrExpr],
+    ty: &IrType,
+    context: Option<&EmitContext>,
+) -> Result<(), String> {
+    emit_identifier(callee, "pointer return nested call callee")?;
+    if !pointer_return_nested_call_arg_type_allowed(ty) {
+        return Err(format!(
+            "pointer return nested call result {} is unsupported",
+            type_label(ty)
+        ));
+    }
+    validate_bounded_nested_call_plain_args(args, context)
+}
+
+fn validate_bounded_nested_call_plain_args(
+    args: &[IrExpr],
+    context: Option<&EmitContext>,
+) -> Result<(), String> {
     let side_effect_args = validate_bounded_side_effect_call_args(args)?;
     if !side_effect_args.is_empty() {
         for (index, arg) in args.iter().enumerate() {

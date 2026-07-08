@@ -20,10 +20,10 @@
 | `uint16_t` | 已支持 | 映射为 `u16` |
 | `int64_t` / `uint64_t` | 已支持 | 映射为 `i64` / `u64` |
 | `size_t` | 窄支持 | 仅在 `build_profile.target` 提供明确 target ABI 宽度证据时映射为 `usize`；无 profile 的 clang frontend 仍 fail-closed，禁止猜成固定 64-bit |
-| `enum T` | 窄支持 | 仅完整 `EnumDecl`、唯一命名、所有 enum 常量都有显式非负 `int` `ConstantExpr.value`、值可放入 `i32`，且 `build_profile.target.int_width=32` 时，标量参数/返回值/局部值位置可按 `i32` 降入 typed IR；无 target ABI、隐式/负值/计算 enum 常量、非 i32 ABI、enum pointer/array/field 和 Rust enum 生成仍 fail-closed |
+| `enum T` | 窄支持 | 仅完整 `EnumDecl`、唯一命名、enum 常量值可由显式非负 `int` `ConstantExpr.value` 或同一 `EnumDecl` 声明顺序从已知前值推导、值可放入 `i32`，且 `build_profile.target.int_width=32` 时，标量参数/返回值/局部值位置可按 `i32` 降入 typed IR；无 target ABI、负值/计算 enum 常量、非 i32 ABI、enum pointer/array/field 和 Rust enum 生成仍 fail-closed |
 | `void` | 已支持 | return type 和 pointer pointee |
 | `const void *` (byte cursor) | 窄支持 | 仅在 proven byte cursor 场景映射为 `&[u8]` |
-| `const T *` (readonly integer pointer) | 窄支持 | 仅在有 `*p` / `p[i]` / `*(p+i)` / `*p++` 等只读访问证据、未写入、不 escape 且长度/索引边界可推断时映射为 `&[T]`；未使用或仅声明的 readonly pointer 参数 fail-closed，不自动映射 |
+| `const T *` (readonly integer pointer) | 窄支持 | 仅在有 `*p` / `p[i]` / `*(p+i)` / `*p++` 等只读访问证据、未写入、不 escape 且长度/索引边界可推断时映射为 `&[T]`；未使用或仅声明的 8-bit readonly pointer 参数可作为 raw `*const core::ffi::c_void` candidate 保留，但不会自动降为 slice；非 8-bit 或被读取的 readonly pointer 仍需显式证据/alias gate |
 | `T *` (mutable output pointer) | 窄支持 | 仅在作为写目标时映射为 `&mut [T]` |
 | `struct T *` (mutable record pointer) | 窄支持 | 仅在 direct single-pointer scalar field 写/update/read-after-write、direct if-return fallthrough write、statement inc-dec 时映射为 `&mut T`；不是通用 ownership 或 alias 模型 |
 | `plain char` | 不支持 | 符号未知，clang 前端拒绝 |
@@ -31,7 +31,7 @@
 | `long` / `unsigned long` | 窄支持 | 仅在 `build_profile.target.long_width` 明确时按该宽度建模；无 profile 仍 fail-closed |
 | `long long` / `unsigned long long` | 不支持 | 如不是 typedef alias，拒绝 |
 | `float` / `double` / `long double` | 不支持 | 浮点类型完全未支持 |
-| `_Bool` | 不支持 | 未建模 |
+| `_Bool` | 窄支持 | 仅支持 literal-only `IntegralToBoolean` 和 direct-call 结果作为 Rust `bool` 发射；更广的 bool 存储、指针、ABI 和 bool/int 混合值语义仍 fail-closed |
 | `enum` 其他类型面 | 不支持 | enum pointer/array/field、底层 ABI/layout 和 Rust enum 生成仍未建模；参数、返回值和局部标量值仅限上方 target-ABI-bound i32 子集，显式整数 enum 常量引用见下方“enum 常量引用” |
 | `union` | 不支持 | 未建模 |
 | `struct` (按值传递) | 窄支持 | dot-field read、简单 dot-field assignment、按值 dot-field compound assignment、statement 位置 dot-field inc/dec、simple `ForStmt` step-position direct dot-field inc/dec、本地 by-value copy、唯一具名 tag 的完整直接标量字段清单下的 whole-record return；record-field 子集已有 no-clang AST fixture replay 覆盖按值 dot 读/写、readonly arrow 读、single-pointer mutable arrow 写，以及 `fdb_blob_t` 这类 typedef spelling 通过 clang `desugaredQualType`/`canonicalQualType` fallback 到 `struct fdb_blob *` 的 reduced 形状和 opt-in real-clang smoke；`real-fdb-blob-make` 已有 committed typed-IR candidate provenance 和 L4 accepted-evidence semantic pass，accepted binding 覆盖 C oracle、Rust report、schema diff、negative diff、unsafe scan/ledger、3 个 fixture case 以及 `return_same_blob` / `blob.buf` / `blob.size` observable outputs；generated Rust draft 仍保持 `generated_draft_semantic_pass=false`，这不是 generated draft 自身 accepted、不是 layout/ABI proof，也不解决 `fdb_kv_set` callee 语义；dot-field 路径仍是 minimal field candidate；whole-record inventory 拒绝同名 tag、bitfield、volatile/packed field、self-pointer/non-scalar field；pointer member access 只限 readonly 和 single-pointer mutable 窄子集，不是通用 `->`；value-position field update、多 pointer alias-sensitive field write、嵌套、匿名仍不支持 |
@@ -57,7 +57,7 @@
 |------|------|------|
 | 整数字面量 | 已支持 | 含 unsigned suffix |
 | 变量引用 | 已支持 | 局部变量和参数 |
-| enum 常量引用 | 窄支持 | 仅 clang AST 中 `DeclRefExpr -> EnumConstantDecl` 且声明处有显式非负整数 `ConstantExpr.value` 和匹配的直接 `IntegerLiteral` child 时，会在 skeleton 边界重写为 typed IR 整数字面量；同一受证明常量也可出现在顶层 readonly `static const` 固定长度整数全局数组的 literal-like initializer 中；隐式枚举值、负值、计算表达式仍 fail-closed；`enum T` 类型本身只有上方 target-ABI-bound i32 标量子集 |
+| enum 常量引用 | 窄支持 | clang AST 中 `DeclRefExpr -> EnumConstantDecl` 仅在值可由显式非负整数 `ConstantExpr.value` 加匹配直接 `IntegerLiteral` child 证明，或可由所属 `EnumDecl` 声明顺序从已知前值推导时，才会在 skeleton 边界重写为 typed IR 整数字面量；同一受证明常量也可出现在顶层 readonly `static const` 固定长度整数全局数组的 literal-like initializer 中；负值、计算表达式、缺少完整顺序 inventory 的孤立隐式常量仍 fail-closed；`enum T` 类型本身只有上方 target-ABI-bound i32 标量子集 |
 | `+` `-` `*` `/` `%` | 窄支持 | 标量整数，要求 operand 同型；clang-proven usual arithmetic `IntegralCast`/`IntegralPromotion` 会以显式 IR cast 参与运算，缺少该 cast 的混合宽度/符号 operand 会 fail-closed，不由 emitter 猜转换；无符号结果的 `+` / `-` / `*` 发射显式 `wrapping_add` / `wrapping_sub` / `wrapping_mul`；有符号结果的 `+` / `-` / `*` 发射 `checked_add` / `checked_sub` / `checked_mul` + `expect(...)`，将 no signed overflow 作为 runtime precondition；literal `/ 0` 和 `% 0` fail closed |
 | `&` `\|` `^` `<<` `>>` | 窄支持 | 标量整数，shift 的 lhs/result 同型；literal 负数 shift count、`shift_count >= width` 和无 contract 的 signed right shift fail closed |
 | `~` (bitwise not) | 已支持 | |
@@ -68,7 +68,7 @@
 | `&&` `\|\|` (short-circuit) | 窄支持 | 条件和 value-position C int 0/1 |
 | `?:` (conditional) | 窄支持 | 仅纯整数 value-position；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | 整数 cast (显式/隐式) | 窄支持 | clang-proven `IntegralCast` / `IntegralPromotion`，source/target 同为支持整数；普通 value context、binary usual arithmetic context、unary-plus integer-promotion context、direct-call argument context、`?:` condition context 以及 `if`/`while`/`do-while`/`for` condition context 中的 integral `ImplicitCastExpr` 会保留为显式 IR cast；保留值上下文中的整数 `NoOp` 也会保留为 `implicit=true` 的显式 IR cast，显式 C-style same-width integer `NoOp` cast 仍保留为 `implicit=false` 的显式 cast；clang-proven integer value-context `LValueToRValue` 会保留为显式 typed IR `IrExpr::LValueToRValue` 节点；已有 no-clang AST fixture replay 覆盖 `uint32_t + uint8_t` 中的 clang-proven RHS cast、`+signed_char` 中的 clang-proven `IntegralPromotion`、整数 `NoOp` return cast、整数 `LValueToRValue` return read 和缺失 cast 的 fail-closed；普通表达式、参数位置或条件中的 `FloatingToIntegral`、`IntegralToFloating`、unknown/missing `ImplicitCastExpr.castKind` 会 fail-closed，只有已建模整数 cast、integer value-context `LValueToRValue` 显式 IR 节点和非整数/未保留 `NoOp` skeleton 边界可继续；pointer、record 和 general lvalue read 的 `LValueToRValue` 不属于该能力 |
-| 函数调用 (direct call) | 窄支持 | 仅直接标识符 callee；用户函数 `helper`/`observe` 这类 bounded direct call 已有 no-clang AST fixture replay，参数位置的 clang-proven integer `ImplicitCastExpr` 会保留为显式 cast；direct callee 位置的 `FunctionToPointerDecay` 可作为直接函数名或简单函数指针参数 callee 的 clang 形状被消费，call-argument 位置仅允许直接函数名 decay 传给简单标量签名函数指针参数，其它 value/argument 位置会进入显式 typed IR `IrExpr::FunctionToPointerDecay` 并在缺少 explicit function-pointer lowering evidence 时 fail-closed；`assert(int)`、`abs(int)`、target-ABI-bound `strlen(const char *)`、bounded `strnlen(const char *, size_t)`、受限 `memcmp(const void *, const void *, size_t)`、statement-only `memset(dst, byte_literal, size)` 和 statement-only `memcpy(out, src, size)` 有最小模型，其它 reserved C macro/stdlib/extern surface 仍需显式模型或 extern binding，否则 fail-closed |
+| 函数调用 (direct call) | 窄支持 | 仅直接标识符 callee；用户函数 `helper`/`observe` 这类 bounded direct call 已有 no-clang AST fixture replay，参数位置的 clang-proven integer `ImplicitCastExpr` 会保留为显式 cast；`_Bool` direct-call 结果可用于直接或取反条件位置，普通整数返回 call truthiness 仍 fail-closed；direct callee 位置的 `FunctionToPointerDecay` 可作为直接函数名或简单函数指针参数 callee 的 clang 形状被消费，call-argument 位置仅允许直接函数名 decay 传给简单标量签名函数指针参数，其它 value/argument 位置会进入显式 typed IR `IrExpr::FunctionToPointerDecay` 并在缺少 explicit function-pointer lowering evidence 时 fail-closed；`assert(int)`、`abs(int)`、target-ABI-bound `strlen(const char *)`、bounded `strnlen(const char *, size_t)`、受限 `memcmp(const void *, const void *, size_t)`、statement-only `memset(dst, byte_literal, size)` 和 statement-only `memcpy(out, src, size)` 有最小模型，其它 reserved C macro/stdlib/extern surface 仍需显式模型或 extern binding，否则 fail-closed |
 | 嵌套 direct call | 窄支持 | 普通 nested direct call 仍只支持一层单个 nested arg；带标量 inc/dec leaf 的 side-effect 形状只支持单链多层 `outer(middle(inner(++value)))` / `outer(middle(inner(value++)))`，每层只能有一个 nested direct-call 参数，任意层混入普通参数、多 sibling nested call、非单链 nested call、复杂 inc/dec target、pointer/member/deref side effect 仍 fail-closed |
 | `*p` (deref read) | 窄支持 | readonly integer pointer，无副作用 |
 | `*(p+i)` / `*(i+p)` (offset deref) | 窄支持 | readonly integer pointer，integer offset |
@@ -134,7 +134,7 @@
 
 | 构造 | 状态 | 说明 |
 |------|------|------|
-| `const T *` readonly slice | 窄支持 | 仅参数上的实际只读访问；缺少 read-access evidence（包括 unused readonly pointer 参数）时 fail-closed |
+| `const T *` readonly slice | 窄支持 | 仅参数上的实际只读访问可降为 slice；缺少 read-access evidence 时不会降为 `&[T]`，未用 8-bit readonly pointer 只允许 raw pointer candidate，非 8-bit/被读取形状仍 fail-closed |
 | `T *` mutable output slice | 窄支持 | 参数上的只写访问 |
 | `*p` deref read | 窄支持 | readonly pointer only |
 | `*(p+i)` bounded offset deref | 窄支持 | readonly, integer offset |
@@ -151,7 +151,7 @@
 | double/triple pointer | 不支持 | `T **` |
 | pointer cast (non-integer) | 不支持 | |
 | `const T *` write | 不支持 | |
-| mutable pointer read | 不支持 | 仅有写证明的 pointer 不能读 |
+| mutable pointer read | 窄支持 | 仅支持函数参数 `T *out` 在同一路径已 definite write 后的 direct `*out` zero-slot read，发射为 `out[0usize]`；read-before-write、offset/index read、nullable、inout、escape 和复杂 alias 场景仍 fail-closed |
 | nullable pointer deref after check | 不支持 | null check 后不能继续使用 |
 
 ## 预处理器
@@ -177,7 +177,7 @@
 4. **有符号加减乘**：C signed `+` / `-` / `*` 发射 `checked_*().expect(...)`，用于把 no-overflow 前置条件显式带入 candidate Rust；这仍只是 candidate generation/runtime precondition，不证明输入满足该 precondition，也不替代 slice contract、evidence 字段、C oracle 或 C/Rust diff。
 5. **除法/取模**：literal zero divisor 已 fail closed；只有在 divisor 非零由 literal 或 fixture contract 约束时，才能进入后续 semantic gate 讨论。非 literal divisor 仍需要 slice precondition 或 evidence contract。
 6. **bitwise/shift**：literal 负数 shift count、`shift_count >= width` 和无 contract 的 signed right shift 已 fail closed；这不代表完整 C 位运算语义、usual arithmetic conversions 或 signed overflow UB parity。
-7. **pointer-to-slice lowering**：需要 audit 指针存在实际只读访问证据（`*p`、`p[i]`、`*(p+i)`、`*p++` 等）、不 escape、不写入（const case）、长度/索引边界可推断；只有 `const T *` 声明而没有访问证据时必须 fail-closed，不能自动 lowering 成 `&[T]`。
-8. **mutable pointer write**：当前没有 noalias 证明或多 pointer 交互的 alias 分析。
+7. **pointer-to-slice lowering**：需要 audit 指针存在实际只读访问证据（`*p`、`p[i]`、`*(p+i)`、`*p++` 等）、不 escape、不写入（const case）、长度/索引边界可推断；只有 `const T *` 声明而没有访问证据时不能自动 lowering 成 `&[T]`。当前只允许未读取/未提及的 8-bit readonly pointer 作为 raw `*const core::ffi::c_void` candidate 保留，非 8-bit 或已读取的 readonly pointer 仍必须通过 slice/noalias 证据或 fail-closed。
+8. **mutable pointer write/read**：单个 output pointer 或带显式 `restrict`/slice-spec noalias pair 的 readonly-input + mutable-output 形状已有窄路径；direct `*out` 已 definite write 后可作为 zero-slot read 发射为 `out[0usize]`。没有 noalias 证明、多 pointer/inout、nullable、escape、volatile/hardware、复杂 offset/index read 或复杂交互时仍 fail-closed，没有完整 alias 分析。
 9. **record/struct**：dot-field 路径的 struct definition 仍是从实际读取到的字段派生的 minimal Rust struct，不是 C layout/ABI proof；whole-record return 的完整字段清单路径会拒绝同名 tag、bitfield、volatile/packed、自引用指针和非标量字段；union、nested/anonymous record 仍 fail closed。
 10. **本清单是手动维护**。最终权威来源是 `crates/c2r-translator/tests/bounded_translation.rs` 中的 fail-closed tests。

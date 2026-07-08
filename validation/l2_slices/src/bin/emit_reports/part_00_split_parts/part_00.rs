@@ -239,6 +239,65 @@ struct FdbBlobMakeExpectedOutputs {
     blob_size: usize,
 }
 
+#[derive(Debug, Deserialize)]
+struct FdbKvDelOracleReport {
+    level: String,
+    target_id: String,
+    slice_id: String,
+    source_commit: String,
+    source_boundary: Value,
+    compared_fields: Vec<String>,
+    case_count: usize,
+    cases: Vec<FdbKvDelOracleCase>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FdbKvDelOracleCase {
+    id: String,
+    coverage_kind: String,
+    db_name: String,
+    db_state: String,
+    key: String,
+    return_code: i32,
+    expected_outputs: FdbKvDelExpectedOutputs,
+    status: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FdbKvDelExpectedOutputs {
+    return_code: i32,
+}
+
+#[derive(Debug, Deserialize)]
+struct FdbKvSetOracleReport {
+    level: String,
+    target_id: String,
+    slice_id: String,
+    source_commit: String,
+    source_boundary: Value,
+    compared_fields: Vec<String>,
+    case_count: usize,
+    cases: Vec<FdbKvSetOracleCase>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FdbKvSetOracleCase {
+    id: String,
+    coverage_kind: String,
+    db_name: String,
+    db_state: String,
+    key: String,
+    value: Option<String>,
+    return_code: i32,
+    expected_outputs: FdbKvSetExpectedOutputs,
+    status: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FdbKvSetExpectedOutputs {
+    return_code: i32,
+}
+
 #[derive(Debug)]
 struct SliceResult {
     slice_id: &'static str,
@@ -313,6 +372,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     ];
     emit_real_fdb_calc_crc32(&fixtures_dir, repo_root)?;
     emit_real_fdb_blob_make(&fixtures_dir, repo_root)?;
+    emit_real_fdb_kv_del(&fixtures_dir, repo_root)?;
+    emit_real_fdb_kv_set(&fixtures_dir, repo_root)?;
     let safety = emit_safety_evidence(&crate_dir, &evidence_dir)?;
     emit_libuv_safety_evidence(repo_root, &safety)?;
     emit_store_add_one_safety_evidence(repo_root, &safety)?;
