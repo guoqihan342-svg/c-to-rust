@@ -10,6 +10,9 @@ fn emit_param(
     } else if context.is_mutable_record_pointer_write_param(&param.name) {
         emit_mutable_record_pointer_param_type(&param.ty)
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
+    } else if context.is_readonly_record_pointer_read_param(&param.name) {
+        emit_readonly_record_pointer_param_type(&param.ty)
+            .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else if context.is_byte_slice_param(&param.name) {
         "&[u8]".to_string()
     } else if context.is_record_pointer_field_value_param(&param.name) {
@@ -89,7 +92,7 @@ fn returned_mutable_record_pointer_param<'a>(
     else {
         return Ok(None);
     };
-    if ty != &function.return_type {
+    if !record_pointer_types_match_ignoring_spelling(ty, &function.return_type) {
         return Err(format!(
             "mutable record pointer return type {} does not match function return type {}",
             type_label(ty),
@@ -124,6 +127,7 @@ fn emitted_param_type_is_borrow(
     }
     context.is_nullable_pointer_param(&param.name)
         || context.is_mutable_record_pointer_write_param(&param.name)
+        || context.is_readonly_record_pointer_read_param(&param.name)
         || context.is_byte_slice_param(&param.name)
         || (assigned_vars.contains(&param.name)
             && mutable_pointer_slice_element_type(&param.ty).is_some())
@@ -423,6 +427,19 @@ fn emit_nullable_pointer_param_type(ty: &IrType) -> Result<String, String> {
     }
     Err(format!(
         "nullable pointer param type {} is unsupported",
+        type_label(ty)
+    ))
+}
+
+fn emit_readonly_record_pointer_param_type(ty: &IrType) -> Result<String, String> {
+    let pointee =
+        readonly_record_pointer_pointee_type(ty).or_else(|| mutable_record_pointer_pointee_type(ty));
+    if let Some(pointee) = pointee {
+        let pointee = emit_value_type(pointee)?;
+        return Ok(format!("&{pointee}"));
+    }
+    Err(format!(
+        "readonly record pointer param type {} is unsupported",
         type_label(ty)
     ))
 }

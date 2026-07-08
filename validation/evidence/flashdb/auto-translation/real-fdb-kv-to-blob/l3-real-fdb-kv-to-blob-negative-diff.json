@@ -1,0 +1,43 @@
+{
+  "accepted_negative_diff_required": true,
+  "blocked_by": [
+    "schema_diff"
+  ],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c2rust-baseline-manifest.json",
+    "sha256": "fe1a83b01e6ae7ba4af52a914a45c2daafb6bea987c327fa23be8d702ac7b329",
+    "status": "skipped"
+  },
+  "expected_failure": true,
+  "mutation_detected": false,
+  "negative_diff_gate": "schema_aware_negative_diff",
+  "reason": "Negative diff is not run for draft-only auto-translation candidates.",
+  "reason_code": "missing_passed_schema_diff",
+  "required_inputs": {
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "incomplete",
+    "schema_diff_required_first_mismatch": null,
+    "schema_diff_required_status": "passed"
+  },
+  "root_blocked_by": [
+    "c_oracle",
+    "rust_replay"
+  ],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-route-decision.json",
+    "sha256": "927aee5907ce1504e09b1b6862572c70e3b884a2463c0354042ac8f43acc7405",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-to-blob",
+  "status": "incomplete",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "e48e68ef1ae2ea8a7c78dc641de88d649f722d0303b3c9b9835c0eedee68144f",
+    "status": "incomplete"
+  }
+}

@@ -107,7 +107,7 @@ fn parse_lvalue(target: &str) -> LValue {
     if let Some((base, field)) = trimmed.split_once("->") {
         let base = base.trim();
         let field = field.trim();
-        if is_simple_identifier(base) && is_simple_identifier(field) {
+        if is_simple_identifier(base) && is_member_path(field) {
             return LValue::PointerField {
                 base: base.to_string(),
                 field: field.to_string(),
@@ -154,6 +154,11 @@ fn parse_lvalue(target: &str) -> LValue {
     LValue::Unsupported {
         reason: "complex lvalue is outside the bounded subset".to_string(),
     }
+}
+
+fn is_member_path(text: &str) -> bool {
+    let trimmed = text.trim();
+    !trimmed.is_empty() && trimmed.split('.').all(is_simple_identifier)
 }
 
 fn parse_pointer_arithmetic_deref_lvalue(target: &str) -> Option<(String, String, String)> {

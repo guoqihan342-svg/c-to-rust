@@ -240,6 +240,56 @@ struct FdbBlobMakeExpectedOutputs {
 }
 
 #[derive(Debug, Deserialize)]
+struct FdbKvToBlobOracleReport {
+    level: String,
+    target_id: String,
+    slice_id: String,
+    source_commit: String,
+    source_boundary: Value,
+    compared_fields: Vec<String>,
+    case_count: usize,
+    cases: Vec<FdbKvToBlobOracleCase>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FdbKvToBlobOracleCase {
+    id: String,
+    coverage_kind: String,
+    kv: FdbKvToBlobKvInput,
+    initial_blob_saved: FdbKvToBlobSavedInput,
+    expected_outputs: FdbKvToBlobExpectedOutputs,
+    status: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FdbKvToBlobKvInput {
+    #[serde(rename = "addr.start")]
+    addr_start: u32,
+    #[serde(rename = "addr.value")]
+    addr_value: u32,
+    value_len: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct FdbKvToBlobSavedInput {
+    meta_addr: u32,
+    addr: u32,
+    len: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct FdbKvToBlobExpectedOutputs {
+    #[serde(rename = "return_same_blob")]
+    return_same_blob: bool,
+    #[serde(rename = "blob.saved.meta_addr")]
+    blob_saved_meta_addr: u32,
+    #[serde(rename = "blob.saved.addr")]
+    blob_saved_addr: u32,
+    #[serde(rename = "blob.saved.len")]
+    blob_saved_len: usize,
+}
+
+#[derive(Debug, Deserialize)]
 struct FdbKvDelOracleReport {
     level: String,
     target_id: String,
@@ -372,6 +422,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     ];
     emit_real_fdb_calc_crc32(&fixtures_dir, repo_root)?;
     emit_real_fdb_blob_make(&fixtures_dir, repo_root)?;
+    emit_real_fdb_kv_to_blob(&fixtures_dir, repo_root)?;
     emit_real_fdb_kv_del(&fixtures_dir, repo_root)?;
     emit_real_fdb_kv_set(&fixtures_dir, repo_root)?;
     let safety = emit_safety_evidence(&crate_dir, &evidence_dir)?;

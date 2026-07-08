@@ -1,0 +1,393 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "TypedefDecl",
+      "name": "fdb_kv_t",
+      "type": {
+        "qualType": "struct fdb_kv *"
+      }
+    },
+    {
+      "kind": "TypedefDecl",
+      "name": "fdb_blob_t",
+      "type": {
+        "qualType": "struct fdb_blob *"
+      }
+    },
+    {
+      "kind": "RecordDecl",
+      "tagUsed": "struct",
+      "name": "fdb_kv",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "kind": "FieldDecl",
+          "name": "value_len",
+          "type": {
+            "qualType": "size_t"
+          }
+        },
+        {
+          "kind": "RecordDecl",
+          "tagUsed": "struct",
+          "completeDefinition": true,
+          "inner": [
+            {
+              "kind": "FieldDecl",
+              "name": "start",
+              "type": {
+                "qualType": "uint32_t"
+              }
+            },
+            {
+              "kind": "FieldDecl",
+              "name": "value",
+              "type": {
+                "qualType": "uint32_t"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "addr",
+          "type": {
+            "qualType": "struct (unnamed struct at fdb_def.h:155:5)",
+            "desugaredQualType": "struct fdb_kv_addr",
+            "canonicalQualType": "struct fdb_kv_addr"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "RecordDecl",
+      "tagUsed": "struct",
+      "name": "fdb_blob",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "kind": "FieldDecl",
+          "name": "buf",
+          "type": {
+            "qualType": "void *"
+          }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "size",
+          "type": {
+            "qualType": "size_t"
+          }
+        },
+        {
+          "kind": "RecordDecl",
+          "tagUsed": "struct",
+          "completeDefinition": true,
+          "inner": [
+            {
+              "kind": "FieldDecl",
+              "name": "meta_addr",
+              "type": {
+                "qualType": "uint32_t"
+              }
+            },
+            {
+              "kind": "FieldDecl",
+              "name": "addr",
+              "type": {
+                "qualType": "uint32_t"
+              }
+            },
+            {
+              "kind": "FieldDecl",
+              "name": "len",
+              "type": {
+                "qualType": "size_t"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "saved",
+          "type": {
+            "qualType": "struct (unnamed struct at fdb_def.h:319:5)",
+            "desugaredQualType": "struct fdb_blob_saved",
+            "canonicalQualType": "struct fdb_blob_saved"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "fdb_kv_to_blob",
+      "type": {
+        "qualType": "fdb_blob_t (fdb_kv_t, fdb_blob_t)",
+        "desugaredQualType": "struct fdb_blob *(struct fdb_kv *, struct fdb_blob *)",
+        "canonicalQualType": "struct fdb_blob *(struct fdb_kv *, struct fdb_blob *)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "kv",
+          "type": {
+            "qualType": "fdb_kv_t",
+            "desugaredQualType": "struct fdb_kv *",
+            "canonicalQualType": "struct fdb_kv *"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "blob",
+          "type": {
+            "qualType": "fdb_blob_t",
+            "desugaredQualType": "struct fdb_blob *",
+            "canonicalQualType": "struct fdb_blob *"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "uint32_t"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "meta_addr",
+                  "isArrow": false,
+                  "type": {
+                    "qualType": "uint32_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "MemberExpr",
+                      "name": "saved",
+                      "isArrow": true,
+                      "type": {
+                        "qualType": "struct (unnamed struct at fdb_def.h:319:5)",
+                        "desugaredQualType": "struct fdb_blob_saved",
+                        "canonicalQualType": "struct fdb_blob_saved"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "fdb_blob_t",
+                            "desugaredQualType": "struct fdb_blob *",
+                            "canonicalQualType": "struct fdb_blob *"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "blob"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "MemberExpr",
+                  "name": "start",
+                  "isArrow": false,
+                  "type": {
+                    "qualType": "uint32_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "MemberExpr",
+                      "name": "addr",
+                      "isArrow": true,
+                      "type": {
+                        "qualType": "struct (unnamed struct at fdb_def.h:155:5)",
+                        "desugaredQualType": "struct fdb_kv_addr",
+                        "canonicalQualType": "struct fdb_kv_addr"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "fdb_kv_t",
+                            "desugaredQualType": "struct fdb_kv *",
+                            "canonicalQualType": "struct fdb_kv *"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "kv"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "uint32_t"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "addr",
+                  "isArrow": false,
+                  "type": {
+                    "qualType": "uint32_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "MemberExpr",
+                      "name": "saved",
+                      "isArrow": true,
+                      "type": {
+                        "qualType": "struct (unnamed struct at fdb_def.h:319:5)",
+                        "desugaredQualType": "struct fdb_blob_saved",
+                        "canonicalQualType": "struct fdb_blob_saved"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "fdb_blob_t",
+                            "desugaredQualType": "struct fdb_blob *",
+                            "canonicalQualType": "struct fdb_blob *"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "blob"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "MemberExpr",
+                  "name": "value",
+                  "isArrow": false,
+                  "type": {
+                    "qualType": "uint32_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "MemberExpr",
+                      "name": "addr",
+                      "isArrow": true,
+                      "type": {
+                        "qualType": "struct (unnamed struct at fdb_def.h:155:5)",
+                        "desugaredQualType": "struct fdb_kv_addr",
+                        "canonicalQualType": "struct fdb_kv_addr"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "fdb_kv_t",
+                            "desugaredQualType": "struct fdb_kv *",
+                            "canonicalQualType": "struct fdb_kv *"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "kv"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "size_t"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "len",
+                  "isArrow": false,
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "MemberExpr",
+                      "name": "saved",
+                      "isArrow": true,
+                      "type": {
+                        "qualType": "struct (unnamed struct at fdb_def.h:319:5)",
+                        "desugaredQualType": "struct fdb_blob_saved",
+                        "canonicalQualType": "struct fdb_blob_saved"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "fdb_blob_t",
+                            "desugaredQualType": "struct fdb_blob *",
+                            "canonicalQualType": "struct fdb_blob *"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "blob"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "MemberExpr",
+                  "name": "value_len",
+                  "isArrow": true,
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "fdb_kv_t",
+                        "desugaredQualType": "struct fdb_kv *",
+                        "canonicalQualType": "struct fdb_kv *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "kv"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "type": {
+                    "qualType": "fdb_blob_t",
+                    "desugaredQualType": "struct fdb_blob *",
+                    "canonicalQualType": "struct fdb_blob *"
+                  },
+                  "referencedDecl": {
+                    "kind": "ParmVarDecl",
+                    "name": "blob"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

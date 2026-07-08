@@ -1,0 +1,65 @@
+{
+  "alias_gate": {
+    "complete_alias_safety": false,
+    "decision": "allow",
+    "preconditions": [
+      {
+        "applies_to": [
+          "kv",
+          "blob"
+        ],
+        "id": "alias-precondition-1",
+        "kind": "noalias",
+        "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+        "required": false
+      }
+    ],
+    "requires_noalias": false,
+    "risk_count": 1,
+    "risk_level": "proven_noalias"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c2rust-baseline-manifest.json",
+    "sha256": "fe1a83b01e6ae7ba4af52a914a45c2daafb6bea987c327fa23be8d702ac7b329",
+    "status": "skipped"
+  },
+  "c_oracle_status": "DRAFT_GENERATED",
+  "required_before_acceptance": [
+    "C_ORACLE_GENERATED",
+    "Rust replay",
+    "schema-aware diff",
+    "negative diff",
+    "unsafe scan",
+    "version/config binding"
+  ],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-route-decision.json",
+    "sha256": "927aee5907ce1504e09b1b6862572c70e3b884a2463c0354042ac8f43acc7405",
+    "status": "recorded"
+  },
+  "rust_check_status": "passed",
+  "schema_version": 1,
+  "semantic_pass": false,
+  "skipped_gates": [
+    {
+      "gate": "c_oracle_diff",
+      "reason": "DRAFT_GENERATED"
+    }
+  ],
+  "slice_id": "real-fdb-kv-to-blob",
+  "status": "incomplete",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "e48e68ef1ae2ea8a7c78dc641de88d649f722d0303b3c9b9835c0eedee68144f",
+    "status": "incomplete"
+  },
+  "validation_profile_status": "incomplete",
+  "verified_unsafe_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c2rust-verified-unsafe-baseline.json",
+    "sha256": "31fe82700ae08da33c7f4735ac2d62f81b5ad3224366c321036aa3e33924e0e2",
+    "status": "blocked"
+  }
+}

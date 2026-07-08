@@ -346,6 +346,64 @@ fn clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang() 
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_real_fdb_kv_to_blob_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/real_fdb_kv_to_blob_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "fdb_kv_to_blob",
+        Some(&target_abi),
+    )
+    .expect("lower real FlashDB fdb_kv_to_blob fixture without invoking clang");
+    let policy = EmitPolicy {
+        noalias_param_pairs: vec![NoAliasParamPair {
+            readonly_param: "kv".to_string(),
+            mutable_param: "blob".to_string(),
+        }],
+        ..Default::default()
+    };
+    let emitted =
+        emit_rust_from_ir_with_globals_and_policy(&lowered.function_ir, &lowered.globals, policy)
+            .expect("emit Rust from real FlashDB fdb_kv_to_blob fixture");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct FdbKv"), "{rust}");
+    assert!(rust.contains("pub struct FdbKvAddr"), "{rust}");
+    assert!(rust.contains("pub struct FdbBlob"), "{rust}");
+    assert!(rust.contains("pub struct FdbBlobSaved"), "{rust}");
+    assert!(
+        rust.contains("pub fn fdb_kv_to_blob<'a>(kv: &FdbKv"),
+        "{rust}"
+    );
+    assert!(rust.contains("blob: &'a mut FdbBlob"), "{rust}");
+    assert!(
+        rust.contains("blob.saved.meta_addr = kv.addr.start;"),
+        "{rust}"
+    );
+    assert!(rust.contains("blob.saved.addr = kv.addr.value;"), "{rust}");
+    assert!(rust.contains("blob.saved.len = kv.value_len;"), "{rust}");
+    assert!(rust.contains("return blob;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-real-fdb-kv-to-blob", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../../fixtures/clang_ast/usual_arithmetic_ast.json"

@@ -1,0 +1,174 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "definition_status": "real_source_bound",
+        "kind": "type",
+        "name": "fdb_kv_t",
+        "source": "inc/fdb_def.h#typedef struct fdb_kv *fdb_kv_t",
+        "source_span": {
+          "file": "inc/fdb_def.h",
+          "line_end": 160,
+          "line_start": 147,
+          "sha256": "8c204cfa9e013f553e4f9025cbccd874084ec311914341e23480918ab24c7e0a"
+        }
+      },
+      {
+        "definition_status": "real_source_bound",
+        "kind": "type",
+        "name": "fdb_blob_t",
+        "source": "inc/fdb_def.h#typedef struct fdb_blob *fdb_blob_t",
+        "source_span": {
+          "file": "inc/fdb_def.h",
+          "line_end": 325,
+          "line_start": 316,
+          "sha256": "4bb85f67932dbdcd01609594dc44517f680ff89b4e51e6c9f9d0270d548ce95a"
+        }
+      },
+      {
+        "definition_status": "real_source_bound",
+        "kind": "config",
+        "name": "fdb_kv_to_blob prototype",
+        "source": "inc/flashdb.h#fdb_kv_to_blob",
+        "source_span": {
+          "file": "inc/flashdb.h",
+          "line_end": 51,
+          "line_start": 51,
+          "sha256": "4508e84a47d7b38302ddbf3757d65e026601b5836342dcee90d55e75faf4bd94"
+        }
+      }
+    ],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py",
+      "frontend": "bounded-c-source-scanner",
+      "semantic_status": "syntax-indexed; compile-profile evidence required before accepted translation"
+    },
+    "files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "functions": [
+      "fdb_kv_to_blob"
+    ],
+    "pointer_contract": {
+      "alias_contract": {
+        "complete_alias_safety": false,
+        "decision": "requires_noalias_contract",
+        "proven": true,
+        "requires_noalias": true,
+        "source": "Fixture and route contract require kv and blob to denote distinct FlashDB objects; generated draft must fail closed without this noalias pair."
+      },
+      "aliasing_proven": true,
+      "input_buffers": [
+        {
+          "c_type": "fdb_kv_t",
+          "mutability": "read_only",
+          "name": "kv",
+          "nullability": "unknown",
+          "ownership_role": "observer",
+          "read_effects": [
+            "kv->addr.start",
+            "kv->addr.value",
+            "kv->value_len"
+          ],
+          "translation_rule_id": "readonly_record_pointer_nested_scalar_field_read",
+          "write_effects": []
+        }
+      ],
+      "noalias_required": [
+        [
+          "kv",
+          "blob"
+        ]
+      ],
+      "output_pointers": [
+        {
+          "c_type": "fdb_blob_t",
+          "mutability": "read_write",
+          "name": "blob",
+          "nullability": "unknown",
+          "ownership_role": "inout_param",
+          "read_effects": [],
+          "translation_rule_id": "mutable_record_pointer_nested_scalar_field_write_identity_return",
+          "write_effects": [
+            "blob->saved.meta_addr",
+            "blob->saved.addr",
+            "blob->saved.len"
+          ]
+        }
+      ]
+    },
+    "signatures": [
+      {
+        "c_source": "fdb_blob_t fdb_kv_to_blob(fdb_kv_t kv, fdb_blob_t blob)\n{\n    blob->saved.meta_addr = kv->addr.start;\n    blob->saved.addr = kv->addr.value;\n    blob->saved.len = kv->value_len;\n\n    return blob;\n}",
+        "definition_status": "real_source_bound",
+        "function": "fdb_kv_to_blob",
+        "id": "sig-fdb-kv-to-blob",
+        "parameters": [
+          {
+            "c_type": "fdb_kv_t",
+            "direction": "input",
+            "name": "kv"
+          },
+          {
+            "c_type": "fdb_blob_t",
+            "direction": "inout",
+            "name": "blob"
+          }
+        ],
+        "return_type": "fdb_blob_t",
+        "source_span": {
+          "byte_end": 25370,
+          "byte_start": 25173,
+          "file": "src/fdb_kvdb.c",
+          "line_end": 690,
+          "line_start": 683,
+          "sha256": "1e4968303608ea12d8ea2a7811a6cee80ff4d8a55238aecd234cfac53a6f9c85"
+        }
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-project migration",
+      "semantic equivalence without C oracle and Rust replay evidence",
+      "generated fdb_kv_to_blob Rust draft is itself semantically accepted"
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+      "No claim that syntax-only extraction proves typedef, macro, ABI, layout, alias, or lifetime semantics.",
+      "No claim that this slice spec alone proves fdb_tsl_to_blob or FlashDB KVDB migration."
+    ]
+  },
+  "fixture": {
+    "hash": "real-fdb-kv-to-blob-fixture",
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json"
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/fdb_kv_to_blob.rs",
+    "public_api": [
+      {
+        "boundary_kind": "internal_ffi",
+        "name": "fdb_kv_to_blob",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-to-blob",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb"
+}

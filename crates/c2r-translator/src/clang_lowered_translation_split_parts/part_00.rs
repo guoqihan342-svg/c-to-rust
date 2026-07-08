@@ -200,10 +200,87 @@ fn slice_source_translation_unit(spec: &SliceSpec) -> String {
     source.push_str(&slice_source_typedefs(spec));
     source.push_str(&slice_source_constants(spec));
     source.push_str(&slice_source_function_prototypes(spec));
+    source.push_str(&slice_source_global_dependency_definitions(spec));
     source.push('\n');
     source.push_str(&spec.c_source);
     source.push('\n');
     source
+}
+
+fn slice_source_global_dependency_definitions(spec: &SliceSpec) -> String {
+    let mut definitions = String::new();
+    let mut seen_spans = BTreeSet::new();
+    for dependency in &spec.c_boundary.direct_dependencies {
+        if dependency.kind != "global" {
+            continue;
+        }
+        let Some(span) = &dependency.source_span else {
+            continue;
+        };
+        if span.file.trim().is_empty() || span.byte_end <= span.byte_start {
+            continue;
+        }
+        let key = (span.file.clone(), span.byte_start, span.byte_end);
+        if !seen_spans.insert(key) {
+            continue;
+        }
+        let Some(fragment) = source_span_fragment(spec, span) else {
+            continue;
+        };
+        let Some(fragment) = trim_global_dependency_fragment(&fragment, &dependency.name) else {
+            continue;
+        };
+        definitions.push_str(&fragment);
+        if !fragment.ends_with('\n') {
+            definitions.push('\n');
+        }
+        definitions.push('\n');
+    }
+    definitions
+}
+
+fn source_span_fragment(spec: &SliceSpec, span: &crate::SourceSpanRef) -> Option<String> {
+    let source_path = if let Some(source_root) = spec.source_root.as_deref() {
+        resolve_repo_path(source_root).join(&span.file)
+    } else {
+        resolve_repo_path(&span.file)
+    };
+    let source = fs::read_to_string(source_path).ok()?;
+    if span.line_start > 0 && span.line_end >= span.line_start {
+        let line_start = usize::try_from(span.line_start - 1).ok()?;
+        let line_end = usize::try_from(span.line_end).ok()?;
+        let lines = source.lines().collect::<Vec<_>>();
+        if line_end <= lines.len() {
+            return Some(lines[line_start..line_end].join("\n") + "\n");
+        }
+    }
+    let start = usize::try_from(span.byte_start).ok()?;
+    let end = usize::try_from(span.byte_end).ok()?;
+    if start >= end || end > source.len() || !source.is_char_boundary(start) || !source.is_char_boundary(end) {
+        return None;
+    }
+    Some(source[start..end].to_string())
+}
+
+fn trim_global_dependency_fragment(fragment: &str, name: &str) -> Option<String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return None;
+    }
+    for (index, _) in fragment.match_indices(name) {
+        let before = fragment[..index].chars().next_back();
+        let after = fragment[index + name.len()..].chars().next();
+        if before.is_some_and(is_c_identifier_char) || after.is_some_and(is_c_identifier_char) {
+            continue;
+        }
+        let line_start = fragment[..index].rfind('\n').map_or(0, |pos| pos + 1);
+        return Some(fragment[line_start..].to_string());
+    }
+    None
+}
+
+fn is_c_identifier_char(ch: char) -> bool {
+    ch == '_' || ch.is_ascii_alphanumeric()
 }
 
 fn slice_source_struct_declarations(spec: &SliceSpec) -> String {

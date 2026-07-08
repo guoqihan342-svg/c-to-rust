@@ -90,6 +90,7 @@ fn add_record_field_use<'a>(
 
 fn record_field_types_match(lhs: &IrType, rhs: &IrType) -> bool {
     lhs == rhs
+        || types_match_ignoring_spelling(lhs, rhs)
         || (is_integer_type(lhs)
             && is_integer_type(rhs)
             && lhs.canonical == rhs.canonical

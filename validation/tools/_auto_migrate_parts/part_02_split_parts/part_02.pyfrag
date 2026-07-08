@@ -2,6 +2,14 @@
     return payload, patch
 
 
+def rust_check_bindings_are_fixture_bound(context: dict[str, Any]) -> bool:
+    bindings = rust_check_external_binding_report(context).get("bindings", [])
+    return bool(bindings) and all(
+        binding.get("allowed_use") == "fixture_bound_rust_replay_only"
+        for binding in bindings
+    )
+
+
 def rust_check_once(path: Path) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="c2r-rust-check-") as build_dir:
         cmd = [

@@ -4,9 +4,9 @@ fn emit_type_map(
     spec: &SliceSpec,
     result: &mut TranslationResult,
 ) {
-    record_type_mapping("return", &function.return_type, &spec.build_profile, result);
+    record_type_mapping("return", &function.return_type, &spec.build_profile, spec, result);
     for param in &function.params {
-        record_type_mapping(&param.name, &param.c_type, &spec.build_profile, result);
+        record_type_mapping(&param.name, &param.c_type, &spec.build_profile, spec, result);
     }
     for statement in statements {
         if let Some(declaration) = parse_declaration(&statement.text) {
@@ -14,6 +14,7 @@ fn emit_type_map(
                 &declaration.name,
                 &declaration.c_type,
                 &spec.build_profile,
+                spec,
                 result,
             );
         }
@@ -24,6 +25,7 @@ pub(crate) fn record_type_mapping(
     symbol: &str,
     c_type: &str,
     profile: &BuildProfile,
+    spec: &SliceSpec,
     result: &mut TranslationResult,
 ) {
     if let Some(rust_type) = map_c_type(c_type) {
@@ -32,6 +34,15 @@ pub(crate) fn record_type_mapping(
             rust_type: rust_type.to_string(),
             symbol: symbol.to_string(),
             reason: "supported MVP C subset mapping".to_string(),
+        });
+        return;
+    }
+    if let Some(rust_type) = source_bound_record_pointer_type(c_type, spec) {
+        result.type_map.mappings.push(TypeMapping {
+            c_type: c_type.to_string(),
+            rust_type,
+            symbol: symbol.to_string(),
+            reason: "source-bound record pointer typedef from slice direct dependencies".to_string(),
         });
         return;
     }
@@ -73,5 +84,28 @@ fn map_c_type(c_type: &str) -> Option<&'static str> {
         "struct sockaddr_in*" => Some("Ip4AddrReport"),
         "void" => Some("()"),
         _ => None,
+    }
+}
+
+fn source_bound_record_pointer_type(c_type: &str, spec: &SliceSpec) -> Option<String> {
+    let normalized = normalize_type(c_type);
+    let base = normalized
+        .trim_start_matches("const ")
+        .trim_end_matches('*')
+        .trim()
+        .trim_start_matches("struct ")
+        .to_string();
+    if base.is_empty() {
+        return None;
+    }
+    let is_source_bound_type = spec
+        .c_boundary
+        .direct_dependencies
+        .iter()
+        .any(|dependency| dependency.kind == "type" && dependency.name == base);
+    if is_source_bound_type {
+        Some(rust_record_type_name(c_type))
+    } else {
+        None
     }
 }

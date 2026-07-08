@@ -7,6 +7,7 @@ struct EmitContext {
     nullable_pointer_params: HashSet<String>,
     readonly_pointer_read_params: HashSet<String>,
     readonly_pointer_mentioned_params: HashSet<String>,
+    readonly_record_pointer_read_params: HashSet<String>,
     mutable_pointer_write_params: HashSet<String>,
     opaque_pointer_call_arg_params: HashSet<String>,
     raw_direct_call_pointer_params: HashSet<String>,
@@ -103,6 +104,12 @@ impl EmitContext {
             collect_raw_direct_call_pointer_params(&function.body, &function.params);
         let mutable_record_pointer_write_params =
             collect_mutable_record_pointer_write_params(&function.body, &function.params, &policy)?;
+        let readonly_record_pointer_read_params = collect_readonly_record_pointer_read_params(
+            &function.body,
+            &function.params,
+            &mutable_record_pointer_write_params,
+            &policy,
+        )?;
         let record_pointer_field_value_params =
             collect_record_pointer_field_value_params(
                 &function.body,
@@ -131,6 +138,7 @@ impl EmitContext {
             nullable_pointer_params,
             readonly_pointer_read_params: readonly_pointer_uses.read_params,
             readonly_pointer_mentioned_params: readonly_pointer_uses.mentioned_params,
+            readonly_record_pointer_read_params,
             mutable_pointer_write_params,
             opaque_pointer_call_arg_params,
             raw_direct_call_pointer_params,
@@ -165,6 +173,10 @@ impl EmitContext {
 
     fn is_readonly_pointer_mentioned_param(&self, name: &str) -> bool {
         self.readonly_pointer_mentioned_params.contains(name)
+    }
+
+    fn is_readonly_record_pointer_read_param(&self, name: &str) -> bool {
+        self.readonly_record_pointer_read_params.contains(name)
     }
 
     fn is_mutable_pointer_write_param(&self, name: &str) -> bool {

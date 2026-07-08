@@ -1,0 +1,18 @@
+{
+  "case_id": "zero-addresses-empty-value",
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "zero-addresses-empty-value",
+    "field": "blob.saved.len",
+    "mutated_c_value": 1,
+    "rust_value": 0
+  },
+  "level": "L3",
+  "mutation": "first oracle case blob.saved.len is changed by wrapping +1",
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-to-blob",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "expected_failed",
+  "target_id": "flashdb"
+}

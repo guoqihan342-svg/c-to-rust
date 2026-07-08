@@ -1,0 +1,44 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c2rust-baseline-manifest.json",
+    "sha256": "fe1a83b01e6ae7ba4af52a914a45c2daafb6bea987c327fa23be8d702ac7b329",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-wuc_irhb F:\\agent\\crustpaper\\0630\\validation\\evidence\\flashdb\\auto-translation\\real-fdb-kv-to-blob\\l3-real-fdb-kv-to-blob-rust-draft.rs",
+  "error_count": 0,
+  "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [],
+    "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
+    "status": "not_applicable"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-route-decision.json",
+    "sha256": "927aee5907ce1504e09b1b6862572c70e3b884a2463c0354042ac8f43acc7405",
+    "status": "recorded"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "mixed",
+    "bindings": [],
+    "semantics_verified": false,
+    "status": "none"
+  },
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "e48e68ef1ae2ea8a7c78dc641de88d649f722d0303b3c9b9835c0eedee68144f",
+    "status": "incomplete"
+  }
+}

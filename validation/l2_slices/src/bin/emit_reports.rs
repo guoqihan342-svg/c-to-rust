@@ -6,8 +6,9 @@ use std::{
 
 use c_to_rust_l2_slices::{
     add_i32_pair_ptr_arith, call_expression_chain, copy_i32_ptr_arith, external_direct_callee,
-    fdb_blob_make, fdb_calc_crc32, fdb_kv_del, fdb_kv_set, libuv_ip4_addr, signed_rshift_contract,
-    sqlite_varint, store_add_one, sum_i32_buffer, sum_i32_ptr_arith, zlib_adler32, zstd_xxh32,
+    fdb_blob_make, fdb_calc_crc32, fdb_kv_del, fdb_kv_set, fdb_kv_to_blob, libuv_ip4_addr,
+    signed_rshift_contract, sqlite_varint, store_add_one, sum_i32_buffer, sum_i32_ptr_arith,
+    zlib_adler32, zstd_xxh32,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};

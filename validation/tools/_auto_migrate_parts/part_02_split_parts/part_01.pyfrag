@@ -1882,9 +1882,12 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
         patch = write_no_patch_required(spec, evidence_dir, path)
     else:
         original_draft = path.read_text(encoding="utf-8")
+        checked_draft = original_draft
+        injected_stubs = False
         try:
             if external_context["status"] == "recorded":
-                inject_external_callee_stubs(path, external_context, spec)
+                injected_stubs = inject_external_callee_stubs(path, external_context, spec)
+                checked_draft = path.read_text(encoding="utf-8")
             first = rust_check_once(path)
             write_log_text(evidence_dir / "rust-check-initial.stdout.log", first["stdout"])
             write_log_text(evidence_dir / "rust-check-initial.stderr.jsonl", first["stderr"])
@@ -1894,6 +1897,12 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
         patch = write_no_patch_required(spec, evidence_dir, path)
         if final["returncode"] != 0:
             final, patch = run_safe_self_heal_loop(spec, evidence_dir, path, final)
+        if (
+            final["returncode"] == 0
+            and injected_stubs
+            and rust_check_bindings_are_fixture_bound(external_context)
+        ):
+            path.write_text(checked_draft, encoding="utf-8")
         if final["returncode"] != 0 and patch["status"] != "blocked":
             patch = write_blocked_patch(
                 spec,

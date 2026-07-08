@@ -146,7 +146,7 @@ fn emit_mutable_record_pointer_identity_return(
                 .to_string(),
         );
     };
-    if ty != return_type {
+    if !record_pointer_types_match_ignoring_spelling(ty, return_type) {
         return Err(format!(
             "mutable record pointer return type {} does not match function return type {}",
             type_label(ty),

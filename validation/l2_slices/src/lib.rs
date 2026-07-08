@@ -8,6 +8,7 @@ pub mod fdb_blob_make;
 pub mod fdb_calc_crc32;
 pub mod fdb_kv_del;
 pub mod fdb_kv_set;
+pub mod fdb_kv_to_blob;
 pub mod implicit_integer_noop_cast;
 pub mod libuv_ip4_addr;
 pub mod scalar_div_rem_contract;

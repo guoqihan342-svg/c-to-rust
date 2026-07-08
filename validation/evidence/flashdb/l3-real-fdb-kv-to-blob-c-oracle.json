@@ -1,0 +1,85 @@
+{
+  "accepted_boundary": "Accepted C oracle report is bound to fixture cases and compile/harness evidence captured by the auto-translation oracle draft; generated Rust draft remains non-authoritative.",
+  "case_count": 3,
+  "cases": [
+    {
+      "blob.saved.addr": 0,
+      "blob.saved.len": 0,
+      "blob.saved.meta_addr": 0,
+      "id": "zero-addresses-empty-value",
+      "return_same_blob": true,
+      "status": "passed"
+    },
+    {
+      "blob.saved.addr": 4352,
+      "blob.saved.len": 128,
+      "blob.saved.meta_addr": 4096,
+      "id": "nominal-kv-value",
+      "return_same_blob": true,
+      "status": "passed"
+    },
+    {
+      "blob.saved.addr": 4294967295,
+      "blob.saved.len": 65535,
+      "blob.saved.meta_addr": 4294967280,
+      "id": "max-u32-addresses",
+      "return_same_blob": true,
+      "status": "passed"
+    }
+  ],
+  "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+  "compared_fields": [
+    "return_same_blob",
+    "blob.saved.meta_addr",
+    "blob.saved.addr",
+    "blob.saved.len"
+  ],
+  "fixture": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json",
+  "generator": "validation/l2_slices/src/bin/emit_reports.rs::emit_real_fdb_kv_to_blob",
+  "level": "L3",
+  "provenance": {
+    "compile_execution": {
+      "semantic_pass": false,
+      "status": "compile_failed",
+      "toolchain_adapter": "wsl",
+      "toolchain_status_after_attempt": "COMPILE_FAILED"
+    },
+    "cycle_boundary": "This provenance intentionally omits the root c-oracle self hash; auto-translation evidence records the accepted c-oracle hash after regeneration.",
+    "evidence_refs": {
+      "c_oracle_status": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c-oracle-status.json",
+      "evidence_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-evidence-manifest.json",
+      "slice_spec": "validation/slice-specs/flashdb-real-fdb-kv-to-blob.json",
+      "version_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-version-manifest.json"
+    },
+    "fixture_identity": "real-fdb-kv-to-blob-fixture",
+    "harness_draft_ref": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c-oracle-harness-draft.c",
+      "sha256": "58195712b363ea4ea63ed2a401cafb33c7ecc20dc11c0fac88e1b56edff50041",
+      "status": "draft"
+    },
+    "source_file_hashes": {
+      "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320",
+      "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+      "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+    },
+    "source_span_sha256": "1e4968303608ea12d8ea2a7811a6cee80ff4d8a55238aecd234cfac53a6f9c85"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-kv-to-blob",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c",
+      "inc/fdb_def.h",
+      "inc/flashdb.h"
+    ],
+    "functions": [
+      "fdb_kv_to_blob"
+    ],
+    "signature": "fdb_blob_t fdb_kv_to_blob(fdb_kv_t kv, fdb_blob_t blob)"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

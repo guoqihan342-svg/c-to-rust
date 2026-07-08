@@ -289,13 +289,9 @@ fn emit_nested_record_pointer_member_expr(
         ));
     }
     let field_path = record_pointer_member_path_key(&path);
-    if mutable_record_pointer_pointee_type(path.root_ty).is_some() {
-        if !context.is_mutable_record_pointer_write_param(path.root_name) {
-            return Err(format!(
-                "nested mutable record pointer field {}.{field_path} requires mutable record pointer ownership evidence",
-                path.root_name
-            ));
-        }
+    if mutable_record_pointer_pointee_type(path.root_ty).is_some()
+        && context.is_mutable_record_pointer_write_param(path.root_name)
+    {
         emit_scalar_type(path.ty).map_err(|detail| {
             format!(
                 "nested mutable record pointer field {}.{field_path} has {detail}",
@@ -315,13 +311,23 @@ fn emit_nested_record_pointer_member_expr(
         )
         .map(Some);
     }
-    readonly_record_pointer_pointee_type(path.root_ty).ok_or_else(|| {
-        format!(
-            "nested arrow member base {} has unsupported type {}",
-            path.root_name,
-            type_label(path.root_ty)
-        )
-    })?;
+    if mutable_record_pointer_pointee_type(path.root_ty).is_some()
+        && !context.is_readonly_record_pointer_read_param(path.root_name)
+    {
+        return Err(format!(
+            "nested mutable record pointer field {}.{field_path} requires mutable record pointer ownership evidence",
+            path.root_name
+        ));
+    }
+    readonly_record_pointer_read_pointee_type(path.root_name, path.root_ty, context).ok_or_else(
+        || {
+            format!(
+                "nested arrow member base {} has unsupported type {}",
+                path.root_name,
+                type_label(path.root_ty)
+            )
+        },
+    )?;
     if context.is_nullable_pointer_param(path.root_name) {
         return Err(format!(
             "nullable pointer param {} cannot use nested record pointer member path in the bounded emitter",
@@ -399,7 +405,7 @@ fn emit_readonly_record_pointer_member_expr(
     if !symbols.contains(base_name) {
         return Err(format!("arrow member base {base_name} is not declared"));
     }
-    readonly_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+    readonly_record_pointer_read_pointee_type(base_name, base_ty, context).ok_or_else(|| {
         format!(
             "arrow member base {base_name} has unsupported type {}",
             type_label(base_ty)
@@ -412,6 +418,19 @@ fn emit_readonly_record_pointer_member_expr(
         return Ok(format!("{base_name}.unwrap().{field}"));
     }
     Ok(format!("{base_name}.{field}"))
+}
+
+fn readonly_record_pointer_read_pointee_type<'a>(
+    name: &str,
+    ty: &'a IrType,
+    context: &EmitContext,
+) -> Option<&'a IrType> {
+    readonly_record_pointer_pointee_type(ty).or_else(|| {
+        context
+            .is_readonly_record_pointer_read_param(name)
+            .then(|| mutable_record_pointer_pointee_type(ty))
+            .flatten()
+    })
 }
 
 fn emit_readonly_pointer_add_deref_expr(

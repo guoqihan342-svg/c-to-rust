@@ -1,0 +1,62 @@
+{
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=1d9d94a12cae20d4413f7b6b31b08ccc3f6e7aa7ccd50f0f2bd40581ef3e3f31",
+    "fixture_hash=real-fdb-kv-to-blob-fixture",
+    "build_profile_hash=1e0a33cc99cd0cd11d457d6481ba2541850641426abcb92234286392d02d5644",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "tests/Makefile"
+    ],
+    "config_header_included": true,
+    "include_paths": [
+      "inc",
+      "tests"
+    ]
+  },
+  "config_header": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "0dacb3dcc097c1885a89deb79a21a2d33577cd737d62a1d34d4c1cfd1c887b55"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "real-fdb-kv-to-blob-fixture",
+    "operation_count": 3,
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No full project migration claim.",
+    "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+    "No claim that syntax-only extraction proves typedef, macro, ABI, layout, alias, or lifetime semantics."
+  ],
+  "profile_id": "flashdb-real-fdb-kv-to-blob-real-source",
+  "repo_commit": "0516aae6a86d8fa1cdb8568e456b5dff3e60443b",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-to-blob",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "incomplete",
+  "target_id": "flashdb",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

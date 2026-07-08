@@ -8,7 +8,7 @@
     // and its artifact-level integration tests.
 
     use super::translate_slice;
-    use crate::{BuildProfile, SliceSpec};
+    use crate::{BuildProfile, CBoundary, CDirectDependency, SliceSpec};
 
     // Minimal copy of the shared `profile` helper from
     // tests/bounded_translation.rs so the moved tests keep their original
@@ -95,6 +95,61 @@
             .read_effects
             .contains(&"addr->sin_family = AF_INET".to_string()));
         assert_eq!(result.plan.unsafe_candidate_count, 0);
+    }
+
+    #[test]
+    fn record_pointer_nested_scalar_identity_return_generates_candidate() {
+        let spec = SliceSpec {
+        target_id: "flashdb".to_string(),
+        slice_id: "real-fdb-kv-to-blob".to_string(),
+        source_commit: "f9d0421315c564fb890a1b14eee77b290e0d7bbe".to_string(),
+        function_name: "fdb_kv_to_blob".to_string(),
+        c_source: "fdb_blob_t fdb_kv_to_blob(fdb_kv_t kv, fdb_blob_t blob) { blob->saved.meta_addr = kv->addr.start; blob->saved.addr = kv->addr.value; blob->saved.len = kv->value_len; return blob; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(false),
+        c_boundary: CBoundary {
+            direct_dependencies: vec![
+                CDirectDependency {
+                    kind: "type".to_string(),
+                    name: "fdb_kv_t".to_string(),
+                    source: "inc/fdb_def.h#typedef struct fdb_kv *fdb_kv_t".to_string(),
+                    source_span: None,
+                    value: None,
+                },
+                CDirectDependency {
+                    kind: "type".to_string(),
+                    name: "fdb_blob_t".to_string(),
+                    source: "inc/fdb_def.h#typedef struct fdb_blob *fdb_blob_t".to_string(),
+                    source_span: None,
+                    value: None,
+                },
+            ],
+            ..CBoundary::default()
+        },
+        ..SliceSpec::default()
+    };
+
+        let result = translate_slice(&spec);
+
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        assert!(result.rust_code.contains("pub struct FdbKvAddr"), "{}", result.rust_code);
+        assert!(result.rust_code.contains("pub struct FdbBlobSaved"), "{}", result.rust_code);
+        assert!(
+            result
+                .rust_code
+                .contains("pub fn fdb_kv_to_blob<'a>(kv: &FdbKv, blob: &'a mut FdbBlob) -> &'a mut FdbBlob"),
+            "{}",
+            result.rust_code
+        );
+        assert!(result.rust_code.contains("blob.saved.meta_addr = kv.addr.start;"));
+        assert!(result.rust_code.contains("blob.saved.addr = kv.addr.value;"));
+        assert!(result.rust_code.contains("blob.saved.len = kv.value_len;"));
+        assert!(result.rust_code.contains("return blob;"));
+        assert!(result
+            .plan
+            .translation_rule_ids
+            .contains(&"mutable-record-pointer-nested-scalar-field-write".to_string()));
+        assert_eq!(result.plan.unsupported_node_count, 0);
     }
 
     #[test]

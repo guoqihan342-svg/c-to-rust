@@ -2395,6 +2395,9 @@
         "nested record pointer scalar field path copy with explicit noalias evidence",
         "mutable record pointer identity return lifetime disambiguation",
         "typedef-backed mutable record pointer via desugared/canonical clang type fallback",
+        "complete/incomplete typedef-backed record pointer matching for nested scalar paths",
+        "non-written mutable C record pointer params lowered as readonly record borrows for nested scalar reads",
+        "real FlashDB fdb_kv_to_blob typed-IR L1 candidate generation",
         "local complete record zero initializer for address-taken direct-call candidates",
         "anonymous nested integer record field inventory for complete local record zero initializers",
         "accepted named-slice evidence record field enrichment for local address-taken records",
@@ -2422,6 +2425,10 @@
               "path": "crates/c2r-translator/fixtures/clang_ast/record_pointer_field_typedef_ast.json"
             },
             {
+              "name": "real fdb_kv_to_blob no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/real_fdb_kv_to_blob_ast.json"
+            },
+            {
               "name": "clang_ast_fixture_replays_record_field_subset_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -2436,6 +2443,11 @@
             {
               "name": "clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_real_fdb_kv_to_blob_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_00_02.rs",
+              "proof_class": "committed_no_clang_fixture_candidate_provenance"
             },
             {
               "name": "clang_ast_dump_emits_typedef_record_pointer_opaque_field_write_when_enabled",
@@ -2491,6 +2503,14 @@
             },
             {
               "name": "typed_ir_emits_nested_record_pointer_scalar_field_copy",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs"
+            },
+            {
+              "name": "typed_ir_emits_mutable_record_pointer_readonly_nested_input_with_noalias",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs"
+            },
+            {
+              "name": "typed_ir_emits_typedef_record_pointer_identity_return",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs"
             },
             {
@@ -2641,6 +2661,14 @@
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs"
             },
             {
+              "name": "typed_ir_emits_mutable_record_pointer_readonly_nested_input_with_noalias",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs"
+            },
+            {
+              "name": "typed_ir_emits_typedef_record_pointer_identity_return",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs"
+            },
+            {
               "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -2693,7 +2721,7 @@
         },
         "c_rust_diff": {
           "status": "covered",
-          "scope_note": "real-fdb-blob-make has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence. The refreshed real-fdb-kv-set exact generated draft now consumes accepted named-slice record-field evidence to emit a non-opaque FdbBlob and passes the uninitialized-DB return-code fixture gates. These count only for their bound named slices and do not generalize record-field semantic acceptance, layout/ABI proof, or initialized KV semantics.",
+          "scope_note": "real-fdb-blob-make has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence. The refreshed real-fdb-kv-set exact generated draft now consumes accepted named-slice record-field evidence to emit a non-opaque FdbBlob and passes the uninitialized-DB return-code fixture gates. The real-fdb-kv-to-blob typed-IR draft is candidate_context_only here because C oracle remains DRAFT_GENERATED and final verification has semantic_pass=false. These count only for their bound named slices and do not generalize record-field semantic acceptance, layout/ABI proof, or initialized KV semantics.",
           "evidence": [
             {
               "name": "real-fdb-blob-make final verification",
@@ -2784,6 +2812,31 @@
               "proof_class": "committed_rust_check_passed_fixture_bound_external_context"
             },
             {
+              "name": "real-fdb-kv-to-blob L1 candidate route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-route-decision.json",
+              "proof_class": "committed_l1_candidate_generated_semantic_incomplete"
+            },
+            {
+              "name": "real-fdb-kv-to-blob validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-validation-profile.json",
+              "proof_class": "committed_l1_candidate_generated_compile_passed_semantic_incomplete"
+            },
+            {
+              "name": "real-fdb-kv-to-blob clang lowering report",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-clang-lowering-report.json",
+              "proof_class": "committed_no_clang_fixture_candidate_provenance"
+            },
+            {
+              "name": "real-fdb-kv-to-blob rust check",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/rust-check.json",
+              "proof_class": "committed_rust_check_passed_semantic_incomplete"
+            },
+            {
+              "name": "real-fdb-kv-to-blob generated Rust draft",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-rust-draft.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
               "name": "real-fdb-blob-make rust check",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/rust-check.json",
               "proof_class": "committed_rust_check_passed"
@@ -2804,7 +2857,7 @@
               "proof_class": "committed_wsl_local_simulation_matched_not_oracle"
             }
           ],
-          "reason": "committed named-slice candidate provenance plus Rust compile/replay, accepted C oracle/diff evidence, and fixture-bound replay evidence now exist for the bounded fdb_blob_make and real-fdb-kv-set slices; initialized KV semantics, external callee semantics, and general record layout/ABI remain separate gaps"
+          "reason": "committed named-slice candidate provenance plus Rust compile/replay, accepted C oracle/diff evidence, and fixture-bound replay evidence now exist for the bounded fdb_blob_make and real-fdb-kv-set slices; real-fdb-kv-to-blob now has an L1 typed-IR candidate with rust_check passed but semantic_pass=false because C oracle/diff gates remain incomplete; initialized KV semantics, external callee semantics, and general record layout/ABI remain separate gaps"
         }
       },
       "positive_cases": [
@@ -2860,6 +2913,18 @@
         {
           "name": "typed_ir_emits_nested_record_pointer_scalar_field_copy",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs"
+        },
+        {
+          "name": "typed_ir_emits_mutable_record_pointer_readonly_nested_input_with_noalias",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs"
+        },
+        {
+          "name": "typed_ir_emits_typedef_record_pointer_identity_return",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_real_fdb_kv_to_blob_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_00_02.rs"
         },
         {
           "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",

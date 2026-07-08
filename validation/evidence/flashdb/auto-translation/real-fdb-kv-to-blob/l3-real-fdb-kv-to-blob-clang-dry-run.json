@@ -1,0 +1,74 @@
+{
+  "active_frontend": {
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "kind": "clang_ast_dump_json",
+    "required_env": [
+      "CLANG_PATH"
+    ],
+    "uses_libclang": false
+  },
+  "artifact_kind": "clang-dry-run",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "dry_run": {
+    "active_frontend": {
+      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+      "kind": "clang_ast_dump_json",
+      "required_env": [
+        "CLANG_PATH"
+      ],
+      "uses_libclang": false
+    },
+    "arguments": [
+      "-Isources/FlashDB/inc",
+      "-Isources/FlashDB/tests"
+    ],
+    "claim_boundary": {
+      "affects_manifest_status": false,
+      "affects_semantic_pass": false,
+      "authoritative_evidence": false,
+      "role": "diagnostic_only"
+    },
+    "compile_commands": null,
+    "diagnostics": [
+      "LIBCLANG_PATH is observed only as ignored legacy metadata; active lowering uses clang AST dump JSON via CLANG_PATH"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "function_name": "fdb_kv_to_blob",
+    "source_file": "src/fdb_kvdb.c",
+    "source_root": "sources/FlashDB",
+    "status": "diagnostic_only"
+  },
+  "errors": [],
+  "frontend": "clang",
+  "metadata": {
+    "function_source_span": {
+      "byte_end": 25370,
+      "byte_start": 25173,
+      "file": "src/fdb_kvdb.c",
+      "line_end": 690,
+      "line_start": 683,
+      "sha256": "1e4968303608ea12d8ea2a7811a6cee80ff4d8a55238aecd234cfac53a6f9c85"
+    },
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b"
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-to-blob",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "diagnostic_only",
+  "target_id": "flashdb"
+}

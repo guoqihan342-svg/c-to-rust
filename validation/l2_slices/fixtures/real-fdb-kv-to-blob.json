@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-to-blob",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "fixture_only",
+  "toolchain_status": "RUST_REPLAY_FIXTURE_ONLY",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c",
+      "inc/fdb_def.h",
+      "inc/flashdb.h"
+    ],
+    "functions": [
+      "fdb_kv_to_blob"
+    ],
+    "signature": "fdb_blob_t fdb_kv_to_blob(fdb_kv_t kv, fdb_blob_t blob)"
+  },
+  "compared_fields": [
+    "return_same_blob",
+    "blob.saved.meta_addr",
+    "blob.saved.addr",
+    "blob.saved.len"
+  ],
+  "case_count": 3,
+  "cases": [
+    {
+      "id": "zero-addresses-empty-value",
+      "coverage_kind": "zero-addresses-empty-value",
+      "kv": {
+        "addr.start": 0,
+        "addr.value": 0,
+        "value_len": 0
+      },
+      "initial_blob_saved": {
+        "meta_addr": 99,
+        "addr": 88,
+        "len": 77
+      },
+      "expected_outputs": {
+        "return_same_blob": true,
+        "blob.saved.meta_addr": 0,
+        "blob.saved.addr": 0,
+        "blob.saved.len": 0
+      },
+      "status": "ok"
+    },
+    {
+      "id": "nominal-kv-value",
+      "coverage_kind": "nominal-kv-value",
+      "kv": {
+        "addr.start": 4096,
+        "addr.value": 4352,
+        "value_len": 128
+      },
+      "initial_blob_saved": {
+        "meta_addr": 1,
+        "addr": 2,
+        "len": 3
+      },
+      "expected_outputs": {
+        "return_same_blob": true,
+        "blob.saved.meta_addr": 4096,
+        "blob.saved.addr": 4352,
+        "blob.saved.len": 128
+      },
+      "status": "ok"
+    },
+    {
+      "id": "max-u32-addresses",
+      "coverage_kind": "max-u32-addresses",
+      "kv": {
+        "addr.start": 4294967280,
+        "addr.value": 4294967295,
+        "value_len": 65535
+      },
+      "initial_blob_saved": {
+        "meta_addr": 10,
+        "addr": 20,
+        "len": 30
+      },
+      "expected_outputs": {
+        "return_same_blob": true,
+        "blob.saved.meta_addr": 4294967280,
+        "blob.saved.addr": 4294967295,
+        "blob.saved.len": 65535
+      },
+      "status": "ok"
+    }
+  ]
+}

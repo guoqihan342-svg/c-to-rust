@@ -1,0 +1,258 @@
+{
+  "boundary": "Draft generation is not oracle success.",
+  "compile_command_draft": {
+    "argv": [
+      "cc",
+      "-std=c99",
+      "-Isources/FlashDB/inc",
+      "-Isources/FlashDB/tests",
+      "l3-real-fdb-kv-to-blob-c-oracle-harness-draft.c",
+      "sources/FlashDB/src/fdb_kvdb.c",
+      "-o",
+      "l3-real-fdb-kv-to-blob-c-oracle-harness-draft.exe"
+    ],
+    "defines": [],
+    "link_source_files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "resolution": "source_root_relative",
+        "resolved_path": "sources/FlashDB/src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "link_strategy": "compile_harness_with_declared_c_boundary_sources",
+    "oracle_source_mode": "declared_c_boundary_sources",
+    "resolved_include_paths": [
+      "sources/FlashDB/inc",
+      "sources/FlashDB/tests"
+    ],
+    "source_root": "sources/FlashDB",
+    "status": "draft_not_executed",
+    "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob"
+  },
+  "compile_execution": {
+    "argv": [
+      "cc",
+      "-std=c99",
+      "-Isources/FlashDB/inc",
+      "-Isources/FlashDB/tests",
+      "l3-real-fdb-kv-to-blob-c-oracle-harness-draft.c",
+      "sources/FlashDB/src/fdb_kvdb.c",
+      "-o",
+      "l3-real-fdb-kv-to-blob-c-oracle-harness-draft.exe"
+    ],
+    "attempted": true,
+    "compiler_candidates": [
+      "cc",
+      "gcc",
+      "clang"
+    ],
+    "compiler_name": "cc",
+    "compiler_path": "/usr/bin/cc",
+    "diagnostics": [
+      "C oracle compile command failed; no oracle evidence accepted."
+    ],
+    "execution_argv": [
+      "C:\\WINDOWS\\system32\\wsl.exe",
+      "-e",
+      "sh",
+      "-lc",
+      "cd /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob && /usr/bin/cc -std=c99 -I/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc -I/mnt/f/agent/crustpaper/0630/sources/FlashDB/tests /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c-oracle-harness-draft.c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c -o /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c-oracle-harness-draft.exe"
+    ],
+    "requested_compiler": "cc",
+    "returncode": 1,
+    "semantic_pass": false,
+    "status": "compile_failed",
+    "stderr": "In file included from /mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/flashdb.h:22,\n                 from /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:16:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018read_kv\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:18: warning: field precision specifier \u2018.*\u2019 expects argument of type \u2018int\u2019, but argument 2 has type \u2018size_t\u2019 {aka \u2018long unsigned int\u2019} [-Wformat=]\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                                   ~~~~~~~~\n      |                                                                                     |\n      |                                                                                     size_t {aka long unsigned int}\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/fdb_def.h:59:47: note: in definition of macro \u2018FDB_PRINT\u2019\n   59 | #define FDB_PRINT(...)                 printf(__VA_ARGS__)\n      |                                               ^~~~~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:9: note: in expansion of macro \u2018FDB_INFO\u2019\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |         ^~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:41: note: format string is defined here\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |                                       ~~^~\n      |                                         |\n      |                                         int\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018new_kv\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:22: warning: format \u2018%u\u2019 expects argument of type \u2018unsigned int\u2019, but argument 2 has type \u2018size_t\u2019 {aka \u2018long unsigned int\u2019} [-Wformat=]\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~                                              ~~~~~~~\n      |                                                                                                |\n      |                                                                                                size_t {aka long unsigned int}\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/fdb_def.h:59:47: note: in definition of macro \u2018FDB_PRINT\u2019\n   59 | #define FDB_PRINT(...)                 printf(__VA_ARGS__)\n      |                                               ^~~~~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:13: note: in expansion of macro \u2018FDB_INFO\u2019\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |             ^~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:49: note: format string is defined here\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |                                                ~^\n      |                                                 |\n      |                                                 unsigned int\n      |                                                %lu\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018fdb_kv_print\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1502:15: warning: format \u2018%u\u2019 expects argument of type \u2018unsigned int\u2019, but argument 2 has type \u2018long unsigned int\u2019 [-Wformat=]\n 1502 |     FDB_PRINT(\"size: %\" PRIu32 \"/%\" PRIu32 \" bytes.\\n\", (uint32_t)using_size + ((SECTOR_NUM - FDB_GC_EMPTY_SEC_THRESHOLD) * SECTOR_HDR_DATA_SIZE),\n      |               ^~~~~~~~~                                 ~~~~~~\n...[truncated]",
+    "stdout": "",
+    "toolchain_adapter": "wsl",
+    "toolchain_status_after_attempt": "COMPILE_FAILED",
+    "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob"
+  },
+  "fixture": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json",
+  "fixture_binding": {
+    "behavior_fields": [
+      "return_same_blob",
+      "blob.saved.meta_addr",
+      "blob.saved.addr",
+      "blob.saved.len"
+    ],
+    "binding_status": "declared_not_executed",
+    "case_bindings": [
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "blob.saved.addr": 0,
+          "blob.saved.len": 0,
+          "blob.saved.meta_addr": 0,
+          "return_same_blob": true
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json",
+        "id": "zero-addresses-empty-value",
+        "input_ref": "cases[0]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_same_blob",
+          "blob.saved.meta_addr",
+          "blob.saved.addr",
+          "blob.saved.len"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "blob.saved.addr": 4352,
+          "blob.saved.len": 128,
+          "blob.saved.meta_addr": 4096,
+          "return_same_blob": true
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json",
+        "id": "nominal-kv-value",
+        "input_ref": "cases[1]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_same_blob",
+          "blob.saved.meta_addr",
+          "blob.saved.addr",
+          "blob.saved.len"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "blob.saved.addr": 4294967295,
+          "blob.saved.len": 65535,
+          "blob.saved.meta_addr": 4294967280,
+          "return_same_blob": true
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json",
+        "id": "max-u32-addresses",
+        "input_ref": "cases[2]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_same_blob",
+          "blob.saved.meta_addr",
+          "blob.saved.addr",
+          "blob.saved.len"
+        ]
+      }
+    ],
+    "case_count": 3,
+    "expected_output_status": "declared_not_executed",
+    "observable_outputs": [
+      "return_same_blob",
+      "blob.saved.meta_addr",
+      "blob.saved.addr",
+      "blob.saved.len"
+    ],
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json"
+  },
+  "global_linkage_requirements": [],
+  "harness_contract": {
+    "fixture": {
+      "behavior_fields": [
+        "return_same_blob",
+        "blob.saved.meta_addr",
+        "blob.saved.addr",
+        "blob.saved.len"
+      ],
+      "binding_status": "declared_not_executed",
+      "case_bindings": [
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "blob.saved.addr": 0,
+            "blob.saved.len": 0,
+            "blob.saved.meta_addr": 0,
+            "return_same_blob": true
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json",
+          "id": "zero-addresses-empty-value",
+          "input_ref": "cases[0]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_same_blob",
+            "blob.saved.meta_addr",
+            "blob.saved.addr",
+            "blob.saved.len"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "blob.saved.addr": 4352,
+            "blob.saved.len": 128,
+            "blob.saved.meta_addr": 4096,
+            "return_same_blob": true
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json",
+          "id": "nominal-kv-value",
+          "input_ref": "cases[1]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_same_blob",
+            "blob.saved.meta_addr",
+            "blob.saved.addr",
+            "blob.saved.len"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "blob.saved.addr": 4294967295,
+            "blob.saved.len": 65535,
+            "blob.saved.meta_addr": 4294967280,
+            "return_same_blob": true
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json",
+          "id": "max-u32-addresses",
+          "input_ref": "cases[2]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_same_blob",
+            "blob.saved.meta_addr",
+            "blob.saved.addr",
+            "blob.saved.len"
+          ]
+        }
+      ],
+      "case_count": 3,
+      "expected_output_status": "declared_not_executed",
+      "observable_outputs": [
+        "return_same_blob",
+        "blob.saved.meta_addr",
+        "blob.saved.addr",
+        "blob.saved.len"
+      ],
+      "path": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json"
+    },
+    "function_prototype": "fdb_blob_t fdb_kv_to_blob(fdb_kv_t kv, fdb_blob_t blob);",
+    "global_dependencies": [],
+    "oracle_harness_includes": [
+      "flashdb.h"
+    ],
+    "oracle_source_mode": "declared_c_boundary_sources",
+    "source_files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "status": "draft_requires_review"
+  },
+  "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c-oracle-harness-draft.c",
+    "sha256": "58195712b363ea4ea63ed2a401cafb33c7ecc20dc11c0fac88e1b56edff50041",
+    "status": "draft"
+  },
+  "required_final_status": "C_ORACLE_GENERATED",
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "real-fdb-kv-to-blob",
+  "status": "DRAFT_GENERATED",
+  "target_id": "flashdb",
+  "toolchain_status": "COMPILE_FAILED"
+}

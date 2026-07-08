@@ -314,6 +314,8 @@ pub struct CDirectDependency {
     #[serde(default)]
     pub source: String,
     #[serde(default)]
+    pub source_span: Option<SourceSpanRef>,
+    #[serde(default)]
     pub value: Option<JsonValue>,
 }
 
@@ -352,7 +354,9 @@ pub struct SourceSpanRef {
     pub file: String,
     pub line_start: u64,
     pub line_end: u64,
+    #[serde(default)]
     pub byte_start: u64,
+    #[serde(default)]
     pub byte_end: u64,
     pub sha256: String,
 }
