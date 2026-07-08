@@ -1,0 +1,127 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+    "fixture_sha256": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+      "diff": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
+      "final_verification": "afd15baa820382ddb7c9957d68cd74d483505aec0bcdc752fc2b01b201351c32",
+      "negative_diff": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
+      "performance_smoke": "b8842b777fe1510478a708a86a94417979fbe9f30ddd20566780782b7abbbbaf",
+      "rust_report": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
+      "unsafe_ledger": "36b74f0e644f02ece0f2ba8c5221402ff662a93682a6260587048689e11d2fb5",
+      "unsafe_scan": "241e0df92cb003189d4c9984f0b80d2047a1b172886eb53ba924b646b4b725c3",
+      "version_manifest": "a957a9d4f3f39f57f27386932d147e6a2aaa16207d7295b5b21177df1820206e"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
+      "final_verification": "validation/evidence/demo/l3-sum-i32-ptr-arith-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-sum-i32-ptr-arith-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-sum-i32-ptr-arith-version-manifest.json"
+    },
+    "slice_id": "sum-i32-ptr-arith",
+    "source_commit": "demo-sum-i32-ptr-arith-20260625",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "blocked_reasons": [
+    "c2rust_baseline_not_generated",
+    "c2rust_output_missing",
+    "c2rust_compile_not_passed",
+    "c2rust_compile_artifact_missing",
+    "No Rust replay harness currently calls this exact C2Rust output sha."
+  ],
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
+    "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
+    "status": "skipped"
+  },
+  "c2rust_output": null,
+  "claim_boundary": {
+    "accepted_evidence_reused": false,
+    "compile_only_is_semantic_pass": false,
+    "generated_draft_semantic_pass": false,
+    "scope": "C2Rust baseline verification status artifact; blocked until direct C2Rust output replay, diff, negative diff, unsafe ledger, and final verification are all bound to the same output.",
+    "semantic_pass": false
+  },
+  "compile_artifact": null,
+  "direct_c2rust_replay": {
+    "artifact": null,
+    "c2rust_output": null,
+    "compile_artifact": null,
+    "observable_replay_pass": false,
+    "reason": "No Rust replay harness currently calls this exact C2Rust output sha.",
+    "semantic_pass": false,
+    "status": "blocked"
+  },
+  "entry_function": "sum_i32_ptr_arith",
+  "fixture": {
+    "hash": "sum-i32-ptr-arith-fixture",
+    "path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json"
+  },
+  "gate_refs": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c-oracle-status.json",
+      "sha256": "6edfadb12c2d33c196c458a7c2537b9ef8ae45088f6ee425a1bb18a97a5ee12d",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "final_verification": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-final-verification.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-negative-diff.json",
+      "sha256": "d770cb5d5f08e550550e1332d5074c1a2f6e77719c6bd0739ee2c35deca9cb30",
+      "status": "passed"
+    },
+    "rust_replay": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-rust-report.json",
+      "sha256": "feee2faff7581bc46382e196d227bd1ba86365c0b129e97f0c33c44dc5230a0e",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-diff.json",
+      "sha256": "c4bdfe69a621e4de72aa2c5b9f0ff6dbea01cbd04c60b8cf44a698a5e2a63c31",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-unsafe-ledger.json",
+      "sha256": "4d43bd0a96f08a879abda4361fd84d808cc630d8ba693f11f26a48ad71e2b50c",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-unsafe-scan.json",
+      "sha256": "d3c08a2da9635f878ed1b480b4483888fadd6662a3a2423510deab93edf66521",
+      "status": "passed"
+    }
+  },
+  "generated_draft_semantic_pass": false,
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
+    "sha256": "03f9f45a30bee2a67e788e5c6005bdeed5ae2b8d43bc3f1e6e12bd0fbf6fc6e3",
+    "status": "recorded"
+  },
+  "same_output_gate_refs": null,
+  "schema_version": 1,
+  "semantic_claim_source": "blocked_missing_direct_c2rust_replay",
+  "semantic_pass": false,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "status": "blocked",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "8a486f81151ca38b10951c1e82b7d972e39367ff2dfe47ba861751b5cee9af9d",
+    "status": "passed"
+  }
+}

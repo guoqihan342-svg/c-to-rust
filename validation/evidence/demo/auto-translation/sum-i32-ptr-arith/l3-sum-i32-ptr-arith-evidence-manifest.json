@@ -1,5 +1,6 @@
 {
   "claim_boundary": {
+    "accepted_evidence_authoritative": false,
     "accepted_metadata_differences": [],
     "alias_gate": {
       "complete_alias_safety": false,
@@ -29,14 +30,120 @@
       "canonical_reads",
       "source_write"
     ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+        "fixture_sha256": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+          "diff": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
+          "final_verification": "afd15baa820382ddb7c9957d68cd74d483505aec0bcdc752fc2b01b201351c32",
+          "negative_diff": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
+          "performance_smoke": "b8842b777fe1510478a708a86a94417979fbe9f30ddd20566780782b7abbbbaf",
+          "rust_report": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
+          "unsafe_ledger": "36b74f0e644f02ece0f2ba8c5221402ff662a93682a6260587048689e11d2fb5",
+          "unsafe_scan": "241e0df92cb003189d4c9984f0b80d2047a1b172886eb53ba924b646b4b725c3",
+          "version_manifest": "a957a9d4f3f39f57f27386932d147e6a2aaa16207d7295b5b21177df1820206e"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
+          "diff": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
+          "final_verification": "validation/evidence/demo/l3-sum-i32-ptr-arith-final-verification.json",
+          "negative_diff": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+          "performance_smoke": "validation/evidence/demo/l3-sum-i32-ptr-arith-performance-smoke.json",
+          "rust_report": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
+          "unsafe_ledger": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-scan.json",
+          "version_manifest": "validation/evidence/demo/l3-sum-i32-ptr-arith-version-manifest.json"
+        },
+        "slice_id": "sum-i32-ptr-arith",
+        "source_commit": "demo-sum-i32-ptr-arith-20260625",
+        "status": "accepted",
+        "target_id": "demo",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
+          "sha256": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+          "sha256": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
+          "sha256": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
+          "sha256": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-ledger.json",
+          "sha256": "36b74f0e644f02ece0f2ba8c5221402ff662a93682a6260587048689e11d2fb5",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-scan.json",
+          "sha256": "241e0df92cb003189d4c9984f0b80d2047a1b172886eb53ba924b646b4b725c3",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-4tguwh6x/generated_replay.rs -o /tmp/c2r-generated-replay-4tguwh6x/generated_replay.exe",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "/tmp/c2r-generated-replay-4tguwh6x/generated_replay.exe --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-rust-draft.rs",
+        "sha256": "2cf90428365a256106aaf276c772789b266f6dba4d6fc0cb9d093fd4f335dd89",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "sum-i32-ptr-arith",
+      "source_commit": "demo-sum-i32-ptr-arith-20260625",
+      "status": "passed",
+      "target_id": "demo"
+    },
+    "generated_draft_semantic_pass": true,
     "known_gaps": [
       "No full project migration claim.",
       "No support for NULL values or out pointers.",
       "No support for negative len values.",
       "No support for signed overflow; fixture sums remain inside C int defined range.",
       "No support for pointer arithmetic writes such as *(out + i) = value.",
-      "No aliasing proof between values and out.",
-      "Auto-generated Rust draft remains a candidate; accepted semantics are bound to the referenced Rust replay evidence."
+      "No whole-program alias safety proof beyond the declared values/out noalias precondition.",
+      "Auto-generated Rust draft is accepted only by the generated_draft_acceptance binding for this exact draft sha."
     ],
     "must_not_claim": [
       "full automatic C99/C11 translation",
@@ -46,113 +153,123 @@
       "semantic equivalence for this auto-generated Rust draft",
       "full C99/C11 automatic translation"
     ],
-    "scope": "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft."
+    "scope": "Automatic translation run completed with accepted evidence binding and generated_draft_acceptance for this exact Rust draft."
   },
   "evidence": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
-      "sha256": "551b5fa2a724da6f2c6b5e074717299637ee44c2119ab6b3ed961b660750e54e",
+      "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
       "status": "skipped"
     },
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c-oracle-status.json",
-      "sha256": "c292668efbc493f2801e6db1ebd8780c0a3e28baa3230bd1a244ab5ad26e8ad8",
+      "sha256": "6edfadb12c2d33c196c458a7c2537b9ef8ae45088f6ee425a1bb18a97a5ee12d",
       "status": "C_ORACLE_GENERATED"
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-auto-cache-metadata.json",
-      "sha256": "8cd9f06851ad5c7869b1f49d7c73db124d5f0aabae4d040d19546f0f1cf8da68",
+      "sha256": "b28029f321fb17840e62823ed58c05e033a5ed3b12d35c7ec8fa59f2b42d6466",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-clang-lowering-report.json",
+      "sha256": "d6e4937d8528d1a5708679f37d8d6ca9c20023e7c0b2196c9f8eeea12f956301",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-config-profile.json",
       "profile_id": "demo-sum-i32-ptr-arith-wsl-gcc",
-      "sha256": "aeabad8f1360a4301d042bfdac83a8c6506ca0ed04e1c051adf94b5511af1804",
+      "sha256": "91b242f61717101b5ffda72a36dc7dd5e55283d84889314fd3d186a6d5255123",
       "status": "recorded"
     },
     "context_pack": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-context-pack.json",
-      "sha256": "61c4d85f601e8bb90b53d24e6e57d08174cc8cd49c22c375d74d55905ad34bd8",
+      "sha256": "1227d1fafcab3c450cb74d477a74d40547cdd9d44094e567ce719aef6c2cd0fb",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-final-verification.json",
-      "sha256": "a90e93ca6542bbc9b39f4d78575d1f0291cf35740f3e469d4f46df14adcc7746",
+      "sha256": "a76c82bd167899d9a4086f23892cb2cfac55d984306927661bef238d791f2fa0",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-negative-diff.json",
-      "sha256": "1a8480c1139869d009784a2e73c47722b53047833b625fa9592a9398071d3f16",
+      "sha256": "d770cb5d5f08e550550e1332d5074c1a2f6e77719c6bd0739ee2c35deca9cb30",
       "status": "expected_failed"
     },
     "performance_smoke": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-performance-smoke.json",
       "secondary_only": true,
-      "sha256": "91ae69a827352ca0c99a196bf3c621ec862d836840e6e4913565101661310789",
+      "sha256": "bf8c24b2517395e6617f4c1855f3b09c32a36b116e8d8c2bc3447f7f35064f08",
       "status": "recorded"
     },
     "pointer_dependency_graph": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-pointer-graph.json",
-      "sha256": "a21dab68337f49c4ed5e161a5828caf0bc16bae0899f88c0a3e0d1edbd4c7876",
+      "sha256": "35bfa0e643bcedb97c71a89ad73d50fbf9bb38241cad988e469ef8c54be0a48a",
       "status": "recorded"
     },
     "route_decision": {
-      "level": "L2",
+      "level": "L1",
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
-      "sha256": "be22c1bbb0221c9eb99f7f565b3a7d3adeca2c7e113ab900054034ecfa9fa2aa",
+      "sha256": "03f9f45a30bee2a67e788e5c6005bdeed5ae2b8d43bc3f1e6e12bd0fbf6fc6e3",
       "status": "recorded"
     },
     "rust_check": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/rust-check.json",
-      "sha256": "fe28f140bf113b3bcd69c573b3e37314646a2ef9f369b0fabbf3c8fba0546cbc",
+      "sha256": "942aa90dd308972838b07fff0e71789d16e9bd7e442b219f1de022c2371efb1e",
       "status": "passed"
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-rust-report.json",
-      "sha256": "6ceb5513399b664b63e0032e97d8a8136c0896883ec41f6d579d6cae331273f7",
+      "sha256": "feee2faff7581bc46382e196d227bd1ba86365c0b129e97f0c33c44dc5230a0e",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-diff.json",
-      "sha256": "4ba564e02169ebd4007c8ae25f0606f19a9363e71c00f83f1ab9f76161ff2670",
+      "sha256": "c4bdfe69a621e4de72aa2c5b9f0ff6dbea01cbd04c60b8cf44a698a5e2a63c31",
       "status": "passed"
     },
     "slice_contract": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-slice-contract.json",
-      "sha256": "27d88386e07420f6e8146d49e11e5256262e6a47b198db1c69798ca8a55ab321",
+      "sha256": "dab3e83faea661eccc2cc337ab35eb2685507147c055791e5f8949776cca5e1e",
       "status": "recorded"
     },
     "summary": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-summary.json",
-      "sha256": "f09c1b149e6f860d7561dea00e3e8a7ba29e2e4aa110abadb52d060a93eee182",
+      "sha256": "f80b64251e3769f775784515e5caafc60b95762cc122a4e1dfd0f8023d4432bc",
       "status": "passed"
     },
     "test_translation": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-test-translation-generated.json",
-      "sha256": "bc117901c6a635d7e5902721b682bfa06785ac38ef6c398d0688598a8ad6a5ff",
+      "sha256": "c247e63cb51727be032d9968e5c480fe60e40dce971c8976aaa046aa73dad320",
       "status": "recorded"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-unsafe-ledger.json",
-      "sha256": "840f59b2403ed07b3acda559c0224e42114bcc3fac97e6407c77e181a3d551ab",
+      "sha256": "4d43bd0a96f08a879abda4361fd84d808cc630d8ba693f11f26a48ad71e2b50c",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-unsafe-scan.json",
-      "sha256": "5e0ee5e8910bd10ed75ab6172ab8803109328a485df8de459b4375679f27e3a3",
+      "sha256": "d3c08a2da9635f878ed1b480b4483888fadd6662a3a2423510deab93edf66521",
       "status": "passed"
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
-      "profile": "L2-dev",
-      "sha256": "7f771c155b7a3fb738f818f12f7ac85f00314bb4ef52a14c18d5bbf1c66a8612",
+      "profile": "L1-dev",
+      "sha256": "8a486f81151ca38b10951c1e82b7d972e39367ff2dfe47ba861751b5cee9af9d",
       "status": "passed"
+    },
+    "verified_unsafe_baseline": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-verified-unsafe-baseline.json",
+      "sha256": "4339414ea861e209f8bfdbc37ae7f3a6e46d3d619cb908f77ff8730891689905",
+      "status": "blocked"
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-version-manifest.json",
-      "sha256": "3c6030bf8e7c1f4bb0e93699012d8988e23eb19f04e2be7d7d37cbde6a1e92b1",
+      "sha256": "466fc067f8d63f6cbfb1a88e7ad741bb2a76ea7278e2e5b954ab23c5cba5f6dd",
       "status": "recorded"
     }
   },
@@ -162,7 +279,7 @@
     "path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json"
   },
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "8f0930bc628e771473419152723f185d9f00e90b",
   "schema_version": 1,
   "slice_id": "sum-i32-ptr-arith",
   "source_commit": "demo-sum-i32-ptr-arith-20260625",

@@ -1,14 +1,19 @@
 {
   "accepted_oracle": {
     "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
-    "sha256": "b48e57c58187c69b2e15de807ac496d7cebc790ab25824ec92a1acb15328698b",
+    "sha256": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
     "status": "passed"
   },
   "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
   "case_count": 6,
   "fixture": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
-  "fixture_sha256": "b48e57c58187c69b2e15de807ac496d7cebc790ab25824ec92a1acb15328698b",
+  "fixture_sha256": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
   "harness_draft": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c-oracle-harness-draft.c",
+    "sha256": "fd9dae47ed71926afa382abdd5d5f981d2f06efc56aeb314b583ff80bfaa7925",
+    "status": "draft"
+  },
   "schema_version": 1,
   "semantic_pass": true,
   "slice_id": "sum-i32-ptr-arith",

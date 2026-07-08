@@ -1036,14 +1036,26 @@ def rust_replay_i32_slice_output_report_case_literal(
 
 
 def i32_input_buffer_out0_sum_report_replay_supported(spec: dict[str, Any]) -> bool:
-    if behavior_fields(spec) != [
-        "return_code",
-        "status",
-        "len",
-        "sum",
-        "source_reads",
-        "source_write",
-    ]:
+    fields = behavior_fields(spec)
+    if fields not in (
+        [
+            "return_code",
+            "status",
+            "len",
+            "sum",
+            "source_reads",
+            "source_write",
+        ],
+        [
+            "return_code",
+            "status",
+            "len",
+            "sum",
+            "source_reads",
+            "canonical_reads",
+            "source_write",
+        ],
+    ):
         return False
     signature = c_function_signature(spec)
     if normalize_c_type(str(signature.get("return_type") or "")) != "int":
@@ -1099,7 +1111,14 @@ def rust_replay_i32_input_buffer_out0_sum_report_cases_source(
     output_param_name = str(parameters["output"].get("name") or "out")
     input_name = safe_ident(input_param_name)
     length_name = safe_ident(length_param_name)
-    expected_source_reads = f"{input_param_name}[i] under i < {length_param_name}"
+    fields = behavior_fields(spec)
+    include_canonical_reads = "canonical_reads" in fields
+    expected_source_reads = i32_input_buffer_out0_sum_source_reads_contract(
+        spec,
+        input_param_name,
+        length_param_name,
+    )
+    expected_canonical_reads = f"{input_param_name}[i]"
     expected_source_write = f"{output_param_name}[0]"
     call_args = i32_input_buffer_out0_sum_call_arguments(spec)
     if call_args is None:
@@ -1131,11 +1150,17 @@ def rust_replay_i32_input_buffer_out0_sum_report_cases_source(
         "        status: &'static str,\n",
         "        sum: i32,\n",
         "        source_reads: &'static str,\n",
-        "        source_write: &'static str,\n",
-        "    }\n",
-        "\n",
-        "    let fixture_cases: &[FixtureCase] = &[\n",
     ]
+    if include_canonical_reads:
+        lines.append("        canonical_reads: &'static str,\n")
+    lines.extend(
+        [
+            "        source_write: &'static str,\n",
+            "    }\n",
+            "\n",
+            "    let fixture_cases: &[FixtureCase] = &[\n",
+        ]
+    )
     lines.extend(case_literals)
     lines.extend(
         [
@@ -1149,12 +1174,42 @@ def rust_replay_i32_input_buffer_out0_sum_report_cases_source(
             '        assert_eq!(case.status, "ok", "{} fixture status drifted", case.id);\n',
             '        assert_eq!(out[0], case.sum, "{} sum drifted", case.id);\n',
             f"        assert_eq!(case.source_reads, {rust_string_literal(expected_source_reads)}, \"{{}} source_reads drifted\", case.id);\n",
+        ]
+    )
+    if include_canonical_reads:
+        lines.append(
+            f"        assert_eq!(case.canonical_reads, {rust_string_literal(expected_canonical_reads)}, \"{{}} canonical_reads drifted\", case.id);\n"
+        )
+    lines.extend(
+        [
             f"        assert_eq!(case.source_write, {rust_string_literal(expected_source_write)}, \"{{}} source_write drifted\", case.id);\n",
             "    }\n",
         ]
     )
     lines.extend(unsupported_comments)
     return "".join(lines)
+
+
+def i32_input_buffer_out0_sum_source_reads_contract(
+    spec: dict[str, Any],
+    input_param_name: str,
+    length_param_name: str,
+) -> str:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    input_buffers = pointer_contract.get("input_buffers") if isinstance(pointer_contract, dict) else None
+    read_effects: list[str] = []
+    if isinstance(input_buffers, list):
+        for buffer in input_buffers:
+            if not isinstance(buffer, dict) or buffer.get("name") != input_param_name:
+                continue
+            effects = buffer.get("read_effects")
+            if isinstance(effects, list):
+                read_effects = [str(effect) for effect in effects]
+            break
+    pointer_read = f"*({input_param_name} + i)"
+    if pointer_read in read_effects:
+        return f"{pointer_read} under i < {length_param_name}"
+    return f"{input_param_name}[i] under i < {length_param_name}"
 
 
 def rust_replay_i32_input_buffer_out0_sum_report_case_literal(
@@ -1179,6 +1234,8 @@ def rust_replay_i32_input_buffer_out0_sum_report_case_literal(
     status = expected_outputs.get("status")
     sum_value = expected_outputs.get("sum")
     source_reads = expected_outputs.get("source_reads")
+    include_canonical_reads = "canonical_reads" in behavior_fields(spec)
+    canonical_reads = expected_outputs.get("canonical_reads")
     source_write = expected_outputs.get("source_write")
     if not is_i32_list(input_values):
         return None
@@ -1190,16 +1247,24 @@ def rust_replay_i32_input_buffer_out0_sum_report_case_literal(
         return None
     if not isinstance(source_reads, str) or not isinstance(source_write, str):
         return None
+    if include_canonical_reads and not isinstance(canonical_reads, str):
+        return None
+    literal_fields = [
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}",
+        f"{input_name}: {rust_i32_slice_literal(input_values)}",
+        f"{length_name}: {rust_i32_literal(int(length))}",
+        f"return_code: {rust_i32_literal(int(expected_return))}",
+        f"status: {rust_string_literal(status)}",
+        f"sum: {rust_i32_literal(int(sum_value))}",
+        f"source_reads: {rust_string_literal(source_reads)}",
+    ]
+    if include_canonical_reads:
+        literal_fields.append(f"canonical_reads: {rust_string_literal(canonical_reads)}")
+    literal_fields.append(f"source_write: {rust_string_literal(source_write)}")
     return (
         "        FixtureCase { "
-        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
-        f"{input_name}: {rust_i32_slice_literal(input_values)}, "
-        f"{length_name}: {rust_i32_literal(int(length))}, "
-        f"return_code: {rust_i32_literal(int(expected_return))}, "
-        f"status: {rust_string_literal(status)}, "
-        f"sum: {rust_i32_literal(int(sum_value))}, "
-        f"source_reads: {rust_string_literal(source_reads)}, "
-        f"source_write: {rust_string_literal(source_write)} "
+        + ", ".join(literal_fields)
+        + " "
         "},\n"
     )
 

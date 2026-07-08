@@ -17,8 +17,8 @@
         "out"
       ],
       "read_effects": [
-        "values[i]",
-        "*(values + i)"
+        "*(values + i)",
+        "values[i]"
       ],
       "requires_noalias": true,
       "risk_level": "unknown_alias",
@@ -48,24 +48,71 @@
   },
   "cache_invalidation_keys": [
     "source_commit=demo-sum-i32-ptr-arith-20260625",
-    "slice_spec_sha256=29d438e3cd09353016b95ba580eceb05b8a1f0ed9c9a0c354152f5755e0b7139",
+    "slice_spec_sha256=40f4e948ad911519dbc34db3d78dfa0060a492084305d39b404a71608bf28b1b",
     "fixture_hash=sum-i32-ptr-arith-fixture",
     "build_profile_hash=84a18a27b406e8c2841ad34b46438a59993acaceea9e27d985dd1d9f3ee41153",
     "translator_version=0.1.0",
     "schema_version=1",
     "alias_gate=requires_noalias_contract",
     "alias_risk_count=1",
-    "aliasing_proven=false"
+    "aliasing_proven=false",
+    "effect_graph",
+    "effect_graph_sha256=8e061067cd3686a0ed034eb3179a23ae5c7dbd76e5512fd2605c59b5949f734d"
   ],
   "context_pack_ref": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-context-pack.json",
-  "dependency_edges": [
-    {
-      "evidence": "input_influences_output",
-      "from": "values",
-      "relationship": "writes_through",
-      "to": "out"
+  "dependency_edges": [],
+  "effect_graph": {
+    "edges": [
+      {
+        "evidence": "alias-risk-1 covers values/out",
+        "from_effect": "effect-1",
+        "relationship": "requires_noalias",
+        "to_effect": "effect-3"
+      },
+      {
+        "evidence": "alias-risk-1 covers values/out",
+        "from_effect": "effect-2",
+        "relationship": "requires_noalias",
+        "to_effect": "effect-3"
+      }
+    ],
+    "effects": [
+      {
+        "expression": "*(values + i)",
+        "id": "effect-1",
+        "kind": "read",
+        "pointer_node": "values",
+        "source": "pointer_nodes.read_effects"
+      },
+      {
+        "expression": "values[i]",
+        "id": "effect-2",
+        "kind": "read",
+        "pointer_node": "values",
+        "source": "pointer_nodes.read_effects"
+      },
+      {
+        "expression": "out[0]",
+        "id": "effect-3",
+        "kind": "write",
+        "pointer_node": "out",
+        "source": "pointer_nodes.write_effects"
+      }
+    ],
+    "summary": {
+      "alias_gate_decision": "requires_noalias_contract",
+      "alias_sensitive": true,
+      "external_state": [],
+      "read_count": 2,
+      "reads": [
+        "values"
+      ],
+      "write_count": 1,
+      "writes": [
+        "out"
+      ]
     }
-  ],
+  },
   "level": "L3",
   "pointer_decisions": [
     {
@@ -79,7 +126,7 @@
         "line_end": 1,
         "line_start": 1
       },
-      "source_statement": "values[i]",
+      "source_statement": "*(values + i)",
       "translation_rule_id": "bounded-input-buffer-read",
       "unsafe_expected": false
     },
@@ -94,7 +141,7 @@
         "line_end": 1,
         "line_start": 1
       },
-      "source_statement": "values[i]",
+      "source_statement": "*(values + i)",
       "translation_rule_id": "bounded-pointer-arithmetic-input-read",
       "unsafe_expected": false
     },
@@ -121,7 +168,7 @@
         "bounded_pointer_arithmetic_input_read"
       ],
       "buffer_role": "input",
-      "c_type": "const int*",
+      "c_type": "const int *",
       "id": "values",
       "kind": "buffer",
       "length_companion": "len",
@@ -129,8 +176,8 @@
       "nullability": "unknown",
       "ownership_role": "borrowed",
       "read_effects": [
-        "values[i]",
-        "*(values + i)"
+        "*(values + i)",
+        "values[i]"
       ],
       "symbol": "values",
       "write_effects": []
@@ -139,22 +186,22 @@
       "boundary_decisions": [
         "bounded_pointer_index"
       ],
-      "c_type": "int*",
+      "buffer_role": "output",
+      "c_type": "int *",
       "id": "out",
-      "kind": "struct_pointer",
+      "kind": "buffer",
+      "length_companion": "len",
       "mutability": "write_only",
       "nullability": "unknown",
       "ownership_role": "out_param",
-      "read_effects": [
-        "out[0] = total"
-      ],
+      "read_effects": [],
       "symbol": "out",
       "write_effects": [
         "out[0]"
       ]
     }
   ],
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "8f0930bc628e771473419152723f185d9f00e90b",
   "risk_summary": {
     "alias_gate": {
       "complete_alias_safety": false,
@@ -173,7 +220,7 @@
       "No support for negative len values.",
       "No support for signed overflow; fixture sums remain inside C int defined range.",
       "No support for pointer arithmetic writes such as *(out + i) = value.",
-      "No aliasing proof between values and out."
+      "No whole-program alias safety proof beyond the declared values/out noalias precondition."
     ],
     "unsafe_expected": false
   },
@@ -203,7 +250,7 @@
       "required": true
     }
   ],
-  "schema_version": 1,
+  "schema_version": 2,
   "slice_id": "sum-i32-ptr-arith",
   "source_boundary": {
     "direct_call_edges": [],

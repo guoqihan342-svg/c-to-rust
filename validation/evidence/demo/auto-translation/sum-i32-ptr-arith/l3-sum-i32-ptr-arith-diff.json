@@ -1,14 +1,14 @@
 {
   "accepted_diff": {
     "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
-    "sha256": "bac8b639324cf5035c8282eeac62cf155567d9fb38bcd9b059b510390a710aa0",
+    "sha256": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
     "status": "passed"
   },
   "accepted_diff_required": true,
   "blocked_by": [],
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "551b5fa2a724da6f2c6b5e074717299637ee44c2119ab6b3ed961b660750e54e",
+    "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
     "status": "skipped"
   },
   "compared_fields": [
@@ -26,14 +26,15 @@
     "c_oracle_actual_status": "C_ORACLE_GENERATED",
     "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
     "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_replay_actual_status": "recorded",
     "rust_report_actual_status": "passed",
     "rust_report_required_status": "passed",
     "schema_diff_actual_status": "passed"
   },
   "route_decision": {
-    "level": "L2",
+    "level": "L1",
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
-    "sha256": "be22c1bbb0221c9eb99f7f565b3a7d3adeca2c7e113ab900054034ecfa9fa2aa",
+    "sha256": "03f9f45a30bee2a67e788e5c6005bdeed5ae2b8d43bc3f1e6e12bd0fbf6fc6e3",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -43,8 +44,8 @@
   "target_id": "demo",
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
-    "profile": "L2-dev",
-    "sha256": "7f771c155b7a3fb738f818f12f7ac85f00314bb4ef52a14c18d5bbf1c66a8612",
+    "profile": "L1-dev",
+    "sha256": "8a486f81151ca38b10951c1e82b7d972e39367ff2dfe47ba861751b5cee9af9d",
     "status": "passed"
   }
 }

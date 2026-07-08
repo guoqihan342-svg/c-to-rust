@@ -5,12 +5,104 @@
     "compiler_command_source": "validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py",
     "defines": [],
     "include_paths": [],
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
     "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "pointer_contract": {
+      "aliasing_proven": false,
+      "input_buffers": [
+        {
+          "c_type": "const int*",
+          "length_companion": "len",
+          "loop_bound": "0 <= i < len",
+          "name": "values",
+          "read_effects": [
+            "*(values + i)",
+            "values[i]"
+          ],
+          "translation_rule_id": "bounded-pointer-arithmetic-input-read"
+        }
+      ],
+      "noalias_required": [
+        [
+          "values",
+          "out"
+        ]
+      ],
+      "output_pointers": [
+        {
+          "c_type": "int*",
+          "name": "out",
+          "write_effects": [
+            "out[0]"
+          ]
+        }
+      ]
+    },
+    "signatures": [
+      {
+        "c_source": "int sum_i32_ptr_arith(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + *(values + i); } out[0] = total; return 0; }",
+        "function": "sum_i32_ptr_arith",
+        "parameters": [
+          {
+            "buffer_length_parameter": "len",
+            "c_type": "const int*",
+            "direction": "input",
+            "name": "values"
+          },
+          {
+            "bounds": {
+              "maximum": "fixture-bound",
+              "minimum": 0
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "len"
+          },
+          {
+            "c_type": "int*",
+            "direction": "output",
+            "name": "out"
+          }
+        ],
+        "return_type": "int"
+      }
+    ]
   },
   "c_source": "int sum_i32_ptr_arith(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + *(values + i); } out[0] = total; return 0; }",
   "fixture_hash": "sum-i32-ptr-arith-fixture",
   "function_name": "sum_i32_ptr_arith",
   "slice_id": "sum-i32-ptr-arith",
   "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "source_file": "validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+    "validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py": "aaff85da70aba9bcf801edd3c3c8780bb9db72c2a00b323f879e791b2a25cd6c"
+  },
+  "source_files": [
+    {
+      "path": "validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py",
+      "role": "source"
+    },
+    {
+      "path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+      "role": "fixture"
+    }
+  ],
+  "source_root": "<demo-slice>",
   "target_id": "demo"
 }

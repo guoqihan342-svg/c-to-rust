@@ -1,14 +1,14 @@
 {
   "accepted_negative_diff": {
     "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
-    "sha256": "7dc12e45d5c570823993e70a2d57472b2534afad34d9e355fe1391e303e890be",
+    "sha256": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
     "status": "passed"
   },
   "accepted_negative_diff_required": true,
   "blocked_by": [],
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "551b5fa2a724da6f2c6b5e074717299637ee44c2119ab6b3ed961b660750e54e",
+    "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
     "status": "skipped"
   },
   "expected_failure": true,
@@ -23,6 +23,7 @@
   "required_inputs": {
     "c_oracle_required_status": "C_ORACLE_GENERATED",
     "negative_diff_actual_status": "expected_failed",
+    "rust_replay_actual_status": "recorded",
     "rust_report_required_status": "passed",
     "schema_diff_actual_status": "passed",
     "schema_diff_required_first_mismatch": null,
@@ -30,9 +31,9 @@
   },
   "root_blocked_by": [],
   "route_decision": {
-    "level": "L2",
+    "level": "L1",
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
-    "sha256": "be22c1bbb0221c9eb99f7f565b3a7d3adeca2c7e113ab900054034ecfa9fa2aa",
+    "sha256": "03f9f45a30bee2a67e788e5c6005bdeed5ae2b8d43bc3f1e6e12bd0fbf6fc6e3",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -41,8 +42,8 @@
   "target_id": "demo",
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
-    "profile": "L2-dev",
-    "sha256": "7f771c155b7a3fb738f818f12f7ac85f00314bb4ef52a14c18d5bbf1c66a8612",
+    "profile": "L1-dev",
+    "sha256": "8a486f81151ca38b10951c1e82b7d972e39367ff2dfe47ba861751b5cee9af9d",
     "status": "passed"
   }
 }

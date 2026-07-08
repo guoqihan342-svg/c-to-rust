@@ -1,19 +1,21 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "551b5fa2a724da6f2c6b5e074717299637ee44c2119ab6b3ed961b660750e54e",
+    "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
     "source_commit=demo-sum-i32-ptr-arith-20260625",
-    "slice_spec_sha256=29d438e3cd09353016b95ba580eceb05b8a1f0ed9c9a0c354152f5755e0b7139",
+    "slice_spec_sha256=40f4e948ad911519dbc34db3d78dfa0060a492084305d39b404a71608bf28b1b",
     "fixture_hash=sum-i32-ptr-arith-fixture",
     "build_profile_hash=84a18a27b406e8c2841ad34b46438a59993acaceea9e27d985dd1d9f3ee41153",
     "translator_version=0.1.0",
     "schema_version=1",
     "alias_gate=requires_noalias_contract",
     "alias_risk_count=1",
-    "aliasing_proven=false"
+    "aliasing_proven=false",
+    "effect_graph",
+    "effect_graph_sha256=8e061067cd3686a0ed034eb3179a23ae5c7dbd76e5512fd2605c59b5949f734d"
   ],
   "generated_artifacts": [
     {
@@ -91,13 +93,21 @@
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-cfg.json",
       "status": "recorded"
     },
+    "external_callee_context": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-context-pack.json",
+      "status": "not_applicable"
+    },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-pointer-graph.json",
       "status": "recorded"
     },
     "slice_spec": {
       "path": "validation/slice-specs/demo-sum-i32-ptr-arith.json",
-      "sha256": "29d438e3cd09353016b95ba580eceb05b8a1f0ed9c9a0c354152f5755e0b7139",
+      "sha256": "40f4e948ad911519dbc34db3d78dfa0060a492084305d39b404a71608bf28b1b",
       "status": "ready"
     },
     "type_map": {
@@ -106,11 +116,11 @@
     }
   },
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "8f0930bc628e771473419152723f185d9f00e90b",
   "route_decision": {
-    "level": "L2",
+    "level": "L1",
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
-    "sha256": "be22c1bbb0221c9eb99f7f565b3a7d3adeca2c7e113ab900054034ecfa9fa2aa",
+    "sha256": "03f9f45a30bee2a67e788e5c6005bdeed5ae2b8d43bc3f1e6e12bd0fbf6fc6e3",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -118,6 +128,9 @@
   "source_commit": "demo-sum-i32-ptr-arith-20260625",
   "status": "draft_generated",
   "target_id": "demo",
+  "translation_source": {
+    "selected": "clang-lowered-typed-ir"
+  },
   "translation_summary": {
     "alias_gate": {
       "complete_alias_safety": false,
@@ -127,9 +140,12 @@
       "risk_count": 1,
       "risk_level": "unknown_alias"
     },
+    "call_expressions": [],
+    "external_direct_callee_blocks": [],
+    "external_direct_callee_declarations": [],
+    "external_direct_callees": [],
     "lvalue_decision_counts": {
       "bounded_input_buffer": 1,
-      "bounded_pointer_arithmetic_input_read": 1,
       "bounded_pointer_index": 1
     },
     "pointer_boundary_decision_counts": {
@@ -139,14 +155,9 @@
     },
     "safe_public_api": true,
     "translation_rule_ids": [
-      "safe-wrapper-for-pointer-out-param",
-      "primitive-declaration",
+      "clang-lowered-typed-ir",
       "bounded-input-buffer-read",
-      "bounded-pointer-arithmetic-input-read",
-      "structured-for",
-      "pointer-write-recorded",
-      "bounded-pointer-index-write",
-      "structured-return-expression"
+      "bounded-pointer-index-write"
     ],
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
@@ -154,8 +165,8 @@
   },
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
-    "profile": "L2-dev",
-    "sha256": "7f771c155b7a3fb738f818f12f7ac85f00314bb4ef52a14c18d5bbf1c66a8612",
+    "profile": "L1-dev",
+    "sha256": "8a486f81151ca38b10951c1e82b7d972e39367ff2dfe47ba861751b5cee9af9d",
     "status": "passed"
   },
   "verification_plan": [

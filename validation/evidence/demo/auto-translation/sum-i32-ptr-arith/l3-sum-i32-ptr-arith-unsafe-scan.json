@@ -1,15 +1,32 @@
 {
   "accepted_unsafe_scan": {
     "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-scan.json",
-    "sha256": "692fb94bbfd4b2545d85f345aaa5b934e6ecbb3b57985821e65577a30d372c17",
+    "sha256": "241e0df92cb003189d4c9984f0b80d2047a1b172886eb53ba924b646b4b725c3",
     "status": "passed"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
+    "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
+    "status": "skipped"
   },
   "first_party_non_test_unsafe_count": 0,
   "first_party_non_test_unsafe_ratio": 0.0,
   "generated_draft_unsafe_count": 0,
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
+    "sha256": "03f9f45a30bee2a67e788e5c6005bdeed5ae2b8d43bc3f1e6e12bd0fbf6fc6e3",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "semantic_pass": true,
   "slice_id": "sum-i32-ptr-arith",
   "status": "passed",
-  "target_id": "demo"
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "8a486f81151ca38b10951c1e82b7d972e39367ff2dfe47ba861751b5cee9af9d",
+    "status": "passed"
+  }
 }

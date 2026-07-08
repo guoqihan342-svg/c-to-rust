@@ -1,14 +1,31 @@
 {
   "accepted_unsafe_ledger": {
     "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-ledger.json",
-    "sha256": "cce8c8308899bbcf72337280e07a8d5eb5bba7d10606aca77ac69ab6b552cc4a",
+    "sha256": "36b74f0e644f02ece0f2ba8c5221402ff662a93682a6260587048689e11d2fb5",
     "status": "passed"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
+    "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
+    "status": "skipped"
   },
   "entries": [],
   "first_party_non_test_unsafe_count": 0,
   "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
+    "sha256": "03f9f45a30bee2a67e788e5c6005bdeed5ae2b8d43bc3f1e6e12bd0fbf6fc6e3",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "sum-i32-ptr-arith",
   "status": "passed",
-  "target_id": "demo"
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "8a486f81151ca38b10951c1e82b7d972e39367ff2dfe47ba861751b5cee9af9d",
+    "status": "passed"
+  }
 }

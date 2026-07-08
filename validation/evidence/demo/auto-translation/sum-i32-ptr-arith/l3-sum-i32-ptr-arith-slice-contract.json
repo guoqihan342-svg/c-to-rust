@@ -35,6 +35,12 @@
           "translation_rule_id": "bounded-pointer-arithmetic-input-read"
         }
       ],
+      "noalias_required": [
+        [
+          "values",
+          "out"
+        ]
+      ],
       "output_pointers": [
         {
           "c_type": "int*",
@@ -89,7 +95,7 @@
       "No support for negative len values.",
       "No support for signed overflow; fixture sums remain inside C int defined range.",
       "No support for pointer arithmetic writes such as *(out + i) = value.",
-      "No aliasing proof between values and out."
+      "No whole-program alias safety proof beyond the declared values/out noalias precondition."
     ]
   },
   "fixture": {
