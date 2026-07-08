@@ -214,11 +214,23 @@ fn slice_source_struct_declarations(spec: &SliceSpec) -> String {
             collect_struct_names_from_type(&parameter.c_type, &mut structs);
         }
     }
+    let accepted_record_fields = collect_accepted_named_slice_record_fields(spec);
     let field_placeholders = collect_signature_record_pointer_field_placeholders(spec);
 
     structs
         .into_iter()
         .map(|name| {
+            if let Some(fields) = accepted_record_fields
+                .get(&name)
+                .filter(|fields| !fields.is_empty())
+            {
+                let mut declaration = format!("struct {name} {{\n");
+                for field in fields {
+                    declaration.push_str(&format!("    {} {};\n", field.c_type, field.name));
+                }
+                declaration.push_str("};\n");
+                return declaration;
+            }
             let Some(fields) = field_placeholders.get(&name).filter(|fields| !fields.is_empty())
             else {
                 return format!("struct {name} {{ unsigned char _c2r_opaque; }};\n");
@@ -231,6 +243,221 @@ fn slice_source_struct_declarations(spec: &SliceSpec) -> String {
             declaration
         })
         .collect::<String>()
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SliceSourceRecordField {
+    name: String,
+    c_type: String,
+}
+
+fn collect_accepted_named_slice_record_fields(
+    spec: &SliceSpec,
+) -> BTreeMap<String, Vec<SliceSourceRecordField>> {
+    let mut result = BTreeMap::new();
+    for callee in &spec.c_boundary.external_direct_callees {
+        let Some(evidence) = &callee.accepted_named_slice_evidence else {
+            continue;
+        };
+        let Some(report_path) = accepted_named_slice_clang_lowering_report_path(evidence) else {
+            continue;
+        };
+        for (record_name, fields) in record_fields_from_clang_lowering_report(&report_path) {
+            result.entry(record_name).or_insert(fields);
+        }
+    }
+    result
+}
+
+fn accepted_named_slice_clang_lowering_report_path(
+    evidence: &crate::AcceptedNamedSliceEvidence,
+) -> Option<PathBuf> {
+    let final_verification = evidence.final_verification.trim();
+    if final_verification.is_empty() {
+        return None;
+    }
+    let final_path = resolve_repo_path(final_verification);
+    let final_value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&final_path).ok()?).ok()?;
+    if !final_verification_accepts_named_slice(&final_value) {
+        return None;
+    }
+
+    if let Some(manifest_path) =
+        sibling_path_with_replaced_file_name(&final_path, "final-verification", "evidence-manifest")
+    {
+        if let Some(report_path) = clang_lowering_report_path_from_manifest(&manifest_path) {
+            return Some(report_path);
+        }
+    }
+
+    sibling_path_with_replaced_file_name(&final_path, "final-verification", "clang-lowering-report")
+        .filter(|path| path.exists())
+}
+
+fn final_verification_accepts_named_slice(value: &serde_json::Value) -> bool {
+    let status_passed = value
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|status| status == "passed");
+    let semantic_pass = value
+        .get("semantic_pass")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    status_passed && semantic_pass
+}
+
+fn clang_lowering_report_path_from_manifest(manifest_path: &Path) -> Option<PathBuf> {
+    let value: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(manifest_path).ok()?).ok()?;
+    let report = value
+        .pointer("/evidence/clang_lowering_report")
+        .and_then(serde_json::Value::as_object)?;
+    let status_recorded = report
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|status| status == "recorded" || status == "passed");
+    if !status_recorded {
+        return None;
+    }
+    report
+        .get("path")
+        .and_then(serde_json::Value::as_str)
+        .map(resolve_repo_path)
+        .filter(|path| path.exists())
+}
+
+fn sibling_path_with_replaced_file_name(path: &Path, needle: &str, replacement: &str) -> Option<PathBuf> {
+    let file_name = path.file_name()?.to_str()?;
+    let replaced = file_name.replace(needle, replacement);
+    (replaced != file_name).then(|| path.with_file_name(replaced))
+}
+
+fn record_fields_from_clang_lowering_report(
+    report_path: &Path,
+) -> BTreeMap<String, Vec<SliceSourceRecordField>> {
+    let Ok(raw_json) = fs::read_to_string(report_path) else {
+        return BTreeMap::new();
+    };
+    let Ok(report) = serde_json::from_str::<serde_json::Value>(&raw_json) else {
+        return BTreeMap::new();
+    };
+    let root = report
+        .pointer("/lowering_report/function_ir")
+        .or_else(|| report.get("function_ir"))
+        .unwrap_or(&report);
+    let mut result = BTreeMap::new();
+    collect_record_fields_from_json_value(root, &mut result);
+    result
+}
+
+fn collect_record_fields_from_json_value(
+    value: &serde_json::Value,
+    records: &mut BTreeMap<String, Vec<SliceSourceRecordField>>,
+) {
+    match value {
+        serde_json::Value::Object(object) => {
+            if let Some(record) = object.get("kind").and_then(|kind| kind.get("Record")) {
+                collect_record_fields_from_record_kind(record, records);
+            }
+            for child in object.values() {
+                collect_record_fields_from_json_value(child, records);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                collect_record_fields_from_json_value(item, records);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_record_fields_from_record_kind(
+    record: &serde_json::Value,
+    records: &mut BTreeMap<String, Vec<SliceSourceRecordField>>,
+) {
+    let Some(name) = record
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .filter(|name| is_c_identifier(name))
+    else {
+        return;
+    };
+    let Some(fields) = record.get("fields").and_then(serde_json::Value::as_array) else {
+        return;
+    };
+    if fields.is_empty() {
+        return;
+    }
+
+    let mut declarations = Vec::new();
+    for field in fields {
+        let Some(field_name) = field
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .filter(|name| is_c_identifier(name))
+        else {
+            return;
+        };
+        let Some(c_type) = field
+            .get("ty")
+            .and_then(c_field_type_from_typed_ir_json)
+        else {
+            return;
+        };
+        declarations.push(SliceSourceRecordField {
+            name: field_name.to_string(),
+            c_type,
+        });
+    }
+    records.entry(name.to_string()).or_insert(declarations);
+}
+
+fn c_field_type_from_typed_ir_json(ty: &serde_json::Value) -> Option<String> {
+    ty.get("spelled")
+        .and_then(serde_json::Value::as_str)
+        .and_then(normalize_supported_c_field_type)
+        .or_else(|| {
+            ty.get("canonical")
+                .and_then(serde_json::Value::as_str)
+                .and_then(normalize_supported_c_field_type)
+        })
+}
+
+fn normalize_supported_c_field_type(candidate: &str) -> Option<String> {
+    let trimmed = candidate.trim();
+    if trimmed.is_empty()
+        || !trimmed
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'*' || byte.is_ascii_whitespace())
+    {
+        return None;
+    }
+    let tokens = c_identifier_tokens(trimmed);
+    if tokens.is_empty() || tokens.iter().any(|token| !is_builtin_type_token(token)) {
+        return None;
+    }
+    if tokens.len() == 1 && tokens[0] == "void" && !trimmed.contains('*') {
+        return None;
+    }
+    Some(normalize_c_type_spacing(trimmed))
+}
+
+fn normalize_c_type_spacing(value: &str) -> String {
+    let mut result = String::new();
+    let mut previous_was_space = false;
+    for ch in value.trim().chars() {
+        if ch.is_whitespace() {
+            if !previous_was_space {
+                result.push(' ');
+                previous_was_space = true;
+            }
+        } else {
+            result.push(ch);
+            previous_was_space = false;
+        }
+    }
+    result
 }
 
 fn collect_signature_record_pointer_field_placeholders(
@@ -642,6 +869,14 @@ fn is_c_ident_continue(byte: u8) -> bool {
     byte == b'_' || byte.is_ascii_alphanumeric()
 }
 
+fn is_c_identifier(value: &str) -> bool {
+    let mut bytes = value.bytes();
+    let Some(first) = bytes.next() else {
+        return false;
+    };
+    is_c_ident_start(first) && bytes.all(is_c_ident_continue)
+}
+
 fn json_numeric_literal(value: &serde_json::Value) -> Option<String> {
     value
         .as_i64()
@@ -660,6 +895,29 @@ fn sanitize_path_fragment(value: &str) -> String {
             }
         })
         .collect()
+}
+
+fn resolve_repo_path(path_text: &str) -> PathBuf {
+    let path = PathBuf::from(path_text);
+    if path.is_absolute() || path.exists() {
+        return path;
+    }
+    if let Ok(current_dir) = std::env::current_dir() {
+        let candidate = current_dir.join(&path);
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        let crate_dir = PathBuf::from(&manifest_dir);
+        if let Some(repo_root) = crate_dir.parent().and_then(Path::parent) {
+            let candidate = repo_root.join(&path);
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+    }
+    path
 }
 
 fn lower_parse_spec_from_ast_fixture_report(
@@ -731,26 +989,7 @@ fn lower_parse_spec_from_ast_fixture_report(
 }
 
 fn resolve_ast_fixture_path(ast_fixture: &str) -> PathBuf {
-    let path = PathBuf::from(ast_fixture);
-    if path.is_absolute() || path.exists() {
-        return path;
-    }
-    if let Ok(current_dir) = std::env::current_dir() {
-        let candidate = current_dir.join(&path);
-        if candidate.exists() {
-            return candidate;
-        }
-    }
-    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        let crate_dir = PathBuf::from(&manifest_dir);
-        if let Some(repo_root) = crate_dir.parent().and_then(Path::parent) {
-            let candidate = repo_root.join(&path);
-            if candidate.exists() {
-                return candidate;
-            }
-        }
-    }
-    path
+    resolve_repo_path(ast_fixture)
 }
 
 fn ast_fixture_arguments(

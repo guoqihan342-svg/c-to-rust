@@ -254,6 +254,9 @@ def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_di
     direct_dependencies = spec.get("c_boundary", {}).get("direct_dependencies", [])
     if direct_dependencies:
         c_boundary["direct_dependencies"] = direct_dependencies
+    external_direct_callees = spec.get("c_boundary", {}).get("external_direct_callees", [])
+    if external_direct_callees:
+        c_boundary["external_direct_callees"] = external_direct_callees
     if c_boundary:
         translator_spec["c_boundary"] = c_boundary
     compile_commands = build_profile.get("compile_commands") or build_profile.get("compile_commands_path")

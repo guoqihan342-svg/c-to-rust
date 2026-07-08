@@ -241,6 +241,18 @@
 
             self.assertEqual(translator_input["function_source_span"]["file"], "src/fdb_kvdb.c")
             self.assertEqual(translator_input["function_source_span"]["line_start"], 1369)
+            translator_callees = translator_input["c_boundary"]["external_direct_callees"]
+            self.assertEqual(
+                {item["name"] for item in translator_callees},
+                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+            )
+            translator_blob_make = next(
+                item for item in translator_callees if item["name"] == "fdb_blob_make"
+            )
+            self.assertEqual(
+                translator_blob_make["accepted_named_slice_evidence"]["slice_id"],
+                "real-fdb-blob-make",
+            )
             dependency_names = {
                 dependency["name"]
                 for dependency in context_pack["call_edges"]

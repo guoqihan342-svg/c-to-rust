@@ -249,6 +249,36 @@ pub struct CBoundary {
     pub signatures: Vec<CSignature>,
     #[serde(default)]
     pub direct_dependencies: Vec<CDirectDependency>,
+    #[serde(default)]
+    pub external_direct_callees: Vec<ExternalDirectCallee>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalDirectCallee {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub signature_ref: String,
+    #[serde(default)]
+    pub source_ref: String,
+    #[serde(default)]
+    pub accepted_named_slice_evidence: Option<AcceptedNamedSliceEvidence>,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, JsonValue>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AcceptedNamedSliceEvidence {
+    #[serde(default)]
+    pub target_id: String,
+    #[serde(default)]
+    pub slice_id: String,
+    #[serde(default)]
+    pub final_verification: String,
+    #[serde(default)]
+    pub boundary: String,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, JsonValue>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

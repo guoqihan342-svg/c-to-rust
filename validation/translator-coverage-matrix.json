@@ -2395,6 +2395,7 @@
         "typedef-backed mutable record pointer via desugared/canonical clang type fallback",
         "local complete record zero initializer for address-taken direct-call candidates",
         "anonymous nested integer record field inventory for complete local record zero initializers",
+        "accepted named-slice evidence record field enrichment for local address-taken records",
         "recursive nested record zero initializer for address-taken direct-call candidates",
         "embedded slice source C oracle harness diagnostic execution",
         "record value field inc/dec for ForStmt step",
@@ -2546,6 +2547,11 @@
             {
               "name": "record field fail-closed tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "slice_source_translation_unit_ignores_unaccepted_named_slice_record_fields",
+              "path": "crates/c2r-translator/src/clang_lowered_translation_split_parts/part_03_split_parts/part_00.rs",
+              "fail_closed_reason": "accepted named-slice record field enrichment requires a passed final verification with semantic_pass=true"
             },
             {
               "name": "typed_ir_rejects_mutable_record_pointer_identity_return_without_field_write",
@@ -2720,6 +2726,16 @@
               "proof_class": "committed_no_clang_fixture_candidate_provenance"
             },
             {
+              "name": "slice_source_translation_unit_enriches_record_fields_from_accepted_named_slice_evidence",
+              "path": "crates/c2r-translator/src/clang_lowered_translation_split_parts/part_03_split_parts/part_00.rs",
+              "proof_class": "unit_evidence_bound_synthetic_source"
+            },
+            {
+              "name": "test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim",
+              "path": "validation/tools/test_auto_migrate.py",
+              "proof_class": "translator_input_preserves_accepted_named_slice_evidence"
+            },
+            {
               "name": "real-fdb-blob-make rust check",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/rust-check.json",
               "proof_class": "committed_rust_check_passed"
@@ -2802,6 +2818,10 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "slice_source_translation_unit_enriches_record_fields_from_accepted_named_slice_evidence",
+          "path": "crates/c2r-translator/src/clang_lowered_translation_split_parts/part_03_split_parts/part_00.rs"
+        },
+        {
           "name": "for_step_stmt_skeleton_from_ast_accepts_record_field_inc_dec_step_as_assignment",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
@@ -2858,6 +2878,11 @@
           "name": "typed_ir_rejects_record_return_value_with_non_scalar_field_inventory",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "whole-record return only supports complete direct scalar field inventory"
+        },
+        {
+          "name": "slice_source_translation_unit_ignores_unaccepted_named_slice_record_fields",
+          "path": "crates/c2r-translator/src/clang_lowered_translation_split_parts/part_03_split_parts/part_00.rs",
+          "fail_closed_reason": "accepted named-slice record field enrichment requires a passed final verification with semantic_pass=true"
         },
         {
           "name": "typed_ir_rejects_mutable_record_pointer_identity_return_without_field_write",
