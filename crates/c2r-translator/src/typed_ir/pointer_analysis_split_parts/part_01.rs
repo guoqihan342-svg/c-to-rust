@@ -421,6 +421,7 @@ fn collect_raw_direct_call_pointer_params_from_expr(
 fn collect_mutable_record_pointer_write_params(
     body: &[IrStmt],
     params: &[IrParam],
+    policy: &EmitPolicy,
 ) -> Result<HashSet<String>, String> {
     let mutable_record_pointer_param_names = params
         .iter()
@@ -430,7 +431,7 @@ fn collect_mutable_record_pointer_write_params(
     let record_pointer_field_value_params =
         collect_record_pointer_field_value_params(body, params, &mutable_record_pointer_param_names)?;
     let readonly_pointer_uses = collect_readonly_pointer_param_uses(body, params)?;
-    let pointer_param_count = params
+    let active_pointer_params = params
         .iter()
         .filter(|param| {
             matches!(param.ty.kind, IrTypeKind::Pointer { .. })
@@ -443,7 +444,8 @@ fn collect_mutable_record_pointer_write_params(
                     &readonly_pointer_uses.mentioned_params,
                 )
         })
-        .count();
+        .map(|param| param.name.as_str())
+        .collect::<Vec<_>>();
     let mutable_record_pointer_params = params
         .iter()
         .filter(|param| mutable_record_pointer_pointee_type(&param.ty).is_some())
@@ -455,13 +457,42 @@ fn collect_mutable_record_pointer_write_params(
         &mutable_record_pointer_params,
         &mut write_params,
     )?;
-    if !write_params.is_empty() && pointer_param_count != 1 {
+    if !write_params.is_empty()
+        && active_pointer_params.len() != 1
+        && !mutable_record_pointer_alias_proven(&active_pointer_params, &write_params, params, policy)
+    {
         return Err(
             "mutable record pointer field assignment requires exactly one pointer param for alias proof"
                 .to_string(),
         );
     }
     Ok(write_params)
+}
+
+fn mutable_record_pointer_alias_proven(
+    active_pointer_params: &[&str],
+    write_params: &HashSet<String>,
+    params: &[IrParam],
+    policy: &EmitPolicy,
+) -> bool {
+    let params_by_name = params
+        .iter()
+        .map(|param| (param.name.as_str(), param))
+        .collect::<HashMap<_, _>>();
+    active_pointer_params.iter().all(|pointer_param| {
+        write_params.iter().all(|write_param| {
+            if *pointer_param == write_param {
+                return true;
+            }
+            if write_params.contains(*pointer_param) {
+                explicit_noalias_between(policy, pointer_param, write_param)
+                    || params_have_restrict_noalias(&params_by_name, pointer_param, write_param)
+            } else {
+                explicit_noalias_pair(policy, pointer_param, write_param)
+                    || params_have_restrict_noalias(&params_by_name, pointer_param, write_param)
+            }
+        })
+    })
 }
 
 fn collect_record_pointer_field_value_params(

@@ -529,30 +529,19 @@ fn collect_mutable_record_pointer_write_param_from_target(
     mutable_record_pointer_params: &HashMap<&str, &IrType>,
     write_params: &mut HashSet<String>,
 ) -> Result<(), String> {
-    let IrExpr::Member {
-        base,
-        field,
-        ty,
-        is_arrow: true,
-        ..
-    } = target
-    else {
-        return Ok(());
-    };
-    let IrExpr::Var {
-        name, ty: base_ty, ..
-    } = base.as_ref()
-    else {
+    let Some(path) = record_pointer_member_path_from_expr(target)? else {
         return Ok(());
     };
     if !mutable_record_pointer_params
-        .get(name.as_str())
-        .is_some_and(|param_ty| *param_ty == base_ty)
+        .get(path.root_name)
+        .is_some_and(|param_ty| *param_ty == path.root_ty)
     {
         return Ok(());
     }
-    emit_mutable_record_pointer_field_type(ty)
-        .map_err(|detail| format!("mutable record pointer arrow field {field} has {detail}"))?;
-    write_params.insert(name.clone());
+    let field_path = record_pointer_member_path_key(&path);
+    emit_mutable_record_pointer_field_type(path.ty).map_err(|detail| {
+        format!("mutable record pointer arrow field {field_path} has {detail}")
+    })?;
+    write_params.insert(path.root_name.to_string());
     Ok(())
 }

@@ -30,6 +30,14 @@ struct RecordFieldUse<'a> {
     ty: &'a IrType,
 }
 
+#[derive(Clone, Debug)]
+struct RecordPointerMemberPath<'a> {
+    root_name: &'a str,
+    root_ty: &'a IrType,
+    fields: Vec<&'a str>,
+    ty: &'a IrType,
+}
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct MutableRecordPointerFieldKey {
     base: String,
@@ -94,7 +102,7 @@ impl EmitContext {
         let raw_direct_call_pointer_params =
             collect_raw_direct_call_pointer_params(&function.body, &function.params);
         let mutable_record_pointer_write_params =
-            collect_mutable_record_pointer_write_params(&function.body, &function.params)?;
+            collect_mutable_record_pointer_write_params(&function.body, &function.params, &policy)?;
         let record_pointer_field_value_params =
             collect_record_pointer_field_value_params(
                 &function.body,
@@ -205,4 +213,79 @@ impl EmitContext {
     fn global_rust_name(&self, name: &str) -> Result<String, String> {
         emit_global_const_identifier(name)
     }
+}
+
+fn record_pointer_member_path_from_expr<'a>(
+    expr: &'a IrExpr,
+) -> Result<Option<RecordPointerMemberPath<'a>>, String> {
+    match expr {
+        IrExpr::Member {
+            base,
+            field,
+            ty,
+            is_arrow: true,
+            ..
+        } => {
+            let IrExpr::Var {
+                name,
+                ty: root_ty,
+                ..
+            } = base.as_ref()
+            else {
+                return Ok(None);
+            };
+            if record_pointer_pointee_type(root_ty).is_none() {
+                return Ok(None);
+            }
+            Ok(Some(RecordPointerMemberPath {
+                root_name: name.as_str(),
+                root_ty,
+                fields: vec![field.as_str()],
+                ty,
+            }))
+        }
+        IrExpr::Member {
+            base,
+            field,
+            ty,
+            is_arrow: false,
+            ..
+        } => {
+            let Some(mut path) = record_pointer_member_path_from_expr(base)? else {
+                return Ok(None);
+            };
+            let Some(base_ty) = expr_type(base) else {
+                return Err("nested record pointer member base type is unsupported".to_string());
+            };
+            if !matches!(base_ty.kind, IrTypeKind::Record { .. }) {
+                return Err(format!(
+                    "nested record pointer member base has unsupported type {}",
+                    type_label(base_ty)
+                ));
+            }
+            path.fields.push(field.as_str());
+            path.ty = ty;
+            Ok(Some(path))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn record_pointer_member_path_key(path: &RecordPointerMemberPath<'_>) -> String {
+    path.fields.join(".")
+}
+
+fn emit_record_pointer_member_path(
+    path: &RecordPointerMemberPath<'_>,
+    root_label: &str,
+    field_label: &str,
+) -> Result<String, String> {
+    let root = emit_identifier(path.root_name, root_label)?;
+    let fields = path
+        .fields
+        .iter()
+        .map(|field| emit_identifier(field, field_label))
+        .collect::<Result<Vec<_>, _>>()?
+        .join(".");
+    Ok(format!("{root}.{fields}"))
 }

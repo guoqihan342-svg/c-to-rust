@@ -83,25 +83,13 @@ fn collect_record_pointer_field_value_param_from_assignment(
     mutable_record_pointer_write_params: &HashSet<String>,
     value_params: &mut HashSet<String>,
 ) -> Result<(), String> {
-    let IrExpr::Member {
-        base,
-        ty,
-        is_arrow: true,
-        ..
-    } = target
-    else {
+    let Some(path) = record_pointer_member_path_from_expr(target)? else {
         return Ok(());
     };
-    let IrExpr::Var {
-        name: base_name, ..
-    } = base.as_ref()
-    else {
-        return Ok(());
-    };
-    if !mutable_record_pointer_write_params.contains(base_name) {
+    if !mutable_record_pointer_write_params.contains(path.root_name) {
         return Ok(());
     }
-    if emit_record_pointer_field_type(ty).is_none() {
+    if emit_record_pointer_field_type(path.ty).is_none() {
         return Ok(());
     }
     collect_record_pointer_value_param_from_expr(value, param_types, value_params)

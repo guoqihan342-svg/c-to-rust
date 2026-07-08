@@ -3,8 +3,9 @@ use std::hash::Hash;
 
 use super::{
     emit_function_pointer_param_type, emit_mutable_record_pointer_field_type, emit_scalar_type,
-    mutable_pointer_slice_element_type, mutable_record_pointer_pointee_type, type_label,
-    EmitContext, IrExpr, IrFunction, IrGlobal, IrStmt, IrType, MutablePointerSlotKey,
+    mutable_pointer_slice_element_type, mutable_record_pointer_pointee_type,
+    record_pointer_member_path_from_expr, record_pointer_member_path_key, type_label, EmitContext,
+    IrExpr, IrFunction, IrGlobal, IrStmt, IrType, MutablePointerSlotKey,
     MutableRecordPointerFieldKey,
 };
 
@@ -418,6 +419,17 @@ fn validate_definite_assignment_target(
             Ok(None)
         }
         IrExpr::Member { base, .. } => {
+            if let Some(path) = record_pointer_member_path_from_expr(target)? {
+                if state
+                    .mutable_record_pointer_write_params
+                    .contains(path.root_name)
+                {
+                    state
+                        .require_initialized(path.root_name)
+                        .map_err(|detail| format!("assign member root {detail}"))?;
+                    return Ok(None);
+                }
+            }
             validate_definite_assignment_expr(base, state)
                 .map_err(|detail| format!("assign member base {detail}"))?;
             Ok(None)
@@ -492,13 +504,17 @@ fn validate_definite_assignment_expr(
                 .map_err(|detail| format!("index operand {detail}"))
         }
         IrExpr::Member { base, .. } => {
-            validate_definite_assignment_expr(base, state)
-                .map_err(|detail| format!("member base {detail}"))?;
             if let Some(key) =
                 mutable_record_pointer_field_key_for_definite_assignment(expr, state)?
             {
+                state
+                    .require_initialized(&key.base)
+                    .map_err(|detail| format!("member root {detail}"))?;
                 state.require_mutable_record_pointer_field_initialized(&key)?;
+                return Ok(());
             }
+            validate_definite_assignment_expr(base, state)
+                .map_err(|detail| format!("member base {detail}"))?;
             Ok(())
         }
         IrExpr::ArrayLiteral { elements, .. } => {
@@ -550,36 +566,32 @@ fn mutable_record_pointer_field_key_for_definite_assignment(
     expr: &IrExpr,
     state: &DefiniteAssignmentState,
 ) -> Result<Option<MutableRecordPointerFieldKey>, String> {
-    let IrExpr::Member {
-        base,
-        field,
-        ty,
-        is_arrow: true,
-        ..
-    } = expr
-    else {
+    let Some(path) = record_pointer_member_path_from_expr(expr)? else {
         return Ok(None);
     };
-    let IrExpr::Var {
-        name, ty: base_ty, ..
-    } = base.as_ref()
-    else {
-        return Ok(None);
-    };
-    if !state.mutable_record_pointer_write_params.contains(name) {
+    if !state
+        .mutable_record_pointer_write_params
+        .contains(path.root_name)
+    {
         return Ok(None);
     }
-    mutable_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+    let field_path = record_pointer_member_path_key(&path);
+    mutable_record_pointer_pointee_type(path.root_ty).ok_or_else(|| {
         format!(
-            "mutable record pointer field {name}.{field} has unsupported base type {}",
-            type_label(base_ty)
+            "mutable record pointer field {}.{field_path} has unsupported base type {}",
+            path.root_name,
+            type_label(path.root_ty)
         )
     })?;
-    emit_mutable_record_pointer_field_type(ty)
-        .map_err(|detail| format!("mutable record pointer field {name}.{field} has {detail}"))?;
+    emit_mutable_record_pointer_field_type(path.ty).map_err(|detail| {
+        format!(
+            "mutable record pointer field {}.{field_path} has {detail}",
+            path.root_name
+        )
+    })?;
     Ok(Some(MutableRecordPointerFieldKey {
-        base: name.clone(),
-        field: field.clone(),
+        base: path.root_name.to_string(),
+        field: field_path,
     }))
 }
 

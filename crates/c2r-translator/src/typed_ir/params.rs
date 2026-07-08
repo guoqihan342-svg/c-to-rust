@@ -2,8 +2,9 @@ fn emit_param(
     param: &IrParam,
     assigned_vars: &HashSet<String>,
     context: &EmitContext,
+    explicit_lifetime: Option<&str>,
 ) -> Result<String, String> {
-    let ty = if context.is_nullable_pointer_param(&param.name) {
+    let mut ty = if context.is_nullable_pointer_param(&param.name) {
         emit_nullable_pointer_param_type(&param.ty)
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else if context.is_mutable_record_pointer_write_param(&param.name) {
@@ -49,6 +50,10 @@ fn emit_param(
         emit_param_type(&param.ty)
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
     };
+    if let Some(lifetime) = explicit_lifetime {
+        ty = add_explicit_borrow_lifetime(&ty, lifetime)
+            .map_err(|detail| format!("param {} {detail}", param.name))?;
+    }
     let name = emit_identifier(&param.name, "param")?;
     let mut_prefix = if assigned_vars.contains(&param.name) {
         "mut "
@@ -56,6 +61,76 @@ fn emit_param(
         ""
     };
     Ok(format!("{mut_prefix}{name}: {ty}"))
+}
+
+fn add_explicit_borrow_lifetime(ty: &str, lifetime: &str) -> Result<String, String> {
+    if let Some(rest) = ty.strip_prefix("&mut ") {
+        return Ok(format!("&'{lifetime} mut {rest}"));
+    }
+    if let Some(rest) = ty.strip_prefix('&') {
+        return Ok(format!("&'{lifetime} {rest}"));
+    }
+    Err(format!(
+        "requires a borrowed type for explicit lifetime, got {ty}"
+    ))
+}
+
+fn returned_mutable_record_pointer_param<'a>(
+    function: &'a IrFunction,
+    context: &EmitContext,
+) -> Result<Option<&'a str>, String> {
+    if mutable_record_pointer_pointee_type(&function.return_type).is_none() {
+        return Ok(None);
+    }
+    let Some(IrStmt::Return {
+        value: Some(IrExpr::Var { name, ty, .. }),
+        ..
+    }) = function.body.last()
+    else {
+        return Ok(None);
+    };
+    if ty != &function.return_type {
+        return Err(format!(
+            "mutable record pointer return type {} does not match function return type {}",
+            type_label(ty),
+            type_label(&function.return_type)
+        ));
+    }
+    if !context.is_mutable_record_pointer_write_param(name) {
+        return Ok(None);
+    }
+    Ok(Some(name.as_str()))
+}
+
+fn emitted_borrow_param_count(function: &IrFunction, context: &EmitContext) -> usize {
+    function
+        .params
+        .iter()
+        .filter(|param| emitted_param_type_is_borrow(param, &context.assigned_vars, context))
+        .count()
+}
+
+fn emitted_param_type_is_borrow(
+    param: &IrParam,
+    assigned_vars: &HashSet<String>,
+    context: &EmitContext,
+) -> bool {
+    if context.is_record_pointer_field_value_param(&param.name)
+        || context.is_opaque_pointer_call_arg_param(&param.name)
+        || should_emit_raw_direct_call_pointer_param(&param.name, &param.ty, context)
+        || should_emit_unused_readonly_8_bit_pointer_param(&param.name, &param.ty, context)
+    {
+        return false;
+    }
+    context.is_nullable_pointer_param(&param.name)
+        || context.is_mutable_record_pointer_write_param(&param.name)
+        || context.is_byte_slice_param(&param.name)
+        || (assigned_vars.contains(&param.name)
+            && mutable_pointer_slice_element_type(&param.ty).is_some())
+        || (readonly_pointer_slice_element_type(&param.ty).is_some()
+            && (context.is_readonly_pointer_read_param(&param.name)
+                || context.is_readonly_pointer_mentioned_param(&param.name)))
+        || readonly_record_pointer_pointee_type(&param.ty).is_some()
 }
 
 fn emit_assigned_param_type(ty: &IrType) -> Result<String, String> {

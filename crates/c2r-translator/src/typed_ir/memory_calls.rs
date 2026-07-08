@@ -169,7 +169,6 @@ fn emit_discarded_record_pointer_member_inc_dec_statement(
     context: &EmitContext,
 ) -> Result<Option<String>, String> {
     let IrExpr::Member {
-        base,
         field,
         ty: target_ty,
         is_arrow,
@@ -194,9 +193,12 @@ fn emit_discarded_record_pointer_member_inc_dec_statement(
             type_label(target_ty)
         ));
     }
-    let target_name =
-        emit_mutable_record_pointer_member_assignment_target(base, field, target_ty, symbols, context)
-            .map_err(|detail| format!("inc/dec statement {detail}"))?;
+    let Some(target_name) =
+        emit_mutable_record_pointer_member_assignment_target(target, symbols, context)
+            .map_err(|detail| format!("inc/dec statement {detail}"))?
+    else {
+        return Ok(None);
+    };
     emit_inc_dec_statement_assignment(&target_name, target_ty, op, "inc/dec statement")
         .map(Some)
 }

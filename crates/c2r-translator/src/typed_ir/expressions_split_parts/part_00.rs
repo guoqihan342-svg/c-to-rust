@@ -113,7 +113,13 @@ fn emit_expr(
             ty,
             is_arrow,
             ..
-        } => emit_member_expr(base, field, ty, *is_arrow, symbols, context),
+        } => {
+            if let Some(path_expr) = emit_nested_record_pointer_member_expr(expr, symbols, context)?
+            {
+                return Ok(path_expr);
+            }
+            emit_member_expr(base, field, ty, *is_arrow, symbols, context)
+        }
         IrExpr::ArrayLiteral { .. } => Err(
             "array literal expression is only supported as a declaration initializer".to_string(),
         ),
@@ -263,6 +269,77 @@ fn emit_member_expr(
     let base_name = emit_identifier(base_name, "member base")?;
     let field = emit_identifier(field, "member field")?;
     Ok(format!("{base_name}.{field}"))
+}
+
+fn emit_nested_record_pointer_member_expr(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let Some(path) = record_pointer_member_path_from_expr(expr)? else {
+        return Ok(None);
+    };
+    if path.fields.len() <= 1 {
+        return Ok(None);
+    }
+    if !symbols.contains(path.root_name) {
+        return Err(format!(
+            "nested arrow member base {} is not declared",
+            path.root_name
+        ));
+    }
+    let field_path = record_pointer_member_path_key(&path);
+    if mutable_record_pointer_pointee_type(path.root_ty).is_some() {
+        if !context.is_mutable_record_pointer_write_param(path.root_name) {
+            return Err(format!(
+                "nested mutable record pointer field {}.{field_path} requires mutable record pointer ownership evidence",
+                path.root_name
+            ));
+        }
+        emit_scalar_type(path.ty).map_err(|detail| {
+            format!(
+                "nested mutable record pointer field {}.{field_path} has {detail}",
+                path.root_name
+            )
+        })?;
+        if !context.is_mutable_record_pointer_read_field(path.root_name, &field_path) {
+            return Err(format!(
+                "mutable record pointer field {}.{field_path} lacks definite assignment evidence",
+                path.root_name
+            ));
+        }
+        return emit_record_pointer_member_path(
+            &path,
+            "nested mutable arrow member base",
+            "nested mutable arrow member field",
+        )
+        .map(Some);
+    }
+    readonly_record_pointer_pointee_type(path.root_ty).ok_or_else(|| {
+        format!(
+            "nested arrow member base {} has unsupported type {}",
+            path.root_name,
+            type_label(path.root_ty)
+        )
+    })?;
+    if context.is_nullable_pointer_param(path.root_name) {
+        return Err(format!(
+            "nullable pointer param {} cannot use nested record pointer member path in the bounded emitter",
+            path.root_name
+        ));
+    }
+    emit_scalar_type(path.ty).map_err(|detail| {
+        format!(
+            "nested readonly record pointer field {}.{field_path} has {detail}",
+            path.root_name
+        )
+    })?;
+    emit_record_pointer_member_path(
+        &path,
+        "nested readonly arrow member base",
+        "nested readonly arrow member field",
+    )
+    .map(Some)
 }
 
 fn emit_mutable_record_pointer_member_expr(

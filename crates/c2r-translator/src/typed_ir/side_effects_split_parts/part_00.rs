@@ -559,7 +559,6 @@ fn emit_member_inc_dec_value_target<'a>(
     path: &str,
 ) -> Result<Option<(String, &'a IrType)>, String> {
     let IrExpr::Member {
-        base,
         field,
         ty: target_ty,
         is_arrow,
@@ -584,9 +583,13 @@ fn emit_member_inc_dec_value_target<'a>(
             type_label(target_ty)
         ));
     }
-    let target_name =
-        emit_mutable_record_pointer_member_assignment_target(base, field, target_ty, symbols, context)
-            .map_err(|detail| format!("{path} {detail}"))?;
+    let Some(target_name) = emit_mutable_record_pointer_member_assignment_target(
+        target, symbols, context,
+    )
+    .map_err(|detail| format!("{path} {detail}"))?
+    else {
+        return Ok(None);
+    };
     Ok(Some((target_name, target_ty)))
 }
 

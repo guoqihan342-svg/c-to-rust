@@ -2392,6 +2392,8 @@
         "mutable record pointer non-void pointer field read after definite write",
         "opaque void pointer field assignment cast",
         "mutable record pointer identity return after field write",
+        "nested record pointer scalar field path copy with explicit noalias evidence",
+        "mutable record pointer identity return lifetime disambiguation",
         "typedef-backed mutable record pointer via desugared/canonical clang type fallback",
         "local complete record zero initializer for address-taken direct-call candidates",
         "anonymous nested integer record field inventory for complete local record zero initializers",
@@ -2486,6 +2488,10 @@
             {
               "name": "typed_ir_emits_readonly_record_pointer_raw_pointer_field_return",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_03.rs"
+            },
+            {
+              "name": "typed_ir_emits_nested_record_pointer_scalar_field_copy",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs"
             },
             {
               "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
@@ -2595,6 +2601,11 @@
               "name": "typed_ir_rejects_member_inc_dec_value_when_sibling_reads_same_record_pointer_base",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs",
               "fail_closed_reason": "value-position mutable record pointer field inc/dec conservatively rejects sibling reads of the same record pointer base"
+            },
+            {
+              "name": "typed_ir_rejects_nested_record_pointer_scalar_field_copy_without_noalias",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs",
+              "fail_closed_reason": "nested record pointer scalar field copy with a readonly record input and mutable record output still requires explicit noalias evidence"
             }
           ]
         },
@@ -2624,6 +2635,10 @@
             {
               "name": "typed_ir_emits_readonly_record_pointer_raw_pointer_field_return",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_03.rs"
+            },
+            {
+              "name": "typed_ir_emits_nested_record_pointer_scalar_field_copy",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs"
             },
             {
               "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
@@ -2843,6 +2858,10 @@
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_03.rs"
         },
         {
+          "name": "typed_ir_emits_nested_record_pointer_scalar_field_copy",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs"
+        },
+        {
           "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -2966,6 +2985,11 @@
           "name": "typed_ir_rejects_member_inc_dec_value_when_sibling_reads_same_record_pointer_base",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs",
           "fail_closed_reason": "value-position mutable record pointer field inc/dec is admitted only when sibling expressions do not read the same record pointer base"
+        },
+        {
+          "name": "typed_ir_rejects_nested_record_pointer_scalar_field_copy_without_noalias",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs",
+          "fail_closed_reason": "nested record pointer scalar field copy with readonly and mutable record pointer params requires explicit noalias evidence"
         }
       ]
     },

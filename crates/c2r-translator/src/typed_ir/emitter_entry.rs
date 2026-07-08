@@ -85,11 +85,24 @@ fn emit_scalar_rust_from_ir_with_globals_and_policy(
     context.mutable_record_pointer_read_fields =
         definite_assignment.mutable_record_pointer_read_fields;
     context.mutable_pointer_read_slots = definite_assignment.mutable_pointer_read_slots;
+    let returned_mutable_param = returned_mutable_record_pointer_param(function, &context)?;
+    let explicit_return_lifetime =
+        returned_mutable_param.filter(|_| emitted_borrow_param_count(function, &context) > 1);
     let function_name = emit_identifier(&function.name, "function")?;
     let params = function
         .params
         .iter()
-        .map(|param| emit_param(param, &context.assigned_vars, &context))
+        .map(|param| {
+            let explicit_lifetime = explicit_return_lifetime
+                .filter(|returned_param| *returned_param == param.name.as_str())
+                .map(|_| "a");
+            emit_param(
+                param,
+                &context.assigned_vars,
+                &context,
+                explicit_lifetime,
+            )
+        })
         .collect::<Result<Vec<_>, _>>()?
         .join(", ");
     let mut symbols = collect_param_symbols(&function.params)?;
@@ -108,8 +121,17 @@ fn emit_scalar_rust_from_ir_with_globals_and_policy(
     if !record_definitions.is_empty() {
         rust.push('\n');
     }
-    rust.push_str(&format!("pub fn {function_name}({params})"));
-    if let Some(return_type) = return_type {
+    let function_lifetime = if explicit_return_lifetime.is_some() {
+        "<'a>"
+    } else {
+        ""
+    };
+    rust.push_str(&format!("pub fn {function_name}{function_lifetime}({params})"));
+    if let Some(mut return_type) = return_type {
+        if explicit_return_lifetime.is_some() {
+            return_type = add_explicit_borrow_lifetime(&return_type, "a")
+                .map_err(|detail| format!("return type {detail}"))?;
+        }
         rust.push_str(&format!(" -> {}", return_type));
     }
     rust.push_str(" {\n");

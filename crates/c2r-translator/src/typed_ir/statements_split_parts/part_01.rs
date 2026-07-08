@@ -115,10 +115,9 @@ fn emit_assignment_target<'a>(
             is_arrow,
             ..
         } => {
-            if *is_arrow {
-                let target = emit_mutable_record_pointer_member_assignment_target(
-                    base, field, ty, symbols, context,
-                )?;
+            if let Some(target) =
+                emit_mutable_record_pointer_member_assignment_target(target, symbols, context)?
+            {
                 return Ok((target, ty));
             }
             let target = emit_member_expr(base, field, ty, *is_arrow, symbols, context)?;
@@ -299,41 +298,42 @@ fn emit_function_pointer_decay_assignment(
 }
 
 fn emit_mutable_record_pointer_member_assignment_target(
-    base: &IrExpr,
-    field: &str,
-    ty: &IrType,
+    expr: &IrExpr,
     symbols: &HashSet<String>,
     context: &EmitContext,
-) -> Result<String, String> {
-    let IrExpr::Var {
-        name: base_name,
-        ty: base_ty,
-        ..
-    } = base
-    else {
-        return Err("arrow member assignment base must be a record pointer variable".to_string());
+) -> Result<Option<String>, String> {
+    let Some(path) = record_pointer_member_path_from_expr(expr)? else {
+        return Ok(None);
     };
-    if !symbols.contains(base_name) {
+    if !symbols.contains(path.root_name) {
         return Err(format!(
-            "arrow member assignment base {base_name} is not declared"
+            "arrow member assignment base {} is not declared",
+            path.root_name
         ));
     }
-    if !context.is_mutable_record_pointer_write_param(base_name) {
+    let field_path = record_pointer_member_path_key(&path);
+    if !context.is_mutable_record_pointer_write_param(path.root_name) {
         return Err(format!(
-            "arrow member assignment base {base_name} requires mutable record pointer ownership evidence"
+            "arrow member assignment base {} requires mutable record pointer ownership evidence",
+            path.root_name
         ));
     }
-    mutable_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+    mutable_record_pointer_pointee_type(path.root_ty).ok_or_else(|| {
         format!(
-            "arrow member assignment base {base_name} has unsupported type {}",
-            type_label(base_ty)
+            "arrow member assignment base {} has unsupported type {}",
+            path.root_name,
+            type_label(path.root_ty)
         )
     })?;
-    emit_mutable_record_pointer_field_type(ty)
-        .map_err(|detail| format!("mutable record pointer arrow field {field} has {detail}"))?;
-    let base_name = emit_identifier(base_name, "arrow member assignment base")?;
-    let field = emit_identifier(field, "arrow member assignment field")?;
-    Ok(format!("{base_name}.{field}"))
+    emit_mutable_record_pointer_field_type(path.ty).map_err(|detail| {
+        format!("mutable record pointer arrow field {field_path} has {detail}")
+    })?;
+    emit_record_pointer_member_path(
+        &path,
+        "arrow member assignment base",
+        "arrow member assignment field",
+    )
+    .map(Some)
 }
 
 fn emit_mutable_record_pointer_member_compound_assignment_value(

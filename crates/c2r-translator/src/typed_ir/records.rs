@@ -198,9 +198,9 @@ fn collect_record_field_uses_from_expr<'a>(
             is_arrow,
             ..
         } => {
-            let IrExpr::Var { ty: base_ty, .. } = base.as_ref() else {
-                return Err("member expression base must be a record variable".to_string());
-            };
+            let base_ty = expr_type(base).ok_or_else(|| {
+                "member expression base type is unsupported for record collection".to_string()
+            })?;
             let record_ty = if *is_arrow {
                 record_pointer_pointee_type(base_ty).ok_or_else(|| {
                     format!(
