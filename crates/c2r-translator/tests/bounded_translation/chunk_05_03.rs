@@ -448,6 +448,58 @@ fn typed_ir_rejects_while_with_incdec_condition_expr() {
     assert!(error.reason.contains("stmt[0].while condition"));
     assert!(error.reason.contains("inc/dec expression is unsupported"));
 }
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_while_comparison_with_incdec_operand() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_while_cmp_incdec".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "count".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "limit".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::While {
+                condition: ir_binary(
+                    IrBinOp::Lt,
+                    IrExpr::IncDec {
+                        target: Box::new(ir_var("count", i32_ty.clone())),
+                        op: IrIncDecOp::Inc,
+                        prefix: false,
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    ir_var("limit", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("count", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("while comparison incdec operand must remain fail closed");
+
+    assert!(error.reason.contains("stmt[0].while condition"));
+    assert!(error.reason.contains("comparison lhs"));
+    assert!(error.reason.contains("inc/dec expression is unsupported"));
+}
 #[cfg(feature = "typed-ir")]
 #[test]
 fn typed_ir_rejects_while_with_non_var_assignment_target() {

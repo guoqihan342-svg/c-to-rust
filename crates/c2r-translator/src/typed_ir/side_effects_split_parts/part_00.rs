@@ -294,6 +294,40 @@ fn emit_direct_inc_dec_comparison_value_expr(
     indent_level: usize,
     path: &str,
 ) -> Result<Option<EmittedExpr>, String> {
+    let Some(emitted) = emit_direct_inc_dec_comparison_condition_expr(
+        op,
+        lhs,
+        rhs,
+        result_ty,
+        symbols,
+        context,
+        indent_level,
+        path,
+    )?
+    else {
+        return Ok(None);
+    };
+    let one = emit_integer_literal(1, result_ty)
+        .map_err(|detail| format!("{path} comparison true literal {detail}"))?;
+    let zero = emit_integer_literal(0, result_ty)
+        .map_err(|detail| format!("{path} comparison false literal {detail}"))?;
+
+    Ok(Some(EmittedExpr {
+        prelude: emitted.prelude,
+        expr: format!("(if {} {{ {one} }} else {{ {zero} }})", emitted.expr),
+    }))
+}
+
+fn emit_direct_inc_dec_comparison_condition_expr(
+    op: &IrBinOp,
+    lhs: &IrExpr,
+    rhs: &IrExpr,
+    result_ty: &IrType,
+    symbols: &mut HashSet<String>,
+    context: &EmitContext,
+    indent_level: usize,
+    path: &str,
+) -> Result<Option<EmittedExpr>, String> {
     let Ok(op) = emit_comparison_op(op) else {
         return Ok(None);
     };
@@ -351,15 +385,11 @@ fn emit_direct_inc_dec_comparison_value_expr(
     } else {
         (other, emitted_inc_dec.expr)
     };
-    let one = emit_integer_literal(1, result_ty)
-        .map_err(|detail| format!("{path} comparison true literal {detail}"))?;
-    let zero = emit_integer_literal(0, result_ty)
-        .map_err(|detail| format!("{path} comparison false literal {detail}"))?;
     *symbols = prelude_symbols;
 
     Ok(Some(EmittedExpr {
         prelude: emitted_inc_dec.prelude,
-        expr: format!("(if ({lhs} {op} {rhs}) {{ {one} }} else {{ {zero} }})"),
+        expr: format!("({lhs} {op} {rhs})"),
     }))
 }
 

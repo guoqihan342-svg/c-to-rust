@@ -231,10 +231,88 @@ fn typed_ir_rejects_short_circuit_condition_with_non_int_result_type() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_comparison_condition_with_incdec_operand() {
+fn typed_ir_emits_if_comparison_condition_with_incdec_operand_ordered_prelude() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
-        name: "bad_cmp_incdec".to_string(),
+        name: "cmp_post_inc_if".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "limit".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Lt,
+                    IrExpr::IncDec {
+                        target: Box::new(ir_var("value", i32_ty.clone())),
+                        op: IrIncDecOp::Inc,
+                        prefix: false,
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    ir_var("limit", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_binary(
+                        IrBinOp::Add,
+                        ir_binary(
+                            IrBinOp::Mul,
+                            ir_var("value", i32_ty.clone()),
+                            ir_lit(10, "10", i32_ty.clone()),
+                            i32_ty.clone(),
+                        ),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    )),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_binary(
+                    IrBinOp::Mul,
+                    ir_var("value", i32_ty.clone()),
+                    ir_lit(10, "10", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit if comparison incdec ordered prelude");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn cmp_post_inc_if(mut value: i32, limit: i32) -> i32"));
+    assert!(rust.contains("let post_inc_value: i32 = value;"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("if (post_inc_value < limit) {"));
+    assert_rust_snippet_runs(
+        "typed-ir-if-comparison-incdec-ordered-prelude",
+        rust,
+        "    assert_eq!(cmp_post_inc_if(4, 5), 51);\n    assert_eq!(cmp_post_inc_if(5, 5), 60);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_if_comparison_incdec_with_same_scalar_sibling_read() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_cmp_incdec_sibling_read_if".to_string(),
         return_type: i32_ty.clone(),
         params: vec![IrParam {
             name: "value".to_string(),
@@ -252,14 +330,10 @@ fn typed_ir_rejects_comparison_condition_with_incdec_operand() {
                         ty: i32_ty.clone(),
                         source_span: None,
                     },
-                    ir_lit(0, "0", i32_ty.clone()),
+                    ir_var("value", i32_ty.clone()),
                     i32_ty.clone(),
                 ),
-                then_body: vec![IrStmt::Assign {
-                    target: ir_var("value", i32_ty.clone()),
-                    value: ir_var("value", i32_ty.clone()),
-                    source_span: None,
-                }],
+                then_body: vec![],
                 else_body: vec![],
                 source_span: None,
             },
@@ -271,14 +345,71 @@ fn typed_ir_rejects_comparison_condition_with_incdec_operand() {
         source_span: None,
     };
 
-    let error = emit_rust_from_ir(&ir).expect_err("comparison incdec operand must fail closed");
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("if comparison incdec plus same-scalar read must fail closed");
 
     assert!(error
         .reason
         .contains("outside the current typed IR emitter subset"));
     assert!(error.reason.contains("stmt[0].if condition"));
-    assert!(error.reason.contains("comparison lhs"));
-    assert!(error.reason.contains("inc/dec expression is unsupported"));
+    assert!(error
+        .reason
+        .contains("binary rhs reads variable value modified by lhs side-effect expression"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_if_comparison_with_two_incdec_operands() {
+    let i32_ty = ir_i32();
+    let inc = |name: &str| IrExpr::IncDec {
+        target: Box::new(ir_var(name, i32_ty.clone())),
+        op: IrIncDecOp::Inc,
+        prefix: false,
+        ty: i32_ty.clone(),
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "bad_cmp_two_incdec_if".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "left".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "right".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Lt,
+                    inc("left"),
+                    inc("right"),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("left", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("if comparison with two incdec operands must fail closed");
+
+    assert!(error.reason.contains("stmt[0].if condition"));
+    assert!(error
+        .reason
+        .contains("comparison cannot lower two direct increment/decrement operands"));
 }
 
 #[cfg(feature = "typed-ir")]

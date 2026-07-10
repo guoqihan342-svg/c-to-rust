@@ -319,9 +319,31 @@ fn emit_stmt(
             else_body,
             ..
         } => {
-            let condition = emit_condition_expr(condition, symbols, context)
-                .map_err(|detail| format!("if condition {detail}"))?;
+            let emitted_condition = match condition {
+                IrExpr::Binary {
+                    op, lhs, rhs, ty, ..
+                } => emit_direct_inc_dec_comparison_condition_expr(
+                    op,
+                    lhs,
+                    rhs,
+                    ty,
+                    symbols,
+                    context,
+                    indent_level,
+                    "if condition",
+                )?,
+                _ => None,
+            };
+            let (condition_prelude, condition) = match emitted_condition {
+                Some(emitted) => (emitted.prelude, emitted.expr),
+                None => (
+                    String::new(),
+                    emit_condition_expr(condition, symbols, context)
+                        .map_err(|detail| format!("if condition {detail}"))?,
+                ),
+            };
             let mut block = String::new();
+            block.push_str(&condition_prelude);
             block.push_str(&format!("{indent}if {condition} {{\n"));
             let mut then_symbols = symbols.clone();
             for (index, stmt) in then_body.iter().enumerate() {
