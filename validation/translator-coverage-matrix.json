@@ -395,6 +395,7 @@
         "IrExpr::Binary comparison over one direct scalar inc/dec operand with ordered prelude",
         "IrStmt::If comparison condition over one direct scalar inc/dec operand with ordered prelude",
         "IrStmt::While comparison condition over one direct scalar inc/dec operand with per-iteration ordered prelude",
+        "IrStmt::DoWhile comparison condition over one direct scalar inc/dec operand with tail-check ordered prelude",
         "no-clang AST fixture replay for scalar runtime preconditions/refusals"
       ],
       "dimension_status": {
@@ -449,6 +450,10 @@
             {
               "name": "typed_ir_emits_while_comparison_with_post_inc_operand_per_iteration",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_03.rs"
+            },
+            {
+              "name": "typed_ir_emits_do_while_comparison_post_inc_at_each_tail_check",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_14.rs"
             }
           ]
         },
@@ -470,6 +475,10 @@
             {
               "name": "while comparison incdec conflict and complex-target fail-closed tests",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_03.rs"
+            },
+            {
+              "name": "typed_ir_rejects_do_while_inc_dec_comparison_outside_bounded_operands",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_14.rs"
             }
           ]
         },
@@ -499,6 +508,10 @@
             {
               "name": "typed_ir_emits_while_comparison_with_post_inc_operand_per_iteration",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_03.rs"
+            },
+            {
+              "name": "typed_ir_emits_do_while_comparison_post_inc_at_each_tail_check",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_14.rs"
             },
             {
               "name": "scalar-div-rem-contract generated Rust replay",
@@ -663,6 +676,10 @@
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_03.rs"
         },
         {
+          "name": "typed_ir_emits_do_while_comparison_post_inc_at_each_tail_check",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_14.rs"
+        },
+        {
           "name": "typed_ir_emits_prefix_dec_statement_for_usize_scalar",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -729,6 +746,11 @@
           "name": "typed_ir_rejects_while_comparison_incdec_with_complex_target",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_03.rs",
           "fail_closed_reason": "complex inc/dec targets require an explicit side-effect target lowering contract"
+        },
+        {
+          "name": "typed_ir_rejects_do_while_inc_dec_comparison_outside_bounded_operands",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_14.rs",
+          "fail_closed_reason": "do-while comparison inc/dec supports one direct scalar target and one independent pure scalar sibling; same-variable reads, two inc/dec operands, complex targets, calls, dereferences, and members remain fail-closed"
         },
         {
           "name": "typed_ir_rejects_division_by_zero_literal",
