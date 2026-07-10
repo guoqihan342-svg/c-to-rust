@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-sector-start",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "A nested u32 field on the unique mutable record root is assigned the wrapping sum of one direct u32 field from a by-value record and an independent by-value u32 scalar; the declared constant bool result is observed.",
+    "external_callee": null,
+    "field_update": {
+      "operation": "wrapping_add",
+      "target_parameter": "kv",
+      "target_field_path": [
+        "addr",
+        "start"
+      ],
+      "record_field": {
+        "parameter": "sector",
+        "field_path": [
+          "addr"
+        ],
+        "rust_type": "u32",
+        "mode": "direct_field_value"
+      },
+      "scalar": {
+        "parameter": "SECTOR_HDR_DATA_SIZE",
+        "fixture_field": "sector_hdr_data_size",
+        "rust_type": "u32",
+        "mode": "scalar_value"
+      }
+    },
+    "excluded_semantics": [
+      "fdb_kv_iterate branches, loops, iterator effects, and sector reads outside exact line 1869",
+      "the actual FDB_WG_ALIGN(sizeof(struct sector_hdr_data)) macro value or record layout/alignment semantics",
+      "the real fdb_kv_t and kvdb_sec_info typedefs, layout, alignment, or ABI"
+    ]
+  },
+  "status": "expected_failed",
+  "expected_failure": true,
+  "mutation_detected": true,
+  "mutation": "wrapping_add changed to wrapping_sub",
+  "detected_case_ids": [
+    "first-sector-data",
+    "ordinary-sector-data",
+    "u32-wrap"
+  ],
+  "partition_detection": {
+    "observable_mismatch_case_ids": [
+      "first-sector-data",
+      "ordinary-sector-data",
+      "u32-wrap"
+    ]
+  },
+  "actual_mutation_execution": {
+    "mutation": {
+      "operator_from": "wrapping_add",
+      "operator_to": "wrapping_sub",
+      "mutation_count": 1,
+      "byte_offset": 400,
+      "original_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-rust-draft.rs",
+        "sha256": "819f5208d2da6594de670cb96c0440e276d84575db0edcab351fa5e620aab7ff"
+      },
+      "mutated_draft": {
+        "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/mutated-rust-draft.rs",
+        "sha256": "96188853177a0454f373d189f0dde40cea6cf47edcf98ff7b876f2508d322b40"
+      }
+    },
+    "same_generated_replay_harness": {
+      "compile": {
+        "argv": [
+          "rustc",
+          "--edition=2021",
+          "--test",
+          "--error-format=json",
+          "<translation-carrier-negative>/mutated_same_replay.rs",
+          "-o",
+          "<translation-carrier-negative>/mutated_same_replay.exe"
+        ],
+        "returncode": 0,
+        "stdout": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/same-replay-compile.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/same-replay-compile.stderr.log",
+          "sha256": "661237825718b440fe9ac2a8262b3ca0afa0952439e08de17129f4a8e6a4a275"
+        }
+      },
+      "run": {
+        "argv": [
+          "<translation-carrier-negative>/mutated_same_replay.exe",
+          "--nocapture"
+        ],
+        "returncode": 101,
+        "stdout": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/same-replay-run.stdout.log",
+          "sha256": "1effe80d6c568e23b1c30205023d2522ab1b3a95501dbf475ef146040e34bd82"
+        },
+        "stderr": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/same-replay-run.stderr.log",
+          "sha256": "7280f4016b1d35e0f46992efdc45ada6e53ead4fac10c46467fe8f9305c073ef"
+        }
+      },
+      "expected_run_failure": true
+    },
+    "partition_replay": {
+      "compile": {
+        "argv": [
+          "rustc",
+          "--edition=2021",
+          "--test",
+          "--error-format=json",
+          "<translation-carrier-negative>/mutated_partition_replay.rs",
+          "-o",
+          "<translation-carrier-negative>/mutated_partition_replay.exe"
+        ],
+        "returncode": 0,
+        "stdout": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/partition-replay-compile.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/partition-replay-compile.stderr.log",
+          "sha256": "33dbf70ebad1623b31a4ce75952ad579b601659023148f457c0d429ca63302e1"
+        }
+      },
+      "case_runs": [
+        {
+          "case_id": "first-sector-data",
+          "comparison_partition": "observable_mismatch",
+          "test_name": "__c2r_negative_partition_case_0",
+          "argv": [
+            "<translation-carrier-negative>/mutated_partition_replay.exe",
+            "--exact",
+            "__c2r_negative_partition_case_0",
+            "--nocapture"
+          ],
+          "returncode": 101,
+          "stdout": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/partition-case-0-run.stdout.log",
+            "sha256": "c075a06cffaafdbe291b8aed0f1ce11cc68b91505519021e87a62bd3441e28e7"
+          },
+          "stderr": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/partition-case-0-run.stderr.log",
+            "sha256": "f18fa1bf2e24b7a4c25da4c6a95b6203c95f0bcb0a5d3fffcf013def1ba605b9"
+          }
+        },
+        {
+          "case_id": "ordinary-sector-data",
+          "comparison_partition": "observable_mismatch",
+          "test_name": "__c2r_negative_partition_case_1",
+          "argv": [
+            "<translation-carrier-negative>/mutated_partition_replay.exe",
+            "--exact",
+            "__c2r_negative_partition_case_1",
+            "--nocapture"
+          ],
+          "returncode": 101,
+          "stdout": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/partition-case-1-run.stdout.log",
+            "sha256": "bb10f513217107ccbd5374f70988817c02b97cbcb19b87292ddc3b1fc0045686"
+          },
+          "stderr": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/partition-case-1-run.stderr.log",
+            "sha256": "9eec22a5cc56bbd55d9bc90f7e1e5d056a8ab56ac65a29c71b2f22e3bd21bfec"
+          }
+        },
+        {
+          "case_id": "u32-wrap",
+          "comparison_partition": "observable_mismatch",
+          "test_name": "__c2r_negative_partition_case_2",
+          "argv": [
+            "<translation-carrier-negative>/mutated_partition_replay.exe",
+            "--exact",
+            "__c2r_negative_partition_case_2",
+            "--nocapture"
+          ],
+          "returncode": 101,
+          "stdout": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/partition-case-2-run.stdout.log",
+            "sha256": "7f1c6349fd984855881bd6d957108b77577d26a3d860fe5994627a82829ddb4b"
+          },
+          "stderr": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-sector-start/partition-case-2-run.stderr.log",
+            "sha256": "b337bb6b1404861dd50f243e769f2124cf6606f68d4f75ba6e279e022aef53e4"
+          }
+        }
+      ],
+      "comparison_true_case_ids": [],
+      "comparison_false_case_ids": [],
+      "sequence_exhaustion_case_ids": [],
+      "observable_mismatch_case_ids": [
+        "first-sector-data",
+        "ordinary-sector-data",
+        "u32-wrap"
+      ]
+    }
+  },
+  "first_mismatch": {
+    "case_id": "first-sector-data",
+    "field": "kv_addr_start",
+    "accepted_value": 32,
+    "mutated_value": 4294967264
+  },
+  "mismatches": [
+    {
+      "case_id": "first-sector-data",
+      "field": "kv_addr_start",
+      "accepted_value": 32,
+      "mutated_value": 4294967264
+    },
+    {
+      "case_id": "ordinary-sector-data",
+      "field": "kv_addr_start",
+      "accepted_value": 4160,
+      "mutated_value": 4032
+    },
+    {
+      "case_id": "u32-wrap",
+      "field": "kv_addr_start",
+      "accepted_value": 16,
+      "mutated_value": 4294967248
+    }
+  ]
+}

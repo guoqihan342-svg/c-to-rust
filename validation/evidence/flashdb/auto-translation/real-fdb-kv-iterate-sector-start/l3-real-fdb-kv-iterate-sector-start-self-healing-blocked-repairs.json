@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "fixture_hash=77d4cc12cc9d54fccc1f3969e0f60a85a2f33d8fe84320914dd408ac6d7a51ce",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-sector-start",
+  "status": "none",
+  "target_id": "flashdb"
+}

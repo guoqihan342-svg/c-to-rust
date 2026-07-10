@@ -1,0 +1,49 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-start-negative-diff.json",
+    "sha256": "bd1677af08f41b19bd9799e86737bf4dfe260144dd9c93401409abf78212e5d1",
+    "status": "passed"
+  },
+  "accepted_negative_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-c2rust-baseline-manifest.json",
+    "sha256": "09f88eb1c5e9c4b0186fb37c7e11d3b0e13c7819d76069c28529bd4a455e016c",
+    "status": "skipped"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "accepted_value": 32,
+    "case_id": "first-sector-data",
+    "field": "kv_addr_start",
+    "mutated_value": 4294967264
+  },
+  "mutation_detected": true,
+  "negative_diff_gate": "schema_aware_negative_diff",
+  "required_inputs": {
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "negative_diff_actual_status": "expected_failed",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed",
+    "schema_diff_required_first_mismatch": null,
+    "schema_diff_required_status": "passed"
+  },
+  "root_blocked_by": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-route-decision.json",
+    "sha256": "336e2c38bb58aad7a79dcf356a831f2cd4b5cc7f2d41060e7e9f9bba207096ee",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-sector-start",
+  "status": "expected_failed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "a698010112e4b03c8e5dfe157861036bdcbcccca92d2d7fdc062dc2153b8d963",
+    "status": "passed"
+  }
+}

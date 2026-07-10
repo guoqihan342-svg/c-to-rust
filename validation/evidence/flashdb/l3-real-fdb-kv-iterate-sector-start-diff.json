@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-sector-start",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "A nested u32 field on the unique mutable record root is assigned the wrapping sum of one direct u32 field from a by-value record and an independent by-value u32 scalar; the declared constant bool result is observed.",
+    "external_callee": null,
+    "field_update": {
+      "operation": "wrapping_add",
+      "target_parameter": "kv",
+      "target_field_path": [
+        "addr",
+        "start"
+      ],
+      "record_field": {
+        "parameter": "sector",
+        "field_path": [
+          "addr"
+        ],
+        "rust_type": "u32",
+        "mode": "direct_field_value"
+      },
+      "scalar": {
+        "parameter": "SECTOR_HDR_DATA_SIZE",
+        "fixture_field": "sector_hdr_data_size",
+        "rust_type": "u32",
+        "mode": "scalar_value"
+      }
+    },
+    "excluded_semantics": [
+      "fdb_kv_iterate branches, loops, iterator effects, and sector reads outside exact line 1869",
+      "the actual FDB_WG_ALIGN(sizeof(struct sector_hdr_data)) macro value or record layout/alignment semantics",
+      "the real fdb_kv_t and kvdb_sec_info typedefs, layout, alignment, or ABI"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "first_mismatch": null
+}

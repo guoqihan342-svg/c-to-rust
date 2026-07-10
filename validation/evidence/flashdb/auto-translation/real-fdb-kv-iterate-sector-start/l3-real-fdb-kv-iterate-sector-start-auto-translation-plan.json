@@ -1,0 +1,222 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-c2rust-baseline-manifest.json",
+    "sha256": "09f88eb1c5e9c4b0186fb37c7e11d3b0e13c7819d76069c28529bd4a455e016c",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=8c61522d39d5fc392554a430d018edd12811d046fd0dea7aafb792351123cb4d",
+    "fixture_hash=77d4cc12cc9d54fccc1f3969e0f60a85a2f33d8fe84320914dd408ac6d7a51ce",
+    "build_profile_hash=975a2c0cea38ad8b71269c32c20c0c862613a0df3848866c9779cdedff48d6ac",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=ba3a1f538bda83695794e1484e64cff5aaf17fdd0252a3db1524deb6d3187740"
+  ],
+  "fixture_hash": "77d4cc12cc9d54fccc1f3969e0f60a85a2f33d8fe84320914dd408ac6d7a51ce",
+  "generated_artifacts": [
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-rust-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_draft",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-rust-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-c-oracle-harness-draft.c",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "c_oracle_harness",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-c-oracle-harness-draft.c",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-rust-replay-test-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_replay_test",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-rust-replay-test-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    }
+  ],
+  "inputs": {
+    "cfg": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-cfg.json",
+      "status": "recorded"
+    },
+    "external_callee_context": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-context-pack.json",
+      "status": "not_applicable"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-pointer-graph.json",
+      "status": "recorded"
+    },
+    "slice_spec": {
+      "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-sector-start.json",
+      "sha256": "8c61522d39d5fc392554a430d018edd12811d046fd0dea7aafb792351123cb4d",
+      "status": "ready"
+    },
+    "type_map": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-type-map.json",
+      "status": "recorded"
+    }
+  },
+  "level": "L3",
+  "repo_commit": "f40937d4787f52408c03c057992213092c1653ec",
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-route-decision.json",
+    "sha256": "336e2c38bb58aad7a79dcf356a831f2cd4b5cc7f2d41060e7e9f9bba207096ee",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-sector-start",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "draft_generated",
+  "target_id": "flashdb",
+  "translation_carrier": {
+    "artifact_source_hash_mode": "lf_stable_text",
+    "carrier_function": "fdb_kv_iterate_sector_start_probe",
+    "carrier_source_sha256": "943a49215a41dfa0c18af49778b41ce7bcaf82ad9136f97ab8b0bce99ba7847a",
+    "claim_boundary": {
+      "excluded_semantics": [
+        "fdb_kv_iterate branches, loops, iterator effects, and sector reads outside exact line 1869",
+        "the actual FDB_WG_ALIGN(sizeof(struct sector_hdr_data)) macro value or record layout/alignment semantics",
+        "the real fdb_kv_t and kvdb_sec_info typedefs, layout, alignment, or ABI"
+      ],
+      "external_callee_semantics_verified": false,
+      "scope": "source_fragment_only",
+      "whole_function_semantics_verified": false
+    },
+    "embedding_mode": "verbatim_once",
+    "frontend_contract": "live_clang_slice_source",
+    "kind": "exact_source_fragment_wrapper",
+    "real_source": {
+      "containing_function": {
+        "declaration_text": "bool fdb_kv_iterate(",
+        "hash_mode": "trimmed_normalized_span",
+        "line_end": 1896,
+        "line_start": 1860,
+        "name": "fdb_kv_iterate",
+        "sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d"
+      },
+      "file": "src/fdb_kvdb.c",
+      "fragment": {
+        "hash_mode": "normalized_line_span_with_newline",
+        "kind": "expression_statement",
+        "line_end": 1869,
+        "line_start": 1869,
+        "sha256": "ac4c50bdfffdcf0d7116896475e810f5d1b0e9a5977b3579f7201efaca8175b9",
+        "text": "                    kv->addr.start = sector.addr + SECTOR_HDR_DATA_SIZE;\n"
+      }
+    },
+    "source_file_hash_mode": "raw_bytes",
+    "source_text_normalization": "utf8_universal_newlines"
+  },
+  "translation_source": {
+    "selected": "clang-lowered-typed-ir"
+  },
+  "translation_summary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "reason": "slice has no input/output pointer alias surface",
+      "requires_noalias": false,
+      "risk_level": "none"
+    },
+    "call_expressions": [],
+    "external_direct_callee_blocks": [],
+    "external_direct_callee_declarations": [],
+    "external_direct_callees": [],
+    "lvalue_decision_counts": {
+      "bounded_pointer_index": 1
+    },
+    "pointer_boundary_decision_counts": {
+      "bounded_pointer_index": 1
+    },
+    "safe_public_api": true,
+    "translation_rule_ids": [
+      "clang-lowered-typed-ir",
+      "bounded-pointer-index-write"
+    ],
+    "unsafe_candidate_count": 0,
+    "unsupported_lvalue_count": 0,
+    "unsupported_node_count": 0
+  },
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "a698010112e4b03c8e5dfe157861036bdcbcccca92d2d7fdc062dc2153b8d963",
+    "status": "passed"
+  },
+  "verification_plan": [
+    {
+      "command": "rustc --error-format=json <draft>",
+      "gate": "rust_check",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "generate accepted C oracle",
+      "gate": "c_oracle",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "emit L3 evidence manifest",
+      "gate": "l3_manifest",
+      "required_before_acceptance": true
+    }
+  ]
+}

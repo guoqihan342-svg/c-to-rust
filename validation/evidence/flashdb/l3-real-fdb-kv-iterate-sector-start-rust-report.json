@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-sector-start",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "A nested u32 field on the unique mutable record root is assigned the wrapping sum of one direct u32 field from a by-value record and an independent by-value u32 scalar; the declared constant bool result is observed.",
+    "external_callee": null,
+    "field_update": {
+      "operation": "wrapping_add",
+      "target_parameter": "kv",
+      "target_field_path": [
+        "addr",
+        "start"
+      ],
+      "record_field": {
+        "parameter": "sector",
+        "field_path": [
+          "addr"
+        ],
+        "rust_type": "u32",
+        "mode": "direct_field_value"
+      },
+      "scalar": {
+        "parameter": "SECTOR_HDR_DATA_SIZE",
+        "fixture_field": "sector_hdr_data_size",
+        "rust_type": "u32",
+        "mode": "scalar_value"
+      }
+    },
+    "excluded_semantics": [
+      "fdb_kv_iterate branches, loops, iterator effects, and sector reads outside exact line 1869",
+      "the actual FDB_WG_ALIGN(sizeof(struct sector_hdr_data)) macro value or record layout/alignment semantics",
+      "the real fdb_kv_t and kvdb_sec_info typedefs, layout, alignment, or ABI"
+    ]
+  },
+  "status": "passed",
+  "replay_contract_kind": "record_u32_field_scalar_wrapping_add_state",
+  "replay_engine": "exact_generated_rust_replay_plus_declarative_field_check",
+  "generated_draft_replay_pass": true,
+  "generated_draft_semantic_pass": false,
+  "provenance": {
+    "status": "passed",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": false,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "<generated-replay-executable> --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/generated-rust-replay.stdout.log"
+    },
+    "refs": {
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-rust-draft.rs",
+        "sha256": "819f5208d2da6594de670cb96c0440e276d84575db0edcab351fa5e620aab7ff"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/rust-check.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-rust-replay-test-draft.rs",
+        "sha256": "5004e2c30d8a517dc83cd47a874607815588e07d2a9b3b7e9f0c83b32ac08090",
+        "declared_sha256": "5004e2c30d8a517dc83cd47a874607815588e07d2a9b3b7e9f0c83b32ac08090"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/generated-rust-replay.stdout.log",
+        "sha256": "de28be8d7445cbdf3813bd8e7ed6a3988f5b11fff1953d0c3d6f1f6265db170f"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-rust-report.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      }
+    },
+    "fixture_state_model": {
+      "kind": "record_u32_field_scalar_wrapping_add_state",
+      "operation": "wrapping_add",
+      "record_field": {
+        "field_path": [
+          "addr"
+        ],
+        "mode": "direct_field_value",
+        "parameter": "sector",
+        "rust_type": "u32"
+      },
+      "scalar": {
+        "fixture_field": "sector_hdr_data_size",
+        "mode": "scalar_value",
+        "parameter": "SECTOR_HDR_DATA_SIZE",
+        "rust_type": "u32"
+      },
+      "scope": "fixture_only"
+    }
+  },
+  "cases": [
+    {
+      "id": "first-sector-data",
+      "return_value": true,
+      "kv_addr_start": 32,
+      "status": "passed"
+    },
+    {
+      "id": "ordinary-sector-data",
+      "return_value": true,
+      "kv_addr_start": 4160,
+      "status": "passed"
+    },
+    {
+      "id": "u32-wrap",
+      "return_value": true,
+      "kv_addr_start": 16,
+      "status": "passed"
+    }
+  ]
+}

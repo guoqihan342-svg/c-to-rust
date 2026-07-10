@@ -1,0 +1,264 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-sector-start",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "A nested u32 field on the unique mutable record root is assigned the wrapping sum of one direct u32 field from a by-value record and an independent by-value u32 scalar; the declared constant bool result is observed.",
+    "external_callee": null,
+    "field_update": {
+      "operation": "wrapping_add",
+      "target_parameter": "kv",
+      "target_field_path": [
+        "addr",
+        "start"
+      ],
+      "record_field": {
+        "parameter": "sector",
+        "field_path": [
+          "addr"
+        ],
+        "rust_type": "u32",
+        "mode": "direct_field_value"
+      },
+      "scalar": {
+        "parameter": "SECTOR_HDR_DATA_SIZE",
+        "fixture_field": "sector_hdr_data_size",
+        "rust_type": "u32",
+        "mode": "scalar_value"
+      }
+    },
+    "excluded_semantics": [
+      "fdb_kv_iterate branches, loops, iterator effects, and sector reads outside exact line 1869",
+      "the actual FDB_WG_ALIGN(sizeof(struct sector_hdr_data)) macro value or record layout/alignment semantics",
+      "the real fdb_kv_t and kvdb_sec_info typedefs, layout, alignment, or ABI"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:assignment@1869"
+    ]
+  },
+  "provenance": {
+    "binding_mode": "executed_harness",
+    "evidence_refs": {
+      "slice_spec": {
+        "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-sector-start.json",
+        "sha256": "8c61522d39d5fc392554a430d018edd12811d046fd0dea7aafb792351123cb4d"
+      },
+      "fixture": {
+        "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-start.json",
+        "sha256": "77d4cc12cc9d54fccc1f3969e0f60a85a2f33d8fe84320914dd408ac6d7a51ce"
+      },
+      "real_source": {
+        "path": "sources/FlashDB/src/fdb_kvdb.c",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+        "artifact_lf_stable_sha256": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b",
+        "containing_function_sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d",
+        "source_fragment_sha256": "ac4c50bdfffdcf0d7116896475e810f5d1b0e9a5977b3579f7201efaca8175b9"
+      },
+      "translation_carrier": {
+        "kind": "exact_source_fragment_wrapper",
+        "carrier_function": "fdb_kv_iterate_sector_start_probe",
+        "carrier_source_sha256": "943a49215a41dfa0c18af49778b41ce7bcaf82ad9136f97ab8b0bce99ba7847a"
+      },
+      "translator_input": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-translator-input.json",
+        "sha256": "db7104c24e7e280fe37764a6ccd86185efb88ff56d55bb8792de882eec5d4638"
+      },
+      "translation_plan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-auto-translation-plan.json",
+        "binding_mode": "field_bound",
+        "status": "draft_generated",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "clang_lowering_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-clang-lowering-report.json",
+        "binding_mode": "field_bound",
+        "status": "lowered",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "c_oracle_status": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-c-oracle-status.json",
+        "binding_mode": "field_bound",
+        "status": "DRAFT_GENERATED",
+        "semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "c_oracle_harness": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-c-oracle-harness-draft.c",
+        "sha256": "5d0a96e04c684458046bbd4219fd3a8bc589b94ed2d92f0c0bdbed7876e85135"
+      },
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-rust-draft.rs",
+        "sha256": "819f5208d2da6594de670cb96c0440e276d84575db0edcab351fa5e620aab7ff"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/rust-check.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-rust-replay-test-draft.rs",
+        "sha256": "5004e2c30d8a517dc83cd47a874607815588e07d2a9b3b7e9f0c83b32ac08090",
+        "declared_sha256": "5004e2c30d8a517dc83cd47a874607815588e07d2a9b3b7e9f0c83b32ac08090"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/generated-rust-replay.stdout.log",
+        "sha256": "de28be8d7445cbdf3813bd8e7ed6a3988f5b11fff1953d0c3d6f1f6265db170f"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-rust-report.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      }
+    },
+    "compile_execution": {
+      "argv": [
+        "cc",
+        "-std=c99",
+        "l3-real-fdb-kv-iterate-sector-start-c-oracle-harness-draft.c",
+        "-o",
+        "l3-real-fdb-kv-iterate-sector-start-c-oracle-harness-draft.exe"
+      ],
+      "attempted": true,
+      "compiler_candidates": [
+        "cc",
+        "gcc",
+        "clang"
+      ],
+      "compiler_name": "cc",
+      "compiler_path": "cc",
+      "diagnostics": [
+        "C oracle compile command succeeded, but execution/diff gates are still required."
+      ],
+      "execution_argv": [
+        "cc",
+        "-std=c99",
+        "l3-real-fdb-kv-iterate-sector-start-c-oracle-harness-draft.c",
+        "-o",
+        "l3-real-fdb-kv-iterate-sector-start-c-oracle-harness-draft.exe"
+      ],
+      "harness_execution": {
+        "argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-c-oracle-harness-draft.exe"
+        ],
+        "attempted": true,
+        "diagnostics": [
+          "C oracle harness executed, but execution output has not passed oracle diff gates."
+        ],
+        "output_gate": {
+          "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+          "compared_fields": [
+            "return_value",
+            "kv_addr_start"
+          ],
+          "diagnostics": [
+            "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+          ],
+          "expected_stdout_fragments": [
+            "fixture case first-sector-data return_value matched",
+            "fixture case first-sector-data kv_addr_start matched",
+            "fixture case ordinary-sector-data return_value matched",
+            "fixture case ordinary-sector-data kv_addr_start matched",
+            "fixture case u32-wrap return_value matched",
+            "fixture case u32-wrap kv_addr_start matched"
+          ],
+          "fixture_expected_output_status": "declared_not_executed",
+          "gate": "c_oracle_harness_output",
+          "matched_stdout_fragments": [
+            "fixture case first-sector-data return_value matched",
+            "fixture case first-sector-data kv_addr_start matched",
+            "fixture case ordinary-sector-data return_value matched",
+            "fixture case ordinary-sector-data kv_addr_start matched",
+            "fixture case u32-wrap return_value matched",
+            "fixture case u32-wrap kv_addr_start matched"
+          ],
+          "missing_stdout_fragments": [],
+          "schema_version": 1,
+          "semantic_pass": false,
+          "status": "matched_not_oracle"
+        },
+        "returncode": 0,
+        "semantic_pass": false,
+        "status": "exited_zero_not_oracle",
+        "stderr": "",
+        "stdout": "oracle harness draft for fdb_kv_iterate_sector_start_probe\nfixture input: validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-start.json\nfixture case first-sector-data return_value matched\nfixture case first-sector-data kv_addr_start matched\nfixture case ordinary-sector-data return_value matched\nfixture case ordinary-sector-data kv_addr_start matched\nfixture case u32-wrap return_value matched\nfixture case u32-wrap kv_addr_start matched\n",
+        "timeout_seconds": 30,
+        "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start",
+        "execution_argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-c-oracle-harness-draft.exe"
+        ]
+      },
+      "requested_compiler": "cc",
+      "returncode": 0,
+      "semantic_pass": false,
+      "status": "compile_succeeded_not_oracle",
+      "stderr": "",
+      "stdout": "",
+      "toolchain_adapter": "local",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start",
+      "command_recording": "portable_logical_argv"
+    }
+  },
+  "cases": [
+    {
+      "id": "first-sector-data",
+      "return_value": true,
+      "kv_addr_start": 32,
+      "status": "passed"
+    },
+    {
+      "id": "ordinary-sector-data",
+      "return_value": true,
+      "kv_addr_start": 4160,
+      "status": "passed"
+    },
+    {
+      "id": "u32-wrap",
+      "return_value": true,
+      "kv_addr_start": 16,
+      "status": "passed"
+    }
+  ]
+}

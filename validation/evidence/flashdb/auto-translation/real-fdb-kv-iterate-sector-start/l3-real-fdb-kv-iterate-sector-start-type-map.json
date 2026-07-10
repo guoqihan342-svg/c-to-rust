@@ -1,0 +1,72 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-translator-input.json",
+    "sha256": "db7104c24e7e280fe37764a6ccd86185efb88ff56d55bb8792de882eec5d4638",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=8c61522d39d5fc392554a430d018edd12811d046fd0dea7aafb792351123cb4d",
+    "fixture_hash=77d4cc12cc9d54fccc1f3969e0f60a85a2f33d8fe84320914dd408ac6d7a51ce",
+    "build_profile_hash=975a2c0cea38ad8b71269c32c20c0c862613a0df3848866c9779cdedff48d6ac",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "bool",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "unsupported",
+      "rust_type": "u8",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "sector",
+      "c_type": "struct Sector",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "struct",
+      "rust_type": "Sector",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "SECTOR_HDR_DATA_SIZE",
+      "c_type": "uint32_t",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "primitive",
+      "rust_type": "u32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "kv",
+      "c_type": "struct Kv *",
+      "confidence": "proven",
+      "id": "type-4",
+      "kind": "pointer",
+      "rust_type": "&mut Kv",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "f40937d4787f52408c03c057992213092c1653ec",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-sector-start",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-sector-start.json",
+    "sha256": "8c61522d39d5fc392554a430d018edd12811d046fd0dea7aafb792351123cb4d",
+    "status": "ready"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

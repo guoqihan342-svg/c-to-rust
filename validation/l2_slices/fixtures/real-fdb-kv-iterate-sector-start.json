@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-sector-start",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:assignment@1869"
+    ]
+  },
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start"
+  ],
+  "case_count": 3,
+  "cases": [
+    {
+      "id": "first-sector-data",
+      "input_ref": "cases[0].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-start.json",
+      "inputs": {
+        "sector_addr": 0,
+        "sector_hdr_data_size": 32,
+        "kv_initial_start": 4294967295
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "kv_addr_start": 32
+      }
+    },
+    {
+      "id": "ordinary-sector-data",
+      "input_ref": "cases[1].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-start.json",
+      "inputs": {
+        "sector_addr": 4096,
+        "sector_hdr_data_size": 64,
+        "kv_initial_start": 7
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "kv_addr_start": 4160
+      }
+    },
+    {
+      "id": "u32-wrap",
+      "input_ref": "cases[2].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-start.json",
+      "inputs": {
+        "sector_addr": 4294967280,
+        "sector_hdr_data_size": 32,
+        "kv_initial_start": 123
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "kv_addr_start": 16
+      }
+    }
+  ]
+}
