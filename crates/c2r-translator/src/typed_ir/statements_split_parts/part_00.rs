@@ -565,6 +565,32 @@ fn emit_do_while_condition_break(
     context: &EmitContext,
     path: &str,
 ) -> Result<String, String> {
+    let emitted_condition = match condition {
+        IrExpr::Binary {
+            op, lhs, rhs, ty, ..
+        } => {
+            let mut condition_symbols = symbols.clone();
+            emit_direct_inc_dec_comparison_condition_expr(
+                op,
+                lhs,
+                rhs,
+                ty,
+                &mut condition_symbols,
+                context,
+                indent_level,
+                &format!("do while {path}"),
+            )?
+        }
+        _ => None,
+    };
+    if let Some(emitted_condition) = emitted_condition {
+        let indent = "    ".repeat(indent_level);
+        let inner_indent = "    ".repeat(indent_level + 1);
+        return Ok(format!(
+            "{}{indent}if !{} {{\n{inner_indent}break;\n{indent}}}\n",
+            emitted_condition.prelude, emitted_condition.expr
+        ));
+    }
     let condition = emit_condition_expr(condition, symbols, context)
         .map_err(|detail| format!("do while {path} {detail}"))?;
     let indent = "    ".repeat(indent_level);

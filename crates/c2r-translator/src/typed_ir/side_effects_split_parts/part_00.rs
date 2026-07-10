@@ -354,6 +354,11 @@ fn emit_direct_inc_dec_comparison_condition_expr(
             "{path} comparison operand call expression {callee} is unsupported"
         ));
     }
+    if let Some(kind) = find_direct_inc_dec_comparison_memory_operand(other) {
+        return Err(format!(
+            "{path} comparison operand {kind} expression is unsupported"
+        ));
+    }
     if expr_has_inc_dec(other) {
         return Err(format!(
             "{path} comparison cannot lower more than one increment/decrement side effect"
@@ -391,6 +396,44 @@ fn emit_direct_inc_dec_comparison_condition_expr(
         prelude: emitted_inc_dec.prelude,
         expr: format!("({lhs} {op} {rhs})"),
     }))
+}
+
+fn find_direct_inc_dec_comparison_memory_operand(expr: &IrExpr) -> Option<&'static str> {
+    match expr {
+        IrExpr::Deref { .. } => Some("deref"),
+        IrExpr::Member { .. } => Some("member"),
+        IrExpr::Binary { lhs, rhs, .. } => find_direct_inc_dec_comparison_memory_operand(lhs)
+            .or_else(|| find_direct_inc_dec_comparison_memory_operand(rhs)),
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::IncDec {
+            target: operand, ..
+        } => find_direct_inc_dec_comparison_memory_operand(operand),
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => find_direct_inc_dec_comparison_memory_operand(condition)
+            .or_else(|| find_direct_inc_dec_comparison_memory_operand(then_expr))
+            .or_else(|| find_direct_inc_dec_comparison_memory_operand(else_expr)),
+        IrExpr::Index { base, index, .. } => find_direct_inc_dec_comparison_memory_operand(base)
+            .or_else(|| find_direct_inc_dec_comparison_memory_operand(index)),
+        IrExpr::ArrayLiteral { elements, .. } => elements
+            .iter()
+            .find_map(find_direct_inc_dec_comparison_memory_operand),
+        IrExpr::Call { args, .. } => args
+            .iter()
+            .find_map(find_direct_inc_dec_comparison_memory_operand),
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => None,
+    }
 }
 
 fn emit_call_expr_with_prelude(
