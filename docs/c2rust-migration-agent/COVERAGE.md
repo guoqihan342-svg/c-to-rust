@@ -146,7 +146,7 @@
 | pointer subtraction | 不支持 | |
 | pointer comparison (general) | 不支持 | 仅 NULL 比较 |
 | void pointer (general) | 不支持 | 仅 proven byte cursor 场景 |
-| 函数指针 | 窄支持 | 简单标量签名的函数指针参数 direct call，以及直接函数名 decay 作为简单函数指针参数传递；函数指针变量 callee、非直接函数名传递、存储、返回、ABI/FFI 和复杂签名仍 fail-closed |
+| 函数指针 | 窄支持 | 简单标量签名的函数指针参数 direct call、直接函数名 decay 参数传递、简单本地函数指针初始化/赋值后调用，以及从直接函数名 decay 返回简单函数指针；未赋值本地函数指针调用、间接来源/存储、ABI/FFI 和复杂签名仍 fail-closed |
 | pointer value 作为函数参数/返回值 | 不支持 | 普通 pointer value 不能自动映射成 slice/reference/raw pointer；需要显式 ownership/lifetime/ABI lowering |
 | double/triple pointer | 不支持 | `T **` |
 | pointer cast (non-integer) | 不支持 | |

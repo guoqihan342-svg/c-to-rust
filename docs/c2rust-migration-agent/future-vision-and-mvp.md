@@ -427,7 +427,7 @@ H7 后续硬化只作为回归门禁，不允许抢占 P0-C/P0-D 主线：`run_j
 - [ ] array-to-pointer decay 作为显式 IR 节点
 - [ ] `switch` / `goto` 支持（需要 CFG + relooper）
 - [ ] compound literal、designated initializer（进展：首个 designated initializer 切片已限定落地为局部固定长度整数数组和顶层 readonly `static const` 固定长度整数全局数组的 clang 已语义化 index-designated / sparse initializer，未指定元素按 C 语义零初始化；record/union 字段 designator、嵌套 initializer、GNU range designator、VLA/不完整数组和未展开 `DesignatedInitExpr` 仍 fail-closed）
-- [ ] function pointer（至少支持直接调用和简单传递；进展：简单标量签名的函数指针参数 direct call 已可经 no-clang AST fixture replay 发射为 Rust `fn(...)` 参数调用，直接函数名 decay 作为简单函数指针参数传递也已有 no-clang fixture replay 和 emitted-Rust runtime 覆盖；本轮新增简单本地函数指针 `int (*fp)(int) = helper; return fp(value);` 的 direct function-name decay 初始化和本地函数指针变量 callee 发射，仍限定为简单标量签名与直接函数名；非直接函数名传递、重新赋值/通用存储、返回、ABI/FFI 和复杂签名仍 fail-closed）
+- [ ] function pointer（至少支持直接调用和简单传递；进展：简单标量签名的函数指针参数 direct call、直接函数名 decay 参数传递、简单本地函数指针由直接函数名 decay 初始化/赋值后调用，以及从直接函数名 decay 返回简单函数指针，均已有 no-clang fixture replay 和 emitted-Rust runtime 覆盖；未赋值本地函数指针调用、非直接函数名传递、复杂重新赋值/通用存储、ABI/FFI 和复杂签名仍 fail-closed）
 - [ ] `enum` 类型（进展：target-ABI-bound `int_width=32`、完整唯一命名 enum、anonymous `typedef enum` alias、typedef 直接拥有的 anonymous `EnumDecl`（真实 clang JSON 可能缺 `completeDefinition` 字段但常量已完整展开），以及 `TypedefDecl -> EnumType.decl` 引用 anonymous `EnumDecl` 且所有常量全隐式顺序值的 FlashDB 类型校验形状，enum 标量参数/返回值已可降为 typed IR `i32`；无 target ABI、负值/计算 enum 常量、普通 enum constant 引用中的隐式值、普通 named `EnumDecl` 缺 `completeDefinition`、非 i32 enum ABI、enum pointer/array/field、Rust enum 生成和完整底层 ABI 模型仍 fail-closed）
 - [ ] `union` 类型（至少支持 tagged union pattern）
 
