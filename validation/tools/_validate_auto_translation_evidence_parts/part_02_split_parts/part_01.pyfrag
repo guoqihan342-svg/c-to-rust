@@ -156,6 +156,9 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
         "version_or_config_binding": load_ref(evidence, "version_or_config_binding"),
     }
 
+    auto_manifest = load_json(evidence_dir / f"{prefix}-auto-translation-manifest.json")
+    test_translation = load_json(evidence_dir / f"{prefix}-test-translation-generated.json")
+
     if reports["c2rust_baseline"].get("correctness_role") != "candidate_context_only":
         raise SystemExit("semantic pass requires C2Rust baseline to remain candidate_context_only")
     if reports["route_decision"].get("level") == "L4" and not accepted_evidence_authoritative_semantic_pass(
@@ -174,6 +177,22 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
         raise SystemExit("semantic pass requires c_oracle.toolchain_status=C_ORACLE_GENERATED")
     if is_promoted_accepted_oracle_wrapper(reports["c_oracle"]):
         validate_accepted_c_oracle_file_binding(evidence_dir, prefix, reports["c_oracle"])
+    validate_semantic_accepted_evidence_bindings(
+        auto_manifest,
+        manifest,
+        reports["validation_profile"],
+        reports["final_verification"],
+        test_translation,
+        reports,
+        evidence,
+    )
+    validate_semantic_noalias_contract(
+        slice_spec,
+        load_json(evidence_dir / f"{prefix}-pointer-graph.json"),
+        auto_manifest,
+        manifest,
+        reports["final_verification"],
+    )
     require_status(reports["rust_report"], "rust_report", {"passed"})
     require_status(reports["schema_diff"], "schema_diff", {"passed"})
     schema_compared_fields = validate_passed_schema_diff_report(reports["schema_diff"], slice_spec)

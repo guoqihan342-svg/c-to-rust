@@ -1,0 +1,95 @@
+def validate_semantic_noalias_contract(
+    slice_spec: dict[str, Any],
+    pointer_graph: dict[str, Any],
+    auto_manifest: dict[str, Any],
+    manifest: dict[str, Any],
+    final: dict[str, Any],
+) -> None:
+    pointer_contract = slice_spec.get("c_boundary", {}).get("pointer_contract", {})
+    declared_pairs = normalize_noalias_pairs(pointer_contract.get("noalias_required", []), "slice spec")
+    if not declared_pairs:
+        return
+
+    gate_sources = {
+        "final_verification.alias_gate": final.get("alias_gate"),
+        "auto_manifest.claim_boundary.alias_gate": auto_manifest.get("claim_boundary", {}).get("alias_gate"),
+        "l3_manifest.claim_boundary.alias_gate": manifest.get("claim_boundary", {}).get("alias_gate"),
+        "pointer_graph.alias_contract": pointer_graph.get("alias_contract"),
+    }
+    for label, gate in gate_sources.items():
+        if not isinstance(gate, dict):
+            raise SystemExit(f"semantic pass requires {label} for declared noalias pairs")
+        if gate.get("decision") in {None, "not_applicable", "not_evaluated"}:
+            raise SystemExit(f"semantic pass {label} cannot be not_applicable for declared noalias pairs")
+        if gate.get("requires_noalias") is not True:
+            raise SystemExit(f"semantic pass {label}.requires_noalias must be true")
+        if not alias_safety_complete_or_proven(gate):
+            raise SystemExit(f"semantic pass {label} must record complete or proven alias safety")
+
+    pointer_alias = gate_sources["pointer_graph.alias_contract"]
+    if pointer_contract.get("aliasing_proven") is True and pointer_alias.get("proven") is not True:
+        raise SystemExit("semantic pass pointer_graph.alias_contract.proven must match aliasing_proven=true")
+
+    precondition_sources = {
+        "final_verification.alias_gate.preconditions": gate_sources["final_verification.alias_gate"].get("preconditions"),
+        "auto_manifest.claim_boundary.alias_gate.preconditions": gate_sources[
+            "auto_manifest.claim_boundary.alias_gate"
+        ].get("preconditions"),
+        "l3_manifest.claim_boundary.alias_gate.preconditions": gate_sources[
+            "l3_manifest.claim_boundary.alias_gate"
+        ].get("preconditions"),
+        "pointer_graph.safe_boundary_preconditions": pointer_graph.get("safe_boundary_preconditions"),
+    }
+    for label, preconditions in precondition_sources.items():
+        actual_pairs = noalias_pairs_from_records(preconditions, label, pair_key="applies_to")
+        if actual_pairs != declared_pairs:
+            raise SystemExit(f"semantic pass {label} does not match slice spec noalias_required")
+
+    risk_pairs = noalias_pairs_from_records(
+        pointer_graph.get("alias_risks"),
+        "pointer_graph.alias_risks",
+        pair_key="pointer_nodes",
+    )
+    if risk_pairs != declared_pairs:
+        raise SystemExit("semantic pass pointer_graph.alias_risks does not match slice spec noalias_required")
+
+
+def normalize_noalias_pairs(value: Any, label: str) -> set[tuple[str, str]]:
+    if not isinstance(value, list):
+        raise SystemExit(f"semantic pass {label} noalias pairs must be an array")
+    pairs: set[tuple[str, str]] = set()
+    for pair in value:
+        if (
+            not isinstance(pair, list)
+            or len(pair) != 2
+            or not all(isinstance(item, str) and item for item in pair)
+            or pair[0] == pair[1]
+        ):
+            raise SystemExit(f"semantic pass {label} contains invalid noalias pair")
+        pairs.add(tuple(sorted(pair)))
+    return pairs
+
+
+def noalias_pairs_from_records(value: Any, label: str, *, pair_key: str) -> set[tuple[str, str]]:
+    if not isinstance(value, list):
+        raise SystemExit(f"semantic pass {label} must be an array")
+    pairs = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise SystemExit(f"semantic pass {label} items must be objects")
+        is_noalias = item.get("kind") == "noalias" if pair_key == "applies_to" else item.get("requires_noalias") is True
+        if not is_noalias:
+            continue
+        if pair_key == "applies_to" and item.get("required") is not True:
+            continue
+        pairs.append(item.get(pair_key))
+    return normalize_noalias_pairs(pairs, label)
+
+
+def alias_safety_complete_or_proven(gate: dict[str, Any]) -> bool:
+    return (
+        gate.get("complete_alias_safety") is True
+        or gate.get("proven") is True
+        or gate.get("aliasing_proven") is True
+        or gate.get("status") in {"complete", "proven"}
+    )

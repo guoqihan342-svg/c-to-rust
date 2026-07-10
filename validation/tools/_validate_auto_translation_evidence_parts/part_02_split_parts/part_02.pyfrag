@@ -69,3 +69,158 @@
             raise SystemExit(f"external callee {label} scope must record stub_kind={expected_scope_stub_kind}")
         if scope.get("semantics_verified"):
             raise SystemExit(f"external callee {label} scope must keep semantics_verified=false")
+
+
+SEMANTIC_ACCEPTED_EVIDENCE_KEYS = (
+    "c_oracle",
+    "rust_report",
+    "diff",
+    "negative_diff",
+    "unsafe_scan",
+    "unsafe_ledger",
+)
+
+
+def validate_semantic_accepted_evidence_bindings(
+    auto_manifest: dict[str, Any],
+    manifest: dict[str, Any],
+    profile: dict[str, Any],
+    final: dict[str, Any],
+    test_translation: dict[str, Any],
+    reports: dict[str, dict[str, Any]],
+    evidence_refs: dict[str, Any],
+    *,
+    repo_root: Path | None = None,
+) -> None:
+    """Reopen every accepted semantic artifact and reject copied or circular proof."""
+    root = (repo_root or REPO_ROOT).resolve()
+    required_bindings = {
+        "auto_manifest.accepted_evidence_binding": auto_manifest.get("accepted_evidence_binding"),
+        "final_verification.accepted_evidence_binding": final.get("accepted_evidence_binding"),
+    }
+    for label, binding in required_bindings.items():
+        if not isinstance(binding, dict):
+            raise SystemExit(f"semantic pass requires {label}")
+
+    occurrences: list[tuple[str, Any]] = []
+    for label, document in (
+        ("auto_manifest", auto_manifest),
+        ("l3_manifest", manifest),
+        ("validation_profile", profile),
+        ("final_verification", final),
+        ("test_translation", test_translation),
+    ):
+        occurrences.extend(find_accepted_evidence_bindings(document, label))
+    for label, binding in occurrences:
+        if not isinstance(binding, dict):
+            raise SystemExit(f"semantic pass {label} must be an object")
+
+    canonical_label, canonical = occurrences[0]
+    for label, binding in occurrences[1:]:
+        if binding != canonical:
+            raise SystemExit(
+                "semantic pass accepted_evidence_binding drift across artifacts: "
+                f"{label} != {canonical_label}"
+            )
+
+    paths = canonical.get("paths")
+    path_sha256 = canonical.get("path_sha256")
+    if not isinstance(paths, dict):
+        raise SystemExit(f"semantic pass {canonical_label}.paths must be an object")
+    if not isinstance(path_sha256, dict):
+        raise SystemExit(f"semantic pass {canonical_label}.path_sha256 must be an object")
+
+    resolved_paths: dict[str, Path] = {}
+    for key in SEMANTIC_ACCEPTED_EVIDENCE_KEYS:
+        path_text = paths.get(key)
+        if not isinstance(path_text, str) or not path_text:
+            raise SystemExit(f"semantic pass {canonical_label}.paths.{key} missing")
+        resolved_paths[key] = semantic_repo_file(path_text, f"{canonical_label}.paths.{key}", root)
+        expected_sha = path_sha256.get(key)
+        if not isinstance(expected_sha, str) or re.fullmatch(r"[0-9a-f]{64}", expected_sha) is None:
+            raise SystemExit(f"semantic pass {canonical_label}.path_sha256.{key} must be lowercase sha256")
+
+    validate_unsafe_accepted_evidence_refs(reports, evidence_refs, resolved_paths, root)
+
+    for key, resolved in resolved_paths.items():
+        actual_sha = sha256(resolved)
+        expected_sha = path_sha256[key]
+        if expected_sha != actual_sha:
+            raise SystemExit(
+                f"semantic pass {canonical_label}.path_sha256.{key} mismatch: "
+                f"{expected_sha} != {actual_sha}"
+            )
+
+
+def find_accepted_evidence_bindings(value: Any, label: str) -> list[tuple[str, Any]]:
+    found: list[tuple[str, Any]] = []
+    if isinstance(value, dict):
+        if "accepted_evidence_binding" in value:
+            found.append((f"{label}.accepted_evidence_binding", value["accepted_evidence_binding"]))
+        for key, child in value.items():
+            if key != "accepted_evidence_binding":
+                found.extend(find_accepted_evidence_bindings(child, f"{label}.{key}"))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found.extend(find_accepted_evidence_bindings(child, f"{label}[{index}]"))
+    return found
+
+
+def semantic_repo_file(path_text: str, label: str, repo_root: Path) -> Path:
+    if (
+        path_text != path_text.strip()
+        or path_text.startswith(("/", "~"))
+        or "\\" in path_text
+        or re.match(r"^[A-Za-z]:", path_text)
+        or any(part in {"", ".", ".."} for part in path_text.split("/"))
+    ):
+        raise SystemExit(f"semantic pass {label} must be a safe repo-relative POSIX path")
+    resolved = (repo_root / Path(path_text)).resolve()
+    try:
+        resolved.relative_to(repo_root)
+    except ValueError as exc:
+        raise SystemExit(f"semantic pass {label} escapes repo root") from exc
+    if not resolved.is_file():
+        raise SystemExit(f"semantic pass {label} points to missing file: {resolved}")
+    return resolved
+
+
+def validate_unsafe_accepted_evidence_refs(
+    reports: dict[str, dict[str, Any]],
+    evidence_refs: dict[str, Any],
+    binding_paths: dict[str, Path],
+    repo_root: Path,
+) -> None:
+    for key, accepted_key in (
+        ("unsafe_scan", "accepted_unsafe_scan"),
+        ("unsafe_ledger", "accepted_unsafe_ledger"),
+    ):
+        report = reports.get(key, {})
+        accepted_ref = report.get(accepted_key)
+        if accepted_ref is None:
+            continue
+        label = f"{key}.{accepted_key}"
+        if not isinstance(accepted_ref, dict):
+            raise SystemExit(f"semantic pass {label} must be an object")
+        accepted_path_text = accepted_ref.get("path")
+        if not isinstance(accepted_path_text, str) or not accepted_path_text:
+            raise SystemExit(f"semantic pass {label}.path missing")
+        accepted_path = semantic_repo_file(accepted_path_text, f"{label}.path", repo_root)
+
+        holder_ref = evidence_refs.get(key)
+        holder_path_text = holder_ref.get("path") if isinstance(holder_ref, dict) else None
+        if not isinstance(holder_path_text, str) or not holder_path_text:
+            raise SystemExit(f"semantic pass manifest evidence.{key}.path missing")
+        holder_candidate = Path(holder_path_text)
+        holder_path = holder_candidate if holder_candidate.is_absolute() else repo_root / holder_candidate
+        if accepted_path.resolve() == holder_path.resolve():
+            raise SystemExit(f"semantic pass rejects self-referential {label}.path")
+        if accepted_path.resolve() != binding_paths[key].resolve():
+            raise SystemExit(f"semantic pass {label}.path does not match accepted_evidence_binding.paths.{key}")
+
+        accepted_sha = accepted_ref.get("sha256")
+        if not isinstance(accepted_sha, str) or re.fullmatch(r"[0-9a-f]{64}", accepted_sha) is None:
+            raise SystemExit(f"semantic pass {label}.sha256 must be lowercase sha256")
+        actual_sha = sha256(accepted_path)
+        if accepted_sha != actual_sha:
+            raise SystemExit(f"semantic pass {label}.sha256 mismatch: {accepted_sha} != {actual_sha}")
