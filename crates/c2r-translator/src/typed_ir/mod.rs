@@ -69,6 +69,7 @@ pub use ir::{
 use rust_types::*;
 
 include!("context.rs");
+include!("record_member_paths.rs");
 include!("emitter_entry.rs");
 include!("params.rs");
 include!("records.rs");
