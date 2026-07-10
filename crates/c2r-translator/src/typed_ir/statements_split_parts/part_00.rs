@@ -402,6 +402,49 @@ fn emit_stmt(
             )? {
                 return Ok(block);
             }
+            let emitted_condition = match condition {
+                IrExpr::Binary {
+                    op, lhs, rhs, ty, ..
+                } => {
+                    let mut condition_symbols = symbols.clone();
+                    emit_direct_inc_dec_comparison_condition_expr(
+                        op,
+                        lhs,
+                        rhs,
+                        ty,
+                        &mut condition_symbols,
+                        context,
+                        indent_level + 1,
+                        "while condition",
+                    )?
+                }
+                _ => None,
+            };
+            if let Some(emitted_condition) = emitted_condition {
+                let inner_indent = "    ".repeat(indent_level + 1);
+                let break_indent = "    ".repeat(indent_level + 2);
+                let mut loop_symbols = symbols.clone();
+                let mut block = format!("{indent}loop {{\n");
+                block.push_str(&emitted_condition.prelude);
+                block.push_str(&format!(
+                    "{inner_indent}if !{} {{\n{break_indent}break;\n{inner_indent}}}\n",
+                    emitted_condition.expr
+                ));
+                for (index, stmt) in body.iter().enumerate() {
+                    let line = emit_stmt(
+                        stmt,
+                        return_type,
+                        indent_level + 1,
+                        &mut loop_symbols,
+                        context,
+                        LoopContext::While,
+                    )
+                    .map_err(|detail| format!("while body[{index}].{detail}"))?;
+                    block.push_str(&line);
+                }
+                block.push_str(&format!("{indent}}}\n"));
+                return Ok(block);
+            }
             let condition = emit_condition_expr(condition, symbols, context)
                 .map_err(|detail| format!("while condition {detail}"))?;
             let mut loop_symbols = symbols.clone();
