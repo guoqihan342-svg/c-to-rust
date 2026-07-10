@@ -212,11 +212,20 @@ fn assignment_call_comparison_from_ast(
     let target_is_direct_scalar =
         string_field(target_node, "kind").as_deref() == Some("DeclRefExpr");
     let target_is_local_record_member =
-        string_field(target_node, "kind").as_deref() == Some("MemberExpr");
+        matches!(context, AssignmentCallComparisonContext::DoWhileTail)
+            && string_field(target_node, "kind").as_deref() == Some("MemberExpr");
     if !target_is_direct_scalar && !target_is_local_record_member {
+        let required_target = match context {
+            AssignmentCallComparisonContext::DoWhileTail => {
+                "a direct non-volatile, non-atomic fixed-width integer DeclRef or a local complete-record pure dot-path integer member"
+            }
+            AssignmentCallComparisonContext::IfCondition => {
+                "a direct non-volatile, non-atomic fixed-width integer DeclRef"
+            }
+        };
         return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
-            "{} assignment-call target must be a direct non-volatile, non-atomic fixed-width integer DeclRef or a local complete-record pure dot-path integer member",
-            context.label()
+            "{} assignment-call target must be {required_target}",
+            context.label(),
         )));
     }
     let target = expr_skeleton_from_ast(target_node)?;

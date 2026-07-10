@@ -435,6 +435,31 @@ fn do_while_local_record_dot_path_rejects_adjacent_targets() {
 }
 
 #[test]
+fn if_assignment_call_comparison_rejects_renamed_local_member_target() {
+    let target = local_record_dot_path_ast(
+        "ledger",
+        "struct ledger_frame",
+        &[
+            ("snapshot", "struct ledger_frame_snapshot"),
+            ("status", "int"),
+        ],
+    );
+    let condition = local_record_tail_assignment_ast(target, "refresh_status", "int");
+
+    let normalized = if_assignment_call_comparison_from_ast(&condition)
+        .expect("classify renamed if local-member assignment-call target");
+    let AssignmentCallComparisonNormalization::Rejected(reason) = normalized else {
+        panic!("if local-member assignment-call target must remain rejected");
+    };
+    assert!(
+        reason.contains(
+            "if condition assignment-call target must be a direct non-volatile, non-atomic fixed-width integer DeclRef"
+        ),
+        "{reason}"
+    );
+}
+
+#[test]
 fn if_assignment_call_comparison_normalizes_to_assignment_and_pure_read() {
     let condition = serde_json::json!({
         "kind": "BinaryOperator",
