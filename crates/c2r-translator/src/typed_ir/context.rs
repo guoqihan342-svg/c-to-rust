@@ -15,6 +15,7 @@ struct EmitContext {
     mutable_record_pointer_write_params: HashSet<String>,
     record_pointer_field_value_params: HashSet<String>,
     mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
+    assignment_call_sibling_record_read: Option<MutableRecordPointerFieldKey>,
     mutable_pointer_read_slots: HashSet<MutablePointerSlotKey>,
     zero_initialized_record_locals: HashSet<String>,
     readonly_globals: HashMap<String, IrGlobal>,
@@ -167,6 +168,7 @@ impl EmitContext {
             mutable_record_pointer_write_params,
             record_pointer_field_value_params,
             mutable_record_pointer_read_fields: HashSet::new(),
+            assignment_call_sibling_record_read: None,
             mutable_pointer_read_slots: HashSet::new(),
             zero_initialized_record_locals,
             readonly_globals,
@@ -235,6 +237,12 @@ impl EmitContext {
                 base: name.to_string(),
                 field: field.to_string(),
             })
+    }
+
+    fn is_assignment_call_sibling_record_read(&self, name: &str, field: &str) -> bool {
+        self.assignment_call_sibling_record_read
+            .as_ref()
+            .is_some_and(|key| key.base == name && key.field == field)
     }
 
     fn is_mutable_pointer_read_slot(&self, name: &str) -> bool {

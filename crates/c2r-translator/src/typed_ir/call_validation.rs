@@ -297,12 +297,23 @@ fn validate_direct_record_scalar_member_call_arg(
                 "nullable record pointer param {root_name} cannot be a direct scalar member call argument"
             ));
         }
-        readonly_record_pointer_read_pointee_type(root_name, root_ty, context).ok_or_else(|| {
-            format!(
-                "record pointer call argument base {root_name} lacks readonly/noalias read proof for {}",
-                type_label(root_ty)
-            )
-        })?
+        if context.is_assignment_call_sibling_record_read(root_name, field) {
+            mutable_record_pointer_pointee_type(root_ty).ok_or_else(|| {
+                format!(
+                    "assignment-call sibling record pointer {root_name} has unsupported type {}",
+                    type_label(root_ty)
+                )
+            })?
+        } else {
+            readonly_record_pointer_read_pointee_type(root_name, root_ty, context).ok_or_else(
+                || {
+                    format!(
+                        "record pointer call argument base {root_name} lacks readonly/noalias read proof for {}",
+                        type_label(root_ty)
+                    )
+                },
+            )?
+        }
     } else {
         root_ty
     };

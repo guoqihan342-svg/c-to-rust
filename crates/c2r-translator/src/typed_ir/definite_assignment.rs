@@ -2,11 +2,11 @@ use std::collections::HashSet;
 use std::hash::Hash;
 
 use super::{
-    emit_function_pointer_param_type, emit_mutable_record_pointer_field_type, emit_scalar_type,
-    mutable_pointer_slice_element_type, mutable_record_pointer_pointee_type,
-    record_pointer_member_path_from_expr, record_pointer_member_path_key, type_label, EmitContext,
-    IrExpr, IrFunction, IrGlobal, IrStmt, IrType, MutablePointerSlotKey,
-    MutableRecordPointerFieldKey,
+    assignment_call_sibling_record_read, emit_function_pointer_param_type,
+    emit_mutable_record_pointer_field_type, emit_scalar_type, mutable_pointer_slice_element_type,
+    mutable_record_pointer_pointee_type, record_pointer_member_path_from_expr,
+    record_pointer_member_path_key, type_label, EmitContext, IrExpr, IrFunction, IrGlobal, IrStmt,
+    IrType, MutablePointerSlotKey, MutableRecordPointerFieldKey,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -232,7 +232,7 @@ fn validate_definite_assignment_stmt(
             let assigned_var = validate_definite_assignment_target(target, state)?;
             match &mutable_record_pointer_target {
                 Some(target_key) => {
-                    validate_definite_assignment_assign_value(value, state, target_key)
+                    validate_definite_assignment_assign_value(target, value, state, target_key)
                         .map_err(|detail| format!("assign value {detail}"))?
                 }
                 None => validate_definite_assignment_expr(value, state)
@@ -442,10 +442,35 @@ fn validate_definite_assignment_target(
 }
 
 fn validate_definite_assignment_assign_value(
+    target: &IrExpr,
     value: &IrExpr,
     state: &mut DefiniteAssignmentState,
     target_key: &MutableRecordPointerFieldKey,
 ) -> Result<(), String> {
+    if let Some(proof) = assignment_call_sibling_record_read(target, value)? {
+        let IrExpr::Call { callee, args, .. } = value else {
+            unreachable!("assignment-call sibling proof requires a direct call value");
+        };
+        if state.declared.contains(callee) {
+            state
+                .require_initialized(callee)
+                .map_err(|detail| format!("call callee {detail}"))?;
+        }
+        for (index, arg) in args.iter().enumerate() {
+            if index == proof.arg_index {
+                state
+                    .require_initialized(&proof.key.base)
+                    .map_err(|detail| format!("call arg[{index}] member root {detail}"))?;
+                state
+                    .validated_mutable_record_pointer_read_fields
+                    .insert(proof.key.clone());
+            } else {
+                validate_definite_assignment_expr(arg, state)
+                    .map_err(|detail| format!("call arg[{index}] {detail}"))?;
+            }
+        }
+        return Ok(());
+    }
     if let IrExpr::Binary { lhs, rhs, .. } = value {
         if mutable_record_pointer_field_key_for_definite_assignment(lhs, state)?.as_ref()
             == Some(target_key)

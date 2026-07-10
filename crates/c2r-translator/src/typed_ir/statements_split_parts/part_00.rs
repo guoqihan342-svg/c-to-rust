@@ -183,8 +183,20 @@ fn emit_stmt(
                 return Ok(format!("{indent}{line}\n"));
             }
             validate_expr_matches_type(value, target_ty, "assign value")?;
-            let emitted =
-                emit_expr_with_prelude(value, symbols, context, indent_level, "assign value")?;
+            let assignment_call_context =
+                assignment_call_sibling_record_read(target, value)?.map(|proof| {
+                    let mut assignment_context = context.clone();
+                    assignment_context.assignment_call_sibling_record_read = Some(proof.key);
+                    assignment_context
+                });
+            let value_context = assignment_call_context.as_ref().unwrap_or(context);
+            let emitted = emit_expr_with_prelude(
+                value,
+                symbols,
+                value_context,
+                indent_level,
+                "assign value",
+            )?;
             Ok(format!(
                 "{}{indent}{target_name} = {};\n",
                 emitted.prelude, emitted.expr

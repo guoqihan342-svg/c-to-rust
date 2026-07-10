@@ -130,6 +130,110 @@ fn emit_assignment_target<'a>(
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AssignmentCallSiblingRecordRead {
+    key: MutableRecordPointerFieldKey,
+    arg_index: usize,
+}
+
+fn assignment_call_sibling_record_read(
+    target: &IrExpr,
+    value: &IrExpr,
+) -> Result<Option<AssignmentCallSiblingRecordRead>, String> {
+    let Some(target_path) = record_pointer_member_path_from_expr(target)? else {
+        return Ok(None);
+    };
+    let IrExpr::Call { args, .. } = value else {
+        return Ok(None);
+    };
+    let Some(target_record_ty) = mutable_record_pointer_pointee_type(target_path.root_ty) else {
+        return Ok(None);
+    };
+    let IrTypeKind::Record {
+        fields: Some(_), ..
+    } = &target_record_ty.kind
+    else {
+        return Ok(None);
+    };
+    emit_scalar_type(target_path.ty).map_err(|detail| {
+        format!(
+            "assignment-call target field {} has {detail}",
+            record_pointer_member_path_key(&target_path)
+        )
+    })?;
+    let owner_arg_indices = args
+        .iter()
+        .enumerate()
+        .filter_map(|(index, arg)| {
+            expr_mentions_var(arg, target_path.root_name).then_some(index)
+        })
+        .collect::<Vec<_>>();
+    let [arg_index] = owner_arg_indices.as_slice() else {
+        return Ok(None);
+    };
+    let IrExpr::LValueToRValue {
+        target: read_ty,
+        expr,
+        ..
+    } = &args[*arg_index]
+    else {
+        return Ok(None);
+    };
+    let IrExpr::Member {
+        base,
+        field,
+        ty: member_ty,
+        is_arrow: true,
+        ..
+    } = expr.as_ref()
+    else {
+        return Ok(None);
+    };
+    let IrExpr::Var {
+        name: owner,
+        ty: owner_ty,
+        ..
+    } = base.as_ref()
+    else {
+        return Ok(None);
+    };
+    if owner != target_path.root_name
+        || !record_pointer_types_match_ignoring_spelling(owner_ty, target_path.root_ty)
+        || !types_match_ignoring_spelling(read_ty, member_ty)
+        || record_pointer_member_path_key(&target_path) == *field
+    {
+        return Ok(None);
+    }
+    emit_scalar_type(member_ty)
+        .map_err(|detail| format!("assignment-call sibling field {owner}.{field} has {detail}"))?;
+    let IrTypeKind::Record {
+        name: record_name,
+        fields: Some(fields),
+    } = &target_record_ty.kind
+    else {
+        return Ok(None);
+    };
+    let Some(declared) = fields.iter().find(|declared| declared.name == *field) else {
+        return Err(format!(
+            "assignment-call sibling field {record_name}.{field} is not declared"
+        ));
+    };
+    if !types_match_ignoring_spelling(member_ty, &declared.ty) {
+        return Err(format!(
+            "assignment-call sibling field {record_name}.{field} type {} does not match declared type {}",
+            type_label(member_ty),
+            type_label(&declared.ty)
+        ));
+    }
+    Ok(Some(AssignmentCallSiblingRecordRead {
+        key: MutableRecordPointerFieldKey {
+            base: owner.clone(),
+            field: field.clone(),
+        },
+        arg_index: *arg_index,
+    }))
+}
+
 fn emit_mutable_record_pointer_identity_return(
     value: &IrExpr,
     return_type: &IrType,
