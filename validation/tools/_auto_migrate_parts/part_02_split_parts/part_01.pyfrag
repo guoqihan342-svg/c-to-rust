@@ -110,6 +110,8 @@ def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict
             return rust_replay_fdb_blob_make_cases_source(spec, fixture_binding)
         if fdb_kv_to_blob_replay_supported(spec):
             return rust_replay_fdb_kv_to_blob_cases_source(spec, fixture_binding)
+        if record_pointer_identity_return_replay_supported(spec, fixture_binding):
+            return rust_replay_record_pointer_identity_return_cases_source(spec, fixture_binding)
         if pure_uint32_value_replay_supported(spec):
             return rust_replay_pure_uint32_value_cases_source(spec, fixture_binding)
         if signed_i32_return_value_replay_supported(spec):
@@ -1795,6 +1797,7 @@ def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) ->
         behavior_fields(spec) != ["return_code"]
         and not fdb_blob_make_replay_supported(spec)
         and not fdb_kv_to_blob_replay_supported(spec)
+        and not record_pointer_identity_return_replay_supported(spec)
         and not pure_uint32_value_replay_supported(spec)
         and not signed_i32_return_value_replay_supported(spec)
         and not single_i32_return_value_replay_supported(spec)

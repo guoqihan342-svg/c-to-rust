@@ -1,0 +1,180 @@
+def rust_replay_record_pointer_identity_return_cases_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> str:
+    contract = record_pointer_identity_return_replay_contract(spec, fixture_binding)
+    if contract is None:
+        raise ValueError("record replay contract is not available")
+    input_record = contract["input"]
+    output_record = contract["output"]
+    input_fields = input_record["fields"]
+    output_fields = output_record["fields"]
+    case_fields = [
+        (f"input_{index}", item["fixture_scalar_type"], item["fixture_path"], "input")
+        for index, item in enumerate(input_fields)
+    ]
+    case_fields.extend(
+        (
+            f"output_initial_{index}",
+            item["fixture_scalar_type"],
+            item["initial_fixture_path"],
+            "output",
+        )
+        for index, item in enumerate(output_fields)
+    )
+    case_fields.extend(
+        (
+            f"output_expected_{index}",
+            item["fixture_scalar_type"],
+            item["expected_output"],
+            "expected",
+        )
+        for index, item in enumerate(output_fields)
+    )
+    case_literals = [
+        record_replay_case_literal(case_binding, spec, contract, case_fields)
+        for case_binding in fixture_binding["case_bindings"]
+    ]
+
+    input_entries = [
+        (item, record_replay_conversion_expression(f"case.input_{index}", item))
+        for index, item in enumerate(input_fields)
+    ]
+    input_entries.extend(
+        (item, record_replay_default_expression(item)) for item in input_record["defaults"]
+    )
+    output_entries = [
+        (item, record_replay_conversion_expression(f"case.output_initial_{index}", item))
+        for index, item in enumerate(output_fields)
+    ]
+    output_entries.extend(
+        (item, record_replay_default_expression(item)) for item in output_record["defaults"]
+    )
+    input_literal = record_replay_render_record_literal(input_record["rust_type"], input_entries)
+    output_literal = record_replay_render_record_literal(output_record["rust_type"], output_entries)
+    input_name = input_record["parameter"]
+    output_name = output_record["parameter"]
+    output_type = output_record["rust_type"]
+    function_name = record_replay_rust_ident(required_str(spec, "function_name"), "function name")
+    identity_field = f"return_same_{output_name}"
+    identity_message = rust_string_literal(f"{{}} {identity_field} drifted")
+
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+    ]
+    lines.extend(f"        {name}: {scalar_type},\n" for name, scalar_type, _, _ in case_fields)
+    lines.extend(["    }\n", "\n", "    let fixture_cases: &[FixtureCase] = &[\n"])
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {len(case_literals)}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            f"        let {input_name} = {input_literal};\n",
+            f"        let mut {output_name} = {output_literal};\n",
+            f"        let {output_name}_ptr = &mut {output_name} as *mut {output_type};\n",
+            "        let returned_ptr = {\n",
+            f"            let returned = {function_name}(&{input_name}, &mut {output_name});\n",
+            f"            returned as *mut {output_type}\n",
+            "        };\n",
+            f"        assert_eq!(returned_ptr, {output_name}_ptr, {identity_message}, case.id);\n",
+        ]
+    )
+    for index, item in enumerate(output_fields):
+        access = f"{output_name}." + ".".join(item["rust_field_path"])
+        expected = record_replay_conversion_expression(f"case.output_expected_{index}", item)
+        message = rust_string_literal(f"{{}} {item['expected_output']} drifted")
+        lines.append(f"        assert_eq!({access}, {expected}, {message}, case.id);\n")
+    lines.append("    }\n")
+    return "".join(lines)
+
+
+def record_replay_case_literal(
+    case_binding: dict[str, Any],
+    spec: dict[str, Any],
+    contract: dict[str, Any],
+    case_fields: list[tuple[str, str, Any, str]],
+) -> str:
+    payload = oracle_fixture_input_payload(spec, case_binding)
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(payload, dict) or not isinstance(expected_outputs, dict):
+        raise ValueError("record replay fixture case payload is incomplete")
+    input_value = record_replay_value_at_path(payload, contract["input"]["fixture_root"])
+    output_value = record_replay_value_at_path(payload, contract["output"]["fixture_root"])
+    values = [f"id: {rust_string_literal(case_binding.get('id') or 'case')}"]
+    for name, scalar_type, source, source_kind in case_fields:
+        if source_kind == "input":
+            value = record_replay_value_at_path(input_value, source)
+        elif source_kind == "output":
+            value = record_replay_value_at_path(output_value, source)
+        else:
+            value = expected_outputs[source]
+        values.append(f"{name}: {record_replay_scalar_literal(value, scalar_type)}")
+    return "        FixtureCase { " + ", ".join(values) + " },\n"
+
+
+def record_replay_scalar_literal(value: Any, scalar_type: str) -> str:
+    record_replay_validate_fixture_scalar(value, scalar_type)
+    return f"{int(value)}{scalar_type}"
+
+
+def record_replay_conversion_expression(expression: str, item: dict[str, Any]) -> str:
+    if item["conversion"] == "identity":
+        return expression
+    if item["conversion"] == "u32_to_usize":
+        return f'usize::try_from({expression}).expect("record replay u32_to_usize contract")'
+    raise ValueError("record replay scalar conversion is unknown")
+
+
+def record_replay_default_expression(item: dict[str, Any]) -> str:
+    scalar_type = item["rust_scalar_type"]
+    kind = item["value"]["kind"]
+    if kind == "zero" and scalar_type in {"u32", "usize"}:
+        return f"0{scalar_type}"
+    if kind == "null" and scalar_type == "raw_const_ptr":
+        return "core::ptr::null()"
+    if kind == "null_mut" and scalar_type == "raw_mut_ptr":
+        return "core::ptr::null_mut()"
+    raise ValueError("record replay default type or kind is unknown")
+
+
+def record_replay_render_record_literal(
+    rust_type: str,
+    entries: list[tuple[dict[str, Any], str]],
+) -> str:
+    tree: dict[str, Any] = {"rust_type": rust_type, "children": {}}
+    for item, expression in entries:
+        path = item["rust_field_path"]
+        types = item["rust_type_path"]
+        node = tree
+        for index, field in enumerate(path):
+            children = node["children"]
+            if index == len(path) - 1:
+                if field in children:
+                    raise ValueError("record replay duplicate Rust field path")
+                children[field] = {"expression": expression}
+                continue
+            expected_type = types[index]
+            child = children.get(field)
+            if child is None:
+                child = {"rust_type": expected_type, "children": {}}
+                children[field] = child
+            elif child.get("rust_type") != expected_type or "children" not in child:
+                raise ValueError("record replay Rust type path is inconsistent")
+            node = child
+    if not tree["children"]:
+        raise ValueError("record replay record definition is empty")
+    return record_replay_render_record_node(tree)
+
+
+def record_replay_render_record_node(node: dict[str, Any]) -> str:
+    fields = []
+    for name, child in node["children"].items():
+        value = (
+            child["expression"]
+            if "expression" in child
+            else record_replay_render_record_node(child)
+        )
+        fields.append(f"{name}: {value}")
+    return f"{node['rust_type']} {{ " + ", ".join(fields) + " }"

@@ -1,0 +1,377 @@
+def record_pointer_identity_return_replay_supported(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any] | None = None,
+) -> bool:
+    if "replay_contract" not in spec:
+        return False
+    if fixture_binding is None:
+        fixture_binding = oracle_fixture_binding(spec)
+    return record_pointer_identity_return_replay_contract(spec, fixture_binding) is not None
+
+
+def record_pointer_identity_return_replay_contract(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> dict[str, Any] | None:
+    if "replay_contract" not in spec:
+        return None
+    contract = spec.get("replay_contract")
+    if not isinstance(contract, dict):
+        raise ValueError("record replay contract must be an object")
+    if contract.get("kind") != "record_pointer_identity_return":
+        raise ValueError("record replay contract kind must be record_pointer_identity_return")
+    validate_record_pointer_identity_return_replay_contract(spec, fixture_binding, contract)
+    return contract
+
+
+def validate_record_pointer_identity_return_replay_contract(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+    contract: dict[str, Any],
+) -> None:
+    if contract.get("schema_version") != 1:
+        raise ValueError("record replay contract schema_version must be 1")
+    input_record = contract.get("input")
+    output_record = contract.get("output")
+    return_contract = contract.get("return")
+    if not isinstance(input_record, dict) or not isinstance(output_record, dict):
+        raise ValueError("record replay contract requires input and output record definitions")
+    if not isinstance(return_contract, dict):
+        raise ValueError("record replay contract requires an identity return")
+    input_name = record_replay_rust_ident(input_record.get("parameter"), "input parameter")
+    output_name = record_replay_rust_ident(output_record.get("parameter"), "output parameter")
+    if input_name == output_name:
+        raise ValueError("record replay input and output parameters must be distinct")
+    if return_contract != {"kind": "identity", "parameter_ref": "output"}:
+        raise ValueError("record replay contract requires an identity return to output")
+
+    signature = c_function_signature(spec)
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 2 or [item.get("name") for item in parameters] != [input_name, output_name]:
+        raise ValueError("record replay contract parameters do not match the C signature")
+    if parameters[0].get("direction") != "input" or parameters[1].get("direction") not in {
+        "inout",
+        "output",
+    }:
+        raise ValueError("record replay contract parameter directions do not match input/output")
+    if normalize_c_type(str(signature.get("return_type") or "")) != normalize_c_type(
+        str(parameters[1].get("c_type") or "")
+    ):
+        raise ValueError("record replay contract requires an identity return type")
+    record_replay_validate_declared_identity_source(spec, signature, output_name)
+    record_replay_rust_ident(required_str(spec, "function_name"), "function name")
+    record_replay_rust_ident(input_record.get("rust_type"), "Rust type")
+    record_replay_rust_ident(output_record.get("rust_type"), "Rust type")
+    record_replay_validate_noalias_refs(spec, contract.get("noalias_refs"), input_name, output_name)
+
+    input_root = record_replay_fixture_path(input_record.get("fixture_root"), "input fixture root")
+    output_root = record_replay_fixture_path(output_record.get("fixture_root"), "output fixture root")
+    input_fields = record_replay_validate_fields(input_record.get("fields"), "input")
+    output_fields = record_replay_validate_fields(output_record.get("fields"), "output")
+    input_defaults = record_replay_validate_defaults(input_record.get("defaults"), "input")
+    output_defaults = record_replay_validate_defaults(output_record.get("defaults"), "output")
+    record_replay_validate_record_definition(input_fields, input_defaults, "input")
+    record_replay_validate_record_definition(output_fields, output_defaults, "output")
+
+    identity_field = f"return_same_{output_name}"
+    mapped_outputs = [item["expected_output"] for item in output_fields]
+    observable = behavior_fields(spec)
+    if (
+        len(observable) != len(set(observable))
+        or len(mapped_outputs) != len(set(mapped_outputs))
+        or set(observable) != {identity_field, *mapped_outputs}
+    ):
+        raise ValueError("record replay observable output mapping does not match behavior fields")
+    record_replay_validate_fixture_shape(
+        spec,
+        fixture_binding,
+        input_root,
+        output_root,
+        input_fields,
+        output_fields,
+        identity_field,
+    )
+
+
+def record_replay_validate_declared_identity_source(
+    spec: dict[str, Any],
+    signature: dict[str, Any],
+    output_name: str,
+) -> None:
+    source = signature.get("c_source") or spec.get("c_source")
+    if not isinstance(source, str) or not source.strip():
+        return
+    returned_names = re.findall(r"\breturn\s+([A-Za-z_][A-Za-z0-9_]*)\s*;", source)
+    if returned_names != [output_name]:
+        raise ValueError("record replay contract requires an identity return")
+
+
+def record_replay_validate_noalias_refs(
+    spec: dict[str, Any],
+    value: Any,
+    input_name: str,
+    output_name: str,
+) -> None:
+    if value != [["input", "output"]]:
+        raise ValueError("record replay contract must declare input/output noalias refs")
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract")
+    if not isinstance(pointer_contract, dict) or not pointer_contract:
+        raise ValueError("record replay pointer contract is required for noalias proof")
+    pairs = pointer_contract.get("noalias_required")
+    alias_contract = pointer_contract.get("alias_contract")
+    if not isinstance(pairs, list):
+        raise ValueError("record replay pointer contract noalias refs are missing")
+    normalized_pairs: set[frozenset[str]] = set()
+    for pair in pairs:
+        if not isinstance(pair, list) or len(pair) != 2:
+            raise ValueError("record replay pointer contract noalias pair shape drifted")
+        names = [record_replay_rust_ident(item, "noalias parameter") for item in pair]
+        normalized = frozenset(names)
+        if len(normalized) != 2 or normalized in normalized_pairs:
+            raise ValueError("record replay pointer contract noalias pair is duplicate")
+        normalized_pairs.add(normalized)
+    if (
+        frozenset((input_name, output_name)) not in normalized_pairs
+        or pointer_contract.get("aliasing_proven") is not True
+        or not isinstance(alias_contract, dict)
+        or alias_contract.get("requires_noalias") is not True
+        or alias_contract.get("proven") is not True
+    ):
+        raise ValueError("record replay pointer contract must prove declared noalias refs")
+
+
+def record_replay_validate_fields(value: Any, role: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"record replay {role} field mapping is missing")
+    fixture_key = "fixture_path" if role == "input" else "initial_fixture_path"
+    fields: list[dict[str, Any]] = []
+    seen_fixture: set[tuple[str, ...]] = set()
+    seen_rust: set[tuple[str, ...]] = set()
+    seen_expected: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError(f"record replay {role} field mapping must be an object")
+        fixture_path = record_replay_fixture_path(item.get(fixture_key), fixture_key)
+        rust_path = record_replay_rust_path(item.get("rust_field_path"), "Rust field path")
+        record_replay_rust_type_path(item.get("rust_type_path"), len(rust_path) - 1)
+        record_replay_validate_scalar_conversion(
+            item.get("fixture_scalar_type"),
+            item.get("rust_scalar_type"),
+            item.get("conversion"),
+        )
+        if tuple(fixture_path) in seen_fixture:
+            raise ValueError(f"record replay duplicate {role} {fixture_key}")
+        if tuple(rust_path) in seen_rust:
+            raise ValueError(f"record replay duplicate {role} Rust field path")
+        seen_fixture.add(tuple(fixture_path))
+        seen_rust.add(tuple(rust_path))
+        if role == "output":
+            expected = item.get("expected_output")
+            if not isinstance(expected, str) or not expected:
+                raise ValueError("record replay output expected_output is missing")
+            if expected in seen_expected:
+                raise ValueError("record replay duplicate output expected_output")
+            seen_expected.add(expected)
+        fields.append(item)
+    return fields
+
+
+def record_replay_validate_defaults(value: Any, role: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ValueError(f"record replay {role} defaults must be declared as a list")
+    defaults: list[dict[str, Any]] = []
+    seen: set[tuple[str, ...]] = set()
+    allowed = {
+        "u32": {"zero"},
+        "usize": {"zero"},
+        "raw_const_ptr": {"null"},
+        "raw_mut_ptr": {"null_mut"},
+    }
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError(f"record replay {role} default must be an object")
+        rust_path = record_replay_rust_path(item.get("rust_field_path"), "Rust field path")
+        record_replay_rust_type_path(item.get("rust_type_path"), len(rust_path) - 1)
+        scalar_type = item.get("rust_scalar_type")
+        default = item.get("value")
+        kind = default.get("kind") if isinstance(default, dict) else None
+        if scalar_type not in allowed or kind not in allowed[scalar_type]:
+            raise ValueError("record replay default type or kind is unknown")
+        if tuple(rust_path) in seen:
+            raise ValueError(f"record replay duplicate {role} default Rust field path")
+        seen.add(tuple(rust_path))
+        defaults.append(item)
+    return defaults
+
+
+def record_replay_validate_record_definition(
+    fields: list[dict[str, Any]],
+    defaults: list[dict[str, Any]],
+    role: str,
+) -> None:
+    mapped = {tuple(item["rust_field_path"]) for item in fields}
+    defaulted = {tuple(item["rust_field_path"]) for item in defaults}
+    if mapped & defaulted:
+        raise ValueError(f"record replay {role} field is both mapped and defaulted")
+    prefix_types: dict[tuple[str, ...], str] = {}
+    leaves = mapped | defaulted
+    for item in [*fields, *defaults]:
+        path = item["rust_field_path"]
+        for index, rust_type in enumerate(item["rust_type_path"]):
+            prefix = tuple(path[: index + 1])
+            previous = prefix_types.get(prefix)
+            if previous is not None and previous != rust_type:
+                raise ValueError("record replay Rust type path is inconsistent")
+            prefix_types[prefix] = rust_type
+    for leaf in leaves:
+        if any(other != leaf and other[: len(leaf)] == leaf for other in leaves):
+            raise ValueError("record replay Rust field path has a prefix conflict")
+
+
+def record_replay_validate_scalar_conversion(
+    fixture_type: Any,
+    rust_type: Any,
+    conversion: Any,
+) -> None:
+    if fixture_type not in {"u32", "usize"}:
+        raise ValueError(f"record replay unsupported fixture scalar type: {fixture_type}")
+    if rust_type not in {"u32", "usize"}:
+        raise ValueError(f"record replay unsupported Rust scalar type: {rust_type}")
+    if conversion == "identity" and fixture_type == rust_type:
+        return
+    if conversion == "u32_to_usize" and fixture_type == "u32" and rust_type == "usize":
+        return
+    raise ValueError("record replay scalar conversion is unknown or inconsistent")
+
+
+def record_replay_validate_fixture_shape(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+    input_root: list[str],
+    output_root: list[str],
+    input_fields: list[dict[str, Any]],
+    output_fields: list[dict[str, Any]],
+    identity_field: str,
+) -> None:
+    case_bindings = fixture_binding.get("case_bindings")
+    if not isinstance(case_bindings, list) or not case_bindings:
+        raise ValueError("record replay fixture cases are missing")
+    if fixture_binding.get("case_count") != len(case_bindings):
+        raise ValueError("record replay fixture case count drifted")
+    expected_input_paths = {tuple(item["fixture_path"]) for item in input_fields}
+    expected_initial_paths = {tuple(item["initial_fixture_path"]) for item in output_fields}
+    expected_outputs = {identity_field, *(item["expected_output"] for item in output_fields)}
+    for case_binding in case_bindings:
+        if not isinstance(case_binding, dict):
+            raise ValueError("record replay fixture case binding shape drifted")
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        bound_outputs = case_binding.get("expected_outputs")
+        if not isinstance(payload, dict) or not isinstance(bound_outputs, dict):
+            raise ValueError("record replay fixture case payload is incomplete")
+        input_value = record_replay_value_at_path(payload, input_root)
+        output_value = record_replay_value_at_path(payload, output_root)
+        if record_replay_relative_leaf_paths(input_value) != expected_input_paths:
+            raise ValueError("record replay fixture shape drift: input field mapping changed")
+        if record_replay_relative_leaf_paths(output_value) != expected_initial_paths:
+            raise ValueError("record replay fixture shape drift: output initial field mapping changed")
+        if set(bound_outputs) != expected_outputs or bound_outputs.get(identity_field) is not True:
+            raise ValueError("record replay fixture shape drift: expected output mapping changed")
+        payload_outputs = payload.get("expected_outputs")
+        if isinstance(payload_outputs, dict) and payload_outputs != bound_outputs:
+            raise ValueError("record replay fixture shape drift: spec and fixture outputs differ")
+        for item in input_fields:
+            record_replay_validate_fixture_scalar(
+                record_replay_value_at_path(input_value, item["fixture_path"]),
+                item["fixture_scalar_type"],
+            )
+        for item in output_fields:
+            record_replay_validate_fixture_scalar(
+                record_replay_value_at_path(output_value, item["initial_fixture_path"]),
+                item["fixture_scalar_type"],
+            )
+            record_replay_validate_fixture_scalar(
+                bound_outputs[item["expected_output"]],
+                item["fixture_scalar_type"],
+            )
+
+
+def record_replay_relative_leaf_paths(value: Any) -> set[tuple[str, ...]]:
+    if not isinstance(value, dict) or not value:
+        raise ValueError("record replay fixture shape drift: record root is missing or empty")
+    paths: set[tuple[str, ...]] = set()
+    record_replay_collect_relative_leaf_paths(value, (), paths)
+    return paths
+
+
+def record_replay_value_at_path(value: Any, path: list[str]) -> Any:
+    current = value
+    for part in path:
+        if not isinstance(current, dict) or part not in current:
+            raise ValueError(f"record replay fixture shape drift: missing {'.'.join(path)}")
+        current = current[part]
+    return current
+
+
+def record_replay_collect_relative_leaf_paths(
+    value: dict[str, Any],
+    prefix: tuple[str, ...],
+    paths: set[tuple[str, ...]],
+) -> None:
+    for key, child in value.items():
+        if not isinstance(key, str) or not key:
+            raise ValueError("record replay fixture shape drift: invalid record field")
+        path = (*prefix, key)
+        if isinstance(child, dict):
+            if not child:
+                raise ValueError("record replay fixture shape drift: empty nested record")
+            record_replay_collect_relative_leaf_paths(child, path, paths)
+        else:
+            paths.add(path)
+
+
+def record_replay_fixture_path(value: Any, label: str) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or not value
+        or any(not isinstance(item, str) or not item for item in value)
+    ):
+        raise ValueError(f"record replay {label} must be a non-empty string path")
+    return value
+
+
+def record_replay_rust_path(value: Any, label: str) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"record replay {label} must be a non-empty list")
+    return [record_replay_rust_ident(item, label) for item in value]
+
+
+def record_replay_rust_type_path(value: Any, expected_length: int) -> list[str]:
+    if not isinstance(value, list) or len(value) != expected_length:
+        raise ValueError("record replay Rust type path length does not match Rust field path")
+    return [record_replay_rust_ident(item, "Rust type path") for item in value]
+
+
+def record_replay_rust_ident(value: Any, label: str) -> str:
+    rust_keywords = {
+        "Self", "as", "async", "await", "break", "const", "continue", "crate", "dyn",
+        "else", "enum", "extern", "false", "fn", "for", "if", "impl", "in", "let",
+        "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self", "static",
+        "struct", "super", "trait", "true", "type", "union", "unsafe", "use", "where",
+        "while",
+    }
+    if (
+        not isinstance(value, str)
+        or safe_ident(value) != value
+        or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value) is None
+        or value in rust_keywords
+    ):
+        raise ValueError(f"record replay {label} is not a safe Rust identifier")
+    return value
+
+
+def record_replay_validate_fixture_scalar(value: Any, scalar_type: str) -> None:
+    if scalar_type == "u32" and is_uint32_value(value):
+        return
+    if scalar_type == "usize" and is_size_value(value):
+        return
+    raise ValueError(f"record replay fixture scalar does not match declared {scalar_type}")

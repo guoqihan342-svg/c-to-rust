@@ -1,0 +1,257 @@
+    def _synthetic_record_pointer_identity_replay_spec(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "target_id": "synthetic-records",
+            "slice_id": "transfer-window-contract",
+            "level": "L3",
+            "function_name": "transfer_window",
+            "source_commit": "synthetic-record-pointer-contract",
+            "fixture_hash": "synthetic-transfer-window-fixture",
+            "fixture_contract": {
+                "path": "inline-synthetic-transfer-window.json",
+                "behavior_fields": [
+                    "return_same_target",
+                    "target.header.position",
+                    "target.count",
+                ],
+                "observable_outputs": [
+                    "return_same_target",
+                    "target.header.position",
+                    "target.count",
+                ],
+                "cases": [
+                    {
+                        "id": "moves-window",
+                        "input_ref": "inline",
+                        "expected_ref": "inline",
+                        "inputs": {
+                            "source": {
+                                "window.offset": 7,
+                                "count": 9,
+                            },
+                            "initial_target": {
+                                "header.position": 1,
+                                "count": 2,
+                            },
+                        },
+                        "expected_outputs": {
+                            "return_same_target": True,
+                            "target.header.position": 7,
+                            "target.count": 9,
+                        },
+                    }
+                ],
+            },
+            "c_boundary": {
+                "signatures": [
+                    {
+                        "function": "transfer_window",
+                        "return_type": "target_record_t",
+                        "parameters": [
+                            {
+                                "name": "source",
+                                "c_type": "source_record_t",
+                                "direction": "input",
+                            },
+                            {
+                                "name": "target",
+                                "c_type": "target_record_t",
+                                "direction": "inout",
+                            },
+                        ],
+                    }
+                ],
+                "pointer_contract": {
+                    "noalias_required": [["source", "target"]],
+                    "aliasing_proven": True,
+                    "alias_contract": {
+                        "requires_noalias": True,
+                        "proven": True,
+                    },
+                },
+            },
+            "replay_contract": {
+                "schema_version": 1,
+                "kind": "record_pointer_identity_return",
+                "input": {
+                    "parameter": "source",
+                    "fixture_root": ["source"],
+                    "rust_type": "SourcePacket",
+                    "fields": [
+                        {
+                            "fixture_path": ["window.offset"],
+                            "rust_field_path": ["window", "offset"],
+                            "rust_type_path": ["SourceWindow"],
+                            "fixture_scalar_type": "u32",
+                            "rust_scalar_type": "u32",
+                            "conversion": "identity",
+                        },
+                        {
+                            "fixture_path": ["count"],
+                            "rust_field_path": ["count"],
+                            "rust_type_path": [],
+                            "fixture_scalar_type": "u32",
+                            "rust_scalar_type": "usize",
+                            "conversion": "u32_to_usize",
+                        },
+                    ],
+                    "defaults": [],
+                },
+                "output": {
+                    "parameter": "target",
+                    "fixture_root": ["initial_target"],
+                    "rust_type": "TargetPacket",
+                    "fields": [
+                        {
+                            "initial_fixture_path": ["header.position"],
+                            "expected_output": "target.header.position",
+                            "rust_field_path": ["header", "position"],
+                            "rust_type_path": ["TargetHeader"],
+                            "fixture_scalar_type": "u32",
+                            "rust_scalar_type": "u32",
+                            "conversion": "identity",
+                        },
+                        {
+                            "initial_fixture_path": ["count"],
+                            "expected_output": "target.count",
+                            "rust_field_path": ["count"],
+                            "rust_type_path": [],
+                            "fixture_scalar_type": "u32",
+                            "rust_scalar_type": "usize",
+                            "conversion": "u32_to_usize",
+                        },
+                    ],
+                    "defaults": [
+                        {
+                            "rust_field_path": ["marker"],
+                            "rust_type_path": [],
+                            "rust_scalar_type": "u32",
+                            "value": {"kind": "zero"},
+                        }
+                    ],
+                },
+                "return": {"kind": "identity", "parameter_ref": "output"},
+                "noalias_refs": [["input", "output"]],
+            },
+        }
+
+    def test_record_pointer_identity_replay_contract_is_generic_and_executes(self) -> None:
+        module = load_auto_migrate_module()
+        spec = self._synthetic_record_pointer_identity_replay_spec()
+        draft = """\
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SourcePacket {
+    pub window: SourceWindow,
+    pub count: usize,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SourceWindow {
+    pub offset: u32,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TargetPacket {
+    pub marker: u32,
+    pub header: TargetHeader,
+    pub count: usize,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TargetHeader {
+    pub position: u32,
+}
+
+pub fn transfer_window<'a>(source: &SourcePacket, target: &'a mut TargetPacket) -> &'a mut TargetPacket {
+    target.header.position = source.window.offset;
+    target.count = source.count;
+    target
+}
+"""
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-generic-record-pointer-replay-") as tmp:
+            evidence_dir = Path(tmp)
+            spec_path = evidence_dir / "transfer-window-contract.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            (evidence_dir / "l3-transfer-window-contract-rust-draft.rs").write_text(
+                draft,
+                encoding="utf-8",
+            )
+            (evidence_dir / "l3-transfer-window-contract-auto-translation-plan.json").write_text(
+                json.dumps({"translation_summary": {"translation_rule_ids": ["clang-lowered-typed-ir"]}}),
+                encoding="utf-8",
+            )
+
+            replay = module.generate_rust_replay_test_draft(spec, evidence_dir, spec_path)
+            replay = module.run_generated_rust_replay(
+                spec,
+                evidence_dir,
+                replay,
+                {"status": "passed"},
+            )
+
+            replay_source = (
+                evidence_dir / "l3-transfer-window-contract-rust-replay-test-draft.rs"
+            ).read_text(encoding="utf-8")
+            self.assertIn("let source = SourcePacket", replay_source)
+            self.assertIn("window: SourceWindow { offset: case.input_0 }", replay_source)
+            self.assertIn(
+                'usize::try_from(case.input_1).expect("record replay u32_to_usize contract")',
+                replay_source,
+            )
+            self.assertIn("marker: 0u32", replay_source)
+            self.assertIn("transfer_window(&source, &mut target)", replay_source)
+            self.assertIn("target.header.position", replay_source)
+            self.assertNotIn("fdb_", replay_source)
+            self.assertEqual(replay["status"], "passed")
+            self.assertTrue(replay["generated_draft_replay_pass"])
+
+    def test_record_pointer_identity_replay_contract_fails_closed(self) -> None:
+        module = load_auto_migrate_module()
+
+        invalid_contracts: list[tuple[str, dict[str, Any], str]] = []
+
+        unknown_type = self._synthetic_record_pointer_identity_replay_spec()
+        unknown_type["replay_contract"]["input"]["fields"][0]["fixture_scalar_type"] = "u16"
+        invalid_contracts.append(("unknown scalar", unknown_type, "unsupported fixture scalar type"))
+
+        duplicate_mapping = self._synthetic_record_pointer_identity_replay_spec()
+        duplicate_mapping["replay_contract"]["input"]["fields"].append(
+            json.loads(json.dumps(duplicate_mapping["replay_contract"]["input"]["fields"][0]))
+        )
+        invalid_contracts.append(("duplicate mapping", duplicate_mapping, "duplicate input fixture_path"))
+
+        missing_mapping = self._synthetic_record_pointer_identity_replay_spec()
+        missing_mapping["replay_contract"]["output"]["fields"].pop()
+        invalid_contracts.append(("missing mapping", missing_mapping, "observable output mapping"))
+
+        non_identity = self._synthetic_record_pointer_identity_replay_spec()
+        non_identity["replay_contract"]["return"]["kind"] = "value"
+        invalid_contracts.append(("non identity", non_identity, "identity return"))
+
+        missing_noalias = self._synthetic_record_pointer_identity_replay_spec()
+        missing_noalias["replay_contract"]["noalias_refs"] = []
+        invalid_contracts.append(("missing noalias", missing_noalias, "noalias"))
+
+        missing_c_boundary = self._synthetic_record_pointer_identity_replay_spec()
+        missing_c_boundary.pop("c_boundary")
+        invalid_contracts.append(("missing c boundary", missing_c_boundary, "C signature|parameters"))
+
+        missing_pointer_contract = self._synthetic_record_pointer_identity_replay_spec()
+        missing_pointer_contract["c_boundary"].pop("pointer_contract")
+        invalid_contracts.append(
+            ("missing pointer contract", missing_pointer_contract, "pointer contract")
+        )
+
+        fixture_drift = self._synthetic_record_pointer_identity_replay_spec()
+        fixture_drift["fixture_contract"]["cases"][0]["inputs"]["source"]["drifted"] = 11
+        invalid_contracts.append(("fixture drift", fixture_drift, "fixture shape drift"))
+
+        unsafe_field = self._synthetic_record_pointer_identity_replay_spec()
+        unsafe_field["replay_contract"]["input"]["fields"][0]["rust_field_path"] = [
+            "window; panic!()",
+            "offset",
+        ]
+        invalid_contracts.append(("unsafe field", unsafe_field, "Rust field path"))
+
+        for label, spec, message in invalid_contracts:
+            with self.subTest(label=label):
+                fixture_binding = module.oracle_fixture_binding(spec)
+                with self.assertRaisesRegex(ValueError, message):
+                    module.record_pointer_identity_return_replay_contract(spec, fixture_binding)
