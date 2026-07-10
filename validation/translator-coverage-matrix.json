@@ -4465,6 +4465,7 @@
         "IrStmt::DoWhile",
         "IrStmt::For",
         "Clang ForStmt top-level init comma chain over direct integer scalar assignments",
+        "Clang DoStmt strict tail assignment-call comparison normalized to body-tail IrStmt::Assign plus pure sentinel comparison",
         "final IrStmt::If accepted when both branches end in return values",
         "legacy CFG evidence for label/goto/switch/case/default",
         "unsupported_control_flow classification",
@@ -4524,6 +4525,20 @@
               "name": "clang_ast_fixture_replays_do_while_scalar_incdec_refusals_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_15.rs",
               "assertion": "requires same-variable sibling reads and two-incdec do-while comparisons to remain fail-closed after offline frontend lowering"
+            },
+            {
+              "name": "do-while strict tail assignment-call AST JSON fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/do_while_tail_call_assignment_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_normalizes_do_while_tail_call_assignment_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
+              "assertion": "requires a strict scalar assignment from exactly one direct call to become the final do-while body assignment followed by a pure sentinel comparison, with runtime proof that break skips the synthesized tail"
+            },
+            {
+              "name": "clang_ast_fixture_rejects_do_while_tail_call_assignment_boundaries_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
+              "assertion": "requires current-level continue, a dereference target, a second call, and while/if assignment conditions to remain fail-closed"
             }
           ],
           "scope_note": "clang fixture replay and source_range diagnostics only; this does not claim Control IR, relooper support, Rust candidate lowering, or C/Rust semantic pass for switch/goto"
@@ -4569,6 +4584,10 @@
             {
               "name": "clang_ast_fixture_replays_do_while_scalar_incdec_candidate_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_15.rs"
+            },
+            {
+              "name": "clang_ast_fixture_normalizes_do_while_tail_call_assignment_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs"
             },
             {
               "name": "typed_ir_accepts_final_if_when_both_branches_return_values",
@@ -4700,6 +4719,10 @@
           "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_03_split_parts/part_00.rs"
         },
         {
+          "name": "clang_ast_fixture_normalizes_do_while_tail_call_assignment_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs"
+        },
+        {
           "name": "typed_ir_for_nested_while_continue_does_not_emit_outer_step",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -4765,6 +4788,11 @@
           "name": "for_condition_and_step_comma_operators_remain_unsupported",
           "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_03_split_parts/part_00.rs",
           "fail_closed_reason": "comma sequencing is currently bounded to the ForStmt init slot and must not silently expand into condition or step semantics"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_do_while_tail_call_assignment_boundaries_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
+          "fail_closed_reason": "strict do-while tail assignment-call normalization is regression-tested to exclude current-level continue, dereference targets, a second call, and assignment conditions outside DoStmt"
         },
         {
           "name": "unsupported_goto_blocks_translation_without_false_success",
