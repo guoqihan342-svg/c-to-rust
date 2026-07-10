@@ -6,8 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .contract import ReporterError, behavior_fields, require_dict
-from .field_add_contract import KIND as FIELD_ADD_KIND
-from .constant_state_contract import KIND as CONSTANT_STATE_KIND
+from .state_replay_kinds import is_state_replay_kind
 from .source_binding import (
     StaticContext,
     file_ref,
@@ -290,7 +289,7 @@ def validate_generated_rust_replay(
             "replay_test": replay_test_path,
         },
     }
-    if context.contract.get("kind") in {FIELD_ADD_KIND, CONSTANT_STATE_KIND}:
+    if is_state_replay_kind(context.contract):
         result["fixture_state_model"] = replay["fixture_state_model"]
     else:
         result["fixture_external_stub"] = replay["fixture_external_stub"]

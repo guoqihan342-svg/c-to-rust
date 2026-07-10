@@ -8,14 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from .contract import ReporterError, behavior_fields
-from .field_add_contract import KIND as FIELD_ADD_KIND
-from .constant_state_contract import KIND as CONSTANT_STATE_KIND
-from .constant_state_model import (
-    negative_partition_probe_source as constant_state_negative_partition_probe_source,
-)
-from .field_add_model import (
-    negative_partition_probe_source as field_add_negative_partition_probe_source,
-)
 from .record_contract import (
     KIND as RECORD_KIND,
     negative_partition_probe_source as record_negative_partition_probe_source,
@@ -26,6 +18,11 @@ from .sequence_model import (
     negative_partition_probe_source as sequence_negative_partition_probe_source,
 )
 from .source_binding import StaticContext
+from .state_replay_kinds import is_state_replay_kind
+from .state_replay_negative import (
+    mutation_spec as state_replay_mutation_spec,
+    negative_partition_probe_source as state_replay_partition_probe_source,
+)
 from .negative_runtime import (
     add_command_artifacts,
     command_result_summary,
@@ -50,14 +47,9 @@ def run_negative_execution(
     if rustc is None:
         raise ReporterError("rustc is required for generated-draft negative replay")
     original = draft_path.read_bytes()
-    if context.contract.get("kind") == CONSTANT_STATE_KIND:
-        pattern = re.compile(rb"\b0(?=(?:u32|i32\s+as\s+u32\))?\s*;)")
-        operator_from = b"0"
-        operator_to = b"1"
-    elif context.contract.get("kind") == FIELD_ADD_KIND:
-        pattern = re.compile(rb"\bwrapping_add\b")
-        operator_from = b"wrapping_add"
-        operator_to = b"wrapping_sub"
+    state_mutation = state_replay_mutation_spec(context.contract)
+    if state_mutation is not None:
+        pattern, operator_from, operator_to = state_mutation
     elif context.contract.get("kind") == SEQUENCE_KIND:
         pattern = re.compile(rb"!=")
         operator_from = b"!="
@@ -135,7 +127,7 @@ def run_negative_execution(
                 sequence_mutation_partition(case, context.contract)
                 if context.contract.get("kind") == SEQUENCE_KIND
                 else "observable_mismatch"
-                if context.contract.get("kind") in {FIELD_ADD_KIND, CONSTANT_STATE_KIND}
+                if is_state_replay_kind(context.contract)
                 else (
                     "comparison_true"
                     if case["expected_outputs"][return_field]
@@ -164,7 +156,7 @@ def run_negative_execution(
 
     true_ids = [item["case_id"] for item in case_runs if item["comparison_partition"] == "comparison_true"]
     false_ids = [item["case_id"] for item in case_runs if item["comparison_partition"] == "comparison_false"]
-    if context.contract.get("kind") not in {SEQUENCE_KIND, FIELD_ADD_KIND, CONSTANT_STATE_KIND} and (
+    if context.contract.get("kind") != SEQUENCE_KIND and not is_state_replay_kind(context.contract) and (
         not true_ids or not false_ids
     ):
         raise ReporterError("actual negative replay must detect true and false comparison partitions")
@@ -227,10 +219,9 @@ def run_negative_execution(
 
 
 def partition_probe_source(context: StaticContext) -> str:
-    if context.contract.get("kind") == CONSTANT_STATE_KIND:
-        return constant_state_negative_partition_probe_source(context)
-    if context.contract.get("kind") == FIELD_ADD_KIND:
-        return field_add_negative_partition_probe_source(context)
+    state_probe = state_replay_partition_probe_source(context)
+    if state_probe is not None:
+        return state_probe
     if context.contract.get("kind") == SEQUENCE_KIND:
         return sequence_negative_partition_probe_source(context)
     if context.contract.get("kind") == RECORD_KIND:

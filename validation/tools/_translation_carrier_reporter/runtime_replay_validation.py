@@ -3,11 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .constant_state_contract import KIND as CONSTANT_STATE_KIND
 from .contract import ReporterError, behavior_fields, require_dict
-from .field_add_contract import KIND as FIELD_ADD_KIND
 from .runtime_oracle_validation import reject_host_path_text, resolve_repo_path
 from .source_binding import StaticContext, file_ref, sha256_file
+from .state_replay_kinds import expected_fixture_state_model, is_state_replay_kind
 
 
 MUTABLE_AUTO_ARTIFACT_CYCLE_BOUNDARY = (
@@ -49,7 +48,7 @@ def validate_rust_check(context: StaticContext, rust_check: dict[str, Any]) -> N
         "rust-check harness-only bindings",
     )
     bindings = harness.get("bindings")
-    if context.contract.get("kind") in {FIELD_ADD_KIND, CONSTANT_STATE_KIND}:
+    if is_state_replay_kind(context.contract):
         if (
             harness.get("status") != "none"
             or harness.get("semantics_verified") is not False
@@ -124,19 +123,12 @@ def validate_replay_payload(context: StaticContext, replay: dict[str, Any]) -> N
         raise ReporterError("generated draft replay did not pass or overclaims semantics")
     if replay.get("behavior_fields") != behavior_fields(context.contract):
         raise ReporterError("generated replay behavior fields drifted")
-    if context.contract.get("kind") in {FIELD_ADD_KIND, CONSTANT_STATE_KIND}:
+    if is_state_replay_kind(context.contract):
         model = require_dict(replay.get("fixture_state_model"), "fixture_state_model")
-        expected_operation = (
-            "constant_assign"
-            if context.contract.get("kind") == CONSTANT_STATE_KIND
-            else "wrapping_add"
-        )
-        if model.get("kind") != context.contract["kind"] or model.get("scope") != "fixture_only":
+        if model != expected_fixture_state_model(context.contract):
             raise ReporterError("generated replay state model boundary drifted")
-        if model.get("operation") != expected_operation or replay.get("fixture_external_stub") is not None:
+        if replay.get("fixture_external_stub") is not None:
             raise ReporterError("generated replay state model boundary drifted")
-        if context.contract.get("kind") == CONSTANT_STATE_KIND and model.get("value") != 0:
-            raise ReporterError("generated replay constant-state value drifted")
         execution = require_dict(replay.get("replay_execution"), "generated replay execution")
         validate_replay_execution(execution)
         validate_replay_fixture_ref(context, replay)

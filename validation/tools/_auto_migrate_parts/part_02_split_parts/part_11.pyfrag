@@ -1,0 +1,65 @@
+def rust_replay_record_u32_field_scalar_wrapping_add_state_cases_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> str:
+    contract = record_u32_field_scalar_wrapping_add_state_replay_contract(
+        spec, fixture_binding
+    )
+    if contract is None:
+        return "    // TODO: bind record field and scalar wrapping-add fixture cases.\n"
+    state = contract["state_output"]
+    update = contract["state_update"]
+    record_field = update["record_field"]
+    scalar_binding = update["scalar"]
+    result = contract["return"]
+    function_name = safe_ident(required_str(spec, "function_name"))
+    blocks = ["    // Exact nested-state record-field plus scalar fixture replay.\n"]
+    for case_binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding["expected_outputs"]
+        case_id = str(case_binding.get("id") or "case")
+        local_names: dict[str, str] = {}
+        declarations: list[str] = []
+        call_arguments: list[str] = []
+        for entry in contract["entry_arguments"]:
+            parameter = safe_ident(str(entry["parameter"]))
+            local_name = f"actual_{safe_ident(case_id)}_{parameter}"
+            local_names[str(entry["parameter"])] = local_name
+            if "initializer" in entry:
+                mutable = "mut " if entry["pass_mode"] == "mutable_ref" else ""
+                declarations.append(
+                    f"        let {mutable}{local_name} = "
+                    f"{scripted_record_rust_initializer(entry['initializer'], payload)};\n"
+                )
+                call_arguments.append(
+                    f"&mut {local_name}" if entry["pass_mode"] == "mutable_ref" else local_name
+                )
+            else:
+                declarations.append(
+                    f"        let {local_name} = {int(payload[entry['fixture_field']])}u32;\n"
+                )
+                call_arguments.append(local_name)
+        state_expression = (
+            f"{local_names[str(state['parameter'])]}."
+            + ".".join(str(field) for field in state["field_path"])
+        )
+        source_expression = (
+            f"{local_names[str(record_field['parameter'])]}."
+            + ".".join(str(field) for field in record_field["field_path"])
+        )
+        scalar_expression = local_names[str(scalar_binding["parameter"])]
+        expected_state = int(expected[str(state["fixture_field"])])
+        expected_return = str(bool(expected[str(result["fixture_field"])] )).lower()
+        blocks.extend(
+            [
+                "    {\n",
+                f"        let case_id = {rust_string_literal(case_id)};\n",
+                *declarations,
+                f"        let expected_state = {source_expression}.wrapping_add({scalar_expression});\n",
+                f"        assert_eq!(expected_state, {expected_state}u32, \"{{}} declared field-scalar state drifted\", case_id);\n",
+                f"        let actual_return = {function_name}({', '.join(call_arguments)});\n",
+                f"        assert_eq!({state_expression}, expected_state, \"{{}} field-scalar state drifted\", case_id);\n",
+                f"        assert_eq!(actual_return, {expected_return}, \"{{}} return drifted\", case_id);\n",
+                "    }\n",
+            ]
+        )
+    return "".join(blocks)

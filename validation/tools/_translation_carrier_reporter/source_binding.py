@@ -16,6 +16,8 @@ from .contract import (
     validate_cases,
 )
 from .field_add_contract import KIND as FIELD_ADD_KIND
+from .field_scalar_add_contract import KIND as FIELD_SCALAR_ADD_KIND
+from .field_scalar_add_source import validate_carrier_source as validate_field_scalar_add_source
 from .constant_state_contract import KIND as CONSTANT_STATE_KIND
 
 
@@ -142,6 +144,8 @@ def validate_carrier(
         validate_constant_state_carrier_source(c_source, contract)
     elif contract.get("kind") == FIELD_ADD_KIND:
         validate_field_add_carrier_source(c_source, contract)
+    elif contract.get("kind") == FIELD_SCALAR_ADD_KIND:
+        validate_field_scalar_add_source(c_source, contract)
     else:
         external_name = str(contract["external_callee"]["name"])
         if f"{external_name}(" not in c_source:
