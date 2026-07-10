@@ -124,12 +124,10 @@ fn do_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFro
             assignment,
             condition,
         } => {
-            if do_while_body_has_current_level_continue(&body) {
-                return Ok(ClangStmtSkeleton::Unsupported {
-                    reason: "do-while tail-call assignment cannot be normalized with a current-level continue because continue would skip the synthesized tail assignment"
-                        .to_string(),
-                });
-            }
+            do_while_body_insert_tail_assignment_before_current_level_continue(
+                &mut body,
+                &assignment,
+            );
             body.push(assignment);
             condition
         }

@@ -11,4 +11,5 @@ mod tests {
     include!("tests/chunk_05.rs");
     include!("tests/chunk_06.rs");
     include!("tests/chunk_07.rs");
+    include!("tests/chunk_08.rs");
 }

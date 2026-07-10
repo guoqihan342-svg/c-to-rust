@@ -4647,7 +4647,7 @@
         "IrStmt::DoWhile",
         "IrStmt::For",
         "Clang ForStmt top-level init comma chain over direct integer scalar assignments",
-        "Clang DoStmt strict tail assignment-call comparison normalized to body-tail IrStmt::Assign plus pure sentinel comparison",
+        "Clang DoStmt strict tail assignment-call comparison normalized to body-tail IrStmt::Assign plus pure sentinel comparison, with the same assignment inserted before current-level continue",
         "final IrStmt::If accepted when both branches end in return values",
         "legacy CFG evidence for label/goto/switch/case/default",
         "unsupported_control_flow classification",
@@ -4715,12 +4715,22 @@
             {
               "name": "clang_ast_fixture_normalizes_do_while_tail_call_assignment_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
-              "assertion": "requires a strict scalar assignment from exactly one direct call to become the final do-while body assignment followed by a pure sentinel comparison, with runtime proof that break skips the synthesized tail"
+              "assertion": "requires a strict scalar assignment from exactly one direct call to become the final do-while body assignment plus a pure sentinel comparison; current-level if/continue paths receive the same assignment before the emitter's sentinel check, and runtime proves the loop terminates without skipping that condition"
+            },
+            {
+              "name": "do_while_tail_assignment_rewrite_does_not_enter_nested_loops",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
+              "assertion": "requires an offline AST nested while continue to remain owned by the nested loop while the outer normal path keeps exactly one tail assignment"
+            },
+            {
+              "name": "do_while_tail_assignment_rewrite_only_enters_current_level_if_branches",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_08.rs",
+              "assertion": "requires then/else current-level continues to receive cloned tail assignments while nested while, do-while, and for bodies remain unchanged"
             },
             {
               "name": "clang_ast_fixture_rejects_do_while_tail_call_assignment_boundaries_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
-              "assertion": "requires current-level continue, a dereference target, a second call, and while/if assignment conditions to remain fail-closed"
+              "assertion": "requires a dereference target, a second call, and while/if assignment conditions to remain fail-closed"
             }
           ],
           "scope_note": "clang fixture replay and source_range diagnostics only; this does not claim Control IR, relooper support, Rust candidate lowering, or C/Rust semantic pass for switch/goto"
@@ -4769,7 +4779,8 @@
             },
             {
               "name": "clang_ast_fixture_normalizes_do_while_tail_call_assignment_without_clang",
-              "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs"
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
+              "assertion": "executes the current-level if/continue path and fails by nontermination if the cloned assignment or pure sentinel check is skipped"
             },
             {
               "name": "typed_ir_accepts_final_if_when_both_branches_return_values",
@@ -4905,6 +4916,14 @@
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs"
         },
         {
+          "name": "do_while_tail_assignment_rewrite_does_not_enter_nested_loops",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs"
+        },
+        {
+          "name": "do_while_tail_assignment_rewrite_only_enters_current_level_if_branches",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_08.rs"
+        },
+        {
           "name": "typed_ir_for_nested_while_continue_does_not_emit_outer_step",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -4974,7 +4993,7 @@
         {
           "name": "clang_ast_fixture_rejects_do_while_tail_call_assignment_boundaries_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
-          "fail_closed_reason": "strict do-while tail assignment-call normalization is regression-tested to exclude current-level continue, dereference targets, a second call, and assignment conditions outside DoStmt"
+          "fail_closed_reason": "strict do-while tail assignment-call normalization is regression-tested to exclude dereference targets, a second call, and assignment conditions outside DoStmt"
         },
         {
           "name": "unsupported_goto_blocks_translation_without_false_success",

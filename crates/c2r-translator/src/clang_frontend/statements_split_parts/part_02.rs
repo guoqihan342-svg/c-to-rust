@@ -375,20 +375,39 @@ fn do_while_tail_type_is_atomic(ty: &ClangTypeSkeleton) -> bool {
 }
 
 #[cfg(feature = "typed-ir")]
-fn do_while_body_has_current_level_continue(body: &[ClangStmtSkeleton]) -> bool {
-    body.iter().any(|stmt| match stmt {
-        ClangStmtSkeleton::Continue => true,
-        ClangStmtSkeleton::If {
-            then_body,
-            else_body,
-            ..
-        } => {
-            do_while_body_has_current_level_continue(then_body)
-                || do_while_body_has_current_level_continue(else_body)
+fn do_while_body_insert_tail_assignment_before_current_level_continue(
+    body: &mut Vec<ClangStmtSkeleton>,
+    assignment: &ClangStmtSkeleton,
+) {
+    let original = std::mem::take(body);
+    let mut rewritten = Vec::with_capacity(original.len());
+    for stmt in original {
+        match stmt {
+            ClangStmtSkeleton::Continue => {
+                rewritten.push(assignment.clone());
+                rewritten.push(ClangStmtSkeleton::Continue);
+            }
+            ClangStmtSkeleton::If {
+                condition,
+                mut then_body,
+                mut else_body,
+            } => {
+                do_while_body_insert_tail_assignment_before_current_level_continue(
+                    &mut then_body,
+                    assignment,
+                );
+                do_while_body_insert_tail_assignment_before_current_level_continue(
+                    &mut else_body,
+                    assignment,
+                );
+                rewritten.push(ClangStmtSkeleton::If {
+                    condition,
+                    then_body,
+                    else_body,
+                });
+            }
+            nested_or_plain => rewritten.push(nested_or_plain),
         }
-        ClangStmtSkeleton::While { .. }
-        | ClangStmtSkeleton::DoWhile { .. }
-        | ClangStmtSkeleton::For { .. } => false,
-        _ => false,
-    })
+    }
+    *body = rewritten;
 }
