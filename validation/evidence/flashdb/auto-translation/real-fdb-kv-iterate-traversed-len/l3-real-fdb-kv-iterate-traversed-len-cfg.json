@@ -1,0 +1,125 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=c462e6d2d253c3f627670655e7cf9ea167d923f3d44df96d6f758ca69f4d75e3",
+    "fixture_hash=14a7a37800b6136ecd6960425872d79e37f5566db9efbc2e31e80f79e25aefce",
+    "build_profile_hash=684cff82e488c5d52da876d3feb2aa4a288c628673c6639fd9243bb4c2976b48",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [
+            {
+              "decision": "bounded_input_buffer",
+              "lvalue_kind": "bounded_input_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "assign member traversed_len",
+              "statement_index": 0,
+              "translation_rule_id": "bounded-input-buffer-read"
+            },
+            {
+              "decision": "bounded_pointer_index",
+              "lvalue_kind": "bounded_pointer_index",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "return",
+              "statement_index": 1,
+              "translation_rule_id": "bounded-pointer-index-write"
+            }
+          ],
+          "lvalue_kinds": [
+            "bounded_input_buffer",
+            "bounded_pointer_index"
+          ],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "assignment",
+            "return",
+            "bounded_input_buffer_read",
+            "bounded_pointer_index_write"
+          ],
+          "statements": [
+            "assign member traversed_len",
+            "return"
+          ],
+          "terminator": "return"
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return-1"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "fdb_kv_iterate_traversed_len_probe",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "bool fdb_kv_iterate_traversed_len_probe(struct Database * db, struct FdbKvIterator * itr)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 0,
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "fb55b013d8b66fb8c20ac2993a0767bed5d10d69",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-traversed-len",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-traversed-len.json",
+    "sha256": "c462e6d2d253c3f627670655e7cf9ea167d923f3d44df96d6f758ca69f4d75e3",
+    "status": "ready"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "unsupported_control_flow": []
+}

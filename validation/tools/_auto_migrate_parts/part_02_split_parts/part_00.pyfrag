@@ -136,6 +136,8 @@ def wsl_path(path: Path, launcher: str) -> str:
     result = subprocess.run(
         [launcher, "-e", "wslpath", "-a", str(path)],
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         check=False,
         timeout=10,
@@ -153,6 +155,8 @@ def wsl_command_output(launcher: str, command: str) -> str | None:
         result = subprocess.run(
             [launcher, "-e", "sh", "-lc", command],
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             check=False,
             timeout=10,
@@ -245,6 +249,8 @@ def c_oracle_harness_execution(
             execution_argv,
             cwd=execution_cwd,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             check=False,
             timeout=timeout_seconds,

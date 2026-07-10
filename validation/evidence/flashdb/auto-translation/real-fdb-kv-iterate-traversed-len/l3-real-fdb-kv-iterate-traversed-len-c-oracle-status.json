@@ -1,0 +1,26 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-traversed-len-c-oracle.json",
+    "sha256": "f5ecdb1f13d15ee78d2641fb6d2e84c9b36529b9cdcfc731d9475b3bd5e567e0",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 3,
+  "fixture": "validation/l2_slices/fixtures/real-fdb-kv-iterate-traversed-len.json",
+  "fixture_sha256": "14a7a37800b6136ecd6960425872d79e37f5566db9efbc2e31e80f79e25aefce",
+  "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-c-oracle-harness-draft.c",
+    "sha256": "c3326263a9f2cbe9cf59d29728808ffd05ad9a2be0aaa3ceb7fecd17dfcf90a3",
+    "status": "draft"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-kv-iterate-traversed-len",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_slice_id": "real-fdb-kv-iterate-traversed-len",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

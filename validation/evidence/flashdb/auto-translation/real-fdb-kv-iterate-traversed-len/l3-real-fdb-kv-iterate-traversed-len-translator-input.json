@@ -1,0 +1,154 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_available": true,
+    "compiler_command_source": "translation-carrier self-contained C plus tests/Makefile ABI",
+    "defines": [],
+    "include_paths": [],
+    "target": {
+      "char_width": 8,
+      "endianness": "little",
+      "int_width": 32,
+      "long_long_width": 64,
+      "long_width": 64,
+      "plain_char_signed": true,
+      "pointer_width": 64,
+      "short_width": 16,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "definition_status": "carrier_equivalent_direct_u32_field_read",
+        "kind": "macro",
+        "name": "db_sec_size",
+        "source": "src/fdb_kvdb.c:86"
+      }
+    ],
+    "pointer_contract": {
+      "aliasing_proven": true,
+      "input_buffers": [
+        {
+          "c_type": "struct Database *",
+          "mutability": "read_only",
+          "name": "db",
+          "nullability": "non_null",
+          "ownership_role": "borrowed",
+          "read_effects": [
+            "db.sec_size"
+          ],
+          "write_effects": []
+        }
+      ],
+      "noalias_required": [
+        [
+          "db",
+          "itr"
+        ]
+      ],
+      "output_pointers": [
+        {
+          "c_type": "struct FdbKvIterator *",
+          "mutability": "read_write",
+          "name": "itr",
+          "nullability": "non_null",
+          "ownership_role": "inout_param",
+          "read_effects": [
+            "itr.traversed_len"
+          ],
+          "write_effects": [
+            "itr.traversed_len"
+          ]
+        }
+      ]
+    },
+    "scalar_arithmetic_contract": {
+      "comparison": "uint32_t compound addition follows C unsigned modulo-2^32 semantics",
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "signatures": [
+      {
+        "definition_status": "synthetic_translation_carrier",
+        "function": "fdb_kv_iterate_traversed_len_probe",
+        "id": "sig-fdb-kv-iterate-traversed-len-probe",
+        "parameters": [
+          {
+            "c_type": "struct Database *",
+            "direction": "input",
+            "name": "db"
+          },
+          {
+            "c_type": "struct FdbKvIterator *",
+            "direction": "inout",
+            "name": "itr"
+          }
+        ],
+        "return_type": "bool"
+      }
+    ]
+  },
+  "c_source": "#define db_sec_size(db) ((db)->sec_size)\nstruct Database { uint32_t sec_size; };\nstruct FdbKvIterator { uint32_t traversed_len; };\nstatic bool fdb_kv_iterate_traversed_len_probe(struct Database *db, struct FdbKvIterator *itr)\n{\n        itr->traversed_len += db_sec_size(db);\n    return true;\n}\n",
+  "fixture_hash": "14a7a37800b6136ecd6960425872d79e37f5566db9efbc2e31e80f79e25aefce",
+  "function_name": "fdb_kv_iterate_traversed_len_probe",
+  "slice_id": "real-fdb-kv-iterate-traversed-len",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_file": "src/fdb_kvdb.c",
+  "source_file_hashes": {
+    "src/fdb_kvdb.c": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b"
+  },
+  "source_files": [
+    {
+      "path": "src/fdb_kvdb.c",
+      "role": "source",
+      "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+    }
+  ],
+  "source_root": "sources/FlashDB",
+  "target_id": "flashdb",
+  "translation_carrier": {
+    "artifact_source_hash_mode": "lf_stable_text",
+    "carrier_function": "fdb_kv_iterate_traversed_len_probe",
+    "carrier_source_sha256": "fd870d6e8fcdcc6091a5e6cae3cfebaeaa38125a6572f02fe1a6750d5b48d5d5",
+    "claim_boundary": {
+      "excluded_semantics": [
+        "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1892 expression",
+        "the real fdb_db_t cast and FlashDB database/iterator layout or ABI",
+        "storage behavior and cross-iteration effects"
+      ],
+      "external_callee_semantics_verified": false,
+      "scope": "source_fragment_only",
+      "whole_function_semantics_verified": false
+    },
+    "embedding_mode": "verbatim_once",
+    "frontend_contract": "live_clang_slice_source",
+    "kind": "exact_source_fragment_wrapper",
+    "real_source": {
+      "containing_function": {
+        "declaration_text": "bool fdb_kv_iterate(",
+        "hash_mode": "trimmed_normalized_span",
+        "line_end": 1896,
+        "line_start": 1860,
+        "name": "fdb_kv_iterate",
+        "sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d"
+      },
+      "file": "src/fdb_kvdb.c",
+      "fragment": {
+        "hash_mode": "normalized_line_span_with_newline",
+        "kind": "expression_statement",
+        "line_end": 1892,
+        "line_start": 1892,
+        "sha256": "120aec2aa3fb302e0e95b6655c656fa51e57365f2bc974cc1dc0de8df25ac840",
+        "text": "        itr->traversed_len += db_sec_size(db);\n"
+      }
+    },
+    "source_file_hash_mode": "raw_bytes",
+    "source_text_normalization": "utf8_universal_newlines"
+  }
+}

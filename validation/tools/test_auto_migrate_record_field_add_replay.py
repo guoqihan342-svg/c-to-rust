@@ -120,6 +120,24 @@ class AutoMigrateRecordFieldAddReplayTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "expected outputs drifted"):
             self._parse(expected)
 
+    def test_expected_output_object_order_does_not_define_semantics(self) -> None:
+        renamed = copy.deepcopy(self.spec)
+        renamed["replay_contract"]["return"]["fixture_field"] = "z_return"
+        renamed["replay_contract"]["state_output"]["fixture_field"] = "a_state"
+        renamed["fixture_contract"]["behavior_fields"] = ["z_return", "a_state"]
+        renamed["fixture_contract"]["observable_outputs"] = ["z_return", "a_state"]
+        for case in renamed["fixture_contract"]["cases"]:
+            old = case["expected_outputs"]
+            case["expected_outputs"] = {
+                "z_return": old["accepted"],
+                "a_state": old["combined_fill"],
+            }
+
+        contract = self._parse(renamed)
+
+        self.assertEqual(contract["return"]["fixture_field"], "z_return")
+        self.assertEqual(contract["state_output"]["fixture_field"], "a_state")
+
     def _parse(self, spec: dict[str, object]) -> dict[str, object]:
         return self.module.record_u32_field_wrapping_add_state_replay_contract(
             spec, self.module.oracle_fixture_binding(spec)

@@ -1,0 +1,88 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics bind independent oracle/replay/diff evidence and stable generated-draft unsafe gates; final accepted reports are downstream and cannot hash-bind themselves.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-traversed-len.json",
+    "fixture_sha256": "14a7a37800b6136ecd6960425872d79e37f5566db9efbc2e31e80f79e25aefce",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "f5ecdb1f13d15ee78d2641fb6d2e84c9b36529b9cdcfc731d9475b3bd5e567e0",
+      "diff": "3655bd22b310e4b52e1553a8ec618095f14b61b8ce928d2bbfb0fb95e4359aed",
+      "negative_diff": "8f9f0d5413278a8a8f3738bb45e99ed90487232a40e8559851ac518c4f6078c3",
+      "rust_report": "29411732ce5e317d5c47eea5279f8bdf543af16c56efbcae67a7ddc66cd05992",
+      "unsafe_ledger": "3127ae2b24e92c638ef4de7fa04ed26364db026fcc325ddf955f41f81b280d8e",
+      "unsafe_scan": "c1502f0b5b8018b28d63e6cc19705d378c582e6b235d84f687a31c3a89cf1f96"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-traversed-len-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-traversed-len-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-traversed-len-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-traversed-len-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-generated-draft-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-generated-draft-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-kv-iterate-traversed-len",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED",
+    "unsafe_gate_source": "generated_draft_unsafe_gates"
+  },
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=c462e6d2d253c3f627670655e7cf9ea167d923f3d44df96d6f758ca69f4d75e3",
+    "fixture_hash=14a7a37800b6136ecd6960425872d79e37f5566db9efbc2e31e80f79e25aefce",
+    "build_profile_hash=684cff82e488c5d52da876d3feb2aa4a288c628673c6639fd9243bb4c2976b48",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "translation-carrier self-contained C plus tests/Makefile ABI"
+    ],
+    "config_header_included": true,
+    "include_paths": []
+  },
+  "config_header": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "2d4536ad89627bd1a0ddddd3293d8fb220e4e090a9ea45a75c30a653cfbef04d"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "14a7a37800b6136ecd6960425872d79e37f5566db9efbc2e31e80f79e25aefce",
+    "operation_count": 3,
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-traversed-len.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No whole fdb_kv_iterate function migration claim.",
+    "No iterator loop-control, sector transition, or KV-address reset claim.",
+    "No real FlashDB database/iterator layout or fdb_db_t cast claim.",
+    "Fixture records only test distinct-root field read, unsigned wrapping addition, and state writeback."
+  ],
+  "profile_id": "flashdb-real-fdb-kv-iterate-traversed-len-carrier",
+  "repo_commit": "fb55b013d8b66fb8c20ac2993a0767bed5d10d69",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-traversed-len",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

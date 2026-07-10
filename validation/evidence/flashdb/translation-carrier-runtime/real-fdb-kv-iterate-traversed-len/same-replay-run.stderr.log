@@ -1,0 +1,6 @@
+
+thread 'replay_real_fdb_kv_iterate_traversed_len_fixture_contract' (716) panicked at <translation-carrier-negative>/mutated_same_replay.rs:31:9:
+assertion `left == right` failed: first-sector wrapping state drifted
+  left: 4294963200
+ right: 4096
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

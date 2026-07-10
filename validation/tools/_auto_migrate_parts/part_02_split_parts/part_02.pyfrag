@@ -21,7 +21,14 @@ def rust_check_once(path: Path) -> dict[str, Any]:
             build_dir,
             str(path),
         ]
-        result = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+        result = subprocess.run(
+            cmd,
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
         aliases = {
             str(Path(build_dir)): "<rust-check-output>",
             str(path.resolve()): "<draft>",

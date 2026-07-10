@@ -1,0 +1,17 @@
+{
+  "boundary": "Stable unsafe gate for the exact generated Rust draft; it is written before accepted reports and never references those reports.",
+  "first_party_non_test_unsafe_count": 0,
+  "first_party_non_test_unsafe_ratio": 0.0,
+  "gate_source": "generated_draft_unsafe_gates",
+  "generated_rust_draft": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-rust-draft.rs",
+    "sha256": "5bfb1af50e30295de66c89db36fc4cfb6b6b5c0db7c7c31b1037b48e26754ba9",
+    "status": "candidate"
+  },
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "real-fdb-kv-iterate-traversed-len",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb"
+}

@@ -201,7 +201,7 @@ def validate_record_field_wrapping_add_cases(
         expected = case.get("expected_outputs")
         if not isinstance(payload, dict) or not isinstance(expected, dict):
             raise ValueError("record field wrapping-add fixture case is incomplete")
-        if list(expected) != fields:
+        if set(expected) != set(fields):
             raise ValueError("record field wrapping-add expected output fields drifted")
         for entry in contract["entry_arguments"]:
             for fixture_field, _ in scripted_record_initializer_fixture_paths(entry["initializer"]):

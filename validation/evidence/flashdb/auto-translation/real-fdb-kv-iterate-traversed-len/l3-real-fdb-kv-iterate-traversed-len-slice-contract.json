@@ -1,0 +1,135 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "definition_status": "carrier_equivalent_direct_u32_field_read",
+        "kind": "macro",
+        "name": "db_sec_size",
+        "source": "src/fdb_kvdb.c:86"
+      }
+    ],
+    "external_direct_callees": [],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py plus translation_carrier validator",
+      "frontend": "live clang slice-source carrier",
+      "semantic_status": "exact source fragment and carrier provenance are checked; oracle/replay/diff gates are required for bounded semantic acceptance"
+    },
+    "files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "functions": [
+      "fdb_kv_iterate_traversed_len_probe"
+    ],
+    "oracle_source_mode": "embedded_slice_c_source",
+    "pointer_contract": {
+      "aliasing_proven": true,
+      "input_buffers": [
+        {
+          "c_type": "struct Database *",
+          "mutability": "read_only",
+          "name": "db",
+          "nullability": "non_null",
+          "ownership_role": "borrowed",
+          "read_effects": [
+            "db.sec_size"
+          ],
+          "write_effects": []
+        }
+      ],
+      "noalias_required": [
+        [
+          "db",
+          "itr"
+        ]
+      ],
+      "output_pointers": [
+        {
+          "c_type": "struct FdbKvIterator *",
+          "mutability": "read_write",
+          "name": "itr",
+          "nullability": "non_null",
+          "ownership_role": "inout_param",
+          "read_effects": [
+            "itr.traversed_len"
+          ],
+          "write_effects": [
+            "itr.traversed_len"
+          ]
+        }
+      ]
+    },
+    "scalar_arithmetic_contract": {
+      "comparison": "uint32_t compound addition follows C unsigned modulo-2^32 semantics",
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "signatures": [
+      {
+        "definition_status": "synthetic_translation_carrier",
+        "function": "fdb_kv_iterate_traversed_len_probe",
+        "id": "sig-fdb-kv-iterate-traversed-len-probe",
+        "parameters": [
+          {
+            "c_type": "struct Database *",
+            "direction": "input",
+            "name": "db"
+          },
+          {
+            "c_type": "struct FdbKvIterator *",
+            "direction": "inout",
+            "name": "itr"
+          }
+        ],
+        "return_type": "bool"
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "whole-project migration",
+      "fdb_kv_iterate semantic equivalence",
+      "FlashDB layout or ABI equivalence",
+      "semantic equivalence without C oracle and exact generated Rust replay evidence"
+    ],
+    "non_goals": [
+      "No whole fdb_kv_iterate function migration claim.",
+      "No iterator loop-control, sector transition, or KV-address reset claim.",
+      "No real FlashDB database/iterator layout or fdb_db_t cast claim.",
+      "Fixture records only test distinct-root field read, unsigned wrapping addition, and state writeback."
+    ]
+  },
+  "fixture": {
+    "hash": "14a7a37800b6136ecd6960425872d79e37f5566db9efbc2e31e80f79e25aefce",
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-traversed-len.json"
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-rust-draft.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "name": "fdb_kv_iterate_traversed_len_probe",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.0
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-traversed-len",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb"
+}

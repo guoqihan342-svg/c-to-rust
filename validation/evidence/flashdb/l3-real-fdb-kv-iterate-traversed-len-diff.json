@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-traversed-len",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "itr_traversed_len"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Fixture-created records cross the declared entry boundary; the target u32 field is updated with wrapping_add from one direct source-record u32 field, and the declared constant bool result is observed.",
+    "external_callee": null,
+    "field_update": {
+      "operation": "wrapping_add",
+      "target_parameter": "itr",
+      "target_field_path": [
+        "traversed_len"
+      ],
+      "source_parameter": "db",
+      "source_field_path": [
+        "sec_size"
+      ]
+    },
+    "excluded_semantics": [
+      "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1892 expression",
+      "the real fdb_db_t cast and FlashDB database/iterator layout or ABI",
+      "storage behavior and cross-iteration effects"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "first_mismatch": null
+}

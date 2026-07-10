@@ -1,0 +1,6 @@
+
+thread '__c2r_negative_partition_case_0' (736) panicked at <translation-carrier-negative>/mutated_partition_replay.rs:21:5:
+assertion `left == right` failed: first-sector state drifted
+  left: 4294963200
+ right: 4096
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
