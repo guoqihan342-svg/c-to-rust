@@ -145,6 +145,164 @@
     }
 
     #[test]
+    fn for_init_comma_chain_lowers_two_assignments_in_sequence_point_order() {
+        let init = comma_ast(
+            integer_assignment_ast("i", integer_read_ast("start")),
+            integer_assignment_ast("j", integer_read_ast("i")),
+        );
+
+        let statements =
+            for_init_stmt_skeletons_from_ast(&init).expect("two-item comma init chain");
+
+        assert_eq!(assignment_target_names(&statements), ["i", "j"]);
+        let ClangStmtSkeleton::Assign { value, .. } = &statements[1] else {
+            panic!("expected second assignment, got {:?}", statements[1]);
+        };
+        assert!(matches!(
+            value,
+            ClangExprSkeleton::LValueToRValue { expr, .. }
+                if matches!(expr.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "i")
+        ));
+    }
+
+    #[test]
+    fn for_init_comma_chain_flattens_three_item_left_associative_tree_in_order() {
+        let init = comma_ast(
+            comma_ast(
+                integer_assignment_ast("i", integer_read_ast("start")),
+                integer_assignment_ast("j", integer_read_ast("i")),
+            ),
+            integer_assignment_ast("k", integer_read_ast("j")),
+        );
+
+        let statements =
+            for_init_stmt_skeletons_from_ast(&init).expect("three-item comma init chain");
+
+        assert_eq!(assignment_target_names(&statements), ["i", "j", "k"]);
+    }
+
+    #[test]
+    fn for_init_comma_chain_rejects_memory_assignment_target() {
+        let memory_assignment = serde_json::json!({
+            "kind": "BinaryOperator",
+            "opcode": "=",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "MemberExpr",
+                    "name": "value",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "struct Holder" },
+                            "referencedDecl": { "name": "holder" }
+                        }
+                    ]
+                },
+                integer_literal_ast(0)
+            ]
+        });
+        let init = comma_ast(
+            integer_assignment_ast("i", integer_literal_ast(0)),
+            memory_assignment,
+        );
+
+        let statements = for_init_stmt_skeletons_from_ast(&init).expect("memory target refusal");
+
+        assert!(unsupported_init_reason(&statements)
+            .contains("target must be a direct integer scalar DeclRef"));
+    }
+
+    #[test]
+    fn for_init_comma_chain_rejects_call_and_deref_rhs() {
+        let call = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(void)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (void)" },
+                            "referencedDecl": { "kind": "FunctionDecl", "name": "next" }
+                        }
+                    ]
+                }
+            ]
+        });
+        let deref = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "*",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "int *" },
+                    "referencedDecl": { "name": "ptr" }
+                }
+            ]
+        });
+
+        for (rhs, expected_reason) in [(call, "call"), (deref, "dereference")] {
+            let init = comma_ast(
+                integer_assignment_ast("i", integer_literal_ast(0)),
+                integer_assignment_ast("j", rhs),
+            );
+            let statements =
+                for_init_stmt_skeletons_from_ast(&init).expect("RHS refusal skeleton");
+
+            assert!(
+                unsupported_init_reason(&statements).contains(expected_reason),
+                "unexpected refusal for {expected_reason}: {}",
+                unsupported_init_reason(&statements)
+            );
+        }
+    }
+
+    #[test]
+    fn for_init_comma_chain_rejects_incdec_leaf() {
+        let incdec = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "++",
+            "isPostfix": true,
+            "type": { "qualType": "int" },
+            "inner": [integer_decl_ref_ast("j")]
+        });
+        let init = comma_ast(
+            integer_assignment_ast("i", integer_literal_ast(0)),
+            incdec,
+        );
+
+        let statements = for_init_stmt_skeletons_from_ast(&init).expect("incdec leaf refusal");
+
+        assert!(unsupported_init_reason(&statements)
+            .contains("leaf must be a direct integer scalar assignment"));
+    }
+
+    #[test]
+    fn for_condition_and_step_comma_operators_remain_unsupported() {
+        let comma = comma_ast(integer_literal_ast(0), integer_literal_ast(1));
+
+        let condition = condition_expr_skeleton_from_ast(&comma).expect("condition skeleton");
+        assert!(matches!(
+            condition,
+            ClangExprSkeleton::Unsupported { node, reason }
+                if node == "BinaryOperator" && reason.contains("opcode ,")
+        ));
+
+        let step = for_step_stmt_skeleton_from_ast(&comma).expect("step skeleton");
+        assert!(matches!(
+            step,
+            ClangStmtSkeleton::Unsupported { reason }
+                if reason.contains("ForStmt step BinaryOperator")
+        ));
+    }
+
+    #[test]
     fn while_stmt_skeleton_from_ast_maps_single_statement_body() {
         let stmt = serde_json::json!({
             "kind": "WhileStmt",
@@ -541,4 +699,69 @@
             reason.contains("modify variable i more than once"),
             "unexpected reason: {reason}"
         );
+    }
+    fn integer_decl_ref_ast(name: &str) -> Value {
+        serde_json::json!({
+            "kind": "DeclRefExpr",
+            "type": { "qualType": "int" },
+            "referencedDecl": { "name": name }
+        })
+    }
+
+    fn integer_read_ast(name: &str) -> Value {
+        serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "castKind": "LValueToRValue",
+            "type": { "qualType": "int" },
+            "inner": [integer_decl_ref_ast(name)]
+        })
+    }
+
+    fn integer_literal_ast(value: u64) -> Value {
+        serde_json::json!({
+            "kind": "IntegerLiteral",
+            "type": { "qualType": "int" },
+            "value": value.to_string()
+        })
+    }
+
+    fn integer_assignment_ast(name: &str, value: Value) -> Value {
+        serde_json::json!({
+            "kind": "BinaryOperator",
+            "opcode": "=",
+            "type": { "qualType": "int" },
+            "inner": [integer_decl_ref_ast(name), value]
+        })
+    }
+
+    fn comma_ast(lhs: Value, rhs: Value) -> Value {
+        serde_json::json!({
+            "kind": "BinaryOperator",
+            "opcode": ",",
+            "type": { "qualType": "int" },
+            "inner": [lhs, rhs]
+        })
+    }
+
+    fn assignment_target_names(statements: &[ClangStmtSkeleton]) -> Vec<&str> {
+        statements
+            .iter()
+            .map(|stmt| match stmt {
+                ClangStmtSkeleton::Assign {
+                    target: ClangExprSkeleton::DeclRef { name, .. },
+                    ..
+                } => name.as_str(),
+                _ => panic!("expected direct assignment, got {stmt:?}"),
+            })
+            .collect()
+    }
+
+    fn unsupported_init_reason(statements: &[ClangStmtSkeleton]) -> &str {
+        statements
+            .iter()
+            .find_map(|stmt| match stmt {
+                ClangStmtSkeleton::Unsupported { reason } => Some(reason.as_str()),
+                _ => None,
+            })
+            .expect("expected unsupported comma-chain leaf")
     }
