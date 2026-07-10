@@ -434,11 +434,6 @@ def generated_draft_acceptance_binding(
         if path_text:
             ref_path = REPO_ROOT / path_text
             accepted_ref = evidence_ref(ref_path, status)
-            try:
-                if ref_path.resolve().is_relative_to(evidence_dir.resolve()):
-                    accepted_ref.pop("sha256", None)
-            except OSError:
-                pass
             accepted_refs[key] = accepted_ref
         else:
             blockers.append(f"{key}_path_missing")
@@ -457,10 +452,15 @@ def generated_draft_acceptance_binding(
         "generated_draft_semantic_pass": passed,
         "generated_draft_replay_pass": replay.get("generated_draft_replay_pass") is True,
         "rust_draft": draft_ref,
-        "rust_check": {"path": rel(evidence_dir / "rust-check.json"), "status": rust_check.get("status", "unknown")},
+        "rust_check": evidence_ref(evidence_dir / "rust-check.json", rust_check.get("status", "unknown")),
         "replay_execution": replay.get("replay_execution", {}),
         "accepted_evidence_refs": accepted_refs,
         "accepted_evidence_binding": accepted_binding_summary(accepted) if accepted else None,
+        **(
+            {"unsafe_gate_source": accepted["unsafe_gate_source"]}
+            if accepted and accepted.get("unsafe_gate_source")
+            else {}
+        ),
         "blocked_reasons": blockers,
         "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
     }

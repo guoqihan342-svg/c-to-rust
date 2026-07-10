@@ -1,0 +1,87 @@
+def stabilize_colliding_accepted_unsafe_evidence(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    accepted: dict[str, Any],
+) -> None:
+    """Break accepted-unsafe self references before final reports are rewritten."""
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
+    actual_unsafe_count = rust_draft_unsafe_count(draft_path)
+    reports = accepted["reports"]
+    paths = accepted["paths"]
+    path_sha256 = accepted["path_sha256"]
+    output_paths = {
+        "unsafe_scan": evidence_dir / f"{prefix}-unsafe-scan.json",
+        "unsafe_ledger": evidence_dir / f"{prefix}-unsafe-ledger.json",
+    }
+    collisions = {
+        key
+        for key, output_path in output_paths.items()
+        if key in paths and (REPO_ROOT / paths[key]).resolve() == output_path.resolve()
+    }
+    if not collisions:
+        return
+    if collisions != set(output_paths):
+        missing = sorted(set(output_paths) - collisions)
+        raise SystemExit(
+            "accepted unsafe evidence must use one provenance boundary; "
+            f"colliding and external paths cannot be mixed (external: {', '.join(missing)})"
+        )
+
+    scan_count = unsafe_count_from_report(reports["unsafe_scan"])
+    ledger_count = unsafe_count_from_report(reports["unsafe_ledger"])
+    if scan_count != actual_unsafe_count or ledger_count != actual_unsafe_count:
+        raise SystemExit(
+            "accepted unsafe evidence count does not match the generated Rust draft: "
+            f"draft={actual_unsafe_count}, scan={scan_count}, ledger={ledger_count}"
+        )
+    entries = reports["unsafe_ledger"].get("entries", [])
+    if not isinstance(entries, list) or len(entries) < actual_unsafe_count:
+        raise SystemExit("accepted unsafe ledger does not cover every generated Rust unsafe site")
+
+    stable_paths = {
+        "unsafe_scan": evidence_dir / f"{prefix}-generated-draft-unsafe-scan.json",
+        "unsafe_ledger": evidence_dir / f"{prefix}-generated-draft-unsafe-ledger.json",
+    }
+    stable_reports = {
+        "unsafe_scan": {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "source_commit": source_commit(spec),
+            "status": "passed",
+            "semantic_pass": False,
+            "gate_source": "generated_draft_unsafe_gates",
+            "generated_rust_draft": evidence_ref(draft_path, "candidate"),
+            "first_party_non_test_unsafe_count": actual_unsafe_count,
+            "first_party_non_test_unsafe_ratio": reports["unsafe_scan"].get(
+                "first_party_non_test_unsafe_ratio", 0.0 if actual_unsafe_count == 0 else 1.0
+            ),
+            "boundary": "Stable unsafe gate for the exact generated Rust draft; it is written before accepted reports and never references those reports.",
+        },
+        "unsafe_ledger": {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "source_commit": source_commit(spec),
+            "status": "passed",
+            "semantic_pass": False,
+            "gate_source": "generated_draft_unsafe_gates",
+            "generated_rust_draft": evidence_ref(draft_path, "candidate"),
+            "first_party_non_test_unsafe_count": actual_unsafe_count,
+            "entries": entries,
+            "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+            "boundary": "Stable unsafe ledger for the exact generated Rust draft; it is written before accepted reports and never references those reports.",
+        },
+    }
+    for key, stable_path in stable_paths.items():
+        write_json(stable_path, stable_reports[key])
+        paths[key] = rel(stable_path)
+        path_sha256[key] = sha256(stable_path)
+        reports[key] = stable_reports[key]
+    accepted["unsafe_gate_source"] = "generated_draft_unsafe_gates"
+    accepted["binding_boundary"] = (
+        "Accepted semantics bind independent oracle/replay/diff evidence and stable generated-draft "
+        "unsafe gates; final accepted reports are downstream and cannot hash-bind themselves."
+    )

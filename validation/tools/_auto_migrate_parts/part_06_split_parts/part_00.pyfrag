@@ -103,6 +103,11 @@ def accepted_binding_summary(accepted: dict[str, Any] | None) -> dict[str, Any] 
         "fixture_sha256": accepted.get("fixture_sha256"),
         "toolchain_status": accepted.get("toolchain_status"),
         "generated_draft_semantic_pass": accepted.get("generated_draft_semantic_pass"),
+        **(
+            {"unsafe_gate_source": accepted["unsafe_gate_source"]}
+            if accepted.get("unsafe_gate_source")
+            else {}
+        ),
         "paths": accepted.get("paths", {}),
         "path_sha256": accepted.get("path_sha256", {}),
         "binding_boundary": accepted.get("binding_boundary"),
