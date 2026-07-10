@@ -91,3 +91,123 @@
         assert_eq!(saved_fields[1].name, "addr");
         assert_eq!(saved_fields[2].name, "len");
     }
+
+    #[test]
+    fn record_inventory_from_ast_keeps_renamed_fixed_integer_array_fields() {
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                {
+                    "kind": "RecordDecl",
+                    "tagUsed": "struct",
+                    "name": "renamed_ledger",
+                    "completeDefinition": true,
+                    "inner": [
+                        {
+                            "kind": "FieldDecl",
+                            "name": "tokens",
+                            "type": { "qualType": "unsigned int[7]" }
+                        },
+                        {
+                            "kind": "FieldDecl",
+                            "name": "results",
+                            "type": { "qualType": "int[7]" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let inventory = record_inventory_from_ast_with_target_abi(&ast, None);
+        let fields = inventory
+            .get("renamed_ledger")
+            .expect("fixed integer array fields stay in record inventory");
+
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields[0].name, "tokens");
+        let IrTypeKind::Array {
+            element: token_element,
+            len: Some(token_len),
+        } = &fields[0].ty.kind
+        else {
+            panic!("tokens should be a complete fixed array, got {:?}", fields[0].ty);
+        };
+        assert_eq!(*token_len, 7);
+        assert!(matches!(
+            token_element.kind,
+            IrTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+
+        assert_eq!(fields[1].name, "results");
+        let IrTypeKind::Array {
+            element: result_element,
+            len: Some(result_len),
+        } = &fields[1].ty.kind
+        else {
+            panic!(
+                "results should be a complete fixed array, got {:?}",
+                fields[1].ty
+            );
+        };
+        assert_eq!(*result_len, 7);
+        assert!(matches!(
+            result_element.kind,
+            IrTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+    }
+
+    #[test]
+    fn record_inventory_from_ast_rejects_incomplete_and_pointer_element_arrays() {
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                {
+                    "kind": "RecordDecl",
+                    "tagUsed": "struct",
+                    "name": "unknown_extent_record",
+                    "completeDefinition": true,
+                    "inner": [
+                        {
+                            "kind": "FieldDecl",
+                            "name": "version",
+                            "type": { "qualType": "int" }
+                        },
+                        {
+                            "kind": "FieldDecl",
+                            "name": "cells",
+                            "type": { "qualType": "unsigned int[]" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "RecordDecl",
+                    "tagUsed": "struct",
+                    "name": "pointer_element_record",
+                    "completeDefinition": true,
+                    "inner": [
+                        {
+                            "kind": "FieldDecl",
+                            "name": "version",
+                            "type": { "qualType": "int" }
+                        },
+                        {
+                            "kind": "FieldDecl",
+                            "name": "cells",
+                            "type": { "qualType": "unsigned int *[3]" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let inventory = record_inventory_from_ast_with_target_abi(&ast, None);
+
+        assert!(!inventory.contains_key("unknown_extent_record"));
+        assert!(!inventory.contains_key("pointer_element_record"));
+    }

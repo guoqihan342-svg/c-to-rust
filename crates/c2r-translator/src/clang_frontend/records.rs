@@ -202,10 +202,24 @@ fn record_field_from_field_decl(
     }
     let clang_ty = type_from_ast_type_object(type_object, target_abi).ok()?;
     let ty = lower_type(&clang_ty).ok()?;
-    if !matches!(ty.kind, IrTypeKind::Integer { .. }) && !is_opaque_void_pointer_ir_type(&ty) {
+    if !matches!(ty.kind, IrTypeKind::Integer { .. })
+        && !is_opaque_void_pointer_ir_type(&ty)
+        && !is_complete_fixed_integer_array_ir_type(&ty)
+    {
         return None;
     }
     Some(IrRecordField { name, ty })
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_complete_fixed_integer_array_ir_type(ty: &IrType) -> bool {
+    matches!(
+        &ty.kind,
+        IrTypeKind::Array {
+            element,
+            len: Some(_)
+        } if matches!(element.kind, IrTypeKind::Integer { .. })
+    )
 }
 
 #[cfg(feature = "typed-ir")]
