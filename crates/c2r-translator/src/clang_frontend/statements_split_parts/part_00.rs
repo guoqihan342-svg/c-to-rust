@@ -439,9 +439,6 @@ fn compound_body_skeleton_from_ast(
 
     let mut body = Vec::new();
     for stmt in inner(compound) {
-        if string_field(stmt, "kind").as_deref() == Some("NullStmt") {
-            continue;
-        }
         body.extend(body_stmt_skeletons_from_ast(stmt)?);
     }
     Ok(body)
@@ -452,6 +449,7 @@ fn body_stmt_skeletons_from_ast(
     stmt: &Value,
 ) -> Result<Vec<ClangStmtSkeleton>, ClangFrontendError> {
     match string_field(stmt, "kind").as_deref() {
+        Some("NullStmt") => return Ok(Vec::new()),
         Some("IfStmt") => return if_stmt_skeletons_from_ast(stmt),
         Some("DeclStmt") => {}
         _ => return Ok(vec![stmt_skeleton_from_ast(stmt)?]),

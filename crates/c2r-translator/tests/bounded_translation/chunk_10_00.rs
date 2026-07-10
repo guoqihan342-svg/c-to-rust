@@ -526,6 +526,65 @@ fn clang_ast_ignores_exact_null_stmt_in_compound_without_clang_and_runs() {
     );
 }
 
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_treats_single_statement_null_stmt_as_empty_body_without_clang_and_runs() {
+    let function_name = "increment_after_empty_branch";
+    let ast = renamed_add_one_ast_with_leading_stmt(
+        function_name,
+        serde_json::json!({
+            "kind": "IfStmt",
+            "inner": [
+                int_read_ast("value", "ParmVarDecl"),
+                { "kind": "NullStmt" }
+            ]
+        }),
+    );
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
+        .expect("treat a direct NullStmt body as an empty body without invoking clang");
+    let [IrStmt::If {
+        then_body,
+        else_body,
+        ..
+    }, IrStmt::Return { .. }] = lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected empty if body followed by return, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert!(then_body.is_empty(), "{then_body:?}");
+    assert!(else_body.is_empty(), "{else_body:?}");
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit renamed function with an empty single-statement body");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-single-null-stmt-body",
+        &emitted.rust,
+        "assert_eq!(increment_after_empty_branch(41i32), 42i32);",
+    );
+}
+
+#[cfg(feature = "clang-lowering-report")]
+#[test]
+fn clang_ast_single_statement_null_stmt_match_is_exact_and_draft_stays_empty() {
+    let function_name = "reject_similar_empty_branch";
+    let slice_id = "reject-similar-empty-branch";
+    let ast = renamed_add_one_ast_with_leading_stmt(
+        function_name,
+        serde_json::json!({
+            "kind": "IfStmt",
+            "inner": [
+                int_read_ast("value", "ParmVarDecl"),
+                { "kind": "NullStmtSuffix" }
+            ]
+        }),
+    );
+
+    assert_no_clang_ast_refusal_writes_empty_draft(&ast, function_name, slice_id);
+}
+
 #[cfg(feature = "clang-lowering-report")]
 fn assert_no_clang_ast_refusal_writes_empty_draft(
     ast: &Value,
