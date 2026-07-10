@@ -68,15 +68,23 @@ fn expr_skeleton_from_ast_with_options(
     match string_field(expr, "kind").as_deref() {
         Some("ImplicitCastExpr") => {
             let cast_kind = string_field(expr, "castKind");
-            let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
+            let operand_ast = inner(expr).first().ok_or_else(|| ClangFrontendError {
                 kind: "invalid_clang_expr".to_string(),
                 message: "ImplicitCastExpr is missing operand".to_string(),
             })?;
+            if cast_kind.as_deref() == Some("IntegralToBoolean") {
+                let operand = expr_skeleton_from_ast_with_options(operand_ast, true)?;
+                return integral_to_boolean_skeleton_from_cast(
+                    expr,
+                    &operand,
+                    "ImplicitCastExpr",
+                );
+            }
             let preserve_integral_conversion =
                 (preserve_integral_casts || cast_kind.as_deref() == Some("NoOp"))
                     && is_integral_conversion_cast_expr(expr);
             let operand = expr_skeleton_from_ast_with_options(
-                operand,
+                operand_ast,
                 preserve_integral_casts || preserve_integral_conversion,
             )?;
             if cast_kind.as_deref() == Some("FunctionToPointerDecay") {
@@ -87,13 +95,6 @@ fn expr_skeleton_from_ast_with_options(
             }
             if cast_kind.as_deref() == Some("NullToPointer") {
                 return null_pointer_skeleton_from_cast(expr, &operand, "ImplicitCastExpr");
-            }
-            if cast_kind.as_deref() == Some("IntegralToBoolean") {
-                return integral_to_boolean_literal_skeleton_from_cast(
-                    expr,
-                    &operand,
-                    "ImplicitCastExpr",
-                );
             }
             if cast_kind.as_deref() == Some("ArrayToPointerDecay") {
                 return Ok(ClangExprSkeleton::ArrayToPointerDecay {
@@ -421,6 +422,18 @@ fn expr_skeleton_from_ast_with_options(
                 let operand =
                     expr_skeleton_from_ast_with_options(operand, preserve_integral_casts)?;
                 return null_pointer_skeleton_from_cast(expr, &operand, "CStyleCastExpr");
+            }
+            if string_field(expr, "castKind").as_deref() == Some("IntegralToBoolean") {
+                let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
+                    kind: "invalid_cast_expr".to_string(),
+                    message: "CStyleCastExpr is missing operand".to_string(),
+                })?;
+                let operand = expr_skeleton_from_ast_with_options(operand, true)?;
+                return integral_to_boolean_skeleton_from_cast(
+                    expr,
+                    &operand,
+                    "CStyleCastExpr",
+                );
             }
             if !matches!(
                 string_field(expr, "castKind").as_deref(),

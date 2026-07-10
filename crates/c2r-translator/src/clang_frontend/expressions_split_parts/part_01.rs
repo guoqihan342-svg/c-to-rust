@@ -36,7 +36,7 @@ fn null_pointer_skeleton_from_cast(
 }
 
 #[cfg(feature = "typed-ir")]
-fn integral_to_boolean_literal_skeleton_from_cast(
+fn integral_to_boolean_skeleton_from_cast(
     expr: &Value,
     operand: &ClangExprSkeleton,
     node: &str,
@@ -51,18 +51,42 @@ fn integral_to_boolean_literal_skeleton_from_cast(
             ),
         });
     }
-    let ClangExprSkeleton::IntegerLiteral { value, .. } = operand else {
+    if let ClangExprSkeleton::IntegerLiteral { value, .. } = operand {
+        let value = u64::from(*value != 0);
+        return Ok(ClangExprSkeleton::IntegerLiteral {
+            value,
+            spelling: value.to_string(),
+            ty: target,
+        });
+    }
+    let Some(source) = clang_expr_skeleton_type(operand) else {
         return Ok(ClangExprSkeleton::Unsupported {
             node: node.to_string(),
-            reason:
-                "castKind IntegralToBoolean with non-literal operand is outside the bounded boolean literal subset"
-                    .to_string(),
+            reason: "castKind IntegralToBoolean source type is unavailable".to_string(),
         });
     };
-    let value = u64::from(*value != 0);
-    Ok(ClangExprSkeleton::IntegerLiteral {
-        value,
-        spelling: value.to_string(),
+    if !is_integer_or_target_dependent_integer_type(source) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: node.to_string(),
+            reason: format!(
+                "castKind IntegralToBoolean source {} is not an integer or target-ABI-bound integer type",
+                source.spelled
+            ),
+        });
+    }
+
+    Ok(ClangExprSkeleton::Conditional {
+        condition: Box::new(operand.clone()),
+        then_expr: Box::new(ClangExprSkeleton::IntegerLiteral {
+            value: 1,
+            spelling: "1".to_string(),
+            ty: target.clone(),
+        }),
+        else_expr: Box::new(ClangExprSkeleton::IntegerLiteral {
+            value: 0,
+            spelling: "0".to_string(),
+            ty: target.clone(),
+        }),
         ty: target,
     })
 }
