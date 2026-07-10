@@ -214,13 +214,19 @@ fn assignment_call_comparison_from_ast(
     let target_is_local_record_member =
         matches!(context, AssignmentCallComparisonContext::DoWhileTail)
             && string_field(target_node, "kind").as_deref() == Some("MemberExpr");
-    if !target_is_direct_scalar && !target_is_local_record_member {
+    let target_is_mutable_record_pointer_member =
+        matches!(context, AssignmentCallComparisonContext::IfCondition)
+            && string_field(target_node, "kind").as_deref() == Some("MemberExpr");
+    if !target_is_direct_scalar
+        && !target_is_local_record_member
+        && !target_is_mutable_record_pointer_member
+    {
         let required_target = match context {
             AssignmentCallComparisonContext::DoWhileTail => {
                 "a direct non-volatile, non-atomic fixed-width integer DeclRef or a local complete-record pure dot-path integer member"
             }
             AssignmentCallComparisonContext::IfCondition => {
-                "a direct non-volatile, non-atomic fixed-width integer DeclRef"
+                "a direct non-volatile, non-atomic fixed-width integer DeclRef or a direct mutable record-pointer arrow integer member"
             }
         };
         return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
@@ -235,7 +241,16 @@ fn assignment_call_comparison_from_ast(
             context.label()
         )));
     };
-    if target_is_local_record_member {
+    if target_is_mutable_record_pointer_member {
+        if let Some(reason) =
+            if_condition_record_pointer_member_target_rejection_reason(target_node)?
+        {
+            return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+                "{} assignment-call record-pointer member target is unsupported: {reason}",
+                context.label()
+            )));
+        }
+    } else if target_is_local_record_member {
         if let Some(reason) =
             do_while_tail_local_record_member_target_rejection_reason(target_node)?
         {
@@ -407,6 +422,73 @@ fn do_while_tail_local_record_member_target_rejection_reason(
                 )));
             }
             None => return Ok(Some("path base is missing its expression kind".to_string())),
+        }
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn if_condition_record_pointer_member_target_rejection_reason(
+    target: &Value,
+) -> Result<Option<String>, ClangFrontendError> {
+    let first_member = target;
+    let first_member_ty = expr_type(first_member)?;
+    if clang_type_is_volatile(&first_member_ty) || do_while_tail_type_is_atomic(&first_member_ty) {
+        return Ok(Some(format!(
+            "leaf type {} is volatile or atomic",
+            first_member_ty.spelled
+        )));
+    }
+    if !matches!(first_member_ty.kind, ClangTypeKind::Integer { .. }) {
+        return Ok(Some(format!(
+            "leaf type {} is not a fixed-width integer",
+            first_member_ty.spelled
+        )));
+    }
+    if string_field(first_member, "kind").as_deref() != Some("MemberExpr") {
+        return Ok(Some(
+            "path contains an expression other than a direct DeclRef root and member hops"
+                .to_string(),
+        ));
+    }
+    if first_member.get("isArrow").and_then(Value::as_bool) != Some(true) {
+        return Ok(Some(
+            "if condition assignment-call record-pointer target must be a single direct arrow member with no dot hops"
+                .to_string(),
+        ));
+    }
+    let children = inner(first_member);
+    let [base] = children else {
+        return Err(ClangFrontendError {
+            kind: "invalid_member_expr".to_string(),
+            message: "assignment-call target MemberExpr must have one base operand".to_string(),
+        });
+    };
+    match string_field(base, "kind").as_deref() {
+        Some("MemberExpr") => {
+            return Ok(Some(
+                "if condition assignment-call record-pointer target must not contain a second member hop"
+                    .to_string(),
+            ));
+        }
+        Some("DeclRefExpr") => {
+            let root_ty = expr_type(base)?;
+            if !clang_type_is_mutable_record_pointer(&root_ty) {
+                return Ok(Some(format!(
+                    "root type {} must be a non-const mutable record pointer",
+                    root_ty.spelled
+                )));
+            }
+            return Ok(None);
+        }
+        Some(kind) => {
+            return Ok(Some(format!(
+                "root must be a direct non-null mutable record pointer DeclRef, found {kind}"
+            )));
+        }
+        None => {
+            return Ok(Some(
+                "member base is missing its expression kind".to_string(),
+            ));
         }
     }
 }
