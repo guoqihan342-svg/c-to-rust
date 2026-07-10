@@ -306,7 +306,15 @@ fn local_record_member_path_from_parts<'a>(
     ty: &'a IrType,
     is_arrow: bool,
 ) -> Result<Option<LocalRecordMemberPath<'a>>, String> {
-    if is_arrow {
+    if is_arrow
+        || !matches!(
+            base,
+            IrExpr::Member {
+                is_arrow: false,
+                ..
+            }
+        )
+    {
         return Ok(None);
     }
     let mut members = Vec::new();

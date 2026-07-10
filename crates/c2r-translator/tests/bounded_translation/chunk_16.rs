@@ -759,3 +759,42 @@ fn typed_ir_rejects_incomplete_nested_local_record_member_path() {
         "{error:?}"
     );
 }
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_preserves_single_member_with_incomplete_record_inventory() {
+    let i32_ty = ir_i32();
+    let record_ty = ir_record("legacy_box");
+    let ir = IrFunction {
+        name: "read_legacy_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "item".to_string(),
+            ty: record_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Member {
+                base: Box::new(ir_var("item", record_ty)),
+                field: "value".to_string(),
+                ty: i32_ty,
+                is_arrow: false,
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("single dot member must retain the legacy incomplete-root emitter path");
+    let rust = emitted.rust;
+    assert!(rust.contains("pub struct LegacyBox"), "{rust}");
+    assert!(rust.contains("pub value: i32"), "{rust}");
+    assert!(rust.contains("return item.value;"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-single-member-incomplete-record-inventory",
+        &rust,
+        "    assert_eq!(read_legacy_value(LegacyBox { value: 17i32 }), 17i32);",
+    );
+}
