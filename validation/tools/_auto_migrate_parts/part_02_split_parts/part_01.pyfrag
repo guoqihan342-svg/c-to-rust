@@ -101,6 +101,10 @@ def generate_rust_replay_test_draft(
 
 
 def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    if record_u32_field_wrapping_add_state_replay_supported(spec, fixture_binding):
+        return rust_replay_record_u32_field_wrapping_add_state_cases_source(
+            spec, fixture_binding
+        )
     if scripted_external_record_u32_sequence_do_while_state_replay_supported(
         spec, fixture_binding
     ):
@@ -1772,7 +1776,13 @@ def run_generated_rust_replay(
     replay["status"] = "passed" if passed else "failed"
     replay["generated_draft_replay_pass"] = passed
     replay["generated_draft_semantic_pass"] = False
-    if scripted_external_record_u32_sequence_do_while_state_replay_contract(spec) is not None:
+    if record_u32_field_wrapping_add_state_replay_contract(spec) is not None:
+        replay["fixture_state_model"] = {
+            "kind": RECORD_U32_FIELD_WRAPPING_ADD_STATE_KIND,
+            "scope": "fixture_only",
+            "operation": "wrapping_add",
+        }
+    elif scripted_external_record_u32_sequence_do_while_state_replay_contract(spec) is not None:
         replay["fixture_external_stub"] = {
             "kind": SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND,
             "scope": "fixture_only",
@@ -1827,6 +1837,7 @@ def rust_check_has_harness_only_external_bindings(rust_check: dict[str, Any]) ->
 def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) -> bool:
     if (
         behavior_fields(spec) != ["return_code"]
+        and not record_u32_field_wrapping_add_state_replay_supported(spec)
         and not scripted_external_record_u32_sequence_do_while_state_replay_supported(spec)
         and not scripted_external_record_u32_call_bool_state_replay_supported(spec)
         and not scripted_external_u32_call_bool_out_replay_supported(spec)

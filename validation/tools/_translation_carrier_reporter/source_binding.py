@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ from .contract import (
     require_nonempty_string,
     validate_cases,
 )
+from .field_add_contract import KIND as FIELD_ADD_KIND
 
 
 @dataclass(frozen=True)
@@ -135,10 +137,29 @@ def validate_carrier(
     excluded = claim.get("excluded_semantics")
     if not isinstance(excluded, list) or not excluded:
         raise ReporterError("translation carrier excluded semantics must be declared")
-    external_name = str(contract["external_callee"]["name"])
-    if f"{external_name}(" not in c_source:
-        raise ReporterError("declared external callee is not present in carrier source")
+    if contract.get("kind") == FIELD_ADD_KIND:
+        validate_field_add_carrier_source(c_source, contract)
+    else:
+        external_name = str(contract["external_callee"]["name"])
+        if f"{external_name}(" not in c_source:
+            raise ReporterError("declared external callee is not present in carrier source")
     return claim
+
+
+def validate_field_add_carrier_source(c_source: str, contract: dict[str, Any]) -> None:
+    state = contract["state_output"]
+    rhs = contract["rhs"]
+    target_root = re.escape(str(state["parameter"]))
+    target_field = re.escape(str(state["field_path"][0]))
+    source_root = re.escape(str(rhs["parameter"]))
+    pattern = re.compile(
+        rf"\b{target_root}\s*->\s*{target_field}\s*\+=\s*([^;]+);"
+    )
+    matches = pattern.findall(c_source)
+    if len(matches) != 1 or re.search(rf"\b{source_root}\b", matches[0]) is None:
+        raise ReporterError(
+            "carrier must contain one declared target wrapping-add expression bound to the source root"
+        )
 
 
 def validate_source_spans(

@@ -1,0 +1,240 @@
+RECORD_U32_FIELD_WRAPPING_ADD_STATE_KIND = "record_u32_field_wrapping_add_state"
+
+
+def record_u32_field_wrapping_add_state_replay_supported(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any] | None = None,
+) -> bool:
+    return record_u32_field_wrapping_add_state_replay_contract(
+        spec, fixture_binding
+    ) is not None
+
+
+def record_u32_field_wrapping_add_state_replay_contract(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    contract = spec.get("replay_contract")
+    if not isinstance(contract, dict) or contract.get("kind") != RECORD_U32_FIELD_WRAPPING_ADD_STATE_KIND:
+        return None
+    if set(contract) != {
+        "schema_version",
+        "kind",
+        "entry_arguments",
+        "rhs",
+        "state_output",
+        "state_update",
+        "return",
+        "noalias_required",
+    }:
+        raise ValueError("record field wrapping-add replay contract shape drifted")
+    if contract.get("schema_version") != 1:
+        raise ValueError("record field wrapping-add replay schema_version must be 1")
+
+    entries = contract.get("entry_arguments")
+    if not isinstance(entries, list) or len(entries) != 2:
+        raise ValueError("record field wrapping-add replay requires exactly two entry record roots")
+    entry_by_name: dict[str, dict[str, Any]] = {}
+    fixture_fields: list[str] = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict) or set(entry) != {
+            "parameter",
+            "c_type",
+            "rust_type",
+            "pass_mode",
+            "direction",
+            "initializer",
+        }:
+            raise ValueError(f"record field wrapping-add entry argument {index} shape drifted")
+        parameter = scripted_external_replay_identifier(
+            entry.get("parameter"), f"record field entry argument {index} parameter"
+        )
+        rust_type = scripted_external_replay_identifier(
+            entry.get("rust_type"), f"record field entry argument {index} rust_type"
+        )
+        if entry.get("pass_mode") != "mutable_ref":
+            raise ValueError("record field wrapping-add entry roots must be mutable_ref")
+        if entry.get("direction") not in {"input", "inout"}:
+            raise ValueError("record field wrapping-add entry direction is unsupported")
+        if normalize_c_type(str(entry.get("c_type") or "")) != normalize_c_type(
+            f"struct {rust_type} *"
+        ):
+            raise ValueError("record field wrapping-add entry C type drifted")
+        if parameter in entry_by_name:
+            raise ValueError("record field wrapping-add entry parameters must be unique")
+        initializer = scripted_record_validate_initializer(
+            entry.get("initializer"), f"record field entry argument {index} initializer"
+        )
+        if initializer["record_type"] != rust_type:
+            raise ValueError("record field wrapping-add initializer type drifted")
+        fixture_fields.extend(
+            field for field, _ in scripted_record_initializer_fixture_paths(initializer)
+        )
+        entry_by_name[parameter] = entry
+
+    rhs = contract.get("rhs")
+    if not isinstance(rhs, dict) or set(rhs) != {
+        "parameter",
+        "field_path",
+        "rust_type",
+        "mode",
+    }:
+        raise ValueError("record field wrapping-add rhs shape drifted")
+    rhs_parameter = scripted_external_replay_identifier(
+        rhs.get("parameter"), "record field wrapping-add rhs parameter"
+    )
+    if rhs.get("mode") != "scalar_field_value":
+        raise ValueError("record field wrapping-add rhs mode is unsupported")
+    if rhs.get("rust_type") != "u32":
+        raise ValueError("record field wrapping-add rhs rust_type must be u32")
+    rhs_path = direct_record_u32_field_path(rhs.get("field_path"), "rhs field_path")
+    rhs_entry = entry_by_name.get(rhs_parameter)
+    if rhs_entry is None or rhs_path not in dict(
+        scripted_record_initializer_fixture_paths(rhs_entry["initializer"])
+    ).values():
+        raise ValueError("record field wrapping-add rhs field is not initialized")
+
+    state = contract.get("state_output")
+    if not isinstance(state, dict) or set(state) != {
+        "parameter",
+        "field_path",
+        "fixture_field",
+        "rust_type",
+    }:
+        raise ValueError("record field wrapping-add state_output shape drifted")
+    state_parameter = scripted_external_replay_identifier(
+        state.get("parameter"), "record field wrapping-add state parameter"
+    )
+    state_fixture = scripted_external_replay_identifier(
+        state.get("fixture_field"), "record field wrapping-add state fixture_field"
+    )
+    if state.get("rust_type") != "u32":
+        raise ValueError("record field wrapping-add state rust_type must be u32")
+    state_path = direct_record_u32_field_path(state.get("field_path"), "state field_path")
+    state_entry = entry_by_name.get(state_parameter)
+    if state_entry is None or state_path not in dict(
+        scripted_record_initializer_fixture_paths(state_entry["initializer"])
+    ).values():
+        raise ValueError("record field wrapping-add state field is not initialized")
+    if rhs_parameter == state_parameter:
+        raise ValueError("record field wrapping-add source and target roots must be distinct")
+
+    update = contract.get("state_update")
+    if not isinstance(update, dict) or set(update) != {"operation"}:
+        raise ValueError("record field wrapping-add state_update shape drifted")
+    if update.get("operation") != "wrapping_add":
+        raise ValueError("record field wrapping-add operation must be wrapping_add")
+
+    result = contract.get("return")
+    if not isinstance(result, dict) or set(result) != {"fixture_field", "rust_type", "value"}:
+        raise ValueError("record field wrapping-add return shape drifted")
+    return_fixture = scripted_external_replay_identifier(
+        result.get("fixture_field"), "record field wrapping-add return fixture_field"
+    )
+    if result.get("rust_type") != "bool" or type(result.get("value")) is not bool:
+        raise ValueError("record field wrapping-add return must declare a bool constant")
+
+    required_pair = {tuple(sorted((rhs_parameter, state_parameter)))}
+    declared = scripted_record_noalias_pairs(
+        contract.get("noalias_required"), "record field replay noalias_required"
+    )
+    pointer = spec.get("c_boundary", {}).get("pointer_contract")
+    if not isinstance(pointer, dict) or pointer.get("aliasing_proven") is not True:
+        raise ValueError("record field wrapping-add requires proven pointer aliasing metadata")
+    boundary = scripted_record_noalias_pairs(
+        pointer.get("noalias_required"), "record field pointer noalias_required"
+    )
+    if declared != boundary:
+        raise ValueError("record field wrapping-add noalias contract drifted")
+    if declared != required_pair:
+        raise ValueError("record field wrapping-add noalias must cover the complete mutable root pair")
+
+    output_fields = [return_fixture, state_fixture]
+    if len([*fixture_fields, *output_fields]) != len(set([*fixture_fields, *output_fields])):
+        raise ValueError("record field wrapping-add fixture and output fields must be unique")
+    if behavior_fields(spec) != output_fields:
+        raise ValueError("record field wrapping-add observable output mapping drifted")
+    validate_record_field_wrapping_add_signature(spec, contract)
+    if fixture_binding is not None:
+        validate_record_field_wrapping_add_cases(spec, fixture_binding, contract)
+    return contract
+
+
+def direct_record_u32_field_path(value: Any, label: str) -> tuple[str, ...]:
+    path = scripted_record_field_path(value, label)
+    if len(path) != 1:
+        raise ValueError(f"record field wrapping-add {label} must be one direct field")
+    return path
+
+
+def validate_record_field_wrapping_add_signature(
+    spec: dict[str, Any], contract: dict[str, Any]
+) -> None:
+    signature = c_function_signature(spec)
+    if not signature or signature.get("function") != spec.get("function_name"):
+        raise ValueError("record field wrapping-add entry signature is missing")
+    if normalize_c_type(str(signature.get("return_type") or "")) not in {"bool", "_Bool"}:
+        raise ValueError("record field wrapping-add entry return type must be bool")
+    actual = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    entries = contract["entry_arguments"]
+    if [item.get("name") for item in actual] != [item["parameter"] for item in entries]:
+        raise ValueError("record field wrapping-add entry parameters drifted")
+    if [normalize_c_type(str(item.get("c_type") or "")) for item in actual] != [
+        normalize_c_type(str(item["c_type"])) for item in entries
+    ]:
+        raise ValueError("record field wrapping-add entry parameter types drifted")
+    if [item.get("direction") for item in actual] != [item["direction"] for item in entries]:
+        raise ValueError("record field wrapping-add entry parameter directions drifted")
+
+
+def validate_record_field_wrapping_add_cases(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+    contract: dict[str, Any],
+) -> None:
+    cases = fixture_binding.get("case_bindings")
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("record field wrapping-add fixture cases are missing")
+    fields = [contract["return"]["fixture_field"], contract["state_output"]["fixture_field"]]
+    for case in cases:
+        payload = oracle_fixture_input_payload(spec, case)
+        expected = case.get("expected_outputs")
+        if not isinstance(payload, dict) or not isinstance(expected, dict):
+            raise ValueError("record field wrapping-add fixture case is incomplete")
+        if list(expected) != fields:
+            raise ValueError("record field wrapping-add expected output fields drifted")
+        for entry in contract["entry_arguments"]:
+            for fixture_field, _ in scripted_record_initializer_fixture_paths(entry["initializer"]):
+                if not is_uint32_value(payload.get(fixture_field)):
+                    raise ValueError("record field wrapping-add fixture record field must be u32")
+        if expected != record_field_wrapping_add_expected_outputs(payload, contract):
+            raise ValueError("record field wrapping-add expected outputs drifted")
+
+
+def record_field_wrapping_add_expected_outputs(
+    payload: dict[str, Any], contract: dict[str, Any]
+) -> dict[str, Any]:
+    entries = {str(item["parameter"]): item for item in contract["entry_arguments"]}
+    rhs = contract["rhs"]
+    state = contract["state_output"]
+    rhs_value = scripted_record_initial_field_value(payload, entries, rhs)
+    state_value = scripted_record_initial_field_value(payload, entries, state)
+    return {
+        str(contract["return"]["fixture_field"]): bool(contract["return"]["value"]),
+        str(state["fixture_field"]): (state_value + rhs_value) & 0xFFFFFFFF,
+    }
+
+
+def scripted_record_initial_field_value(
+    payload: dict[str, Any],
+    entries: dict[str, dict[str, Any]],
+    field: dict[str, Any],
+) -> int:
+    paths = {
+        path: fixture_field
+        for fixture_field, path in scripted_record_initializer_fixture_paths(
+            entries[str(field["parameter"])]["initializer"]
+        )
+    }
+    field_path = tuple(str(item) for item in field["field_path"])
+    return int(payload[paths[field_path]])

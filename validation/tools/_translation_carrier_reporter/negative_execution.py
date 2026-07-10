@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any
 
 from .contract import ReporterError, behavior_fields
+from .field_add_contract import KIND as FIELD_ADD_KIND
+from .field_add_model import (
+    negative_partition_probe_source as field_add_negative_partition_probe_source,
+)
 from .record_contract import (
     KIND as RECORD_KIND,
     negative_partition_probe_source as record_negative_partition_probe_source,
@@ -34,7 +38,11 @@ def run_negative_execution(
     if rustc is None:
         raise ReporterError("rustc is required for generated-draft negative replay")
     original = draft_path.read_bytes()
-    if context.contract.get("kind") == SEQUENCE_KIND:
+    if context.contract.get("kind") == FIELD_ADD_KIND:
+        pattern = re.compile(rb"\bwrapping_add\b")
+        operator_from = b"wrapping_add"
+        operator_to = b"wrapping_sub"
+    elif context.contract.get("kind") == SEQUENCE_KIND:
         pattern = re.compile(rb"!=")
         operator_from = b"!="
         operator_to = b"=="
@@ -45,15 +53,15 @@ def run_negative_execution(
     matches = list(pattern.finditer(original))
     if len(matches) != 1:
         raise ReporterError(
-            "generated Rust draft must contain exactly one declared comparison mutation site"
+            "generated Rust draft must contain exactly one declared mutation site"
         )
     match = matches[0]
     mutated = original[: match.start()] + operator_to + original[match.end() :]
     if len(mutated) != len(original):
-        raise ReporterError("comparison mutation changed generated draft length")
+        raise ReporterError("declared mutation changed generated draft length")
     changed = [index for index, pair in enumerate(zip(original, mutated, strict=True)) if pair[0] != pair[1]]
-    if changed != [match.start()]:
-        raise ReporterError("generated Rust draft changed outside the unique comparison mutation")
+    if not changed or min(changed) < match.start() or max(changed) >= match.end():
+        raise ReporterError("generated Rust draft changed outside the unique declared mutation")
 
     output_root = output_dir.resolve()
     ensure_contained(context.repo_root, output_root, "negative output directory")
@@ -106,10 +114,12 @@ def run_negative_execution(
                 aliases=command_aliases,
             )
             if result["returncode"] == 0:
-                raise ReporterError(f"comparison mutation was not detected by fixture case {case['id']}")
+                raise ReporterError(f"declared mutation was not detected by fixture case {case['id']}")
             comparison_partition = (
                 sequence_mutation_partition(case, context.contract)
                 if context.contract.get("kind") == SEQUENCE_KIND
+                else "observable_mismatch"
+                if context.contract.get("kind") == FIELD_ADD_KIND
                 else (
                     "comparison_true"
                     if case["expected_outputs"][return_field]
@@ -138,7 +148,9 @@ def run_negative_execution(
 
     true_ids = [item["case_id"] for item in case_runs if item["comparison_partition"] == "comparison_true"]
     false_ids = [item["case_id"] for item in case_runs if item["comparison_partition"] == "comparison_false"]
-    if context.contract.get("kind") != SEQUENCE_KIND and (not true_ids or not false_ids):
+    if context.contract.get("kind") not in {SEQUENCE_KIND, FIELD_ADD_KIND} and (
+        not true_ids or not false_ids
+    ):
         raise ReporterError("actual negative replay must detect true and false comparison partitions")
     exhausted_ids = [
         item["case_id"]
@@ -199,6 +211,8 @@ def run_negative_execution(
 
 
 def partition_probe_source(context: StaticContext) -> str:
+    if context.contract.get("kind") == FIELD_ADD_KIND:
+        return field_add_negative_partition_probe_source(context)
     if context.contract.get("kind") == SEQUENCE_KIND:
         return sequence_negative_partition_probe_source(context)
     if context.contract.get("kind") == RECORD_KIND:

@@ -14,6 +14,11 @@ from .contract import (
 )
 from .runtime_binding import load_runtime_provenance
 from .negative_execution import run_negative_execution
+from .field_add_contract import KIND as FIELD_ADD_KIND
+from .field_add_reports import (
+    build_negative_report as build_field_add_negative_report,
+    build_report_claim as build_field_add_report_claim,
+)
 from .record_contract import KIND as RECORD_KIND
 from .sequence_contract import KIND as SEQUENCE_KIND
 from .sequence_model import mutated_observable_outputs, mutation_partition
@@ -122,6 +127,8 @@ def build_negative_report(
     common: dict[str, Any],
     execution: dict[str, Any],
 ) -> dict[str, Any]:
+    if context.contract.get("kind") == FIELD_ADD_KIND:
+        return build_field_add_negative_report(context, common, execution)
     if context.contract.get("kind") == SEQUENCE_KIND:
         return build_sequence_negative_report(context, common, execution)
     return_field = behavior_fields(context.contract)[0]
@@ -230,6 +237,8 @@ def build_sequence_negative_report(
 
 
 def report_claim(context: StaticContext) -> dict[str, Any]:
+    if context.contract.get("kind") == FIELD_ADD_KIND:
+        return build_field_add_report_claim(context)
     external_name = context.contract["external_callee"]["name"]
     if context.contract.get("kind") == SEQUENCE_KIND:
         verified_behavior = (

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .contract import ReporterError, behavior_fields, require_dict
+from .field_add_contract import KIND as FIELD_ADD_KIND
 from .source_binding import (
     StaticContext,
     file_ref,
@@ -261,11 +262,10 @@ def validate_generated_rust_replay(
             paths["test_translation"],
             test_translation,
         )
-    return {
+    result = {
         "status": "passed",
         "generated_draft_replay_pass": True,
         "generated_draft_semantic_pass": False,
-        "fixture_external_stub": replay["fixture_external_stub"],
         "replay_execution": execution,
         "refs": refs,
         "runtime_paths": {
@@ -273,6 +273,11 @@ def validate_generated_rust_replay(
             "replay_test": replay_test_path,
         },
     }
+    if context.contract.get("kind") == FIELD_ADD_KIND:
+        result["fixture_state_model"] = replay["fixture_state_model"]
+    else:
+        result["fixture_external_stub"] = replay["fixture_external_stub"]
+    return result
 
 
 def replay_artifact_ref(
@@ -297,9 +302,28 @@ def validate_rust_check(context: StaticContext, rust_check: dict[str, Any]) -> N
         rust_check.get("rust_check_harness_only_bindings"),
         "rust-check harness-only bindings",
     )
+    bindings = harness.get("bindings")
+    if context.contract.get("kind") == FIELD_ADD_KIND:
+        if (
+            harness.get("status") != "none"
+            or harness.get("semantics_verified") is not False
+            or bindings != []
+        ):
+            raise ReporterError("record field replay must not use external fixture bindings")
+        external_context = require_dict(
+            rust_check.get("external_callee_context"),
+            "rust-check external callee context",
+        )
+        if (
+            external_context.get("status") != "not_applicable"
+            or external_context.get("declared_count") != 0
+            or external_context.get("blocked_count") != 0
+            or external_context.get("declared_callees") != []
+        ):
+            raise ReporterError("record field replay external callee context drifted")
+        return
     if harness.get("status") != "emitted" or harness.get("semantics_verified") is not False:
         raise ReporterError("rust-check fixture-only semantics boundary drifted")
-    bindings = harness.get("bindings")
     if not isinstance(bindings, list) or not bindings:
         raise ReporterError("rust-check fixture-only binding is missing")
     expected_name = context.contract["external_callee"]["name"]
@@ -354,6 +378,19 @@ def validate_replay_payload(context: StaticContext, replay: dict[str, Any]) -> N
         raise ReporterError("generated draft replay did not pass or overclaims semantics")
     if replay.get("behavior_fields") != behavior_fields(context.contract):
         raise ReporterError("generated replay behavior fields drifted")
+    if context.contract.get("kind") == FIELD_ADD_KIND:
+        model = require_dict(replay.get("fixture_state_model"), "fixture_state_model")
+        if (
+            model.get("kind") != context.contract["kind"]
+            or model.get("scope") != "fixture_only"
+            or model.get("operation") != "wrapping_add"
+            or replay.get("fixture_external_stub") is not None
+        ):
+            raise ReporterError("generated replay state model boundary drifted")
+        execution = require_dict(replay.get("replay_execution"), "generated replay execution")
+        validate_replay_execution(execution)
+        validate_replay_fixture_ref(context, replay)
+        return
     stub = require_dict(replay.get("fixture_external_stub"), "fixture_external_stub")
     if (
         stub.get("kind") != context.contract["kind"]
@@ -362,6 +399,11 @@ def validate_replay_payload(context: StaticContext, replay: dict[str, Any]) -> N
     ):
         raise ReporterError("generated replay external stub semantics boundary drifted")
     execution = require_dict(replay.get("replay_execution"), "generated replay execution")
+    validate_replay_execution(execution)
+    validate_replay_fixture_ref(context, replay)
+
+
+def validate_replay_execution(execution: dict[str, Any]) -> None:
     if (
         execution.get("status") != "passed"
         or execution.get("compile_returncode") != 0
@@ -370,6 +412,9 @@ def validate_replay_payload(context: StaticContext, replay: dict[str, Any]) -> N
         raise ReporterError("generated replay compile or run did not pass")
     reject_host_path_text(execution.get("compile_command"), "generated replay compile command")
     reject_host_path_text(execution.get("run_command"), "generated replay run command")
+
+
+def validate_replay_fixture_ref(context: StaticContext, replay: dict[str, Any]) -> None:
     fixtures = replay.get("source_test_inputs", {}).get("fixtures")
     expected_fixture_path = context.fixture_path.relative_to(context.repo_root).as_posix()
     matching = [
