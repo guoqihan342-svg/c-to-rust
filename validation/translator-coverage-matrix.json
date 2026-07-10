@@ -2704,7 +2704,8 @@
         "direct record integer scalar member as direct-call argument",
         "unique complete named nested record inventory with anonymous-record preservation",
         "direct mutable record pointer arrow-rooted pure dot-path integer field as if assignment-call comparison target",
-        "direct mutable record pointer nested integer field assignment from an in-range integer literal with complete record inventory"
+        "direct mutable record pointer nested integer field assignment from an in-range integer literal with complete record inventory",
+        "direct mutable record pointer nested u32 field assignment from a by-value record direct u32 field wrapping-add scalar u32"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -2817,6 +2818,18 @@
               "name": "nested literal field assignment real clang smoke",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_26_split_parts/part_01.rs",
               "assertion": "opt-in live clang smoke lowers, emits, compiles, and runs the renamed nested literal field assignment",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "nested record scalar add no-clang candidate",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_27.rs",
+              "assertion": "renamed target and by-value source records lower target.nested.value = source.base + extent as u32 wrapping_add without project-specific names",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "nested record scalar add real clang smoke",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_27_split_parts/part_01.rs",
+              "assertion": "opt-in live clang smoke lowers, emits, compiles, and runs the renamed nested u32 field assignment from a by-value record field plus scalar u32",
               "proof_class": "candidate_context_only"
             }
           ]
@@ -3026,6 +3039,18 @@
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_26_split_parts/part_03.rs",
               "fail_closed_reason": "missing nested record inventory, undeclared leaves, type mismatches, and out-of-range literals fail closed",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "nested record scalar add pointer and expression refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_27_split_parts/part_02.rs",
+              "fail_closed_reason": "pointer sources, second arrow hops, effectful RHS expressions, and integer type drift remain outside the bounded nested record scalar-add contract",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "nested record scalar add inventory qualifier and ABI refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_27_split_parts/part_03.rs",
+              "fail_closed_reason": "incomplete source inventory, volatile or atomic fields, and ABI-unproven integer spellings remain refused",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -3153,12 +3178,18 @@
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_26_split_parts/part_01.rs",
               "assertion": "emits and executes a renamed nested u32 field reset while preserving adjacent state",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "nested record scalar add emitted Rust runtime test",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_27_split_parts/part_01.rs",
+              "assertion": "emits and executes target.nested.value = source.base.wrapping_add(extent), including u32 overflow behavior",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
         "c_rust_diff": {
           "status": "covered",
-          "scope_note": "real-fdb-blob-make has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence. The refreshed real-fdb-kv-set exact generated draft consumes accepted named-slice record-field evidence to emit a non-opaque FdbBlob and passes the uninitialized-DB return-code fixture gates. The real-fdb-kv-to-blob and real-fdb-tsl-to-blob exact generated drafts pass generated_draft_acceptance with embedded-slice C oracles, generated Rust replay, schema diff, negative diff, unsafe scan/ledger, and final verification semantic_pass=true. The TSL slice also binds a clang-proven uint32_t-to-size_t widening. real-fdb-kv-iterate-traversed-len passes the same semantic gate for the exact line-1892 u32 wrapping-add fragment with an explicit db/itr noalias contract. real-fdb-kv-iterate-kv-reset passes only for the exact named slice bound to fdb_kvdb.c:1891; the identical source text at fdb_kvdb.c:1871 is not automatically covered. These count only for their bound named slices and do not generalize record-field semantic acceptance, layout/ABI proof, the complete fdb_kv_iterate function, or the FlashDB project.",
+          "scope_note": "real-fdb-blob-make has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence. The refreshed real-fdb-kv-set exact generated draft consumes accepted named-slice record-field evidence to emit a non-opaque FdbBlob and passes the uninitialized-DB return-code fixture gates. The real-fdb-kv-to-blob and real-fdb-tsl-to-blob exact generated drafts pass generated_draft_acceptance with embedded-slice C oracles, generated Rust replay, schema diff, negative diff, unsafe scan/ledger, and final verification semantic_pass=true. The TSL slice also binds a clang-proven uint32_t-to-size_t widening. real-fdb-kv-iterate-traversed-len passes the same semantic gate for the exact line-1892 u32 wrapping-add fragment with an explicit db/itr noalias contract. real-fdb-kv-iterate-kv-reset passes only for the exact named slice bound to fdb_kvdb.c:1891; the identical source text at fdb_kvdb.c:1871 is not automatically covered. real-fdb-kv-iterate-sector-start passes only for the exact named slice bound to fdb_kvdb.c:1869; SECTOR_HDR_DATA_SIZE is a fixture-bound same-name u32 parameter and does not prove the real FDB_WG_ALIGN macro expansion, sizeof, layout, alignment, or ABI. These count only for their bound named slices and do not generalize record-field semantic acceptance, the complete fdb_kv_iterate function, or the FlashDB project.",
           "evidence": [
             {
               "name": "real-fdb-blob-make final verification",
@@ -3294,6 +3325,31 @@
               "name": "real-fdb-kv-iterate-kv-reset final verification",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-final-verification.json",
               "assertion": "generated_draft_semantic_pass=true only for the exact named slice bound to fdb_kvdb.c:1891; the identical source text at line 1871 remains outside this acceptance"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-start C oracle",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-start-c-oracle.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-start Rust report",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-start-rust-report.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-start schema diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-start-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-start negative diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-start-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-start generated-draft unsafe ledger",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-generated-draft-unsafe-ledger.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-start final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-final-verification.json",
+              "assertion": "generated_draft_semantic_pass=true only for the exact named slice bound to fdb_kvdb.c:1869; SECTOR_HDR_DATA_SIZE remains a fixture-bound same-name u32 parameter without FDB_WG_ALIGN, sizeof, layout, alignment, or ABI proof"
             }
           ]
         },
@@ -3447,9 +3503,21 @@
             {
               "name": "real-fdb-kv-iterate-kv-reset capability delta",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-capability-delta.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-start route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-route-decision.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-start validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-validation-profile.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-start capability delta",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-capability-delta.json"
             }
           ],
-          "reason": "committed named-slice candidate provenance plus Rust compile/replay, accepted C oracle/diff evidence, and fixture-bound replay evidence now exist for the bounded fdb_blob_make, real-fdb-kv-set, real-fdb-kv-to-blob, real-fdb-tsl-to-blob, real-fdb-kv-iterate-traversed-len, and real-fdb-kv-iterate-kv-reset slices; traversed-len is limited to line 1892 and kv-reset is limited to the exact named slice at line 1891, with the identical line-1871 text explicitly outside that acceptance, while initialized KV/TSL semantics, the complete fdb_kv_iterate function, external callee semantics, general record layout/ABI, and the FlashDB project remain separate gaps"
+          "reason": "committed named-slice candidate provenance plus Rust compile/replay, accepted C oracle/diff evidence, and fixture-bound replay evidence now exist for the bounded fdb_blob_make, real-fdb-kv-set, real-fdb-kv-to-blob, real-fdb-tsl-to-blob, real-fdb-kv-iterate-traversed-len, real-fdb-kv-iterate-kv-reset, and real-fdb-kv-iterate-sector-start slices; traversed-len is limited to line 1892, kv-reset is limited to the exact named slice at line 1891 with the identical line-1871 text outside acceptance, and sector-start is limited to fdb_kvdb.c:1869 with SECTOR_HDR_DATA_SIZE modeled only as a fixture-bound same-name u32 parameter, while the real FDB_WG_ALIGN macro expansion, sizeof, layout, alignment, ABI, complete fdb_kv_iterate function, and FlashDB project remain separate gaps"
         }
       },
       "positive_cases": [
@@ -3599,6 +3667,16 @@
           "name": "real-fdb-kv-iterate-kv-reset strict named-slice semantic verification",
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-final-verification.json",
           "assertion": "accepts only the exact fdb_kvdb.c:1891 named slice; the identical line-1871 text, complete fdb_kv_iterate function, and FlashDB project are not covered"
+        },
+        {
+          "name": "clang_ast_nested_record_scalar_add_lowers_emits_and_wraps",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_27_split_parts/part_01.rs",
+          "proof_class": "candidate_context_only"
+        },
+        {
+          "name": "real-fdb-kv-iterate-sector-start strict named-slice semantic verification",
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-final-verification.json",
+          "assertion": "accepts only the exact fdb_kvdb.c:1869 named slice; SECTOR_HDR_DATA_SIZE is fixture-bound and does not cover FDB_WG_ALIGN, sizeof, layout, alignment, ABI, the complete fdb_kv_iterate function, or FlashDB"
         }
       ],
       "negative_cases": [
@@ -3696,6 +3774,16 @@
           "name": "clang_ast_nested_literal_field_assignment_inventory_and_literal_boundaries_fail_closed",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_26_split_parts/part_03.rs",
           "fail_closed_reason": "incomplete record inventory, undeclared leaves, incompatible types, and out-of-range literals remain refused"
+        },
+        {
+          "name": "clang_ast_nested_record_scalar_add_pointer_expression_and_type_boundaries_fail_closed",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_27_split_parts/part_02.rs",
+          "fail_closed_reason": "pointer sources, second arrow hops, effectful RHS expressions, and integer type drift remain refused"
+        },
+        {
+          "name": "clang_ast_nested_record_scalar_add_inventory_qualifier_and_abi_boundaries_fail_closed",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_27_split_parts/part_03.rs",
+          "fail_closed_reason": "incomplete source inventory, volatile or atomic fields, and ABI-unproven integer spellings remain refused"
         }
       ]
     },

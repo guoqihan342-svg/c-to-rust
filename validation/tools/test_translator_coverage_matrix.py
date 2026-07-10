@@ -105,8 +105,8 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
             1,
         )
         self.assertGreaterEqual(ledger["blocked_callee_count"], 1)
-        self.assertEqual(ledger["translator_generated_semantic_pass_count"], 28)
-        self.assertEqual(ledger["semantic_pass_count"], 28)
+        self.assertEqual(ledger["translator_generated_semantic_pass_count"], 29)
+        self.assertEqual(ledger["semantic_pass_count"], 29)
         self.assertGreaterEqual(ledger["accepted_evidence_semantic_pass_count"], 1)
         self.assertIn("not semantic acceptance evidence", ledger["claim_boundary"])
 
@@ -171,6 +171,43 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
         scope_note = capability["dimension_status"]["c_rust_diff"]["scope_note"]
         self.assertIn("exact named slice bound to fdb_kvdb.c:1891", scope_note)
         self.assertIn("fdb_kvdb.c:1871 is not automatically covered", scope_note)
+        self.assertIn("complete fdb_kv_iterate function", scope_note)
+        self.assertIn("FlashDB project", scope_note)
+
+    def test_current_repository_matrix_binds_sector_start_to_exact_named_slice(self) -> None:
+        matrix = json.loads(
+            Path("validation/translator-coverage-matrix.json").read_text(encoding="utf-8")
+        )
+        capability = next(
+            item for item in matrix["capabilities"] if item["id"] == "record-field-subset"
+        )
+        evidence_paths = {
+            evidence["path"]
+            for dimension in capability["dimension_status"].values()
+            for evidence in dimension.get("evidence", [])
+        }
+
+        required_paths = {
+            "crates/c2r-translator/tests/bounded_translation/chunk_27.rs",
+            "crates/c2r-translator/tests/bounded_translation/chunk_27_split_parts/part_01.rs",
+            "crates/c2r-translator/tests/bounded_translation/chunk_27_split_parts/part_02.rs",
+            "crates/c2r-translator/tests/bounded_translation/chunk_27_split_parts/part_03.rs",
+            "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-start-c-oracle.json",
+            "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-start-rust-report.json",
+            "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-start-diff.json",
+            "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-start-negative-diff.json",
+            "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-generated-draft-unsafe-ledger.json",
+            "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-route-decision.json",
+            "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-validation-profile.json",
+            "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-capability-delta.json",
+            "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-start/l3-real-fdb-kv-iterate-sector-start-final-verification.json",
+        }
+        self.assertTrue(required_paths.issubset(evidence_paths))
+        scope_note = capability["dimension_status"]["c_rust_diff"]["scope_note"]
+        self.assertIn("exact named slice bound to fdb_kvdb.c:1869", scope_note)
+        self.assertIn("fixture-bound same-name u32 parameter", scope_note)
+        self.assertIn("FDB_WG_ALIGN macro expansion", scope_note)
+        self.assertIn("sizeof, layout, alignment, or ABI", scope_note)
         self.assertIn("complete fdb_kv_iterate function", scope_note)
         self.assertIn("FlashDB project", scope_note)
 
