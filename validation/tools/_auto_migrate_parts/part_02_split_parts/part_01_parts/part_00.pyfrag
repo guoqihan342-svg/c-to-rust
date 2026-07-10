@@ -1,0 +1,227 @@
+
+def generate_rust_replay_test_draft(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    slice_spec_path: Path,
+    route_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    function_name = required_str(spec, "function_name")
+    path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
+    fixture = spec.get("fixture_contract", {})
+    fixture_path_text = fixture_path(spec)
+    fixture_binding = oracle_fixture_binding(spec)
+    fixture_cases_source = rust_replay_fixture_cases_source(spec, fixture_binding)
+    text = (
+        "// Auto-generated Rust replay test draft.\n"
+        "// Review before promoting into validation/l2_slices/tests.\n\n"
+        "#[test]\n"
+        f"fn replay_{safe_ident(slice_id)}_fixture_contract() {{\n"
+        f"    let _fixture = {rust_string_literal(fixture_path_text)};\n"
+        f"    let _api = {rust_string_literal(function_name)};\n"
+        "    const GENERATED_DRAFT_SEMANTIC_PASS: bool = false;\n"
+        f"{fixture_cases_source}"
+        "}\n"
+    )
+    write_text(path, text)
+    behavior_fields = fixture.get("observable_outputs") or fixture.get("behavior_fields", [])
+    test_name = f"replay_{safe_ident(slice_id)}_fixture_contract"
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "level": spec.get("level", "L3"),
+        "status": "recorded",
+        "generated_draft_semantic_pass": False,
+        "test_draft": rel(path),
+        "fixture": fixture_path_text,
+        "behavior_fields": list(behavior_fields),
+        "source_commit": source_commit(spec),
+        "repo_commit": repo_commit(),
+        "source_test_inputs": {
+            "oracle_strategy": "Generated replay draft from slice fixture contract; accepted semantics still require C_ORACLE_GENERATED.",
+            "fixtures": [
+                {
+                    "path": fixture_path_text,
+                    "hash": fixture_hash(spec),
+                    "operation_count": len(fixture.get("cases", [])),
+                    "source_kind": "fixture",
+                }
+            ],
+            "oracle_reports": [
+                {
+                    "path": rel(evidence_dir / f"l3-{slice_id}-c-oracle-status.json"),
+                    "status": "draft_or_skipped",
+                }
+            ],
+        },
+        "rust_tests": [
+            {
+                "file": rel(path),
+                "test_names": [test_name],
+                "cargo_command": f"cargo test {test_name}",
+                "framework": "cargo test",
+                "file_hash": sha256(path),
+            }
+        ],
+        "coverage": {
+            "main_paths": list(behavior_fields),
+            "error_paths": [],
+            "negative_cases": ["negative diff must be generated before acceptance"],
+        },
+        "translation_mappings": [
+            {
+                "source": fixture_path_text,
+                "rust_test": f"{rel(path)}::{test_name}",
+                "behavior_fields": list(behavior_fields),
+                "coverage_kind": "oracle_replay",
+                "status": "mapped",
+                "evidence": [
+                    {
+                        "path": rel(evidence_dir / f"l3-{slice_id}-c-oracle-status.json"),
+                        "status": "not_semantic_pass",
+                    }
+                ],
+            }
+        ],
+        "evidence_links": {
+            "rust_draft": {
+                "path": rel(evidence_dir / f"l3-{slice_id}-rust-draft.rs"),
+                "status": generated_rust_draft_status(route_decision),
+            },
+            "c_oracle": {"path": rel(evidence_dir / f"l3-{slice_id}-c-oracle-status.json"), "status": "draft_or_skipped"},
+        },
+        "known_gaps": [
+            "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
+        ],
+        "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+    }
+    write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", payload)
+    return payload
+
+
+def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    if record_u32_field_constant_state_replay_supported(spec, fixture_binding):
+        return rust_replay_record_u32_field_constant_state_cases_source(
+            spec, fixture_binding
+        )
+    if record_u32_field_wrapping_add_state_replay_supported(spec, fixture_binding):
+        return rust_replay_record_u32_field_wrapping_add_state_cases_source(
+            spec, fixture_binding
+        )
+    if scripted_external_record_u32_sequence_do_while_state_replay_supported(
+        spec, fixture_binding
+    ):
+        return rust_replay_scripted_external_record_u32_sequence_do_while_state_cases_source(
+            spec, fixture_binding
+        )
+    if scripted_external_record_u32_call_bool_state_replay_supported(spec, fixture_binding):
+        return rust_replay_scripted_external_record_u32_call_bool_state_cases_source(
+            spec, fixture_binding
+        )
+    if scripted_external_u32_call_bool_out_replay_supported(spec, fixture_binding):
+        return rust_replay_scripted_external_u32_call_bool_out_cases_source(spec, fixture_binding)
+    if fdb_kv_del_replay_supported(spec):
+        return rust_replay_fdb_kv_del_cases_source(spec, fixture_binding)
+    if fdb_kv_set_replay_supported(spec):
+        return rust_replay_fdb_kv_set_cases_source(spec, fixture_binding)
+    if behavior_fields(spec) != ["return_code"]:
+        if readonly_byte_slice_bool_return_replay_supported(spec, fixture_binding):
+            return rust_replay_readonly_byte_slice_bool_return_cases_source(spec, fixture_binding)
+        if fdb_blob_make_replay_supported(spec):
+            return rust_replay_fdb_blob_make_cases_source(spec, fixture_binding)
+        if fdb_kv_to_blob_replay_supported(spec):
+            return rust_replay_fdb_kv_to_blob_cases_source(spec, fixture_binding)
+        if record_pointer_identity_return_replay_supported(spec, fixture_binding):
+            return rust_replay_record_pointer_identity_return_cases_source(spec, fixture_binding)
+        if pure_uint32_value_replay_supported(spec):
+            return rust_replay_pure_uint32_value_cases_source(spec, fixture_binding)
+        if signed_i32_return_value_replay_supported(spec):
+            return rust_replay_signed_i32_return_value_cases_source(spec, fixture_binding)
+        if single_i32_return_value_replay_supported(spec):
+            return rust_replay_single_i32_return_value_cases_source(spec, fixture_binding)
+        if single_u64_return_value_replay_supported(spec):
+            return rust_replay_single_u64_return_value_cases_source(spec, fixture_binding)
+        if single_i32_out0_report_replay_supported(spec):
+            return rust_replay_single_i32_out0_report_cases_source(spec, fixture_binding)
+        if i32_slice_output_report_replay_supported(spec):
+            return rust_replay_i32_slice_output_report_cases_source(spec, fixture_binding)
+        if i32_input_buffer_out0_sum_report_replay_supported(spec):
+            return rust_replay_i32_input_buffer_out0_sum_report_cases_source(spec, fixture_binding)
+        if single_i32_call_metadata_replay_supported(spec):
+            return rust_replay_single_i32_call_metadata_cases_source(spec, fixture_binding)
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    function_name = safe_ident(required_str(spec, "function_name"))
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_fixture_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this replay draft generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        crc: u32,\n",
+        "        buf: &'static [u8],\n",
+        "        size: usize,\n",
+        "        return_code: u32,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            '        assert_eq!(case.buf.len(), case.size, "{} fixture size must match byte buffer length", case.id);\n',
+            f"        let actual = {function_name}(case.crc, case.buf, case.size);\n",
+            '        assert_eq!(actual, case.return_code, "{} return_code drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def fdb_blob_make_replay_supported(spec: dict[str, Any]) -> bool:
+    return required_str(spec, "function_name") == "fdb_blob_make" and behavior_fields(spec) == [
+        "return_same_blob",
+        "blob.buf",
+        "blob.size",
+    ]
+
+
+def fdb_kv_to_blob_replay_supported(spec: dict[str, Any]) -> bool:
+    return required_str(spec, "function_name") == "fdb_kv_to_blob" and behavior_fields(spec) == [
+        "return_same_blob",
+        "blob.saved.meta_addr",
+        "blob.saved.addr",
+        "blob.saved.len",
+    ]
+
+
+def fdb_kv_set_replay_supported(spec: dict[str, Any]) -> bool:
+    return required_str(spec, "function_name") == "fdb_kv_set" and behavior_fields(spec) == [
+        "return_code",
+    ]
+
+
+def fdb_kv_del_replay_supported(spec: dict[str, Any]) -> bool:
+    return required_str(spec, "function_name") == "fdb_kv_del" and behavior_fields(spec) == [
+        "return_code",
+    ]

@@ -1,0 +1,166 @@
+RECORD_U32_FIELD_CONSTANT_STATE_KIND = "record_u32_field_constant_state"
+
+
+def record_u32_field_constant_state_replay_supported(
+    spec: dict[str, Any], fixture_binding: dict[str, Any] | None = None
+) -> bool:
+    return record_u32_field_constant_state_replay_contract(spec, fixture_binding) is not None
+
+
+def record_u32_field_constant_state_replay_contract(
+    spec: dict[str, Any], fixture_binding: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    contract = spec.get("replay_contract")
+    if not isinstance(contract, dict) or contract.get("kind") != RECORD_U32_FIELD_CONSTANT_STATE_KIND:
+        return None
+    if set(contract) != {
+        "schema_version", "kind", "entry_arguments", "state_output", "state_update",
+        "return", "noalias_required",
+    }:
+        raise ValueError("record field constant-state replay contract shape drifted")
+    if contract.get("schema_version") != 1:
+        raise ValueError("record field constant-state replay schema_version must be 1")
+
+    entries = contract.get("entry_arguments")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("record field constant-state replay entry arguments are missing")
+    entry_by_name: dict[str, dict[str, Any]] = {}
+    fixture_fields: list[str] = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict) or set(entry) != {
+            "parameter", "c_type", "rust_type", "pass_mode", "direction", "initializer",
+        }:
+            raise ValueError(f"record field constant-state entry argument {index} shape drifted")
+        parameter = scripted_external_replay_identifier(
+            entry.get("parameter"), f"record field constant-state entry {index} parameter"
+        )
+        rust_type = scripted_external_replay_identifier(
+            entry.get("rust_type"), f"record field constant-state entry {index} rust_type"
+        )
+        if entry.get("pass_mode") != "mutable_ref":
+            raise ValueError("record field constant-state entry roots must be mutable_ref")
+        if entry.get("direction") not in {"input", "inout"}:
+            raise ValueError("record field constant-state entry direction is unsupported")
+        if normalize_c_type(str(entry.get("c_type") or "")) != normalize_c_type(
+            f"struct {rust_type} *"
+        ):
+            raise ValueError("record field constant-state entry C type drifted")
+        if parameter in entry_by_name:
+            raise ValueError("record field constant-state entry parameters must be unique")
+        initializer = scripted_record_validate_initializer(
+            entry.get("initializer"), f"record field constant-state entry {index} initializer"
+        )
+        if initializer["record_type"] != rust_type:
+            raise ValueError("record field constant-state initializer type drifted")
+        fixture_fields.extend(
+            field for field, _ in scripted_record_initializer_fixture_paths(initializer)
+        )
+        entry_by_name[parameter] = entry
+
+    state = contract.get("state_output")
+    if not isinstance(state, dict) or set(state) != {
+        "parameter", "field_path", "fixture_field", "rust_type",
+    }:
+        raise ValueError("record field constant-state state_output shape drifted")
+    state_parameter = scripted_external_replay_identifier(
+        state.get("parameter"), "record field constant-state parameter"
+    )
+    state_fixture = scripted_external_replay_identifier(
+        state.get("fixture_field"), "record field constant-state fixture_field"
+    )
+    if state.get("rust_type") != "u32":
+        raise ValueError("record field constant-state rust_type must be u32")
+    state_path = scripted_record_field_path(state.get("field_path"), "constant-state field_path")
+    if len(state_path) < 2:
+        raise ValueError("record field constant-state field_path must be nested")
+    state_entry = entry_by_name.get(state_parameter)
+    if state_entry is None or state_entry.get("direction") != "inout":
+        raise ValueError("record field constant-state target must bind an inout entry root")
+    initialized = dict(scripted_record_initializer_fixture_paths(state_entry["initializer"])).values()
+    if state_path not in initialized:
+        raise ValueError("record field constant-state target field is not initialized")
+
+    update = contract.get("state_update")
+    if not isinstance(update, dict) or set(update) != {"operation", "rust_type", "value"}:
+        raise ValueError("record field constant-state state_update shape drifted")
+    if update != {"operation": "constant_assign", "rust_type": "u32", "value": 0}:
+        raise ValueError("record field constant-state update must assign declared u32 constant 0")
+    result = contract.get("return")
+    if not isinstance(result, dict) or set(result) != {"fixture_field", "rust_type", "value"}:
+        raise ValueError("record field constant-state return shape drifted")
+    return_fixture = scripted_external_replay_identifier(
+        result.get("fixture_field"), "record field constant-state return fixture_field"
+    )
+    if result.get("rust_type") != "bool" or type(result.get("value")) is not bool:
+        raise ValueError("record field constant-state return must declare a bool constant")
+
+    declared = scripted_record_noalias_pairs(
+        contract.get("noalias_required"), "record field constant-state noalias_required"
+    )
+    pointer = spec.get("c_boundary", {}).get("pointer_contract")
+    if not isinstance(pointer, dict) or pointer.get("aliasing_proven") is not True:
+        raise ValueError("record field constant-state requires proven pointer metadata")
+    boundary = scripted_record_noalias_pairs(
+        pointer.get("noalias_required"), "record field constant-state pointer noalias_required"
+    )
+    names = sorted(entry_by_name)
+    required = {
+        (names[left], names[right])
+        for left in range(len(names)) for right in range(left + 1, len(names))
+    }
+    if declared != boundary or declared != required:
+        raise ValueError("record field constant-state noalias must cover every mutable root pair")
+
+    outputs = [return_fixture, state_fixture]
+    if len([*fixture_fields, *outputs]) != len(set([*fixture_fields, *outputs])):
+        raise ValueError("record field constant-state fixture and output fields must be unique")
+    if behavior_fields(spec) != outputs:
+        raise ValueError("record field constant-state observable output mapping drifted")
+    validate_record_field_constant_state_signature(spec, contract)
+    if fixture_binding is not None:
+        validate_record_field_constant_state_cases(spec, fixture_binding, contract)
+    return contract
+
+
+def validate_record_field_constant_state_signature(
+    spec: dict[str, Any], contract: dict[str, Any]
+) -> None:
+    signature = c_function_signature(spec)
+    if not signature or signature.get("function") != spec.get("function_name"):
+        raise ValueError("record field constant-state entry signature is missing")
+    if normalize_c_type(str(signature.get("return_type") or "")) not in {"bool", "_Bool"}:
+        raise ValueError("record field constant-state return type must be bool")
+    actual = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    entries = contract["entry_arguments"]
+    if [item.get("name") for item in actual] != [item["parameter"] for item in entries]:
+        raise ValueError("record field constant-state entry parameters drifted")
+    if [normalize_c_type(str(item.get("c_type") or "")) for item in actual] != [
+        normalize_c_type(str(item["c_type"])) for item in entries
+    ]:
+        raise ValueError("record field constant-state entry parameter types drifted")
+    if [item.get("direction") for item in actual] != [item["direction"] for item in entries]:
+        raise ValueError("record field constant-state entry directions drifted")
+
+
+def validate_record_field_constant_state_cases(
+    spec: dict[str, Any], fixture_binding: dict[str, Any], contract: dict[str, Any]
+) -> None:
+    cases = fixture_binding.get("case_bindings")
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("record field constant-state fixture cases are missing")
+    fields = [contract["return"]["fixture_field"], contract["state_output"]["fixture_field"]]
+    expected_outputs = {
+        str(fields[0]): bool(contract["return"]["value"]),
+        str(fields[1]): int(contract["state_update"]["value"]),
+    }
+    for case in cases:
+        payload = oracle_fixture_input_payload(spec, case)
+        expected = case.get("expected_outputs")
+        if not isinstance(payload, dict) or not isinstance(expected, dict):
+            raise ValueError("record field constant-state fixture case is incomplete")
+        if set(expected) != set(fields) or expected != expected_outputs:
+            raise ValueError("record field constant-state expected outputs drifted")
+        for entry in contract["entry_arguments"]:
+            for fixture_field, _ in scripted_record_initializer_fixture_paths(entry["initializer"]):
+                if not is_uint32_value(payload.get(fixture_field)):
+                    raise ValueError("record field constant-state fixture field must be u32")

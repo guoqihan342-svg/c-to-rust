@@ -1,0 +1,117 @@
+def stable_process_text(text: str, aliases: dict[str, str]) -> str:
+    stable = text
+    for source, replacement in sorted(aliases.items(), key=lambda item: len(item[0]), reverse=True):
+        variants = {source, source.replace("\\", "/"), source.replace("/", "\\")}
+        for variant in variants:
+            if variant:
+                stable = stable.replace(variant, replacement)
+    return stable.rstrip("\r\n") + ("\n" if stable else "")
+
+
+def generated_rust_report_cases(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    cases: list[dict[str, Any]] = []
+    fixture_binding = oracle_fixture_binding(spec)
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_payload = oracle_fixture_input_payload(spec, case_binding)
+        expected_outputs = case_binding.get("expected_outputs")
+        if not isinstance(case_payload, dict) or not isinstance(expected_outputs, dict):
+            continue
+        case = {
+            "id": case_binding.get("id"),
+            "crc": case_payload.get("crc"),
+            "buf": case_payload.get("buf"),
+            "size": case_payload.get("size"),
+            "return_code": expected_outputs.get("return_code"),
+        }
+        if pure_uint32_value_replay_supported(spec):
+            parameter_name = pure_uint32_value_parameter_name(spec)
+            case = {
+                "id": case_binding.get("id"),
+                parameter_name: case_payload.get(parameter_name),
+                "value": expected_outputs.get("value"),
+            }
+        elif signed_i32_return_value_replay_supported(spec):
+            case = {
+                "id": case_binding.get("id"),
+                "value": case_payload.get("value"),
+                "count": case_payload.get("count"),
+                "return_value": expected_outputs.get("return_value"),
+                "status": expected_outputs.get("status"),
+                "contract": expected_outputs.get("contract"),
+            }
+        elif single_i32_return_value_replay_supported(spec):
+            parameter_name = single_i32_parameter_name(spec)
+            case = {
+                "id": case_binding.get("id"),
+                parameter_name: case_payload.get(parameter_name),
+                "return_value": expected_outputs.get("return_value"),
+                "status": expected_outputs.get("status"),
+            }
+        elif single_u64_return_value_replay_supported(spec):
+            parameter_name = single_u64_parameter_name(spec)
+            case = {
+                "id": case_binding.get("id"),
+                parameter_name: case_payload.get(parameter_name),
+                "return_value": expected_outputs.get("return_value"),
+                "status": expected_outputs.get("status"),
+            }
+        elif single_i32_out0_report_replay_supported(spec):
+            parameter_name = single_i32_out0_input_parameter_name(spec)
+            case = {
+                "id": case_binding.get("id"),
+                parameter_name: case_payload.get(parameter_name),
+                "return_code": expected_outputs.get("return_code"),
+                "status": expected_outputs.get("status"),
+                "out0": expected_outputs.get("out0"),
+            }
+        elif i32_slice_output_report_replay_supported(spec):
+            parameters = i32_slice_output_parameters(spec)
+            input_param_name = str(parameters["input"].get("name") or "values") if parameters else "values"
+            length_param_name = str(parameters["length"].get("name") or "len") if parameters else "len"
+            case = {
+                "id": case_binding.get("id"),
+                input_param_name: case_payload.get(input_param_name),
+                length_param_name: case_payload.get(length_param_name),
+                "return_code": expected_outputs.get("return_code"),
+                "status": expected_outputs.get("status"),
+                "out_values": expected_outputs.get("out_values"),
+                "source_reads": expected_outputs.get("source_reads"),
+                "canonical_reads": expected_outputs.get("canonical_reads"),
+                "source_writes": expected_outputs.get("source_writes"),
+                "canonical_writes": expected_outputs.get("canonical_writes"),
+                "write_count": expected_outputs.get("write_count"),
+            }
+        elif i32_input_buffer_out0_sum_report_replay_supported(spec):
+            parameters = i32_input_buffer_out0_sum_parameters(spec)
+            input_param_name = str(parameters["input"].get("name") or "values") if parameters else "values"
+            length_param_name = str(parameters["length"].get("name") or "len") if parameters else "len"
+            case = {
+                "id": case_binding.get("id"),
+                input_param_name: case_payload.get(input_param_name),
+                length_param_name: case_payload.get(length_param_name),
+                "return_code": expected_outputs.get("return_code"),
+                "status": expected_outputs.get("status"),
+                "sum": expected_outputs.get("sum"),
+                "source_reads": expected_outputs.get("source_reads"),
+                "source_write": expected_outputs.get("source_write"),
+            }
+        elif single_i32_call_metadata_replay_supported(spec):
+            input_value = case_payload.get("input_value")
+            if input_value is None:
+                input_value = case_payload.get(single_i32_parameter_name(spec))
+            case = {
+                "id": case_binding.get("id"),
+                "input_value": input_value,
+                "return_value": expected_outputs.get("return_value"),
+                "status": expected_outputs.get("status"),
+                "call_expression_count": expected_outputs.get("call_expression_count"),
+                "call_expression_contexts": expected_outputs.get("call_expression_contexts"),
+                "source_calls": expected_outputs.get("source_calls"),
+            }
+        for optional_key in ["coverage_kind", "status"]:
+            if optional_key in case_payload:
+                case[optional_key] = case_payload[optional_key]
+        cases.append(case)
+    return cases

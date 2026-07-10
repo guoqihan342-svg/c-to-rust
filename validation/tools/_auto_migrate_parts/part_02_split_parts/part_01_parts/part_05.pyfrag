@@ -1,0 +1,256 @@
+def i32_input_buffer_out0_sum_call_arguments(spec: dict[str, Any]) -> list[str] | None:
+    parameters = i32_input_buffer_out0_sum_parameters(spec)
+    if parameters is None:
+        return None
+    input_param_name = str(parameters["input"].get("name") or "values")
+    length_param_name = str(parameters["length"].get("name") or "len")
+    output_param_name = str(parameters["output"].get("name") or "out")
+    input_name = safe_ident(input_param_name)
+    length_name = safe_ident(length_param_name)
+    arguments: list[str] = []
+    for parameter in parameters["ordered"]:
+        parameter_name = str(parameter.get("name") or "")
+        if parameter_name == input_param_name:
+            arguments.append(f"case.{input_name}")
+        elif parameter_name == length_param_name:
+            arguments.append(f"case.{length_name}")
+        elif parameter_name == output_param_name:
+            arguments.append("&mut out")
+        else:
+            return None
+    return arguments
+
+
+def single_i32_call_metadata_replay_supported(spec: dict[str, Any]) -> bool:
+    if behavior_fields(spec) != [
+        "return_value",
+        "status",
+        "call_expression_count",
+        "call_expression_contexts",
+        "source_calls",
+    ]:
+        return False
+    boundary = spec.get("c_boundary", {})
+    if not isinstance(boundary, dict):
+        return False
+    contract = boundary.get("call_expression_contract", {})
+    if not isinstance(contract, dict):
+        return False
+    if contract.get("direct_call_only") is not True or contract.get("callee_scope") != "self_recursive":
+        return False
+    signature = c_function_signature(spec)
+    if normalize_c_type(str(signature.get("return_type") or "")) != "int":
+        return False
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 1:
+        return False
+    return normalize_c_type(str(parameters[0].get("c_type") or "")) == "int"
+
+
+def rust_replay_single_i32_call_metadata_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_single_i32_call_metadata_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this call-metadata replay generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        input_value: i32,\n",
+        "        return_value: i32,\n",
+        "        status: &'static str,\n",
+        "        call_expression_count: usize,\n",
+        "        call_expression_contexts: &'static [&'static str],\n",
+        "        source_calls: &'static [&'static str],\n",
+        "    }\n",
+        "\n",
+        "    const EXPECTED_CONTEXTS: &[&str] = &[\n",
+        "        \"declaration_initializer\",\n",
+        "        \"assignment\",\n",
+        "        \"return\",\n",
+        "    ];\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            f"        let actual = {function_name}(case.input_value);\n",
+            '        assert_eq!(actual, case.return_value, "{} return_value drifted", case.id);\n',
+            '        assert_eq!(case.status, "ok", "{} fixture status drifted", case.id);\n',
+            '        assert_eq!(case.call_expression_contexts, EXPECTED_CONTEXTS, "{} call contexts drifted", case.id);\n',
+            '        assert_eq!(case.call_expression_count, case.source_calls.len(), "{} source call count drifted", case.id);\n',
+            '        assert_eq!(case.call_expression_count, case.call_expression_contexts.len(), "{} call context count drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_single_i32_call_metadata_case_literal(
+    spec: dict[str, Any], case_binding: dict[str, Any]
+) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    input_value = case_payload.get("input_value")
+    if input_value is None:
+        input_value = case_payload.get(single_i32_parameter_name(spec))
+    expected_return = expected_outputs.get("return_value")
+    status = expected_outputs.get("status")
+    call_count = expected_outputs.get("call_expression_count")
+    contexts = expected_outputs.get("call_expression_contexts")
+    source_calls = expected_outputs.get("source_calls")
+    if not is_i32_value(input_value) or not is_i32_value(expected_return):
+        return None
+    if status != "ok" or not is_size_value(call_count):
+        return None
+    if not is_string_list(contexts) or not is_string_list(source_calls):
+        return None
+    if int(call_count) != len(source_calls) or int(call_count) != len(contexts):
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"input_value: {int(input_value)}i32, "
+        f"return_value: {int(expected_return)}i32, "
+        f"status: {rust_string_literal(status)}, "
+        f"call_expression_count: {int(call_count)}usize, "
+        f"call_expression_contexts: {rust_string_slice_literal(contexts)}, "
+        f"source_calls: {rust_string_slice_literal(source_calls)} "
+        "},\n"
+    )
+
+
+def single_i32_parameter_name(spec: dict[str, Any]) -> str:
+    signature = c_function_signature(spec)
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    return str(parameters[0].get("name") or "value") if parameters else "value"
+
+
+def is_string_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def is_i32_list(value: Any) -> bool:
+    return isinstance(value, list) and all(is_i32_value(item) for item in value)
+
+
+def rust_replay_fdb_blob_make_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_fdb_blob_make_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this fdb_blob_make replay generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        value_buf: &'static [u8],\n",
+        "        value_buf_is_null: bool,\n",
+        "        buf_len: usize,\n",
+        "        initial_blob_size: usize,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            "        if !case.value_buf_is_null {\n",
+            '            assert!(case.value_buf.len() >= case.buf_len, "{} fixture buffer shorter than declared length", case.id);\n',
+            "        }\n",
+            "        let value_ptr: *const core::ffi::c_void = if case.value_buf_is_null {\n",
+            "            core::ptr::null::<core::ffi::c_void>()\n",
+            "        } else {\n",
+            "            case.value_buf.as_ptr().cast::<core::ffi::c_void>()\n",
+            "        };\n",
+            "        let mut blob = FdbBlob { buf: core::ptr::null_mut(), size: case.initial_blob_size };\n",
+            "        let blob_ptr = &mut blob as *mut FdbBlob;\n",
+            "        let returned_ptr = {\n",
+            f"            let returned = {function_name}(&mut blob, value_ptr, case.buf_len);\n",
+            "            returned as *mut FdbBlob\n",
+            "        };\n",
+            '        assert_eq!(returned_ptr, blob_ptr, "{} return_same_blob drifted", case.id);\n',
+            '        assert_eq!(blob.buf, value_ptr as *mut core::ffi::c_void, "{} blob.buf drifted", case.id);\n',
+            '        assert_eq!(blob.size, case.buf_len, "{} blob.size drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_fdb_blob_make_case_literal(spec: dict[str, Any], case_binding: dict[str, Any]) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    return_same_blob = expected_outputs.get("return_same_blob")
+    expected_blob_buf = expected_outputs.get("blob.buf")
+    expected_blob_size = expected_outputs.get("blob.size")
+    buf_len = case_payload.get("buf_len")
+    initial_blob_size = case_payload.get("initial_blob_size", 0)
+    value_buf = case_payload.get("value_buf")
+    if return_same_blob is not True or expected_blob_buf != "value_buf":
+        return None
+    if not is_size_value(buf_len) or not is_size_value(initial_blob_size):
+        return None
+    if expected_blob_size != int(buf_len):
+        return None
+    if value_buf is None:
+        value_buf_literal = "&[]"
+        value_buf_is_null = "true"
+    elif is_byte_list(value_buf):
+        value_buf_literal = rust_byte_slice_literal(value_buf)
+        value_buf_is_null = "false"
+    else:
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"value_buf: {value_buf_literal}, "
+        f"value_buf_is_null: {value_buf_is_null}, "
+        f"buf_len: {int(buf_len)}usize, "
+        f"initial_blob_size: {int(initial_blob_size)}usize "
+        "},\n"
+    )

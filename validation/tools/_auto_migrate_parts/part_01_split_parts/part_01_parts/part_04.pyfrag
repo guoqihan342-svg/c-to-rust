@@ -1,0 +1,77 @@
+def c_oracle_case_execution_source(
+    spec: dict[str, Any],
+    signature: dict[str, Any],
+    case_binding: dict[str, Any],
+) -> dict[str, str] | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    expected_return = expected_outputs.get("return_code")
+    if not is_uint32_value(expected_return):
+        return None
+
+    crc = case_payload.get("crc")
+    buf = case_payload.get("buf")
+    size = case_payload.get("size")
+    if not is_uint32_value(crc) or not is_size_value(size) or not is_byte_list(buf):
+        return None
+    if int(size) != len(buf):
+        return None
+
+    function_name = required_str(spec, "function_name")
+    case_id = str(case_binding.get("id") or "case")
+    case_ident = c_safe_ident(case_id)
+    buffer_name = f"{case_ident}_buf"
+    actual_name = f"actual_{case_ident}_return_code"
+    buffer_values = c_byte_array_initializer(buf)
+    expected_literal = c_integer_literal("uint32_t", int(expected_return))
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    argument_expressions = [
+        c_integer_literal(str(parameters[0].get("c_type") or "uint32_t"), int(crc)),
+        buffer_name,
+        c_integer_literal(str(parameters[2].get("c_type") or "size_t"), int(size)),
+    ]
+    declarations = f"static const uint8_t {buffer_name}[] = {{ {buffer_values} }};\n\n"
+    statements = (
+        f"  uint32_t {actual_name} = {function_name}({', '.join(argument_expressions)});\n"
+        f"  if ({actual_name} != {expected_literal}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' return_code mismatch: expected ' + str(int(expected_return)) + ' got %llu\n')}, "
+        f"(unsigned long long){actual_name});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' return_code matched')});\n"
+    )
+    return {"declarations": declarations, "statements": statements}
+
+
+def oracle_fixture_input_payload(spec: dict[str, Any], case_binding: dict[str, Any]) -> Any | None:
+    inline_input = case_binding.get("input_payload")
+    if isinstance(inline_input, dict) and inline_input:
+        return inline_input
+    fixture = spec.get("fixture_contract", {})
+    input_ref = str(case_binding.get("input_ref") or "")
+    candidate_refs = [fixture.get("path") or fixture.get("input"), case_binding.get("expected_ref")]
+    for candidate_ref in candidate_refs:
+        payload = load_fixture_ref_payload(candidate_ref)
+        if payload is None:
+            continue
+        case_payload = fixture_case_payload(payload, input_ref)
+        if isinstance(case_payload, dict):
+            return case_payload
+    inline_case = fixture_case_payload({"cases": fixture.get("cases", [])}, input_ref)
+    if isinstance(inline_case, dict):
+        return inline_case
+    return None
+
+
+def c_function_signature(spec: dict[str, Any]) -> dict[str, Any]:
+    function_name = required_str(spec, "function_name")
+    signatures = spec.get("c_boundary", {}).get("signatures", [])
+    return next(
+        (item for item in signatures if isinstance(item, dict) and item.get("function") == function_name),
+        {},
+    )

@@ -16,6 +16,7 @@ from .contract import (
     validate_cases,
 )
 from .field_add_contract import KIND as FIELD_ADD_KIND
+from .constant_state_contract import KIND as CONSTANT_STATE_KIND
 
 
 @dataclass(frozen=True)
@@ -137,13 +138,29 @@ def validate_carrier(
     excluded = claim.get("excluded_semantics")
     if not isinstance(excluded, list) or not excluded:
         raise ReporterError("translation carrier excluded semantics must be declared")
-    if contract.get("kind") == FIELD_ADD_KIND:
+    if contract.get("kind") == CONSTANT_STATE_KIND:
+        validate_constant_state_carrier_source(c_source, contract)
+    elif contract.get("kind") == FIELD_ADD_KIND:
         validate_field_add_carrier_source(c_source, contract)
     else:
         external_name = str(contract["external_callee"]["name"])
         if f"{external_name}(" not in c_source:
             raise ReporterError("declared external callee is not present in carrier source")
     return claim
+
+
+def validate_constant_state_carrier_source(c_source: str, contract: dict[str, Any]) -> None:
+    state = contract["state_output"]
+    root = re.escape(str(state["parameter"]))
+    path = [re.escape(str(item)) for item in state["field_path"]]
+    access = rf"\b{root}\s*->\s*{path[0]}" + "".join(
+        rf"\s*\.\s*{component}" for component in path[1:]
+    )
+    pattern = re.compile(rf"{access}\s*=\s*(?:\(\s*uint32_t\s*\)\s*)?0[uU]?\s*;")
+    if len(pattern.findall(c_source)) != 1:
+        raise ReporterError(
+            "carrier must contain one declared nested u32 constant-zero assignment"
+        )
 
 
 def validate_field_add_carrier_source(c_source: str, contract: dict[str, Any]) -> None:

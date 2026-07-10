@@ -1,0 +1,214 @@
+def run_generated_rust_replay(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    replay: dict[str, Any],
+    rust_check: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    replay_path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
+    draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
+    if rust_check.get("status") != "passed":
+        return replay
+    if rust_check_has_harness_only_external_bindings(rust_check):
+        replay["status"] = "not_applicable"
+        replay["skip_reason"] = "compile_only_external_bindings_not_executable"
+        replay["not_applicable_reason"] = "compile_only_external_bindings_not_executable"
+        replay["generated_draft_replay_pass"] = False
+        replay["generated_draft_semantic_pass"] = False
+        replay["known_gaps"] = [
+            "Rust-check harness-only external callee bindings are compile-only and must not be executed as replay proof."
+        ]
+        write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", replay)
+        return replay
+    if not generated_rust_replay_supported(spec, evidence_dir):
+        return replay
+    external_context = external_direct_callee_context(
+        spec,
+        load_plan_call_expressions(evidence_dir, slice_id),
+    )
+    if external_context["status"] == "recorded":
+        with tempfile.TemporaryDirectory(prefix="c2r-generated-replay-input-") as replay_input_dir:
+            replay_draft_path = Path(replay_input_dir) / draft_path.name
+            replay_draft_path.write_text(draft_path.read_text(encoding="utf-8-sig"), encoding="utf-8")
+            inject_external_callee_stubs(replay_draft_path, external_context, spec)
+            result = run_generated_rust_replay_once(replay_draft_path, replay_path)
+    else:
+        result = run_generated_rust_replay_once(draft_path, replay_path)
+    write_text(evidence_dir / "generated-rust-replay-compile.stdout.log", result["compile_stdout"])
+    write_text(evidence_dir / "generated-rust-replay-compile.stderr.jsonl", result["compile_stderr"])
+    write_text(evidence_dir / "generated-rust-replay.stdout.log", result["run_stdout"])
+    write_text(evidence_dir / "generated-rust-replay.stderr.log", result["run_stderr"])
+    passed = result["status"] == "passed"
+    replay["status"] = "passed" if passed else "failed"
+    replay["generated_draft_replay_pass"] = passed
+    replay["generated_draft_semantic_pass"] = False
+    if record_u32_field_constant_state_replay_contract(spec) is not None:
+        replay["fixture_state_model"] = {
+            "kind": RECORD_U32_FIELD_CONSTANT_STATE_KIND,
+            "scope": "fixture_only",
+            "operation": "constant_assign",
+            "value": 0,
+        }
+    elif record_u32_field_wrapping_add_state_replay_contract(spec) is not None:
+        replay["fixture_state_model"] = {
+            "kind": RECORD_U32_FIELD_WRAPPING_ADD_STATE_KIND,
+            "scope": "fixture_only",
+            "operation": "wrapping_add",
+        }
+    elif scripted_external_record_u32_sequence_do_while_state_replay_contract(spec) is not None:
+        replay["fixture_external_stub"] = {
+            "kind": SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND,
+            "scope": "fixture_only",
+            "semantics_verified": False,
+        }
+    elif scripted_external_record_u32_call_bool_state_replay_contract(spec) is not None:
+        replay["fixture_external_stub"] = {
+            "kind": SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND,
+            "scope": "fixture_only",
+            "semantics_verified": False,
+        }
+    elif scripted_external_u32_call_bool_out_replay_contract(spec) is not None:
+        replay["fixture_external_stub"] = {
+            "kind": SCRIPTED_EXTERNAL_U32_CALL_BOOL_OUT_KIND,
+            "scope": "fixture_only",
+            "semantics_verified": False,
+        }
+    replay["replay_execution"] = {
+        "status": result["status"],
+        "phase": result["phase"],
+        "compile_command": result["compile_command"],
+        "compile_returncode": result["compile_returncode"],
+        "run_command": result["run_command"],
+        "run_returncode": result["run_returncode"],
+        "stdout_log": rel(evidence_dir / "generated-rust-replay.stdout.log"),
+        "stderr_log": rel(evidence_dir / "generated-rust-replay.stderr.log"),
+    }
+    replay["known_gaps"] = [
+        "Generated Rust replay passed committed fixture cases; C oracle, schema diff, negative diff, unsafe, and final verification gates are still required."
+    ]
+    for mapping in replay.get("translation_mappings", []):
+        if isinstance(mapping, dict):
+            mapping["status"] = "passed" if passed else "failed"
+    write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", replay)
+    return replay
+
+
+def rust_check_has_harness_only_external_bindings(rust_check: dict[str, Any]) -> bool:
+    report = rust_check.get("rust_check_harness_only_bindings")
+    if not isinstance(report, dict):
+        return False
+    return any(
+        isinstance(binding, dict)
+        and (
+            binding.get("status") in {"harness_only", "generated_compile_only"}
+            or binding.get("allowed_use") == "rustc_compile_only"
+        )
+        for binding in report.get("bindings", [])
+    )
+
+
+def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) -> bool:
+    if (
+        behavior_fields(spec) != ["return_code"]
+        and not record_u32_field_constant_state_replay_supported(spec)
+        and not record_u32_field_wrapping_add_state_replay_supported(spec)
+        and not scripted_external_record_u32_sequence_do_while_state_replay_supported(spec)
+        and not scripted_external_record_u32_call_bool_state_replay_supported(spec)
+        and not scripted_external_u32_call_bool_out_replay_supported(spec)
+        and not readonly_byte_slice_bool_return_replay_supported(spec)
+        and not fdb_blob_make_replay_supported(spec)
+        and not fdb_kv_to_blob_replay_supported(spec)
+        and not record_pointer_identity_return_replay_supported(spec)
+        and not pure_uint32_value_replay_supported(spec)
+        and not signed_i32_return_value_replay_supported(spec)
+        and not single_i32_return_value_replay_supported(spec)
+        and not single_u64_return_value_replay_supported(spec)
+        and not single_i32_out0_report_replay_supported(spec)
+        and not i32_slice_output_report_replay_supported(spec)
+        and not i32_input_buffer_out0_sum_report_replay_supported(spec)
+        and not single_i32_call_metadata_replay_supported(spec)
+    ):
+        return False
+    slice_id = required_str(spec, "slice_id")
+    plan_path = evidence_dir / f"l3-{slice_id}-auto-translation-plan.json"
+    draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
+    replay_path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
+    if not plan_path.exists() or not draft_path.exists() or not replay_path.exists():
+        return False
+    plan = read_json(plan_path)
+    rule_ids = plan.get("translation_summary", {}).get("translation_rule_ids", [])
+    return "clang-lowered-typed-ir" in rule_ids
+
+
+def run_generated_rust_replay_once(draft_path: Path, replay_path: Path) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="c2r-generated-replay-") as build_dir_text:
+        build_dir = Path(build_dir_text)
+        combined_path = build_dir / "generated_replay.rs"
+        exe_path = build_dir / "generated_replay.exe"
+        combined_path.write_text(
+            draft_path.read_text(encoding="utf-8-sig")
+            + "\n"
+            + replay_path.read_text(encoding="utf-8-sig"),
+            encoding="utf-8",
+        )
+        compile_cmd = [
+            "rustc",
+            "--edition=2021",
+            "--test",
+            "--error-format=json",
+            str(combined_path),
+            "-o",
+            str(exe_path),
+        ]
+        compile_result = subprocess.run(
+            compile_cmd,
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
+        aliases = {
+            str(build_dir): "<generated-replay>",
+            str(REPO_ROOT): ".",
+        }
+        compile_stdout = stable_process_text(compile_result.stdout, aliases)
+        compile_stderr = stable_process_text(compile_result.stderr, aliases)
+        stable_compile_command = (
+            "rustc --edition=2021 --test --error-format=json "
+            "<generated-replay.rs> -o <generated-replay-executable>"
+        )
+        if compile_result.returncode != 0:
+            return {
+                "status": "failed",
+                "phase": "compile",
+                "compile_command": stable_compile_command,
+                "compile_returncode": compile_result.returncode,
+                "compile_stdout": compile_stdout,
+                "compile_stderr": compile_stderr,
+                "run_command": None,
+                "run_returncode": None,
+                "run_stdout": "",
+                "run_stderr": "",
+            }
+        run_cmd = [str(exe_path), "--nocapture"]
+        run_result = subprocess.run(
+            run_cmd,
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
+        return {
+            "status": "passed" if run_result.returncode == 0 else "failed",
+            "phase": "run",
+            "compile_command": stable_compile_command,
+            "compile_returncode": compile_result.returncode,
+            "compile_stdout": compile_stdout,
+            "compile_stderr": compile_stderr,
+            "run_command": "<generated-replay-executable> --nocapture",
+            "run_returncode": run_result.returncode,
+            "run_stdout": stable_process_text(run_result.stdout, aliases),
+            "run_stderr": stable_process_text(run_result.stderr, aliases),
+        }

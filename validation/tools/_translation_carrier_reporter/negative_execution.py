@@ -3,13 +3,16 @@ from __future__ import annotations
 import hashlib
 import re
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 
 from .contract import ReporterError, behavior_fields
 from .field_add_contract import KIND as FIELD_ADD_KIND
+from .constant_state_contract import KIND as CONSTANT_STATE_KIND
+from .constant_state_model import (
+    negative_partition_probe_source as constant_state_negative_partition_probe_source,
+)
 from .field_add_model import (
     negative_partition_probe_source as field_add_negative_partition_probe_source,
 )
@@ -23,6 +26,15 @@ from .sequence_model import (
     negative_partition_probe_source as sequence_negative_partition_probe_source,
 )
 from .source_binding import StaticContext
+from .negative_runtime import (
+    add_command_artifacts,
+    command_result_summary,
+    command_summary,
+    content_ref,
+    ensure_contained,
+    path_ref,
+    run_command,
+)
 
 
 COMPARISON_PATTERN = re.compile(rb"(?<![=!<>])==(?!=)")
@@ -38,7 +50,11 @@ def run_negative_execution(
     if rustc is None:
         raise ReporterError("rustc is required for generated-draft negative replay")
     original = draft_path.read_bytes()
-    if context.contract.get("kind") == FIELD_ADD_KIND:
+    if context.contract.get("kind") == CONSTANT_STATE_KIND:
+        pattern = re.compile(rb"\b0(?=(?:u32)?\s*;)")
+        operator_from = b"0"
+        operator_to = b"1"
+    elif context.contract.get("kind") == FIELD_ADD_KIND:
         pattern = re.compile(rb"\bwrapping_add\b")
         operator_from = b"wrapping_add"
         operator_to = b"wrapping_sub"
@@ -119,7 +135,7 @@ def run_negative_execution(
                 sequence_mutation_partition(case, context.contract)
                 if context.contract.get("kind") == SEQUENCE_KIND
                 else "observable_mismatch"
-                if context.contract.get("kind") == FIELD_ADD_KIND
+                if context.contract.get("kind") in {FIELD_ADD_KIND, CONSTANT_STATE_KIND}
                 else (
                     "comparison_true"
                     if case["expected_outputs"][return_field]
@@ -148,7 +164,7 @@ def run_negative_execution(
 
     true_ids = [item["case_id"] for item in case_runs if item["comparison_partition"] == "comparison_true"]
     false_ids = [item["case_id"] for item in case_runs if item["comparison_partition"] == "comparison_false"]
-    if context.contract.get("kind") not in {SEQUENCE_KIND, FIELD_ADD_KIND} and (
+    if context.contract.get("kind") not in {SEQUENCE_KIND, FIELD_ADD_KIND, CONSTANT_STATE_KIND} and (
         not true_ids or not false_ids
     ):
         raise ReporterError("actual negative replay must detect true and false comparison partitions")
@@ -211,6 +227,8 @@ def run_negative_execution(
 
 
 def partition_probe_source(context: StaticContext) -> str:
+    if context.contract.get("kind") == CONSTANT_STATE_KIND:
+        return constant_state_negative_partition_probe_source(context)
     if context.contract.get("kind") == FIELD_ADD_KIND:
         return field_add_negative_partition_probe_source(context)
     if context.contract.get("kind") == SEQUENCE_KIND:
@@ -252,101 +270,6 @@ fn __c2r_negative_partition_case_{index}() {{
 """
         )
     return "".join(tests)
-
-
-def run_command(argv: list[str], *, aliases: dict[str, str]) -> dict[str, Any]:
-    try:
-        completed = subprocess.run(
-            argv,
-            capture_output=True,
-            check=False,
-            timeout=60,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise ReporterError(f"negative replay command failed to execute: {exc}") from exc
-    return {
-        "argv": [stable_text(item, aliases) for item in argv],
-        "returncode": completed.returncode,
-        "stdout": stable_bytes(completed.stdout, aliases),
-        "stderr": stable_bytes(completed.stderr, aliases),
-    }
-
-
-def stable_text(value: str, aliases: dict[str, str]) -> str:
-    stable = value
-    for source, replacement in sorted(aliases.items(), key=lambda item: len(item[0]), reverse=True):
-        variants = {source, source.replace("\\", "/"), source.replace("/", "\\")}
-        for variant in variants:
-            if variant:
-                stable = stable.replace(variant, replacement)
-    return stable
-
-
-def stable_bytes(value: bytes, aliases: dict[str, str]) -> bytes:
-    stable = stable_text(value.decode("utf-8", errors="replace"), aliases)
-    return (stable.rstrip("\r\n") + ("\n" if stable else "")).encode("utf-8")
-
-
-def add_command_artifacts(
-    artifacts: dict[Path, bytes],
-    artifact_dir: Path,
-    stem: str,
-    result: dict[str, Any],
-) -> None:
-    artifacts[artifact_dir / f"{stem}.stdout.log"] = result["stdout"]
-    artifacts[artifact_dir / f"{stem}.stderr.log"] = result["stderr"]
-
-
-def command_summary(
-    context: StaticContext,
-    artifact_dir: Path,
-    stem: str,
-    compile_result: dict[str, Any],
-    run_result: dict[str, Any],
-    *,
-    expected_run_failure: bool,
-) -> dict[str, Any]:
-    return {
-        "compile": command_result_summary(
-            context, artifact_dir, f"{stem}-compile", compile_result
-        ),
-        "run": command_result_summary(context, artifact_dir, f"{stem}-run", run_result),
-        "expected_run_failure": expected_run_failure,
-    }
-
-
-def command_result_summary(
-    context: StaticContext,
-    artifact_dir: Path,
-    stem: str,
-    result: dict[str, Any],
-) -> dict[str, Any]:
-    stdout = result["stdout"]
-    stderr = result["stderr"]
-    return {
-        "argv": result["argv"],
-        "returncode": result["returncode"],
-        "stdout": content_ref(context.repo_root, artifact_dir / f"{stem}.stdout.log", stdout),
-        "stderr": content_ref(context.repo_root, artifact_dir / f"{stem}.stderr.log", stderr),
-    }
-
-
-def path_ref(root: Path, path: Path, sha256: str) -> dict[str, Any]:
-    return {"path": path.resolve().relative_to(root).as_posix(), "sha256": sha256}
-
-
-def content_ref(root: Path, path: Path, content: bytes) -> dict[str, Any]:
-    return {
-        "path": path.resolve().relative_to(root).as_posix(),
-        "sha256": hashlib.sha256(content).hexdigest(),
-    }
-
-
-def ensure_contained(root: Path, path: Path, label: str) -> None:
-    try:
-        path.relative_to(root)
-    except ValueError as exc:
-        raise ReporterError(f"{label} escapes repo root") from exc
 
 
 def rust_string(value: Any) -> str:

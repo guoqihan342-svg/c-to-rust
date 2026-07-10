@@ -7,6 +7,7 @@ from typing import Any
 
 from .contract import ReporterError, behavior_fields, require_dict
 from .field_add_contract import KIND as FIELD_ADD_KIND
+from .constant_state_contract import KIND as CONSTANT_STATE_KIND
 from .source_binding import (
     StaticContext,
     file_ref,
@@ -16,6 +17,22 @@ from .source_binding import (
 )
 
 
+from .runtime_replay_validation import (
+    replay_artifact_ref,
+    validate_candidate_rust_report,
+    validate_replay_payload,
+    validate_replay_test_ref,
+    validate_rust_check,
+)
+from .runtime_oracle_validation import (
+    ensure_inside_repo,
+    json_pointer,
+    resolve_repo_path,
+    resolve_status_path,
+    validate_execution_or_promotion,
+    validate_harness,
+    validate_status_identity,
+)
 HOST_PATH_PATTERN = re.compile(
     r"(?:[A-Za-z]:[\\/]|/(?:tmp|mnt|home|root|Users?)/|\\\\wsl(?:\$|\.localhost)[\\/])",
     re.IGNORECASE,
@@ -273,331 +290,8 @@ def validate_generated_rust_replay(
             "replay_test": replay_test_path,
         },
     }
-    if context.contract.get("kind") == FIELD_ADD_KIND:
+    if context.contract.get("kind") in {FIELD_ADD_KIND, CONSTANT_STATE_KIND}:
         result["fixture_state_model"] = replay["fixture_state_model"]
     else:
         result["fixture_external_stub"] = replay["fixture_external_stub"]
     return result
-
-
-def replay_artifact_ref(
-    root: Path,
-    path: Path,
-    artifact: dict[str, Any],
-) -> dict[str, Any]:
-    return field_bound_ref(
-        root,
-        path,
-        status=artifact.get("status"),
-        generated_draft_replay_pass=artifact.get("generated_draft_replay_pass"),
-        generated_draft_semantic_pass=artifact.get("generated_draft_semantic_pass"),
-    )
-
-
-def validate_rust_check(context: StaticContext, rust_check: dict[str, Any]) -> None:
-    if rust_check.get("status") != "passed":
-        raise ReporterError("rust-check status is not passed")
-    reject_host_path_text(rust_check.get("command"), "rust-check command")
-    harness = require_dict(
-        rust_check.get("rust_check_harness_only_bindings"),
-        "rust-check harness-only bindings",
-    )
-    bindings = harness.get("bindings")
-    if context.contract.get("kind") == FIELD_ADD_KIND:
-        if (
-            harness.get("status") != "none"
-            or harness.get("semantics_verified") is not False
-            or bindings != []
-        ):
-            raise ReporterError("record field replay must not use external fixture bindings")
-        external_context = require_dict(
-            rust_check.get("external_callee_context"),
-            "rust-check external callee context",
-        )
-        if (
-            external_context.get("status") != "not_applicable"
-            or external_context.get("declared_count") != 0
-            or external_context.get("blocked_count") != 0
-            or external_context.get("declared_callees") != []
-        ):
-            raise ReporterError("record field replay external callee context drifted")
-        return
-    if harness.get("status") != "emitted" or harness.get("semantics_verified") is not False:
-        raise ReporterError("rust-check fixture-only semantics boundary drifted")
-    if not isinstance(bindings, list) or not bindings:
-        raise ReporterError("rust-check fixture-only binding is missing")
-    expected_name = context.contract["external_callee"]["name"]
-    matching = [item for item in bindings if isinstance(item, dict) and item.get("name") == expected_name]
-    if len(matching) != 1:
-        raise ReporterError("rust-check external fixture binding drifted")
-    binding = matching[0]
-    if (
-        binding.get("fixture_only") is not True
-        or binding.get("semantics_verified") is not False
-        or binding.get("replay_contract_kind") != context.contract["kind"]
-    ):
-        raise ReporterError("rust-check external binding overclaims semantics")
-    external_context = require_dict(
-        rust_check.get("external_callee_context"),
-        "rust-check external callee context",
-    )
-    declared = external_context.get("declared_callees")
-    matching_declared = [
-        item for item in declared or [] if isinstance(item, dict) and item.get("name") == expected_name
-    ]
-    if len(matching_declared) != 1 or matching_declared[0].get("semantics_verified") is not False:
-        raise ReporterError("rust-check external callee context overclaims semantics")
-
-
-def validate_candidate_rust_report(
-    context: StaticContext,
-    report: dict[str, Any],
-    draft_path: Path,
-    draft_sha: str,
-) -> None:
-    validate_identity(context, report, "candidate rust report", source_commit_optional=True)
-    if (
-        report.get("status") != "passed"
-        or report.get("generated_draft_replay_pass") is not True
-        or report.get("generated_draft_semantic_pass") is not False
-    ):
-        raise ReporterError("candidate rust report replay or semantic boundary drifted")
-    draft_ref = require_dict(report.get("generated_draft"), "candidate generated_draft")
-    declared_path = resolve_repo_path(context, draft_ref.get("path"), "candidate rust draft")
-    if declared_path != draft_path or draft_ref.get("sha256") != draft_sha:
-        raise ReporterError("candidate rust draft path or sha256 drifted")
-
-
-def validate_replay_payload(context: StaticContext, replay: dict[str, Any]) -> None:
-    validate_identity(context, replay, "generated replay", source_commit_optional=False)
-    if (
-        replay.get("status") != "passed"
-        or replay.get("generated_draft_replay_pass") is not True
-        or replay.get("generated_draft_semantic_pass") is not False
-    ):
-        raise ReporterError("generated draft replay did not pass or overclaims semantics")
-    if replay.get("behavior_fields") != behavior_fields(context.contract):
-        raise ReporterError("generated replay behavior fields drifted")
-    if context.contract.get("kind") == FIELD_ADD_KIND:
-        model = require_dict(replay.get("fixture_state_model"), "fixture_state_model")
-        if (
-            model.get("kind") != context.contract["kind"]
-            or model.get("scope") != "fixture_only"
-            or model.get("operation") != "wrapping_add"
-            or replay.get("fixture_external_stub") is not None
-        ):
-            raise ReporterError("generated replay state model boundary drifted")
-        execution = require_dict(replay.get("replay_execution"), "generated replay execution")
-        validate_replay_execution(execution)
-        validate_replay_fixture_ref(context, replay)
-        return
-    stub = require_dict(replay.get("fixture_external_stub"), "fixture_external_stub")
-    if (
-        stub.get("kind") != context.contract["kind"]
-        or stub.get("scope") != "fixture_only"
-        or stub.get("semantics_verified") is not False
-    ):
-        raise ReporterError("generated replay external stub semantics boundary drifted")
-    execution = require_dict(replay.get("replay_execution"), "generated replay execution")
-    validate_replay_execution(execution)
-    validate_replay_fixture_ref(context, replay)
-
-
-def validate_replay_execution(execution: dict[str, Any]) -> None:
-    if (
-        execution.get("status") != "passed"
-        or execution.get("compile_returncode") != 0
-        or execution.get("run_returncode") != 0
-    ):
-        raise ReporterError("generated replay compile or run did not pass")
-    reject_host_path_text(execution.get("compile_command"), "generated replay compile command")
-    reject_host_path_text(execution.get("run_command"), "generated replay run command")
-
-
-def validate_replay_fixture_ref(context: StaticContext, replay: dict[str, Any]) -> None:
-    fixtures = replay.get("source_test_inputs", {}).get("fixtures")
-    expected_fixture_path = context.fixture_path.relative_to(context.repo_root).as_posix()
-    matching = [
-        item
-        for item in fixtures or []
-        if isinstance(item, dict) and item.get("path") == expected_fixture_path
-    ]
-    if (
-        len(matching) != 1
-        or matching[0].get("hash") != context.spec.get("fixture_hash")
-        or matching[0].get("operation_count") != len(context.cases)
-    ):
-        raise ReporterError("generated replay fixture binding drifted")
-
-
-def validate_replay_test_ref(
-    context: StaticContext,
-    replay: dict[str, Any],
-) -> tuple[Path, str]:
-    test_draft_path = resolve_repo_path(context, replay.get("test_draft"), "replay test draft")
-    tests = replay.get("rust_tests")
-    if not isinstance(tests, list) or not tests:
-        raise ReporterError("generated replay test ref is missing")
-    matching = [
-        item
-        for item in tests
-        if isinstance(item, dict)
-        and resolve_repo_path(context, item.get("file"), "rust test file") == test_draft_path
-    ]
-    if len(matching) != 1:
-        raise ReporterError("generated replay test path drifted")
-    declared_sha = matching[0].get("file_hash")
-    if not isinstance(declared_sha, str) or declared_sha != sha256_file(test_draft_path):
-        raise ReporterError("generated replay test sha256 drifted")
-    return test_draft_path, declared_sha
-
-
-def validate_identity(
-    context: StaticContext,
-    artifact: dict[str, Any],
-    label: str,
-    *,
-    source_commit_optional: bool,
-) -> None:
-    for key in ("target_id", "slice_id"):
-        if artifact.get(key) != context.spec.get(key):
-            raise ReporterError(f"{label} {key} drifted")
-    source_commit = artifact.get("source_commit")
-    if (not source_commit_optional or source_commit is not None) and source_commit != context.spec.get(
-        "source_commit"
-    ):
-        raise ReporterError(f"{label} source_commit drifted")
-
-
-def resolve_repo_path(context: StaticContext, value: Any, label: str) -> Path:
-    if not isinstance(value, str) or not value:
-        raise ReporterError(f"{label} path is missing")
-    path = Path(value)
-    resolved = (path if path.is_absolute() else context.repo_root / path).resolve(strict=True)
-    ensure_inside_repo(context, resolved, label)
-    return resolved
-
-
-def validate_status_identity(context: StaticContext, status: dict[str, Any]) -> None:
-    for key in ("target_id", "slice_id"):
-        if status.get(key) != context.spec.get(key):
-            raise ReporterError(f"C oracle status {key} drifted")
-    if status.get("source_commit") not in (None, context.spec.get("source_commit")):
-        raise ReporterError("C oracle status source_commit drifted")
-    if status.get("fixture") != context.fixture_path.relative_to(context.repo_root).as_posix():
-        raise ReporterError("C oracle status fixture path drifted")
-    status_fixture_sha = status.get("fixture_sha256")
-    if status_fixture_sha is not None and status_fixture_sha != context.spec.get("fixture_hash"):
-        raise ReporterError("C oracle status fixture hash drifted")
-
-
-def validate_harness(
-    context: StaticContext,
-    harness_path: Path,
-    status: dict[str, Any],
-) -> None:
-    harness = harness_path.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n")
-    c_source = str(context.spec["c_source"]).replace("\r\n", "\n").replace("\r", "\n")
-    if harness.count(c_source) != 1:
-        raise ReporterError("C oracle harness must embed the carrier source exactly once")
-    markers = expected_markers(context)
-    missing_from_source = [marker for marker in markers if marker not in harness]
-    if missing_from_source:
-        raise ReporterError("C oracle harness does not assert every fixture output field")
-    output_gate = status.get("compile_execution", {}).get("harness_execution", {}).get("output_gate", {})
-    if output_gate:
-        matched = output_gate.get("matched_stdout_fragments")
-        if not isinstance(matched, list) or any(marker not in matched for marker in markers):
-            raise ReporterError("C oracle harness output gate did not match every fixture field")
-
-
-def validate_execution_or_promotion(
-    context: StaticContext,
-    status: dict[str, Any],
-    output_dir: Path,
-    prefix: str,
-) -> dict[str, Any]:
-    compile_execution = status.get("compile_execution")
-    if isinstance(compile_execution, dict):
-        execution = compile_execution.get("harness_execution")
-        output_gate = execution.get("output_gate") if isinstance(execution, dict) else None
-        if (
-            compile_execution.get("status") != "compile_succeeded_not_oracle"
-            or compile_execution.get("returncode") != 0
-            or not isinstance(execution, dict)
-            or execution.get("status") != "exited_zero_not_oracle"
-            or execution.get("returncode") != 0
-            or not isinstance(output_gate, dict)
-            or output_gate.get("status") != "matched_not_oracle"
-            or output_gate.get("missing_stdout_fragments") != []
-        ):
-            raise ReporterError("C oracle harness compile, execution, or output gate did not pass")
-        return {
-            "binding_mode": "executed_harness",
-            "compile_execution": portable_compile_execution(compile_execution),
-        }
-
-    if status.get("status") != "C_ORACLE_GENERATED" or status.get("semantic_pass") is not True:
-        raise ReporterError("C oracle status has neither executed harness proof nor accepted promotion")
-    accepted = require_dict(status.get("accepted_oracle"), "accepted_oracle")
-    expected = (output_dir / f"{prefix}-c-oracle.json").resolve()
-    accepted_path = resolve_status_path(context, status, "/accepted_oracle/path")
-    if accepted_path != expected or accepted.get("status") != "passed":
-        raise ReporterError("promoted C oracle does not bind the expected accepted report")
-    if not expected.is_file() or accepted.get("sha256") != sha256_file(expected):
-        raise ReporterError("promoted accepted C oracle hash drifted")
-    return {"binding_mode": "promoted_accepted_oracle"}
-
-
-def expected_markers(context: StaticContext) -> list[str]:
-    fields = behavior_fields(context.contract)
-    return [f"fixture case {case['id']} {field} matched" for case in context.cases for field in fields]
-
-
-def resolve_status_path(context: StaticContext, status: dict[str, Any], pointer: str) -> Path:
-    value = json_pointer(status, pointer)
-    if not isinstance(value, str) or not value:
-        raise ReporterError(f"C oracle status is missing {pointer}")
-    path = Path(value)
-    resolved = (path if path.is_absolute() else context.repo_root / path).resolve(strict=True)
-    ensure_inside_repo(context, resolved, pointer)
-    return resolved
-
-
-def json_pointer(value: dict[str, Any], pointer: str) -> Any:
-    current: Any = value
-    for token in pointer.strip("/").split("/"):
-        if not isinstance(current, dict) or token not in current:
-            raise ReporterError(f"missing JSON field: {pointer}")
-        current = current[token]
-    return current
-
-
-def ensure_inside_repo(context: StaticContext, path: Path, label: str) -> None:
-    try:
-        path.relative_to(context.repo_root)
-    except ValueError as exc:
-        raise ReporterError(f"{label} escapes repo root") from exc
-
-
-def reject_host_path_text(value: Any, label: str) -> None:
-    if value is not None and (not isinstance(value, str) or HOST_PATH_PATTERN.search(value)):
-        raise ReporterError(f"{label} contains a host-local absolute path")
-
-
-def portable_compile_execution(execution: dict[str, Any]) -> dict[str, Any]:
-    portable = copy.deepcopy(execution)
-    logical_argv = portable.get("argv")
-    if isinstance(logical_argv, list):
-        portable["execution_argv"] = list(logical_argv)
-    compiler_name = portable.get("compiler_name") or portable.get("requested_compiler")
-    if isinstance(compiler_name, str) and compiler_name:
-        portable["compiler_path"] = compiler_name
-    harness = portable.get("harness_execution")
-    if isinstance(harness, dict):
-        harness_argv = harness.get("argv")
-        if isinstance(harness_argv, list):
-            harness["execution_argv"] = list(harness_argv)
-        harness.pop("executable_path", None)
-    portable["command_recording"] = "portable_logical_argv"
-    return portable

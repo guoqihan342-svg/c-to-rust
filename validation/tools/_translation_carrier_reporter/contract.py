@@ -3,6 +3,17 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .constant_state_contract import (
+    KIND as CONSTANT_STATE_KIND,
+    behavior_fields as constant_state_behavior_fields,
+    parse_contract as parse_constant_state_contract,
+)
+from .constant_state_model import (
+    mutated_outputs as constant_state_mutated_outputs,
+    reference_outputs as constant_state_reference_outputs,
+    replay_outputs as constant_state_replay_outputs,
+    validate_cases as validate_constant_state_cases,
+)
 from .errors import ReporterError
 from .field_add_contract import (
     KIND as FIELD_ADD_KIND,
@@ -41,6 +52,8 @@ U32_MAX = (1 << 32) - 1
 
 def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
     contract = require_dict(spec.get("replay_contract"), "replay_contract")
+    if contract.get("kind") == CONSTANT_STATE_KIND:
+        return parse_constant_state_contract(spec)
     if contract.get("kind") == FIELD_ADD_KIND:
         return parse_field_add_contract(spec)
     if contract.get("kind") == SEQUENCE_KIND:
@@ -97,6 +110,8 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def behavior_fields(contract: dict[str, Any]) -> list[str]:
+    if contract.get("kind") == CONSTANT_STATE_KIND:
+        return constant_state_behavior_fields(contract)
     if contract.get("kind") == FIELD_ADD_KIND:
         return field_add_behavior_fields(contract)
     if contract.get("kind") == SEQUENCE_KIND:
@@ -113,6 +128,8 @@ def behavior_fields(contract: dict[str, Any]) -> list[str]:
 
 
 def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]:
+    if contract.get("kind") == CONSTANT_STATE_KIND:
+        return validate_constant_state_cases(cases, contract)
     if contract.get("kind") == FIELD_ADD_KIND:
         return validate_field_add_cases(cases, contract)
     if contract.get("kind") == SEQUENCE_KIND:
@@ -154,6 +171,8 @@ def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]
 
 
 def reference_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    if contract.get("kind") == CONSTANT_STATE_KIND:
+        return constant_state_reference_outputs(case, contract)
     if contract.get("kind") == FIELD_ADD_KIND:
         return field_add_reference_outputs(case, contract)
     if contract.get("kind") == SEQUENCE_KIND:
@@ -174,6 +193,8 @@ def reference_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[st
 
 
 def replay_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    if contract.get("kind") == CONSTANT_STATE_KIND:
+        return constant_state_replay_outputs(case, contract)
     if contract.get("kind") == FIELD_ADD_KIND:
         return field_add_replay_outputs(case, contract)
     if contract.get("kind") == SEQUENCE_KIND:
@@ -193,6 +214,8 @@ def replay_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, 
 
 
 def mutated_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    if contract.get("kind") == CONSTANT_STATE_KIND:
+        return constant_state_mutated_outputs(case, contract)
     if contract.get("kind") == FIELD_ADD_KIND:
         return field_add_mutated_outputs(case, contract)
     output = replay_outputs(case, contract)

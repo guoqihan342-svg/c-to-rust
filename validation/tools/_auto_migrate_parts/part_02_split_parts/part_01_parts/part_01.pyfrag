@@ -1,0 +1,236 @@
+def rust_replay_fdb_kv_del_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_fdb_kv_del_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by the fdb_kv_del replay draft generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fdb_kv_del fixture cases to generated Rust API assertions.\n"
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        key: &'static [u8],\n",
+        "        return_code: i32,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            "        let mut db_marker = 0u8;\n",
+            "        let db = (&mut db_marker as *mut u8).cast::<core::ffi::c_void>();\n",
+            f"        let actual = {function_name}(db, case.key.as_ptr().cast::<core::ffi::c_void>());\n",
+            '        assert_eq!(actual, case.return_code, "{} return_code drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_fdb_kv_del_case_literal(
+    spec: dict[str, Any],
+    case_binding: dict[str, Any],
+) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(case_payload, dict) or not isinstance(expected_outputs, dict):
+        return None
+    if case_payload.get("db_state") != "uninitialized_named":
+        return None
+    case_id = str(case_binding.get("id") or case_payload.get("id") or "unknown-case")
+    if "return_code" not in expected_outputs:
+        return None
+    key = case_payload.get("key")
+    if key is None:
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_id)}, "
+        f"key: {rust_u8_nul_terminated_slice_literal(key)}, "
+        f"return_code: {rust_i32_literal(int(expected_outputs['return_code']))} "
+        "},\n"
+    )
+
+
+def rust_replay_fdb_kv_set_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_fdb_kv_set_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by the fdb_kv_set replay draft generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fdb_kv_set fixture cases to generated Rust API assertions.\n"
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        key: &'static [u8],\n",
+        "        value: Option<&'static [i8]>,\n",
+        "        return_code: i32,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            "        let mut db_marker = 0u8;\n",
+            "        let db = (&mut db_marker as *mut u8).cast::<core::ffi::c_void>();\n",
+            f"        let actual = {function_name}(db, case.key.as_ptr().cast::<core::ffi::c_void>(), case.value);\n",
+            '        assert_eq!(actual, case.return_code, "{} return_code drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_fdb_kv_set_case_literal(
+    spec: dict[str, Any],
+    case_binding: dict[str, Any],
+) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(case_payload, dict) or not isinstance(expected_outputs, dict):
+        return None
+    case_id = str(case_binding.get("id") or case_payload.get("id") or "unknown-case")
+    if "return_code" not in expected_outputs:
+        return None
+    key = case_payload.get("key")
+    if key is None:
+        return None
+    value = case_payload.get("value")
+    value_literal = (
+        "None"
+        if value is None
+        else f"Some({rust_i8_nul_terminated_slice_literal(value)})"
+    )
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_id)}, "
+        f"key: {rust_u8_nul_terminated_slice_literal(key)}, "
+        f"value: {value_literal}, "
+        f"return_code: {rust_i32_literal(int(expected_outputs['return_code']))} "
+        "},\n"
+    )
+
+
+def rust_u8_nul_terminated_slice_literal(value: Any) -> str:
+    values = list(str(value).encode("utf-8")) + [0]
+    return "&[" + ", ".join(f"{item}u8" for item in values) + "]"
+
+
+def rust_i8_nul_terminated_slice_literal(value: Any) -> str:
+    values = list(str(value).encode("utf-8")) + [0]
+    return "&[" + ", ".join(f"{item}i8" for item in values) + "]"
+
+
+def pure_uint32_value_replay_supported(spec: dict[str, Any]) -> bool:
+    if behavior_fields(spec) != ["value"]:
+        return False
+    signature = c_function_signature(spec)
+    if normalize_c_type(str(signature.get("return_type") or "")) != "uint32_t":
+        return False
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 1:
+        return False
+    return normalize_c_type(str(parameters[0].get("c_type") or "")) == "uint32_t"
+
+
+def rust_replay_pure_uint32_value_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_pure_uint32_value_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this pure-value replay generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    parameter_name = pure_uint32_value_parameter_name(spec)
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        f"        {parameter_name}: u32,\n",
+        "        value: u32,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            f"        let actual = {function_name}(case.{parameter_name});\n",
+            '        assert_eq!(actual, case.value, "{} value drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_pure_uint32_value_case_literal(spec: dict[str, Any], case_binding: dict[str, Any]) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    parameter_name = pure_uint32_value_parameter_name(spec)
+    input_value = case_payload.get(parameter_name)
+    expected_value = expected_outputs.get("value")
+    if not is_uint32_value(input_value) or not is_uint32_value(expected_value):
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"{parameter_name}: {int(input_value)}u32, "
+        f"value: {int(expected_value)}u32 "
+        "},\n"
+    )
+
+
+def pure_uint32_value_parameter_name(spec: dict[str, Any]) -> str:
+    signature = c_function_signature(spec)
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    return safe_ident(str(parameters[0].get("name") or "value")) if parameters else "value"

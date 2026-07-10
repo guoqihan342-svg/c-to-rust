@@ -1,0 +1,146 @@
+def c_oracle_record_pointer_identity_return_case_execution_source(
+    spec: dict[str, Any],
+    signature: dict[str, Any],
+    case_binding: dict[str, Any],
+) -> dict[str, str] | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 2:
+        return None
+    input_parameter, output_parameter = parameters
+    input_name = str(input_parameter.get("name") or "").strip()
+    output_name = str(output_parameter.get("name") or "").strip()
+    input_struct_type = c_record_pointer_struct_type(spec, str(input_parameter.get("c_type") or ""))
+    output_struct_type = c_record_pointer_struct_type(spec, str(output_parameter.get("c_type") or ""))
+    if not input_name or not output_name or input_struct_type is None or output_struct_type is None:
+        return None
+
+    input_fields = case_payload.get(input_name)
+    if not isinstance(input_fields, dict) or not input_fields:
+        return None
+    output_initial_fields = c_oracle_record_pointer_initial_fields(case_payload, output_name)
+    expected_return_same = expected_outputs.get(f"return_same_{output_name}")
+    expected_output_fields = {
+        key[len(output_name) + 1 :]: value
+        for key, value in expected_outputs.items()
+        if isinstance(key, str) and key.startswith(f"{output_name}.")
+    }
+    if expected_return_same is not True or not expected_output_fields:
+        return None
+
+    function_name = required_str(spec, "function_name")
+    case_id = str(case_binding.get("id") or "case")
+    case_ident = c_safe_ident(case_id)
+    input_var = f"{case_ident}_{input_name}"
+    output_var = f"{case_ident}_{output_name}"
+    actual_var = f"actual_{case_ident}_{output_name}"
+
+    statements = [
+        f"  {input_struct_type} {input_var} = {{0}};\n",
+        *c_oracle_record_pointer_field_assignments(input_var, input_fields),
+        f"  {output_struct_type} {output_var} = {{0}};\n",
+        *c_oracle_record_pointer_field_assignments(output_var, output_initial_fields),
+        f"  {signature.get('return_type')} {actual_var} = {function_name}(&{input_var}, &{output_var});\n",
+        f"  if ({actual_var} != &{output_var}) {{\n",
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' return_same_' + output_name + ' mismatch\n')});\n",
+        "    return 1;\n",
+        "  }\n",
+        f"  puts({c_string_literal('fixture case ' + case_id + ' return_same_' + output_name + ' matched')});\n",
+    ]
+    for field_path, expected_value in sorted(expected_output_fields.items()):
+        access = c_record_field_access(output_var, field_path)
+        literal = c_record_field_literal(field_path, expected_value)
+        if access is None or literal is None:
+            return None
+        full_field = f"{output_name}.{field_path}"
+        statements.extend(
+            [
+                f"  if ({access} != {literal}) {{\n",
+                "    fprintf(stderr, "
+                f"{c_string_literal(case_id + ' ' + full_field + ' mismatch: expected %llu got %llu\n')}, "
+                f"(unsigned long long){literal}, (unsigned long long){access});\n",
+                "    return 1;\n",
+                "  }\n",
+                f"  puts({c_string_literal('fixture case ' + case_id + ' ' + full_field + ' matched')});\n",
+            ]
+        )
+    return {"declarations": "", "statements": "".join(statements)}
+
+
+def c_oracle_record_pointer_initial_fields(case_payload: dict[str, Any], output_name: str) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    direct = case_payload.get(f"initial_{output_name}")
+    if isinstance(direct, dict):
+        fields.update(c_flatten_record_fields(direct))
+    prefix = f"initial_{output_name}_"
+    for key, value in case_payload.items():
+        if not isinstance(key, str) or not key.startswith(prefix) or not isinstance(value, dict):
+            continue
+        field_prefix = key[len(prefix) :].replace("_", ".")
+        for nested_key, nested_value in c_flatten_record_fields(value).items():
+            fields[f"{field_prefix}.{nested_key}" if field_prefix else nested_key] = nested_value
+    return fields
+
+
+def c_flatten_record_fields(payload: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    for key, value in payload.items():
+        field = f"{prefix}.{key}" if prefix else str(key)
+        if isinstance(value, dict):
+            fields.update(c_flatten_record_fields(value, field))
+        else:
+            fields[field] = value
+    return fields
+
+
+def c_oracle_record_pointer_field_assignments(var_name: str, fields: dict[str, Any]) -> list[str]:
+    statements: list[str] = []
+    for field_path, value in sorted(fields.items()):
+        access = c_record_field_access(var_name, field_path)
+        literal = c_record_field_literal(field_path, value)
+        if access is None or literal is None:
+            continue
+        statements.append(f"  {access} = {literal};\n")
+    return statements
+
+
+def c_record_field_access(var_name: str, field_path: Any) -> str | None:
+    parts = str(field_path).split(".")
+    if not parts or any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", part) for part in parts):
+        return None
+    return f"{var_name}." + ".".join(parts)
+
+
+def c_record_field_literal(field_path: Any, value: Any) -> str | None:
+    if not is_size_value(value):
+        return None
+    leaf = str(field_path).split(".")[-1]
+    c_type = "size_t" if leaf in {"len", "size", "value_len", "buf_len"} else "uint32_t"
+    return c_integer_literal(c_type, int(value))
+
+
+def c_record_pointer_struct_type(spec: dict[str, Any], c_type: str) -> str | None:
+    normalized = normalize_c_type(c_type)
+    if normalized.startswith("struct ") and normalized.endswith(" *"):
+        return normalized[: -len(" *")].strip()
+    type_name = normalized
+    for dependency in spec.get("c_boundary", {}).get("direct_dependencies", []):
+        if not isinstance(dependency, dict) or dependency.get("kind") != "type":
+            continue
+        if normalize_c_type(str(dependency.get("name") or "")) != type_name:
+            continue
+        source = str(dependency.get("source") or "")
+        match = re.search(
+            r"typedef\s+struct\s+([A-Za-z_][A-Za-z0-9_]*)\s*\*\s*" + re.escape(type_name) + r"\b",
+            source,
+        )
+        if match:
+            return f"struct {match.group(1)}"
+    return None

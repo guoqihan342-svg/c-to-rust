@@ -1,0 +1,276 @@
+def signed_i32_return_value_replay_supported(spec: dict[str, Any]) -> bool:
+    if behavior_fields(spec) != ["return_value", "status", "contract"]:
+        return False
+    boundary = spec.get("c_boundary", {})
+    if not isinstance(boundary, dict):
+        return False
+    scalar_contract = boundary.get("scalar_arithmetic_contract", {})
+    if not isinstance(scalar_contract, dict):
+        return False
+    if scalar_contract.get("signed_right_shift") != "explicit_implementation_defined_contract":
+        return False
+    signature = c_function_signature(spec)
+    if normalize_c_type(str(signature.get("return_type") or "")) != "int":
+        return False
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 2:
+        return False
+    return all(normalize_c_type(str(item.get("c_type") or "")) == "int" for item in parameters)
+
+
+def rust_replay_signed_i32_return_value_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_signed_i32_return_value_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this signed i32 replay generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        value: i32,\n",
+        "        count: i32,\n",
+        "        return_value: i32,\n",
+        "        status: &'static str,\n",
+        "        contract: &'static str,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            f"        let actual = {function_name}(case.value, case.count);\n",
+            '        assert_eq!(actual, case.return_value, "{} return_value drifted", case.id);\n',
+            '        assert_eq!(case.status, "ok", "{} fixture status drifted", case.id);\n',
+            '        assert_eq!(case.contract, "implementation_defined_arithmetic_shift", "{} fixture contract drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_signed_i32_return_value_case_literal(spec: dict[str, Any], case_binding: dict[str, Any]) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    value = case_payload.get("value")
+    count = case_payload.get("count")
+    expected_return = expected_outputs.get("return_value")
+    status = expected_outputs.get("status")
+    contract = expected_outputs.get("contract")
+    if not is_i32_value(value) or not is_i32_value(count) or not is_i32_value(expected_return):
+        return None
+    if status != "ok" or contract != "implementation_defined_arithmetic_shift":
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"value: {int(value)}i32, "
+        f"count: {int(count)}i32, "
+        f"return_value: {int(expected_return)}i32, "
+        f"status: {rust_string_literal(status)}, "
+        f"contract: {rust_string_literal(contract)} "
+        "},\n"
+    )
+
+
+def single_i32_return_value_replay_supported(spec: dict[str, Any]) -> bool:
+    if behavior_fields(spec) != ["return_value", "status"]:
+        return False
+    signature = c_function_signature(spec)
+    if normalize_c_type(str(signature.get("return_type") or "")) != "int":
+        return False
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 1:
+        return False
+    parameter = parameters[0]
+    return parameter.get("direction") == "input" and normalize_c_type(str(parameter.get("c_type") or "")) == "int"
+
+
+def rust_replay_single_i32_return_value_cases_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    parameter_name = single_i32_parameter_name(spec)
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_single_i32_return_value_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this i32 return replay generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        f"        {safe_ident(parameter_name)}: i32,\n",
+        "        return_value: i32,\n",
+        "        status: &'static str,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            f"        let actual = {function_name}(case.{safe_ident(parameter_name)});\n",
+            '        assert_eq!(actual, case.return_value, "{} return_value drifted", case.id);\n',
+            '        assert_eq!(case.status, "ok", "{} fixture status drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_single_i32_return_value_case_literal(
+    spec: dict[str, Any], case_binding: dict[str, Any]
+) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    parameter_name = single_i32_parameter_name(spec)
+    input_value = case_payload.get(parameter_name)
+    expected_return = expected_outputs.get("return_value")
+    status = expected_outputs.get("status")
+    if not is_i32_value(input_value) or not is_i32_value(expected_return):
+        return None
+    if status != "ok":
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"{safe_ident(parameter_name)}: {int(input_value)}i32, "
+        f"return_value: {int(expected_return)}i32, "
+        f"status: {rust_string_literal(status)} "
+        "},\n"
+    )
+
+
+def single_u64_return_value_replay_supported(spec: dict[str, Any]) -> bool:
+    if behavior_fields(spec) != ["return_value", "status"]:
+        return False
+    signature = c_function_signature(spec)
+    if normalize_c_type(str(signature.get("return_type") or "")) != "unsigned long":
+        return False
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 1:
+        return False
+    parameter = parameters[0]
+    return (
+        parameter.get("direction") == "input"
+        and normalize_c_type(str(parameter.get("c_type") or "")) == "unsigned long"
+    )
+
+
+def rust_replay_single_u64_return_value_cases_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    parameter_name = single_u64_parameter_name(spec)
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_single_u64_return_value_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this u64 return replay generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        f"        {safe_ident(parameter_name)}: u64,\n",
+        "        return_value: u64,\n",
+        "        status: &'static str,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            f"        let actual = {function_name}(case.{safe_ident(parameter_name)});\n",
+            '        assert_eq!(actual, case.return_value, "{} return_value drifted", case.id);\n',
+            '        assert_eq!(case.status, "ok", "{} fixture status drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_single_u64_return_value_case_literal(
+    spec: dict[str, Any], case_binding: dict[str, Any]
+) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    parameter_name = single_u64_parameter_name(spec)
+    input_value = case_payload.get(parameter_name)
+    expected_return = expected_outputs.get("return_value")
+    status = expected_outputs.get("status")
+    if not is_u64_value(input_value) or not is_u64_value(expected_return):
+        return None
+    if status != "ok":
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"{safe_ident(parameter_name)}: {rust_u64_literal(int(input_value))}, "
+        f"return_value: {rust_u64_literal(int(expected_return))}, "
+        f"status: {rust_string_literal(status)} "
+        "},\n"
+    )

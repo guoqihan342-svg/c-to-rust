@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +12,13 @@ from .contract import (
 )
 from .runtime_binding import load_runtime_provenance
 from .negative_execution import run_negative_execution
+from .report_io import write_reports_atomically
 from .field_add_contract import KIND as FIELD_ADD_KIND
+from .constant_state_contract import KIND as CONSTANT_STATE_KIND
+from .constant_state_reports import (
+    build_negative_report as build_constant_state_negative_report,
+    build_report_claim as build_constant_state_report_claim,
+)
 from .field_add_reports import (
     build_negative_report as build_field_add_negative_report,
     build_report_claim as build_field_add_report_claim,
@@ -121,12 +125,13 @@ def build_reports(
         "negative_diff": negative,
     }
 
-
 def build_negative_report(
     context: StaticContext,
     common: dict[str, Any],
     execution: dict[str, Any],
 ) -> dict[str, Any]:
+    if context.contract.get("kind") == CONSTANT_STATE_KIND:
+        return build_constant_state_negative_report(context, common, execution)
     if context.contract.get("kind") == FIELD_ADD_KIND:
         return build_field_add_negative_report(context, common, execution)
     if context.contract.get("kind") == SEQUENCE_KIND:
@@ -237,6 +242,8 @@ def build_sequence_negative_report(
 
 
 def report_claim(context: StaticContext) -> dict[str, Any]:
+    if context.contract.get("kind") == CONSTANT_STATE_KIND:
+        return build_constant_state_report_claim(context)
     if context.contract.get("kind") == FIELD_ADD_KIND:
         return build_field_add_report_claim(context)
     external_name = context.contract["external_callee"]["name"]
@@ -265,30 +272,3 @@ def report_claim(context: StaticContext) -> dict[str, Any]:
         "external_callee": external_name,
         "excluded_semantics": list(context.claim_boundary["excluded_semantics"]),
     }
-
-
-def write_reports_atomically(
-    paths: dict[str, Path],
-    reports: dict[str, dict[str, Any]],
-    artifacts: dict[Path, bytes],
-) -> None:
-    if set(paths) != set(reports):
-        raise ReporterError("report path set does not match generated report set")
-    output_dir = next(iter(paths.values())).parent
-    output_dir.mkdir(parents=True, exist_ok=True)
-    temporary: list[tuple[Path, Path]] = []
-    try:
-        for path, content in artifacts.items():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-            temp.write_bytes(content)
-            temporary.append((temp, path))
-        for name, path in paths.items():
-            temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-            temp.write_bytes((json.dumps(reports[name], indent=2) + "\n").encode("utf-8"))
-            temporary.append((temp, path))
-        for temp, path in temporary:
-            os.replace(temp, path)
-    finally:
-        for temp, _ in temporary:
-            temp.unlink(missing_ok=True)
