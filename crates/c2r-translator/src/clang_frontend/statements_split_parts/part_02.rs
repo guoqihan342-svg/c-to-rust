@@ -216,7 +216,8 @@ fn assignment_call_comparison_from_ast(
             && string_field(target_node, "kind").as_deref() == Some("MemberExpr");
     let target_is_mutable_record_pointer_member =
         matches!(context, AssignmentCallComparisonContext::IfCondition)
-            && string_field(target_node, "kind").as_deref() == Some("MemberExpr");
+            && string_field(target_node, "kind").as_deref() == Some("MemberExpr")
+            && target_node.get("isArrow").and_then(Value::as_bool) == Some(true);
     if !target_is_direct_scalar
         && !target_is_local_record_member
         && !target_is_mutable_record_pointer_member

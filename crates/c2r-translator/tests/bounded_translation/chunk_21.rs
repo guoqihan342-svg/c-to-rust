@@ -191,7 +191,9 @@ fn clang_ast_if_assignment_call_record_pointer_member_rejects_nested_dot_hop() {
     let error = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
         .expect_err("nested dot hop must fail closed at frontend");
     assert!(
-        error.message.contains("must be a single direct arrow member with no dot hops"),
+        error
+            .message
+            .contains("direct mutable record-pointer arrow integer member"),
         "expected nested dot rejection, got {error:?}"
     );
 }
@@ -414,7 +416,9 @@ fn clang_ast_if_assignment_call_record_pointer_member_rejects_by_value_local_mem
     let error = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
         .expect_err("by-value local member must fail closed in IfCondition");
     assert!(
-        error.message.contains("single direct arrow member"),
+        error
+            .message
+            .contains("direct mutable record-pointer arrow integer member"),
         "expected local member rejection, got {error:?}"
     );
 }
