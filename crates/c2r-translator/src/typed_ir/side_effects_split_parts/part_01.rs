@@ -102,6 +102,12 @@ fn emit_index_expr(
         }
         let element_ty = fixed_integer_array_element_type(base_ty)
             .or_else(|| readonly_pointer_slice_element_type(base_ty))
+            .or_else(|| {
+                context
+                    .is_readonly_mutable_pointer_index_param(base_name)
+                    .then(|| mutable_pointer_slice_element_type(base_ty))
+                    .flatten()
+            })
             .ok_or_else(|| {
                 format!(
                     "index base {base_name} has unsupported type {}",
@@ -158,6 +164,12 @@ fn emit_index_expr_with_emitted_index(
         }
         let element_ty = fixed_integer_array_element_type(base_ty)
             .or_else(|| readonly_pointer_slice_element_type(base_ty))
+            .or_else(|| {
+                context
+                    .is_readonly_mutable_pointer_index_param(base_name)
+                    .then(|| mutable_pointer_slice_element_type(base_ty))
+                    .flatten()
+            })
             .ok_or_else(|| {
                 format!(
                     "index base {base_name} has unsupported type {}",

@@ -144,7 +144,7 @@ fn typed_ir_rejects_mutable_pointer_param_in_generic_emitter() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_non_const_pointer_param_in_generic_emitter() {
+fn typed_ir_emits_non_const_pointer_param_with_body_proven_readonly_index() {
     let u32_ty = ir_u32();
     let mutable_u32_ptr = ir_pointer("uint32_t *", "unsigned int *", u32_ty.clone(), false);
     let ir = IrFunction {
@@ -174,11 +174,17 @@ fn typed_ir_rejects_non_const_pointer_param_in_generic_emitter() {
         source_span: None,
     };
 
-    let error = emit_rust_from_ir(&ir).expect_err("non-const pointer param must fail closed");
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("body-proven readonly non-const pointer index should emit a shared slice");
+    let rust = &emitted.rust;
 
-    assert!(error
-        .reason
-        .contains("param table has pointer type uint32_t * is unsupported"));
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains("pub fn read_mutable_table(table: &[u32], idx: u32) -> u32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return table[idx as usize];"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-body-readonly-mutable-u32-pointer", rust);
 }
 
 #[cfg(feature = "typed-ir")]

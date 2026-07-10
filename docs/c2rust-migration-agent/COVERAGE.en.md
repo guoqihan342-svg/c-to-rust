@@ -23,6 +23,7 @@ This document honestly lists C language constructs that are "currently supported
 | `const void *` (byte cursor) | Narrow | Maps to `&[u8]` only in proven byte cursor scenarios |
 | `const T *` (readonly integer pointer) | Narrow | Maps to `&[T]` only with read-access evidence such as `*p` / `p[i]` / `*(p+i)` / `*p++`, no writes, no escape, and inferrable length/index bounds; unused or declared-only 8-bit readonly pointer params may remain raw `*const core::ffi::c_void` candidates, but they do not auto-lower to slices; non-8-bit or read readonly pointers still need explicit evidence/alias gates |
 | `T *` (mutable output pointer) | Narrow | Maps to `&mut [T]` only when used as a write target |
+| `T *` (body-proven readonly) | Narrow | Maps to candidate `&[T]` only for direct integer `p[i]` reads when the parameter is never written, rebound, returned, escaped, passed as a call argument, or used in a nullable branch; coexistence with a mutable output requires explicit noalias/restrict proof. `*p`, pointer arithmetic, inout, and complex alias cases remain fail-closed |
 | `struct T *` (mutable record pointer) | Narrow | Maps to `&mut T` only for direct single-pointer scalar field writes/updates/read-after-write, direct if-return fallthrough writes, statement/simple `ForStmt` step inc-dec, and narrow value-position inc-dec preludes for direct integer fields; statement-position inc-dec is handled only as a value-discarded field assignment; not a general ownership or alias model |
 | plain `char` | Unsupported | Sign unknown, clang frontend rejects |
 | `short` / `unsigned short` | Unsupported | Target-dependent spelling, rejected |
@@ -54,6 +55,7 @@ This document honestly lists C language constructs that are "currently supported
 | Construct | Status | Notes |
 |-----------|--------|-------|
 | Integer literal | Supported | Including unsigned suffix |
+| Character literal | Narrow | A clang `CharacterLiteral` lowers to its compiler/target-resolved integer value only when the node supplies a non-negative `int` value no greater than `i32::MAX`; missing, negative, out-of-range, and non-`int` values fail closed. This is not a general execution-character-set or cross-compiler encoding claim |
 | Variable reference | Supported | Locals and params |
 | Enum constant reference | Narrow | Clang AST `DeclRefExpr -> EnumConstantDecl` references are rewritten at the skeleton boundary into typed IR integer literals only when the value is a non-negative integer proven by explicit `ConstantExpr.value` plus matching direct `IntegerLiteral`, or inferred from the containing `EnumDecl` sibling order after a known prior value; the same proven constants can also appear in literal-like initializers for top-level readonly `static const` fixed-size integer global arrays. Negative values, computed expressions, and isolated implicit constants without the ordered enum inventory still fail closed; `enum T` itself is limited to the target-ABI-bound i32 scalar subset above |
 | `+` `-` `*` `/` `%` | Narrow | Scalar integer, same-type operands required; clang-proven usual-arithmetic `IntegralCast`/`IntegralPromotion` participates as an explicit IR cast, while mixed-width/signedness operands without that cast fail closed instead of being guessed by the emitter; unsigned-result `+` / `-` / `*` emit explicit `wrapping_add` / `wrapping_sub` / `wrapping_mul`; signed-result `+` / `-` / `*` emit `checked_add` / `checked_sub` / `checked_mul` + `expect(...)`, making no signed overflow a runtime precondition; literal `/ 0` and `% 0` fail closed |
@@ -135,6 +137,7 @@ Real named-slice acceptance supplement (2026-07-10): the exact generated draft f
 | Construct | Status | Notes |
 |-----------|--------|-------|
 | `const T *` readonly slice | Narrow | Actual read-only parameter access only; missing read-access evidence does not lower to `&[T]`. Unused 8-bit readonly pointers may remain raw pointer candidates, while non-8-bit or read shapes still fail closed without the slice/noalias evidence they need |
+| `T *` body-proven readonly slice | Narrow | Direct `p[i]` reads only, with whole-function proof of no write, rebinding, return/escape/call-argument/nullable use; any mutable output requires bound noalias/restrict evidence. The `fdb_is_str` no-clang fixture and adjacent negatives cover this boundary, but it remains candidate generation |
 | `T *` mutable output slice | Narrow | Write-only access on params |
 | `*p` deref read | Narrow | Readonly pointer only |
 | `*(p+i)` bounded offset deref | Narrow | Readonly, integer offset |
@@ -151,7 +154,7 @@ Real named-slice acceptance supplement (2026-07-10): the exact generated draft f
 | Double/triple pointer | Unsupported | `T **` |
 | Pointer cast (non-integer) | Unsupported | |
 | `const T *` write | Unsupported | |
-| Mutable pointer read | Narrow | Only direct `*out` zero-slot reads from a function parameter `T *out` are supported after a definite write on the same path, emitting `out[0usize]`; read-before-write, offset/index reads, nullable pointers, inout, escape, and complex alias cases still fail closed |
+| Mutable pointer read | Narrow | Two disjoint narrow paths exist: direct `*out` zero-slot reads after a definite same-path write, or direct `p[i]` reads when the whole function proves the parameter read-only and lowers it to a shared slice. Read-before-write, other offset/deref reads, nullable pointers, inout, escape, and unproven alias cases remain fail-closed |
 | Nullable pointer deref after check | Unsupported | Cannot use after null check |
 
 ## Preprocessor

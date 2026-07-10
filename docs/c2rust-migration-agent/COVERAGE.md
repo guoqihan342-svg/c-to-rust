@@ -25,6 +25,7 @@
 | `const void *` (byte cursor) | 窄支持 | 仅在 proven byte cursor 场景映射为 `&[u8]` |
 | `const T *` (readonly integer pointer) | 窄支持 | 仅在有 `*p` / `p[i]` / `*(p+i)` / `*p++` 等只读访问证据、未写入、不 escape 且长度/索引边界可推断时映射为 `&[T]`；未使用或仅声明的 8-bit readonly pointer 参数可作为 raw `*const core::ffi::c_void` candidate 保留，但不会自动降为 slice；非 8-bit 或被读取的 readonly pointer 仍需显式证据/alias gate |
 | `T *` (mutable output pointer) | 窄支持 | 仅在作为写目标时映射为 `&mut [T]` |
+| `T *`（函数体证明只读） | 窄支持 | 仅 direct `p[i]` 整数读取，且参数从未写入、重绑定、返回、逃逸、作为 call argument 或参与 nullable 分支时，才可作为 candidate 映射为 `&[T]`；与 mutable output 并存必须有显式 noalias/restrict 证明。`*p`、pointer arithmetic、inout 和复杂 alias 仍 fail-closed |
 | `struct T *` (mutable record pointer) | 窄支持 | 仅在 direct single-pointer scalar field 写/update/read-after-write、direct if-return fallthrough write、statement/simple `ForStmt` step inc-dec、direct integer field 的窄 value-position inc-dec prelude，以及 explicit noalias/restrict 证据下的 nested record pointer 标量字段路径 copy/identity return 时映射为 `&mut T`；statement-position inc-dec 只按返回值丢弃的字段赋值处理；不是通用 ownership 或 alias 模型 |
 | `plain char` | 不支持 | 符号未知，clang 前端拒绝 |
 | `short` / `unsigned short` | 不支持 | target-dependent spelling，拒绝 |
@@ -56,6 +57,7 @@
 | 构造 | 状态 | 说明 |
 |------|------|------|
 | 整数字面量 | 已支持 | 含 unsigned suffix |
+| 字符字面量 | 窄支持 | Clang `CharacterLiteral` 已提供非负 `int` 数值且不超过 `i32::MAX` 时，按该 compiler/target 已解析的数值降为整数字面量；缺值、负值、越界或非 `int` 类型 fail-closed。该路径不声称通用 execution-character-set 或跨 compiler 字符编码等价 |
 | 变量引用 | 已支持 | 局部变量和参数 |
 | enum 常量引用 | 窄支持 | clang AST 中 `DeclRefExpr -> EnumConstantDecl` 仅在值可由显式非负整数 `ConstantExpr.value` 加匹配直接 `IntegerLiteral` child 证明，或可由所属 `EnumDecl` 声明顺序从已知前值推导时，才会在 skeleton 边界重写为 typed IR 整数字面量；同一受证明常量也可出现在顶层 readonly `static const` 固定长度整数全局数组的 literal-like initializer 中；负值、计算表达式、缺少完整顺序 inventory 的孤立隐式常量仍 fail-closed；`enum T` 类型本身只有上方 target-ABI-bound i32 标量子集 |
 | `+` `-` `*` `/` `%` | 窄支持 | 标量整数，要求 operand 同型；clang-proven usual arithmetic `IntegralCast`/`IntegralPromotion` 会以显式 IR cast 参与运算，缺少该 cast 的混合宽度/符号 operand 会 fail-closed，不由 emitter 猜转换；无符号结果的 `+` / `-` / `*` 发射显式 `wrapping_add` / `wrapping_sub` / `wrapping_mul`；有符号结果的 `+` / `-` / `*` 发射 `checked_add` / `checked_sub` / `checked_mul` + `expect(...)`，将 no signed overflow 作为 runtime precondition；literal `/ 0` 和 `% 0` fail closed |
@@ -137,6 +139,7 @@
 | 构造 | 状态 | 说明 |
 |------|------|------|
 | `const T *` readonly slice | 窄支持 | 仅参数上的实际只读访问可降为 slice；缺少 read-access evidence 时不会降为 `&[T]`，未用 8-bit readonly pointer 只允许 raw pointer candidate，非 8-bit/被读取形状仍 fail-closed |
+| `T *` body-proven readonly slice | 窄支持 | 仅 direct `p[i]` 读，且全函数无写入、重绑定、return/escape/call-argument/nullable 使用；存在 mutable output 时必须绑定 noalias/restrict。边界由 `fdb_is_str` no-clang fixture 和相邻负例覆盖，但仍只是 candidate generation |
 | `T *` mutable output slice | 窄支持 | 参数上的只写访问 |
 | `*p` deref read | 窄支持 | readonly pointer only |
 | `*(p+i)` bounded offset deref | 窄支持 | readonly, integer offset |
@@ -153,7 +156,7 @@
 | double/triple pointer | 不支持 | `T **` |
 | pointer cast (non-integer) | 不支持 | |
 | `const T *` write | 不支持 | |
-| mutable pointer read | 窄支持 | 仅支持函数参数 `T *out` 在同一路径已 definite write 后的 direct `*out` zero-slot read，发射为 `out[0usize]`；read-before-write、offset/index read、nullable、inout、escape 和复杂 alias 场景仍 fail-closed |
+| mutable pointer read | 窄支持 | 两条互斥窄路径：`T *out` 在同一路径 definite write 后可 direct `*out` zero-slot read；或整个函数证明 direct `p[i]` only-read 时把该参数降为 shared slice。read-before-write、其它 offset/deref read、nullable、inout、escape 和未证明 alias 仍 fail-closed |
 | nullable pointer deref after check | 不支持 | null check 后不能继续使用 |
 
 ## 预处理器

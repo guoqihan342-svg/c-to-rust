@@ -7,6 +7,7 @@ struct EmitContext {
     nullable_pointer_params: HashSet<String>,
     readonly_pointer_read_params: HashSet<String>,
     readonly_pointer_mentioned_params: HashSet<String>,
+    readonly_mutable_pointer_index_params: HashSet<String>,
     readonly_record_pointer_read_params: HashSet<String>,
     mutable_pointer_write_params: HashSet<String>,
     opaque_pointer_call_arg_params: HashSet<String>,
@@ -102,6 +103,15 @@ impl EmitContext {
             collect_opaque_pointer_call_arg_params(&function.body, &function.params);
         let raw_direct_call_pointer_params =
             collect_raw_direct_call_pointer_params(&function.body, &function.params);
+        let readonly_mutable_pointer_index_params =
+            collect_readonly_mutable_pointer_index_params(
+                &function.body,
+                &function.params,
+                &assigned_vars,
+                &nullable_pointer_params,
+                &mutable_pointer_write_params,
+                &policy,
+            )?;
         let mutable_record_pointer_write_params =
             collect_mutable_record_pointer_write_params(&function.body, &function.params, &policy)?;
         let readonly_record_pointer_read_params = collect_readonly_record_pointer_read_params(
@@ -138,6 +148,7 @@ impl EmitContext {
             nullable_pointer_params,
             readonly_pointer_read_params: readonly_pointer_uses.read_params,
             readonly_pointer_mentioned_params: readonly_pointer_uses.mentioned_params,
+            readonly_mutable_pointer_index_params,
             readonly_record_pointer_read_params,
             mutable_pointer_write_params,
             opaque_pointer_call_arg_params,
@@ -173,6 +184,10 @@ impl EmitContext {
 
     fn is_readonly_pointer_mentioned_param(&self, name: &str) -> bool {
         self.readonly_pointer_mentioned_params.contains(name)
+    }
+
+    fn is_readonly_mutable_pointer_index_param(&self, name: &str) -> bool {
+        self.readonly_mutable_pointer_index_params.contains(name)
     }
 
     fn is_readonly_record_pointer_read_param(&self, name: &str) -> bool {

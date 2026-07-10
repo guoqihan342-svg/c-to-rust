@@ -149,6 +149,39 @@ fn expr_skeleton_from_ast_with_options(
             let ty = expr_type(expr)?;
             Ok(ClangExprSkeleton::DeclRef { name, ty })
         }
+        Some("CharacterLiteral") => {
+            let value = integer_field(expr, "value").ok_or_else(|| ClangFrontendError {
+                kind: "invalid_character_literal".to_string(),
+                message: "CharacterLiteral is missing a signed JSON integer value".to_string(),
+            })?;
+            let ty = expr_type(expr)?;
+            if ty.canonical.trim() != "int" {
+                return Err(ClangFrontendError {
+                    kind: "unsupported_character_literal_type".to_string(),
+                    message: format!(
+                        "CharacterLiteral type {} is outside the plain C int literal subset",
+                        ty.canonical
+                    ),
+                });
+            }
+            let value = u64::try_from(value).map_err(|_| ClangFrontendError {
+                kind: "unsupported_character_literal_value".to_string(),
+                message: "CharacterLiteral value must be non-negative".to_string(),
+            })?;
+            if value > i32::MAX as u64 {
+                return Err(ClangFrontendError {
+                    kind: "unsupported_character_literal_value".to_string(),
+                    message: format!(
+                        "CharacterLiteral value {value} is outside the supported C int range"
+                    ),
+                });
+            }
+            Ok(ClangExprSkeleton::IntegerLiteral {
+                value,
+                spelling: value.to_string(),
+                ty,
+            })
+        }
         Some("IntegerLiteral") => {
             let spelling = string_field(expr, "value").ok_or_else(|| ClangFrontendError {
                 kind: "invalid_integer_literal".to_string(),

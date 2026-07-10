@@ -1,0 +1,454 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "isUsed": true,
+      "name": "fdb_is_str",
+      "mangledName": "fdb_is_str",
+      "type": {
+        "qualType": "bool (uint8_t *, size_t)"
+      },
+      "storageClass": "static",
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "isUsed": true,
+          "name": "value",
+          "type": {
+            "qualType": "uint8_t *"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "isUsed": true,
+          "name": "len",
+          "type": {
+            "desugaredQualType": "unsigned long",
+            "qualType": "size_t"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "isUsed": true,
+                  "name": "i",
+                  "type": {
+                    "desugaredQualType": "unsigned long",
+                    "qualType": "size_t"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "ForStmt",
+              "inner": [
+                {
+                  "kind": "BinaryOperator",
+                  "type": {
+                    "desugaredQualType": "unsigned long",
+                    "qualType": "size_t"
+                  },
+                  "valueCategory": "prvalue",
+                  "opcode": "=",
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "desugaredQualType": "unsigned long",
+                        "qualType": "size_t"
+                      },
+                      "valueCategory": "lvalue",
+                      "referencedDecl": {
+                        "kind": "VarDecl",
+                        "name": "i",
+                        "type": {
+                          "desugaredQualType": "unsigned long",
+                          "qualType": "size_t"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "type": {
+                        "desugaredQualType": "unsigned long",
+                        "qualType": "size_t"
+                      },
+                      "valueCategory": "prvalue",
+                      "castKind": "IntegralCast",
+                      "inner": [
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "valueCategory": "prvalue",
+                          "value": "0"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {},
+                {
+                  "kind": "BinaryOperator",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "valueCategory": "prvalue",
+                  "opcode": "<",
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "type": {
+                        "desugaredQualType": "unsigned long",
+                        "qualType": "size_t"
+                      },
+                      "valueCategory": "prvalue",
+                      "castKind": "LValueToRValue",
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "desugaredQualType": "unsigned long",
+                            "qualType": "size_t"
+                          },
+                          "valueCategory": "lvalue",
+                          "referencedDecl": {
+                            "kind": "VarDecl",
+                            "name": "i",
+                            "type": {
+                              "desugaredQualType": "unsigned long",
+                              "qualType": "size_t"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "type": {
+                        "desugaredQualType": "unsigned long",
+                        "qualType": "size_t"
+                      },
+                      "valueCategory": "prvalue",
+                      "castKind": "LValueToRValue",
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "desugaredQualType": "unsigned long",
+                            "qualType": "size_t"
+                          },
+                          "valueCategory": "lvalue",
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "len",
+                            "type": {
+                              "desugaredQualType": "unsigned long",
+                              "qualType": "size_t"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "UnaryOperator",
+                  "type": {
+                    "desugaredQualType": "unsigned long",
+                    "qualType": "size_t"
+                  },
+                  "valueCategory": "prvalue",
+                  "isPostfix": true,
+                  "opcode": "++",
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "desugaredQualType": "unsigned long",
+                        "qualType": "size_t"
+                      },
+                      "valueCategory": "lvalue",
+                      "referencedDecl": {
+                        "kind": "VarDecl",
+                        "name": "i",
+                        "type": {
+                          "desugaredQualType": "unsigned long",
+                          "qualType": "size_t"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "CompoundStmt",
+                  "inner": [
+                    {
+                      "kind": "IfStmt",
+                      "inner": [
+                        {
+                          "kind": "UnaryOperator",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "valueCategory": "prvalue",
+                          "isPostfix": false,
+                          "opcode": "!",
+                          "canOverflow": false,
+                          "inner": [
+                            {
+                              "kind": "ParenExpr",
+                              "type": {
+                                "qualType": "int"
+                              },
+                              "valueCategory": "prvalue",
+                              "inner": [
+                                {
+                                  "kind": "BinaryOperator",
+                                  "type": {
+                                    "qualType": "int"
+                                  },
+                                  "valueCategory": "prvalue",
+                                  "opcode": "<",
+                                  "inner": [
+                                    {
+                                      "kind": "CStyleCastExpr",
+                                      "type": {
+                                        "qualType": "unsigned int"
+                                      },
+                                      "valueCategory": "prvalue",
+                                      "castKind": "IntegralCast",
+                                      "inner": [
+                                        {
+                                          "kind": "ParenExpr",
+                                          "type": {
+                                            "qualType": "int"
+                                          },
+                                          "valueCategory": "prvalue",
+                                          "inner": [
+                                            {
+                                              "kind": "BinaryOperator",
+                                              "type": {
+                                                "qualType": "int"
+                                              },
+                                              "valueCategory": "prvalue",
+                                              "opcode": "-",
+                                              "inner": [
+                                                {
+                                                  "kind": "ImplicitCastExpr",
+                                                  "type": {
+                                                    "qualType": "int"
+                                                  },
+                                                  "valueCategory": "prvalue",
+                                                  "castKind": "IntegralCast",
+                                                  "inner": [
+                                                    {
+                                                      "kind": "ImplicitCastExpr",
+                                                      "type": {
+                                                        "desugaredQualType": "unsigned char",
+                                                        "qualType": "uint8_t"
+                                                      },
+                                                      "valueCategory": "prvalue",
+                                                      "castKind": "LValueToRValue",
+                                                      "inner": [
+                                                        {
+                                                          "kind": "ParenExpr",
+                                                          "type": {
+                                                            "desugaredQualType": "unsigned char",
+                                                            "qualType": "uint8_t"
+                                                          },
+                                                          "valueCategory": "lvalue",
+                                                          "inner": [
+                                                            {
+                                                              "kind": "ArraySubscriptExpr",
+                                                              "type": {
+                                                                "desugaredQualType": "unsigned char",
+                                                                "qualType": "uint8_t"
+                                                              },
+                                                              "valueCategory": "lvalue",
+                                                              "inner": [
+                                                                {
+                                                                  "kind": "ImplicitCastExpr",
+                                                                  "type": {
+                                                                    "qualType": "uint8_t *"
+                                                                  },
+                                                                  "valueCategory": "prvalue",
+                                                                  "castKind": "LValueToRValue",
+                                                                  "inner": [
+                                                                    {
+                                                                      "kind": "DeclRefExpr",
+                                                                      "type": {
+                                                                        "qualType": "uint8_t *"
+                                                                      },
+                                                                      "valueCategory": "lvalue",
+                                                                      "referencedDecl": {
+                                                                        "kind": "ParmVarDecl",
+                                                                        "name": "value",
+                                                                        "type": {
+                                                                          "qualType": "uint8_t *"
+                                                                        }
+                                                                      }
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "kind": "ImplicitCastExpr",
+                                                                  "type": {
+                                                                    "desugaredQualType": "unsigned long",
+                                                                    "qualType": "size_t"
+                                                                  },
+                                                                  "valueCategory": "prvalue",
+                                                                  "castKind": "LValueToRValue",
+                                                                  "inner": [
+                                                                    {
+                                                                      "kind": "DeclRefExpr",
+                                                                      "type": {
+                                                                        "desugaredQualType": "unsigned long",
+                                                                        "qualType": "size_t"
+                                                                      },
+                                                                      "valueCategory": "lvalue",
+                                                                      "referencedDecl": {
+                                                                        "kind": "VarDecl",
+                                                                        "name": "i",
+                                                                        "type": {
+                                                                          "desugaredQualType": "unsigned long",
+                                                                          "qualType": "size_t"
+                                                                        }
+                                                                      }
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "kind": "CharacterLiteral",
+                                                  "type": {
+                                                    "qualType": "int"
+                                                  },
+                                                  "valueCategory": "prvalue",
+                                                  "value": 32
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "kind": "BinaryOperator",
+                                      "type": {
+                                        "qualType": "unsigned int"
+                                      },
+                                      "valueCategory": "prvalue",
+                                      "opcode": "-",
+                                      "inner": [
+                                        {
+                                          "kind": "IntegerLiteral",
+                                          "type": {
+                                            "qualType": "unsigned int"
+                                          },
+                                          "valueCategory": "prvalue",
+                                          "value": "127"
+                                        },
+                                        {
+                                          "kind": "ImplicitCastExpr",
+                                          "type": {
+                                            "qualType": "unsigned int"
+                                          },
+                                          "valueCategory": "prvalue",
+                                          "castKind": "IntegralCast",
+                                          "inner": [
+                                            {
+                                              "kind": "CharacterLiteral",
+                                              "type": {
+                                                "qualType": "int"
+                                              },
+                                              "valueCategory": "prvalue",
+                                              "value": 32
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "CompoundStmt",
+                          "inner": [
+                            {
+                              "kind": "ReturnStmt",
+                              "inner": [
+                                {
+                                  "kind": "ImplicitCastExpr",
+                                  "type": {
+                                    "qualType": "bool"
+                                  },
+                                  "valueCategory": "prvalue",
+                                  "castKind": "IntegralToBoolean",
+                                  "inner": [
+                                    {
+                                      "kind": "IntegerLiteral",
+                                      "type": {
+                                        "qualType": "int"
+                                      },
+                                      "valueCategory": "prvalue",
+                                      "value": "0"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "type": {
+                    "qualType": "bool"
+                  },
+                  "valueCategory": "prvalue",
+                  "castKind": "IntegralToBoolean",
+                  "inner": [
+                    {
+                      "kind": "IntegerLiteral",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "valueCategory": "prvalue",
+                      "value": "1"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

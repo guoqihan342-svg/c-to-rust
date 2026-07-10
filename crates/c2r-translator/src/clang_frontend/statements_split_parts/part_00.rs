@@ -335,13 +335,13 @@ fn inc_dec_stmt_skeleton_from_ast(
         }
     }
     .clone();
-    if !matches!(&target_ty.kind, ClangTypeKind::Integer { .. })
-        || !compound_assignment_types_match(&target_ty, &ty)
+    if !is_integer_or_target_dependent_integer_type(&target_ty)
+        || !is_same_lvalue_to_rvalue_integer_type(&target_ty, &ty)
     {
         return Ok(ClangStmtSkeleton::Unsupported {
             reason: format!(
-                "{context} inc/dec target type {} is unsupported",
-                target_ty.canonical
+                "{context} inc/dec target type {} is unsupported; parsed target {:?} does not match result type {} ({:?})",
+                target_ty.canonical, target_ty.kind, ty.canonical, ty.kind
             ),
         });
     }

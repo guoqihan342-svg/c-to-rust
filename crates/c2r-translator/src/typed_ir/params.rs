@@ -13,6 +13,17 @@ fn emit_param(
     } else if context.is_readonly_record_pointer_read_param(&param.name) {
         emit_readonly_record_pointer_param_type(&param.ty)
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
+    } else if context.is_readonly_mutable_pointer_index_param(&param.name) {
+        let element_ty = mutable_pointer_slice_element_type(&param.ty).ok_or_else(|| {
+            format!(
+                "param {} has unsupported body-proven readonly pointer type {}",
+                param.name,
+                type_label(&param.ty)
+            )
+        })?;
+        let element_ty = emit_scalar_type(element_ty)
+            .map_err(|detail| format!("param {} has {detail}", param.name))?;
+        format!("&[{element_ty}]")
     } else if context.is_byte_slice_param(&param.name) {
         "&[u8]".to_string()
     } else if context.is_record_pointer_field_value_param(&param.name) {
@@ -128,6 +139,7 @@ fn emitted_param_type_is_borrow(
     context.is_nullable_pointer_param(&param.name)
         || context.is_mutable_record_pointer_write_param(&param.name)
         || context.is_readonly_record_pointer_read_param(&param.name)
+        || context.is_readonly_mutable_pointer_index_param(&param.name)
         || context.is_byte_slice_param(&param.name)
         || (assigned_vars.contains(&param.name)
             && mutable_pointer_slice_element_type(&param.ty).is_some())

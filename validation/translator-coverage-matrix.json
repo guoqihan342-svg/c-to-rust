@@ -803,6 +803,7 @@
         "integer unary scalar operand LValueToRValue explicit typed IR node",
         "integer array subscript index LValueToRValue explicit typed IR node",
         "target-dependent integer LValueToRValue preserved for later target ABI binding",
+        "plain clang CharacterLiteral numeric value preserved as an int literal with type/value fail-closed guards",
         "non-integer NoOp transparent skeleton boundary",
         "unmodeled implicit castKind fail-closed",
         "non-integer implicit castKind fail-closed",
@@ -836,6 +837,10 @@
             {
               "name": "integral C-style cast no-clang AST fixture",
               "path": "crates/c2r-translator/fixtures/clang_ast/integral_c_style_cast_ast.json"
+            },
+            {
+              "name": "real fdb_is_str CharacterLiteral and promotion no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/real_fdb_is_str_ast.json"
             },
             {
               "name": "clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang",
@@ -1780,6 +1785,8 @@
         "nullable readonly pointer value position remains fail-closed outside condition/non-null branch use",
         "readonly pointer parameter without read-access evidence does not lower to a slice; unused 8-bit readonly pointers may stay raw pointer candidates",
         "readonly input pointer plus mutable output pointer with explicit restrict/noalias proof",
+        "non-const integer pointer lowered to a shared slice only after direct-index-read-only body proof",
+        "body-proven readonly non-const input plus mutable output requires explicit noalias proof",
         "multiple restrict-qualified mutable output pointer writes with pairwise noalias proof",
         "restrict-qualified pointer parameters from clang AST no-clang fixture replay",
         "readonly input plus mutable output noalias lowering reachable from clang AST replay",
@@ -1837,6 +1844,14 @@
             {
               "name": "clang_ast_fixture_replays_readonly_mutable_without_noalias_fails_closed",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "real fdb_is_str no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/real_fdb_is_str_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_replays_real_fdb_is_str_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs"
             }
           ]
         },
@@ -1846,6 +1861,14 @@
             {
               "name": "typed IR pointer slice tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_body_proven_readonly_mutable_pointer_index_as_shared_slice",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs"
+            },
+            {
+              "name": "typed_ir_emits_readonly_mutable_pointer_beside_write_with_noalias",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs"
             },
             {
               "name": "typed_ir_emits_readonly_input_and_mutable_output_index_assignment_with_restrict_noalias_proof",
@@ -1943,6 +1966,18 @@
             {
               "name": "typed_ir_rejects_unbound_global_array_decay_direct_call_argument",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_mutable_pointer_with_index_read_and_call_escape",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs"
+            },
+            {
+              "name": "typed_ir_rejects_readonly_mutable_pointer_beside_write_without_noalias",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs"
+            },
+            {
+              "name": "clang_ast_fixture_rejects_real_fdb_is_str_without_target_abi",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs"
             }
           ]
         },
@@ -2008,6 +2043,10 @@
             {
               "name": "typed_ir_emits_mutable_pointer_deref_read_after_write",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_03_01.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_real_fdb_is_str_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs"
             }
           ]
         },
@@ -2159,6 +2198,14 @@
         {
           "name": "clang_lowered_type_map_records_unused_readonly_8_bit_pointer_as_raw_candidate",
           "path": "crates/c2r-translator/src/clang_lowered_translation_split_parts/part_03_split_parts/part_00.rs"
+        },
+        {
+          "name": "typed_ir_emits_non_const_pointer_param_with_body_proven_readonly_index",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_02.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_real_fdb_is_str_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs"
         }
       ],
       "negative_cases": [
@@ -2231,6 +2278,21 @@
           "name": "clang_ast_fixture_replays_readonly_mutable_without_noalias_fails_closed",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "readonly input plus mutable output from clang AST replay still requires explicit restrict/noalias proof before safe Rust slice lowering"
+        },
+        {
+          "name": "typed_ir_rejects_mutable_pointer_with_index_read_and_call_escape",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs",
+          "fail_closed_reason": "a non-const pointer cannot become a shared slice when it also escapes as a direct call argument"
+        },
+        {
+          "name": "typed_ir_rejects_readonly_mutable_pointer_beside_write_without_noalias",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs",
+          "fail_closed_reason": "body-proven readonly non-const input beside a mutable output still requires explicit noalias proof"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_real_fdb_is_str_without_target_abi",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs",
+          "fail_closed_reason": "the size_t loop variable requires target ABI width provenance"
         }
       ]
     },
