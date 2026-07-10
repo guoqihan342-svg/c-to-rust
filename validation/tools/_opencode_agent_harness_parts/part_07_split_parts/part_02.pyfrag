@@ -8,9 +8,10 @@
             f"{label} --variant must be {launch_policy['opencode_variant']}: "
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
-    if flags["--model"] != launch_policy["opencode_model"]:
+    required_model_id = expected_model_id or launch_policy["opencode_model"]
+    if flags["--model"] != required_model_id:
         raise SystemExit(
-            f"{label} --model must be {launch_policy['opencode_model']}: "
+            f"{label} --model must be {required_model_id}: "
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
     expected_agent = launch_policy.get("opencode_agent")

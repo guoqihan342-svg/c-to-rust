@@ -77,6 +77,165 @@ class _OpenCodeAgentHarnessTestPart08:
         self.assertTrue(harness.opencode_models_output_mentions_required_model("zhipu/GLM-5.1\n", "GLM-5.1"))
         self.assertTrue(harness.opencode_models_output_mentions_required_model("zai/glm-5.1\n", "GLM-5.1"))
 
+    def test_resolve_opencode_model_id_returns_provider_qualified_id(self) -> None:
+        self.assertEqual(
+            harness.resolve_opencode_model_id("zai/glm-5.1\n", "GLM-5.1"),
+            "zai/glm-5.1",
+        )
+
+    def test_resolve_opencode_model_id_returns_canonical_when_no_provider_prefix(self) -> None:
+        self.assertEqual(
+            harness.resolve_opencode_model_id("GLM-5.1\n", "GLM-5.1"),
+            "GLM-5.1",
+        )
+
+    def test_resolve_opencode_model_id_returns_none_when_not_listed(self) -> None:
+        self.assertIsNone(
+            harness.resolve_opencode_model_id("openai/gpt-5.1\n", "GLM-5.1"),
+        )
+
+    def test_resolve_opencode_model_id_rejects_ambiguous_matches(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "ambiguous"):
+            harness.resolve_opencode_model_id("zai/glm-5.1\nzhipu/GLM-5.1\n", "GLM-5.1")
+
+    def test_resolve_opencode_model_id_deduplicates_identical_matches(self) -> None:
+        self.assertEqual(
+            harness.resolve_opencode_model_id("zai/glm-5.1\nzai/glm-5.1\n", "GLM-5.1"),
+            "zai/glm-5.1",
+        )
+
+    def test_resolved_opencode_model_id_for_launch_rejects_wrong_model(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "does not match required model"):
+            harness.resolved_opencode_model_id_for_launch("GLM-5.1", "zai/glm-5.2")
+
+    def test_opencode_model_probe_adds_resolved_model_id_to_availability(self) -> None:
+        with temp_repo_dir() as tmp:
+            logs_dir = Path(tmp) / "logs"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(
+                    argv, 0, stdout="zai/glm-5.1\nother/model\n", stderr=""
+                )
+
+            result = harness.run_opencode_model_availability_probe(
+                opencode_command="opencode",
+                opencode_model="GLM-5.1",
+                logs_dir=logs_dir,
+                opencode_process_env={},
+                timeout_seconds=5,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(result["status"], "available")
+        self.assertEqual(result["resolved_model_id"], "zai/glm-5.1")
+        self.assertEqual(result["required_model"], "GLM-5.1")
+
+    def test_opencode_model_probe_fails_closed_on_ambiguous_match(self) -> None:
+        with temp_repo_dir() as tmp:
+            logs_dir = Path(tmp) / "logs"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(
+                    argv, 0, stdout="zai/glm-5.1\nzhipu/GLM-5.1\n", stderr=""
+                )
+
+            result = harness.run_opencode_model_availability_probe(
+                opencode_command="opencode",
+                opencode_model="GLM-5.1",
+                logs_dir=logs_dir,
+                opencode_process_env={},
+                timeout_seconds=5,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(result["status"], "unavailable")
+        self.assertEqual(result["failure_reason"], "ambiguous_model_match")
+
+    def test_opencode_preflight_uses_resolved_model_id_in_argv(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "opencode-preflight"
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(
+                        argv, 0, stdout="zai/glm-5.1\n", stderr=""
+                    )
+                contract_path = out_root / "harness" / "opencode-preflight-contract.json"
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                marker_path = REPO_ROOT / contract["expected_marker_path"]
+                write_valid_preflight_marker(marker_path, run_id="preflight-run")
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {
+                                    "command": contract["worker_command_line"],
+                                    "workdir": str(REPO_ROOT),
+                                },
+                                "status": "completed",
+                            },
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            with patch.object(harness, "resolve_subprocess_command", return_value="opencode"):
+                result = harness.run_opencode_preflight(
+                    out_root=out_root,
+                    run_id="preflight-run",
+                    opencode_model="GLM-5.1",
+                    opencode_agent="c2rust-migrator",
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["opencode_model_availability"]["resolved_model_id"], "zai/glm-5.1")
+        run_call = [c for c in calls if len(c) >= 2 and c[1] == "run"][0]
+        self.assertEqual(run_call[run_call.index("--model") + 1], "zai/glm-5.1")
+        self.assertEqual(result["launch_policy"]["opencode_model"], "GLM-5.1")
+
+    def test_validate_opencode_run_argv_binding_requires_exact_resolved_model_id(self) -> None:
+        policy = harness.opencode_launch_policy(
+            opencode_command="opencode",
+            opencode_model="GLM-5.1",
+            opencode_agent="c2rust-migrator",
+            opencode_variant="max",
+            opencode_skip_permissions=False,
+        )
+        argv = [
+            "opencode",
+            "run",
+            "--dir",
+            ".",
+            "--format",
+            "json",
+            "--variant",
+            "max",
+            "--model",
+            "zhipu/GLM-5.1",
+            "--agent",
+            "c2rust-migrator",
+            "prompt",
+        ]
+        with self.assertRaisesRegex(SystemExit, "--model must be zai/glm-5.1"):
+            harness.validate_opencode_run_argv_binding(
+                argv,
+                label="resolved model argv",
+                launch_policy=policy,
+                expected_model_id="zai/glm-5.1",
+                report_path=REPO_ROOT / "target" / "resolved-model-report.json",
+                repo_root=REPO_ROOT,
+            )
+
     def test_opencode_launch_policy_defaults_to_repo_owned_agent_and_rejects_wrong_agent(self) -> None:
         policy = harness.opencode_launch_policy(
             opencode_command="opencode",

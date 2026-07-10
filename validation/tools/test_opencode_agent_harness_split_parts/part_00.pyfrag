@@ -490,6 +490,7 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
                     "failure_reason": "",
                     "opencode_command": "opencode",
                     "required_model": "GLM-5.1",
+                    "resolved_model_id": "GLM-5.1",
                     "argv": ["opencode", "models"],
                     "process_returncode": 0,
                     "model_listed": True,

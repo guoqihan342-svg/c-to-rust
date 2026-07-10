@@ -402,6 +402,7 @@ class _OpenCodeAgentHarnessTestPart02:
                     "argv": preflight_report_payload["opencode_model_availability"]["argv"],
                     "process_returncode": 0,
                     "model_listed": True,
+                    "resolved_model_id": "GLM-5.1",
                 },
                 "opencode_runtime_env": preflight_report_payload["opencode_runtime_env"],
                 "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",

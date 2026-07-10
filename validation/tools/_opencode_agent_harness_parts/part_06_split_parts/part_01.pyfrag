@@ -1,11 +1,17 @@
         "argv": model_availability.get("argv") if isinstance(model_availability.get("argv"), list) else [],
         "process_returncode": model_probe_returncode,
         "model_listed": model_availability.get("model_listed") is True,
+        "resolved_model_id": model_availability.get("resolved_model_id"),
     }
     if (
         availability_binding["status"] != "available"
         or availability_binding["opencode_command"] != expected_launch_policy["opencode_command"]
         or availability_binding["required_model"] != expected_launch_policy["opencode_model"]
+        or not isinstance(availability_binding["resolved_model_id"], str)
+        or not opencode_model_id_matches_required(
+            availability_binding["resolved_model_id"],
+            expected_launch_policy["opencode_model"],
+        )
         or availability_binding["process_returncode"] != 0
         or availability_binding["model_listed"] is not True
     ):
@@ -38,6 +44,7 @@
         report,
         contract_verification=contract_verification,
         launch_policy=actual_launch_policy,
+        resolved_model_id=availability_binding["resolved_model_id"],
         run_id=report_run_id,
         report_path=report_path,
         opencode_allow_non_competition_model=opencode_allow_non_competition_model,
@@ -75,6 +82,7 @@ def validate_opencode_preflight_session_contract(
     *,
     contract_verification: dict[str, Any],
     launch_policy: dict[str, Any],
+    resolved_model_id: str,
     run_id: str,
     report_path: Path,
     repo_root: Path,
@@ -208,6 +216,7 @@ def validate_opencode_preflight_session_contract(
         report_argv,
         label="opencode preflight report argv",
         launch_policy=launch_policy,
+        expected_model_id=resolved_model_id,
         report_path=report_path,
         repo_root=repo_root,
     )

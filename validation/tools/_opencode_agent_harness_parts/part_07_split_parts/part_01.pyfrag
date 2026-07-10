@@ -571,6 +571,7 @@ def validate_opencode_run_argv_binding(
     *,
     label: str,
     launch_policy: dict[str, Any],
+    expected_model_id: str | None = None,
     report_path: Path,
     repo_root: Path,
 ) -> list[str]:

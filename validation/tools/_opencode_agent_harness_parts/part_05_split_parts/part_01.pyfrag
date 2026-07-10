@@ -137,6 +137,11 @@ def run_worker(
             opencode_credential_source=opencode_credential_source,
             repo_root=repo_root,
         )
+        worker_resolved_model_id = None
+        if isinstance(preflight_binding, dict):
+            availability = preflight_binding.get("opencode_model_availability")
+            if isinstance(availability, dict):
+                worker_resolved_model_id = availability.get("resolved_model_id")
         argv = build_opencode_run_argv(
             opencode_command=opencode_command,
             opencode_model=opencode_model,
@@ -149,6 +154,7 @@ def run_worker(
             summary_path=summary_path,
             handoff_contract_path=handoff_contract_path,
             repo_root=repo_root,
+            resolved_model_id=worker_resolved_model_id,
         )
         report_argv = portable_opencode_evidence_argv(
             argv,

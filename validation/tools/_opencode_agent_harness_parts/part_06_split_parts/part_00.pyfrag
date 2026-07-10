@@ -199,6 +199,18 @@ def run_opencode_preflight(
         opencode_credential_source=opencode_credential_source,
         repo_root=repo_root,
     )
+    started = time.monotonic()
+    model_availability = run_opencode_model_availability_probe(
+        opencode_command=launch_policy["opencode_command"],
+        opencode_model=launch_policy["opencode_model"],
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+        logs_dir=logs_dir,
+        opencode_process_env=opencode_process_env,
+        timeout_seconds=timeout_seconds,
+        command_runner=command_runner,
+        repo_root=repo_root,
+    )
+    resolved_model_id = model_availability.get("resolved_model_id") if model_availability.get("status") == "available" else None
     argv = build_opencode_preflight_argv(
         opencode_command=opencode_command,
         opencode_model=opencode_model,
@@ -210,6 +222,7 @@ def run_opencode_preflight(
         marker_path=marker_path,
         contract_path=contract_path,
         repo_root=repo_root,
+        resolved_model_id=resolved_model_id,
     )
     report_argv = portable_opencode_evidence_argv(
         argv,
@@ -223,17 +236,6 @@ def run_opencode_preflight(
         opencode_argv=report_argv,
         launch_policy=launch_policy,
         opencode_runtime_env=opencode_runtime_env,
-        repo_root=repo_root,
-    )
-    started = time.monotonic()
-    model_availability = run_opencode_model_availability_probe(
-        opencode_command=launch_policy["opencode_command"],
-        opencode_model=launch_policy["opencode_model"],
-        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
-        logs_dir=logs_dir,
-        opencode_process_env=opencode_process_env,
-        timeout_seconds=timeout_seconds,
-        command_runner=command_runner,
         repo_root=repo_root,
     )
     if model_availability.get("status") != "available":

@@ -50,6 +50,37 @@ def opencode_model_id_matches_required(model_id: str, required_model: str) -> bo
     return False
 
 
+def resolve_opencode_model_id(stdout: str, required_model: str) -> str | None:
+    matches: list[str] = []
+    for line in stdout.splitlines():
+        for token in re.split(r"\s+", line.strip()):
+            token = token.strip().strip("`'\"*,")
+            if token and opencode_model_id_matches_required(token, required_model):
+                matches.append(token)
+    if not matches:
+        return None
+    unique = list(dict.fromkeys(matches))
+    if len(unique) != 1:
+        raise SystemExit(
+            f"opencode models output has ambiguous matches for {required_model}: "
+            f"{unique}"
+        )
+    return unique[0]
+
+
+def resolved_opencode_model_id_for_launch(
+    required_model: str,
+    resolved_model_id: str | None,
+) -> str:
+    if resolved_model_id is None:
+        return required_model
+    if not opencode_model_id_matches_required(resolved_model_id, required_model):
+        raise SystemExit(
+            f"resolved OpenCode model id {resolved_model_id} does not match required model {required_model}"
+        )
+    return resolved_model_id
+
+
 def opencode_models_output_mentions_required_model(stdout: str, required_model: str) -> bool:
     for line in stdout.splitlines():
         for token in re.split(r"\s+", line.strip()):
@@ -129,10 +160,21 @@ def run_opencode_model_availability_probe(
     returncode = int(completed.returncode)
     timed_out = completed_process_timed_out(completed)
     model_listed = returncode == 0 and opencode_models_output_mentions_required_model(stdout, opencode_model)
+    resolved_model_id: str | None = None
+    ambiguous_model_match = False
     if model_listed:
+        try:
+            resolved_model_id = resolve_opencode_model_id(stdout, opencode_model)
+        except SystemExit:
+            model_listed = False
+            ambiguous_model_match = True
+    if model_listed and resolved_model_id is not None:
         status = "available"
         failure_reason = ""
-    elif returncode == 0:
+    elif returncode == 0 and ambiguous_model_match:
+        status = "unavailable"
+        failure_reason = "ambiguous_model_match"
+    elif returncode == 0 and resolved_model_id is None:
         status = "unavailable"
         failure_reason = "required_model_not_listed"
     elif timed_out:
@@ -147,6 +189,7 @@ def run_opencode_model_availability_probe(
         "failure_reason": failure_reason,
         "opencode_command": opencode_command,
         "required_model": opencode_model,
+        "resolved_model_id": resolved_model_id,
         "argv": report_argv,
         "process_returncode": returncode,
         "elapsed_seconds": int(time.monotonic() - started),
@@ -278,6 +321,7 @@ def build_opencode_run_argv(
     repo_root: Path,
     handoff_contract_path: Path | None = None,
     opencode_allow_non_competition_model: bool = False,
+    resolved_model_id: str | None = None,
 ) -> list[str]:
     launch_policy = opencode_launch_policy(
         opencode_command=opencode_command,
@@ -324,7 +368,11 @@ def build_opencode_run_argv(
         "--variant",
         launch_policy["opencode_variant"],
     ]
-    argv.extend(["--model", launch_policy["opencode_model"]])
+    execution_model_id = resolved_opencode_model_id_for_launch(
+        launch_policy["opencode_model"],
+        resolved_model_id,
+    )
+    argv.extend(["--model", execution_model_id])
     argv.extend(["--agent", launch_policy["opencode_agent"]])
     if launch_policy["opencode_skip_permissions"]:
         argv.append("--dangerously-skip-permissions")
@@ -344,6 +392,7 @@ def build_opencode_preflight_argv(
     contract_path: Path,
     repo_root: Path,
     opencode_allow_non_competition_model: bool = False,
+    resolved_model_id: str | None = None,
 ) -> list[str]:
     launch_policy = opencode_launch_policy(
         opencode_command=opencode_command,
@@ -382,7 +431,11 @@ def build_opencode_preflight_argv(
         "--variant",
         launch_policy["opencode_variant"],
     ]
-    argv.extend(["--model", launch_policy["opencode_model"]])
+    execution_model_id = resolved_opencode_model_id_for_launch(
+        launch_policy["opencode_model"],
+        resolved_model_id,
+    )
+    argv.extend(["--model", execution_model_id])
     argv.extend(["--agent", launch_policy["opencode_agent"]])
     if launch_policy["opencode_skip_permissions"]:
         argv.append("--dangerously-skip-permissions")
