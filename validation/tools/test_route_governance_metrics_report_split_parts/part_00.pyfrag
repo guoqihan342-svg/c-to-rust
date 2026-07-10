@@ -294,8 +294,15 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
             jsonschema.validate(report, schema)
             expanded = json.loads(json.dumps(report))
             expanded["metrics"]["translation_coverage_numerator"] = 1
+            jsonschema.validate(expanded, schema)
+            negative_coverage = json.loads(json.dumps(report))
+            negative_coverage["metrics"]["translation_coverage_numerator"] = -1
             with self.assertRaises(jsonschema.exceptions.ValidationError):
-                jsonschema.validate(expanded, schema)
+                jsonschema.validate(negative_coverage, schema)
+            string_coverage = json.loads(json.dumps(report))
+            string_coverage["metrics"]["translation_coverage_numerator"] = "1"
+            with self.assertRaises(jsonschema.exceptions.ValidationError):
+                jsonschema.validate(string_coverage, schema)
             committed_target = json.loads(json.dumps(report))
             committed_target["retention_policy"]["target_artifacts"]["committed"] = True
             with self.assertRaises(jsonschema.exceptions.ValidationError):

@@ -126,14 +126,40 @@ def validate_judge_evidence_index_contract(
     if payload.get("report_kind") != "judge-evidence-index":
         raise ValueError(f"judge_evidence_index report_kind must be judge-evidence-index: {path_text}")
     boundary = require_object(payload.get("claim_boundary"), "judge_evidence_index.claim_boundary")
-    if boundary.get("semantic_claim_source") != "accepted_evidence_binding":
-        raise ValueError("judge_evidence_index.claim_boundary.semantic_claim_source must be accepted_evidence_binding")
+    semantic_claim_source = boundary.get("semantic_claim_source")
+    allowed_semantic_claim_sources = {
+        "accepted_evidence_binding",
+        "c2rust_safety_transform_replay_with_accepted_c_oracle",
+    }
+    if semantic_claim_source not in allowed_semantic_claim_sources:
+        raise ValueError(
+            "judge_evidence_index.claim_boundary.semantic_claim_source must be a supported bound source"
+        )
     if boundary.get("generated_draft_semantic_pass") is not False:
         raise ValueError("judge_evidence_index.claim_boundary.generated_draft_semantic_pass must be false")
-    if boundary.get("translation_coverage_numerator") != 0:
-        raise ValueError("judge_evidence_index.claim_boundary.translation_coverage_numerator must be 0")
+    translation_coverage_numerator = boundary.get("translation_coverage_numerator")
+    if (
+        isinstance(translation_coverage_numerator, bool)
+        or not isinstance(translation_coverage_numerator, int)
+        or translation_coverage_numerator < 0
+    ):
+        raise ValueError(
+            "judge_evidence_index.claim_boundary.translation_coverage_numerator must be a nonnegative integer"
+        )
     if boundary.get("index_is_semantic_gate") is not False:
         raise ValueError("judge_evidence_index.claim_boundary.index_is_semantic_gate must be false")
+
+    core_quality = payload.get("core_translation_quality")
+    if semantic_claim_source != "accepted_evidence_binding" or translation_coverage_numerator != 0:
+        core_quality = require_object(core_quality, "judge_evidence_index.core_translation_quality")
+        if core_quality.get("semantic_claim_source") != semantic_claim_source:
+            raise ValueError(
+                "judge_evidence_index.core_translation_quality.semantic_claim_source must match claim_boundary"
+            )
+        if core_quality.get("translation_coverage_numerator") != translation_coverage_numerator:
+            raise ValueError(
+                "judge_evidence_index.core_translation_quality.translation_coverage_numerator must match claim_boundary"
+            )
 
     architecture = require_object(payload.get("harness_architecture"), "judge_evidence_index.harness_architecture")
     contracts = require_object(architecture.get("architecture_contracts"), "judge_evidence_index.architecture_contracts")
@@ -178,6 +204,15 @@ def validate_judge_evidence_index_contract(
         repo_root=repo_root,
         opencode_runtime_result=opencode_runtime_result,
     )
+    route_metrics_contract = artifact_refs.get("route_governance_metrics_report")
+    if (
+        isinstance(route_metrics_contract, dict)
+        and route_metrics_contract.get("translation_coverage_numerator") != translation_coverage_numerator
+    ):
+        raise ValueError(
+            "judge_evidence_index.claim_boundary.translation_coverage_numerator must match "
+            "route_governance_metrics_report"
+        )
     local_path_scan = validate_local_absolute_path_policy(payload, label=f"judge_evidence_index {path_text}")
 
     result = {

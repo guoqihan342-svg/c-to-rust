@@ -29,7 +29,7 @@
   },
   "oracle_evidence": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-verification.json",
-    "sha256": "dcf1cfe311b07db6f4d9f9f37646f42cd98944c3e67cd435c00531a8a8834945"
+    "sha256": "3eafed3cd8407d34dbd2b0a323b1216e84927c1c4619f09eb60d90c837363a45"
   },
   "patch_log": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-safety-step-log.jsonl",
@@ -39,11 +39,11 @@
   "semantic_evidence": {
     "final_source_snapshot": {
       "path": "validation/l2_slices/src/store_add_one.rs",
-      "sha256": "b12284e94a7e5ba1e10091ff6046847fc6e5e0755c82143d1d28ed06dcad7902"
+      "sha256": "2dbe1e11e8e3aff43307a340d34dd66bdb82d035db6bdb73af56467c592fc771"
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-diff.json",
-      "sha256": "d561c4a99b2361b14d4cd288419c53929a97bd27335c89e43aac10b673303565"
+      "sha256": "742c3e01f810427d2d2b880c05ffdd6595c38c60c29822b0f47b75c524c4d072"
     }
   },
   "slice_id": "store-add-one",

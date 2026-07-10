@@ -1,0 +1,29 @@
+--- validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-safety-baseline.rs
++++ validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-safety-candidate.rs
+@@ -5 +5 @@
+-static mut crc32_table: [uint32_t; 256] = [
++static crc32_table: [uint32_t; 256] = [
+@@ -264,8 +264 @@
+-#[no_mangle]
+-pub unsafe extern "C" fn fdb_calc_crc32(
+-    mut crc: uint32_t,
+-    mut buf: *const ::core::ffi::c_void,
+-    mut size: size_t,
+-) -> uint32_t {
+-    let mut p: *const uint8_t = ::core::ptr::null::<uint8_t>();
+-    p = buf as *const uint8_t;
++pub fn fdb_calc_crc32(mut crc: uint32_t, buf: &[uint8_t]) -> uint32_t {
+@@ -273,10 +266,3 @@
+-    loop {
+-        let c2rust_fresh0 = size;
+-        size = size.wrapping_sub(1);
+-        if c2rust_fresh0 == 0 {
+-            break;
+-        }
+-        let c2rust_fresh1 = p;
+-        p = p.offset(1);
+-        crc = crc32_table[((crc ^ *c2rust_fresh1 as uint32_t) & 0xff as uint32_t) as usize]
+-            ^ crc >> 8 as ::core::ffi::c_int;
++    for byte in buf {
++        crc = crc32_table[((crc ^ *byte as uint32_t) & 0xff as uint32_t) as usize]
++        ^ crc >> 8 as ::core::ffi::c_int;

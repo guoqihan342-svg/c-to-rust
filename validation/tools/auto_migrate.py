@@ -119,3 +119,20 @@ def c2rust_crc32_safety_candidate_from_manifest(
             "translation_coverage_numerator": 0,
         },
     }
+
+
+def emit_c2rust_crc32_safety_evidence(
+    baseline_manifest: dict[str, Any],
+    *,
+    manifest_path: Path,
+    repo_root: Path,
+    out_dir: Path,
+) -> dict[str, Any]:
+    from validation.tools.c2rust_crc32_safety_evidence import emit_evidence
+
+    candidate = c2rust_crc32_safety_candidate_from_manifest(
+        baseline_manifest,
+        manifest_path=manifest_path,
+        repo_root=repo_root,
+    )
+    return emit_evidence(candidate, repo_root=repo_root, out_dir=out_dir)

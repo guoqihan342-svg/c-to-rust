@@ -29,8 +29,9 @@ def validate_translation_before_after_unit(
     status = evidence.get("status")
     if status != "bound":
         raise SystemExit(f"workflow metrics per_unit_statuses[{index}].translation_before_after.status must be bound")
+    artifact_paths: dict[str, Path] = {}
     for key in ["baseline", "final", "oracle_evidence", "accepted_patch"]:
-        validate_before_after_artifact_ref(
+        artifact_paths[key] = validate_before_after_artifact_ref(
             evidence.get(key),
             key=key,
             unit=unit,
@@ -40,7 +41,7 @@ def validate_translation_before_after_unit(
         )
     patch_log = evidence.get("patch_log")
     if patch_log is not None:
-        validate_before_after_artifact_ref(
+        artifact_paths["patch_log"] = validate_before_after_artifact_ref(
             patch_log,
             key="patch_log",
             unit=unit,
@@ -82,6 +83,357 @@ def validate_translation_before_after_unit(
             f"workflow metrics per_unit_statuses[{index}].translation_before_after.unsafe_reduction "
             "must strictly reduce unsafe"
         )
+    claim_boundary = evidence.get("claim_boundary")
+    if (
+        isinstance(claim_boundary, dict)
+        and claim_boundary.get("semantic_claim_source")
+        == "c2rust_safety_transform_replay_with_accepted_c_oracle"
+    ):
+        validate_c2rust_safety_before_after(
+            evidence,
+            artifact_paths=artifact_paths,
+            unit=unit,
+            index=index,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+
+
+def validate_c2rust_safety_before_after(
+    evidence: dict[str, Any],
+    *,
+    artifact_paths: dict[str, Path],
+    unit: dict[str, Any],
+    index: int,
+    summary_path: Path,
+    repo_root: Path,
+) -> None:
+    prefix = f"workflow metrics per_unit_statuses[{index}].translation_before_after.c2rust_safety"
+    verification_path = artifact_paths.get("oracle_evidence")
+    if verification_path is None:
+        raise SystemExit(f"{prefix}.verification artifact is required")
+    try:
+        report = json.loads(verification_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{prefix}.verification artifact must be JSON") from exc
+    if not isinstance(report, dict):
+        raise SystemExit(f"{prefix}.verification artifact must be an object")
+    required_values = {
+        "report_kind": "c2rust-crc32-safety-verification",
+        "target_id": evidence.get("target_id"),
+        "slice_id": evidence.get("slice_id"),
+        "status": "passed",
+        "semantic_pass": True,
+        "semantic_claim_source": "c2rust_safety_transform_replay_with_accepted_c_oracle",
+        "candidate_source": "c2rust-function-level-safety-transform",
+    }
+    for key, expected in required_values.items():
+        if report.get(key) != expected:
+            raise SystemExit(f"{prefix}.{key} does not match the bound C2Rust safety contract")
+
+    claim = report.get("claim_boundary")
+    if not isinstance(claim, dict):
+        raise SystemExit(f"{prefix}.claim_boundary must be an object")
+    if (
+        claim.get("scope") != "function_level_c2rust_plus_repair_candidate"
+        or claim.get("generated_draft_semantic_pass") is not False
+        or claim.get("translation_coverage_numerator") != 0
+        or claim.get("whole_project_migration") is not False
+    ):
+        raise SystemExit(f"{prefix}.claim_boundary exceeds the function-level candidate scope")
+
+    report_artifacts = report.get("artifacts")
+    if not isinstance(report_artifacts, dict):
+        raise SystemExit(f"{prefix}.artifacts must be an object")
+    for evidence_key, report_key in {
+        "baseline": "baseline",
+        "final": "candidate",
+        "accepted_patch": "accepted_patch",
+        "patch_log": "repair_history",
+    }.items():
+        expected_ref = evidence.get(evidence_key)
+        actual_ref = report_artifacts.get(report_key)
+        if not same_path_sha_ref(actual_ref, expected_ref):
+            raise SystemExit(f"{prefix}.artifacts.{report_key} does not match translation_before_after.{evidence_key}")
+
+    for key in ["baseline_manifest", "baseline_output"]:
+        validate_c2rust_safety_nested_ref(
+            report.get(key),
+            key=key,
+            prefix=prefix,
+            unit=unit,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+    nested_paths: dict[str, Path] = {}
+    for key in ["c_oracle", "fixture", "replay_source", "replay_stdout", "replay_stderr"]:
+        nested_paths[key] = validate_c2rust_safety_nested_ref(
+            report_artifacts.get(key),
+            key=f"artifacts.{key}",
+            prefix=prefix,
+            unit=unit,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+
+    rustc = report.get("rustc")
+    if not isinstance(rustc, dict) or not isinstance(rustc.get("version"), str) or not rustc["version"]:
+        raise SystemExit(f"{prefix}.rustc version is required")
+    for key in ["baseline_compile", "candidate_compile", "replay_compile"]:
+        compile_gate = rustc.get(key)
+        if (
+            not isinstance(compile_gate, dict)
+            or compile_gate.get("status") != "passed"
+            or compile_gate.get("returncode") != 0
+        ):
+            raise SystemExit(f"{prefix}.rustc.{key} must be passed")
+    replay = report.get("replay")
+    if (
+        not isinstance(replay, dict)
+        or replay.get("status") != "passed"
+        or replay.get("returncode") != 0
+        or not isinstance(replay.get("case_count"), int)
+        or replay["case_count"] <= 0
+        or not isinstance(replay.get("cases"), list)
+        or len(replay["cases"]) != replay["case_count"]
+    ):
+        raise SystemExit(f"{prefix}.replay must bind passed non-empty cases")
+    schema_diff = report.get("schema_diff")
+    if (
+        not isinstance(schema_diff, dict)
+        or schema_diff.get("status") != "passed"
+        or schema_diff.get("first_mismatch") is not None
+        or schema_diff.get("case_count") != replay["case_count"]
+    ):
+        raise SystemExit(f"{prefix}.schema_diff must pass for every replay case")
+    negative_diff = report.get("negative_diff")
+    if (
+        not isinstance(negative_diff, dict)
+        or negative_diff.get("status") != "expected_failed"
+        or negative_diff.get("expected_failure") is not True
+        or negative_diff.get("mutation_detected") is not True
+        or not isinstance(negative_diff.get("first_mismatch"), dict)
+    ):
+        raise SystemExit(f"{prefix}.negative_diff must detect the injected mutation")
+    if report.get("unsafe_reduction") != evidence.get("unsafe_reduction"):
+        raise SystemExit(f"{prefix}.unsafe_reduction must match translation_before_after")
+
+    c_execution = report.get("c_oracle_execution")
+    validate_c2rust_real_c_execution(
+        c_execution,
+        report_artifacts=report_artifacts,
+        prefix=prefix,
+        unit=unit,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    c_oracle_payload = json.loads(nested_paths["c_oracle"].read_text(encoding="utf-8"))
+    oracle_cases = c_oracle_payload.get("cases") if isinstance(c_oracle_payload, dict) else None
+    if not isinstance(oracle_cases, list):
+        raise SystemExit(f"{prefix}.artifacts.c_oracle cases are required")
+    expected_cases = [
+        {"id": case.get("id"), "return_code": case.get("return_code"), "status": "passed"}
+        for case in oracle_cases
+        if isinstance(case, dict)
+    ]
+    if replay["cases"] != expected_cases:
+        raise SystemExit(f"{prefix}.replay cases must match the bound C oracle cases")
+    replay_stdout = nested_paths["replay_stdout"].read_text(encoding="utf-8")
+    replay_stdout_cases = []
+    for line in replay_stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 2:
+            raise SystemExit(f"{prefix}.artifacts.replay_stdout contains an invalid line")
+        try:
+            return_code = int(parts[1])
+        except ValueError as exc:
+            raise SystemExit(f"{prefix}.artifacts.replay_stdout contains an invalid return code") from exc
+        replay_stdout_cases.append({"id": parts[0], "return_code": return_code, "status": "passed"})
+    if replay_stdout_cases != replay["cases"]:
+        raise SystemExit(f"{prefix}.replay cases do not match replay_stdout")
+    if schema_diff != {
+        "status": "passed",
+        "case_count": len(expected_cases),
+        "compared_fields": ["return_code"],
+        "first_mismatch": None,
+    }:
+        raise SystemExit(f"{prefix}.schema_diff does not match recomputed C/Rust cases")
+    if not expected_cases:
+        raise SystemExit(f"{prefix}.negative_diff requires a non-empty case set")
+    expected_negative_mismatch = {
+        "id": expected_cases[0]["id"],
+        "field": "return_code",
+        "expected": expected_cases[0]["return_code"],
+        "actual": expected_cases[0]["return_code"] ^ 1,
+    }
+    if negative_diff.get("first_mismatch") != expected_negative_mismatch:
+        raise SystemExit(f"{prefix}.negative_diff does not match the deterministic mutation")
+
+    baseline_rust = artifact_paths["baseline"].read_text(encoding="utf-8").replace("\r\n", "\n")
+    final_rust = artifact_paths["final"].read_text(encoding="utf-8").replace("\r\n", "\n")
+    baseline_unsafe_count = c2rust_crc32_unsafe_count(baseline_rust)
+    final_unsafe_count = c2rust_crc32_unsafe_count(final_rust)
+    recomputed_unsafe = {
+        "status": "measured",
+        "baseline_total_unsafe": baseline_unsafe_count,
+        "current_total_unsafe": final_unsafe_count,
+        "reduced_by": baseline_unsafe_count - final_unsafe_count,
+        "ratio": 0.0
+        if baseline_unsafe_count == 0
+        else final_unsafe_count / baseline_unsafe_count,
+    }
+    if recomputed_unsafe != evidence.get("unsafe_reduction"):
+        raise SystemExit(f"{prefix}.unsafe_reduction does not match rescanned baseline/final")
+    expected_patch = "".join(
+        difflib.unified_diff(
+            baseline_rust.splitlines(keepends=True),
+            final_rust.splitlines(keepends=True),
+            fromfile=evidence["baseline"]["path"],
+            tofile=evidence["final"]["path"],
+            n=0,
+        )
+    )
+    actual_patch = artifact_paths["accepted_patch"].read_text(encoding="utf-8").replace("\r\n", "\n")
+    if actual_patch != expected_patch:
+        raise SystemExit(f"{prefix}.accepted_patch does not match deterministic baseline/final diff")
+
+
+def c2rust_crc32_unsafe_count(rust: str) -> int:
+    mutable_static = bool(re.search(r"(?m)^static mut crc32_table\s*:", rust))
+    raw_boundary = re.search(
+        r'pub unsafe extern "C" fn fdb_calc_crc32\s*\((?P<parameters>.*?)\)\s*->',
+        rust,
+        re.DOTALL,
+    )
+    raw_pointer_len = bool(
+        raw_boundary is not None
+        and "*const ::core::ffi::c_void" in raw_boundary.group("parameters")
+        and re.search(r"\bsize\s*:\s*size_t\b", raw_boundary.group("parameters"))
+    )
+    return int(mutable_static) + int(raw_pointer_len)
+
+
+def same_path_sha_ref(left: Any, right: Any) -> bool:
+    return (
+        isinstance(left, dict)
+        and isinstance(right, dict)
+        and left.get("path") == right.get("path")
+        and left.get("sha256") == right.get("sha256")
+    )
+
+
+def validate_c2rust_real_c_execution(
+    execution: Any,
+    *,
+    report_artifacts: dict[str, Any],
+    prefix: str,
+    unit: dict[str, Any],
+    summary_path: Path,
+    repo_root: Path,
+) -> None:
+    if not isinstance(execution, dict) or execution.get("status") != "passed" or execution.get("semantic_pass") is not True:
+        raise SystemExit(f"{prefix}.c_oracle_execution must be a passed real C execution")
+    compile_gate = execution.get("compile")
+    run_gate = execution.get("execution")
+    toolchain = execution.get("toolchain")
+    if (
+        not isinstance(compile_gate, dict)
+        or compile_gate.get("attempted") is not True
+        or compile_gate.get("returncode") != 0
+        or not isinstance(compile_gate.get("canonical_argv"), list)
+        or not compile_gate["canonical_argv"]
+        or not isinstance(compile_gate.get("actual_argv_sha256"), str)
+        or len(compile_gate["actual_argv_sha256"]) != 64
+        or not isinstance(compile_gate.get("executable_sha256"), str)
+        or len(compile_gate["executable_sha256"]) != 64
+    ):
+        raise SystemExit(f"{prefix}.c_oracle_execution.compile must bind a successful real compile")
+    if (
+        not isinstance(run_gate, dict)
+        or run_gate.get("attempted") is not True
+        or run_gate.get("returncode") != 0
+        or not isinstance(run_gate.get("actual_argv_sha256"), str)
+        or len(run_gate["actual_argv_sha256"]) != 64
+        or not isinstance(run_gate.get("matched_stdout_fragments"), list)
+        or not run_gate["matched_stdout_fragments"]
+        or run_gate.get("missing_stdout_fragments") != []
+    ):
+        raise SystemExit(f"{prefix}.c_oracle_execution.execution must bind a successful marker-complete run")
+    if (
+        not isinstance(toolchain, dict)
+        or toolchain.get("adapter") not in {"local", "wsl"}
+        or not isinstance(toolchain.get("compiler_name"), str)
+        or not isinstance(toolchain.get("compiler_version"), str)
+        or not toolchain["compiler_version"]
+    ):
+        raise SystemExit(f"{prefix}.c_oracle_execution.toolchain is incomplete")
+    execution_artifacts = execution.get("artifacts")
+    if not isinstance(execution_artifacts, dict):
+        raise SystemExit(f"{prefix}.c_oracle_execution.artifacts must be an object")
+    execution_paths: dict[str, Path] = {}
+    for key in ["c_compile_stdout", "c_compile_stderr", "c_replay_stdout", "c_replay_stderr"]:
+        if not same_path_sha_ref(execution_artifacts.get(key), report_artifacts.get(key)):
+            raise SystemExit(f"{prefix}.c_oracle_execution.artifacts.{key} must match top-level artifacts")
+        execution_paths[key] = validate_c2rust_safety_nested_ref(
+            execution_artifacts.get(key),
+            key=f"c_oracle_execution.artifacts.{key}",
+            prefix=prefix,
+            unit=unit,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+    c_stdout = execution_paths["c_replay_stdout"].read_text(encoding="utf-8")
+    if any(fragment not in c_stdout for fragment in run_gate["matched_stdout_fragments"]):
+        raise SystemExit(f"{prefix}.c_oracle_execution marker list does not match c_replay_stdout")
+    inputs = execution.get("inputs")
+    if not isinstance(inputs, dict):
+        raise SystemExit(f"{prefix}.c_oracle_execution.inputs must be an object")
+    for key in ["slice_spec", "harness"]:
+        validate_c2rust_safety_nested_ref(
+            inputs.get(key),
+            key=f"c_oracle_execution.inputs.{key}",
+            prefix=prefix,
+            unit=unit,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+    source_files = inputs.get("source_files")
+    if not isinstance(source_files, list) or len(source_files) < 2:
+        raise SystemExit(f"{prefix}.c_oracle_execution.inputs.source_files must bind real C sources")
+    for source_index, source_ref in enumerate(source_files):
+        validate_c2rust_safety_nested_ref(
+            source_ref,
+            key=f"c_oracle_execution.inputs.source_files[{source_index}]",
+            prefix=prefix,
+            unit=unit,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+
+
+def validate_c2rust_safety_nested_ref(
+    artifact: Any,
+    *,
+    key: str,
+    prefix: str,
+    unit: dict[str, Any],
+    summary_path: Path,
+    repo_root: Path,
+) -> Path:
+    if not isinstance(artifact, dict):
+        raise SystemExit(f"{prefix}.{key} must be an artifact ref")
+    path = artifact.get("path")
+    expected_sha = artifact.get("sha256")
+    if not isinstance(path, str) or not is_repo_relative_posix_path(path):
+        raise SystemExit(f"{prefix}.{key}.path must be repo-relative POSIX")
+    if not isinstance(expected_sha, str) or len(expected_sha) != 64:
+        raise SystemExit(f"{prefix}.{key}.sha256 must be sha256")
+    resolved = resolve_unit_artifact(path, unit=unit, summary_path=summary_path, repo_root=repo_root)
+    if resolved is None:
+        raise SystemExit(f"{prefix}.{key}.path does not exist: {path}")
+    if sha256(resolved) != expected_sha:
+        raise SystemExit(f"{prefix}.{key}.sha256 does not match")
+    return resolved
 
 
 def validate_root_unsafe_reduction_consistency(metrics: dict[str, Any]) -> None:

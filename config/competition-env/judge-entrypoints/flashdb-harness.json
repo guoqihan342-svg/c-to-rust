@@ -12,7 +12,7 @@
       "Explicit multi-worker fan-out/fan-in with source pinning, context pack, agent index, and judge evidence index",
       "OpenCode explicit multi-worker evaluate profile with preflight gate, runtime contract audit, context pack, agent index, and judge evidence index"
     ],
-    "baseline_boundary": "reviewed unsafe Rust baseline derived from the real C slice signature; C2Rust baseline has generated + compile-only + direct replay observable-passed evidence but remains candidate_context_only / semantic_pass=false",
+    "baseline_boundary": "raw C2Rust output remains candidate_context_only / semantic_pass=false; the before/after exhibit uses a hash-bound function-level extraction whose verified unsafe baseline gates pass, while only the independently replayed C2Rust+repair safety candidate is semantically accepted for that function",
     "boundary": "This file indexes judge-facing harness entrypoints and stable tracked manifests. It is a reproduction/runbook index, not a semantic gate, and it does not claim translator-generated semantic pass or whole-project FlashDB migration.",
     "forbidden_claims": [
       "translator-generated semantic pass",
@@ -102,7 +102,7 @@
       "profile": {
         "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
         "profile_id": "flashdb-fdb-utils-before-after",
-        "sha256": "22ba7b78a01a9f4c47db06086915e0caf18f3e6ffc8810f3798301c696481679"
+        "sha256": "5926a8b3ba93b05979ec2e8d0582b6976b2e2a0ecb4e566a826760d380a46ea2"
       },
       "proof_class": "local-simulation",
       "purpose": "core-translation-before-after-exhibit",
@@ -114,7 +114,7 @@
       "run_id": "competition-flashdb-before-after-exhibit",
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json",
-        "sha256": "b1f2be6fd7131901375c6fb60e3b57f5f45419e4dde41fb0dd56726de32eee3d"
+        "sha256": "4b20d4be41861ec08fd3c50b70d21fff91d724f5bca190cd432d72f5dfe89964"
       },
       "verification_commands": [
         "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json"

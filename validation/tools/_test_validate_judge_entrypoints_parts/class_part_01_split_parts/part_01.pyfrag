@@ -168,9 +168,9 @@
 
     def test_deterministic_judge_evidence_index_claim_boundary_fails_closed(self) -> None:
         mutations = [
-            ("semantic_claim_source", "competition-run-summary.final_gate", "semantic_claim_source must be accepted_evidence_binding"),
+            ("semantic_claim_source", "competition-run-summary.final_gate", "semantic_claim_source must be a supported bound source"),
             ("generated_draft_semantic_pass", True, "generated_draft_semantic_pass must be false"),
-            ("translation_coverage_numerator", 1, "translation_coverage_numerator must be 0"),
+            ("translation_coverage_numerator", 1, "core_translation_quality must be an object"),
             ("index_is_semantic_gate", True, "index_is_semantic_gate must be false"),
         ]
 

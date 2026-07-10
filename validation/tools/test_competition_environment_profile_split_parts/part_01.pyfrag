@@ -27,7 +27,10 @@
         self.assertEqual(batch["max_workers"], 4)
         self.assertTrue(batch["emit_route_governance_metrics_report"])
         self.assertTrue(batch["emit_before_after_exhibit_report"])
-        self.assertEqual(batch["acceptance_boundary"]["semantic_claim_source"], "accepted_evidence_binding")
+        self.assertEqual(
+            batch["acceptance_boundary"]["semantic_claim_source"],
+            "c2rust_safety_transform_replay_with_accepted_c_oracle",
+        )
         self.assertIs(batch["acceptance_boundary"]["generated_draft_semantic_pass"], False)
         self.assertEqual(
             batch["acceptance_boundary"]["translation_before_after"],

@@ -1,8 +1,8 @@
 {
   "acceptance_boundary": {
-    "claim": "real FlashDB fdb_calc_crc32 before/after exhibit; baseline is reviewed unsafe Rust derived from the real C slice signature; C2Rust baseline has generated + compile-only + direct replay observable-passed evidence but remains candidate_context_only / semantic_pass=false",
+    "claim": "function-level real FlashDB fdb_calc_crc32 C2Rust+repair exhibit; baseline is extracted from hash-bound C2Rust output and the safe candidate passes independent accepted-oracle replay/diff/negative-diff/unsafe gates",
     "generated_draft_semantic_pass": false,
-    "semantic_claim_source": "accepted_evidence_binding",
+    "semantic_claim_source": "c2rust_safety_transform_replay_with_accepted_c_oracle",
     "translation_before_after": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json"
   },
   "accepted_evidence_root": "validation/evidence",
@@ -23,14 +23,14 @@
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json",
         "semantic_claim_source": "verified_unsafe_baseline_gates",
         "semantic_pass": true,
-        "sha256": "0a62e2a4944b366086ce516fd2270c6c352f71c159bdb950969bf41fd48750df",
+        "sha256": "249e90e838487876dcacd26950905ce059b43c99477b694bd8b53d833dd8f787",
         "status": "passed"
       }
     },
     "mode": "baseline_repair_gate",
     "translation_before_after": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-      "sha256": "559adaab89d9e952a50044a71348f2c86a5922fff89c0b1b1202303219e07b62"
+      "sha256": "1c2f37e07f4f010f7af4e180d4782d1028de17822ebc96cdecfc74b834742492"
     }
   },
   "auto_retry": true,

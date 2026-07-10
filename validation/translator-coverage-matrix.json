@@ -393,6 +393,8 @@
         "IrExpr::IncDec prefix statement-position scalar Add/Sub desugar",
         "IrExpr::Unary.Neg/BitNot/Not over scalar inc/dec operand with ordered prelude",
         "IrExpr::Binary comparison over one direct scalar inc/dec operand with ordered prelude",
+        "IrStmt::If comparison condition over one direct scalar inc/dec operand with ordered prelude",
+        "IrStmt::While comparison condition over one direct scalar inc/dec operand with per-iteration ordered prelude",
         "no-clang AST fixture replay for scalar runtime preconditions/refusals"
       ],
       "dimension_status": {
@@ -439,6 +441,14 @@
             {
               "name": "typed_ir_emits_value_comparison_with_incdec_operand_ordered_prelude",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_06_00.rs"
+            },
+            {
+              "name": "typed_ir_emits_if_comparison_condition_with_incdec_operand_ordered_prelude",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_00.rs"
+            },
+            {
+              "name": "typed_ir_emits_while_comparison_with_post_inc_operand_per_iteration",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_03.rs"
             }
           ]
         },
@@ -452,6 +462,14 @@
             {
               "name": "typed_ir_rejects_value_comparison_incdec_with_same_scalar_sibling_read",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_06_00.rs"
+            },
+            {
+              "name": "if/loop comparison incdec fail-closed boundary tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_00.rs"
+            },
+            {
+              "name": "while comparison incdec conflict and complex-target fail-closed tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_03.rs"
             }
           ]
         },
@@ -473,6 +491,14 @@
             {
               "name": "typed_ir_emits_value_comparison_with_incdec_operand_ordered_prelude",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_06_00.rs"
+            },
+            {
+              "name": "typed_ir_emits_if_comparison_condition_with_incdec_operand_ordered_prelude",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_00.rs"
+            },
+            {
+              "name": "typed_ir_emits_while_comparison_with_post_inc_operand_per_iteration",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_03.rs"
             },
             {
               "name": "scalar-div-rem-contract generated Rust replay",
@@ -629,6 +655,14 @@
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_06_00.rs"
         },
         {
+          "name": "typed_ir_emits_if_comparison_condition_with_incdec_operand_ordered_prelude",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_00.rs"
+        },
+        {
+          "name": "typed_ir_emits_while_comparison_with_post_inc_operand_per_iteration",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_03.rs"
+        },
+        {
           "name": "typed_ir_emits_prefix_dec_statement_for_usize_scalar",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -670,6 +704,31 @@
           "name": "typed_ir_rejects_value_comparison_incdec_with_same_scalar_sibling_read",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_06_00.rs",
           "fail_closed_reason": "a comparison sibling must not read the scalar modified by the other inc/dec operand"
+        },
+        {
+          "name": "typed_ir_rejects_if_comparison_incdec_with_same_scalar_sibling_read",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_00.rs",
+          "fail_closed_reason": "an if-comparison sibling must not read the scalar modified by the other inc/dec operand"
+        },
+        {
+          "name": "typed_ir_rejects_if_comparison_with_two_incdec_operands",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_00.rs",
+          "fail_closed_reason": "an if comparison may not contain two independently side-effecting inc/dec operands"
+        },
+        {
+          "name": "typed_ir_rejects_while_comparison_incdec_with_same_scalar_sibling_read",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_03.rs",
+          "fail_closed_reason": "a while-comparison sibling must not read the scalar modified by the other inc/dec operand"
+        },
+        {
+          "name": "typed_ir_rejects_while_comparison_with_two_incdec_operands",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_03.rs",
+          "fail_closed_reason": "a while comparison may not contain two independently side-effecting inc/dec operands"
+        },
+        {
+          "name": "typed_ir_rejects_while_comparison_incdec_with_complex_target",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_03.rs",
+          "fail_closed_reason": "complex inc/dec targets require an explicit side-effect target lowering contract"
         },
         {
           "name": "typed_ir_rejects_division_by_zero_literal",

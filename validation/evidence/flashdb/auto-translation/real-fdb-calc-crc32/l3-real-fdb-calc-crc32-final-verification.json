@@ -247,7 +247,7 @@
   "validation_profile_status": "passed",
   "verified_unsafe_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json",
-    "sha256": "2159d69d453105989cffde88f80954d4872bf3b1ed7f644d55bc3dc15a4e4bbc",
+    "sha256": "249e90e838487876dcacd26950905ce059b43c99477b694bd8b53d833dd8f787",
     "status": "passed"
   },
   "version_config_status": "recorded"

@@ -1,4 +1,63 @@
 class _JudgeEntrypointsValidatorTestsPart09:
+    def test_judge_index_allows_bound_c2rust_safety_claim_source(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        source = "c2rust_safety_transform_replay_with_accepted_c_oracle"
+        payload["claim_boundary"]["semantic_claim_source"] = source
+        payload["judge_headline"]["semantic_claim_source"] = source
+        payload["core_translation_quality"] = {
+            "semantic_claim_source": source,
+            "translation_coverage_numerator": 0,
+        }
+
+        result = validator.validate_judge_evidence_index_contract(
+            payload,
+            path_text="target/judge-evidence-index.json",
+        )
+
+        self.assertEqual(result["status"], "passed")
+
+    def test_judge_index_rejects_unbound_c2rust_safety_claim_source(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        source = "c2rust_safety_transform_replay_with_accepted_c_oracle"
+        payload["claim_boundary"]["semantic_claim_source"] = source
+        payload["judge_headline"]["semantic_claim_source"] = source
+        payload["core_translation_quality"] = {
+            "semantic_claim_source": "accepted_evidence_binding",
+            "translation_coverage_numerator": 0,
+        }
+
+        with self.assertRaisesRegex(ValueError, "core_translation_quality.semantic_claim_source must match"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/judge-evidence-index.json",
+            )
+
+    def test_judge_index_rejects_unknown_semantic_claim_source(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        payload["claim_boundary"]["semantic_claim_source"] = "unbound_claim_source"
+        payload["judge_headline"]["semantic_claim_source"] = "unbound_claim_source"
+
+        with self.assertRaisesRegex(ValueError, "must be a supported bound source"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/judge-evidence-index.json",
+            )
+
+    def test_judge_index_rejects_coverage_numerator_core_quality_drift(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        payload["claim_boundary"]["translation_coverage_numerator"] = 21
+        payload["judge_headline"]["translation_coverage_numerator"] = 21
+        payload["core_translation_quality"] = {
+            "semantic_claim_source": "accepted_evidence_binding",
+            "translation_coverage_numerator": 20,
+        }
+
+        with self.assertRaisesRegex(ValueError, "core_translation_quality.translation_coverage_numerator must match"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/judge-evidence-index.json",
+            )
+
     def test_merge_execution_argv_allows_host_trace(self) -> None:
         result = validator.validate_local_absolute_path_policy(
             {"merge_execution": {"argv": ["C:\\Python314\\python.exe", "validation/tools/run_competition.py"]}},

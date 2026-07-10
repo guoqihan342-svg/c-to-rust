@@ -1,10 +1,12 @@
 import json
 import hashlib
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
 from validation.tools import auto_migrate
+from validation.tools import validate_competition_run_summary as summary_validator
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -31,7 +33,7 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
 
         self.assertEqual(candidate["candidate_source"], "c2rust-function-level-baseline")
         self.assertFalse(candidate["semantic_pass"])
-        self.assertEqual(candidate["baseline_manifest"]["sha256"], self._sha256(manifest_path))
+        self.assertEqual(candidate["baseline_manifest"]["sha256"], auto_migrate.sha256(manifest_path))
         self.assertEqual(candidate["baseline_output"], manifest["output"] | {"verified_sha256": True})
         self.assertEqual(candidate["unsafe_reduction"]["baseline_total_unsafe"], 2)
         self.assertEqual(candidate["unsafe_reduction"]["current_total_unsafe"], 0)
@@ -64,6 +66,105 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
                 manifest_path=manifest_path,
                 repo_root=REPO_ROOT,
             )
+
+    def test_c2rust_safety_evidence_runs_independent_replay_and_keeps_coverage_zero(self) -> None:
+        evidence_dir = (
+            REPO_ROOT
+            / "validation"
+            / "evidence"
+            / "flashdb"
+            / "auto-translation"
+            / "real-fdb-calc-crc32"
+        )
+        manifest_path = evidence_dir / "l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json"
+        manifest = self._load(manifest_path)
+
+        with tempfile.TemporaryDirectory(prefix="crc32-c2rust-safety-evidence-", dir=REPO_ROOT / "target") as tmp:
+            report = auto_migrate.emit_c2rust_crc32_safety_evidence(
+                manifest,
+                manifest_path=manifest_path,
+                repo_root=REPO_ROOT,
+                out_dir=Path(tmp),
+            )
+
+            self.assertEqual(report["status"], "passed")
+            self.assertTrue(report["semantic_pass"])
+            self.assertFalse(report["claim_boundary"]["generated_draft_semantic_pass"])
+            self.assertEqual(report["claim_boundary"]["translation_coverage_numerator"], 0)
+            self.assertEqual(report["replay"]["case_count"], 2)
+            self.assertEqual(
+                [case["return_code"] for case in report["replay"]["cases"]],
+                [0, 3421780262],
+            )
+            self.assertEqual(report["schema_diff"]["status"], "passed")
+            self.assertTrue(report["negative_diff"]["mutation_detected"])
+            self.assertEqual(report["unsafe_reduction"]["status"], "measured")
+            self.assertEqual(report["unsafe_reduction"]["reduced_by"], 2)
+            for artifact in report["artifacts"].values():
+                artifact_path = REPO_ROOT / artifact["path"]
+                self.assertTrue(artifact_path.is_file())
+                self.assertEqual(artifact["sha256"], auto_migrate.sha256(artifact_path))
+            verification_path = REPO_ROOT / report["verification"]["path"]
+            self.assertEqual(report["verification"]["sha256"], auto_migrate.sha256(verification_path))
+
+    def test_summary_validator_deep_checks_c2rust_safety_verification_body(self) -> None:
+        evidence_dir = (
+            REPO_ROOT
+            / "validation"
+            / "evidence"
+            / "flashdb"
+            / "auto-translation"
+            / "real-fdb-calc-crc32"
+        )
+        before_after = self._load(evidence_dir / "l3-real-fdb-calc-crc32-translation-before-after.json")
+        summary_path = REPO_ROOT / "target" / "c2rust-safety-validator" / "summary" / "summary.json"
+        summary_validator.validate_translation_before_after_unit(
+            before_after,
+            unit={},
+            index=0,
+            summary_path=summary_path,
+            repo_root=REPO_ROOT,
+        )
+
+        with tempfile.TemporaryDirectory(prefix="crc32-c2rust-safety-tamper-", dir=REPO_ROOT / "target") as tmp:
+            tampered_path = Path(tmp) / "c2rust-safety-verification.json"
+            tampered = self._load(REPO_ROOT / before_after["oracle_evidence"]["path"])
+            tampered["schema_diff"] = {**tampered["schema_diff"], "status": "failed"}
+            tampered_path.write_text(json.dumps(tampered, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
+            tampered_before_after = json.loads(json.dumps(before_after))
+            tampered_ref = {
+                "path": tampered_path.relative_to(REPO_ROOT).as_posix(),
+                "sha256": auto_migrate.sha256(tampered_path),
+            }
+            tampered_before_after["oracle_evidence"] = tampered_ref
+            with self.assertRaisesRegex(SystemExit, "schema_diff must pass"):
+                summary_validator.validate_translation_before_after_unit(
+                    tampered_before_after,
+                    unit={},
+                    index=0,
+                    summary_path=summary_path,
+                    repo_root=REPO_ROOT,
+                )
+
+            tampered = self._load(REPO_ROOT / before_after["oracle_evidence"]["path"])
+            tampered["c_oracle_execution"]["execution"]["returncode"] = 1
+            tampered_path.write_text(
+                json.dumps(tampered, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            tampered_before_after["oracle_evidence"] = {
+                "path": tampered_path.relative_to(REPO_ROOT).as_posix(),
+                "sha256": auto_migrate.sha256(tampered_path),
+            }
+            with self.assertRaisesRegex(SystemExit, "successful marker-complete run"):
+                summary_validator.validate_translation_before_after_unit(
+                    tampered_before_after,
+                    unit={},
+                    index=0,
+                    summary_path=summary_path,
+                    repo_root=REPO_ROOT,
+                )
 
     def test_emit_reports_records_real_fdb_calc_crc32_replay_and_diff_gates(self) -> None:
         result = subprocess.run(
@@ -130,7 +231,7 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
         )
         self.assertEqual(
             provenance["source_file_hashes"]["src/fdb_utils.c"],
-            "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc",
+            slice_spec["source"]["source_file_hashes"]["src/fdb_utils.c"],
         )
         self.assertEqual(
             provenance["source_span_sha256"],

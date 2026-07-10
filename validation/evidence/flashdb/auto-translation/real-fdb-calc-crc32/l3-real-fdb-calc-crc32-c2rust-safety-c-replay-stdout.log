@@ -1,0 +1,4 @@
+oracle harness draft for fdb_calc_crc32
+fixture input: validation/l2_slices/fixtures/real-fdb-calc-crc32.json
+fixture case empty-crc-zero return_code matched
+fixture case ascii-123456789-crc-zero return_code matched

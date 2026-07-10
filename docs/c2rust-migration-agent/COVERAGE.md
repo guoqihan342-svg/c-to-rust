@@ -64,7 +64,7 @@
 | `-value` (unary minus) | 窄支持 | 仅 signed integer；简单标量 inc/dec operand 可通过有序 Rust prelude 参与 value-position candidate emission |
 | `+value` (unary plus) | 窄支持 | 仅整数；clang-proven `IntegralPromotion` 会保留为显式 IR cast，operand/result 类型不匹配或非整数 fail-closed |
 | `!expr` (logical not) | 窄支持 | 条件和 value-position C int 0/1；简单标量 inc/dec operand，以及包含单个标量 inc/dec 参数的 side-effect direct-call operand，可通过有序 Rust prelude 参与 candidate emission，更复杂的 side-effect/conflict 形状仍 fail-closed |
-| `==` `!=` `<` `<=` `>` `>=` | 窄支持 | 条件和 value-position C int 0/1；value-position 允许恰好一个 direct scalar inc/dec operand 与不读取同一标量的纯 scalar sibling 通过 ordered prelude 发射，condition-position、call/deref/member、双 side-effect operand 和同变量 sibling read 仍 fail-closed |
+| `==` `!=` `<` `<=` `>` `>=` | 窄支持 | 条件和 value-position C int 0/1；value-position、`if` condition 及 `while` condition 允许恰好一个 direct scalar inc/dec operand 与不读取同一标量的纯 scalar sibling 通过 ordered prelude 发射；`while` 会在每轮判断前重新执行 prelude，`continue` 回到下一轮 prelude；`do-while`/`for`、call/deref/member、双 side-effect operand、复杂 target 和同变量 sibling read 仍 fail-closed |
 | `&&` `\|\|` (short-circuit) | 窄支持 | 条件和 value-position C int 0/1 |
 | `?:` (conditional) | 窄支持 | 仅纯整数 value-position；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | 整数 cast (显式/隐式) | 窄支持 | clang-proven `IntegralCast` / `IntegralPromotion`，source/target 同为支持整数；普通 value context、binary usual arithmetic context、unary-plus integer-promotion context、direct-call argument context、`?:` condition context 以及 `if`/`while`/`do-while`/`for` condition context 中的 integral `ImplicitCastExpr` 会保留为显式 IR cast；保留值上下文中的整数 `NoOp` 也会保留为 `implicit=true` 的显式 IR cast，显式 C-style same-width integer `NoOp` cast 仍保留为 `implicit=false` 的显式 cast；clang-proven integer value-context `LValueToRValue` 会保留为显式 typed IR `IrExpr::LValueToRValue` 节点；已有 no-clang AST fixture replay 覆盖 `uint32_t + uint8_t` 中的 clang-proven RHS cast、`+signed_char` 中的 clang-proven `IntegralPromotion`、整数 `NoOp` return cast、整数 `LValueToRValue` return read 和缺失 cast 的 fail-closed；普通表达式、参数位置或条件中的 `FloatingToIntegral`、`IntegralToFloating`、unknown/missing `ImplicitCastExpr.castKind` 会 fail-closed，只有已建模整数 cast、integer value-context `LValueToRValue` 显式 IR 节点和非整数/未保留 `NoOp` skeleton 边界可继续；pointer、record 和 general lvalue read 的 `LValueToRValue` 不属于该能力 |
@@ -103,8 +103,8 @@
 |------|------|------|
 | 表达式语句 | 已支持 | `value++;`、`++value;` |
 | `return` (with/without value) | 已支持 | |
-| `if` / `if-else` | 已支持 | 含 comparison condition；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
-| `while` | 已支持 | 含 postfix `size--` 和窄形状 prefix `--size`；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
+| `if` / `if-else` | 已支持 | 含 comparison condition；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留；单个 direct scalar inc/dec comparison operand 可在上述受限冲突检查后通过 ordered prelude 发射 |
+| `while` | 已支持 | 含 postfix `size--`、窄形状 prefix `--size`，以及单个 direct scalar inc/dec comparison operand 的 per-iteration ordered prelude；`continue`/`break` runtime 测试锁定重新判断与退出语义；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | `do-while` | 已支持 | condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | `for` (scoped) | 窄支持 | init/condition/step 为简单形式；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | `break` | 窄支持 | 仅在 loop body 内 |

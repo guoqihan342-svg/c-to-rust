@@ -67,7 +67,7 @@
         "blocked_repairs"
       ],
       "properties": {
-        "translation_coverage_numerator": {"const": 0},
+        "translation_coverage_numerator": {"type": "integer", "minimum": 0},
         "accepted_evidence_semantic_pass_count": {"type": "integer", "minimum": 0},
         "tracked_capability_delta_ledgers": {"type": "integer", "minimum": 0},
         "tracked_capability_delta_count": {"type": "integer", "minimum": 0},

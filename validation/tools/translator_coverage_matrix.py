@@ -150,6 +150,9 @@ def build_capability_delta_ledger(repo_root: Path, *, evidence_root: Path) -> di
         route_statuses[route_status] += 1
         accepted_evidence_semantic_pass = accepted_evidence_semantic_pass_for_ledger(path, payload)
         generated_draft_semantic_pass = generated_draft_semantic_pass_for_ledger(path, payload)
+        semantic_pass_delta_count = sum(
+            1 for delta in deltas if isinstance(delta, dict) and delta.get("semantic_pass") is True
+        )
         if accepted_evidence_semantic_pass:
             accepted_evidence_semantic_pass_count += 1
         governance_delta_count += len(governance)
@@ -162,6 +165,7 @@ def build_capability_delta_ledger(repo_root: Path, *, evidence_root: Path) -> di
                 "route_level": route_level,
                 "route_status": route_status,
                 "delta_count": len(deltas),
+                "semantic_pass_delta_count": semantic_pass_delta_count,
                 "accepted_evidence_semantic_pass": accepted_evidence_semantic_pass,
                 "generated_draft_semantic_pass": generated_draft_semantic_pass,
             }

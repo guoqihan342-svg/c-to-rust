@@ -40,11 +40,17 @@ def require_nonnegative_int(value: Any, message: str) -> int:
 
 
 def generated_draft_semantic_pass_count_from_ledgers(ledgers: list[Any]) -> int:
-    return sum(
-        1
-        for item in ledgers
-        if isinstance(item, dict) and item.get("generated_draft_semantic_pass") is True
-    )
+    count = 0
+    for item in ledgers:
+        if not isinstance(item, dict) or item.get("generated_draft_semantic_pass") is not True:
+            continue
+        semantic_delta_count = item.get("semantic_pass_delta_count", 1)
+        require(
+            isinstance(semantic_delta_count, int) and semantic_delta_count >= 0,
+            "semantic_pass_delta_count must be a non-negative integer",
+        )
+        count += semantic_delta_count
+    return count
 
 
 def is_l4_refused(item: Any) -> bool:
