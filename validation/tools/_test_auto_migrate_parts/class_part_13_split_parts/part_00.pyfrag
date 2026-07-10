@@ -1,0 +1,91 @@
+class _AutoMigrateTestsPart13:
+    def _pointer_alias_spec(self) -> dict[str, Any]:
+        return {
+            "c_boundary": {
+                "pointer_contract": {
+                    "input_buffers": [
+                        {
+                            "name": "source",
+                            "c_type": "struct Source *",
+                            "mutability": "read-write",
+                            "read_effects": [],
+                            "write_effects": [],
+                        }
+                    ],
+                    "output_pointers": [
+                        {
+                            "name": "target",
+                            "c_type": "struct Target *",
+                            "mutability": "read_write",
+                            "read_effects": [],
+                            "write_effects": [],
+                        }
+                    ],
+                    "aliasing_proven": True,
+                    "noalias_required": [["source", "target"]],
+                }
+            }
+        }
+
+    def test_declared_noalias_with_empty_effects_produces_complete_pair_gate(self) -> None:
+        module = load_auto_migrate_module()
+        spec = self._pointer_alias_spec()
+        nodes_by_name = module.pointer_contract_nodes_by_name(spec)
+
+        self.assertEqual(nodes_by_name["source"]["mutability"], "read_write")
+        self.assertEqual(nodes_by_name["source"]["read_effects"], ["*source"])
+        self.assertEqual(nodes_by_name["source"]["write_effects"], ["*source"])
+        self.assertEqual(nodes_by_name["target"]["mutability"], "read_write")
+        self.assertEqual(nodes_by_name["target"]["read_effects"], ["*target"])
+        self.assertEqual(nodes_by_name["target"]["write_effects"], ["*target"])
+
+        gate = module.alias_gate_evidence(spec, list(nodes_by_name.values()))
+        self.assertTrue(gate["is_alias_sensitive"])
+        self.assertEqual(gate["summary"]["decision"], "allow")
+        self.assertTrue(gate["summary"]["requires_noalias"])
+        self.assertTrue(gate["summary"]["complete_alias_safety"])
+        self.assertEqual(
+            [risk["pointer_nodes"] for risk in gate["alias_risks"]],
+            [["source", "target"]],
+        )
+        self.assertEqual(
+            [item["applies_to"] for item in gate["safe_boundary_preconditions"]],
+            [["source", "target"]],
+        )
+        self.assertTrue(gate["safe_boundary_preconditions"][0]["required"])
+
+    def test_declared_noalias_pair_drift_fails_closed(self) -> None:
+        module = load_auto_migrate_module()
+        unknown = self._pointer_alias_spec()
+        unknown["c_boundary"]["pointer_contract"]["noalias_required"] = [
+            ["source", "missing"]
+        ]
+        unknown_nodes = module.pointer_contract_nodes_by_name(unknown)
+        with self.assertRaisesRegex(ValueError, "unknown pointer nodes: missing"):
+            module.alias_gate_evidence(unknown, list(unknown_nodes.values()))
+
+        incomplete = self._pointer_alias_spec()
+        incomplete["c_boundary"]["pointer_contract"]["output_pointers"].append(
+            {
+                "name": "audit",
+                "c_type": "struct Audit *",
+                "mutability": "write_only",
+                "write_effects": ["*audit"],
+            }
+        )
+        incomplete_nodes = module.pointer_contract_nodes_by_name(incomplete)
+        with self.assertRaisesRegex(ValueError, "does not cover effect-derived alias pairs"):
+            module.alias_gate_evidence(incomplete, list(incomplete_nodes.values()))
+
+    def test_no_declared_noalias_without_cross_effects_is_not_applicable(self) -> None:
+        module = load_auto_migrate_module()
+        spec = self._pointer_alias_spec()
+        pointer_contract = spec["c_boundary"]["pointer_contract"]
+        pointer_contract["output_pointers"] = []
+        pointer_contract["noalias_required"] = []
+        nodes = module.pointer_contract_nodes_by_name(spec)
+
+        gate = module.alias_gate_evidence(spec, list(nodes.values()))
+        self.assertEqual(gate["summary"]["decision"], "not_applicable")
+        self.assertFalse(gate["is_alias_sensitive"])
+        self.assertEqual(gate["alias_risks"], [])
