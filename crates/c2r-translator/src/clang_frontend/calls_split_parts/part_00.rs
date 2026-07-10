@@ -39,6 +39,19 @@ fn call_expr_skeleton_from_ast_with_memory_statement_args(
         };
         args.push(arg);
     }
+    if args
+        .iter()
+        .any(clang_is_direct_record_scalar_member_call_arg)
+    {
+        if let Some(reason) =
+            clang_direct_record_scalar_member_call_signature_rejection_reason(callee_node, &args)
+        {
+            return Ok(ClangExprSkeleton::Unsupported {
+                node: "CallExpr".to_string(),
+                reason,
+            });
+        }
+    }
     let rejection_reason = match (allow_memory_statement_args, callee.as_str()) {
         (true, "memset") => bounded_memset_statement_args_rejection_reason(&args),
         (true, "memcpy") => bounded_memcpy_statement_args_rejection_reason(&args),
@@ -432,6 +445,16 @@ fn bounded_call_args_rejection_reason(args: &[ClangExprSkeleton]) -> Option<Stri
     if nested_call_count > 1 {
         return Some(
             "multiple nested call arguments are outside the bounded call subset".to_string(),
+        );
+    }
+    if nested_call_count > 0
+        && args
+            .iter()
+            .any(clang_is_direct_record_scalar_member_call_arg)
+    {
+        return Some(
+            "direct record scalar member call argument cannot be combined with an additional call"
+                .to_string(),
         );
     }
     let side_effect_args = match clang_side_effect_call_args(args) {

@@ -46,6 +46,12 @@ fn validate_bounded_call_args(args: &[IrExpr], context: &EmitContext) -> Result<
             "multiple nested call arguments are outside the bounded call subset".to_string(),
         );
     }
+    if nested_call_count > 0 && args.iter().any(is_direct_record_scalar_member_call_arg) {
+        return Err(
+            "direct record scalar member call argument cannot be combined with an additional call"
+                .to_string(),
+        );
+    }
     let side_effect_args = side_effect_call_args(args)?;
     for (index, arg) in args.iter().enumerate() {
         if !side_effect_args.is_empty() {
@@ -69,6 +75,16 @@ fn validate_bounded_call_args(args: &[IrExpr], context: &EmitContext) -> Result<
         .map_err(|detail| format!("call arg[{index}] {detail}"))?;
     }
     Ok(())
+}
+
+fn is_direct_record_scalar_member_call_arg(expr: &IrExpr) -> bool {
+    match expr {
+        IrExpr::Member { .. } => true,
+        IrExpr::Cast { expr, .. } | IrExpr::LValueToRValue { expr, .. } => {
+            is_direct_record_scalar_member_call_arg(expr)
+        }
+        _ => false,
+    }
 }
 
 fn validate_bounded_side_effect_call_args(args: &[IrExpr]) -> Result<Vec<(usize, &str)>, String> {
@@ -155,9 +171,15 @@ fn validate_bounded_call_arg_with_context(
             validate_bounded_call_arg_with_context(base, false, context)?;
             validate_bounded_call_arg_with_context(index, false, context)
         }
-        IrExpr::Member { .. } => {
-            Err("member access call arguments are outside the bounded call subset".to_string())
-        }
+        IrExpr::Member {
+            base,
+            field,
+            ty,
+            is_arrow,
+            ..
+        } => validate_direct_record_scalar_member_call_arg(
+            base, field, ty, *is_arrow, context,
+        ),
         IrExpr::ArrayLiteral { .. } => {
             Err("array literal arguments are outside the bounded call subset".to_string())
         }
@@ -182,6 +204,83 @@ fn validate_bounded_call_arg_with_context(
             Err(format!("unsupported argument expression {node}: {reason}"))
         }
     }
+}
+
+fn validate_direct_record_scalar_member_call_arg(
+    base: &IrExpr,
+    field: &str,
+    ty: &IrType,
+    is_arrow: bool,
+    context: Option<&EmitContext>,
+) -> Result<(), String> {
+    if !is_integer_type(ty) {
+        return Err(format!(
+            "direct record call argument field {field} must be a fixed-width integer scalar, got {}",
+            type_label(ty)
+        ));
+    }
+    emit_scalar_type(ty)
+        .map_err(|detail| format!("direct record call argument field {field} has {detail}"))?;
+    let IrExpr::Var {
+        name: root_name,
+        ty: root_ty,
+        ..
+    } = base
+    else {
+        return Err(
+            "direct record scalar member call argument base must be a direct DeclRef root"
+                .to_string(),
+        );
+    };
+
+    let record_ty = if is_arrow {
+        let context = context.ok_or_else(|| {
+            "direct record pointer scalar member call argument requires readonly/noalias context"
+                .to_string()
+        })?;
+        if context.is_nullable_pointer_param(root_name) {
+            return Err(format!(
+                "nullable record pointer param {root_name} cannot be a direct scalar member call argument"
+            ));
+        }
+        readonly_record_pointer_read_pointee_type(root_name, root_ty, context).ok_or_else(|| {
+            format!(
+                "record pointer call argument base {root_name} lacks readonly/noalias read proof for {}",
+                type_label(root_ty)
+            )
+        })?
+    } else {
+        root_ty
+    };
+    let IrTypeKind::Record {
+        name: record_name,
+        fields: Some(fields),
+    } = &record_ty.kind
+    else {
+        return Err(format!(
+            "direct record scalar member call argument base {root_name} is not a complete record type"
+        ));
+    };
+    let declared = fields
+        .iter()
+        .find(|declared| declared.name == field)
+        .ok_or_else(|| format!("complete record {record_name} has no field {field}"))?;
+    if !is_integer_type(&declared.ty) {
+        return Err(format!(
+            "direct record call argument field {record_name}.{field} is not a fixed-width integer scalar"
+        ));
+    }
+    emit_scalar_type(&declared.ty).map_err(|detail| {
+        format!("direct record call argument field {record_name}.{field} has {detail}")
+    })?;
+    if !types_match_ignoring_spelling(ty, &declared.ty) {
+        return Err(format!(
+            "direct record call argument field {record_name}.{field} type {} does not match declared type {}",
+            type_label(ty),
+            type_label(&declared.ty)
+        ));
+    }
+    Ok(())
 }
 
 fn validate_null_pointer_call_arg(ty: &IrType) -> Result<(), String> {
