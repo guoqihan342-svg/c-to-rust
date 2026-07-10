@@ -453,7 +453,7 @@ fn if_assignment_call_comparison_rejects_renamed_local_member_target() {
     };
     assert!(
         reason.contains(
-            "if condition assignment-call target must be a direct non-volatile, non-atomic fixed-width integer DeclRef"
+            "path must contain exactly one arrow rooted at a direct mutable record-pointer DeclRef"
         ),
         "{reason}"
     );

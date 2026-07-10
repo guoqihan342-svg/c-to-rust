@@ -52,6 +52,33 @@ fn validate_bounded_call_args(args: &[IrExpr], context: &EmitContext) -> Result<
                 .to_string(),
         );
     }
+    let mutable_record_borrows = args
+        .iter()
+        .enumerate()
+        .filter_map(|(index, arg)| match arg {
+            IrExpr::Var { name, ty, .. }
+                if validate_mutable_record_pointer_call_arg(name, ty, context).is_ok() =>
+            {
+                Some((index, name.as_str()))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if mutable_record_borrows.len() > 1 {
+        return Err(
+            "one direct call cannot borrow multiple mutable record pointer parameters"
+                .to_string(),
+        );
+    }
+    for (borrow_index, borrowed_name) in &mutable_record_borrows {
+        if args.iter().enumerate().any(|(index, arg)| {
+            index != *borrow_index && expr_mentions_var(arg, borrowed_name)
+        }) {
+            return Err(format!(
+                "mutable record pointer call argument {borrowed_name} cannot have a sibling argument that reads the same record"
+            ));
+        }
+    }
     let side_effect_args = side_effect_call_args(args)?;
     for (index, arg) in args.iter().enumerate() {
         if !side_effect_args.is_empty() {
@@ -136,6 +163,9 @@ fn validate_bounded_call_arg_with_context(
                     return Ok(());
                 }
                 if let Some(context) = context {
+                    if validate_mutable_record_pointer_call_arg(name, ty, context).is_ok() {
+                        return Ok(());
+                    }
                     if validate_raw_direct_call_pointer_arg(name, ty, context).is_ok() {
                         return Ok(());
                     }
@@ -204,6 +234,30 @@ fn validate_bounded_call_arg_with_context(
             Err(format!("unsupported argument expression {node}: {reason}"))
         }
     }
+}
+
+fn validate_mutable_record_pointer_call_arg(
+    name: &str,
+    ty: &IrType,
+    context: &EmitContext,
+) -> Result<(), String> {
+    if !context.is_mutable_record_pointer_write_param(name) {
+        return Err(format!(
+            "mutable record pointer call argument {name} lacks ownership evidence"
+        ));
+    }
+    mutable_record_pointer_pointee_type(ty).ok_or_else(|| {
+        format!(
+            "mutable record pointer call argument {name} has unsupported type {}",
+            type_label(ty)
+        )
+    })?;
+    if context.is_nullable_pointer_param(name) {
+        return Err(format!(
+            "nullable mutable record pointer {name} cannot be passed to a direct call"
+        ));
+    }
+    Ok(())
 }
 
 fn validate_direct_record_scalar_member_call_arg(

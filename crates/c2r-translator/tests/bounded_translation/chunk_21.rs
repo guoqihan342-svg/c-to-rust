@@ -175,26 +175,43 @@ fn clang_ast_if_assignment_call_record_pointer_member_accepts_and_runs() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_if_assignment_call_record_pointer_member_rejects_nested_dot_hop() {
-    let function_name = "bad_if_assign_call_nested_dot";
-    let mut ast = if_assignment_call_record_pointer_member_fixture(function_name, "==");
-    let function = ast["inner"]
-        .as_array_mut()
-        .expect("translation unit declarations")
-        .iter_mut()
-        .find(|decl| decl["name"] == function_name)
-        .expect("renamed fixture function");
-    let target_member = &mut function["inner"][2]["inner"][0]["inner"][0]
-        ["inner"][0]["inner"][0]["inner"][0];
-    target_member["isArrow"] = serde_json::json!(false);
+fn clang_ast_if_assignment_call_record_pointer_nested_dot_member_accepts_and_runs() {
+    let function_name = "if_assign_call_record_ptr_nested_member";
+    let ast = if_assignment_call_record_pointer_nested_member_fixture(function_name);
 
-    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
-        .expect_err("nested dot hop must fail closed at frontend");
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
+        .expect("lower arrow-rooted nested dot assignment-call comparison");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit arrow-rooted nested dot assignment-call comparison");
+    let rust = &emitted.rust;
     assert!(
-        error
-            .message
-            .contains("direct mutable record-pointer arrow integer member"),
-        "expected nested dot rejection, got {error:?}"
+        rust.contains("ctx.address.threshold = fetch_value(ctx, seed);"),
+        "missing emitted nested assignment: {rust}"
+    );
+    assert!(
+        rust.contains("if (ctx.address.threshold == 4294967295u32)"),
+        "missing emitted nested comparison: {rust}"
+    );
+    assert_eq!(rust.matches("fetch_value(").count(), 1, "{rust}");
+
+    let runtime_rust = format!(
+        "use std::sync::atomic::{{AtomicUsize, Ordering}};\n\
+         static CALLS: AtomicUsize = AtomicUsize::new(0);\n\
+         fn fetch_value(_ctx: &mut Context, seed: u32) -> u32 {{\
+             CALLS.fetch_add(1, Ordering::SeqCst); seed.wrapping_add(1)\
+         }}\n\
+         {rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-if-assignment-call-record-ptr-nested-member",
+        &runtime_rust,
+        r#"
+    CALLS.store(0, Ordering::SeqCst);
+    let mut ctx = Context { address: Address { threshold: 0 } };
+    if_assign_call_record_ptr_nested_member(&mut ctx, 99);
+    assert_eq!(ctx.address.threshold, 100);
+    assert_eq!(CALLS.load(Ordering::SeqCst), 1);
+"#,
     );
 }
 
@@ -243,7 +260,9 @@ fn clang_ast_if_assignment_call_record_pointer_member_rejects_second_arrow_hop()
     let error = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
         .expect_err("second arrow hop must fail closed");
     assert!(
-        error.message.contains("must not contain a second member hop"),
+        error
+            .message
+            .contains("must not contain a second arrow or pointer member hop"),
         "expected second arrow rejection, got {error:?}"
     );
 }
@@ -418,7 +437,7 @@ fn clang_ast_if_assignment_call_record_pointer_member_rejects_by_value_local_mem
     assert!(
         error
             .message
-            .contains("direct mutable record-pointer arrow integer member"),
+            .contains("exactly one arrow rooted at a direct mutable record-pointer DeclRef"),
         "expected local member rejection, got {error:?}"
     );
 }

@@ -2701,7 +2701,8 @@
         "direct record scalar member as compound assignment RHS",
         "complete local record nested dot path as do-while tail assignment-call target",
         "direct record integer scalar member as direct-call argument",
-        "direct mutable record pointer integer field as if assignment-call comparison target"
+        "unique complete named nested record inventory with anonymous-record preservation",
+        "direct mutable record pointer arrow-rooted pure dot-path integer field as if assignment-call comparison target"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -2785,6 +2786,11 @@
             {
               "name": "direct record pointer field if assignment-call no-clang replay",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "named nested record inventory and mutable borrow refusal replay",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_22.rs",
               "proof_class": "candidate_context_only"
             }
           ]
@@ -2971,6 +2977,11 @@
               "name": "direct record pointer field if assignment-call adjacent refusals",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "nested record inventory and duplicate mutable borrow refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_22.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -3079,6 +3090,11 @@
             },
             {
               "name": "direct record pointer field if assignment-call emitted Rust runtime test",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "arrow-rooted nested record pointer field emitted Rust runtime test",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
               "proof_class": "candidate_context_only"
             }
@@ -3565,6 +3581,7 @@
         "nullable readonly pointer truthiness can guard record-pointer constructor arguments that unwrap value and strlen leaves in the nonnull branch",
         "modeled C strlen(const char *) leaf with size_t or __size_t result spelling inside record-pointer constructor call arguments",
         "direct integer scalar record member call arguments for by-value, local complete, readonly pointer, and noalias-proven mutable pointer records",
+        "exactly one complete mutable record owner direct-call argument with same-record sibling-read refusal",
         "route candidate evidence"
       ],
       "dimension_status": {
@@ -3686,6 +3703,11 @@
             {
               "name": "direct record scalar call argument no-clang replay",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_20_00.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "complete mutable record owner direct-call argument no-clang replay",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
               "proof_class": "candidate_context_only"
             }
           ]
@@ -3998,6 +4020,11 @@
               "name": "direct record scalar call argument signature, qualifier, and alias refusals",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_20_01.rs",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "duplicate mutable record borrow direct-call refusal",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_22.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -4163,6 +4190,11 @@
             {
               "name": "direct record scalar call argument emitted Rust runtime tests",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_20_00.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "complete mutable record owner call and nested target emitted Rust runtime test",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
               "proof_class": "candidate_context_only"
             }
           ]
@@ -4773,7 +4805,7 @@
         "Clang IfStmt left-operand assignment-call comparison",
         "preceding IrStmt::Assign plus pure IrStmt::If comparison normalization",
         "direct non-volatile non-atomic fixed-width integer scalar target",
-        "strict direct non-nullable mutable record pointer integer field target",
+        "strict direct non-nullable mutable record pointer arrow-rooted pure dot-path integer field target",
         "exactly one direct call in the complete assignment RHS subtree",
         "pure comparison operators == != < <= > >=",
         "candidate extensions remain candidate_context_only; accepted named-slice semantic-pass count is 24"
@@ -4794,6 +4826,11 @@
             },
             {
               "name": "clang_ast_if_assignment_call_record_pointer_member_accepts_and_runs",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "clang_ast_if_assignment_call_record_pointer_nested_dot_member_accepts_and_runs",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
               "proof_class": "candidate_context_only"
             }
@@ -4825,6 +4862,11 @@
               "name": "record pointer field assignment-call target adjacent refusals",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "nested inventory and duplicate mutable borrow adjacent refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_22.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -4843,6 +4885,11 @@
             },
             {
               "name": "record pointer field assignment-call emitted Rust runtime test",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "arrow-rooted nested record pointer field assignment-call emitted Rust runtime test",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
               "proof_class": "candidate_context_only"
             }
@@ -4926,6 +4973,11 @@
           "name": "strict direct mutable record pointer field assignment-call candidate",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
           "proof_class": "candidate_context_only"
+        },
+        {
+          "name": "arrow-rooted nested record pointer field assignment-call candidate",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+          "proof_class": "candidate_context_only"
         }
       ],
       "negative_cases": [
@@ -4948,6 +5000,11 @@
           "name": "record pointer field assignment-call adjacent structural refusals",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
           "fail_closed_reason": "local members, nested hops, readonly/volatile/effectful targets, logical composition, and a second call remain outside the strict direct mutable record-pointer field boundary"
+        },
+        {
+          "name": "nested record inventory and mutable borrow refusals",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_22.rs",
+          "fail_closed_reason": "missing complete named record inventory and duplicate mutable-record call borrows remain fail-closed"
         }
       ]
     },
@@ -4966,7 +5023,7 @@
         "Clang DoStmt strict tail assignment-call comparison normalized to body-tail IrStmt::Assign plus pure sentinel comparison, with the same assignment inserted before current-level continue",
         "Clang DoStmt assignment-call comparison with independent pure logical-and suffix",
         "Clang DoStmt complete local record nested dot path tail assignment-call target",
-        "Clang IfStmt strict direct mutable record pointer integer field assignment-call comparison target",
+        "Clang IfStmt strict direct mutable record pointer arrow-rooted pure dot-path integer field assignment-call comparison target",
         "final IrStmt::If accepted when both branches end in return values",
         "legacy CFG evidence for label/goto/switch/case/default",
         "unsupported_control_flow classification",

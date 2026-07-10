@@ -16,10 +16,58 @@ pub(super) fn record_inventory_from_ast_with_target_abi(
 ) -> BTreeMap<String, Vec<IrRecordField>> {
     let mut records = BTreeMap::new();
     collect_record_inventory_from_ast(ast, target_abi, &mut records);
-    records
-        .into_iter()
-        .filter_map(|(name, fields)| fields.map(|fields| (name, fields)))
-        .collect()
+    let mut resolved = BTreeMap::new();
+    for name in records.keys() {
+        let mut stack = Vec::new();
+        if let Some(fields) = resolve_complete_record_fields(name, &records, &mut stack) {
+            resolved.insert(name.clone(), fields);
+        }
+    }
+    resolved
+}
+
+#[cfg(feature = "typed-ir")]
+fn resolve_complete_record_fields(
+    name: &str,
+    records: &BTreeMap<String, Option<Vec<IrRecordField>>>,
+    stack: &mut Vec<String>,
+) -> Option<Vec<IrRecordField>> {
+    if stack.iter().any(|ancestor| ancestor == name) {
+        return None;
+    }
+    let mut fields = records.get(name)?.as_ref()?.clone();
+    stack.push(name.to_string());
+    for field in &mut fields {
+        if !resolve_complete_record_type(&mut field.ty, records, stack) {
+            stack.pop();
+            return None;
+        }
+    }
+    stack.pop();
+    Some(fields)
+}
+
+#[cfg(feature = "typed-ir")]
+fn resolve_complete_record_type(
+    ty: &mut IrType,
+    records: &BTreeMap<String, Option<Vec<IrRecordField>>>,
+    stack: &mut Vec<String>,
+) -> bool {
+    let IrTypeKind::Record { name, fields } = &mut ty.kind else {
+        return true;
+    };
+    if fields.is_none() {
+        let Some(resolved) = resolve_complete_record_fields(name, records, stack) else {
+            return false;
+        };
+        *fields = Some(resolved);
+    }
+    let Some(fields) = fields else {
+        return false;
+    };
+    fields
+        .iter_mut()
+        .all(|field| resolve_complete_record_type(&mut field.ty, records, stack))
 }
 
 #[cfg(feature = "typed-ir")]
@@ -205,10 +253,32 @@ fn record_field_from_field_decl(
     if !matches!(ty.kind, IrTypeKind::Integer { .. })
         && !is_opaque_void_pointer_ir_type(&ty)
         && !is_complete_fixed_integer_array_ir_type(&ty)
+        && !is_named_record_ir_type(&ty, &spellings)
     {
         return None;
     }
     Some(IrRecordField { name, ty })
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_named_record_ir_type(ty: &IrType, spellings: &[String]) -> bool {
+    let IrTypeKind::Record { name, .. } = &ty.kind else {
+        return false;
+    };
+    if spellings
+        .iter()
+        .any(|spelling| spelling.contains("(unnamed "))
+    {
+        return false;
+    }
+    is_simple_c_identifier(name)
+        && spellings.iter().any(|spelling| {
+            let spelling = spelling.trim();
+            let spelling = spelling.strip_prefix("const ").unwrap_or(spelling);
+            spelling
+                .strip_prefix("struct ")
+                .is_some_and(|record_name| record_name.trim() == name)
+        })
 }
 
 #[cfg(feature = "typed-ir")]

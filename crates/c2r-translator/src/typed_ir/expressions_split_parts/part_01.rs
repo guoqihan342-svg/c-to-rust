@@ -74,6 +74,11 @@ fn emit_call_arg_expr(
             emit_opaque_pointer_call_arg_var(name, symbols, context)
         }
         IrExpr::Var { name, ty, .. }
+            if validate_mutable_record_pointer_call_arg(name, ty, context).is_ok() =>
+        {
+            emit_mutable_record_pointer_call_arg_var(name, ty, symbols, context)
+        }
+        IrExpr::Var { name, ty, .. }
             if should_emit_raw_direct_call_pointer_param(name, ty, context) =>
         {
             emit_raw_direct_call_pointer_arg_var(name, ty, symbols, context)
@@ -245,6 +250,21 @@ fn emit_raw_direct_call_pointer_arg_var(
     }
     validate_raw_direct_call_pointer_arg(name, ty, context)?;
     emit_identifier(name, "raw direct call pointer argument")
+}
+
+fn emit_mutable_record_pointer_call_arg_var(
+    name: &str,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    if !symbols.contains(name) {
+        return Err(format!(
+            "mutable record pointer call argument {name} is not declared"
+        ));
+    }
+    validate_mutable_record_pointer_call_arg(name, ty, context)?;
+    emit_identifier(name, "mutable record pointer call argument")
 }
 
 fn emit_opaque_pointer_call_arg_var(

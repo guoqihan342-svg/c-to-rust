@@ -21,3 +21,4 @@ include!("bounded_translation/chunk_18.rs");
 include!("bounded_translation/chunk_19.rs");
 include!("bounded_translation/chunk_20.rs");
 include!("bounded_translation/chunk_21.rs");
+include!("bounded_translation/chunk_22.rs");
