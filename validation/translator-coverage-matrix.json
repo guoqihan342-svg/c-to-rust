@@ -4464,6 +4464,7 @@
         "IrStmt::Continue",
         "IrStmt::DoWhile",
         "IrStmt::For",
+        "Clang ForStmt top-level init comma chain over direct integer scalar assignments",
         "final IrStmt::If accepted when both branches end in return values",
         "legacy CFG evidence for label/goto/switch/case/default",
         "unsupported_control_flow classification",
@@ -4505,6 +4506,24 @@
               "name": "clang_source_range_summary_falls_back_to_loc_when_range_is_missing",
               "path": "crates/c2r-translator/src/clang_frontend.rs",
               "assertion": "requires clang frontend diagnostics to fall back from range to loc when range is absent"
+            },
+            {
+              "name": "do-while scalar incdec AST JSON fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/do_while_scalar_incdec_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_replays_do_while_scalar_incdec_candidate_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_15.rs",
+              "assertion": "requires the offline AST fixture to lower a do-while postfix-inc comparison, emit the ordered tail preludes for normal and continue paths, and execute the Rust candidate"
+            },
+            {
+              "name": "do-while scalar incdec refusal AST JSON fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/do_while_scalar_incdec_refusals_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_replays_do_while_scalar_incdec_refusals_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_15.rs",
+              "assertion": "requires same-variable sibling reads and two-incdec do-while comparisons to remain fail-closed after offline frontend lowering"
             }
           ],
           "scope_note": "clang fixture replay and source_range diagnostics only; this does not claim Control IR, relooper support, Rust candidate lowering, or C/Rust semantic pass for switch/goto"
@@ -4546,6 +4565,10 @@
             {
               "name": "typed IR while/do-while/for control-flow emitted Rust tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_do_while_scalar_incdec_candidate_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_15.rs"
             },
             {
               "name": "typed_ir_accepts_final_if_when_both_branches_return_values",
@@ -4665,6 +4688,18 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "clang_ast_fixture_replays_do_while_scalar_incdec_candidate_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_15.rs"
+        },
+        {
+          "name": "for_init_comma_chain_lowers_two_assignments_in_sequence_point_order",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_03_split_parts/part_00.rs"
+        },
+        {
+          "name": "for_init_comma_chain_flattens_three_item_left_associative_tree_in_order",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_03_split_parts/part_00.rs"
+        },
+        {
           "name": "typed_ir_for_nested_while_continue_does_not_emit_outer_step",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -4705,6 +4740,31 @@
           "name": "typed_ir_rejects_while_with_incdec_condition_expr",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "side-effecting inc/dec loop conditions outside the explicitly modeled postfix size-- and prefix --size shapes require explicit sequencing support before lowering"
+        },
+        {
+          "name": "clang_ast_fixture_replays_do_while_scalar_incdec_refusals_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_15.rs",
+          "fail_closed_reason": "same-variable sibling reads and two direct inc/dec operands remain outside the bounded do-while comparison contract"
+        },
+        {
+          "name": "for_init_comma_chain_rejects_memory_assignment_target",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_03_split_parts/part_00.rs",
+          "fail_closed_reason": "ForStmt init comma chains accept direct integer scalar assignment targets only"
+        },
+        {
+          "name": "for_init_comma_chain_rejects_call_and_deref_rhs",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_03_split_parts/part_00.rs",
+          "fail_closed_reason": "calls and memory dereferences require a broader side-effect and alias contract before entering a ForStmt init comma chain"
+        },
+        {
+          "name": "for_init_comma_chain_rejects_incdec_leaf",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_03_split_parts/part_00.rs",
+          "fail_closed_reason": "each ForStmt init comma-chain leaf must be a direct assignment rather than a value-discarded inc/dec expression"
+        },
+        {
+          "name": "for_condition_and_step_comma_operators_remain_unsupported",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_03_split_parts/part_00.rs",
+          "fail_closed_reason": "comma sequencing is currently bounded to the ForStmt init slot and must not silently expand into condition or step semantics"
         },
         {
           "name": "unsupported_goto_blocks_translation_without_false_success",

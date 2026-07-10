@@ -105,8 +105,8 @@
 | `return` (with/without value) | 已支持 | |
 | `if` / `if-else` | 已支持 | 含 comparison condition；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留；单个 direct scalar inc/dec comparison operand 可在上述受限冲突检查后通过 ordered prelude 发射 |
 | `while` | 已支持 | 含 postfix `size--`、窄形状 prefix `--size`，以及单个 direct scalar inc/dec comparison operand 的 per-iteration ordered prelude；`continue`/`break` runtime 测试锁定重新判断与退出语义；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
-| `do-while` | 已支持 | condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留；受限 direct scalar inc/dec comparison condition 在正常尾部和 `continue` 路径执行 ordered prelude，`break` 不执行 condition |
-| `for` (scoped) | 窄支持 | init/condition/step 为简单形式；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
+| `do-while` | 已支持 | condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留；受限 direct scalar inc/dec comparison condition 在正常尾部和 `continue` 路径执行 ordered prelude，`break` 不执行 condition；已有 no-clang AST 正例和同变量 sibling/双 incdec 拒绝回放 |
+| `for` (scoped) | 窄支持 | init/condition/step 为简单形式；顶层 init 支持按从左到右顺序展开 direct integer scalar assignment comma chain（如 `i = start, j = i`）；memory target、call/deref RHS、inc/dec leaf、volatile 读写及 condition/step comma fail-closed；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | `break` | 窄支持 | 仅在 loop body 内 |
 | `continue` | 窄支持 | 仅在 loop body 内 |
 | `switch` | 不支持 | 已有 schema-bound CFG/relooper/route 拒绝证据、clang AST `source_range` refusal diagnostics、归一化 `switch-0 -> case/default` edges 和最小 structured-recovery precondition/refusal evidence；仍需完整 CFG + relooper + Rust candidate lowering 才能支持 |

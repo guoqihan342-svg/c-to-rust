@@ -41,11 +41,22 @@
 
 本轮补充（2026-07-04 harness 证据链收紧）：`run_judge_entrypoints.py` 的 competition config archive producer 现在只枚举 `bundle-manifest.json` 自身和已声明的 `COMPETITION_ENV_BUNDLE_FILE_ROLES` 文件，不会把同目录临时/诊断文件先夹带进 run report 再等待下游拒绝；`validate_public_release_packet.py` 会把 `publication_manifest.competition_config_archive.status/root/report_kind/file_count` 反向绑定到 run report 顶层 archive；`run_competition_smoke.py` 会在 host attestation 或 `opencode models` 早退前删除旧 `summary/competition-smoke-summary.json`；`judge_milestone_bundle.py` 也要求 `validation.status=passed` 时，所有会进入 bundle rollup / publication refs 的 `key_artifacts` 都必须有同 entrypoint 的 `validation.expected_artifacts` 绑定，缺失时以 `validated_artifact_binding_missing:<entrypoint>:<artifact>` 阻断。边界不变：这些都是配置归档、smoke 和 bundle 证据链防伪，不是 semantic gate，也不关闭缺真实 `OpenCode + GLM-5.1 + c2rust-migrator + max` host 的 H9。
 
-## 1.2. 10 天 harness-first 活跃队列
+## 1.2. 2026-07-10 当前可执行队列（翻译层优先）
 
-当前执行队列按“评委主要看核心翻译功能和 harness 架构”重排。P0 只保留能直接增强一键评测、OpenCode 多 agent 编排、上下文索引、repair/retry 和 before/after 证明链的事项。
+当前按“先提高通用翻译成功率，再用既有 gate 收口证据”执行。FlashDB 只提供真实 source hit 和回归输入，不允许进入 translator 的项目名、函数名、路径或模板特判。每个切片都必须先有窄正例、相邻负例和 fail-closed 边界；只有 named slice 的 C oracle、Rust replay、diff、negative diff、unsafe ledger 与 final verification 全部通过后，才允许增加 `translator_generated_semantic_pass_count`。typed-IR unit/runtime、no-clang fixture 或 C2Rust compile-only 通过仍只是 candidate evidence。
 
-活跃项：
+- [x] **P0-T0 ordered inc/dec comparison 基线**：value position、`if`、`while`、`do-while` 的单 direct-scalar inc/dec comparison 已有 ordered prelude 与冲突负例；`while`/`do-while` 的 `continue`/`break` 路径已由 runtime 测试锁定。该项不增加语义通过计数。
+- [x] **P0-T1 真实 FlashDB `for` init 逗号赋值链**：已按真实命中形状覆盖 `for (i = start, j = i; ...)`，只在 `ForStmt.init` 顶层按 C sequence-point 顺序展开 direct integer scalar assignment leaves；memory target、call/deref RHS、inc/dec leaf、volatile 读写以及 condition/step comma 继续 fail-closed。实现保持项目无关，frontend focused 与完整 bounded tests 已通过；该项仍只是 candidate capability，不增加语义通过计数。
+- [x] **P0-T2 no-clang AST 回放补强**：已为 `do-while` direct scalar inc/dec comparison 增加离线 AST fixture、emitted-Rust runtime 正例以及同变量 sibling/双 incdec 拒绝负例，使比赛无系统 clang 的测试路径仍能验证 frontend -> typed IR -> emitter 接线；完整 bounded tests 已通过。该项仍不等于 C/Rust 语义接受。
+- [ ] **P0-T3 下一真实 source-backed gap**：完成 P0-T1 后重新扫描 FlashDB 源码，按“真实命中数、通用性、最小可验证边界”选择下一切片；没有真实命中的语法形状不进入当前优先队列。
+- [ ] **P0-T4 语义接受提升**：从上述候选中选择可构造完整 observable contract 的真实 named slice，跑通 C oracle、Rust replay、schema diff、negative diff、unsafe 与 final verification 后再更新 coverage numerator。当前 `translator_generated_semantic_pass_count=21`，候选测试不得虚增该数字。
+- [ ] **P0-D/H9 真实 OpenCode 复验**：仅当同一运行生成精确 preflight marker `opencode + GLM-5.1 + c2rust-migrator + max` 后才启动 competition worker。当前隔离 runtime 中 `GLM-5.1` model availability 未通过，不能绕过 marker；这不阻塞 P0-T1..T4 的本地通用翻译开发。
+
+## 1.3. 2026-06-30 10 天 harness-first 历史队列与证据背景
+
+以下内容保留已落地的 harness 合同、历史验收和长期 P0/P1/P2 背景，不再覆盖上面的当前翻译层执行顺序。
+
+历史活跃项：
 
 ### 2026-07-07 历史执行状态、接力摘要与冲刺总令
 
@@ -73,7 +84,7 @@
 - `validate_judge_entrypoints.py --require-local-artifacts` 现在会重开 competition smoke 旁边的三个报告 artifact，并校验最小 producer 合同：`evidence-governance.json` 必须有 `schema_version=1`、`status`、`policy_compliance`、`portability` 和 `inventory`；`translator-coverage-matrix.json` 必须是 passed coverage report 并带 `capability_delta_ledger`；`milestone-release-report.json` 必须是 `report_kind=milestone-release-metrics` 且 readiness/metrics 与 translation numerator 自洽。空 `{}` 或错类型报告不能再借 smoke summary / command log 自洽绕过 local-artifact deep validation。边界：这是 smoke 附属报告防伪，不是 semantic gate，也不关闭 H9。最新验证：`test_validate_judge_entrypoints` 242 tests OK。
 - OpenCode runtime worker summary 现在不再只比对 `worker_report.summary_status` 与 `summary.final_gate.status`；`validate_opencode_worker_runtime()` 会复用 `validate_competition_run_summary.validate_summary()` 深验 hash-bound `competition-run-summary.json`，因此只有 `final_gate` 的伪 summary 或缺 workflow metrics / slices / artifact roots 的 summary 都不能再作为有效 worker runtime evidence。测试 fixture 也改为写真实最小 competition summary + workflow metrics。边界：这是 worker runtime evidence 防伪，不是 semantic gate，也不增加 coverage。最新验证：`test_validate_judge_entrypoints` 243 tests OK。
 
-当前最小下一步：继续按 P0-H9 / P0-D 主线推进。若没有真实 `GLM-5.1` host，则不要声称 H9 关闭；优先补能在本地验证的 harness 证据合同、resume/replay 负例、public packet 防伪和 before/after 展品接线。若拿到真实或等价 `OpenCode + GLM-5.1 + c2rust-migrator + max` host，则第一优先级是在该 host 上重跑 preflight、multi-worker evaluate/profile、judge entrypoints 和 public packet gate。
+历史最小下一步（已由 1.2 当前队列取代）：当时继续按 P0-H9 / P0-D 主线推进。若没有真实 `GLM-5.1` host，则不得声称 H9 关闭；拿到真实或等价 `OpenCode + GLM-5.1 + c2rust-migrator + max` host 后，仍需在该 host 上重跑 preflight、multi-worker evaluate/profile、judge entrypoints 和 public packet gate。
 
 本轮补充（2026-07-08 翻译层成功率冲刺）：在 WSL/competition-like 命令 `CLANG_PATH=/usr/bin/clang python3 -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-kv-del.json --out-root validation/evidence --emit-clang-dry-run --emit-clang-lowering-report --competition-clang-lane --accept-existing-evidence` 下，`real-fdb-kv-del` 已从候选可执行推进到窄边界语义接受：`status=accepted_evidence_bound`、`semantic_pass=true`、`validation_profile.status=passed`、`final_verification.status=passed`、`generated_draft_acceptance.status=passed`、`generated_draft_semantic_pass=true`，且 `route_decision.candidate_generation.typed_ir.rust_draft_sha256` 与当前 `l3-real-fdb-kv-del-rust-draft.rs` 的 LF-stable hash 一致。该接受只覆盖已声明的 uninitialized DB `return_code=FDB_INIT_FAILED` fixture，不代表 initialized delete 路径或 `del_kv` 全语义已完成。本轮新增/收敛的通用能力包括 slice-source TU 声明边界传入、NULL 指针直接实参、literal-only `IntegralToBoolean`、`_Bool`/Rust `bool` 发射、typedef-backed opaque `void *` 参数透传、直接 `_Bool` direct-call condition、readonly pointer-return nested call argument、declared external callee 的通用 compile-only stub fallback、`direct_dependencies.kind=constant` schema 验证，以及显式 `replay_contract.kind=ignored_non_observable_void` 的 void 外部调用 no-op replay shim。`FDB_INFO` 现在通过 spec 声明其日志副作用不属于本 fixture 的 `return_code` observable，binding 为 `declared_ignored_non_observable_void`；没有该显式合同的 declared 外部调用仍保持 `generated_compile_only` 并让 replay fail-closed 跳过。边界不变：这不是全项目级完整转换，也不是 FlashDB 专用硬编码；它只是一个真实 named slice 的 exact generated draft 通过 accepted C oracle、Rust replay、schema diff、negative diff、unsafe ledger 和 final verification 的闭环。
 
@@ -88,7 +99,7 @@
 
 禁止两个 agent 同时改同一个 validator、schema、profile、evidence 文件或 roadmap。本轮测试节奏是先小后大：开发中只跑 focused unit/contract test 与 `git diff --check`；一个可交付阶段收口后，再跑 `test_opencode_agent_harness`、`test_validate_judge_entrypoints`、competition profile/runner 组合、judge entrypoint validator；全部开发完再跑 FlashDB competition source pin、competition smoke、coverage matrix、route-governance、unsafe budget 和 GitHub Actions。
 
-当前最小开发目标：
+历史最小开发目标（保留作证据背景，不覆盖 1.2）：
 
 1. 在真实 GLM host 不可用时，继续补 harness 负例和 public artifact 防伪：session evidence 与 raw stdout/stderr 反查、safety attempt 与 run-worker-report/ledger 反向绑定、safety attempt 的 hash-bound worker summary `run_id` 文件体绑定、smoke/main command log canonical flag/run_id 绑定、exact-host revalidation config ref 反查、before/after unit refs 与 workflow metrics 交叉绑定、before/after unit unsafe 数字与 workflow metrics 交叉绑定、worker summary body run_id 与 assignment request 中的 worker 级 run_id 绑定、C2Rust baseline manifest ref/count/path/sha 绑定、public packet summary/readiness/proof-class 反查、before/after rollup source/baseline 反查、measured unsafe / accepted patch rollup 与 unsafe reduction 总量重算、passed public packet 必须发布 `judge_evidence_index`、published safety attempt 必须被 published judge index/runtime worker 绑定已完成；下一步继续优先补仍可用 focused 负例证明的浅信任入口，尤其是 public packet / bundle / OpenCode attempt 之间的跨 artifact 自洽漂移。
 2. 在有 `DEEPSEEK_API_KEY` 的本机环境中，只把 DeepSeek V4 Pro 当 rehearsal：可跑 focused 单 worker / 2-worker local rehearsal 证明 wiring，但所有报告必须保留 `local_simulation_closes_p0_h9=false`。
@@ -619,6 +630,8 @@ H7 后冲刺排序（结合外部评估与 harness-first 评分面）：
   最新补充（2026-07-10，`if` comparison side-effect operand）：单次求值的 `if` comparison condition 现在可复用 ordered prelude，支持恰好一个 direct scalar inc/dec operand 与不读取被修改标量的纯 scalar sibling，例如 `if (value++ < limit)`；postfix 比较使用旧值，分支内观察更新后的标量。同变量 sibling、两个 inc/dec operand、复杂 target、call/alias-sensitive side effect 和尚未建模的 `for` condition 仍 fail-closed；`while`/`do-while` 的重复求值由后续独立能力覆盖。该项只提供 typed IR contract 与 emitted-Rust runtime candidate evidence，不增加 `translation_coverage_numerator` 或 semantic pass。
   最新补充（2026-07-10，`while` comparison per-iteration prelude）：`while (value++ < limit)` 这类 condition 现在可在每轮判断前执行 ordered prelude，postfix 比较使用旧值、body 使用更新后的值；`continue` 回到下一轮 prelude，`break` 不额外执行 condition。支持范围仍限恰好一个 direct scalar inc/dec operand 与独立纯 scalar sibling；同变量 sibling、双 inc/dec、复杂 target、call/deref/member 和 `for` condition 继续 fail-closed。该项只提供 typed IR contract 与 emitted-Rust runtime candidate evidence，不增加 `translation_coverage_numerator` 或 semantic pass。
   最新补充（2026-07-10，`do-while` comparison tail prelude）：`do { ... } while (value++ < limit)` 现在会在每次正常尾部判断前执行 ordered prelude；`continue` 也进入同一尾部 prelude，`break` 直接退出且不额外求值 condition。postfix comparison 使用旧值，下一轮 body 观察更新后的值。支持范围与 `while` 相同；同变量 sibling、双 inc/dec、复杂 target、call/deref/member 和 `for` condition 继续 fail-closed。该项只提供 typed IR contract 与 emitted-Rust runtime candidate evidence，不增加 `translation_coverage_numerator` 或 semantic pass。
+  最新补充（2026-07-10，no-clang `do-while` replay）：离线 clang AST JSON fixture 现在会实际经过 frontend lowering、typed IR 和 Rust emitter，并运行生成的 `do_while_postinc_paths`；相邻 fixture 锁定同变量 sibling 与双 incdec comparison 的拒绝原因。该项不调用系统 clang，也不产生 C oracle/diff，因此只算 candidate plumbing evidence。
+  最新补充（2026-07-10，`for` init comma assignment chain）：Clang frontend 现在只在 `ForStmt.init` 顶层把 `i = start, j = i` 这类 direct integer scalar assignment comma chain 按左到右 sequence-point 顺序展开；三项左结合树同样保持顺序。memory target、call/deref RHS、inc/dec leaf、volatile 读写和 condition/step comma 继续 fail-closed。实现不读取 FlashDB 项目名、函数名或路径；该项只有 frontend/bounded candidate evidence，不增加语义通过计数。
 - [ ] 设计 alias/noalias 与 pointer escape 模型：把 readonly slice、mutable out slice、nullable pointer、unknown alias、volatile/hardware register 分成可证明路径和 L4 拒绝路径。P0 已有的 readonly input + mutable output `restrict`/显式 noalias pair 只是局部 proof gate 和负例保护，不代表完整 alias/noalias、escape、provenance、volatile/hardware register 模型完成。
 - [ ] 补齐 P0 最小合同之外的 integer conversion 纪律：P0 先覆盖会阻塞真实 slice 的 `ImplicitCastExpr`、promotion、usual arithmetic 和 narrowing/truncation；P1 继续扩到跨表达式、复合赋值、函数参数/返回、array/function decay、record/enum/ABI 相关转换，并保持 IR 中显式可见。
 - [ ] 扩控制流：`switch`/`goto` 先进入 CFG 证据和 fail-closed classifier，再考虑 relooper 和 Rust candidate。
