@@ -232,6 +232,8 @@ pub struct SliceSpec {
     pub source_file_hashes: BTreeMap<String, String>,
     #[serde(default)]
     pub function_source_span: Option<SourceSpanRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub translation_carrier: Option<JsonValue>,
     #[serde(default)]
     pub compile_commands: Option<String>,
     #[serde(default)]

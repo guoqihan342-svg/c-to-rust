@@ -1,0 +1,34 @@
+{
+  "ai_required_for_default_pipeline": false,
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-c2rust-baseline-manifest.json",
+    "sha256": "7b43cf30ce389b94eb4a48bceef41fd080d6ba092a47fb0a63ca5cfd238d0538",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=bacd46dcedfe950d479e27f39ac5de9198498577577d51ded7227fa9deacfbd7",
+    "fixture_hash=2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+    "build_profile_hash=70108bd8159a8cbddcfb4f14a56b3e42a59afbe08e857bcf585e06eabe460b8e",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "candidates": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-route-decision.json",
+    "sha256": "a599b5917633a18e9f15c69bd86f82c4e0ba40e98d17001c577dde68b21ef731",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "slice_id": "real-fdb-new-kv-alloc-compare",
+  "status": "not_used",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "d73411927cd5c3decb83d8e668a279012a039284de50a463cd1725538d8e706f",
+    "status": "passed"
+  }
+}

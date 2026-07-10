@@ -33,21 +33,24 @@ pub(crate) fn write_core_translation_artifacts(
     } else {
         "not_evaluated"
     };
+    let mut translation_plan = json!({
+        "schema_version": 1,
+        "target_id": spec.target_id,
+        "slice_id": spec.slice_id,
+        "source_commit": spec.source_commit,
+        "fixture_hash": spec.fixture_hash,
+        "status": status,
+        "translation_source": &result.translation_source,
+        "plan": &result.plan,
+        "errors": &result.errors,
+    });
+    bind_translation_carrier(&mut translation_plan, spec);
+
     Ok(vec![
         write_json_file(
             out_dir,
             &format!("{prefix}-auto-translation-plan.json"),
-            &json!({
-                "schema_version": 1,
-                "target_id": spec.target_id,
-                "slice_id": spec.slice_id,
-                "source_commit": spec.source_commit,
-                "fixture_hash": spec.fixture_hash,
-                "status": status,
-                "translation_source": &result.translation_source,
-                "plan": &result.plan,
-                "errors": &result.errors,
-            }),
+            &translation_plan,
         )?,
         write_text_file(
             out_dir,
@@ -128,6 +131,19 @@ pub(crate) fn write_core_translation_artifacts(
             &result.rust_code,
         )?,
     ])
+}
+
+fn bind_translation_carrier(value: &mut serde_json::Value, spec: &SliceSpec) {
+    let Some(translation_carrier) = &spec.translation_carrier else {
+        return;
+    };
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+    object.insert(
+        "translation_carrier".to_string(),
+        translation_carrier.clone(),
+    );
 }
 
 pub fn write_translation_artifacts(
@@ -410,6 +426,7 @@ pub(crate) fn write_clang_lowering_report_artifact(
         }),
     };
     sanitize_host_paths_json(&mut value);
+    bind_translation_carrier(&mut value, spec);
     write_json_file(
         out_dir,
         &format!("{prefix}-clang-lowering-report.json"),

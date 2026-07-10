@@ -1,0 +1,64 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-c2rust-baseline-manifest.json",
+    "sha256": "7b43cf30ce389b94eb4a48bceef41fd080d6ba092a47fb0a63ca5cfd238d0538",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir <rust-check-output> <draft>",
+  "error_count": 0,
+  "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [
+      {
+        "binding_status": "fixture_only_scripted_external",
+        "name": "alloc_kv",
+        "semantics_verified": false,
+        "signature_ref": "sig-scripted-alloc-kv-u32",
+        "stub_kind": "compile_only"
+      }
+    ],
+    "declared_count": 1,
+    "declared_spec_count": 1,
+    "declared_spec_names": [
+      "alloc_kv"
+    ],
+    "status": "recorded"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-route-decision.json",
+    "sha256": "a599b5917633a18e9f15c69bd86f82c4e0ba40e98d17001c577dde68b21ef731",
+    "status": "recorded"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "fixture_bound_rust_replay_only",
+    "bindings": [
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "fixture_only": true,
+        "name": "alloc_kv",
+        "replay_contract_kind": "scripted_external_u32_call_bool_out",
+        "semantics_verified": false,
+        "signature": "fn alloc_kv(db: u32, sector: u32, kv_size: usize) -> u32",
+        "status": "fixture_only_scripted_external"
+      }
+    ],
+    "semantics_verified": false,
+    "status": "emitted"
+  },
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "d73411927cd5c3decb83d8e668a279012a039284de50a463cd1725538d8e706f",
+    "status": "passed"
+  }
+}

@@ -116,7 +116,7 @@
 | label | 不支持 | 仅作为 `goto` refusal 的 schema-bound CFG/relooper evidence 记录；clang AST fixture 已要求拒绝原因带 `source_range` |
 | `case` / `default` | 不支持 | 仅作为 `switch` refusal 的 schema-bound CFG/relooper evidence 记录；clang AST fixture 已要求拒绝原因带 `source_range` |
 
-真实 named-slice 验收补充（2026-07-10）：`real-fdb-tsl-to-blob` 的 exact generated draft 已通过 3-case C oracle、generated Rust replay、schema diff、negative diff、unsafe scan/ledger、route/profile 与 final verification，包含 clang-proven `uint32_t -> size_t` widening 和 mutable output identity return；`real-fdb-is-str` 也已通过 8-case C oracle/Rust replay/diff/negative/unsafe/route/final-verification 链。两项都只证明各自绑定 fixture、SHA 与 observable contract，不外推为通用 record layout/ABI/alias/provenance、locale 或任意字符串证明；`translator_generated_semantic_pass_count` 当前为 23。
+真实 named-slice 验收补充（2026-07-10）：`real-fdb-tsl-to-blob`、`real-fdb-is-str` 与 `real-fdb-new-kv-alloc-compare` 的 exact generated draft 均已通过各自绑定的 C oracle、generated Rust replay、schema diff、negative diff、unsafe scan/ledger、route/profile 与 final verification。新增 alloc-compare 切片只证明 `fdb_kvdb.c:1076` fragment 在 fixture-scripted external u32 返回合同下的赋值、比较、调用次数和参数，不证明完整 `new_kv` 或真实 `alloc_kv` 语义；其它切片也不外推为通用 record layout/ABI/alias/provenance、locale 或任意字符串证明。`translator_generated_semantic_pass_count` 当前为 24。
 
 ## 数组
 

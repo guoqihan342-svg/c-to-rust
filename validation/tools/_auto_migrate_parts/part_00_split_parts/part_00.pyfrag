@@ -241,6 +241,8 @@ def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_di
         translator_spec["source_file_hashes"] = resolved_source_file_hashes
     if source_span:
         translator_spec["function_source_span"] = source_span
+    if "translation_carrier" in spec:
+        translator_spec["translation_carrier"] = spec["translation_carrier"]
     c_boundary: dict[str, Any] = {}
     scalar_contract = spec.get("c_boundary", {}).get("scalar_arithmetic_contract", {})
     if scalar_contract:

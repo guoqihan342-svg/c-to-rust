@@ -1,0 +1,191 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_available": true,
+    "compiler_command_source": "translation-carrier self-contained C plus tests/Makefile ABI",
+    "defines": [],
+    "include_paths": [],
+    "target": {
+      "char_width": 8,
+      "endianness": "little",
+      "int_width": 32,
+      "long_long_width": 64,
+      "long_width": 64,
+      "plain_char_signed": true,
+      "pointer_width": 64,
+      "short_width": 16,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "definition_status": "carrier_equivalent_uint32_sentinel",
+        "kind": "macro",
+        "name": "FAILED_ADDR",
+        "source": "src/fdb_kvdb.c"
+      },
+      {
+        "definition_status": "deterministic_fixture_stimulus_only",
+        "kind": "callee",
+        "name": "alloc_kv",
+        "source": "src/fdb_kvdb.c#alloc_kv"
+      }
+    ],
+    "external_direct_callees": [
+      {
+        "definition_status": "deterministic_fixture_stimulus",
+        "name": "alloc_kv",
+        "signature_ref": "sig-scripted-alloc-kv-u32",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "translation-carrier:scripted-alloc-kv-u32",
+        "stub_boundary": "scripted_fixture_only_no_real_callee_semantics"
+      }
+    ],
+    "pointer_contract": {
+      "aliasing_proven": true,
+      "input_buffers": [],
+      "noalias_required": [],
+      "output_pointers": [
+        {
+          "c_type": "uint32_t *",
+          "direction": "output",
+          "length_companion": "constant:1",
+          "mutability": "write_only",
+          "name": "empty_kv_out",
+          "nullability": "non_null",
+          "ownership_role": "out_param",
+          "translation_rule_id": "direct_output_element_zero"
+        }
+      ]
+    },
+    "scalar_arithmetic_contract": {
+      "comparison": "assigned uint32_t return value is compared with UINT32_MAX",
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "signatures": [
+      {
+        "c_source": "static bool fdb_alloc_compare_probe(uint32_t db, uint32_t sector, size_t kv_size, uint32_t *empty_kv_out)",
+        "definition_status": "synthetic_translation_carrier",
+        "function": "fdb_alloc_compare_probe",
+        "id": "sig-fdb-alloc-compare-probe",
+        "parameters": [
+          {
+            "c_type": "uint32_t",
+            "direction": "input",
+            "name": "db"
+          },
+          {
+            "c_type": "uint32_t",
+            "direction": "input",
+            "name": "sector"
+          },
+          {
+            "c_type": "size_t",
+            "direction": "input",
+            "name": "kv_size"
+          },
+          {
+            "c_type": "uint32_t *",
+            "direction": "output",
+            "name": "empty_kv_out"
+          }
+        ],
+        "return_type": "bool"
+      },
+      {
+        "definition_status": "deterministic_fixture_stimulus",
+        "function": "alloc_kv",
+        "id": "sig-scripted-alloc-kv-u32",
+        "parameters": [
+          {
+            "c_type": "uint32_t",
+            "direction": "input",
+            "name": "db"
+          },
+          {
+            "c_type": "uint32_t",
+            "direction": "input",
+            "name": "sector"
+          },
+          {
+            "c_type": "size_t",
+            "direction": "input",
+            "name": "kv_size"
+          }
+        ],
+        "return_type": "uint32_t",
+        "source_ref": "translation-carrier:scripted-alloc-kv-u32"
+      }
+    ]
+  },
+  "c_source": "#define FAILED_ADDR ((uint32_t)-1)\nuint32_t alloc_kv(uint32_t db, uint32_t sector, size_t kv_size);\nstatic bool fdb_alloc_compare_probe(uint32_t db, uint32_t sector, size_t kv_size, uint32_t *empty_kv_out)\n{\n    uint32_t empty_kv = FAILED_ADDR;\n    bool failed = false;\n\n    if ((empty_kv = alloc_kv(db, sector, kv_size)) == FAILED_ADDR) {\n        failed = true;\n    }\n    *empty_kv_out = empty_kv;\n    return failed;\n}",
+  "fixture_hash": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+  "function_name": "fdb_alloc_compare_probe",
+  "slice_id": "real-fdb-new-kv-alloc-compare",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_file": "src/fdb_kvdb.c",
+  "source_file_hashes": {
+    "src/fdb_kvdb.c": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b"
+  },
+  "source_files": [
+    {
+      "path": "src/fdb_kvdb.c",
+      "role": "source",
+      "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+    }
+  ],
+  "source_root": "sources/FlashDB",
+  "target_id": "flashdb",
+  "translation_carrier": {
+    "artifact_source_hash_mode": "lf_stable_text",
+    "carrier_function": "fdb_alloc_compare_probe",
+    "carrier_source_sha256": "d701edfa85ab48811ebcd3a1acc37bd485c23ca5219d34aceeea16fc25436cb7",
+    "claim_boundary": {
+      "excluded_semantics": [
+        "new_kv retry and garbage-collection control flow",
+        "fdb_kvdb and kvdb_sec_info record layout, pointer identity, aliasing, and provenance",
+        "real alloc_kv implementation behavior and side effects",
+        "FlashDB logging and database state mutation"
+      ],
+      "external_callee_semantics_verified": false,
+      "scope": "source_fragment_only",
+      "whole_function_semantics_verified": false
+    },
+    "embedding_mode": "verbatim_once",
+    "frontend_contract": "live_clang_slice_source",
+    "kind": "exact_source_fragment_wrapper",
+    "real_source": {
+      "containing_function": {
+        "declaration_text": "static uint32_t new_kv(",
+        "hash_mode": "trimmed_normalized_span",
+        "line_end": 1089,
+        "line_start": 1069,
+        "name": "new_kv",
+        "sha256": "95dba4d2bde590cebacd1ebe85b16907a2f5141bd1aff22ea0aaebe82b74182f"
+      },
+      "file": "src/fdb_kvdb.c",
+      "fragment": {
+        "hash_mode": "normalized_line_span_with_newline",
+        "kind": "if_condition_header",
+        "line_end": 1076,
+        "line_start": 1076,
+        "sha256": "7453b43d215e0e64d84377787ee92d08c8f09ce77e65ff0346a8e3962d58ed49",
+        "text": "    if ((empty_kv = alloc_kv(db, sector, kv_size)) == FAILED_ADDR) {\n"
+      }
+    },
+    "source_file_hash_mode": "raw_bytes",
+    "source_text_normalization": "utf8_universal_newlines"
+  }
+}

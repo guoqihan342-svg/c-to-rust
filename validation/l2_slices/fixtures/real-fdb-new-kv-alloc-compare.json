@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-new-kv-alloc-compare",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "fixture_only",
+  "toolchain_status": "RUST_REPLAY_FIXTURE_ONLY",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "new_kv:if-condition@1076"
+    ],
+    "signature": "if ((empty_kv = alloc_kv(db, sector, kv_size)) == FAILED_ADDR)"
+  },
+  "compared_fields": [
+    "return_value",
+    "empty_kv",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "case_count": 3,
+  "cases": [
+    {
+      "id": "failed-address",
+      "coverage_kind": "sentinel-equal",
+      "db": 17,
+      "sector": 29,
+      "kv_size": 64,
+      "external_return": 4294967295,
+      "expected_outputs": {
+        "return_value": true,
+        "empty_kv": 4294967295,
+        "external_call_count": 1,
+        "external_call_args": [17, 29, 64]
+      },
+      "status": "ok"
+    },
+    {
+      "id": "zero-address",
+      "coverage_kind": "sentinel-not-equal-zero",
+      "db": 3,
+      "sector": 5,
+      "kv_size": 0,
+      "external_return": 0,
+      "expected_outputs": {
+        "return_value": false,
+        "empty_kv": 0,
+        "external_call_count": 1,
+        "external_call_args": [3, 5, 0]
+      },
+      "status": "ok"
+    },
+    {
+      "id": "allocated-address",
+      "coverage_kind": "sentinel-not-equal-nonzero",
+      "db": 305419896,
+      "sector": 2271560481,
+      "kv_size": 4096,
+      "external_return": 8192,
+      "expected_outputs": {
+        "return_value": false,
+        "empty_kv": 8192,
+        "external_call_count": 1,
+        "external_call_args": [305419896, 2271560481, 4096]
+      },
+      "status": "ok"
+    }
+  ]
+}

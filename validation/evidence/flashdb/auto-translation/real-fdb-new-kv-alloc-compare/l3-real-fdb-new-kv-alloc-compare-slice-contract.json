@@ -1,0 +1,171 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "definition_status": "carrier_equivalent_uint32_sentinel",
+        "kind": "macro",
+        "name": "FAILED_ADDR",
+        "source": "src/fdb_kvdb.c"
+      },
+      {
+        "definition_status": "deterministic_fixture_stimulus_only",
+        "kind": "callee",
+        "name": "alloc_kv",
+        "source": "src/fdb_kvdb.c#alloc_kv"
+      }
+    ],
+    "external_direct_callees": [
+      {
+        "definition_status": "deterministic_fixture_stimulus",
+        "name": "alloc_kv",
+        "signature_ref": "sig-scripted-alloc-kv-u32",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "translation-carrier:scripted-alloc-kv-u32",
+        "stub_boundary": "scripted_fixture_only_no_real_callee_semantics"
+      }
+    ],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py plus translation_carrier validator",
+      "frontend": "live clang slice-source carrier",
+      "semantic_status": "exact source fragment and carrier provenance are checked; oracle/replay/diff gates are required for bounded semantic acceptance"
+    },
+    "files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "functions": [
+      "fdb_alloc_compare_probe"
+    ],
+    "oracle_source_mode": "embedded_slice_c_source",
+    "pointer_contract": {
+      "aliasing_proven": true,
+      "input_buffers": [],
+      "noalias_required": [],
+      "output_pointers": [
+        {
+          "c_type": "uint32_t *",
+          "direction": "output",
+          "length_companion": "constant:1",
+          "mutability": "write_only",
+          "name": "empty_kv_out",
+          "nullability": "non_null",
+          "ownership_role": "out_param",
+          "translation_rule_id": "direct_output_element_zero"
+        }
+      ]
+    },
+    "scalar_arithmetic_contract": {
+      "comparison": "assigned uint32_t return value is compared with UINT32_MAX",
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "signatures": [
+      {
+        "c_source": "static bool fdb_alloc_compare_probe(uint32_t db, uint32_t sector, size_t kv_size, uint32_t *empty_kv_out)",
+        "definition_status": "synthetic_translation_carrier",
+        "function": "fdb_alloc_compare_probe",
+        "id": "sig-fdb-alloc-compare-probe",
+        "parameters": [
+          {
+            "c_type": "uint32_t",
+            "direction": "input",
+            "name": "db"
+          },
+          {
+            "c_type": "uint32_t",
+            "direction": "input",
+            "name": "sector"
+          },
+          {
+            "c_type": "size_t",
+            "direction": "input",
+            "name": "kv_size"
+          },
+          {
+            "c_type": "uint32_t *",
+            "direction": "output",
+            "name": "empty_kv_out"
+          }
+        ],
+        "return_type": "bool"
+      },
+      {
+        "definition_status": "deterministic_fixture_stimulus",
+        "function": "alloc_kv",
+        "id": "sig-scripted-alloc-kv-u32",
+        "parameters": [
+          {
+            "c_type": "uint32_t",
+            "direction": "input",
+            "name": "db"
+          },
+          {
+            "c_type": "uint32_t",
+            "direction": "input",
+            "name": "sector"
+          },
+          {
+            "c_type": "size_t",
+            "direction": "input",
+            "name": "kv_size"
+          }
+        ],
+        "return_type": "uint32_t",
+        "source_ref": "translation-carrier:scripted-alloc-kv-u32"
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-project migration",
+      "new_kv semantic equivalence",
+      "alloc_kv semantic equivalence",
+      "semantic equivalence without C oracle and exact generated Rust replay evidence"
+    ],
+    "non_goals": [
+      "No whole new_kv function migration claim.",
+      "No alloc_kv implementation semantics claim.",
+      "No real FlashDB pointer, record, alias, garbage collection, retry, logging, or database-state claim.",
+      "The scripted scalar identities only test call ordering, assignment, argument forwarding, and sentinel comparison."
+    ]
+  },
+  "fixture": {
+    "hash": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+    "path": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json"
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-rust-draft.rs",
+    "public_api": [
+      {
+        "boundary_kind": "validated_buffer",
+        "name": "fdb_alloc_compare_probe",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.0
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-new-kv-alloc-compare",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb"
+}

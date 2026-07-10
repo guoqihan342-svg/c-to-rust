@@ -22,16 +22,26 @@ def rust_check_once(path: Path) -> dict[str, Any]:
             str(path),
         ]
         result = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+        aliases = {
+            str(Path(build_dir)): "<rust-check-output>",
+            str(path.resolve()): "<draft>",
+            str(REPO_ROOT): ".",
+        }
+        stdout = stable_process_text(result.stdout, aliases)
+        stderr = stable_process_text(result.stderr, aliases)
     errors = [
         json.loads(line)
-        for line in result.stderr.splitlines()
+        for line in stderr.splitlines()
         if line.startswith("{") and '"level":"error"' in line.replace(" ", "")
     ]
     return {
-        "command": " ".join(cmd),
+        "command": (
+            "rustc --edition=2021 --crate-type=lib --error-format=json "
+            "--out-dir <rust-check-output> <draft>"
+        ),
         "returncode": result.returncode,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        "stdout": stdout,
+        "stderr": stderr,
         "errors": errors,
     }
 

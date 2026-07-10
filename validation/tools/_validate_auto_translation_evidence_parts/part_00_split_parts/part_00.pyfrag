@@ -103,6 +103,7 @@ def main() -> int:
     validate_global_dependency_requirements(evidence_dir, prefix, slice_spec)
     validate_schema_diff_contract(evidence_dir, prefix, slice_spec)
     validate_external_direct_callee_context_for_default_checks(evidence_dir, prefix, slice_spec)
+    validate_translation_carrier_binding(evidence_dir, prefix, slice_spec)
 
     patch_schema = load_json(REPO_ROOT / "validation/auto-translation-template/patch-event.schema.json")
     patch_path = evidence_dir / f"{prefix}-patch-events.jsonl"

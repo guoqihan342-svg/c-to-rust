@@ -1,0 +1,121 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json",
+    "fixture_sha256": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "5b43dd6f0233d39f34e36e17d769f778786cb6c368b98bcff7e9a7cfacbe3bb1",
+      "diff": "2b769da40f82ee0e7ef0dd6d3c46bc8779abcbb0a69fb555c1a52f425bdfda0a",
+      "negative_diff": "493d776eaf301e6e47e537d18dc95b6a24c8f75ef2b3ee21a4fa9370040e638f",
+      "rust_report": "7b920d9304bf3ba454daf608c4e77224264c904348c22609bd197a1c2a00075a",
+      "unsafe_ledger": "5c3990bd1f13447f5ccdf239613dc6e495f213b5eb50999b5a571bbeebd43a0d",
+      "unsafe_scan": "6084219b8f7fd151f55d71bf73efe9338ebfc9f1b3d83c97e88df6fa3a7d8fe1"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-new-kv-alloc-compare",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "blocked_reasons": [
+    "c2rust_baseline_not_generated",
+    "c2rust_output_missing",
+    "c2rust_compile_not_passed",
+    "c2rust_compile_artifact_missing",
+    "No Rust replay harness currently calls this exact C2Rust output sha."
+  ],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-c2rust-baseline-manifest.json",
+    "sha256": "7b43cf30ce389b94eb4a48bceef41fd080d6ba092a47fb0a63ca5cfd238d0538",
+    "status": "skipped"
+  },
+  "c2rust_output": null,
+  "claim_boundary": {
+    "accepted_evidence_reused": false,
+    "compile_only_is_semantic_pass": false,
+    "generated_draft_semantic_pass": false,
+    "scope": "C2Rust baseline verification status artifact; blocked until direct C2Rust output replay, diff, negative diff, unsafe ledger, and final verification are all bound to the same output.",
+    "semantic_pass": false
+  },
+  "compile_artifact": null,
+  "direct_c2rust_replay": {
+    "artifact": null,
+    "c2rust_output": null,
+    "compile_artifact": null,
+    "observable_replay_pass": false,
+    "reason": "No Rust replay harness currently calls this exact C2Rust output sha.",
+    "semantic_pass": false,
+    "status": "blocked"
+  },
+  "entry_function": "fdb_alloc_compare_probe",
+  "fixture": {
+    "hash": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+    "path": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json"
+  },
+  "gate_refs": {
+    "c_oracle": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-c-oracle-status.json",
+      "sha256": "2ebd05e6d2ee6642371682b46935eaaed54f40423dfcbdcee17daec214f87e65",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "final_verification": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-final-verification.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-negative-diff.json",
+      "sha256": "115e8f1b945720334d9cc73346dce603f739ab79129a88643d6aec53f41376c4",
+      "status": "passed"
+    },
+    "rust_replay": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-rust-report.json",
+      "sha256": "7cff3cc19d1cce166f02c5a751488768e6cad77593656f2a95b64706e860a942",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-diff.json",
+      "sha256": "63124a14291ea83875540732663293ffdf329c04a041a9581880fc290bcbee47",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-ledger.json",
+      "sha256": "2f38d50cd8c31dc04cfee93daf094647758c5855a91bf3129e5c2df8a22c793e",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-scan.json",
+      "sha256": "326bbd2c42cb207b5af698d331056506341a4d3e6665942de13ad8d4a9cc8962",
+      "status": "passed"
+    }
+  },
+  "generated_draft_semantic_pass": false,
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-route-decision.json",
+    "sha256": "a599b5917633a18e9f15c69bd86f82c4e0ba40e98d17001c577dde68b21ef731",
+    "status": "recorded"
+  },
+  "same_output_gate_refs": null,
+  "schema_version": 1,
+  "semantic_claim_source": "blocked_missing_direct_c2rust_replay",
+  "semantic_pass": false,
+  "slice_id": "real-fdb-new-kv-alloc-compare",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "blocked",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "d73411927cd5c3decb83d8e668a279012a039284de50a463cd1725538d8e706f",
+    "status": "passed"
+  }
+}

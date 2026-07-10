@@ -1,0 +1,103 @@
+def c_oracle_scripted_external_u32_call_bool_out_execution_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> dict[str, Any]:
+    contract = scripted_external_u32_call_bool_out_replay_contract(spec, fixture_binding)
+    if contract is None:
+        return {"declarations": "", "statements": ""}
+    external = contract["external_callee"]
+    inputs = contract["inputs"]
+    output_pointer = contract["output_pointer"]
+    return_contract = contract["return"]
+    external_name = str(external["name"])
+    external_parameter_names = [str(item["parameter"]) for item in inputs]
+    declarations = f"""/* Fixture-only scripted external; real external callee semantics are not verified. */
+static uint32_t c2r_scripted_external_return = 0u;
+static size_t c2r_scripted_external_call_count = 0u;
+static uint32_t c2r_scripted_external_arg0 = 0u;
+static uint32_t c2r_scripted_external_arg1 = 0u;
+static size_t c2r_scripted_external_arg2 = 0u;
+
+uint32_t {external_name}(
+    uint32_t {external_parameter_names[0]},
+    uint32_t {external_parameter_names[1]},
+    size_t {external_parameter_names[2]})
+{{
+    c2r_scripted_external_call_count += 1u;
+    c2r_scripted_external_arg0 = {external_parameter_names[0]};
+    c2r_scripted_external_arg1 = {external_parameter_names[1]};
+    c2r_scripted_external_arg2 = {external_parameter_names[2]};
+    return c2r_scripted_external_return;
+}}
+
+"""
+    statements: list[str] = []
+    for case_binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding["expected_outputs"]
+        case_id = str(case_binding.get("id") or "case")
+        case_ident = c_safe_ident(case_id)
+        input_values = [int(payload[str(item["fixture_field"])]) for item in inputs]
+        scripted_return = int(payload[str(external["return_fixture_field"])])
+        expected_return = bool(expected[str(return_contract["fixture_field"])])
+        expected_out = int(expected[str(output_pointer["fixture_field"])])
+        expected_count = int(expected[str(external["call_count_output"])])
+        expected_args = [int(value) for value in expected[str(external["call_args_output"])] ]
+        actual_return_name = f"actual_{case_ident}_return"
+        actual_out_name = f"actual_{case_ident}_out"
+        expected_return_literal = "true" if expected_return else "false"
+        call_arguments = [
+            c_integer_literal("uint32_t", input_values[0]),
+            c_integer_literal("uint32_t", input_values[1]),
+            c_integer_literal("size_t", input_values[2]),
+            f"&{actual_out_name}",
+        ]
+        statements.append(
+            f"  c2r_scripted_external_return = {c_integer_literal('uint32_t', scripted_return)};\n"
+            "  c2r_scripted_external_call_count = 0u;\n"
+            "  c2r_scripted_external_arg0 = 0u;\n"
+            "  c2r_scripted_external_arg1 = 0u;\n"
+            "  c2r_scripted_external_arg2 = 0u;\n"
+            f"  uint32_t {actual_out_name} = 0u;\n"
+            f"  bool {actual_return_name} = {required_str(spec, 'function_name')}({', '.join(call_arguments)});\n"
+            f"  if ({actual_return_name} != {expected_return_literal}) {{\n"
+            "    fprintf(stderr, "
+            f"{c_string_literal(case_id + ' return mismatch: expected %d got %d\\n')}, "
+            f"(int){expected_return_literal}, (int){actual_return_name});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(return_contract['fixture_field']) + ' matched')});\n"
+            f"  if ({actual_out_name} != {c_integer_literal('uint32_t', expected_out)}) {{\n"
+            "    fprintf(stderr, "
+            f"{c_string_literal(case_id + ' u32 out mismatch: expected %llu got %llu\\n')}, "
+            f"(unsigned long long){c_integer_literal('uint32_t', expected_out)}, "
+            f"(unsigned long long){actual_out_name});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(output_pointer['fixture_field']) + ' matched')});\n"
+            f"  if (c2r_scripted_external_call_count != {c_integer_literal('size_t', expected_count)}) {{\n"
+            "    fprintf(stderr, "
+            f"{c_string_literal(case_id + ' external call count mismatch: expected %llu got %llu\\n')}, "
+            f"(unsigned long long){c_integer_literal('size_t', expected_count)}, "
+            "(unsigned long long)c2r_scripted_external_call_count);\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(external['call_count_output']) + ' matched')});\n"
+            f"  if (c2r_scripted_external_arg0 != {c_integer_literal('uint32_t', expected_args[0])} ||\n"
+            f"      c2r_scripted_external_arg1 != {c_integer_literal('uint32_t', expected_args[1])} ||\n"
+            f"      c2r_scripted_external_arg2 != {c_integer_literal('size_t', expected_args[2])}) {{\n"
+            "    fprintf(stderr, "
+            f"{c_string_literal(case_id + ' external call args mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(external['call_args_output']) + ' matched')});\n"
+        )
+    return {
+        "declarations": declarations,
+        "statements": "".join(statements),
+        "fixture_external_stub": {
+            "kind": SCRIPTED_EXTERNAL_U32_CALL_BOOL_OUT_KIND,
+            "scope": "fixture_only",
+            "semantics_verified": False,
+        },
+    }

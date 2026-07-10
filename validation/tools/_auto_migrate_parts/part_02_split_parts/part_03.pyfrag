@@ -17,9 +17,9 @@ def record_pointer_identity_return_replay_contract(
         return None
     contract = spec.get("replay_contract")
     if not isinstance(contract, dict):
-        raise ValueError("record replay contract must be an object")
+        return None
     if contract.get("kind") != "record_pointer_identity_return":
-        raise ValueError("record replay contract kind must be record_pointer_identity_return")
+        return None
     validate_record_pointer_identity_return_replay_contract(spec, fixture_binding, contract)
     return contract
 

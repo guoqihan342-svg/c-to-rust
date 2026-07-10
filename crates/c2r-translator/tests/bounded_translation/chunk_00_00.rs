@@ -228,6 +228,7 @@ fn assert_rust_snippet_compiles(name: &str, rust_code: &str) {
 
     let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
     let result = Command::new(rustc)
+        .arg("-Awarnings")
         .arg("--crate-type")
         .arg("lib")
         .arg(&source)
@@ -269,6 +270,7 @@ fn assert_rust_snippet_runs_with_overflow_checks(
 
     let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
     let compile = Command::new(&rustc)
+        .arg("-Awarnings")
         .arg("-C")
         .arg(if overflow_checks {
             "overflow-checks=on"
@@ -320,6 +322,7 @@ fn assert_rust_snippet_fails_with_overflow_checks(
 
     let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
     let compile = Command::new(&rustc)
+        .arg("-Awarnings")
         .arg("-C")
         .arg(if overflow_checks {
             "overflow-checks=on"

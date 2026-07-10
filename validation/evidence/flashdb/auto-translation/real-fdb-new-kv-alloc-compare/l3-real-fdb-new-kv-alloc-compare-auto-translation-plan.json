@@ -1,0 +1,320 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-c2rust-baseline-manifest.json",
+    "sha256": "7b43cf30ce389b94eb4a48bceef41fd080d6ba092a47fb0a63ca5cfd238d0538",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=bacd46dcedfe950d479e27f39ac5de9198498577577d51ded7227fa9deacfbd7",
+    "fixture_hash=2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+    "build_profile_hash=70108bd8159a8cbddcfb4f14a56b3e42a59afbe08e857bcf585e06eabe460b8e",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
+  ],
+  "fixture_hash": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+  "generated_artifacts": [
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-rust-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_draft",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-rust-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-c-oracle-harness-draft.c",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "c_oracle_harness",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-c-oracle-harness-draft.c",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-rust-replay-test-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_replay_test",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-rust-replay-test-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    }
+  ],
+  "inputs": {
+    "cfg": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-cfg.json",
+      "status": "recorded"
+    },
+    "external_callee_context": {
+      "blocked_count": 0,
+      "declared_count": 1,
+      "declared_spec_count": 1,
+      "declared_spec_names": [
+        "alloc_kv"
+      ],
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-context-pack.json",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-pointer-graph.json",
+      "status": "recorded"
+    },
+    "slice_spec": {
+      "path": "validation/slice-specs/flashdb-real-fdb-new-kv-alloc-compare.json",
+      "sha256": "bacd46dcedfe950d479e27f39ac5de9198498577577d51ded7227fa9deacfbd7",
+      "status": "ready"
+    },
+    "type_map": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-type-map.json",
+      "status": "recorded"
+    }
+  },
+  "level": "L3",
+  "repo_commit": "b902a78c644fd657298dd6d372927ff2769ab8de",
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-route-decision.json",
+    "sha256": "a599b5917633a18e9f15c69bd86f82c4e0ba40e98d17001c577dde68b21ef731",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-new-kv-alloc-compare",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "draft_generated",
+  "target_id": "flashdb",
+  "translation_carrier": {
+    "artifact_source_hash_mode": "lf_stable_text",
+    "carrier_function": "fdb_alloc_compare_probe",
+    "carrier_source_sha256": "d701edfa85ab48811ebcd3a1acc37bd485c23ca5219d34aceeea16fc25436cb7",
+    "claim_boundary": {
+      "excluded_semantics": [
+        "new_kv retry and garbage-collection control flow",
+        "fdb_kvdb and kvdb_sec_info record layout, pointer identity, aliasing, and provenance",
+        "real alloc_kv implementation behavior and side effects",
+        "FlashDB logging and database state mutation"
+      ],
+      "external_callee_semantics_verified": false,
+      "scope": "source_fragment_only",
+      "whole_function_semantics_verified": false
+    },
+    "embedding_mode": "verbatim_once",
+    "frontend_contract": "live_clang_slice_source",
+    "kind": "exact_source_fragment_wrapper",
+    "real_source": {
+      "containing_function": {
+        "declaration_text": "static uint32_t new_kv(",
+        "hash_mode": "trimmed_normalized_span",
+        "line_end": 1089,
+        "line_start": 1069,
+        "name": "new_kv",
+        "sha256": "95dba4d2bde590cebacd1ebe85b16907a2f5141bd1aff22ea0aaebe82b74182f"
+      },
+      "file": "src/fdb_kvdb.c",
+      "fragment": {
+        "hash_mode": "normalized_line_span_with_newline",
+        "kind": "if_condition_header",
+        "line_end": 1076,
+        "line_start": 1076,
+        "sha256": "7453b43d215e0e64d84377787ee92d08c8f09ce77e65ff0346a8e3962d58ed49",
+        "text": "    if ((empty_kv = alloc_kv(db, sector, kv_size)) == FAILED_ADDR) {\n"
+      }
+    },
+    "source_file_hash_mode": "raw_bytes",
+    "source_text_normalization": "utf8_universal_newlines"
+  },
+  "translation_source": {
+    "selected": "clang-lowered-typed-ir"
+  },
+  "translation_summary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "reason": "slice has no input/output pointer alias surface",
+      "requires_noalias": false,
+      "risk_level": "none"
+    },
+    "call_expressions": [
+      {
+        "arguments": [
+          "db",
+          "sector",
+          "kv_size"
+        ],
+        "callee": "alloc_kv",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-scripted-alloc-kv-u32",
+        "callee_source_ref": "translation-carrier:scripted-alloc-kv-u32",
+        "definition_status": "deterministic_fixture_stimulus",
+        "source_expression": "alloc_kv(db, sector, kv_size)",
+        "statement_context": "assignment",
+        "stub_status": "compile_only"
+      }
+    ],
+    "external_direct_callee_blocks": [],
+    "external_direct_callee_declarations": [
+      {
+        "definition_status": "deterministic_fixture_stimulus",
+        "header_files": [],
+        "model_contract": "scripted_external_u32_call_bool_out",
+        "name": "alloc_kv",
+        "parameters": [
+          {
+            "c_type": "uint32_t",
+            "name": "db",
+            "rust_type": "u32"
+          },
+          {
+            "c_type": "uint32_t",
+            "name": "sector",
+            "rust_type": "u32"
+          },
+          {
+            "c_type": "size_t",
+            "name": "kv_size",
+            "rust_type": "usize"
+          }
+        ],
+        "return_rust_type": "u32",
+        "return_type": "uint32_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-scripted-alloc-kv-u32",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "translation-carrier:scripted-alloc-kv-u32",
+        "stub_boundary": "scripted_fixture_only_no_real_callee_semantics",
+        "stub_generation": "generated_fixture_only_scripted_external",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      }
+    ],
+    "external_direct_callees": [
+      {
+        "definition_status": "deterministic_fixture_stimulus",
+        "header_files": [],
+        "model_contract": "scripted_external_u32_call_bool_out",
+        "name": "alloc_kv",
+        "parameters": [
+          {
+            "c_type": "uint32_t",
+            "name": "db",
+            "rust_type": "u32"
+          },
+          {
+            "c_type": "uint32_t",
+            "name": "sector",
+            "rust_type": "u32"
+          },
+          {
+            "c_type": "size_t",
+            "name": "kv_size",
+            "rust_type": "usize"
+          }
+        ],
+        "return_rust_type": "u32",
+        "return_type": "uint32_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-scripted-alloc-kv-u32",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "translation-carrier:scripted-alloc-kv-u32",
+        "stub_boundary": "scripted_fixture_only_no_real_callee_semantics",
+        "stub_generation": "generated_fixture_only_scripted_external",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      }
+    ],
+    "lvalue_decision_counts": {},
+    "pointer_boundary_decision_counts": {
+      "bounded_pointer_index": 1,
+      "direct_output_element_zero": 1
+    },
+    "safe_public_api": true,
+    "translation_rule_ids": [
+      "clang-lowered-typed-ir",
+      "bounded-call-expression"
+    ],
+    "unsafe_candidate_count": 0,
+    "unsupported_lvalue_count": 0,
+    "unsupported_node_count": 0
+  },
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "d73411927cd5c3decb83d8e668a279012a039284de50a463cd1725538d8e706f",
+    "status": "passed"
+  },
+  "verification_plan": [
+    {
+      "command": "rustc --error-format=json <draft>",
+      "gate": "rust_check",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "generate accepted C oracle",
+      "gate": "c_oracle",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "emit L3 evidence manifest",
+      "gate": "l3_manifest",
+      "required_before_acceptance": true
+    }
+  ]
+}

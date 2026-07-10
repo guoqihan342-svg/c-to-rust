@@ -600,6 +600,7 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
         "/* Draft only: fixture values and oracle assertions must be reviewed before acceptance. */\n"
         "#include <stdint.h>\n"
         "#include <stddef.h>\n"
+        "#include <stdbool.h>\n"
         "#include <stdio.h>\n"
         f"{oracle_harness_include_lines}\n"
         f"/* slice: {spec.get('target_id')}/{slice_id} */\n"
@@ -636,3 +637,4 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
             "function_prototype": prototype,
             "fixture": fixture_binding,
             "source_files": source_files,
+            "fixture_external_stub": fixture_execution.get("fixture_external_stub"),

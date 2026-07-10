@@ -39,6 +39,7 @@ for _C2R_PART_NAME in (
     "class_part_07.py",
     "class_part_08.py",
     "class_part_09.py",
+    "class_part_10.py",
 ):
     _C2R_PART_PATH = _C2R_PARTS_DIR / _C2R_PART_NAME
     exec(
@@ -61,6 +62,7 @@ class AutoMigrateTests(
     _AutoMigrateTestsPart07,
     _AutoMigrateTestsPart08,
     _AutoMigrateTestsPart09,
+    _AutoMigrateTestsPart10,
     unittest.TestCase,
 ):
     pass

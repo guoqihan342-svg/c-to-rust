@@ -1,0 +1,85 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json",
+    "fixture_sha256": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "5b43dd6f0233d39f34e36e17d769f778786cb6c368b98bcff7e9a7cfacbe3bb1",
+      "diff": "2b769da40f82ee0e7ef0dd6d3c46bc8779abcbb0a69fb555c1a52f425bdfda0a",
+      "negative_diff": "493d776eaf301e6e47e537d18dc95b6a24c8f75ef2b3ee21a4fa9370040e638f",
+      "rust_report": "7b920d9304bf3ba454daf608c4e77224264c904348c22609bd197a1c2a00075a",
+      "unsafe_ledger": "5c3990bd1f13447f5ccdf239613dc6e495f213b5eb50999b5a571bbeebd43a0d",
+      "unsafe_scan": "6084219b8f7fd151f55d71bf73efe9338ebfc9f1b3d83c97e88df6fa3a7d8fe1"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-new-kv-alloc-compare",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=bacd46dcedfe950d479e27f39ac5de9198498577577d51ded7227fa9deacfbd7",
+    "fixture_hash=2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+    "build_profile_hash=70108bd8159a8cbddcfb4f14a56b3e42a59afbe08e857bcf585e06eabe460b8e",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "translation-carrier self-contained C plus tests/Makefile ABI"
+    ],
+    "config_header_included": true,
+    "include_paths": []
+  },
+  "config_header": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "711c7c6812b786e44be9418e2a44b353dc45ef36b75dba91db6732496577a378"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+    "operation_count": 3,
+    "path": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No whole new_kv function migration claim.",
+    "No real external callee or pointer semantics claim."
+  ],
+  "profile_id": "flashdb-real-fdb-new-kv-alloc-compare-carrier",
+  "repo_commit": "b902a78c644fd657298dd6d372927ff2769ab8de",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-new-kv-alloc-compare",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

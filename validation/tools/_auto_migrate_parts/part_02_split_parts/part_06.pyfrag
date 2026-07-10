@@ -1,0 +1,73 @@
+def rust_replay_scripted_external_u32_call_bool_out_cases_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> str:
+    contract = scripted_external_u32_call_bool_out_replay_contract(spec, fixture_binding)
+    if contract is None:
+        return "    // TODO: bind scripted external fixture cases.\n"
+    inputs = contract["inputs"]
+    external = contract["external_callee"]
+    output_pointer = contract["output_pointer"]
+    return_contract = contract["return"]
+    case_literals: list[str] = []
+    for case_binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding["expected_outputs"]
+        input_values = [int(payload[str(item["fixture_field"])]) for item in inputs]
+        expected_args = [int(value) for value in expected[str(external["call_args_output"])] ]
+        case_literals.append(
+            "        FixtureCase { "
+            f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+            f"arg0: {input_values[0]}u32, "
+            f"arg1: {input_values[1]}u32, "
+            f"arg2: {input_values[2]}usize, "
+            f"scripted_return: {int(payload[str(external['return_fixture_field'])])}u32, "
+            f"expected_return: {str(bool(expected[str(return_contract['fixture_field'])])).lower()}, "
+            f"expected_out: {int(expected[str(output_pointer['fixture_field'])])}u32, "
+            f"expected_call_count: {int(expected[str(external['call_count_output'])])}usize, "
+            "expected_call_args: ("
+            f"{expected_args[0]}u32, {expected_args[1]}u32, {expected_args[2]}usize"
+            ") },\n"
+        )
+    function_name = safe_ident(required_str(spec, "function_name"))
+    return "".join(
+        [
+            "    // Fixture-only external stimulus; real external callee semantics are not verified.\n",
+            "    struct FixtureCase {\n",
+            "        id: &'static str,\n",
+            "        arg0: u32,\n",
+            "        arg1: u32,\n",
+            "        arg2: usize,\n",
+            "        scripted_return: u32,\n",
+            "        expected_return: bool,\n",
+            "        expected_out: u32,\n",
+            "        expected_call_count: usize,\n",
+            "        expected_call_args: (u32, u32, usize),\n",
+            "    }\n",
+            "\n",
+            "    let fixture_cases: &[FixtureCase] = &[\n",
+            *case_literals,
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {len(case_literals)}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            "        __c2r_scripted_external_set_return(case.scripted_return);\n",
+            "        __c2r_scripted_external_reset_calls();\n",
+            "        let mut actual_out = [0u32; 1];\n",
+            f"        let actual_return = {function_name}(case.arg0, case.arg1, case.arg2, &mut actual_out);\n",
+            '        assert_eq!(actual_return, case.expected_return, "{} return drifted", case.id);\n',
+            '        assert_eq!(actual_out[0], case.expected_out, "{} u32 out drifted", case.id);\n',
+            "        assert_eq!(\n",
+            "            __c2r_scripted_external_call_count(),\n",
+            "            case.expected_call_count,\n",
+            '            "{} external call count drifted",\n',
+            "            case.id,\n",
+            "        );\n",
+            "        assert_eq!(\n",
+            "            __c2r_scripted_external_call_args(),\n",
+            "            case.expected_call_args,\n",
+            '            "{} external call arguments drifted",\n',
+            "            case.id,\n",
+            "        );\n",
+            "    }\n",
+        ]
+    )

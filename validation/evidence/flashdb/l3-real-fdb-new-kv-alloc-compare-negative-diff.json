@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-new-kv-alloc-compare",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "empty_kv",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "A fixture-scripted u32 external return is assigned to the declared output and compared with UINT32_MAX; one call and its declared arguments are observed.",
+    "external_callee": "alloc_kv",
+    "excluded_semantics": [
+      "new_kv retry and garbage-collection control flow",
+      "fdb_kvdb and kvdb_sec_info record layout, pointer identity, aliasing, and provenance",
+      "real alloc_kv implementation behavior and side effects",
+      "FlashDB logging and database state mutation"
+    ]
+  },
+  "status": "expected_failed",
+  "expected_failure": true,
+  "mutation_detected": true,
+  "mutation": "comparison operator == changed to !=",
+  "detected_case_ids": [
+    "failed-address",
+    "zero-address",
+    "allocated-address"
+  ],
+  "partition_detection": {
+    "comparison_true_case_ids": [
+      "failed-address"
+    ],
+    "comparison_false_case_ids": [
+      "zero-address",
+      "allocated-address"
+    ]
+  },
+  "actual_mutation_execution": {
+    "mutation": {
+      "operator_from": "==",
+      "operator_to": "!=",
+      "mutation_count": 1,
+      "byte_offset": 2093,
+      "original_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-rust-draft.rs",
+        "sha256": "71de131507897891378eece72cdb05942e11e08fed0ad677422f1a2acddd3c57"
+      },
+      "mutated_draft": {
+        "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/mutated-rust-draft.rs",
+        "sha256": "7f6974d40a934ee8aa90614e4409ef7e97bad557dd3056a4ac2aea8ccb0f1c0f"
+      }
+    },
+    "same_generated_replay_harness": {
+      "compile": {
+        "argv": [
+          "rustc",
+          "--edition=2021",
+          "--test",
+          "--error-format=json",
+          "<translation-carrier-negative>/mutated_same_replay.rs",
+          "-o",
+          "<translation-carrier-negative>/mutated_same_replay.exe"
+        ],
+        "returncode": 0,
+        "stdout": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/same-replay-compile.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/same-replay-compile.stderr.log",
+          "sha256": "5b95e1795cadcc9a3571c33f62fcbf68272ca6cb941be33462c7e778346dc43e"
+        }
+      },
+      "run": {
+        "argv": [
+          "<translation-carrier-negative>/mutated_same_replay.exe",
+          "--nocapture"
+        ],
+        "returncode": 101,
+        "stdout": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/same-replay-run.stdout.log",
+          "sha256": "080be85e402e4d058464a40c8e1a8987b0d13a8d3881a8691ad167541c038c5c"
+        },
+        "stderr": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/same-replay-run.stderr.log",
+          "sha256": "0f47015c4b6a5797253801d79a0c1002a1bf3ba1e6219a31e497d4ad3f2264bd"
+        }
+      },
+      "expected_run_failure": true
+    },
+    "partition_replay": {
+      "compile": {
+        "argv": [
+          "rustc",
+          "--edition=2021",
+          "--test",
+          "--error-format=json",
+          "<translation-carrier-negative>/mutated_partition_replay.rs",
+          "-o",
+          "<translation-carrier-negative>/mutated_partition_replay.exe"
+        ],
+        "returncode": 0,
+        "stdout": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/partition-replay-compile.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/partition-replay-compile.stderr.log",
+          "sha256": "d9f175691ab9a2c8aea4192a319a62205ceeff085556921089ab57122522bdee"
+        }
+      },
+      "case_runs": [
+        {
+          "case_id": "failed-address",
+          "comparison_partition": "comparison_true",
+          "test_name": "__c2r_negative_partition_case_0",
+          "argv": [
+            "<translation-carrier-negative>/mutated_partition_replay.exe",
+            "--exact",
+            "__c2r_negative_partition_case_0",
+            "--nocapture"
+          ],
+          "returncode": 101,
+          "stdout": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/partition-case-0-run.stdout.log",
+            "sha256": "c075a06cffaafdbe291b8aed0f1ce11cc68b91505519021e87a62bd3441e28e7"
+          },
+          "stderr": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/partition-case-0-run.stderr.log",
+            "sha256": "57ca043bb8b499cd35ee8f7578e1406b83c17e46e62f727495598de675d36cf0"
+          }
+        },
+        {
+          "case_id": "zero-address",
+          "comparison_partition": "comparison_false",
+          "test_name": "__c2r_negative_partition_case_1",
+          "argv": [
+            "<translation-carrier-negative>/mutated_partition_replay.exe",
+            "--exact",
+            "__c2r_negative_partition_case_1",
+            "--nocapture"
+          ],
+          "returncode": 101,
+          "stdout": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/partition-case-1-run.stdout.log",
+            "sha256": "bb10f513217107ccbd5374f70988817c02b97cbcb19b87292ddc3b1fc0045686"
+          },
+          "stderr": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/partition-case-1-run.stderr.log",
+            "sha256": "36dcdb89e774a836b45a35312e970b5ecaaa892f161cddeb50fa0d4ea3599050"
+          }
+        },
+        {
+          "case_id": "allocated-address",
+          "comparison_partition": "comparison_false",
+          "test_name": "__c2r_negative_partition_case_2",
+          "argv": [
+            "<translation-carrier-negative>/mutated_partition_replay.exe",
+            "--exact",
+            "__c2r_negative_partition_case_2",
+            "--nocapture"
+          ],
+          "returncode": 101,
+          "stdout": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/partition-case-2-run.stdout.log",
+            "sha256": "7f1c6349fd984855881bd6d957108b77577d26a3d860fe5994627a82829ddb4b"
+          },
+          "stderr": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-new-kv-alloc-compare/partition-case-2-run.stderr.log",
+            "sha256": "4ffe60d0c125c93dea03b1eb35f1703f48ceb3a5fce5707dda1ce5667d9b23d2"
+          }
+        }
+      ],
+      "comparison_true_case_ids": [
+        "failed-address"
+      ],
+      "comparison_false_case_ids": [
+        "zero-address",
+        "allocated-address"
+      ]
+    }
+  },
+  "first_mismatch": {
+    "case_id": "failed-address",
+    "field": "return_value",
+    "accepted_value": true,
+    "mutated_value": false
+  },
+  "mismatches": [
+    {
+      "case_id": "failed-address",
+      "field": "return_value",
+      "accepted_value": true,
+      "mutated_value": false
+    },
+    {
+      "case_id": "zero-address",
+      "field": "return_value",
+      "accepted_value": false,
+      "mutated_value": true
+    },
+    {
+      "case_id": "allocated-address",
+      "field": "return_value",
+      "accepted_value": false,
+      "mutated_value": true
+    }
+  ]
+}

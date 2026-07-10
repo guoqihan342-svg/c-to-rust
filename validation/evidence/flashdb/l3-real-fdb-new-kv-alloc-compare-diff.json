@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-new-kv-alloc-compare",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "empty_kv",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "A fixture-scripted u32 external return is assigned to the declared output and compared with UINT32_MAX; one call and its declared arguments are observed.",
+    "external_callee": "alloc_kv",
+    "excluded_semantics": [
+      "new_kv retry and garbage-collection control flow",
+      "fdb_kvdb and kvdb_sec_info record layout, pointer identity, aliasing, and provenance",
+      "real alloc_kv implementation behavior and side effects",
+      "FlashDB logging and database state mutation"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "first_mismatch": null
+}

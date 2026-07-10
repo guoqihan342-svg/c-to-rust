@@ -1,0 +1,124 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json",
+    "fixture_sha256": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "5b43dd6f0233d39f34e36e17d769f778786cb6c368b98bcff7e9a7cfacbe3bb1",
+      "diff": "2b769da40f82ee0e7ef0dd6d3c46bc8779abcbb0a69fb555c1a52f425bdfda0a",
+      "negative_diff": "493d776eaf301e6e47e537d18dc95b6a24c8f75ef2b3ee21a4fa9370040e638f",
+      "rust_report": "7b920d9304bf3ba454daf608c4e77224264c904348c22609bd197a1c2a00075a",
+      "unsafe_ledger": "5c3990bd1f13447f5ccdf239613dc6e495f213b5eb50999b5a571bbeebd43a0d",
+      "unsafe_scan": "6084219b8f7fd151f55d71bf73efe9338ebfc9f1b3d83c97e88df6fa3a7d8fe1"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-new-kv-alloc-compare",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json",
+      "fixture_sha256": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "5b43dd6f0233d39f34e36e17d769f778786cb6c368b98bcff7e9a7cfacbe3bb1",
+        "diff": "2b769da40f82ee0e7ef0dd6d3c46bc8779abcbb0a69fb555c1a52f425bdfda0a",
+        "negative_diff": "493d776eaf301e6e47e537d18dc95b6a24c8f75ef2b3ee21a4fa9370040e638f",
+        "rust_report": "7b920d9304bf3ba454daf608c4e77224264c904348c22609bd197a1c2a00075a",
+        "unsafe_ledger": "5c3990bd1f13447f5ccdf239613dc6e495f213b5eb50999b5a571bbeebd43a0d",
+        "unsafe_scan": "6084219b8f7fd151f55d71bf73efe9338ebfc9f1b3d83c97e88df6fa3a7d8fe1"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-c-oracle.json",
+        "diff": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-diff.json",
+        "negative_diff": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-negative-diff.json",
+        "rust_report": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-rust-report.json",
+        "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-scan.json"
+      },
+      "slice_id": "real-fdb-new-kv-alloc-compare",
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "status": "accepted",
+      "target_id": "flashdb",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-c-oracle.json",
+        "sha256": "5b43dd6f0233d39f34e36e17d769f778786cb6c368b98bcff7e9a7cfacbe3bb1",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-negative-diff.json",
+        "sha256": "493d776eaf301e6e47e537d18dc95b6a24c8f75ef2b3ee21a4fa9370040e638f",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-rust-report.json",
+        "sha256": "7b920d9304bf3ba454daf608c4e77224264c904348c22609bd197a1c2a00075a",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-diff.json",
+        "sha256": "2b769da40f82ee0e7ef0dd6d3c46bc8779abcbb0a69fb555c1a52f425bdfda0a",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-ledger.json",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-scan.json",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "<generated-replay-executable> --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/generated-rust-replay.stdout.log"
+    },
+    "rust_check": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-rust-draft.rs",
+      "sha256": "71de131507897891378eece72cdb05942e11e08fed0ad677422f1a2acddd3c57",
+      "status": "accepted_after_gates"
+    },
+    "schema_version": 1,
+    "slice_id": "real-fdb-new-kv-alloc-compare",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "passed",
+    "target_id": "flashdb"
+  },
+  "generated_draft_semantic_pass": true,
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-new-kv-alloc-compare",
+  "status": "passed",
+  "summary": "Auto-translation run completed with accepted C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and final-verification evidence binding.",
+  "target_id": "flashdb"
+}

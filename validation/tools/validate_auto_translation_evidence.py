@@ -8,6 +8,7 @@ for _C2R_PART_NAME in (
     "part_00.py",
     "part_01.py",
     "part_02.py",
+    "part_04.py",
     "part_03.py",
 ):
     _C2R_PART_PATH = _C2R_PARTS_DIR / _C2R_PART_NAME

@@ -1,0 +1,466 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-new-kv-alloc-compare",
+  "level": "L3",
+  "status": "draft",
+  "function_name": "fdb_alloc_compare_probe",
+  "c_source": "#define FAILED_ADDR ((uint32_t)-1)\nuint32_t alloc_kv(uint32_t db, uint32_t sector, size_t kv_size);\nstatic bool fdb_alloc_compare_probe(uint32_t db, uint32_t sector, size_t kv_size, uint32_t *empty_kv_out)\n{\n    uint32_t empty_kv = FAILED_ADDR;\n    bool failed = false;\n\n    if ((empty_kv = alloc_kv(db, sector, kv_size)) == FAILED_ADDR) {\n        failed = true;\n    }\n    *empty_kv_out = empty_kv;\n    return failed;\n}",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "fixture_hash": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+  "source_root": "sources/FlashDB",
+  "source_file": "src/fdb_kvdb.c",
+  "source_file_hashes": {
+    "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+  },
+  "translation_carrier": {
+    "kind": "exact_source_fragment_wrapper",
+    "carrier_function": "fdb_alloc_compare_probe",
+    "carrier_source_sha256": "d701edfa85ab48811ebcd3a1acc37bd485c23ca5219d34aceeea16fc25436cb7",
+    "embedding_mode": "verbatim_once",
+    "frontend_contract": "live_clang_slice_source",
+    "source_text_normalization": "utf8_universal_newlines",
+    "source_file_hash_mode": "raw_bytes",
+    "artifact_source_hash_mode": "lf_stable_text",
+    "real_source": {
+      "file": "src/fdb_kvdb.c",
+      "containing_function": {
+        "name": "new_kv",
+        "line_start": 1069,
+        "line_end": 1089,
+        "sha256": "95dba4d2bde590cebacd1ebe85b16907a2f5141bd1aff22ea0aaebe82b74182f",
+        "hash_mode": "trimmed_normalized_span",
+        "declaration_text": "static uint32_t new_kv("
+      },
+      "fragment": {
+        "kind": "if_condition_header",
+        "line_start": 1076,
+        "line_end": 1076,
+        "sha256": "7453b43d215e0e64d84377787ee92d08c8f09ce77e65ff0346a8e3962d58ed49",
+        "hash_mode": "normalized_line_span_with_newline",
+        "text": "    if ((empty_kv = alloc_kv(db, sector, kv_size)) == FAILED_ADDR) {\n"
+      }
+    },
+    "claim_boundary": {
+      "scope": "source_fragment_only",
+      "whole_function_semantics_verified": false,
+      "external_callee_semantics_verified": false,
+      "excluded_semantics": [
+        "new_kv retry and garbage-collection control flow",
+        "fdb_kvdb and kvdb_sec_info record layout, pointer identity, aliasing, and provenance",
+        "real alloc_kv implementation behavior and side effects",
+        "FlashDB logging and database state mutation"
+      ]
+    }
+  },
+  "l1_evidence": {
+    "path": "validation/evidence/flashdb/l1-native-build.json",
+    "status": "required",
+    "accepted": false
+  },
+  "source": {
+    "source_root": "sources/FlashDB",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "repo_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_branch": "competition"
+  },
+  "c_boundary": {
+    "oracle_source_mode": "embedded_slice_c_source",
+    "files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "functions": [
+      "fdb_alloc_compare_probe"
+    ],
+    "signatures": [
+      {
+        "id": "sig-fdb-alloc-compare-probe",
+        "function": "fdb_alloc_compare_probe",
+        "return_type": "bool",
+        "parameters": [
+          {
+            "name": "db",
+            "c_type": "uint32_t",
+            "direction": "input"
+          },
+          {
+            "name": "sector",
+            "c_type": "uint32_t",
+            "direction": "input"
+          },
+          {
+            "name": "kv_size",
+            "c_type": "size_t",
+            "direction": "input"
+          },
+          {
+            "name": "empty_kv_out",
+            "c_type": "uint32_t *",
+            "direction": "output"
+          }
+        ],
+        "c_source": "static bool fdb_alloc_compare_probe(uint32_t db, uint32_t sector, size_t kv_size, uint32_t *empty_kv_out)",
+        "definition_status": "synthetic_translation_carrier"
+      },
+      {
+        "id": "sig-scripted-alloc-kv-u32",
+        "function": "alloc_kv",
+        "return_type": "uint32_t",
+        "parameters": [
+          {
+            "name": "db",
+            "c_type": "uint32_t",
+            "direction": "input"
+          },
+          {
+            "name": "sector",
+            "c_type": "uint32_t",
+            "direction": "input"
+          },
+          {
+            "name": "kv_size",
+            "c_type": "size_t",
+            "direction": "input"
+          }
+        ],
+        "source_ref": "translation-carrier:scripted-alloc-kv-u32",
+        "definition_status": "deterministic_fixture_stimulus"
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "macro",
+        "name": "FAILED_ADDR",
+        "source": "src/fdb_kvdb.c",
+        "definition_status": "carrier_equivalent_uint32_sentinel"
+      },
+      {
+        "kind": "callee",
+        "name": "alloc_kv",
+        "source": "src/fdb_kvdb.c#alloc_kv",
+        "definition_status": "deterministic_fixture_stimulus_only"
+      }
+    ],
+    "pointer_contract": {
+      "input_buffers": [],
+      "output_pointers": [
+        {
+          "name": "empty_kv_out",
+          "c_type": "uint32_t *",
+          "direction": "output",
+          "length_companion": "constant:1",
+          "nullability": "non_null",
+          "ownership_role": "out_param",
+          "mutability": "write_only",
+          "translation_rule_id": "direct_output_element_zero"
+        }
+      ],
+      "aliasing_proven": true,
+      "noalias_required": []
+    },
+    "scalar_arithmetic_contract": {
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "not_declared",
+      "division_by_zero": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "shift_count": "not_declared",
+      "signed_right_shift": "not_declared",
+      "comparison": "assigned uint32_t return value is compared with UINT32_MAX"
+    },
+    "external_direct_callees": [
+      {
+        "name": "alloc_kv",
+        "signature_ref": "sig-scripted-alloc-kv-u32",
+        "source_ref": "translation-carrier:scripted-alloc-kv-u32",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "definition_status": "deterministic_fixture_stimulus",
+        "stub_boundary": "scripted_fixture_only_no_real_callee_semantics"
+      }
+    ],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py plus translation_carrier validator",
+      "frontend": "live clang slice-source carrier",
+      "semantic_status": "exact source fragment and carrier provenance are checked; oracle/replay/diff gates are required for bounded semantic acceptance"
+    }
+  },
+  "build_profile": {
+    "profile_id": "flashdb-real-fdb-new-kv-alloc-compare-carrier",
+    "compiler_command_source": "translation-carrier self-contained C plus tests/Makefile ABI",
+    "include_paths": [],
+    "oracle_harness_includes": [],
+    "defines": [],
+    "clang_available": true,
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "char_width": 8,
+      "plain_char_signed": true,
+      "short_width": 16,
+      "long_width": 64,
+      "long_long_width": 64,
+      "pointer_width": 64
+    },
+    "target_triple": "x86_64-unknown-linux-gnu",
+    "abi": "x86_64-unknown-linux-gnu",
+    "preprocessing_mode": "manual_flags",
+    "tool_versions": {
+      "extract_source_slice": "0.1.0",
+      "translation_carrier_validator": "1"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "mode": "live_clang_slice_source",
+      "diagnostics": [
+        "The carrier is lowered from its embedded c_source; no offline AST fixture is accepted for this provenance contract."
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "real-fdb-new-kv-alloc-compare-fixture",
+    "path": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json",
+    "hash": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a",
+    "cases": [
+      {
+        "id": "failed-address",
+        "input_ref": "cases[0]",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json",
+        "expected_outputs": {
+          "return_value": true,
+          "empty_kv": 4294967295,
+          "external_call_count": 1,
+          "external_call_args": [17, 29, 64]
+        }
+      },
+      {
+        "id": "zero-address",
+        "input_ref": "cases[1]",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json",
+        "expected_outputs": {
+          "return_value": false,
+          "empty_kv": 0,
+          "external_call_count": 1,
+          "external_call_args": [3, 5, 0]
+        }
+      },
+      {
+        "id": "allocated-address",
+        "input_ref": "cases[2]",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json",
+        "expected_outputs": {
+          "return_value": false,
+          "empty_kv": 8192,
+          "external_call_count": 1,
+          "external_call_args": [305419896, 2271560481, 4096]
+        }
+      }
+    ],
+    "observable_outputs": [
+      "return_value",
+      "empty_kv",
+      "external_call_count",
+      "external_call_args"
+    ],
+    "behavior_fields": [
+      "return_value",
+      "empty_kv",
+      "external_call_count",
+      "external_call_args"
+    ],
+    "c_oracle": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-c-oracle.json",
+    "rust_report": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-rust-report.json",
+    "diff": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-diff.json",
+    "negative_diff": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-negative-diff.json",
+    "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-ledger.json"
+  },
+  "replay_contract": {
+    "schema_version": 1,
+    "kind": "scripted_external_u32_call_bool_out",
+    "external_callee": {
+      "name": "alloc_kv",
+      "return_fixture_field": "external_return",
+      "call_count_output": "external_call_count",
+      "call_args_output": "external_call_args"
+    },
+    "inputs": [
+      {
+        "parameter": "db",
+        "fixture_field": "db",
+        "rust_type": "u32"
+      },
+      {
+        "parameter": "sector",
+        "fixture_field": "sector",
+        "rust_type": "u32"
+      },
+      {
+        "parameter": "kv_size",
+        "fixture_field": "kv_size",
+        "rust_type": "usize"
+      }
+    ],
+    "output_pointer": {
+      "parameter": "empty_kv_out",
+      "fixture_field": "empty_kv",
+      "rust_type": "u32"
+    },
+    "return": {
+      "fixture_field": "return_value",
+      "rust_type": "bool"
+    }
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-rust-draft.rs",
+    "public_api": [
+      {
+        "name": "fdb_alloc_compare_probe",
+        "visibility": "public",
+        "boundary_kind": "validated_buffer"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.0,
+      "ledger_required": true
+    }
+  },
+  "memory_model": {
+    "alias_contract": {
+      "decision": "allow",
+      "proven": true,
+      "requires_noalias": false,
+      "complete_alias_safety": false,
+      "source": "The carrier has one caller-owned output slot and scalar fixture identities; real FlashDB pointer aliasing is excluded."
+    },
+    "ownership_contract": {
+      "inputs": [
+        "db fixture identity",
+        "sector fixture identity",
+        "kv_size",
+        "scripted external return"
+      ],
+      "outputs": [
+        "return_value",
+        "empty_kv_out[0]",
+        "external call count and arguments"
+      ],
+      "borrow_model": "single mutable u32 output slot",
+      "unsafe_boundary": "No raw pointer is emitted; the output slice must contain at least one element."
+    },
+    "length_companions": [
+      {
+        "pointer": "empty_kv_out",
+        "companion": "constant:1",
+        "contract": "empty_kv_out.len() >= 1"
+      }
+    ],
+    "effect_graph": {
+      "effects": [
+        {
+          "id": "external-call",
+          "pointer_node": "none",
+          "kind": "call",
+          "expression": "alloc_kv(db, sector, kv_size)",
+          "source": "src/fdb_kvdb.c:1076"
+        },
+        {
+          "id": "assign-empty-kv",
+          "pointer_node": "empty_kv_out",
+          "kind": "write",
+          "expression": "empty_kv receives the external return and is copied to output slot zero",
+          "source": "src/fdb_kvdb.c:1076"
+        },
+        {
+          "id": "compare-sentinel",
+          "pointer_node": "none",
+          "kind": "compute",
+          "expression": "empty_kv == UINT32_MAX",
+          "source": "src/fdb_kvdb.c:1076"
+        }
+      ],
+      "edges": [
+        {
+          "from_effect": "external-call",
+          "to_effect": "assign-empty-kv",
+          "relationship": "data_influences"
+        },
+        {
+          "from_effect": "assign-empty-kv",
+          "to_effect": "compare-sentinel",
+          "relationship": "data_influences"
+        }
+      ],
+      "summary": {
+        "reads": [
+          "db",
+          "sector",
+          "kv_size",
+          "scripted external return"
+        ],
+        "writes": [
+          "empty_kv_out[0]"
+        ],
+        "external_state": [
+          "fixture-local call counter and argument capture"
+        ],
+        "alias_sensitive": false
+      }
+    }
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No whole new_kv function migration claim.",
+      "No alloc_kv implementation semantics claim.",
+      "No real FlashDB pointer, record, alias, garbage collection, retry, logging, or database-state claim.",
+      "The scripted scalar identities only test call ordering, assignment, argument forwarding, and sentinel comparison."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-project migration",
+      "new_kv semantic equivalence",
+      "alloc_kv semantic equivalence",
+      "semantic equivalence without C oracle and exact generated Rust replay evidence"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No whole new_kv function migration claim.",
+    "No real external callee or pointer semantics claim."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.source_file_hashes",
+    "source_root",
+    "source_file",
+    "source_file_hashes",
+    "translation_carrier",
+    "c_boundary.signatures",
+    "c_boundary.external_direct_callees",
+    "c_boundary.pointer_contract",
+    "c_boundary.scalar_arithmetic_contract",
+    "build_profile.profile_id",
+    "build_profile.target",
+    "fixture_contract.hash",
+    "replay_contract",
+    "memory_model.alias_contract",
+    "translator_version",
+    "source.source_repository",
+    "source.source_branch"
+  ]
+}

@@ -441,6 +441,14 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
             "source_commit": source,
             "repo_commit": repo,
             "translation_source": translation_source,
+            **(
+                {
+                    "translation_carrier": raw_plan["translation_carrier"],
+                    "fixture_hash": raw_plan["fixture_hash"],
+                }
+                if "translation_carrier" in raw_plan
+                else {}
+            ),
             "inputs": {
                 "slice_spec": slice_ref,
                 "type_map": {"path": rel(evidence_dir / f"{prefix}-type-map.json"), "status": "recorded"},

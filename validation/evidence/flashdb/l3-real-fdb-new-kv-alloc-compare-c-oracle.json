@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-new-kv-alloc-compare",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "empty_kv",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "A fixture-scripted u32 external return is assigned to the declared output and compared with UINT32_MAX; one call and its declared arguments are observed.",
+    "external_callee": "alloc_kv",
+    "excluded_semantics": [
+      "new_kv retry and garbage-collection control flow",
+      "fdb_kvdb and kvdb_sec_info record layout, pointer identity, aliasing, and provenance",
+      "real alloc_kv implementation behavior and side effects",
+      "FlashDB logging and database state mutation"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "new_kv:if-condition@1076"
+    ],
+    "signature": "if ((empty_kv = alloc_kv(db, sector, kv_size)) == FAILED_ADDR)"
+  },
+  "provenance": {
+    "binding_mode": "executed_harness",
+    "evidence_refs": {
+      "slice_spec": {
+        "path": "validation/slice-specs/flashdb-real-fdb-new-kv-alloc-compare.json",
+        "sha256": "bacd46dcedfe950d479e27f39ac5de9198498577577d51ded7227fa9deacfbd7"
+      },
+      "fixture": {
+        "path": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json",
+        "sha256": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a"
+      },
+      "real_source": {
+        "path": "sources/FlashDB/src/fdb_kvdb.c",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+        "artifact_lf_stable_sha256": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b",
+        "containing_function_sha256": "95dba4d2bde590cebacd1ebe85b16907a2f5141bd1aff22ea0aaebe82b74182f",
+        "source_fragment_sha256": "7453b43d215e0e64d84377787ee92d08c8f09ce77e65ff0346a8e3962d58ed49"
+      },
+      "translation_carrier": {
+        "kind": "exact_source_fragment_wrapper",
+        "carrier_function": "fdb_alloc_compare_probe",
+        "carrier_source_sha256": "d701edfa85ab48811ebcd3a1acc37bd485c23ca5219d34aceeea16fc25436cb7"
+      },
+      "translator_input": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-translator-input.json",
+        "sha256": "711c7c6812b786e44be9418e2a44b353dc45ef36b75dba91db6732496577a378"
+      },
+      "translation_plan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-auto-translation-plan.json",
+        "sha256": "ded27ab3ee5a376489bcc9ade28ff93403ce136f238a411150b142b5bb5c274b"
+      },
+      "clang_lowering_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-clang-lowering-report.json",
+        "sha256": "1af19d501dc3488d0b2ee1d55ad8eb10d3aa2d9266692841174be4495ae33c76"
+      },
+      "c_oracle_status": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-c-oracle-status.json",
+        "status": "DRAFT_GENERATED",
+        "semantic_pass": false,
+        "cycle_boundary": "The status file is field-bound rather than hash-bound because accepted-oracle promotion writes the accepted root report hash back into this status artifact."
+      },
+      "c_oracle_harness": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-c-oracle-harness-draft.c",
+        "sha256": "fad90bfe817efb8ed48f21a3a843c7af4c5194e37136b4e3a94afc30ea878219"
+      },
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-rust-draft.rs",
+        "sha256": "71de131507897891378eece72cdb05942e11e08fed0ad677422f1a2acddd3c57"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/rust-check.json",
+        "sha256": "41b8be932c8fef71c3c1a213308d4c7778068f73eef07be8f34de55a7faef7b4"
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-test-translation-generated.json",
+        "sha256": "0ca5ae22390ed4b18d044e1857c1967f8af25d42b2008601b75baa7a0ad4aef8"
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-rust-replay-test-draft.rs",
+        "sha256": "4972fc793a1042224d4377d5a6090635128abb4ab31a8b090d1763b6e5512d52",
+        "declared_sha256": "4972fc793a1042224d4377d5a6090635128abb4ab31a8b090d1763b6e5512d52"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/generated-rust-replay.stdout.log",
+        "sha256": "db621fb8e16cfd601bdfb798f42d5ca684168067788c03bf4031613ecf989752"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-rust-report.json",
+        "sha256": "6b441523461d9173304d25a4d909af52e49cb0e4b5281e478964442ced918e76"
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-test-translation-generated.json",
+        "sha256": "0ca5ae22390ed4b18d044e1857c1967f8af25d42b2008601b75baa7a0ad4aef8"
+      }
+    },
+    "compile_execution": {
+      "argv": [
+        "cc",
+        "-std=c99",
+        "l3-real-fdb-new-kv-alloc-compare-c-oracle-harness-draft.c",
+        "-o",
+        "l3-real-fdb-new-kv-alloc-compare-c-oracle-harness-draft.exe"
+      ],
+      "attempted": true,
+      "compiler_candidates": [
+        "cc",
+        "gcc",
+        "clang"
+      ],
+      "compiler_name": "cc",
+      "compiler_path": "cc",
+      "diagnostics": [
+        "C oracle compile command succeeded, but execution/diff gates are still required."
+      ],
+      "execution_argv": [
+        "cc",
+        "-std=c99",
+        "l3-real-fdb-new-kv-alloc-compare-c-oracle-harness-draft.c",
+        "-o",
+        "l3-real-fdb-new-kv-alloc-compare-c-oracle-harness-draft.exe"
+      ],
+      "harness_execution": {
+        "argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-c-oracle-harness-draft.exe"
+        ],
+        "attempted": true,
+        "diagnostics": [
+          "C oracle harness executed, but execution output has not passed oracle diff gates."
+        ],
+        "output_gate": {
+          "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+          "compared_fields": [
+            "return_value",
+            "empty_kv",
+            "external_call_count",
+            "external_call_args"
+          ],
+          "diagnostics": [
+            "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+          ],
+          "expected_stdout_fragments": [
+            "fixture case failed-address return_value matched",
+            "fixture case failed-address empty_kv matched",
+            "fixture case failed-address external_call_count matched",
+            "fixture case failed-address external_call_args matched",
+            "fixture case zero-address return_value matched",
+            "fixture case zero-address empty_kv matched",
+            "fixture case zero-address external_call_count matched",
+            "fixture case zero-address external_call_args matched",
+            "fixture case allocated-address return_value matched",
+            "fixture case allocated-address empty_kv matched",
+            "fixture case allocated-address external_call_count matched",
+            "fixture case allocated-address external_call_args matched"
+          ],
+          "fixture_expected_output_status": "declared_not_executed",
+          "gate": "c_oracle_harness_output",
+          "matched_stdout_fragments": [
+            "fixture case failed-address return_value matched",
+            "fixture case failed-address empty_kv matched",
+            "fixture case failed-address external_call_count matched",
+            "fixture case failed-address external_call_args matched",
+            "fixture case zero-address return_value matched",
+            "fixture case zero-address empty_kv matched",
+            "fixture case zero-address external_call_count matched",
+            "fixture case zero-address external_call_args matched",
+            "fixture case allocated-address return_value matched",
+            "fixture case allocated-address empty_kv matched",
+            "fixture case allocated-address external_call_count matched",
+            "fixture case allocated-address external_call_args matched"
+          ],
+          "missing_stdout_fragments": [],
+          "schema_version": 1,
+          "semantic_pass": false,
+          "status": "matched_not_oracle"
+        },
+        "returncode": 0,
+        "semantic_pass": false,
+        "status": "exited_zero_not_oracle",
+        "stderr": "",
+        "stdout": "oracle harness draft for fdb_alloc_compare_probe\nfixture input: validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json\nfixture case failed-address return_value matched\nfixture case failed-address empty_kv matched\nfixture case failed-address external_call_count matched\nfixture case failed-address external_call_args matched\nfixture case zero-address return_value matched\nfixture case zero-address empty_kv matched\nfixture case zero-address external_call_count matched\nfixture case zero-address external_call_args matched\nfixture case allocated-address return_value matched\nfixture case allocated-address empty_kv matched\nfixture case allocated-address external_call_count matched\nfixture case allocated-address external_call_args matched\n",
+        "timeout_seconds": 30,
+        "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare",
+        "execution_argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-c-oracle-harness-draft.exe"
+        ]
+      },
+      "requested_compiler": "cc",
+      "returncode": 0,
+      "semantic_pass": false,
+      "status": "compile_succeeded_not_oracle",
+      "stderr": "",
+      "stdout": "",
+      "toolchain_adapter": "local",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare",
+      "command_recording": "portable_logical_argv"
+    }
+  },
+  "cases": [
+    {
+      "id": "failed-address",
+      "return_value": true,
+      "empty_kv": 4294967295,
+      "external_call_count": 1,
+      "external_call_args": [
+        17,
+        29,
+        64
+      ],
+      "status": "passed"
+    },
+    {
+      "id": "zero-address",
+      "return_value": false,
+      "empty_kv": 0,
+      "external_call_count": 1,
+      "external_call_args": [
+        3,
+        5,
+        0
+      ],
+      "status": "passed"
+    },
+    {
+      "id": "allocated-address",
+      "return_value": false,
+      "empty_kv": 8192,
+      "external_call_count": 1,
+      "external_call_args": [
+        305419896,
+        2271560481,
+        4096
+      ],
+      "status": "passed"
+    }
+  ]
+}

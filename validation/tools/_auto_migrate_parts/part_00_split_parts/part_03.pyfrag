@@ -1,0 +1,354 @@
+SCRIPTED_EXTERNAL_U32_CALL_BOOL_OUT_KIND = "scripted_external_u32_call_bool_out"
+SCRIPTED_EXTERNAL_STUB_HELPERS = (
+    "__c2r_scripted_external_set_return",
+    "__c2r_scripted_external_reset_calls",
+    "__c2r_scripted_external_call_count",
+    "__c2r_scripted_external_call_args",
+)
+
+
+def scripted_external_u32_call_bool_out_replay_supported(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any] | None = None,
+) -> bool:
+    return scripted_external_u32_call_bool_out_replay_contract(spec, fixture_binding) is not None
+
+
+def scripted_external_u32_call_bool_out_replay_contract(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    contract = spec.get("replay_contract")
+    if not isinstance(contract, dict) or contract.get("kind") != SCRIPTED_EXTERNAL_U32_CALL_BOOL_OUT_KIND:
+        return None
+    expected_contract_keys = {
+        "schema_version",
+        "kind",
+        "external_callee",
+        "inputs",
+        "output_pointer",
+        "return",
+    }
+    if set(contract) != expected_contract_keys:
+        raise ValueError("scripted external replay contract shape drifted")
+    if contract.get("schema_version") != 1:
+        raise ValueError("scripted external replay contract schema_version must be 1")
+
+    external = contract.get("external_callee")
+    inputs = contract.get("inputs")
+    output_pointer = contract.get("output_pointer")
+    return_contract = contract.get("return")
+    if not isinstance(external, dict) or set(external) != {
+        "name",
+        "return_fixture_field",
+        "call_count_output",
+        "call_args_output",
+    }:
+        raise ValueError("scripted external replay contract external_callee shape drifted")
+    if not isinstance(inputs, list) or len(inputs) != 3:
+        raise ValueError("scripted external replay contract requires exactly three inputs")
+    if not isinstance(output_pointer, dict) or set(output_pointer) != {
+        "parameter",
+        "fixture_field",
+        "rust_type",
+    }:
+        raise ValueError("scripted external replay contract output_pointer shape drifted")
+    if not isinstance(return_contract, dict) or set(return_contract) != {
+        "fixture_field",
+        "rust_type",
+    }:
+        raise ValueError("scripted external replay contract return shape drifted")
+
+    expected_rust_types = ("u32", "u32", "usize")
+    for index, (item, expected_rust_type) in enumerate(zip(inputs, expected_rust_types, strict=True)):
+        if not isinstance(item, dict) or set(item) != {"parameter", "fixture_field", "rust_type"}:
+            raise ValueError(f"scripted external replay input {index} shape drifted")
+        if item.get("rust_type") != expected_rust_type:
+            raise ValueError(
+                f"scripted external replay input {index} rust_type must be {expected_rust_type}"
+            )
+        scripted_external_replay_identifier(item.get("parameter"), f"input {index} parameter")
+        scripted_external_replay_identifier(item.get("fixture_field"), f"input {index} fixture field")
+    if output_pointer.get("rust_type") != "u32":
+        raise ValueError("scripted external replay output_pointer rust_type must be u32")
+    if return_contract.get("rust_type") != "bool":
+        raise ValueError("scripted external replay return rust_type must be bool")
+
+    identifier_values = [
+        external.get("name"),
+        external.get("return_fixture_field"),
+        external.get("call_count_output"),
+        external.get("call_args_output"),
+        output_pointer.get("parameter"),
+        output_pointer.get("fixture_field"),
+        return_contract.get("fixture_field"),
+    ]
+    for index, value in enumerate(identifier_values):
+        scripted_external_replay_identifier(value, f"mapping {index}")
+    mapped_parameters = [str(item["parameter"]) for item in inputs]
+    fixture_fields = [
+        *(str(item["fixture_field"]) for item in inputs),
+        str(external["return_fixture_field"]),
+        str(output_pointer["fixture_field"]),
+        str(return_contract["fixture_field"]),
+        str(external["call_count_output"]),
+        str(external["call_args_output"]),
+    ]
+    if len(mapped_parameters) != len(set(mapped_parameters)):
+        raise ValueError("scripted external replay input parameters must be unique")
+    if len(fixture_fields) != len(set(fixture_fields)):
+        raise ValueError("scripted external replay fixture and output fields must be unique")
+    if str(output_pointer["parameter"]) in mapped_parameters:
+        raise ValueError("scripted external replay output parameter must differ from inputs")
+
+    scripted_external_validate_c_signatures(spec, contract)
+    expected_behavior_fields = [
+        str(return_contract["fixture_field"]),
+        str(output_pointer["fixture_field"]),
+        str(external["call_count_output"]),
+        str(external["call_args_output"]),
+    ]
+    if behavior_fields(spec) != expected_behavior_fields:
+        raise ValueError("scripted external replay observable output mapping drifted")
+    if fixture_binding is not None:
+        scripted_external_validate_fixture_cases(spec, fixture_binding, contract)
+    return contract
+
+
+def scripted_external_replay_identifier(value: Any, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value) is None
+        or value in RUST_KEYWORDS
+    ):
+        raise ValueError(f"scripted external replay {label} must be a portable identifier")
+    return value
+
+
+def scripted_external_validate_c_signatures(
+    spec: dict[str, Any],
+    contract: dict[str, Any],
+) -> None:
+    inputs = contract["inputs"]
+    output_pointer = contract["output_pointer"]
+    external_name = str(contract["external_callee"]["name"])
+    function_name = scripted_external_replay_identifier(spec.get("function_name"), "function name")
+    entry_signature = c_function_signature(spec)
+    if not entry_signature or entry_signature.get("function") != function_name:
+        raise ValueError("scripted external replay entry signature is missing")
+    if normalize_c_type(str(entry_signature.get("return_type") or "")) not in {"bool", "_Bool"}:
+        raise ValueError("scripted external replay entry return type must be bool")
+    entry_parameters = [
+        item for item in entry_signature.get("parameters", []) if isinstance(item, dict)
+    ]
+    expected_entry_names = [
+        *(str(item["parameter"]) for item in inputs),
+        str(output_pointer["parameter"]),
+    ]
+    if [str(item.get("name") or "") for item in entry_parameters] != expected_entry_names:
+        raise ValueError("scripted external replay entry parameters do not match the contract")
+    expected_entry_types = ["uint32_t", "uint32_t", "size_t", "uint32_t *"]
+    if [normalize_c_type(str(item.get("c_type") or "")) for item in entry_parameters] != expected_entry_types:
+        raise ValueError("scripted external replay entry parameter types drifted")
+    if [item.get("direction") for item in entry_parameters] != ["input", "input", "input", "output"]:
+        raise ValueError("scripted external replay entry parameter directions drifted")
+
+    c_boundary = spec.get("c_boundary")
+    if not isinstance(c_boundary, dict):
+        raise ValueError("scripted external replay C boundary is missing")
+    external_declarations = [
+        item
+        for item in c_boundary.get("external_direct_callees", [])
+        if isinstance(item, dict) and item.get("name") == external_name
+    ]
+    if len(external_declarations) != 1:
+        raise ValueError("scripted external replay requires one declared external callee")
+    signature_ref = external_declarations[0].get("signature_ref")
+    external_signatures = [
+        item
+        for item in c_boundary.get("signatures", [])
+        if isinstance(item, dict)
+        and item.get("function") == external_name
+        and item.get("id") == signature_ref
+    ]
+    if len(external_signatures) != 1:
+        raise ValueError("scripted external replay external signature binding drifted")
+    external_signature = external_signatures[0]
+    if normalize_c_type(str(external_signature.get("return_type") or "")) != "uint32_t":
+        raise ValueError("scripted external replay external return type must be uint32_t")
+    external_parameters = [
+        item for item in external_signature.get("parameters", []) if isinstance(item, dict)
+    ]
+    if [str(item.get("name") or "") for item in external_parameters] != expected_entry_names[:3]:
+        raise ValueError("scripted external replay external parameters do not match inputs")
+    if [normalize_c_type(str(item.get("c_type") or "")) for item in external_parameters] != expected_entry_types[:3]:
+        raise ValueError("scripted external replay external parameter types drifted")
+    if [item.get("direction") for item in external_parameters] != ["input", "input", "input"]:
+        raise ValueError("scripted external replay external parameter directions drifted")
+
+
+def scripted_external_validate_fixture_cases(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+    contract: dict[str, Any],
+) -> None:
+    cases = fixture_binding.get("case_bindings")
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("scripted external replay fixture cases are missing")
+    if fixture_binding.get("case_count") != len(cases):
+        raise ValueError("scripted external replay fixture case count drifted")
+    inputs = contract["inputs"]
+    external = contract["external_callee"]
+    output_pointer = contract["output_pointer"]
+    return_contract = contract["return"]
+    expected_output_fields = {
+        str(return_contract["fixture_field"]),
+        str(output_pointer["fixture_field"]),
+        str(external["call_count_output"]),
+        str(external["call_args_output"]),
+    }
+    for case_binding in cases:
+        if not isinstance(case_binding, dict):
+            raise ValueError("scripted external replay fixture case binding shape drifted")
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding.get("expected_outputs")
+        if not isinstance(payload, dict) or not isinstance(expected, dict):
+            raise ValueError("scripted external replay fixture case is incomplete")
+        if set(expected) != expected_output_fields:
+            raise ValueError("scripted external replay fixture expected output fields drifted")
+        input_values = [payload.get(str(item["fixture_field"])) for item in inputs]
+        if not is_uint32_value(input_values[0]) or not is_uint32_value(input_values[1]):
+            raise ValueError("scripted external replay u32 fixture input type drifted")
+        if not is_size_value(input_values[2]):
+            raise ValueError("scripted external replay usize fixture input type drifted")
+        external_return = payload.get(str(external["return_fixture_field"]))
+        if not is_uint32_value(external_return):
+            raise ValueError("scripted external replay external return must be u32")
+        expected_return = expected.get(str(return_contract["fixture_field"]))
+        expected_out = expected.get(str(output_pointer["fixture_field"]))
+        expected_count = expected.get(str(external["call_count_output"]))
+        expected_args = expected.get(str(external["call_args_output"]))
+        if type(expected_return) is not bool:
+            raise ValueError("scripted external replay expected return must be bool")
+        if not is_uint32_value(expected_out) or expected_out != external_return:
+            raise ValueError("scripted external replay expected u32 out must equal scripted return")
+        if not is_size_value(expected_count):
+            raise ValueError("scripted external replay expected call count must be usize")
+        if expected_args != input_values:
+            raise ValueError("scripted external replay expected call arguments must match inputs")
+        payload_expected = payload.get("expected_outputs")
+        if isinstance(payload_expected, dict) and payload_expected != expected:
+            raise ValueError("scripted external replay spec and fixture outputs differ")
+
+
+def scripted_external_u32_call_bool_out_external_binding(
+    spec: dict[str, Any],
+    name: str,
+    return_type: str,
+    parameters: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    contract = scripted_external_u32_call_bool_out_replay_contract(spec)
+    if contract is None or name != contract["external_callee"]["name"]:
+        return None
+    expected_names = [str(item["parameter"]) for item in contract["inputs"]]
+    if normalize_c_type(return_type) != "uint32_t":
+        raise ValueError("scripted external replay descriptor return type drifted")
+    if [str(item.get("name") or "") for item in parameters] != expected_names:
+        raise ValueError("scripted external replay descriptor parameter names drifted")
+    if [normalize_c_type(str(item.get("c_type") or "")) for item in parameters] != [
+        "uint32_t",
+        "uint32_t",
+        "size_t",
+    ]:
+        raise ValueError("scripted external replay descriptor parameter types drifted")
+    return contract
+
+
+def rust_check_scripted_external_u32_call_bool_out_stub(
+    callee: dict[str, Any],
+    text: str,
+    spec: dict[str, Any] | None,
+) -> str | None:
+    if not isinstance(spec, dict):
+        return None
+    contract = scripted_external_u32_call_bool_out_replay_contract(spec)
+    if contract is None or callee.get("name") != contract["external_callee"]["name"]:
+        return None
+    signature = rust_check_declared_callee_signature(callee)
+    name = rust_identifier(str(callee["name"]))
+    helper_presence = [helper in text for helper in SCRIPTED_EXTERNAL_STUB_HELPERS]
+    if any(helper_presence):
+        if not all(helper_presence) or not rust_function_declared(text, name):
+            raise ValueError("scripted external replay Rust fixture stub is incomplete")
+        mark_rust_check_binding(
+            callee,
+            "fixture_only_scripted_external",
+            signature,
+            allowed_use="fixture_bound_rust_replay_only",
+        )
+        callee["rust_check_binding"].update(
+            {
+                "fixture_only": True,
+                "replay_contract_kind": SCRIPTED_EXTERNAL_U32_CALL_BOOL_OUT_KIND,
+            }
+        )
+        return None
+    if rust_function_declared(text, name):
+        raise ValueError("scripted external replay callee is already defined without fixture controls")
+
+    parameter_names = [
+        rust_identifier(str(item["parameter"])) for item in contract["inputs"]
+    ]
+    mark_rust_check_binding(
+        callee,
+        "fixture_only_scripted_external",
+        signature,
+        allowed_use="fixture_bound_rust_replay_only",
+    )
+    callee["rust_check_binding"].update(
+        {
+            "fixture_only": True,
+            "replay_contract_kind": SCRIPTED_EXTERNAL_U32_CALL_BOOL_OUT_KIND,
+        }
+    )
+    return f"""// Fixture-only scripted external replay state; real callee semantics are not verified.
+std::thread_local! {{
+    static __C2R_SCRIPTED_EXTERNAL_RETURN: std::cell::Cell<u32> = std::cell::Cell::new(0);
+    static __C2R_SCRIPTED_EXTERNAL_CALL_COUNT: std::cell::Cell<usize> = std::cell::Cell::new(0);
+    static __C2R_SCRIPTED_EXTERNAL_ARG0: std::cell::Cell<u32> = std::cell::Cell::new(0);
+    static __C2R_SCRIPTED_EXTERNAL_ARG1: std::cell::Cell<u32> = std::cell::Cell::new(0);
+    static __C2R_SCRIPTED_EXTERNAL_ARG2: std::cell::Cell<usize> = std::cell::Cell::new(0);
+}}
+
+fn __c2r_scripted_external_set_return(value: u32) {{
+    __C2R_SCRIPTED_EXTERNAL_RETURN.with(|slot| slot.set(value));
+}}
+
+fn __c2r_scripted_external_reset_calls() {{
+    __C2R_SCRIPTED_EXTERNAL_CALL_COUNT.with(|slot| slot.set(0));
+    __C2R_SCRIPTED_EXTERNAL_ARG0.with(|slot| slot.set(0));
+    __C2R_SCRIPTED_EXTERNAL_ARG1.with(|slot| slot.set(0));
+    __C2R_SCRIPTED_EXTERNAL_ARG2.with(|slot| slot.set(0));
+}}
+
+fn __c2r_scripted_external_call_count() -> usize {{
+    __C2R_SCRIPTED_EXTERNAL_CALL_COUNT.with(std::cell::Cell::get)
+}}
+
+fn __c2r_scripted_external_call_args() -> (u32, u32, usize) {{
+    (
+        __C2R_SCRIPTED_EXTERNAL_ARG0.with(std::cell::Cell::get),
+        __C2R_SCRIPTED_EXTERNAL_ARG1.with(std::cell::Cell::get),
+        __C2R_SCRIPTED_EXTERNAL_ARG2.with(std::cell::Cell::get),
+    )
+}}
+
+{signature} {{
+    __C2R_SCRIPTED_EXTERNAL_ARG0.with(|slot| slot.set({parameter_names[0]}));
+    __C2R_SCRIPTED_EXTERNAL_ARG1.with(|slot| slot.set({parameter_names[1]}));
+    __C2R_SCRIPTED_EXTERNAL_ARG2.with(|slot| slot.set({parameter_names[2]}));
+    __C2R_SCRIPTED_EXTERNAL_CALL_COUNT.with(|slot| {{
+        slot.set(slot.get().checked_add(1).expect("scripted external fixture call count overflow"));
+    }});
+    __C2R_SCRIPTED_EXTERNAL_RETURN.with(|slot| slot.get())
+}}"""

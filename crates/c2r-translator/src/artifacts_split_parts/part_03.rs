@@ -339,6 +339,62 @@ mod clang_lowering_report_artifact_tests {
         );
         assert_eq!(value["lowering_report"], Value::Null);
         assert_eq!(value["errors"][0]["kind"], "missing_source_root");
+        assert!(value.get("translation_carrier").is_none());
+    }
+
+    #[test]
+    fn translation_carrier_is_bound_verbatim_to_plan_and_lowering_report() {
+        let carrier = serde_json::json!({
+            "kind": "exact_source_fragment_wrapper",
+            "carrier_function": "carrier_probe",
+            "real_source": {
+                "source_file": "src/source.c",
+                "containing_function": "source_fn",
+                "line_start": 12,
+                "line_end": 12,
+                "sha256": "statement-sha"
+            },
+            "embedding": {
+                "mode": "verbatim_once"
+            }
+        });
+        let spec_json = serde_json::json!({
+            "target_id": "demo",
+            "slice_id": "carrier-binding",
+            "source_commit": "1234567",
+            "function_name": "carrier_probe",
+            "c_source": "int carrier_probe(void) { return 0; }",
+            "fixture_hash": "fixture-sha",
+            "translation_carrier": carrier,
+            "build_profile": profile()
+        });
+        let spec: SliceSpec = serde_json::from_value(spec_json).unwrap();
+        assert_eq!(spec.translation_carrier.as_ref(), Some(&carrier));
+
+        let out_dir = unique_out_dir("translation-carrier-binding");
+        let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+        assert_eq!(manifest.status, "blocked");
+
+        let plan: Value = serde_json::from_str(
+            &fs::read_to_string(
+                out_dir.join("l3-carrier-binding-auto-translation-plan.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let report: Value = serde_json::from_str(
+            &fs::read_to_string(
+                out_dir.join("l3-carrier-binding-clang-lowering-report.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(plan["translation_carrier"], carrier);
+        assert_eq!(report["translation_carrier"], carrier);
+        assert_eq!(plan["translation_carrier"], report["translation_carrier"]);
+
+        fs::remove_dir_all(out_dir).unwrap();
     }
 
     #[test]
@@ -377,6 +433,7 @@ mod clang_lowering_report_artifact_tests {
             "clang_lowered_typed_ir_unavailable"
         );
         assert_eq!(plan["errors"][0]["kind"], "legacy_fallback_retired");
+        assert!(plan.get("translation_carrier").is_none());
 
         let events =
             fs::read_to_string(out_dir.join("l3-fallback-identity-auto-translation-events.jsonl"))
