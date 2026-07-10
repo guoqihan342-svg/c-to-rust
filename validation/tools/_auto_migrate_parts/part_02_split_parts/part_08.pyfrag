@@ -1,0 +1,57 @@
+def rust_replay_scripted_external_record_u32_sequence_do_while_state_cases_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> str:
+    contract = scripted_external_record_u32_sequence_do_while_state_replay_contract(
+        spec, fixture_binding
+    )
+    if contract is None:
+        return "    // TODO: bind scripted sequence fixture cases.\n"
+    external = contract["external_callee"]
+    state = contract["state_output"]
+    result = contract["return"]
+    function_name = safe_ident(required_str(spec, "function_name"))
+    blocks = ["    // Finite fixture sequence; real external callee semantics are not verified.\n"]
+    for case_binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding["expected_outputs"]
+        case_id = str(case_binding.get("id") or "case")
+        local_names: dict[str, str] = {}
+        declarations: list[str] = []
+        call_arguments: list[str] = []
+        for entry in contract["entry_arguments"]:
+            parameter = safe_ident(str(entry["parameter"]))
+            local_name = f"actual_{safe_ident(case_id)}_{parameter}"
+            local_names[str(entry["parameter"])] = local_name
+            mutable = "mut " if entry["pass_mode"] == "mutable_ref" else ""
+            declarations.append(
+                f"        let {mutable}{local_name} = {scripted_record_rust_initializer(entry['initializer'], payload)};\n"
+            )
+            call_arguments.append(f"&mut {local_name}" if entry["pass_mode"] == "mutable_ref" else local_name)
+        sequence = ", ".join(
+            f"{int(value)}u32" for value in payload[str(external["return_sequence_fixture_field"])]
+        )
+        rows = ", ".join(
+            "[" + ", ".join(f"{int(value)}u32" for value in row) + "]"
+            for row in expected[str(external["call_args_output"])]
+        )
+        state_expression = (
+            f"{local_names[str(state['parameter'])]}."
+            + ".".join(str(field) for field in state["field_path"])
+        )
+        blocks.extend(
+            [
+                "    {\n",
+                f"        let case_id = {rust_string_literal(case_id)};\n",
+                f"        __c2r_scripted_external_set_sequence(&[{sequence}]);\n",
+                "        __c2r_scripted_external_reset_calls();\n",
+                *declarations,
+                f"        let actual_return = {function_name}({', '.join(call_arguments)});\n",
+                f"        assert_eq!(actual_return, {str(bool(expected[str(result['fixture_field'])])).lower()}, \"{{}} return drifted\", case_id);\n",
+                f"        assert_eq!({state_expression}, {int(expected[str(state['fixture_field'])])}u32, \"{{}} state drifted\", case_id);\n",
+                f"        assert_eq!(__c2r_scripted_external_call_count(), {int(expected[str(external['call_count_output'])])}usize, \"{{}} external call count drifted\", case_id);\n",
+                f"        assert_eq!(__c2r_scripted_external_call_args(), vec![{rows}], \"{{}} external call arguments drifted\", case_id);\n",
+                "    }\n",
+            ]
+        )
+    return "".join(blocks)

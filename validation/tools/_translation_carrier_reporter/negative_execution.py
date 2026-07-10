@@ -13,6 +13,11 @@ from .record_contract import (
     KIND as RECORD_KIND,
     negative_partition_probe_source as record_negative_partition_probe_source,
 )
+from .sequence_contract import KIND as SEQUENCE_KIND
+from .sequence_model import (
+    mutation_partition as sequence_mutation_partition,
+    negative_partition_probe_source as sequence_negative_partition_probe_source,
+)
 from .source_binding import StaticContext
 
 
@@ -29,11 +34,21 @@ def run_negative_execution(
     if rustc is None:
         raise ReporterError("rustc is required for generated-draft negative replay")
     original = draft_path.read_bytes()
-    matches = list(COMPARISON_PATTERN.finditer(original))
+    if context.contract.get("kind") == SEQUENCE_KIND:
+        pattern = re.compile(rb"!=")
+        operator_from = b"!="
+        operator_to = b"=="
+    else:
+        pattern = COMPARISON_PATTERN
+        operator_from = b"=="
+        operator_to = b"!="
+    matches = list(pattern.finditer(original))
     if len(matches) != 1:
-        raise ReporterError("generated Rust draft must contain exactly one == comparison mutation site")
+        raise ReporterError(
+            "generated Rust draft must contain exactly one declared comparison mutation site"
+        )
     match = matches[0]
-    mutated = original[: match.start()] + b"!=" + original[match.end() :]
+    mutated = original[: match.start()] + operator_to + original[match.end() :]
     if len(mutated) != len(original):
         raise ReporterError("comparison mutation changed generated draft length")
     changed = [index for index, pair in enumerate(zip(original, mutated, strict=True)) if pair[0] != pair[1]]
@@ -92,12 +107,19 @@ def run_negative_execution(
             )
             if result["returncode"] == 0:
                 raise ReporterError(f"comparison mutation was not detected by fixture case {case['id']}")
+            comparison_partition = (
+                sequence_mutation_partition(case, context.contract)
+                if context.contract.get("kind") == SEQUENCE_KIND
+                else (
+                    "comparison_true"
+                    if case["expected_outputs"][return_field]
+                    else "comparison_false"
+                )
+            )
             case_runs.append(
                 {
                     "case_id": case["id"],
-                    "comparison_partition": (
-                        "comparison_true" if case["expected_outputs"][return_field] else "comparison_false"
-                    ),
+                    "comparison_partition": comparison_partition,
                     "test_name": test_name,
                     **result,
                 }
@@ -116,12 +138,22 @@ def run_negative_execution(
 
     true_ids = [item["case_id"] for item in case_runs if item["comparison_partition"] == "comparison_true"]
     false_ids = [item["case_id"] for item in case_runs if item["comparison_partition"] == "comparison_false"]
-    if not true_ids or not false_ids:
+    if context.contract.get("kind") != SEQUENCE_KIND and (not true_ids or not false_ids):
         raise ReporterError("actual negative replay must detect true and false comparison partitions")
+    exhausted_ids = [
+        item["case_id"]
+        for item in case_runs
+        if item["comparison_partition"] == "sequence_exhaustion"
+    ]
+    mismatch_ids = [
+        item["case_id"]
+        for item in case_runs
+        if item["comparison_partition"] == "observable_mismatch"
+    ]
     return {
         "mutation": {
-            "operator_from": "==",
-            "operator_to": "!=",
+            "operator_from": operator_from.decode("ascii"),
+            "operator_to": operator_to.decode("ascii"),
             "mutation_count": 1,
             "byte_offset": match.start(),
             "original_draft": path_ref(context.repo_root, draft_path, original_sha),
@@ -159,12 +191,16 @@ def run_negative_execution(
             ],
             "comparison_true_case_ids": true_ids,
             "comparison_false_case_ids": false_ids,
+            "sequence_exhaustion_case_ids": exhausted_ids,
+            "observable_mismatch_case_ids": mismatch_ids,
         },
         "artifacts": artifacts,
     }
 
 
 def partition_probe_source(context: StaticContext) -> str:
+    if context.contract.get("kind") == SEQUENCE_KIND:
+        return sequence_negative_partition_probe_source(context)
     if context.contract.get("kind") == RECORD_KIND:
         return record_negative_partition_probe_source(context)
     function_name = context.spec["function_name"]

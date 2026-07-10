@@ -1,0 +1,206 @@
+SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND = (
+    "scripted_external_record_u32_sequence_do_while_state"
+)
+SCRIPTED_SEQUENCE_STUB_HELPERS = (
+    "__c2r_scripted_external_set_sequence",
+    "__c2r_scripted_external_reset_calls",
+    "__c2r_scripted_external_call_count",
+    "__c2r_scripted_external_call_args",
+)
+
+
+def scripted_external_record_u32_sequence_do_while_state_replay_supported(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any] | None = None,
+) -> bool:
+    return (
+        scripted_external_record_u32_sequence_do_while_state_replay_contract(
+            spec, fixture_binding
+        )
+        is not None
+    )
+
+
+def scripted_external_record_u32_sequence_do_while_state_replay_contract(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    contract = spec.get("replay_contract")
+    if (
+        not isinstance(contract, dict)
+        or contract.get("kind")
+        != SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND
+    ):
+        return None
+    if set(contract) != {
+        "schema_version",
+        "kind",
+        "external_callee",
+        "entry_arguments",
+        "state_output",
+        "loop",
+        "return",
+        "noalias_required",
+    }:
+        raise ValueError("scripted sequence replay contract shape drifted")
+    if contract.get("schema_version") != 1:
+        raise ValueError("scripted sequence replay contract schema_version must be 1")
+
+    entries = contract.get("entry_arguments")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("scripted sequence replay requires entry arguments")
+    entry_by_name: dict[str, dict[str, Any]] = {}
+    fixture_fields: list[str] = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict) or set(entry) != {
+            "parameter",
+            "c_type",
+            "rust_type",
+            "pass_mode",
+            "direction",
+            "initializer",
+        }:
+            raise ValueError(f"scripted sequence replay entry argument {index} shape drifted")
+        parameter = scripted_external_replay_identifier(
+            entry.get("parameter"), f"sequence entry argument {index} parameter"
+        )
+        rust_type = scripted_external_replay_identifier(
+            entry.get("rust_type"), f"sequence entry argument {index} rust_type"
+        )
+        if entry.get("pass_mode") not in {"mutable_ref", "value"}:
+            raise ValueError(f"scripted sequence replay entry argument {index} pass_mode is unsupported")
+        if entry.get("direction") not in {"input", "inout"}:
+            raise ValueError(f"scripted sequence replay entry argument {index} direction is unsupported")
+        expected_c_type = (
+            f"struct {rust_type} *" if entry["pass_mode"] == "mutable_ref" else f"struct {rust_type}"
+        )
+        if normalize_c_type(str(entry.get("c_type") or "")) != normalize_c_type(expected_c_type):
+            raise ValueError(f"scripted sequence replay entry argument {index} C type drifted")
+        if parameter in entry_by_name:
+            raise ValueError("scripted sequence replay entry parameters must be unique")
+        initializer = scripted_record_validate_initializer(
+            entry.get("initializer"), f"sequence entry argument {index} initializer"
+        )
+        if initializer["record_type"] != rust_type:
+            raise ValueError(f"scripted sequence replay entry argument {index} initializer type drifted")
+        fixture_fields.extend(
+            field for field, _ in scripted_record_initializer_fixture_paths(initializer)
+        )
+        entry_by_name[parameter] = entry
+
+    external = contract.get("external_callee")
+    if not isinstance(external, dict) or set(external) != {
+        "name",
+        "return_sequence_fixture_field",
+        "call_count_output",
+        "call_args_output",
+        "arguments",
+    }:
+        raise ValueError("scripted sequence replay external_callee shape drifted")
+    for key in (
+        "name",
+        "return_sequence_fixture_field",
+        "call_count_output",
+        "call_args_output",
+    ):
+        scripted_external_replay_identifier(external.get(key), f"sequence external_callee {key}")
+    observations = external.get("arguments")
+    if not isinstance(observations, list) or not observations:
+        raise ValueError("scripted sequence replay external arguments are missing")
+    external_names: set[str] = set()
+    for index, observation in enumerate(observations):
+        if not isinstance(observation, dict) or set(observation) != {
+            "parameter",
+            "mode",
+            "entry_parameter",
+            "field_path",
+        }:
+            raise ValueError(f"scripted sequence replay external argument {index} shape drifted")
+        name = scripted_external_replay_identifier(
+            observation.get("parameter"), f"sequence external argument {index} parameter"
+        )
+        entry_name = scripted_external_replay_identifier(
+            observation.get("entry_parameter"), f"sequence external argument {index} entry parameter"
+        )
+        if observation.get("mode") not in {"record_ref", "scalar_field_value"}:
+            raise ValueError(f"scripted sequence replay external argument {index} mode is unsupported")
+        if name in external_names or entry_name not in entry_by_name:
+            raise ValueError("scripted sequence replay external argument binding drifted")
+        external_names.add(name)
+        path = scripted_record_field_path(
+            observation.get("field_path"), f"sequence external argument {index} field_path"
+        )
+        initialized = dict(
+            scripted_record_initializer_fixture_paths(entry_by_name[entry_name]["initializer"])
+        ).values()
+        if path not in initialized:
+            raise ValueError(f"scripted sequence replay external argument {index} field_path is not initialized")
+
+    state = contract.get("state_output")
+    if not isinstance(state, dict) or set(state) != {
+        "parameter",
+        "field_path",
+        "fixture_field",
+        "rust_type",
+    }:
+        raise ValueError("scripted sequence replay state_output shape drifted")
+    state_parameter = scripted_external_replay_identifier(
+        state.get("parameter"), "sequence state output parameter"
+    )
+    scripted_external_replay_identifier(
+        state.get("fixture_field"), "sequence state output fixture field"
+    )
+    state_entry = entry_by_name.get(state_parameter)
+    state_path = scripted_record_field_path(state.get("field_path"), "sequence state output field_path")
+    if state.get("rust_type") != "u32" or state_entry is None or state_entry.get("pass_mode") != "mutable_ref":
+        raise ValueError("scripted sequence replay state output requires a mutable u32 entry field")
+    if state_path not in dict(
+        scripted_record_initializer_fixture_paths(state_entry["initializer"])
+    ).values():
+        raise ValueError("scripted sequence replay state output field_path is not initialized")
+
+    loop = contract.get("loop")
+    if not isinstance(loop, dict) or set(loop) != {"sentinel", "comparison", "max_calls"}:
+        raise ValueError("scripted sequence replay loop shape drifted")
+    if not is_uint32_value(loop.get("sentinel")):
+        raise ValueError("scripted sequence replay sentinel must be u32")
+    if loop.get("comparison") != "not_equal":
+        raise ValueError("scripted sequence replay comparison must be not_equal")
+    if type(loop.get("max_calls")) is not int or not 1 <= loop["max_calls"] <= 1024:
+        raise ValueError("scripted sequence replay max_calls must be between 1 and 1024")
+
+    result = contract.get("return")
+    if not isinstance(result, dict) or set(result) != {"fixture_field", "rust_type", "value"}:
+        raise ValueError("scripted sequence replay return shape drifted")
+    scripted_external_replay_identifier(result.get("fixture_field"), "sequence return fixture field")
+    if result.get("rust_type") != "bool" or type(result.get("value")) is not bool:
+        raise ValueError("scripted sequence replay return must declare a bool value")
+
+    scripted_sequence_validate_noalias(spec, contract, entry_by_name)
+    all_fields = [
+        *fixture_fields,
+        str(external["return_sequence_fixture_field"]),
+        str(state["fixture_field"]),
+        str(result["fixture_field"]),
+        str(external["call_count_output"]),
+        str(external["call_args_output"]),
+    ]
+    if len(all_fields) != len(set(all_fields)):
+        raise ValueError("scripted sequence replay fixture and output fields must be unique")
+    expected_fields = scripted_sequence_behavior_fields(contract)
+    if behavior_fields(spec) != expected_fields:
+        raise ValueError("scripted sequence replay observable output mapping drifted")
+    scripted_sequence_validate_c_signatures(spec, contract, entry_by_name)
+    if fixture_binding is not None:
+        scripted_sequence_validate_fixture_cases(spec, fixture_binding, contract, entry_by_name)
+    return contract
+
+
+def scripted_sequence_behavior_fields(contract: dict[str, Any]) -> list[str]:
+    external = contract["external_callee"]
+    return [
+        str(contract["return"]["fixture_field"]),
+        str(contract["state_output"]["fixture_field"]),
+        str(external["call_count_output"]),
+        str(external["call_args_output"]),
+    ]

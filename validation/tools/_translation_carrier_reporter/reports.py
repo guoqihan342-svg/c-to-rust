@@ -15,6 +15,8 @@ from .contract import (
 from .runtime_binding import load_runtime_provenance
 from .negative_execution import run_negative_execution
 from .record_contract import KIND as RECORD_KIND
+from .sequence_contract import KIND as SEQUENCE_KIND
+from .sequence_model import mutated_observable_outputs, mutation_partition
 from .source_binding import StaticContext, load_static_context
 
 
@@ -120,6 +122,8 @@ def build_negative_report(
     common: dict[str, Any],
     execution: dict[str, Any],
 ) -> dict[str, Any]:
+    if context.contract.get("kind") == SEQUENCE_KIND:
+        return build_sequence_negative_report(context, common, execution)
     return_field = behavior_fields(context.contract)[0]
     detected_true = execution["partition_replay"]["comparison_true_case_ids"]
     detected_false = execution["partition_replay"]["comparison_false_case_ids"]
@@ -164,9 +168,71 @@ def build_negative_report(
     }
 
 
+def build_sequence_negative_report(
+    context: StaticContext,
+    common: dict[str, Any],
+    execution: dict[str, Any],
+) -> dict[str, Any]:
+    actual_runs = execution["partition_replay"]["case_runs"]
+    detected_ids = [str(item["case_id"]) for item in actual_runs]
+    expected_ids = [str(case["id"]) for case in context.cases]
+    if detected_ids != expected_ids:
+        raise ReporterError("actual sequence negative replay case ids drifted")
+    mismatches: list[dict[str, Any]] = []
+    for case in context.cases:
+        partition = mutation_partition(case, context.contract)
+        if partition == "sequence_exhaustion":
+            mismatches.append(
+                {
+                    "case_id": case["id"],
+                    "field": "scripted_return_sequence",
+                    "accepted_value": "sentinel_reached",
+                    "mutated_value": "sequence_exhausted",
+                }
+            )
+            continue
+        mutated = mutated_observable_outputs(case, context.contract)
+        if mutated is None:
+            raise ReporterError("sequence mutation model unexpectedly exhausted")
+        for field in behavior_fields(context.contract):
+            if mutated[field] != case["expected_outputs"][field]:
+                mismatches.append(
+                    {
+                        "case_id": case["id"],
+                        "field": field,
+                        "accepted_value": case["expected_outputs"][field],
+                        "mutated_value": mutated[field],
+                    }
+                )
+    if not mismatches:
+        raise ReporterError("sequence comparison mutation produced no declared mismatch")
+    partition = execution["partition_replay"]
+    return {
+        **common,
+        "status": "expected_failed",
+        "expected_failure": True,
+        "mutation_detected": True,
+        "mutation": "loop comparison operator != changed to ==",
+        "detected_case_ids": detected_ids,
+        "partition_detection": {
+            "sequence_exhaustion_case_ids": partition["sequence_exhaustion_case_ids"],
+            "observable_mismatch_case_ids": partition["observable_mismatch_case_ids"],
+        },
+        "actual_mutation_execution": execution,
+        "first_mismatch": mismatches[0],
+        "mismatches": mismatches,
+    }
+
+
 def report_claim(context: StaticContext) -> dict[str, Any]:
     external_name = context.contract["external_callee"]["name"]
-    if context.contract.get("kind") == RECORD_KIND:
+    if context.contract.get("kind") == SEQUENCE_KIND:
+        verified_behavior = (
+            "Fixture-created records cross the declared entry boundary; a finite u32 sequence drives "
+            "a do-while tail, mixed record-reference and scalar-field arguments are traced per call, "
+            "and the declared mutable state stops at the explicit sentinel within the call bound."
+        )
+    elif context.contract.get("kind") == RECORD_KIND:
         verified_behavior = (
             "Fixture-created records are passed through the declared entry boundary; selected "
             "u32 fields observed by one scripted external call are recorded, its u32 return is "

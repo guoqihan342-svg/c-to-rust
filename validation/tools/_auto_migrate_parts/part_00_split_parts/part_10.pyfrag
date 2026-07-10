@@ -1,0 +1,128 @@
+def scripted_external_record_u32_sequence_do_while_state_external_binding(
+    spec: dict[str, Any],
+    name: str,
+    return_type: str,
+    parameters: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    contract = scripted_external_record_u32_sequence_do_while_state_replay_contract(spec)
+    if contract is None or name != contract["external_callee"]["name"]:
+        return None
+    if normalize_c_type(return_type) != "uint32_t":
+        raise ValueError("scripted sequence replay descriptor return type drifted")
+    observations = contract["external_callee"]["arguments"]
+    entry_by_name = {str(item["parameter"]): item for item in contract["entry_arguments"]}
+    if [str(item.get("name") or "") for item in parameters] != [
+        str(item["parameter"]) for item in observations
+    ]:
+        raise ValueError("scripted sequence replay descriptor parameter names drifted")
+    expected_types = [
+        (
+            f"struct {entry_by_name[str(item['entry_parameter'])]['rust_type']} *"
+            if item["mode"] == "record_ref"
+            else "uint32_t"
+        )
+        for item in observations
+    ]
+    if [normalize_c_type(str(item.get("c_type") or "")) for item in parameters] != [
+        normalize_c_type(item) for item in expected_types
+    ]:
+        raise ValueError("scripted sequence replay descriptor parameter types drifted")
+    return contract
+
+
+def scripted_sequence_external_rust_type(
+    observation: dict[str, Any],
+    entry_by_name: dict[str, dict[str, Any]],
+) -> str:
+    if observation["mode"] == "scalar_field_value":
+        return "u32"
+    return f"&mut {entry_by_name[str(observation['entry_parameter'])]['rust_type']}"
+
+
+def rust_check_scripted_external_record_u32_sequence_do_while_state_stub(
+    callee: dict[str, Any],
+    text: str,
+    spec: dict[str, Any] | None,
+) -> str | None:
+    if not isinstance(spec, dict):
+        return None
+    contract = scripted_external_record_u32_sequence_do_while_state_replay_contract(spec)
+    if contract is None or callee.get("name") != contract["external_callee"]["name"]:
+        return None
+    signature = rust_check_declared_callee_signature(callee)
+    name = rust_identifier(str(callee["name"]))
+    helper_presence = [helper in text for helper in SCRIPTED_SEQUENCE_STUB_HELPERS]
+    if any(helper_presence):
+        if not all(helper_presence) or not rust_function_declared(text, name):
+            raise ValueError("scripted sequence replay Rust fixture stub is incomplete")
+        scripted_sequence_mark_rust_binding(callee, signature)
+        return None
+    if rust_function_declared(text, name):
+        raise ValueError("scripted sequence replay callee is already defined without fixture controls")
+
+    scripted_sequence_mark_rust_binding(callee, signature)
+    observations = contract["external_callee"]["arguments"]
+    arg_count = len(observations)
+    captured = ", ".join(
+        (
+            rust_identifier(str(item["parameter"]))
+            if item["mode"] == "scalar_field_value"
+            else f"{rust_identifier(str(item['parameter']))}.{'.'.join(str(field) for field in item['field_path'])}"
+        )
+        for item in observations
+    )
+    return f"""// Fixture-only finite scripted sequence; real external callee semantics are not verified.
+std::thread_local! {{
+    static __C2R_SCRIPTED_SEQUENCE: std::cell::RefCell<Vec<u32>> = std::cell::RefCell::new(Vec::new());
+    static __C2R_SCRIPTED_SEQUENCE_INDEX: std::cell::Cell<usize> = std::cell::Cell::new(0);
+    static __C2R_SCRIPTED_EXTERNAL_CALL_COUNT: std::cell::Cell<usize> = std::cell::Cell::new(0);
+    static __C2R_SCRIPTED_EXTERNAL_CALL_ARGS: std::cell::RefCell<Vec<[u32; {arg_count}]>> = std::cell::RefCell::new(Vec::new());
+}}
+
+fn __c2r_scripted_external_set_sequence(values: &[u32]) {{
+    assert!(!values.is_empty(), "scripted external return sequence must be non-empty");
+    __C2R_SCRIPTED_SEQUENCE.with(|slot| *slot.borrow_mut() = values.to_vec());
+    __C2R_SCRIPTED_SEQUENCE_INDEX.with(|slot| slot.set(0));
+}}
+
+fn __c2r_scripted_external_reset_calls() {{
+    __C2R_SCRIPTED_SEQUENCE_INDEX.with(|slot| slot.set(0));
+    __C2R_SCRIPTED_EXTERNAL_CALL_COUNT.with(|slot| slot.set(0));
+    __C2R_SCRIPTED_EXTERNAL_CALL_ARGS.with(|slot| slot.borrow_mut().clear());
+}}
+
+fn __c2r_scripted_external_call_count() -> usize {{
+    __C2R_SCRIPTED_EXTERNAL_CALL_COUNT.with(std::cell::Cell::get)
+}}
+
+fn __c2r_scripted_external_call_args() -> Vec<[u32; {arg_count}]> {{
+    __C2R_SCRIPTED_EXTERNAL_CALL_ARGS.with(|slot| slot.borrow().clone())
+}}
+
+{signature} {{
+    __C2R_SCRIPTED_EXTERNAL_CALL_ARGS.with(|slot| slot.borrow_mut().push([{captured}]));
+    __C2R_SCRIPTED_EXTERNAL_CALL_COUNT.with(|slot| {{
+        slot.set(slot.get().checked_add(1).expect("scripted external fixture call count overflow"));
+    }});
+    let index = __C2R_SCRIPTED_SEQUENCE_INDEX.with(std::cell::Cell::get);
+    let value = __C2R_SCRIPTED_SEQUENCE.with(|slot| {{
+        *slot.borrow().get(index).expect("scripted external return sequence exhausted")
+    }});
+    __C2R_SCRIPTED_SEQUENCE_INDEX.with(|slot| slot.set(index + 1));
+    value
+}}"""
+
+
+def scripted_sequence_mark_rust_binding(callee: dict[str, Any], signature: str) -> None:
+    mark_rust_check_binding(
+        callee,
+        "fixture_only_scripted_external",
+        signature,
+        allowed_use="fixture_bound_rust_replay_only",
+    )
+    callee["rust_check_binding"].update(
+        {
+            "fixture_only": True,
+            "replay_contract_kind": SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND,
+        }
+    )

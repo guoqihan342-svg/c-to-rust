@@ -1,0 +1,125 @@
+def c_oracle_scripted_external_record_u32_sequence_do_while_state_execution_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> dict[str, Any]:
+    contract = scripted_external_record_u32_sequence_do_while_state_replay_contract(
+        spec, fixture_binding
+    )
+    if contract is None:
+        return {"declarations": "", "statements": ""}
+    external = contract["external_callee"]
+    observations = external["arguments"]
+    entries = {str(item["parameter"]): item for item in contract["entry_arguments"]}
+    max_calls = int(contract["loop"]["max_calls"])
+    arg_count = len(observations)
+    parameters = ",\n".join(
+        (
+            f"    struct {entries[str(item['entry_parameter'])]['rust_type']} *{item['parameter']}"
+            if item["mode"] == "record_ref"
+            else f"    uint32_t {item['parameter']}"
+        )
+        for item in observations
+    )
+    captures = "\n".join(
+        (
+            f"    c2r_scripted_external_call_args[c2r_scripted_external_call_count][{index}] = {item['parameter']};"
+            if item["mode"] == "scalar_field_value"
+            else f"    c2r_scripted_external_call_args[c2r_scripted_external_call_count][{index}] = {item['parameter']}->{'.'.join(str(field) for field in item['field_path'])};"
+        )
+        for index, item in enumerate(observations)
+    )
+    definitions = f"""/* Fixture-only finite scripted sequence; real external callee semantics are not verified. */
+static const uint32_t *c2r_scripted_external_sequence = NULL;
+static size_t c2r_scripted_external_sequence_len = 0u;
+static size_t c2r_scripted_external_sequence_index = 0u;
+static size_t c2r_scripted_external_call_count = 0u;
+static uint32_t c2r_scripted_external_call_args[{max_calls}][{arg_count}];
+
+uint32_t {external['name']}(
+{parameters})
+{{
+    if (c2r_scripted_external_sequence_index >= c2r_scripted_external_sequence_len ||
+        c2r_scripted_external_call_count >= {max_calls}u) {{
+        fputs("scripted external return sequence exhausted\\n", stderr);
+        exit(86);
+    }}
+{captures}
+    c2r_scripted_external_call_count += 1u;
+    return c2r_scripted_external_sequence[c2r_scripted_external_sequence_index++];
+}}
+
+"""
+
+    statements: list[str] = []
+    state = contract["state_output"]
+    result = contract["return"]
+    for case_binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding["expected_outputs"]
+        case_id = str(case_binding.get("id") or "case")
+        case_ident = c_safe_ident(case_id)
+        sequence = payload[str(external["return_sequence_fixture_field"])]
+        sequence_literal = ", ".join(c_integer_literal("uint32_t", int(item)) for item in sequence)
+        sequence_name = f"scripted_{case_ident}_sequence"
+        local_names: dict[str, str] = {}
+        declarations: list[str] = []
+        call_arguments: list[str] = []
+        for entry in contract["entry_arguments"]:
+            parameter = str(entry["parameter"])
+            local_name = f"actual_{case_ident}_{parameter}"
+            local_names[parameter] = local_name
+            declarations.append(
+                f"  struct {entry['rust_type']} {local_name} = {scripted_record_c_initializer(entry['initializer'], payload)};\n"
+            )
+            call_arguments.append(f"&{local_name}" if entry["pass_mode"] == "mutable_ref" else local_name)
+        state_expression = (
+            f"{local_names[str(state['parameter'])]}."
+            + ".".join(str(field) for field in state["field_path"])
+        )
+        expected_count = int(expected[str(external["call_count_output"])])
+        expected_rows = expected[str(external["call_args_output"])]
+        args_checks = "".join(
+            f"  if (c2r_scripted_external_call_args[{row}][{column}] != {c_integer_literal('uint32_t', int(value))}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' external call args mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            for row, values in enumerate(expected_rows)
+            for column, value in enumerate(values)
+        )
+        expected_return = "true" if expected[str(result["fixture_field"])] else "false"
+        statements.append(
+            f"  const uint32_t {sequence_name}[] = {{ {sequence_literal} }};\n"
+            f"  c2r_scripted_external_sequence = {sequence_name};\n"
+            f"  c2r_scripted_external_sequence_len = sizeof({sequence_name}) / sizeof({sequence_name}[0]);\n"
+            "  c2r_scripted_external_sequence_index = 0u;\n"
+            "  c2r_scripted_external_call_count = 0u;\n"
+            f"{''.join(declarations)}"
+            f"  bool actual_{case_ident}_return = {required_str(spec, 'function_name')}({', '.join(call_arguments)});\n"
+            f"  if (actual_{case_ident}_return != {expected_return}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' return mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(result['fixture_field']) + ' matched')});\n"
+            f"  if ({state_expression} != {c_integer_literal('uint32_t', int(expected[str(state['fixture_field'])]))}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' state mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(state['fixture_field']) + ' matched')});\n"
+            f"  if (c2r_scripted_external_call_count != {c_integer_literal('size_t', expected_count)}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' external call count mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(external['call_count_output']) + ' matched')});\n"
+            f"{args_checks}"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(external['call_args_output']) + ' matched')});\n"
+        )
+    return {
+        "declarations": "#include <stdlib.h>\n",
+        "definitions_after_target": definitions,
+        "statements": "".join(statements),
+        "fixture_external_stub": {
+            "kind": SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND,
+            "scope": "fixture_only",
+            "semantics_verified": False,
+        },
+    }

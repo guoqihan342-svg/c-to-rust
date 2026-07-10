@@ -27,6 +27,29 @@
         return_rust_type = "u32"
         for param, rust_type in zip(parameters, ("u32", "u32", "usize"), strict=True):
             param["rust_type"] = rust_type
+    scripted_sequence_fixture_contract = (
+        scripted_external_record_u32_sequence_do_while_state_external_binding(
+            spec,
+            name,
+            return_type,
+            parameters,
+        )
+    )
+    if scripted_sequence_fixture_contract is not None:
+        unsupported_reasons = []
+        return_rust_type = "u32"
+        entry_by_name = {
+            str(entry["parameter"]): entry
+            for entry in scripted_sequence_fixture_contract["entry_arguments"]
+        }
+        for param, observation in zip(
+            parameters,
+            scripted_sequence_fixture_contract["external_callee"]["arguments"],
+            strict=True,
+        ):
+            param["rust_type"] = scripted_sequence_external_rust_type(
+                observation, entry_by_name
+            )
     scripted_record_fixture_contract = (
         scripted_external_record_u32_call_bool_state_external_binding(
             spec,
@@ -725,6 +748,21 @@ def inject_external_callee_stubs(
     text = draft_path.read_text(encoding="utf-8")
     stubs = []
     for callee in callees:
+        scripted_sequence_stub = (
+            rust_check_scripted_external_record_u32_sequence_do_while_state_stub(
+                callee, text, spec
+            )
+        )
+        if scripted_sequence_stub is not None:
+            stubs.append(scripted_sequence_stub)
+            continue
+        scripted_sequence_binding = callee.get("rust_check_binding")
+        if (
+            isinstance(scripted_sequence_binding, dict)
+            and scripted_sequence_binding.get("replay_contract_kind")
+            == SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND
+        ):
+            continue
         scripted_record_stub = rust_check_scripted_external_record_u32_call_bool_state_stub(
             callee, text, spec
         )

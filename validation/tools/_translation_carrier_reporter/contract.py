@@ -12,6 +12,16 @@ from .record_contract import (
     replay_outputs as record_replay_outputs,
     validate_cases as validate_record_cases,
 )
+from .sequence_contract import (
+    KIND as SEQUENCE_KIND,
+    behavior_fields as sequence_behavior_fields,
+    parse_contract as parse_sequence_contract,
+)
+from .sequence_model import (
+    reference_outputs as sequence_reference_outputs,
+    replay_outputs as sequence_replay_outputs,
+    validate_cases as validate_sequence_cases,
+)
 
 
 KIND = "scripted_external_u32_call_bool_out"
@@ -20,6 +30,8 @@ U32_MAX = (1 << 32) - 1
 
 def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
     contract = require_dict(spec.get("replay_contract"), "replay_contract")
+    if contract.get("kind") == SEQUENCE_KIND:
+        return parse_sequence_contract(spec)
     if contract.get("kind") == RECORD_KIND:
         return parse_record_contract(spec)
     if contract.get("kind") != KIND:
@@ -72,6 +84,8 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def behavior_fields(contract: dict[str, Any]) -> list[str]:
+    if contract.get("kind") == SEQUENCE_KIND:
+        return sequence_behavior_fields(contract)
     if contract.get("kind") == RECORD_KIND:
         return record_behavior_fields(contract)
     external = contract["external_callee"]
@@ -84,6 +98,8 @@ def behavior_fields(contract: dict[str, Any]) -> list[str]:
 
 
 def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]:
+    if contract.get("kind") == SEQUENCE_KIND:
+        return validate_sequence_cases(cases, contract)
     if contract.get("kind") == RECORD_KIND:
         return validate_record_cases(cases, contract)
     if not isinstance(cases, list) or not cases:
@@ -121,6 +137,8 @@ def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]
 
 
 def reference_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    if contract.get("kind") == SEQUENCE_KIND:
+        return sequence_reference_outputs(case, contract)
     if contract.get("kind") == RECORD_KIND:
         return record_reference_outputs(case, contract)
     external = contract["external_callee"]
@@ -137,6 +155,8 @@ def reference_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[st
 
 
 def replay_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    if contract.get("kind") == SEQUENCE_KIND:
+        return sequence_replay_outputs(case, contract)
     if contract.get("kind") == RECORD_KIND:
         return record_replay_outputs(case, contract)
     external = contract["external_callee"]
