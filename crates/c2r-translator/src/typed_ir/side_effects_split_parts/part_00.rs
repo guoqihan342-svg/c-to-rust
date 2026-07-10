@@ -23,6 +23,18 @@ fn emit_expr_with_prelude(
                     expr,
                 });
             }
+            if let Some(emitted) = emit_direct_inc_dec_comparison_value_expr(
+                op,
+                lhs,
+                rhs,
+                ty,
+                symbols,
+                context,
+                indent_level,
+                path,
+            )? {
+                return Ok(emitted);
+            }
             if let Some(expr) = emit_comparison_value_expr(op, lhs, rhs, ty, symbols, context)
                 .map_err(|detail| format!("{path} {detail}"))?
             {
@@ -270,6 +282,85 @@ fn emit_expr_with_prelude(
             expr: emit_expr(expr, symbols, context).map_err(|detail| format!("{path} {detail}"))?,
         }),
     }
+}
+
+fn emit_direct_inc_dec_comparison_value_expr(
+    op: &IrBinOp,
+    lhs: &IrExpr,
+    rhs: &IrExpr,
+    result_ty: &IrType,
+    symbols: &mut HashSet<String>,
+    context: &EmitContext,
+    indent_level: usize,
+    path: &str,
+) -> Result<Option<EmittedExpr>, String> {
+    let Ok(op) = emit_comparison_op(op) else {
+        return Ok(None);
+    };
+    let lhs_is_direct_inc_dec = matches!(lhs, IrExpr::IncDec { .. });
+    let rhs_is_direct_inc_dec = matches!(rhs, IrExpr::IncDec { .. });
+    let (inc_dec, other, inc_dec_is_lhs) = match (
+        lhs_is_direct_inc_dec,
+        rhs_is_direct_inc_dec,
+    ) {
+        (false, false) => return Ok(None),
+        (true, true) => {
+            return Err(format!(
+                "{path} comparison cannot lower two direct increment/decrement operands"
+            ));
+        }
+        (true, false) => (lhs, rhs, true),
+        (false, true) => (rhs, lhs, false),
+    };
+    if scalar_inc_dec_assigned_var_name(inc_dec).is_none() {
+        return Ok(None);
+    }
+    if let Some(callee) = find_call_callee(other) {
+        return Err(format!(
+            "{path} comparison operand call expression {callee} is unsupported"
+        ));
+    }
+    if expr_has_inc_dec(other) {
+        return Err(format!(
+            "{path} comparison cannot lower more than one increment/decrement side effect"
+        ));
+    }
+    validate_binary_side_effect_operand_order(lhs, rhs, path)?;
+    validate_comparison_condition_types(lhs, rhs, result_ty, op)
+        .map_err(|detail| format!("{path} {detail}"))?;
+
+    let other = emit_expr(other, symbols, context).map_err(|detail| {
+        format!(
+            "{path} comparison {} {detail}",
+            if inc_dec_is_lhs { "rhs" } else { "lhs" }
+        )
+    })?;
+    let mut prelude_symbols = symbols.clone();
+    let emitted_inc_dec = emit_expr_with_prelude(
+        inc_dec,
+        &mut prelude_symbols,
+        context,
+        indent_level,
+        &format!(
+            "{path} comparison {}",
+            if inc_dec_is_lhs { "lhs" } else { "rhs" }
+        ),
+    )?;
+    let (lhs, rhs) = if inc_dec_is_lhs {
+        (emitted_inc_dec.expr, other)
+    } else {
+        (other, emitted_inc_dec.expr)
+    };
+    let one = emit_integer_literal(1, result_ty)
+        .map_err(|detail| format!("{path} comparison true literal {detail}"))?;
+    let zero = emit_integer_literal(0, result_ty)
+        .map_err(|detail| format!("{path} comparison false literal {detail}"))?;
+    *symbols = prelude_symbols;
+
+    Ok(Some(EmittedExpr {
+        prelude: emitted_inc_dec.prelude,
+        expr: format!("(if ({lhs} {op} {rhs}) {{ {one} }} else {{ {zero} }})"),
+    }))
 }
 
 fn emit_call_expr_with_prelude(

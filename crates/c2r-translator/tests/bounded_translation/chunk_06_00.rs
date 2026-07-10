@@ -165,10 +165,82 @@ fn typed_ir_rejects_value_comparison_with_call_operand() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_value_comparison_with_incdec_operand() {
+fn typed_ir_emits_value_comparison_with_incdec_operand_ordered_prelude() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
-        name: "bad_cmp_incdec_value".to_string(),
+        name: "cmp_post_inc_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "limit".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "result".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(ir_binary(
+                    IrBinOp::Lt,
+                    IrExpr::IncDec {
+                        target: Box::new(ir_var("value", i32_ty.clone())),
+                        op: IrIncDecOp::Inc,
+                        prefix: false,
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    ir_var("limit", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_binary(
+                    IrBinOp::Add,
+                    ir_binary(
+                        IrBinOp::Mul,
+                        ir_var("value", i32_ty.clone()),
+                        ir_lit(10, "10", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    ir_var("result", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit comparison incdec ordered prelude");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn cmp_post_inc_value(mut value: i32, limit: i32) -> i32"));
+    assert!(rust.contains("let post_inc_value: i32 = value;"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains(
+        "let mut result: i32 = (if (post_inc_value < limit) { 1i32 } else { 0i32 });"
+    ));
+    assert_rust_snippet_runs(
+        "typed-ir-comparison-incdec-ordered-prelude",
+        rust,
+        "    assert_eq!(cmp_post_inc_value(4, 5), 51);\n    assert_eq!(cmp_post_inc_value(5, 5), 60);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_value_comparison_incdec_with_same_scalar_sibling_read() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_cmp_incdec_sibling_read".to_string(),
         return_type: i32_ty.clone(),
         params: vec![IrParam {
             name: "value".to_string(),
@@ -185,7 +257,7 @@ fn typed_ir_rejects_value_comparison_with_incdec_operand() {
                     ty: i32_ty.clone(),
                     source_span: None,
                 },
-                ir_lit(0, "0", i32_ty.clone()),
+                ir_var("value", i32_ty.clone()),
                 i32_ty.clone(),
             )),
             source_span: None,
@@ -193,14 +265,16 @@ fn typed_ir_rejects_value_comparison_with_incdec_operand() {
         source_span: None,
     };
 
-    let error = emit_rust_from_ir(&ir).expect_err("comparison incdec operand must fail closed");
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("comparison incdec plus same-scalar read must fail closed");
 
     assert!(error
         .reason
         .contains("outside the current typed IR emitter subset"));
     assert!(error.reason.contains("return expr"));
-    assert!(error.reason.contains("comparison lhs"));
-    assert!(error.reason.contains("inc/dec expression is unsupported"));
+    assert!(error
+        .reason
+        .contains("binary rhs reads variable value modified by lhs side-effect expression"));
 }
 
 #[cfg(feature = "typed-ir")]
