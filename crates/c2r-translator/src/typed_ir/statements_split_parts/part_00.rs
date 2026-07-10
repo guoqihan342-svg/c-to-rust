@@ -474,16 +474,30 @@ fn emit_stmt(
             step,
             body,
             ..
-        } => emit_for_stmt(
-            init,
-            condition.as_ref(),
-            step.as_deref(),
-            body,
-            return_type,
-            indent_level,
-            symbols,
-            context,
-        ),
+        } => {
+            if let Some(block) = emit_for_with_direct_inc_dec_comparison_condition(
+                init,
+                condition.as_ref(),
+                step.as_deref(),
+                body,
+                return_type,
+                indent_level,
+                symbols,
+                context,
+            )? {
+                return Ok(block);
+            }
+            emit_for_stmt(
+                init,
+                condition.as_ref(),
+                step.as_deref(),
+                body,
+                return_type,
+                indent_level,
+                symbols,
+                context,
+            )
+        }
         IrStmt::Unsupported { node, reason, .. } => {
             Err(format!("unsupported statement {node}: {reason}"))
         }
@@ -598,4 +612,98 @@ fn emit_do_while_condition_break(
     Ok(format!(
         "{indent}if !({condition}) {{\n{inner_indent}break;\n{indent}}}\n"
     ))
+}
+
+fn emit_for_with_direct_inc_dec_comparison_condition(
+    init: &[IrStmt],
+    condition: Option<&IrExpr>,
+    step: Option<&IrStmt>,
+    body: &[IrStmt],
+    return_type: &IrType,
+    indent_level: usize,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let Some(IrExpr::Binary {
+        op, lhs, rhs, ty, ..
+    }) = condition
+    else {
+        return Ok(None);
+    };
+
+    let indent = "    ".repeat(indent_level);
+    let inner_indent = "    ".repeat(indent_level + 1);
+    let loop_indent = "    ".repeat(indent_level + 2);
+    let break_indent = "    ".repeat(indent_level + 3);
+    let mut loop_symbols = symbols.clone();
+    let mut init_block = String::new();
+    for (index, init) in init.iter().enumerate() {
+        validate_for_init_stmt(init)?;
+        let line = emit_stmt(
+            init,
+            return_type,
+            indent_level + 1,
+            &mut loop_symbols,
+            context,
+            LoopContext::None,
+        )
+        .map_err(|detail| format!("for init[{index}] {detail}"))?;
+        init_block.push_str(&line);
+    }
+
+    let mut condition_symbols = loop_symbols.clone();
+    let Some(emitted_condition) = emit_direct_inc_dec_comparison_condition_expr(
+        op,
+        lhs,
+        rhs,
+        ty,
+        &mut condition_symbols,
+        context,
+        indent_level + 2,
+        "for condition",
+    )?
+    else {
+        return Ok(None);
+    };
+
+    let mut block = format!("{indent}{{\n{init_block}{inner_indent}loop {{\n");
+    block.push_str(&emitted_condition.prelude);
+    block.push_str(&format!(
+        "{loop_indent}if !{} {{\n{break_indent}break;\n{loop_indent}}}\n",
+        emitted_condition.expr
+    ));
+
+    let mut body_symbols = loop_symbols.clone();
+    let body_loop_context = step
+        .map(|step| LoopContext::For { step })
+        .unwrap_or(LoopContext::While);
+    for (index, stmt) in body.iter().enumerate() {
+        let line = emit_stmt(
+            stmt,
+            return_type,
+            indent_level + 2,
+            &mut body_symbols,
+            context,
+            body_loop_context,
+        )
+        .map_err(|detail| format!("for body[{index}].{detail}"))?;
+        block.push_str(&line);
+    }
+
+    if let Some(step) = step {
+        validate_for_step_stmt(step)?;
+        let line = emit_stmt(
+            step,
+            return_type,
+            indent_level + 2,
+            &mut loop_symbols,
+            context,
+            LoopContext::None,
+        )
+        .map_err(|detail| format!("for step {detail}"))?;
+        block.push_str(&line);
+    }
+
+    block.push_str(&format!("{inner_indent}}}\n{indent}}}\n"));
+    Ok(Some(block))
 }

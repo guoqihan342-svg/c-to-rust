@@ -421,8 +421,7 @@ fn find_direct_inc_dec_comparison_memory_operand(expr: &IrExpr) -> Option<&'stat
         } => find_direct_inc_dec_comparison_memory_operand(condition)
             .or_else(|| find_direct_inc_dec_comparison_memory_operand(then_expr))
             .or_else(|| find_direct_inc_dec_comparison_memory_operand(else_expr)),
-        IrExpr::Index { base, index, .. } => find_direct_inc_dec_comparison_memory_operand(base)
-            .or_else(|| find_direct_inc_dec_comparison_memory_operand(index)),
+        IrExpr::Index { .. } => Some("index"),
         IrExpr::ArrayLiteral { elements, .. } => elements
             .iter()
             .find_map(find_direct_inc_dec_comparison_memory_operand),
