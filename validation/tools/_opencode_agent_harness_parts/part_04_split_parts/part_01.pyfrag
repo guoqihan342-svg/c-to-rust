@@ -293,6 +293,7 @@ def run_plan(
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
     opencode_allow_non_competition_model: bool = False,
+    opencode_credential_source: str = OPENCODE_CREDENTIAL_SOURCE_NONE,
     opencode_preflight_report: Path | None = None,
     execute_merge: bool = False,
     auto_retry: bool = False,
@@ -313,6 +314,8 @@ def run_plan(
         raise SystemExit("run-plan requires a planner artifact with at least one unit")
     if max_workers < 1:
         raise SystemExit("run-plan max_workers must be a positive integer")
+    if mode != "opencode" and opencode_credential_source != OPENCODE_CREDENTIAL_SOURCE_NONE:
+        raise SystemExit("opencode_credential_source requires --mode opencode")
     opencode_preflight_binding = None
     if mode == "opencode":
         opencode_preflight_binding = validate_opencode_preflight_report(
@@ -324,6 +327,7 @@ def run_plan(
             opencode_variant=opencode_variant,
             opencode_skip_permissions=opencode_skip_permissions,
             opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+            opencode_credential_source=opencode_credential_source,
             repo_root=repo_root,
         )
 
@@ -348,6 +352,7 @@ def run_plan(
             opencode_variant=opencode_variant,
             opencode_skip_permissions=opencode_skip_permissions,
             opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+            opencode_credential_source=opencode_credential_source,
             opencode_preflight_report=opencode_preflight_report,
             repair_trace=repair_trace,
             timeout_seconds=timeout_seconds,
@@ -392,6 +397,7 @@ def run_plan(
                         opencode_variant=opencode_variant,
                         opencode_skip_permissions=opencode_skip_permissions,
                         opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+                        opencode_credential_source=opencode_credential_source,
                         opencode_preflight_report=opencode_preflight_report,
                         repair_trace=repair_trace,
                         timeout_seconds=timeout_seconds,

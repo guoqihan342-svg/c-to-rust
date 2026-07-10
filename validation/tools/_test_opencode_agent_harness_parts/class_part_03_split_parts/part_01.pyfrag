@@ -184,7 +184,11 @@
                 )
                 return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
 
-            with self.assertRaisesRegex(SystemExit, "requires verified repair trace"):
+            with patch.object(
+                harness.route_governance_metrics_report,
+                "build_report",
+                return_value=empty_passing_route_governance_report(),
+            ), self.assertRaisesRegex(SystemExit, "requires verified repair trace"):
                 harness.run_batch_profile(
                     profile_path=profile_path,
                     run_id="run-flashdb-before-after-profile-strict",

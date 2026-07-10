@@ -34,6 +34,9 @@
     }
     if opencode_preflight_binding is not None:
         report["opencode_preflight_report"] = opencode_preflight_binding
+        credential_source = opencode_preflight_binding.get("opencode_credential_source")
+        if isinstance(credential_source, dict):
+            report["opencode_credential_source"] = credential_source
     if merge_execution is not None:
         report["merge_execution"] = merge_execution
     report_path = out_root / "harness" / "run-plan-report.json"

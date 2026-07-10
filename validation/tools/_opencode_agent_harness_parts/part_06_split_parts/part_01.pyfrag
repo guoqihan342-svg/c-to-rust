@@ -43,7 +43,11 @@
         opencode_allow_non_competition_model=opencode_allow_non_competition_model,
         repo_root=repo_root,
     )
-    return {
+    require_opencode_output_files_redacted(
+        report_path.parent.parent,
+        context="opencode preflight output",
+    )
+    binding = {
         "path": repo_relative(report_path, repo_root=repo_root),
         "sha256": sha256_file(report_path),
         "status": "passed",
@@ -60,6 +64,10 @@
             )
         ),
     }
+    credential_source = opencode_credential_source_from_policy(actual_launch_policy)
+    if credential_source is not None:
+        binding["opencode_credential_source"] = credential_source
+    return binding
 
 
 def validate_opencode_preflight_session_contract(

@@ -298,6 +298,7 @@ def validate_opencode_runtime_env_contract(
 def opencode_runtime_process_env(
     runtime_env: dict[str, Any],
     *,
+    opencode_credential_source: str = OPENCODE_CREDENTIAL_SOURCE_NONE,
     repo_root: Path,
 ) -> dict[str, str]:
     process_env = dict(os.environ)
@@ -306,6 +307,14 @@ def opencode_runtime_process_env(
         value = env.get(key)
         if isinstance(value, str):
             process_env[key] = str(repo_path(Path(value), repo_root=repo_root))
+    if opencode_credential_source == OPENCODE_CREDENTIAL_SOURCE_NONE:
+        process_env.pop(OPENCODE_CREDENTIAL_ENV_NAME, None)
+    elif opencode_credential_source == OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV:
+        opencode_credential_source_metadata(opencode_credential_source, require_present=True)
+    else:
+        raise SystemExit(
+            "opencode_credential_source must be one of: " + ", ".join(OPENCODE_CREDENTIAL_SOURCES)
+        )
     return process_env
 
 
@@ -354,6 +363,74 @@ def redact_opencode_completed_process(
         ),
         redaction_count,
     )
+
+
+def redact_opencode_output_files(root: Path) -> dict[str, int]:
+    secret = os.environ.get(OPENCODE_CREDENTIAL_ENV_NAME)
+    if not secret:
+        return {"redaction_count": 0, "redacted_file_count": 0}
+    secret_bytes = secret.encode("utf-8")
+    replacement = OPENCODE_REDACTION_TOKEN.encode("utf-8")
+    redaction_count = 0
+    redacted_file_count = 0
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink() or not path.is_file() or path.suffix.lower() not in OPENCODE_REDACTABLE_OUTPUT_SUFFIXES:
+            continue
+        data = path.read_bytes()
+        count = data.count(secret_bytes)
+        if count == 0:
+            continue
+        atomic_write_bytes(path, data.replace(secret_bytes, replacement))
+        redaction_count += count
+        redacted_file_count += 1
+    return {
+        "redaction_count": redaction_count,
+        "redacted_file_count": redacted_file_count,
+    }
+
+
+def require_opencode_output_files_redacted(root: Path, *, context: str) -> None:
+    secret = os.environ.get(OPENCODE_CREDENTIAL_ENV_NAME)
+    if not secret:
+        return
+    secret_bytes = secret.encode("utf-8")
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink() or not path.is_file() or path.suffix.lower() not in OPENCODE_REDACTABLE_OUTPUT_SUFFIXES:
+            continue
+        if secret_bytes in path.read_bytes():
+            raise SystemExit(f"{context} contains unredacted {OPENCODE_CREDENTIAL_ENV_NAME} content")
+
+
+def normalized_opencode_credential_source_metadata(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise SystemExit("opencode preflight credential source metadata must be an object")
+    if set(value) != {"kind", "env_name", "present"}:
+        raise SystemExit("opencode preflight credential source metadata fields must be kind, env_name, present")
+    if value.get("kind") != OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV:
+        raise SystemExit(
+            "opencode preflight credential source kind must be "
+            f"{OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV}"
+        )
+    if value.get("env_name") != OPENCODE_CREDENTIAL_ENV_NAME:
+        raise SystemExit(
+            f"opencode preflight credential source env_name must be {OPENCODE_CREDENTIAL_ENV_NAME}"
+        )
+    if not isinstance(value.get("present"), bool):
+        raise SystemExit("opencode preflight credential source present must be boolean")
+    current = opencode_credential_source_metadata(
+        OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV,
+        require_present=True,
+    )
+    if value != current:
+        raise SystemExit("opencode preflight credential source presence does not match the worker environment")
+    return current
+
+
+def opencode_credential_source_from_policy(policy: dict[str, Any]) -> dict[str, Any] | None:
+    value = policy.get("opencode_credential_source")
+    if value is None:
+        return None
+    return normalized_opencode_credential_source_metadata(value)
 
 
 def opencode_launch_policy(
@@ -411,6 +488,7 @@ def normalize_opencode_launch_policy(
         raise SystemExit("opencode preflight launch policy is missing fields: " + ", ".join(sorted(missing_fields)))
     if not isinstance(policy.get("opencode_agent"), str):
         raise SystemExit(f"opencode preflight launch policy opencode_agent must be {COMPETITION_OPENCODE_AGENT}")
+    credential_source = opencode_credential_source_from_policy(policy)
     return opencode_launch_policy(
         opencode_command=str(policy.get("opencode_command", "")),
         opencode_model=policy.get("opencode_model") if isinstance(policy.get("opencode_model"), str) else None,
@@ -418,6 +496,11 @@ def normalize_opencode_launch_policy(
         opencode_variant=str(policy.get("opencode_variant", "")),
         opencode_skip_permissions=policy.get("opencode_skip_permissions") is True,
         opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+        opencode_credential_source=(
+            str(credential_source["kind"])
+            if credential_source is not None
+            else OPENCODE_CREDENTIAL_SOURCE_NONE
+        ),
     )
 
 

@@ -58,6 +58,7 @@ OPENCODE_CREDENTIAL_SOURCES = (
     OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV,
 )
 OPENCODE_REDACTION_TOKEN = "[REDACTED]"
+OPENCODE_REDACTABLE_OUTPUT_SUFFIXES = frozenset({".json", ".jsonl", ".log"})
 ALLOWED_PROOF_CLASSES = frozenset(
     {"competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"}
 )
@@ -80,6 +81,9 @@ OPENCODE_WORKER_EVIDENCE_FIELDS = (
     "opencode_safety_transform_attempt",
     "opencode_preflight_report",
     "opencode_runtime_env",
+    "opencode_credential_source",
+    "redaction_count",
+    "artifact_redaction_count",
 )
 BLOCKED_PREFLIGHT_STALE_ARTIFACT_PATHS = (
     Path("summary") / "competition-run-summary.json",
@@ -238,6 +242,11 @@ def main() -> int:
     run_plan_parser.add_argument("--opencode-variant", default="max")
     run_plan_parser.add_argument("--opencode-skip-permissions", action="store_true")
     run_plan_parser.add_argument("--opencode-allow-non-competition-model", action="store_true")
+    run_plan_parser.add_argument(
+        "--opencode-credential-source",
+        choices=OPENCODE_CREDENTIAL_SOURCES,
+        default=OPENCODE_CREDENTIAL_SOURCE_NONE,
+    )
     run_plan_parser.add_argument("--opencode-preflight-report", type=Path)
     run_plan_parser.add_argument("--execute-merge", action="store_true")
     run_plan_parser.add_argument("--auto-retry", action="store_true")
@@ -253,6 +262,10 @@ def main() -> int:
         choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
     )
     batch_profile_parser.add_argument("--timeout-seconds", type=int)
+    batch_profile_parser.add_argument(
+        "--opencode-credential-source",
+        choices=OPENCODE_CREDENTIAL_SOURCES,
+    )
 
     evaluate_parser = subcommands.add_parser("evaluate")
     evaluate_parser.add_argument("--profile", type=Path)
@@ -286,6 +299,11 @@ def main() -> int:
     evaluate_parser.add_argument("--opencode-variant", default="max")
     evaluate_parser.add_argument("--opencode-skip-permissions", action="store_true")
     evaluate_parser.add_argument("--opencode-allow-non-competition-model", action="store_true")
+    evaluate_parser.add_argument(
+        "--opencode-credential-source",
+        choices=OPENCODE_CREDENTIAL_SOURCES,
+        default=OPENCODE_CREDENTIAL_SOURCE_NONE,
+    )
     evaluate_parser.add_argument("--opencode-preflight-report", type=Path)
     evaluate_parser.add_argument("--no-execute-merge", action="store_true")
     evaluate_parser.add_argument("--no-auto-retry", action="store_true")
@@ -323,6 +341,11 @@ def main() -> int:
     run_parser.add_argument("--opencode-variant", default="max")
     run_parser.add_argument("--opencode-skip-permissions", action="store_true")
     run_parser.add_argument("--opencode-allow-non-competition-model", action="store_true")
+    run_parser.add_argument(
+        "--opencode-credential-source",
+        choices=OPENCODE_CREDENTIAL_SOURCES,
+        default=OPENCODE_CREDENTIAL_SOURCE_NONE,
+    )
     run_parser.add_argument("--opencode-preflight-report", type=Path)
     run_parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS)
 
@@ -338,6 +361,11 @@ def main() -> int:
     retry_parser.add_argument("--opencode-variant", default="max")
     retry_parser.add_argument("--opencode-skip-permissions", action="store_true")
     retry_parser.add_argument("--opencode-allow-non-competition-model", action="store_true")
+    retry_parser.add_argument(
+        "--opencode-credential-source",
+        choices=OPENCODE_CREDENTIAL_SOURCES,
+        default=OPENCODE_CREDENTIAL_SOURCE_NONE,
+    )
     retry_parser.add_argument("--opencode-preflight-report", type=Path)
     retry_parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS)
 
@@ -428,6 +456,7 @@ def main() -> int:
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
             opencode_allow_non_competition_model=args.opencode_allow_non_competition_model,
+            opencode_credential_source=args.opencode_credential_source,
             opencode_preflight_report=args.opencode_preflight_report,
             execute_merge=args.execute_merge,
             auto_retry=args.auto_retry,
@@ -440,6 +469,7 @@ def main() -> int:
             run_id=args.run_id,
             out_root=args.out_root,
             proof_class_override=args.proof_class,
+            opencode_credential_source=args.opencode_credential_source,
             timeout_seconds=args.timeout_seconds,
         )
     elif args.command == "evaluate":
@@ -449,6 +479,7 @@ def main() -> int:
                 run_id=args.run_id,
                 out_root=args.out_root,
                 proof_class_override=args.proof_class,
+                opencode_credential_source=args.opencode_credential_source,
                 timeout_seconds=args.timeout_seconds,
             )
             result = write_evaluate_profile_report(
@@ -499,6 +530,7 @@ def main() -> int:
                 opencode_variant=args.opencode_variant,
                 opencode_skip_permissions=args.opencode_skip_permissions,
                 opencode_allow_non_competition_model=args.opencode_allow_non_competition_model,
+                opencode_credential_source=args.opencode_credential_source,
                 opencode_preflight_report=args.opencode_preflight_report,
                 execute_merge=not args.no_execute_merge,
                 auto_retry=not args.no_auto_retry,

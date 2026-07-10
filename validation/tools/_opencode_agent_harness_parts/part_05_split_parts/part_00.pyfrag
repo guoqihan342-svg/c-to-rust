@@ -307,7 +307,7 @@ def run_worker_process(
     timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     env: dict[str, str] | None = None,
     worker_command: list[str] | None = None,
-) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None]:
+) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None, int]:
     retry_delays = [1, 2, 4, 8, 16] if mode == "opencode" else []
     attempts: list[dict[str, Any]] = []
     for index in range(len(retry_delays) + 1):
@@ -318,6 +318,7 @@ def run_worker_process(
             timeout_seconds=timeout_seconds,
             env=env,
         )
+        completed, redaction_count = redact_opencode_completed_process(completed)
         database_locked = mode == "opencode" and opencode_database_locked(completed)
         worker_command_observed = database_locked and opencode_worker_command_observed(completed, worker_command)
         transient_lock = database_locked and not worker_command_observed
@@ -329,13 +330,14 @@ def run_worker_process(
                 "database_locked": database_locked,
                 "worker_command_observed": worker_command_observed,
                 "stderr_tail": tail_text(completed.stderr or "", 512),
+                "redaction_count": redaction_count,
             }
         )
         if not transient_lock or index == len(retry_delays):
             break
         time.sleep(retry_delays[index])
     if len(attempts) == 1:
-        return completed, None
+        return completed, None, int(attempts[0]["redaction_count"])
     final_lock = attempts[-1]["transient_lock"] is True
     return completed, {
         "status": "exhausted" if final_lock else "recovered",
@@ -349,7 +351,8 @@ def run_worker_process(
             "semantic acceptance still requires the worker summary and contract verifier."
         ),
         "semantic_gate": False,
-    }
+        "redaction_count": sum(int(attempt["redaction_count"]) for attempt in attempts),
+    }, int(attempts[-1]["redaction_count"])
 
 
 def timeout_output_text(value: str | bytes | None) -> str:

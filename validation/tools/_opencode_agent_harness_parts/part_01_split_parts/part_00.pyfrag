@@ -274,6 +274,16 @@ def write_blocked_batch_preflight_report(
         preflight_binding["contract_status"] = str(preflight_result["contract_verification"].get("status", ""))
     if isinstance(preflight_result.get("opencode_model_availability"), dict):
         preflight_binding["opencode_model_availability"] = preflight_result["opencode_model_availability"]
+    launch_policy = preflight_result.get("launch_policy")
+    credential_source = (
+        launch_policy.get("opencode_credential_source")
+        if isinstance(launch_policy, dict)
+        else None
+    )
+    if isinstance(credential_source, dict):
+        preflight_binding["opencode_credential_source"] = credential_source
+    if isinstance(preflight_result.get("redaction_count"), int):
+        preflight_binding["redaction_count"] = preflight_result["redaction_count"]
 
     h9_blocker = preflight_result.get("h9_blocker") if isinstance(preflight_result.get("h9_blocker"), dict) else None
     result: dict[str, Any] = {
@@ -307,6 +317,10 @@ def write_blocked_batch_preflight_report(
     }
     if h9_blocker is not None:
         result["h9_blocker"] = h9_blocker
+    if isinstance(credential_source, dict):
+        result["opencode_credential_source"] = credential_source
+    if isinstance(preflight_result.get("redaction_count"), int):
+        result["redaction_count"] = preflight_result["redaction_count"]
     report_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(report_path, result)
     return result
@@ -410,6 +424,7 @@ def run_batch_profile(
     run_id: str,
     out_root: Path,
     proof_class_override: str | None = None,
+    opencode_credential_source: str | None = None,
     timeout_seconds: int | None = None,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
@@ -434,6 +449,22 @@ def run_batch_profile(
     mode = profile_string(profile, "mode", default="deterministic")
     if mode not in {"deterministic", "opencode"}:
         raise SystemExit(f"unsupported mode in batch profile: {mode}")
+    profile_credential_source = (
+        profile_string(
+            profile,
+            "opencode_credential_source",
+            default=OPENCODE_CREDENTIAL_SOURCE_NONE,
+        )
+        or OPENCODE_CREDENTIAL_SOURCE_NONE
+    )
+    effective_credential_source = opencode_credential_source or profile_credential_source
+    if effective_credential_source not in OPENCODE_CREDENTIAL_SOURCES:
+        raise SystemExit(
+            "batch profile opencode_credential_source must be one of: "
+            + ", ".join(OPENCODE_CREDENTIAL_SOURCES)
+        )
+    if mode != "opencode" and effective_credential_source != OPENCODE_CREDENTIAL_SOURCE_NONE:
+        raise SystemExit("opencode_credential_source requires mode=opencode")
     hostless_rehearsal_enabled = profile_bool(profile, "opencode_hostless_rehearsal", default=False)
     if hostless_rehearsal_enabled:
         if mode != "opencode":
@@ -463,6 +494,7 @@ def run_batch_profile(
                 "opencode_allow_non_competition_model",
                 default=False,
             ),
+            opencode_credential_source=effective_credential_source,
             timeout_seconds=effective_timeout_seconds,
             command_runner=command_runner,
             repo_root=repo_root,

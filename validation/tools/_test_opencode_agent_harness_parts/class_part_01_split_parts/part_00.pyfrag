@@ -372,13 +372,18 @@ class _OpenCodeAgentHarnessTestPart01:
                 )
                 return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
 
-            result = harness.run_batch_profile(
-                profile_path=profile_path,
-                run_id="run-profile",
-                out_root=out_root,
-                command_runner=fake_runner,
-                repo_root=REPO_ROOT,
-            )
+            with patch.object(
+                harness.route_governance_metrics_report,
+                "build_report",
+                return_value=empty_passing_route_governance_report(),
+            ):
+                result = harness.run_batch_profile(
+                    profile_path=profile_path,
+                    run_id="run-profile",
+                    out_root=out_root,
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
 
             self.assertEqual(result["status"], "completed")
             self.assertEqual(result["exit_code"], 0)

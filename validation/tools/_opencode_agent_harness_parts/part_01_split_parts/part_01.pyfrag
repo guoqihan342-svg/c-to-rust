@@ -41,6 +41,7 @@
             "opencode_allow_non_competition_model",
             default=False,
         ),
+        opencode_credential_source=effective_credential_source,
         opencode_preflight_report=opencode_preflight_report,
         execute_merge=profile_bool(profile, "execute_merge", default=False),
         auto_retry=profile_bool(profile, "auto_retry", default=False),
@@ -101,6 +102,8 @@
         result["before_after_exhibit_report"] = before_after_exhibit_artifact["binding"]
     if isinstance(run_result.get("opencode_preflight_report"), dict):
         result["opencode_preflight_report"] = run_result["opencode_preflight_report"]
+    if isinstance(run_result.get("opencode_credential_source"), dict):
+        result["opencode_credential_source"] = run_result["opencode_credential_source"]
     report_path = out_root / "harness" / "batch-profile-report.json"
     result["report_path"] = repo_relative(report_path, repo_root=repo_root)
     report_artifacts: dict[str, dict[str, Any]] = {}

@@ -346,6 +346,26 @@ def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None
             tmp_path.unlink()
 
 
+def atomic_write_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd: int | None = None
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "wb") as handle:
+            fd = None
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if fd is not None:
+            os.close(fd)
+        if tmp_path is not None and tmp_path.exists():
+            tmp_path.unlink()
+
+
 def atomic_write_json(path: Path, payload: Any) -> None:
     atomic_write_text(path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
 

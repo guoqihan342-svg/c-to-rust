@@ -408,6 +408,12 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str, repo_root:
         missing.append("opencode_preflight_report.launch_policy.opencode_variant")
     if not isinstance(policy.get("opencode_skip_permissions"), bool):
         missing.append("opencode_preflight_report.launch_policy.opencode_skip_permissions")
+    credential_source = policy.get("opencode_credential_source")
+    if credential_source is not None:
+        try:
+            normalized_opencode_credential_source_metadata(credential_source)
+        except SystemExit:
+            missing.append("opencode_preflight_report.launch_policy.opencode_credential_source")
     runtime_env = preflight.get("opencode_runtime_env")
     if not isinstance(runtime_env, dict):
         missing.append("opencode_preflight_report.opencode_runtime_env")
@@ -490,6 +496,9 @@ def append_opencode_replay_flags(argv: list[str], worker: dict[str, Any]) -> Non
         argv.extend(["--opencode-variant", opencode_variant])
     if policy.get("opencode_skip_permissions") is True:
         argv.append("--opencode-skip-permissions")
+    credential_source = policy.get("opencode_credential_source")
+    if isinstance(credential_source, dict) and credential_source.get("kind") == OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV:
+        argv.extend(["--opencode-credential-source", OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV])
     preflight_path = preflight.get("path")
     if isinstance(preflight_path, str) and preflight_path:
         argv.extend(["--opencode-preflight-report", preflight_path])

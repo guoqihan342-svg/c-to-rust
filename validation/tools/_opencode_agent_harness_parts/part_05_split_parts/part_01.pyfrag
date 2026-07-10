@@ -20,6 +20,7 @@ def run_worker(
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
     opencode_allow_non_competition_model: bool = False,
+    opencode_credential_source: str = OPENCODE_CREDENTIAL_SOURCE_NONE,
     opencode_preflight_report: Path | None = None,
     timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     command_runner: Any = subprocess.run,
@@ -29,6 +30,8 @@ def run_worker(
     repair_trace: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     db_path = repo_path(db_path, repo_root=repo_root)
+    if mode != "opencode" and opencode_credential_source != OPENCODE_CREDENTIAL_SOURCE_NONE:
+        raise SystemExit("opencode_credential_source requires --mode opencode")
     started = time.monotonic()
     assignment_path = assignment_file_path(db_path, worker_id)
     request_path = assignment_path.with_name(f"{worker_id}-request.json")
@@ -97,6 +100,7 @@ def run_worker(
             opencode_variant=opencode_variant,
             opencode_skip_permissions=opencode_skip_permissions,
             opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+            opencode_credential_source=opencode_credential_source,
             repo_root=repo_root,
         )
     if stale_summary_cleanup_error is not None:
@@ -128,7 +132,11 @@ def run_worker(
             scope=worker_id,
             repo_root=repo_root,
         )
-        opencode_process_env = opencode_runtime_process_env(opencode_runtime_env, repo_root=repo_root)
+        opencode_process_env = opencode_runtime_process_env(
+            opencode_runtime_env,
+            opencode_credential_source=opencode_credential_source,
+            repo_root=repo_root,
+        )
         argv = build_opencode_run_argv(
             opencode_command=opencode_command,
             opencode_model=opencode_model,
@@ -164,6 +172,7 @@ def run_worker(
                 opencode_variant=opencode_variant,
                 opencode_skip_permissions=opencode_skip_permissions,
                 opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+                opencode_credential_source=opencode_credential_source,
             ),
             opencode_runtime_env=opencode_runtime_env,
             repo_root=repo_root,
@@ -172,7 +181,7 @@ def run_worker(
         raise SystemExit(f"unsupported worker mode: {mode}")
 
     if stale_summary_cleanup_error is None:
-        completed, opencode_process_retries = run_worker_process(
+        completed, opencode_process_retries, session_redaction_count = run_worker_process(
             argv=argv,
             mode=mode,
             command_runner=command_runner,
@@ -181,6 +190,13 @@ def run_worker(
             env=opencode_process_env,
             worker_command=worker_command,
         )
+    else:
+        session_redaction_count = 0
+    artifact_redaction = (
+        redact_opencode_output_files(worker_out_root)
+        if mode == "opencode" and stale_summary_cleanup_error is None
+        else {"redaction_count": 0, "redacted_file_count": 0}
+    )
     timed_out = completed_process_timed_out(completed)
     stdout_path = logs_dir / "harness-worker-executor.stdout.log"
     stderr_path = logs_dir / "harness-worker-executor.stderr.log"
@@ -194,6 +210,7 @@ def run_worker(
             stdout_path=stdout_path,
             stderr_path=stderr_path,
             opencode_runtime_env=opencode_runtime_env,
+            redaction_count=session_redaction_count,
             repo_root=repo_root,
         )
     opencode_contract_verification = None
@@ -206,7 +223,11 @@ def run_worker(
         )
     opencode_safety_transform_attempt = None
 
-    synthetic_failure_root_cause = None
+    synthetic_failure_root_cause = (
+        "opencode_credential_redacted_from_worker_artifacts"
+        if int(artifact_redaction["redaction_count"]) > 0
+        else None
+    )
     rejected_summary_evidence = None
     if stale_summary_cleanup_error is not None:
         synthetic_failure_root_cause = "stale_summary_cleanup_failed"
@@ -225,7 +246,36 @@ def run_worker(
         and opencode_contract_verification.get("status") != "executed"
         and int(completed.returncode) == 0
     )
-    if stale_summary_cleanup_error is None and opencode_contract_failed:
+    if (
+        stale_summary_cleanup_error is None
+        and synthetic_failure_root_cause == "opencode_credential_redacted_from_worker_artifacts"
+    ):
+        if summary_path.exists():
+            rejected_summary_evidence = write_rejected_worker_summary_evidence(
+                run_id=run_id,
+                worker_id=worker_id,
+                summary_path=summary_path,
+                report_dir=report_dir,
+                opencode_contract_verification=opencode_contract_verification or {},
+                repo_root=repo_root,
+            )
+        write_blocked_worker_summary(
+            run_id=run_id,
+            proof_class=run_proof_class(db_path, run_id),
+            worker_id=worker_id,
+            request=request,
+            root_cause_key=synthetic_failure_root_cause,
+            process_returncode=int(completed.returncode),
+            exit_code=1,
+            elapsed_seconds=int(time.monotonic() - started),
+            summary_path=summary_path,
+            metrics_path=summary_path.parent / "workflow-metrics.json",
+            opencode_contract_verification=opencode_contract_verification,
+            handoff_contract=handoff_contract,
+            opencode_session_evidence=opencode_session_evidence,
+            repo_root=repo_root,
+        )
+    elif stale_summary_cleanup_error is None and opencode_contract_failed:
         synthetic_failure_root_cause = "opencode_contract_not_executed"
         if summary_path.exists():
             rejected_summary_evidence = write_rejected_worker_summary_evidence(
@@ -260,6 +310,7 @@ def run_worker(
             opencode_contract_verification=opencode_contract_verification,
         )
         if provisional_root_cause in {
+            "opencode_credential_redacted_from_worker_artifacts",
             "opencode_contract_not_executed",
             "process_timeout",
             "opencode_database_locked_after_worker_command_seen",
@@ -369,6 +420,11 @@ def run_worker(
             opencode_session_evidence=opencode_session_evidence,
             opencode_contract_verification=opencode_contract_verification,
         )
+    process_redaction_count = (
+        int(opencode_process_retries.get("redaction_count", session_redaction_count))
+        if isinstance(opencode_process_retries, dict)
+        else session_redaction_count
+    )
     report = {
         "schema_version": SCHEMA_VERSION,
         "report_kind": "run-worker-report",
@@ -384,6 +440,8 @@ def run_worker(
         "recorded": recorded is not None,
         "exit_code": effective_exit_code,
         "process_returncode": int(completed.returncode),
+        "redaction_count": process_redaction_count + int(artifact_redaction["redaction_count"]),
+        "artifact_redaction_count": int(artifact_redaction["redaction_count"]),
         "argv": report_argv,
         "logs": {
             "stdout": repo_relative(stdout_path, repo_root=repo_root),
@@ -399,6 +457,9 @@ def run_worker(
         report["opencode_process_retries"] = opencode_process_retries
     if preflight_binding is not None:
         report["opencode_preflight_report"] = preflight_binding
+        credential_source = preflight_binding.get("opencode_credential_source")
+        if isinstance(credential_source, dict):
+            report["opencode_credential_source"] = credential_source
     if opencode_runtime_env is not None:
         report["opencode_runtime_env"] = opencode_runtime_env
     if opencode_session_evidence is not None:
@@ -439,6 +500,8 @@ def run_worker(
             "summary_path": repo_relative(summary_path, repo_root=repo_root),
             "summary_status": summary_status,
             "recorded": recorded is not None,
+            "redaction_count": int(report["redaction_count"]),
+            "artifact_redaction_count": int(report["artifact_redaction_count"]),
             "report_path": repo_relative(report_path, repo_root=repo_root),
         }
         worker_report_ref = record_artifact(
@@ -476,6 +539,8 @@ def run_worker(
             event_payload["opencode_process_retries"] = opencode_process_retries
         if preflight_binding is not None:
             event_payload["opencode_preflight_report"] = preflight_binding
+            if isinstance(report.get("opencode_credential_source"), dict):
+                event_payload["opencode_credential_source"] = report["opencode_credential_source"]
             record_artifact(
                 connection,
                 run_id=run_id,
