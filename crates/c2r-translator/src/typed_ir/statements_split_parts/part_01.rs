@@ -352,7 +352,9 @@ fn emit_mutable_record_pointer_member_compound_assignment_value(
     if !same_direct_mutable_record_pointer_member(lhs, target, context)? {
         return Ok(None);
     }
-    if let Some(reason) = mutable_record_pointer_field_compound_rhs_rejection_reason(rhs) {
+    if let Some(reason) =
+        record_field_compound_assignment_value_rejection_reason(rhs, symbols, context)?
+    {
         return Err(reason);
     }
     let op_token = emit_binary_op(op)?;
@@ -613,33 +615,113 @@ fn direct_mutable_record_pointer_member_parts_any_field<'a>(
     Ok(Some((name.as_str(), base_ty, field.as_str(), ty)))
 }
 
-fn mutable_record_pointer_field_compound_rhs_rejection_reason(value: &IrExpr) -> Option<String> {
+fn record_field_compound_assignment_value_rejection_reason(
+    value: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
     match value {
         IrExpr::Var { ty, .. } | IrExpr::LitInt { ty, .. } => {
             if is_integer_type(ty) {
-                None
+                Ok(None)
             } else {
-                Some(format!(
-                    "mutable record pointer field compound assignment RHS must be a simple integer variable, literal, or integral cast; got {}",
+                Ok(Some(format!(
+                    "record field compound assignment RHS must be a simple integer variable, literal, integral cast, or direct integer record field read; got {}",
                     type_label(ty)
-                ))
+                )))
             }
         }
         IrExpr::Cast { target, expr, .. } => {
             if !is_integer_type(target) {
-                return Some(format!(
-                    "mutable record pointer field compound assignment RHS cast target must be an integer; got {}",
+                return Ok(Some(format!(
+                    "record field compound assignment RHS cast target must be an integer; got {}",
                     type_label(target)
+                )));
+            }
+            record_field_compound_assignment_value_rejection_reason(expr, symbols, context)
+        }
+        IrExpr::LValueToRValue { target, expr, .. } => {
+            if !is_integer_type(target) {
+                return Ok(Some(format!(
+                    "record field compound assignment RHS lvalue-to-rvalue target must be an integer; got {}",
+                    type_label(target)
+                )));
+            }
+            let source_ty = match expr_type(expr) {
+                Some(source_ty) if is_integer_type(source_ty) => source_ty,
+                Some(source_ty) => {
+                    return Ok(Some(format!(
+                        "record field compound assignment RHS lvalue-to-rvalue source must be an integer; got {}",
+                        type_label(source_ty)
+                    )))
+                }
+                None => {
+                    return Ok(Some(
+                        "record field compound assignment RHS lvalue-to-rvalue source type is unsupported"
+                            .to_string(),
+                    ))
+                }
+            };
+            if let Err(detail) = validate_expr_matches_type(
+                expr,
+                target,
+                "record field compound assignment RHS lvalue-to-rvalue expr",
+            ) {
+                return Ok(Some(detail));
+            }
+            if !direct_record_scalar_member_is_readable(expr, source_ty, symbols, context)? {
+                return Ok(Some(
+                    "record field compound assignment RHS lvalue-to-rvalue read must be a direct by-value or readonly record pointer scalar field"
+                        .to_string(),
                 ));
             }
-            mutable_record_pointer_field_compound_rhs_rejection_reason(expr)
+            Ok(None)
         }
-        IrExpr::Unsupported { node, reason, .. } => Some(format!(
-            "mutable record pointer field compound assignment RHS uses unsupported expression {node}: {reason}"
-        )),
-        _ => Some(
-            "mutable record pointer field compound assignment RHS must be a simple integer variable, literal, or integral cast"
+        IrExpr::Unsupported { node, reason, .. } => Ok(Some(format!(
+            "record field compound assignment RHS uses unsupported expression {node}: {reason}"
+        ))),
+        _ => Ok(Some(
+            "record field compound assignment RHS must be a simple integer variable, literal, integral cast, or direct integer record field read"
                 .to_string(),
-        ),
+        )),
     }
+}
+
+fn direct_record_scalar_member_is_readable(
+    expr: &IrExpr,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<bool, String> {
+    let IrExpr::Member {
+        base,
+        field,
+        ty: member_ty,
+        is_arrow,
+        ..
+    } = expr
+    else {
+        return Ok(false);
+    };
+    if !is_integer_type(ty) || !is_integer_type(member_ty) {
+        return Ok(false);
+    }
+    let IrExpr::Var {
+        name: base_name,
+        ty: base_ty,
+        ..
+    } = base.as_ref()
+    else {
+        return Ok(false);
+    };
+    let supported_base = if *is_arrow {
+        readonly_record_pointer_read_pointee_type(base_name, base_ty, context).is_some()
+    } else {
+        matches!(&base_ty.kind, IrTypeKind::Record { .. })
+    };
+    if !supported_base {
+        return Ok(false);
+    }
+    emit_member_expr(base, field, member_ty, *is_arrow, symbols, context)?;
+    Ok(true)
 }

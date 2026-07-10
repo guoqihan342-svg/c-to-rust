@@ -24,6 +24,40 @@ fn record_field_compound_assignment_value_rejection_reason(
             }
             record_field_compound_assignment_value_rejection_reason(expr)
         }
+        ClangExprSkeleton::LValueToRValue { target, expr } => {
+            if !matches!(&target.kind, ClangTypeKind::Integer { .. }) {
+                return Some(format!(
+                    "record field compound assignment RHS lvalue-to-rvalue target must be an integer; got {}",
+                    target.spelled
+                ));
+            }
+            let ClangExprSkeleton::Member { ty, .. } = expr.as_ref() else {
+                return Some(
+                    "record field compound assignment RHS lvalue-to-rvalue read must be a direct record scalar field"
+                        .to_string(),
+                );
+            };
+            if !matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
+                return Some(format!(
+                    "record field compound assignment RHS lvalue-to-rvalue source must be an integer; got {}",
+                    ty.spelled
+                ));
+            }
+            if !compound_assignment_types_match(target, ty) {
+                return Some(format!(
+                    "record field compound assignment RHS lvalue-to-rvalue target/source types must match: target={}, source={}",
+                    target.canonical, ty.canonical
+                ));
+            }
+            if record_field_compound_assignment_value_is_direct_record_scalar_member(expr) {
+                None
+            } else {
+                Some(
+                    "record field compound assignment RHS lvalue-to-rvalue read must be a direct by-value or readonly record pointer scalar field"
+                        .to_string(),
+                )
+            }
+        }
         ClangExprSkeleton::Unsupported { node, reason } => Some(format!(
             "record field compound assignment RHS uses unsupported expression {node}: {reason}"
         )),
@@ -31,6 +65,40 @@ fn record_field_compound_assignment_value_rejection_reason(
             "record field compound assignment RHS must be a simple integer variable, literal, or integral cast"
                 .to_string(),
         ),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn record_field_compound_assignment_value_is_direct_record_scalar_member(
+    value: &ClangExprSkeleton,
+) -> bool {
+    let ClangExprSkeleton::Member {
+        base, ty, is_arrow, ..
+    } = value
+    else {
+        return false;
+    };
+    if !matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
+        return false;
+    }
+    match (is_arrow, base.as_ref()) {
+        (
+            false,
+            ClangExprSkeleton::DeclRef {
+                ty:
+                    ClangTypeSkeleton {
+                        kind: ClangTypeKind::Record { .. },
+                        ..
+                    },
+                ..
+            },
+        ) => true,
+        (true, ClangExprSkeleton::DeclRef { ty: base_ty, .. }) => matches!(
+            &base_ty.kind,
+            ClangTypeKind::Pointer { pointee, .. }
+                if matches!(&pointee.kind, ClangTypeKind::Record { .. })
+        ),
+        _ => false,
     }
 }
 
