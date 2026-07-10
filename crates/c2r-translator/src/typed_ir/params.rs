@@ -325,6 +325,9 @@ fn emit_record_field_type(ty: &IrType) -> Result<String, String> {
     if let Some(pointer_ty) = emit_record_pointer_field_type(ty) {
         return Ok(pointer_ty);
     }
+    if matches!(ty.kind, IrTypeKind::Array { .. }) {
+        return emit_fixed_array_type(ty);
+    }
     if let IrTypeKind::Record {
         fields: Some(_), ..
     } = &ty.kind

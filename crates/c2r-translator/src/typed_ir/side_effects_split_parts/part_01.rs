@@ -82,40 +82,7 @@ fn emit_index_expr(
     symbols: &HashSet<String>,
     context: &EmitContext,
 ) -> Result<String, String> {
-    let IrExpr::Var {
-        name: base_name,
-        ty: base_ty,
-        ..
-    } = base
-    else {
-        return Err("index base must be Var".to_string());
-    };
-    let (element_ty, emitted_base) = if let Some(global) = context.readonly_global(base_name) {
-        validate_global_expr_type(global, base_ty)?;
-        (
-            readonly_global_array_element_type(global)?,
-            context.global_rust_name(base_name)?,
-        )
-    } else {
-        if !symbols.contains(base_name) {
-            return Err(format!("index base {base_name} is not declared"));
-        }
-        let element_ty = fixed_integer_array_element_type(base_ty)
-            .or_else(|| readonly_pointer_slice_element_type(base_ty))
-            .or_else(|| {
-                context
-                    .is_readonly_mutable_pointer_index_param(base_name)
-                    .then(|| mutable_pointer_slice_element_type(base_ty))
-                    .flatten()
-            })
-            .ok_or_else(|| {
-                format!(
-                    "index base {base_name} has unsupported type {}",
-                    type_label(base_ty)
-                )
-            })?;
-        (element_ty, emit_identifier(base_name, "index base")?)
-    };
+    let (element_ty, emitted_base) = emit_index_base(base, symbols, context)?;
     let element_ty =
         emit_scalar_type(element_ty).map_err(|detail| format!("index element has {detail}"))?;
     let result_ty = emit_scalar_type(ty).map_err(|detail| format!("index result has {detail}"))?;
@@ -144,40 +111,7 @@ fn emit_index_expr_with_emitted_index(
     symbols: &HashSet<String>,
     context: &EmitContext,
 ) -> Result<String, String> {
-    let IrExpr::Var {
-        name: base_name,
-        ty: base_ty,
-        ..
-    } = base
-    else {
-        return Err("index base must be Var".to_string());
-    };
-    let (element_ty, emitted_base) = if let Some(global) = context.readonly_global(base_name) {
-        validate_global_expr_type(global, base_ty)?;
-        (
-            readonly_global_array_element_type(global)?,
-            context.global_rust_name(base_name)?,
-        )
-    } else {
-        if !symbols.contains(base_name) {
-            return Err(format!("index base {base_name} is not declared"));
-        }
-        let element_ty = fixed_integer_array_element_type(base_ty)
-            .or_else(|| readonly_pointer_slice_element_type(base_ty))
-            .or_else(|| {
-                context
-                    .is_readonly_mutable_pointer_index_param(base_name)
-                    .then(|| mutable_pointer_slice_element_type(base_ty))
-                    .flatten()
-            })
-            .ok_or_else(|| {
-                format!(
-                    "index base {base_name} has unsupported type {}",
-                    type_label(base_ty)
-                )
-            })?;
-        (element_ty, emit_identifier(base_name, "index base")?)
-    };
+    let (element_ty, emitted_base) = emit_index_base(base, symbols, context)?;
     let element_ty =
         emit_scalar_type(element_ty).map_err(|detail| format!("index element has {detail}"))?;
     let result_ty = emit_scalar_type(ty).map_err(|detail| format!("index result has {detail}"))?;
@@ -187,6 +121,93 @@ fn emit_index_expr_with_emitted_index(
         ));
     }
     Ok(format!("{emitted_base}[{emitted_index} as usize]"))
+}
+
+fn emit_index_base<'a>(
+    base: &'a IrExpr,
+    symbols: &HashSet<String>,
+    context: &'a EmitContext,
+) -> Result<(&'a IrType, String), String> {
+    match base {
+        IrExpr::Var {
+            name: base_name,
+            ty: base_ty,
+            ..
+        } => {
+            if let Some(global) = context.readonly_global(base_name) {
+                validate_global_expr_type(global, base_ty)?;
+                return Ok((
+                    readonly_global_array_element_type(global)?,
+                    context.global_rust_name(base_name)?,
+                ));
+            }
+            if !symbols.contains(base_name) {
+                return Err(format!("index base {base_name} is not declared"));
+            }
+            let element_ty = fixed_integer_array_element_type(base_ty)
+                .or_else(|| readonly_pointer_slice_element_type(base_ty))
+                .or_else(|| {
+                    context
+                        .is_readonly_mutable_pointer_index_param(base_name)
+                        .then(|| mutable_pointer_slice_element_type(base_ty))
+                        .flatten()
+                })
+                .ok_or_else(|| {
+                    format!(
+                        "index base {base_name} has unsupported type {}",
+                        type_label(base_ty)
+                    )
+                })?;
+            Ok((element_ty, emit_identifier(base_name, "index base")?))
+        }
+        IrExpr::Member {
+            base: record_base,
+            field,
+            ty: array_ty,
+            is_arrow: true,
+            ..
+        } => {
+            let IrExpr::Var {
+                name: base_name,
+                ty: base_ty,
+                ..
+            } = record_base.as_ref()
+            else {
+                return Err(
+                    "record pointer array index base must be a direct pointer param field"
+                        .to_string(),
+                );
+            };
+            if !symbols.contains(base_name) {
+                return Err(format!(
+                    "record pointer index base {base_name} is not declared"
+                ));
+            }
+            readonly_record_pointer_read_pointee_type(base_name, base_ty, context).ok_or_else(
+                || {
+                    format!(
+                        "record pointer index base {base_name} has unsupported type {}",
+                        type_label(base_ty)
+                    )
+                },
+            )?;
+            if context.is_nullable_pointer_param(base_name) {
+                return Err(format!(
+                    "nullable record pointer param {base_name} cannot index an array field in the bounded emitter"
+                ));
+            }
+            let element_ty = fixed_integer_array_element_type(array_ty).ok_or_else(|| {
+                format!(
+                    "record pointer array field {field} has unsupported type {}",
+                    type_label(array_ty)
+                )
+            })?;
+            let base_name = emit_identifier(base_name, "record pointer array index base")?;
+            let field = emit_identifier(field, "record pointer array index field")?;
+            Ok((element_ty, format!("{base_name}.{field}")))
+        }
+        _ => Err("index base must be Var or a direct record pointer array field".to_string()),
+    }
 }
 
 fn is_byte_cursor_cast_assignment(

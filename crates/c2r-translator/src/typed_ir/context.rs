@@ -114,12 +114,23 @@ impl EmitContext {
             )?;
         let mutable_record_pointer_write_params =
             collect_mutable_record_pointer_write_params(&function.body, &function.params, &policy)?;
-        let readonly_record_pointer_read_params = collect_readonly_record_pointer_read_params(
+        let readonly_record_pointer_array_index_params =
+            collect_readonly_record_pointer_array_index_params(
+                &function.body,
+                &function.params,
+                &assigned_vars,
+                &nullable_pointer_params,
+                &mutable_pointer_write_params,
+                &mutable_record_pointer_write_params,
+                &policy,
+            )?;
+        let mut readonly_record_pointer_read_params = collect_readonly_record_pointer_read_params(
             &function.body,
             &function.params,
             &mutable_record_pointer_write_params,
             &policy,
         )?;
+        readonly_record_pointer_read_params.extend(readonly_record_pointer_array_index_params);
         let record_pointer_field_value_params =
             collect_record_pointer_field_value_params(
                 &function.body,
