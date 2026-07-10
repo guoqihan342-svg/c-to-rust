@@ -423,6 +423,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     emit_real_fdb_calc_crc32(&fixtures_dir, repo_root)?;
     emit_real_fdb_blob_make(&fixtures_dir, repo_root)?;
     emit_real_fdb_kv_to_blob(&fixtures_dir, repo_root)?;
+    emit_real_fdb_tsl_to_blob(&fixtures_dir, repo_root)?;
     emit_real_fdb_kv_del(&fixtures_dir, repo_root)?;
     emit_real_fdb_kv_set(&fixtures_dir, repo_root)?;
     let safety = emit_safety_evidence(&crate_dir, &evidence_dir)?;
