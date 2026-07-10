@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-tsl-to-blob",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "fixture_only",
+  "toolchain_status": "RUST_REPLAY_FIXTURE_ONLY",
+  "source_boundary": {
+    "files": [
+      "src/fdb_tsdb.c",
+      "inc/fdb_def.h",
+      "inc/flashdb.h"
+    ],
+    "functions": [
+      "fdb_tsl_to_blob"
+    ],
+    "signature": "fdb_blob_t fdb_tsl_to_blob(fdb_tsl_t tsl, fdb_blob_t blob)"
+  },
+  "compared_fields": [
+    "return_same_blob",
+    "blob.saved.addr",
+    "blob.saved.meta_addr",
+    "blob.saved.len"
+  ],
+  "case_count": 3,
+  "cases": [
+    {
+      "id": "all-zero",
+      "coverage_kind": "all-zero",
+      "tsl": {
+        "addr.log": 0,
+        "addr.index": 0,
+        "log_len": 0
+      },
+      "initial_blob_saved": {
+        "addr": 88,
+        "meta_addr": 99,
+        "len": 77
+      },
+      "expected_outputs": {
+        "return_same_blob": true,
+        "blob.saved.addr": 0,
+        "blob.saved.meta_addr": 0,
+        "blob.saved.len": 0
+      },
+      "status": "ok"
+    },
+    {
+      "id": "nominal-tsl",
+      "coverage_kind": "nominal-tsl",
+      "tsl": {
+        "addr.log": 4352,
+        "addr.index": 4096,
+        "log_len": 128
+      },
+      "initial_blob_saved": {
+        "addr": 2,
+        "meta_addr": 1,
+        "len": 3
+      },
+      "expected_outputs": {
+        "return_same_blob": true,
+        "blob.saved.addr": 4352,
+        "blob.saved.meta_addr": 4096,
+        "blob.saved.len": 128
+      },
+      "status": "ok"
+    },
+    {
+      "id": "u32-max",
+      "coverage_kind": "u32-max",
+      "tsl": {
+        "addr.log": 4294967295,
+        "addr.index": 4294967295,
+        "log_len": 4294967295
+      },
+      "initial_blob_saved": {
+        "addr": 20,
+        "meta_addr": 10,
+        "len": 30
+      },
+      "expected_outputs": {
+        "return_same_blob": true,
+        "blob.saved.addr": 4294967295,
+        "blob.saved.meta_addr": 4294967295,
+        "blob.saved.len": 4294967295
+      },
+      "status": "ok"
+    }
+  ]
+}

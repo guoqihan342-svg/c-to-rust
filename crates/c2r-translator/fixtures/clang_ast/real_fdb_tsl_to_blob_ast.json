@@ -1,0 +1,538 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "TypedefDecl",
+      "name": "fdb_tsl_t",
+      "type": {
+        "qualType": "struct fdb_tsl *"
+      }
+    },
+    {
+      "kind": "TypedefDecl",
+      "name": "fdb_blob_t",
+      "type": {
+        "qualType": "struct fdb_blob *"
+      }
+    },
+    {
+      "kind": "RecordDecl",
+      "tagUsed": "struct",
+      "name": "fdb_tsl",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "kind": "FieldDecl",
+          "name": "log_len",
+          "type": {
+            "qualType": "uint32_t",
+            "desugaredQualType": "unsigned int"
+          }
+        },
+        {
+          "kind": "RecordDecl",
+          "tagUsed": "struct",
+          "completeDefinition": true,
+          "inner": [
+            {
+              "kind": "FieldDecl",
+              "name": "index",
+              "type": {
+                "qualType": "uint32_t",
+                "desugaredQualType": "unsigned int"
+              }
+            },
+            {
+              "kind": "FieldDecl",
+              "name": "log",
+              "type": {
+                "qualType": "uint32_t",
+                "desugaredQualType": "unsigned int"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "addr",
+          "type": {
+            "qualType": "struct (unnamed struct at inc/fdb_def.h:177:5)",
+            "desugaredQualType": "struct fdb_tsl::(unnamed at inc/fdb_def.h:177:5)",
+            "canonicalQualType": "struct fdb_tsl_addr"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "RecordDecl",
+      "tagUsed": "struct",
+      "name": "fdb_blob",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "kind": "FieldDecl",
+          "name": "buf",
+          "type": {
+            "qualType": "void *"
+          }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "size",
+          "type": {
+            "qualType": "size_t",
+            "desugaredQualType": "unsigned long"
+          }
+        },
+        {
+          "kind": "RecordDecl",
+          "tagUsed": "struct",
+          "completeDefinition": true,
+          "inner": [
+            {
+              "kind": "FieldDecl",
+              "name": "meta_addr",
+              "type": {
+                "qualType": "uint32_t",
+                "desugaredQualType": "unsigned int"
+              }
+            },
+            {
+              "kind": "FieldDecl",
+              "name": "addr",
+              "type": {
+                "qualType": "uint32_t",
+                "desugaredQualType": "unsigned int"
+              }
+            },
+            {
+              "kind": "FieldDecl",
+              "name": "len",
+              "type": {
+                "qualType": "size_t",
+                "desugaredQualType": "unsigned long"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "saved",
+          "type": {
+            "qualType": "struct (unnamed struct at inc/fdb_def.h:319:5)",
+            "desugaredQualType": "struct fdb_blob::(unnamed at inc/fdb_def.h:319:5)",
+            "canonicalQualType": "struct fdb_blob_saved"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "fdb_tsl_to_blob",
+      "type": {
+        "qualType": "fdb_blob_t (fdb_tsl_t, fdb_blob_t)",
+        "desugaredQualType": "struct fdb_blob *(struct fdb_tsl *, struct fdb_blob *)",
+        "canonicalQualType": "struct fdb_blob *(struct fdb_tsl *, struct fdb_blob *)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "tsl",
+          "type": {
+            "qualType": "fdb_tsl_t",
+            "desugaredQualType": "struct fdb_tsl *"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "blob",
+          "type": {
+            "qualType": "fdb_blob_t",
+            "desugaredQualType": "struct fdb_blob *"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "uint32_t",
+                "desugaredQualType": "unsigned int"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "addr",
+                  "isArrow": false,
+                  "type": {
+                    "qualType": "uint32_t",
+                    "desugaredQualType": "unsigned int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "MemberExpr",
+                      "name": "saved",
+                      "isArrow": true,
+                      "type": {
+                        "qualType": "struct (unnamed struct at inc/fdb_def.h:319:5)",
+                        "desugaredQualType": "struct fdb_blob::(unnamed at inc/fdb_def.h:319:5)",
+                        "canonicalQualType": "struct fdb_blob_saved"
+                      },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "LValueToRValue",
+                          "type": {
+                            "qualType": "fdb_blob_t",
+                            "desugaredQualType": "struct fdb_blob *"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "qualType": "fdb_blob_t",
+                                "desugaredQualType": "struct fdb_blob *"
+                              },
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "blob",
+                                "type": {
+                                  "qualType": "fdb_blob_t",
+                                  "desugaredQualType": "struct fdb_blob *"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "uint32_t",
+                    "desugaredQualType": "unsigned int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "MemberExpr",
+                      "name": "log",
+                      "isArrow": false,
+                      "type": {
+                        "qualType": "uint32_t",
+                        "desugaredQualType": "unsigned int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "MemberExpr",
+                          "name": "addr",
+                          "isArrow": true,
+                          "type": {
+                            "qualType": "struct (unnamed struct at inc/fdb_def.h:177:5)",
+                            "desugaredQualType": "struct fdb_tsl::(unnamed at inc/fdb_def.h:177:5)",
+                            "canonicalQualType": "struct fdb_tsl_addr"
+                          },
+                          "inner": [
+                            {
+                              "kind": "ImplicitCastExpr",
+                              "castKind": "LValueToRValue",
+                              "type": {
+                                "qualType": "fdb_tsl_t",
+                                "desugaredQualType": "struct fdb_tsl *"
+                              },
+                              "inner": [
+                                {
+                                  "kind": "DeclRefExpr",
+                                  "type": {
+                                    "qualType": "fdb_tsl_t",
+                                    "desugaredQualType": "struct fdb_tsl *"
+                                  },
+                                  "referencedDecl": {
+                                    "kind": "ParmVarDecl",
+                                    "name": "tsl",
+                                    "type": {
+                                      "qualType": "fdb_tsl_t",
+                                      "desugaredQualType": "struct fdb_tsl *"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "uint32_t",
+                "desugaredQualType": "unsigned int"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "meta_addr",
+                  "isArrow": false,
+                  "type": {
+                    "qualType": "uint32_t",
+                    "desugaredQualType": "unsigned int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "MemberExpr",
+                      "name": "saved",
+                      "isArrow": true,
+                      "type": {
+                        "qualType": "struct (unnamed struct at inc/fdb_def.h:319:5)",
+                        "desugaredQualType": "struct fdb_blob::(unnamed at inc/fdb_def.h:319:5)",
+                        "canonicalQualType": "struct fdb_blob_saved"
+                      },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "LValueToRValue",
+                          "type": {
+                            "qualType": "fdb_blob_t",
+                            "desugaredQualType": "struct fdb_blob *"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "qualType": "fdb_blob_t",
+                                "desugaredQualType": "struct fdb_blob *"
+                              },
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "blob",
+                                "type": {
+                                  "qualType": "fdb_blob_t",
+                                  "desugaredQualType": "struct fdb_blob *"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "uint32_t",
+                    "desugaredQualType": "unsigned int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "MemberExpr",
+                      "name": "index",
+                      "isArrow": false,
+                      "type": {
+                        "qualType": "uint32_t",
+                        "desugaredQualType": "unsigned int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "MemberExpr",
+                          "name": "addr",
+                          "isArrow": true,
+                          "type": {
+                            "qualType": "struct (unnamed struct at inc/fdb_def.h:177:5)",
+                            "desugaredQualType": "struct fdb_tsl::(unnamed at inc/fdb_def.h:177:5)",
+                            "canonicalQualType": "struct fdb_tsl_addr"
+                          },
+                          "inner": [
+                            {
+                              "kind": "ImplicitCastExpr",
+                              "castKind": "LValueToRValue",
+                              "type": {
+                                "qualType": "fdb_tsl_t",
+                                "desugaredQualType": "struct fdb_tsl *"
+                              },
+                              "inner": [
+                                {
+                                  "kind": "DeclRefExpr",
+                                  "type": {
+                                    "qualType": "fdb_tsl_t",
+                                    "desugaredQualType": "struct fdb_tsl *"
+                                  },
+                                  "referencedDecl": {
+                                    "kind": "ParmVarDecl",
+                                    "name": "tsl",
+                                    "type": {
+                                      "qualType": "fdb_tsl_t",
+                                      "desugaredQualType": "struct fdb_tsl *"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "size_t",
+                "desugaredQualType": "unsigned long"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "len",
+                  "isArrow": false,
+                  "type": {
+                    "qualType": "size_t",
+                    "desugaredQualType": "unsigned long"
+                  },
+                  "inner": [
+                    {
+                      "kind": "MemberExpr",
+                      "name": "saved",
+                      "isArrow": true,
+                      "type": {
+                        "qualType": "struct (unnamed struct at inc/fdb_def.h:319:5)",
+                        "desugaredQualType": "struct fdb_blob::(unnamed at inc/fdb_def.h:319:5)",
+                        "canonicalQualType": "struct fdb_blob_saved"
+                      },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "LValueToRValue",
+                          "type": {
+                            "qualType": "fdb_blob_t",
+                            "desugaredQualType": "struct fdb_blob *"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "qualType": "fdb_blob_t",
+                                "desugaredQualType": "struct fdb_blob *"
+                              },
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "blob",
+                                "type": {
+                                  "qualType": "fdb_blob_t",
+                                  "desugaredQualType": "struct fdb_blob *"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "IntegralCast",
+                  "type": {
+                    "qualType": "size_t",
+                    "desugaredQualType": "unsigned long"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "uint32_t",
+                        "desugaredQualType": "unsigned int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "MemberExpr",
+                          "name": "log_len",
+                          "isArrow": true,
+                          "type": {
+                            "qualType": "uint32_t",
+                            "desugaredQualType": "unsigned int"
+                          },
+                          "inner": [
+                            {
+                              "kind": "ImplicitCastExpr",
+                              "castKind": "LValueToRValue",
+                              "type": {
+                                "qualType": "fdb_tsl_t",
+                                "desugaredQualType": "struct fdb_tsl *"
+                              },
+                              "inner": [
+                                {
+                                  "kind": "DeclRefExpr",
+                                  "type": {
+                                    "qualType": "fdb_tsl_t",
+                                    "desugaredQualType": "struct fdb_tsl *"
+                                  },
+                                  "referencedDecl": {
+                                    "kind": "ParmVarDecl",
+                                    "name": "tsl",
+                                    "type": {
+                                      "qualType": "fdb_tsl_t",
+                                      "desugaredQualType": "struct fdb_tsl *"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "fdb_blob_t",
+                    "desugaredQualType": "struct fdb_blob *"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "fdb_blob_t",
+                        "desugaredQualType": "struct fdb_blob *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "blob",
+                        "type": {
+                          "qualType": "fdb_blob_t",
+                          "desugaredQualType": "struct fdb_blob *"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

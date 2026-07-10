@@ -1,0 +1,578 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-tsl-to-blob",
+  "level": "L3",
+  "status": "draft",
+  "function_name": "fdb_tsl_to_blob",
+  "c_source": "fdb_blob_t fdb_tsl_to_blob(fdb_tsl_t tsl, fdb_blob_t blob)\n{\n    blob->saved.addr = tsl->addr.log;\n    blob->saved.meta_addr = tsl->addr.index;\n    blob->saved.len = tsl->log_len;\n\n    return blob;\n}",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "fixture_hash": "real-fdb-tsl-to-blob-fixture",
+  "source_root": "sources/FlashDB",
+  "source_file": "src/fdb_tsdb.c",
+  "source_file_hashes": {
+    "src/fdb_tsdb.c": "1d56d3820d627fdc468368d1c4a848231834b6dcb513a0c01ea94ac13c9d259b",
+    "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+    "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320"
+  },
+  "function_source_span": {
+    "file": "src/fdb_tsdb.c",
+    "line_start": 857,
+    "line_end": 864,
+    "byte_start": 30924,
+    "byte_end": 31123,
+    "sha256": "8ef7ff7e6efef00fa804a08a43e993e87ef4562edabfed4823047be1e3a588d3"
+  },
+  "l1_evidence": {
+    "path": "validation/evidence/flashdb/l1-native-build.json",
+    "status": "required",
+    "accepted": false
+  },
+  "source": {
+    "source_root": "sources/FlashDB",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "repo_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_file_hashes": {
+      "src/fdb_tsdb.c": "1d56d3820d627fdc468368d1c4a848231834b6dcb513a0c01ea94ac13c9d259b",
+      "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+      "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320"
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_branch": "competition"
+  },
+  "c_boundary": {
+    "oracle_source_mode": "embedded_slice_c_source",
+    "files": [
+      {
+        "path": "src/fdb_tsdb.c",
+        "role": "source",
+        "sha256": "1d56d3820d627fdc468368d1c4a848231834b6dcb513a0c01ea94ac13c9d259b"
+      }
+    ],
+    "functions": [
+      "fdb_tsl_to_blob"
+    ],
+    "signatures": [
+      {
+        "id": "sig-fdb-tsl-to-blob",
+        "function": "fdb_tsl_to_blob",
+        "return_type": "fdb_blob_t",
+        "parameters": [
+          {
+            "name": "tsl",
+            "c_type": "fdb_tsl_t",
+            "direction": "input"
+          },
+          {
+            "name": "blob",
+            "c_type": "fdb_blob_t",
+            "direction": "inout"
+          }
+        ],
+        "c_source": "fdb_blob_t fdb_tsl_to_blob(fdb_tsl_t tsl, fdb_blob_t blob)\n{\n    blob->saved.addr = tsl->addr.log;\n    blob->saved.meta_addr = tsl->addr.index;\n    blob->saved.len = tsl->log_len;\n\n    return blob;\n}",
+        "source_span": {
+          "file": "src/fdb_tsdb.c",
+          "line_start": 857,
+          "line_end": 864,
+          "byte_start": 30924,
+          "byte_end": 31123,
+          "sha256": "8ef7ff7e6efef00fa804a08a43e993e87ef4562edabfed4823047be1e3a588d3"
+        },
+        "definition_status": "real_source_bound"
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "fdb_tsl_t",
+        "source": "inc/fdb_def.h#typedef struct fdb_tsl *fdb_tsl_t",
+        "definition_status": "real_source_bound",
+        "source_span": {
+          "file": "inc/fdb_def.h",
+          "line_start": 173,
+          "line_end": 182,
+          "sha256": "3ea6f8228b86f860601c25ef46dfc9fad593400c889c1fb7bd6f69cbfe1033b3"
+        }
+      },
+      {
+        "kind": "type",
+        "name": "fdb_blob_t",
+        "source": "inc/fdb_def.h#typedef struct fdb_blob *fdb_blob_t",
+        "definition_status": "real_source_bound",
+        "source_span": {
+          "file": "inc/fdb_def.h",
+          "line_start": 316,
+          "line_end": 325,
+          "sha256": "4bb85f67932dbdcd01609594dc44517f680ff89b4e51e6c9f9d0270d548ce95a"
+        }
+      },
+      {
+        "kind": "config",
+        "name": "fdb_tsl_to_blob prototype",
+        "source": "inc/flashdb.h#fdb_tsl_to_blob",
+        "definition_status": "real_source_bound",
+        "source_span": {
+          "file": "inc/flashdb.h",
+          "line_start": 67,
+          "line_end": 67,
+          "sha256": "18e394d325138e7ec54f37a860f9fa761e9997577a54466a06205ae1f05d8a36"
+        }
+      }
+    ],
+    "pointer_contract": {
+      "input_buffers": [
+        {
+          "name": "tsl",
+          "c_type": "fdb_tsl_t",
+          "read_effects": [
+            "tsl->addr.log",
+            "tsl->addr.index",
+            "tsl->log_len"
+          ],
+          "write_effects": [],
+          "nullability": "unknown",
+          "ownership_role": "observer",
+          "mutability": "read_only",
+          "translation_rule_id": "readonly_record_pointer_nested_scalar_field_read"
+        }
+      ],
+      "output_pointers": [
+        {
+          "name": "blob",
+          "c_type": "fdb_blob_t",
+          "write_effects": [
+            "blob->saved.addr",
+            "blob->saved.meta_addr",
+            "blob->saved.len"
+          ],
+          "read_effects": [],
+          "nullability": "unknown",
+          "ownership_role": "inout_param",
+          "mutability": "read_write",
+          "translation_rule_id": "mutable_record_pointer_nested_scalar_field_write_identity_return"
+        }
+      ],
+      "aliasing_proven": true,
+      "noalias_required": [
+        [
+          "tsl",
+          "blob"
+        ]
+      ],
+      "actual_argument_noalias_proof": {
+        "parameter_pair": [
+          "tsl",
+          "blob"
+        ],
+        "actual_arguments": [
+          {
+            "parameter": "tsl",
+            "object": "address of the fixture-local struct fdb_tsl object"
+          },
+          {
+            "parameter": "blob",
+            "object": "address of the distinct fixture-local struct fdb_blob object"
+          }
+        ],
+        "construction": "Each fixture case constructs distinct local struct fdb_tsl and struct fdb_blob objects before calling fdb_tsl_to_blob.",
+        "proven": true
+      },
+      "alias_contract": {
+        "decision": "requires_noalias_contract",
+        "proven": true,
+        "requires_noalias": true,
+        "source": "The fixture and replay pass distinct TSL and blob objects to the actual tsl/blob parameters; generated safe references must fail closed without this pair.",
+        "complete_alias_safety": false
+      }
+    },
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py",
+      "frontend": "bounded-c-source-scanner",
+      "semantic_status": "syntax-indexed real source plus offline WSL clang AST; candidate context only"
+    }
+  },
+  "build_profile": {
+    "profile_id": "flashdb-real-fdb-tsl-to-blob-real-source",
+    "compiler_command_source": "tests/Makefile",
+    "include_paths": [
+      "inc",
+      "tests"
+    ],
+    "oracle_harness_includes": [
+      "flashdb.h"
+    ],
+    "defines": [],
+    "clang_available": false,
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "char_width": 8,
+      "plain_char_signed": true,
+      "short_width": 16,
+      "long_width": 64,
+      "long_long_width": 64,
+      "pointer_width": 64
+    },
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/real_fdb_tsl_to_blob_ast.json",
+    "preprocessing_mode": "manual_flags",
+    "tool_versions": {
+      "extract_source_slice": "0.1.0",
+      "clang": "WSL Ubuntu clang 18.1.3"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "diagnostics": [
+        "Offline fixture is cropped from `clang -std=c11 -Itests -Iinc -Xclang -ast-dump=json -fsyntax-only src/fdb_tsdb.c` on x86_64 WSL; ids, locations, comments, and unrelated declarations are omitted."
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "real-fdb-tsl-to-blob-fixture",
+    "path": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+    "hash": "real-fdb-tsl-to-blob-fixture",
+    "cases": [
+      {
+        "expected_outputs": {
+          "return_same_blob": true,
+          "blob.saved.addr": 0,
+          "blob.saved.meta_addr": 0,
+          "blob.saved.len": 0
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+        "id": "all-zero",
+        "input_ref": "cases[0]"
+      },
+      {
+        "expected_outputs": {
+          "return_same_blob": true,
+          "blob.saved.addr": 4352,
+          "blob.saved.meta_addr": 4096,
+          "blob.saved.len": 128
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+        "id": "nominal-tsl",
+        "input_ref": "cases[1]"
+      },
+      {
+        "expected_outputs": {
+          "return_same_blob": true,
+          "blob.saved.addr": 4294967295,
+          "blob.saved.meta_addr": 4294967295,
+          "blob.saved.len": 4294967295
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+        "id": "u32-max",
+        "input_ref": "cases[2]"
+      }
+    ],
+    "observable_outputs": [
+      "return_same_blob",
+      "blob.saved.addr",
+      "blob.saved.meta_addr",
+      "blob.saved.len"
+    ],
+    "behavior_fields": [
+      "return_same_blob",
+      "blob.saved.addr",
+      "blob.saved.meta_addr",
+      "blob.saved.len"
+    ]
+  },
+  "replay_contract": {
+    "schema_version": 1,
+    "kind": "record_pointer_identity_return",
+    "input": {
+      "parameter": "tsl",
+      "fixture_root": [
+        "tsl"
+      ],
+      "rust_type": "FdbTsl",
+      "fields": [
+        {
+          "fixture_path": [
+            "addr.log"
+          ],
+          "rust_field_path": [
+            "addr",
+            "log"
+          ],
+          "rust_type_path": [
+            "FdbTslAddr"
+          ],
+          "fixture_scalar_type": "u32",
+          "rust_scalar_type": "u32",
+          "conversion": "identity"
+        },
+        {
+          "fixture_path": [
+            "addr.index"
+          ],
+          "rust_field_path": [
+            "addr",
+            "index"
+          ],
+          "rust_type_path": [
+            "FdbTslAddr"
+          ],
+          "fixture_scalar_type": "u32",
+          "rust_scalar_type": "u32",
+          "conversion": "identity"
+        },
+        {
+          "fixture_path": [
+            "log_len"
+          ],
+          "rust_field_path": [
+            "log_len"
+          ],
+          "rust_type_path": [],
+          "fixture_scalar_type": "u32",
+          "rust_scalar_type": "u32",
+          "conversion": "identity"
+        }
+      ],
+      "defaults": []
+    },
+    "output": {
+      "parameter": "blob",
+      "fixture_root": [
+        "initial_blob_saved"
+      ],
+      "rust_type": "FdbBlob",
+      "fields": [
+        {
+          "initial_fixture_path": [
+            "addr"
+          ],
+          "expected_output": "blob.saved.addr",
+          "rust_field_path": [
+            "saved",
+            "addr"
+          ],
+          "rust_type_path": [
+            "FdbBlobSaved"
+          ],
+          "fixture_scalar_type": "u32",
+          "rust_scalar_type": "u32",
+          "conversion": "identity"
+        },
+        {
+          "initial_fixture_path": [
+            "meta_addr"
+          ],
+          "expected_output": "blob.saved.meta_addr",
+          "rust_field_path": [
+            "saved",
+            "meta_addr"
+          ],
+          "rust_type_path": [
+            "FdbBlobSaved"
+          ],
+          "fixture_scalar_type": "u32",
+          "rust_scalar_type": "u32",
+          "conversion": "identity"
+        },
+        {
+          "initial_fixture_path": [
+            "len"
+          ],
+          "expected_output": "blob.saved.len",
+          "rust_field_path": [
+            "saved",
+            "len"
+          ],
+          "rust_type_path": [
+            "FdbBlobSaved"
+          ],
+          "fixture_scalar_type": "u32",
+          "rust_scalar_type": "usize",
+          "conversion": "u32_to_usize"
+        }
+      ],
+      "defaults": [
+        {
+          "rust_field_path": [
+            "buf"
+          ],
+          "rust_type_path": [],
+          "rust_scalar_type": "raw_mut_ptr",
+          "value": {
+            "kind": "null_mut"
+          }
+        },
+        {
+          "rust_field_path": [
+            "size"
+          ],
+          "rust_type_path": [],
+          "rust_scalar_type": "usize",
+          "value": {
+            "kind": "zero"
+          }
+        }
+      ]
+    },
+    "return": {
+      "kind": "identity",
+      "parameter_ref": "output"
+    },
+    "noalias_refs": [
+      [
+        "input",
+        "output"
+      ]
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/fdb_tsl_to_blob.rs",
+    "public_api": [
+      {
+        "name": "fdb_tsl_to_blob",
+        "visibility": "public",
+        "boundary_kind": "internal_ffi"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    }
+  },
+  "memory_model": {
+    "alias_contract": {
+      "decision": "requires_noalias_contract",
+      "proven": true,
+      "requires_noalias": true,
+      "complete_alias_safety": false,
+      "source": "The bounded fixtures construct distinct tsl and blob objects; candidate emission remains fail-closed when the exact tsl/blob noalias pair is absent or drifted."
+    },
+    "ownership_contract": {
+      "inputs": [
+        "tsl"
+      ],
+      "outputs": [
+        "blob->saved.addr",
+        "blob->saved.meta_addr",
+        "blob->saved.len",
+        "return blob"
+      ],
+      "borrow_model": "readonly TSL record pointer plus mutable blob record pointer identity return under explicit noalias",
+      "unsafe_boundary": "The candidate models C pointers as safe references only within the fixture's distinct-object precondition."
+    },
+    "length_companions": [],
+    "effect_graph": {
+      "effects": [
+        {
+          "id": "copy-tsl-log-to-blob-addr",
+          "pointer_node": "blob",
+          "kind": "write",
+          "expression": "blob->saved.addr = tsl->addr.log",
+          "source": "src/fdb_tsdb.c:859"
+        },
+        {
+          "id": "copy-tsl-index-to-blob-meta",
+          "pointer_node": "blob",
+          "kind": "write",
+          "expression": "blob->saved.meta_addr = tsl->addr.index",
+          "source": "src/fdb_tsdb.c:860"
+        },
+        {
+          "id": "widen-tsl-log-len-to-blob-len",
+          "pointer_node": "blob",
+          "kind": "write",
+          "expression": "blob->saved.len = tsl->log_len",
+          "implicit_conversion": "uint32_t_to_lp64_size_t",
+          "source": "src/fdb_tsdb.c:861"
+        },
+        {
+          "id": "return-blob",
+          "pointer_node": "blob",
+          "kind": "compute",
+          "expression": "return blob",
+          "source": "src/fdb_tsdb.c:863"
+        }
+      ],
+      "edges": [
+        {
+          "from_effect": "copy-tsl-log-to-blob-addr",
+          "to_effect": "return-blob",
+          "relationship": "data_influences",
+          "evidence": "return blob observes the updated blob.saved.addr field"
+        },
+        {
+          "from_effect": "copy-tsl-index-to-blob-meta",
+          "to_effect": "return-blob",
+          "relationship": "data_influences",
+          "evidence": "return blob observes the updated blob.saved.meta_addr field"
+        },
+        {
+          "from_effect": "widen-tsl-log-len-to-blob-len",
+          "to_effect": "return-blob",
+          "relationship": "data_influences",
+          "evidence": "LP64 size_t widens the uint32_t log_len before the returned blob observes saved.len"
+        },
+        {
+          "from_effect": "copy-tsl-log-to-blob-addr",
+          "to_effect": "widen-tsl-log-len-to-blob-len",
+          "relationship": "requires_noalias",
+          "evidence": "readonly tsl field reads and mutable blob field writes rely on the explicit tsl/blob noalias precondition"
+        }
+      ],
+      "summary": {
+        "reads": [
+          "tsl->addr.log",
+          "tsl->addr.index",
+          "tsl->log_len"
+        ],
+        "writes": [
+          "blob->saved.addr",
+          "blob->saved.meta_addr",
+          "blob->saved.len"
+        ],
+        "external_state": [],
+        "alias_sensitive": true
+      }
+    }
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+      "No claim that the candidate proves general record layout, ABI, alias, or lifetime semantics.",
+      "No claim that this slice adds or verifies an L2 Rust module."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-project migration",
+      "semantic equivalence without C oracle and Rust replay evidence",
+      "generated fdb_tsl_to_blob Rust draft is semantically accepted"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No full project migration claim.",
+    "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+    "No claim that this candidate-only replay proves general record layout, ABI, alias, or lifetime semantics."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.source_file_hashes",
+    "source_root",
+    "source_file",
+    "source_file_hashes",
+    "function_source_span",
+    "c_boundary.signatures[0].source_span.sha256",
+    "c_boundary.direct_dependencies",
+    "c_boundary.pointer_contract",
+    "build_profile.profile_id",
+    "build_profile.target",
+    "replay_contract",
+    "memory_model.alias_contract",
+    "translator_version",
+    "source.source_repository",
+    "source.source_branch"
+  ]
+}
