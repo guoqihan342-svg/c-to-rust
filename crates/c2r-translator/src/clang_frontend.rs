@@ -55,7 +55,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[cfg(feature = "typed-ir")]
-use crate::typed_ir::{IrFunction, IrGlobal, IrGlobalInit, IrParam};
+use crate::typed_ir::{
+    IrBinOp, IrExpr, IrFunction, IrGlobal, IrGlobalInit, IrParam, IrStmt, IrType, IrTypeKind,
+};
 use crate::{SliceSpec, SourceSpanRef, TargetAbiProfile};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -251,6 +253,8 @@ use types::*;
 
 include!("clang_frontend/parse_spec_impl.rs");
 include!("clang_frontend/ast_dump.rs");
+include!("clang_frontend/record_scalar_add.rs");
+include!("clang_frontend/record_scalar_add_validation.rs");
 include!("clang_frontend/globals.rs");
 include!("clang_frontend/functions.rs");
 include!("clang_frontend/statements.rs");

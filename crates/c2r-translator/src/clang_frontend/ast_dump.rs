@@ -33,46 +33,6 @@ fn lower_function_and_globals_from_clang_ast_dump_with_arguments(
 }
 
 #[cfg(feature = "typed-ir")]
-pub fn lower_function_and_globals_from_clang_ast_json_value(
-    ast: &Value,
-    function_name: &str,
-) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
-    lower_function_and_globals_from_clang_ast_json_value_with_target_abi(ast, function_name, None)
-}
-
-#[cfg(feature = "typed-ir")]
-pub fn lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
-    ast: &Value,
-    function_name: &str,
-    target_abi: Option<&TargetAbiProfile>,
-) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
-    let record_inventory = record_inventory_from_ast_with_target_abi(&ast, target_abi);
-    let enum_constant_inventory = enum_constant_inventory_from_ast(&ast);
-    let enum_type_inventory = enum_type_inventory_from_ast(&ast, target_abi);
-    let type_alias_inventory = type_alias_inventory_from_ast(&ast, target_abi);
-    let function = find_function_decl(&ast, function_name).ok_or_else(|| ClangFrontendError {
-        kind: "missing_function_decl".to_string(),
-        message: format!("clang AST JSON does not contain FunctionDecl named {function_name}"),
-    })?;
-    let mut function = function.clone();
-    rewrite_enum_constant_decl_refs_to_integer_literals(&mut function, &enum_constant_inventory)?;
-    let mut skeleton =
-        function_skeleton_from_ast_with_aliases(&function, &type_alias_inventory, target_abi)?;
-    rewrite_supported_enum_types_in_function_skeleton(&mut skeleton, &enum_type_inventory)?;
-    if let Some(target_abi) = target_abi {
-        bind_target_abi_to_function_skeleton(&mut skeleton, target_abi);
-    }
-    let mut function_ir = lower_function_skeleton(&skeleton)?;
-    attach_record_inventory_to_function(&mut function_ir, &record_inventory);
-    let globals = readonly_globals_from_ast(&ast)?;
-
-    Ok(LoweredFunctionWithGlobals {
-        function_ir,
-        globals,
-    })
-}
-
-#[cfg(feature = "typed-ir")]
 fn clang_ast_dump_json(
     clang_path: &Path,
     arguments: &[String],
