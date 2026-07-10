@@ -277,7 +277,13 @@
       "blob.saved.addr",
       "blob.saved.meta_addr",
       "blob.saved.len"
-    ]
+    ],
+    "c_oracle": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-c-oracle.json",
+    "rust_report": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-rust-report.json",
+    "diff": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-diff.json",
+    "negative_diff": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-negative-diff.json",
+    "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-ledger.json"
   },
   "replay_contract": {
     "schema_version": 1,
@@ -542,7 +548,7 @@
       "No full project migration claim.",
       "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
       "No claim that the candidate proves general record layout, ABI, alias, or lifetime semantics.",
-      "No claim that this slice adds or verifies an L2 Rust module."
+      "The L2 Rust module is reference/replay evidence only and does not itself prove generated-draft semantics."
     ],
     "must_not_claim": [
       "full automatic C99/C11 translation",
