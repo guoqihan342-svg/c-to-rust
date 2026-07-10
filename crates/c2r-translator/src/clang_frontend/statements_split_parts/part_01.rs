@@ -112,9 +112,31 @@ fn do_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFro
             message: "DoStmt must have body and condition".to_string(),
         });
     };
+    let mut body = stmt_body_skeleton_from_ast(body)?;
+    let condition = match do_while_tail_call_assignment_from_ast(condition)? {
+        DoWhileTailCallAssignmentNormalization::NotMatched => {
+            condition_expr_skeleton_from_ast(condition)?
+        }
+        DoWhileTailCallAssignmentNormalization::Rejected(reason) => {
+            return Ok(ClangStmtSkeleton::Unsupported { reason });
+        }
+        DoWhileTailCallAssignmentNormalization::Accepted {
+            assignment,
+            condition,
+        } => {
+            if do_while_body_has_current_level_continue(&body) {
+                return Ok(ClangStmtSkeleton::Unsupported {
+                    reason: "do-while tail-call assignment cannot be normalized with a current-level continue because continue would skip the synthesized tail assignment"
+                        .to_string(),
+                });
+            }
+            body.push(assignment);
+            condition
+        }
+    };
     Ok(ClangStmtSkeleton::DoWhile {
-        body: stmt_body_skeleton_from_ast(body)?,
-        condition: condition_expr_skeleton_from_ast(condition)?,
+        body,
+        condition,
     })
 }
 
