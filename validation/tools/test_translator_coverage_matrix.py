@@ -105,8 +105,8 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
             1,
         )
         self.assertGreaterEqual(ledger["blocked_callee_count"], 1)
-        self.assertEqual(ledger["translator_generated_semantic_pass_count"], 20)
-        self.assertEqual(ledger["semantic_pass_count"], 20)
+        self.assertEqual(ledger["translator_generated_semantic_pass_count"], 21)
+        self.assertEqual(ledger["semantic_pass_count"], 21)
         self.assertGreaterEqual(ledger["accepted_evidence_semantic_pass_count"], 1)
         self.assertIn("not semantic acceptance evidence", ledger["claim_boundary"])
 
