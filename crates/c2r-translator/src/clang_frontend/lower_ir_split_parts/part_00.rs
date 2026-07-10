@@ -1,5 +1,6 @@
 use super::{
-    compound_assignment_target_is_direct_record_field, compound_assignment_target_type,
+    compound_assignment_target_is_direct_index, compound_assignment_target_is_direct_record_field,
+    compound_assignment_target_type, index_compound_assignment_value_rejection_reason,
     record_field_compound_assignment_value_rejection_reason, ClangBinaryOperator,
     ClangExprSkeleton, ClangFrontendError, ClangIncDecOperator, ClangStmtSkeleton, ClangTypeKind,
     ClangTypeSkeleton, ClangUnaryOperator,
@@ -151,8 +152,17 @@ fn lower_compound_assign_stmt(
             });
         }
     }
+    if compound_assignment_target_is_direct_index(target) {
+        if let Some(reason) = index_compound_assignment_value_rejection_reason(value) {
+            return Err(ClangFrontendError {
+                kind: "unsupported_compound_assignment_value".to_string(),
+                message: reason,
+            });
+        }
+    }
     let target = lower_expr(target)?;
-    let lhs = cast_ir_expr_to_type_if_needed(target.clone(), &compute_lhs_ty);
+    let lhs =
+        cast_ir_expr_to_type_if_needed(compound_assignment_read_target(&target), &compute_lhs_ty);
     let rhs = cast_ir_expr_to_type_if_needed(lower_expr(value)?, &compute_lhs_ty);
     let binary = IrExpr::Binary {
         op: lower_binary_operator(op),
@@ -168,6 +178,24 @@ fn lower_compound_assign_stmt(
         value,
         source_span: None,
     })
+}
+
+#[cfg(feature = "typed-ir")]
+fn compound_assignment_read_target(target: &IrExpr) -> IrExpr {
+    let mut read_target = target.clone();
+    let IrExpr::Index { base, .. } = &mut read_target else {
+        return read_target;
+    };
+    let IrExpr::Var { ty, .. } = base.as_mut() else {
+        return read_target;
+    };
+    let IrTypeKind::Pointer { pointee } = &mut ty.kind else {
+        return read_target;
+    };
+
+    // The compound read is a readonly reborrow of the mutable slice target.
+    pointee.is_const = true;
+    read_target
 }
 
 #[cfg(feature = "typed-ir")]

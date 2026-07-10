@@ -533,9 +533,80 @@ fn typed_ir_rejects_multiple_mutable_pointer_index_assignments_without_alias_pro
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_rejects_multiple_mutable_pointer_index_compound_shapes_without_alias_proof() {
+    let i32_ty = ir_i32();
+    let mutable_i32_ptr = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let index = |name: &str| IrExpr::Index {
+        base: Box::new(ir_var(name, mutable_i32_ptr.clone())),
+        index: Box::new(ir_lit(0, "0", i32_ty.clone())),
+        ty: i32_ty.clone(),
+        source_span: None,
+    };
+    let left_target = index("left");
+    let right_target = index("right");
+    let ir = IrFunction {
+        name: "reject_two_compound_writes".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "left".to_string(),
+                ty: mutable_i32_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "right".to_string(),
+                ty: mutable_i32_ptr,
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: left_target.clone(),
+                value: ir_binary(
+                    IrBinOp::BitAnd,
+                    left_target,
+                    ir_lit(7, "7", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: right_target.clone(),
+                value: ir_binary(
+                    IrBinOp::BitOr,
+                    right_target,
+                    ir_lit(8, "8", i32_ty.clone()),
+                    i32_ty,
+                ),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: None,
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("multiple mutable pointer compound writes need alias proof");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("mutable pointer write requires exactly one pointer param for alias proof"),
+        "unexpected reason: {}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_multiple_restrict_mutable_out_pointer_writes() {
     let i32_ty = ir_i32();
-    let mutable_i32_restrict_ptr = ir_pointer("int *restrict", "int *restrict", i32_ty.clone(), false);
+    let mutable_i32_restrict_ptr =
+        ir_pointer("int *restrict", "int *restrict", i32_ty.clone(), false);
     let ir = IrFunction {
         name: "store_pair_restrict".to_string(),
         return_type: ir_void(),
@@ -590,7 +661,8 @@ fn typed_ir_emits_multiple_restrict_mutable_out_pointer_writes() {
         source_span: None,
     };
 
-    let emitted = emit_rust_from_ir(&ir).expect("restrict params provide multi-output noalias proof");
+    let emitted =
+        emit_rust_from_ir(&ir).expect("restrict params provide multi-output noalias proof");
     let rust = &emitted.rust;
 
     assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
