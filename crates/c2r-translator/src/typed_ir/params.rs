@@ -270,6 +270,16 @@ fn emit_raw_direct_call_pointer_param_type(ty: &IrType) -> Option<String> {
     if let Some(pointer_ty) = emit_opaque_void_pointer_type(ty) {
         return Some(pointer_ty);
     }
+    if mutable_record_pointer_pointee_type(ty)
+        .is_some_and(|pointee| !is_incomplete_record_type(pointee))
+    {
+        return emit_mutable_record_pointer_param_type(ty).ok();
+    }
+    if readonly_record_pointer_pointee_type(ty)
+        .is_some_and(|pointee| !is_incomplete_record_type(pointee))
+    {
+        return emit_readonly_record_pointer_param_type(ty).ok();
+    }
     let IrTypeKind::Pointer { pointee } = &ty.kind else {
         return None;
     };

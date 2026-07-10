@@ -3582,6 +3582,8 @@
         "modeled C strlen(const char *) leaf with size_t or __size_t result spelling inside record-pointer constructor call arguments",
         "direct integer scalar record member call arguments for by-value, local complete, readonly pointer, and noalias-proven mutable pointer records",
         "exactly one complete mutable record owner direct-call argument with same-record sibling-read refusal",
+        "complete record pointer direct-call passthrough emitted as a safe borrow under explicit noalias evidence",
+        "initialized address-taken local record emitted mutable for direct-call borrowing",
         "route candidate evidence"
       ],
       "dimension_status": {
@@ -3708,6 +3710,11 @@
             {
               "name": "complete mutable record owner direct-call argument no-clang replay",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "three-record direct-call borrow no-clang replay",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_23.rs",
               "proof_class": "candidate_context_only"
             }
           ]
@@ -4025,6 +4032,11 @@
               "name": "duplicate mutable record borrow direct-call refusal",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_22.rs",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "three-record direct-call missing-noalias refusal",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_23.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -4195,6 +4207,11 @@
             {
               "name": "complete mutable record owner call and nested target emitted Rust runtime test",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "three-record direct-call safe borrow emitted Rust runtime test",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_23.rs",
               "proof_class": "candidate_context_only"
             }
           ]
@@ -4892,6 +4909,11 @@
               "name": "arrow-rooted nested record pointer field assignment-call emitted Rust runtime test",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "arrow-rooted nested target with three-record call arguments runtime test",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_23.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -5005,6 +5027,11 @@
           "name": "nested record inventory and mutable borrow refusals",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_22.rs",
           "fail_closed_reason": "missing complete named record inventory and duplicate mutable-record call borrows remain fail-closed"
+        },
+        {
+          "name": "multi-record direct-call noalias refusal",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_23.rs",
+          "fail_closed_reason": "a complete record call-through pointer and mutable nested-field owner require explicit noalias provenance"
         }
       ]
     },
