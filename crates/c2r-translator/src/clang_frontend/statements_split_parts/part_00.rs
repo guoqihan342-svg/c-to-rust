@@ -65,16 +65,15 @@ fn for_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFr
                 .to_string(),
         });
     }
-    if is_empty_ast_slot(step) {
-        return Ok(ClangStmtSkeleton::Unsupported {
-            reason: "ForStmt without step is outside the current clang lowering skeleton"
-                .to_string(),
-        });
-    }
+    let step = if is_empty_ast_slot(step) {
+        None
+    } else {
+        Some(Box::new(for_step_stmt_skeleton_from_ast(step)?))
+    };
     Ok(ClangStmtSkeleton::For {
         init,
         condition: Some(condition_expr_skeleton_from_ast(condition)?),
-        step: Some(Box::new(for_step_stmt_skeleton_from_ast(step)?)),
+        step,
         body: stmt_body_skeleton_from_ast(body)?,
     })
 }
@@ -440,6 +439,9 @@ fn compound_body_skeleton_from_ast(
 
     let mut body = Vec::new();
     for stmt in inner(compound) {
+        if string_field(stmt, "kind").as_deref() == Some("NullStmt") {
+            continue;
+        }
         body.extend(body_stmt_skeletons_from_ast(stmt)?);
     }
     Ok(body)

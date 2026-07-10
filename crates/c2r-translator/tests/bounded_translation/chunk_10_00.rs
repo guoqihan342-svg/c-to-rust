@@ -78,14 +78,14 @@ fn clang_ast_dump_rejects_typed_ir_for_missing_condition_when_enabled() {
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
 #[ignore = "requires real clang AST smoke test opt-in"]
-fn clang_ast_dump_rejects_typed_ir_for_missing_step_when_enabled() {
+fn clang_ast_dump_emits_typed_ir_for_missing_step_when_enabled() {
     let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-typed-ir-for-missing-step");
     fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("bad_for_missing_step.c");
+    let source_file = out_dir.join("sum_without_step.c");
     fs::write(
         &source_file,
-        "int bad_for_missing_step(int limit) { int total = 0; for (int i = 0; i < limit;) { total = total + i; i = i + 1; } return total; }\n",
+        "int sum_without_step(int limit) { int total = 0; for (int i = 0; i < limit;) { total = total + i; i = i + 1; } return total; }\n",
     )
     .unwrap();
     let environment = std::collections::BTreeMap::from([(
@@ -93,21 +93,23 @@ fn clang_ast_dump_rejects_typed_ir_for_missing_step_when_enabled() {
         clang_path.to_string_lossy().into_owned(),
     )]);
 
-    let report = lower_function_from_clang_ast_dump_report(
-        &environment,
-        &source_file,
-        "bad_for_missing_step",
-    );
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "sum_without_step");
 
-    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
-    assert!(
-        report
-            .errors
-            .iter()
-            .any(|error| error.message.contains("ForStmt without step")),
-        "{:?}",
-        report.errors
-    );
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl { .. }, IrStmt::For { step, .. }, IrStmt::Return { .. }] =
+        function.body.as_slice()
+    else {
+        panic!(
+            "expected declaration, for, and return, got {:?}",
+            function.body
+        );
+    };
+    assert!(step.is_none(), "missing step must lower to None: {step:?}");
+    let emitted = emit_rust_from_ir(function).expect("emit real clang missing-step for loop");
+    assert!(emitted.rust.contains("pub fn sum_without_step"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-for-missing-step", &emitted.rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -477,4 +479,373 @@ fn clang_ast_dump_emits_record_field_inc_dec_for_step_when_enabled() {
         "{rust}"
     );
     assert_rust_snippet_compiles("typed-ir-real-clang-record-field-inc-dec-for-step", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+fn renamed_add_one_ast_with_leading_stmt(function_name: &str, stmt: Value) -> Value {
+    let mut ast: Value =
+        serde_json::from_str(include_str!("../../fixtures/clang_ast/add_one_ast.json"))
+            .expect("add-one fixture JSON");
+    ast["inner"][0]["name"] = serde_json::json!(function_name);
+    ast["inner"][0]["inner"][1]["inner"]
+        .as_array_mut()
+        .expect("function compound body")
+        .insert(0, stmt);
+    ast
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_ignores_exact_null_stmt_in_compound_without_clang_and_runs() {
+    let function_name = "increment_after_empty_statement";
+    let ast = renamed_add_one_ast_with_leading_stmt(
+        function_name,
+        serde_json::json!({
+            "kind": "NullStmt",
+            "range": { "begin": {}, "end": {} }
+        }),
+    );
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
+        .expect("ignore exact NullStmt in a CompoundStmt without invoking clang");
+    assert!(matches!(
+        lowered.function_ir.body.as_slice(),
+        [IrStmt::Return { .. }]
+    ));
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit renamed function after ignoring NullStmt");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn increment_after_empty_statement(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-exact-null-stmt",
+        rust,
+        "assert_eq!(increment_after_empty_statement(41i32), 42i32);",
+    );
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn assert_no_clang_ast_refusal_writes_empty_draft(
+    ast: &Value,
+    function_name: &str,
+    slice_id: &str,
+) {
+    let fixture_dir = unique_out_dir(&format!("{slice_id}-ast"));
+    fs::create_dir_all(&fixture_dir).unwrap();
+    let fixture_file = fixture_dir.join("frontend-boundary.json");
+    fs::write(&fixture_file, serde_json::to_vec_pretty(ast).unwrap()).unwrap();
+
+    let source_file = format!("{function_name}.c");
+    let mut build_profile = profile(true);
+    build_profile.clang_ast_fixture = Some(fixture_file.to_string_lossy().into_owned());
+    let spec = SliceSpec {
+        target_id: "frontend-boundary".to_string(),
+        slice_id: slice_id.to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: function_name.to_string(),
+        c_source: format!("int {function_name}(int value) {{ value ? value : 0; return value; }}"),
+        fixture_hash: "fixture-sha".to_string(),
+        source_root: Some(".".to_string()),
+        source_file: Some(source_file.clone()),
+        source_file_hashes: std::collections::BTreeMap::from([(
+            source_file,
+            "source-file-sha".to_string(),
+        )]),
+        build_profile,
+        ..SliceSpec::default()
+    };
+    let out_dir = unique_out_dir(slice_id);
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+    assert_eq!(manifest.status, "blocked");
+    let draft = fs::read_to_string(out_dir.join(format!("l3-{slice_id}-rust-draft.rs"))).unwrap();
+    assert!(draft.is_empty(), "{draft}");
+    let report = json_file(out_dir.join(format!("l3-{slice_id}-clang-lowering-report.json")));
+    assert_eq!(
+        report["lowering_report"]["frontend"],
+        "clang_ast_json_fixture"
+    );
+    assert_eq!(report["lowering_report"]["status"], "blocked");
+    assert!(
+        report["lowering_report"]["errors"]
+            .as_array()
+            .expect("lowering errors")
+            .iter()
+            .any(|error| error["kind"] == "unsupported_clang_stmt"),
+        "{report:?}"
+    );
+
+    fs::remove_dir_all(out_dir).unwrap();
+    fs::remove_dir_all(fixture_dir).unwrap();
+}
+
+#[cfg(feature = "clang-lowering-report")]
+#[test]
+fn clang_ast_null_stmt_match_is_exact_and_unknown_stmt_drafts_stay_empty() {
+    for (kind, function_name, slice_id) in [
+        (
+            "NullStmtSuffix",
+            "reject_similar_empty_statement",
+            "reject-similar-empty-statement",
+        ),
+        (
+            "ConditionalOperator",
+            "reject_unknown_expression_statement",
+            "reject-unknown-expression-statement",
+        ),
+    ] {
+        let ast = renamed_add_one_ast_with_leading_stmt(
+            function_name,
+            serde_json::json!({ "kind": kind, "type": { "qualType": "int" } }),
+        );
+        assert_no_clang_ast_refusal_writes_empty_draft(&ast, function_name, slice_id);
+    }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+fn int_literal_ast(value: i32) -> Value {
+    serde_json::json!({
+        "kind": "IntegerLiteral",
+        "type": { "qualType": "int" },
+        "value": value.to_string()
+    })
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+fn int_decl_ref_ast(name: &str, decl_kind: &str) -> Value {
+    serde_json::json!({
+        "kind": "DeclRefExpr",
+        "type": { "qualType": "int" },
+        "referencedDecl": { "kind": decl_kind, "name": name }
+    })
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+fn int_read_ast(name: &str, decl_kind: &str) -> Value {
+    serde_json::json!({
+        "kind": "ImplicitCastExpr",
+        "castKind": "LValueToRValue",
+        "type": { "qualType": "int" },
+        "inner": [int_decl_ref_ast(name, decl_kind)]
+    })
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+fn int_binary_ast(opcode: &str, lhs: Value, rhs: Value) -> Value {
+    serde_json::json!({
+        "kind": "BinaryOperator",
+        "opcode": opcode,
+        "type": { "qualType": "int" },
+        "inner": [lhs, rhs]
+    })
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+fn int_assignment_ast(name: &str, value: Value) -> Value {
+    int_binary_ast("=", int_decl_ref_ast(name, "VarDecl"), value)
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+fn renamed_missing_step_for_ast(function_name: &str) -> Value {
+    serde_json::json!({
+        "kind": "TranslationUnitDecl",
+        "inner": [{
+            "kind": "FunctionDecl",
+            "name": function_name,
+            "type": { "qualType": "int (int)" },
+            "inner": [
+                {
+                    "kind": "ParmVarDecl",
+                    "name": "limit",
+                    "type": { "qualType": "int" }
+                },
+                {
+                    "kind": "CompoundStmt",
+                    "inner": [
+                        {
+                            "kind": "DeclStmt",
+                            "inner": [{
+                                "kind": "VarDecl",
+                                "name": "total",
+                                "type": { "qualType": "int" },
+                                "init": "c",
+                                "inner": [int_literal_ast(0)]
+                            }]
+                        },
+                        {
+                            "kind": "ForStmt",
+                            "inner": [
+                                {
+                                    "kind": "DeclStmt",
+                                    "inner": [{
+                                        "kind": "VarDecl",
+                                        "name": "i",
+                                        "type": { "qualType": "int" },
+                                        "init": "c",
+                                        "inner": [int_literal_ast(0)]
+                                    }]
+                                },
+                                {},
+                                int_binary_ast(
+                                    "<",
+                                    int_read_ast("i", "VarDecl"),
+                                    int_read_ast("limit", "ParmVarDecl")
+                                ),
+                                {},
+                                {
+                                    "kind": "CompoundStmt",
+                                    "inner": [
+                                        int_assignment_ast(
+                                            "i",
+                                            int_binary_ast(
+                                                "+",
+                                                int_read_ast("i", "VarDecl"),
+                                                int_literal_ast(1)
+                                            )
+                                        ),
+                                        {
+                                            "kind": "IfStmt",
+                                            "inner": [
+                                                int_binary_ast(
+                                                    "<",
+                                                    int_read_ast("i", "VarDecl"),
+                                                    int_read_ast("limit", "ParmVarDecl")
+                                                ),
+                                                { "kind": "ContinueStmt" }
+                                            ]
+                                        },
+                                        int_assignment_ast(
+                                            "total",
+                                            int_binary_ast(
+                                                "+",
+                                                int_read_ast("total", "VarDecl"),
+                                                int_read_ast("i", "VarDecl")
+                                            )
+                                        )
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "kind": "ReturnStmt",
+                            "inner": [int_read_ast("total", "VarDecl")]
+                        }
+                    ]
+                }
+            ]
+        }]
+    })
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+fn missing_step_for_inner(ast: &mut Value) -> &mut Vec<Value> {
+    ast["inner"][0]["inner"][1]["inner"][1]["inner"]
+        .as_array_mut()
+        .expect("ForStmt inner slots")
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_lowers_missing_step_for_to_none_without_clang_and_runs() {
+    let function_name = "accumulate_without_step";
+    let ast = renamed_missing_step_for_ast(function_name);
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
+        .expect("lower for loop with a condition and an empty step slot");
+    let [IrStmt::Decl { .. }, IrStmt::For { step, .. }, IrStmt::Return { .. }] =
+        lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "unexpected missing-step function body: {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert!(step.is_none(), "missing step must stay None, got {step:?}");
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit for loop through the existing no-step path");
+    let rust = &emitted.rust;
+    let body_increment = "i = i.checked_add(1i32).expect(\"signed addition overflow\");";
+    assert_eq!(rust.matches(body_increment).count(), 1, "{rust}");
+    assert!(rust.contains("continue;"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-for-missing-step",
+        rust,
+        "assert_eq!(accumulate_without_step(0i32), 0i32);\n\
+         assert_eq!(accumulate_without_step(1i32), 1i32);\n\
+         assert_eq!(accumulate_without_step(4i32), 4i32);",
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_missing_step_for_keeps_adjacent_boundaries_fail_closed() {
+    let function_name = "bounded_missing_step_loop";
+    let base = renamed_missing_step_for_ast(function_name);
+    let mut cases = Vec::new();
+
+    let mut missing_condition = base.clone();
+    missing_step_for_inner(&mut missing_condition)[2] = serde_json::json!({});
+    cases.push((
+        "missing condition",
+        missing_condition,
+        "unsupported_clang_stmt",
+        "ForStmt without condition",
+    ));
+
+    let mut condition_variable = base.clone();
+    missing_step_for_inner(&mut condition_variable)[1] =
+        serde_json::json!({ "kind": "VarDecl", "name": "guard" });
+    cases.push((
+        "condition variable",
+        condition_variable,
+        "unsupported_clang_stmt",
+        "ForStmt condition variable",
+    ));
+
+    let mut unsupported_init = base.clone();
+    missing_step_for_inner(&mut unsupported_init)[0] = serde_json::json!({ "kind": "CallExpr" });
+    cases.push((
+        "unsupported init",
+        unsupported_init,
+        "unsupported_clang_stmt",
+        "ForStmt init CallExpr",
+    ));
+
+    let mut unsupported_condition = base.clone();
+    missing_step_for_inner(&mut unsupported_condition)[2] = serde_json::json!({
+        "kind": "MysteryExpr",
+        "type": { "qualType": "int" }
+    });
+    cases.push((
+        "unsupported condition",
+        unsupported_condition,
+        "unsupported_clang_expr",
+        "MysteryExpr",
+    ));
+
+    let mut unsupported_body = base;
+    missing_step_for_inner(&mut unsupported_body)[4] = serde_json::json!({
+        "kind": "CompoundStmt",
+        "inner": [{ "kind": "MysteryStmt" }]
+    });
+    cases.push((
+        "unsupported body",
+        unsupported_body,
+        "unsupported_clang_stmt",
+        "MysteryStmt",
+    ));
+
+    for (label, ast, expected_kind, expected_message) in cases {
+        let error = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
+            .expect_err(label);
+        assert_eq!(error.kind, expected_kind, "{label}: {error:?}");
+        assert!(
+            error.message.contains(expected_message),
+            "{label}: {error:?}"
+        );
+    }
 }
