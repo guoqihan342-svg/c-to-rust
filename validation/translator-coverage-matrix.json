@@ -803,6 +803,7 @@
         "integer unary scalar operand LValueToRValue explicit typed IR node",
         "integer array subscript index LValueToRValue explicit typed IR node",
         "target-dependent integer LValueToRValue preserved for later target ABI binding",
+        "non-literal integer IntegralToBoolean and C-style truthiness normalized to Rust bool with target ABI gates",
         "plain clang CharacterLiteral numeric value preserved as an int literal with type/value fail-closed guards",
         "non-integer NoOp transparent skeleton boundary",
         "unmodeled implicit castKind fail-closed",
@@ -865,6 +866,11 @@
             {
               "name": "clang_ast_fixture_replays_integral_c_style_cast_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "integer truthiness no-clang AST replay tests",
+              "path": "crates/c2r-translator/tests/integer_conversion.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -890,6 +896,11 @@
             {
               "name": "clang_ast_fixture_rejects_usual_arithmetic_missing_integral_cast_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "integer truthiness rejects missing target ABI and PointerToBoolean",
+              "path": "crates/c2r-translator/tests/integer_conversion.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -927,6 +938,11 @@
             {
               "name": "implicit-integer-noop-cast generated draft replay",
               "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-test-translation-generated.json"
+            },
+            {
+              "name": "integer truthiness emitted Rust runtime tests",
+              "path": "crates/c2r-translator/tests/integer_conversion.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -1795,7 +1811,8 @@
         "slice boundary",
         "post-increment readonly byte cursor read with clang LValueToRValue wrapper",
         "clang-lowered byte cursor parameter type-map records emitted Rust slice boundary",
-        "clang-lowered unused readonly 8-bit pointer type-map and pointer graph record emitted raw pointer boundary"
+        "clang-lowered unused readonly 8-bit pointer type-map and pointer graph record emitted raw pointer boundary",
+        "statement indexed compound assignment for mutable integer pointers and local fixed integer arrays with pure index and RHS"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -1852,6 +1869,11 @@
             {
               "name": "clang_ast_fixture_replays_real_fdb_is_str_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs"
+            },
+            {
+              "name": "indexed compound assignment no-clang replay tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_08_02.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -1913,6 +1935,11 @@
             {
               "name": "typed_ir_emits_mutable_record_pointer_arrow_field_assignment_with_unused_readonly_8_bit_pointer_param",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "indexed compound assignment handwritten IR tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_03_01.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -1978,6 +2005,11 @@
             {
               "name": "clang_ast_fixture_rejects_real_fdb_is_str_without_target_abi",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs"
+            },
+            {
+              "name": "indexed compound assignment effectful index and RHS refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_08_02.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -2047,6 +2079,11 @@
             {
               "name": "clang_ast_fixture_replays_real_fdb_is_str_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs"
+            },
+            {
+              "name": "indexed compound assignment emitted Rust runtime tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_03_01.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -2658,7 +2695,13 @@
         "record value field inc/dec for ForStmt step",
         "mutable record pointer field inc/dec for ForStmt step",
         "mutable record pointer field value-position inc/dec",
-        "mutable record pointer field statement-position inc/dec"
+        "mutable record pointer field statement-position inc/dec",
+        "readonly record pointer fixed integer array field indexing",
+        "fixed integer arrays retained in complete record inventory",
+        "direct record scalar member as compound assignment RHS",
+        "complete local record nested dot path as do-while tail assignment-call target",
+        "direct record integer scalar member as direct-call argument",
+        "direct mutable record pointer integer field as if assignment-call comparison target"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -2723,6 +2766,26 @@
               "name": "clang_ast_dump_emits_record_field_inc_dec_for_step_when_enabled",
               "path": "crates/c2r-translator/tests/bounded_translation.rs",
               "proof_class": "optional_real_clang_smoke"
+            },
+            {
+              "name": "record fixed integer array field no-clang replay",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_00_02.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "nested local record do-while tail no-clang replay",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "direct record scalar call argument no-clang replay",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_20_00.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "direct record pointer field if assignment-call no-clang replay",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -2816,6 +2879,21 @@
             {
               "name": "typed_ir_emits_postfix_inc_dec_statement_for_mutable_record_pointer_field",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+            },
+            {
+              "name": "record member compound RHS handwritten IR tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "record fixed integer array handwritten IR tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "direct record scalar call argument handwritten IR tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_20_00.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -2878,6 +2956,21 @@
               "name": "typed_ir_rejects_nested_record_pointer_scalar_field_copy_without_noalias",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs",
               "fail_closed_reason": "nested record pointer scalar field copy with a readonly record input and mutable record output still requires explicit noalias evidence"
+            },
+            {
+              "name": "record member compound RHS alias refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "direct record scalar call argument signature and alias refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_20_01.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "direct record pointer field if assignment-call adjacent refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -2968,6 +3061,26 @@
             {
               "name": "typed_ir_emits_postfix_inc_dec_statement_for_mutable_record_pointer_field",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+            },
+            {
+              "name": "record member compound RHS emitted Rust runtime tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "record fixed integer array emitted Rust runtime tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_18.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "direct record scalar call argument emitted Rust runtime tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_20_00.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "direct record pointer field if assignment-call emitted Rust runtime test",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -3411,7 +3524,7 @@
         "fixture-bound external callee Rust replay model for real-fdb-kv-del with explicit ignored non-observable external logging replay contract and generated_draft_acceptance-bound named-slice evidence",
         "missing explicit external replay contract remains compile-only fail-closed",
         "direct NULL pointer call argument",
-        "literal-only IntegralToBoolean cast",
+        "non-literal integer IntegralToBoolean and C-style truthiness with target ABI gates",
         "C _Bool direct-call result emission as Rust bool",
         "typedef-backed opaque void pointer parameter passthrough",
         "direct _Bool call condition emission; ordinary integer-return call truthiness remains fail-closed",
@@ -3451,6 +3564,7 @@
         "modeled C strlen(const char *) as the only admitted deeper leaf inside record-pointer constructor call arguments",
         "nullable readonly pointer truthiness can guard record-pointer constructor arguments that unwrap value and strlen leaves in the nonnull branch",
         "modeled C strlen(const char *) leaf with size_t or __size_t result spelling inside record-pointer constructor call arguments",
+        "direct integer scalar record member call arguments for by-value, local complete, readonly pointer, and noalias-proven mutable pointer records",
         "route candidate evidence"
       ],
       "dimension_status": {
@@ -3568,6 +3682,11 @@
             {
               "name": "expr_skeleton_from_ast_keeps_nested_side_effect_call_with_independent_plain_arg",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
+              "name": "direct record scalar call argument no-clang replay",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_20_00.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -3874,6 +3993,11 @@
             {
               "name": "test_mixed_generated_compile_only_external_binding_skips_replay",
               "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_01.pyfrag"
+            },
+            {
+              "name": "direct record scalar call argument signature, qualifier, and alias refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_20_01.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -4035,6 +4159,11 @@
             {
               "name": "typed_ir_emits_readonly_pointer_return_nested_call_arg",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_04.rs"
+            },
+            {
+              "name": "direct record scalar call argument emitted Rust runtime tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_20_00.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -4644,9 +4773,10 @@
         "Clang IfStmt left-operand assignment-call comparison",
         "preceding IrStmt::Assign plus pure IrStmt::If comparison normalization",
         "direct non-volatile non-atomic fixed-width integer scalar target",
+        "strict direct non-nullable mutable record pointer integer field target",
         "exactly one direct call in the complete assignment RHS subtree",
         "pure comparison operators == != < <= > >=",
-        "candidate_context_only with semantic-pass count unchanged at 23"
+        "candidate extensions remain candidate_context_only; accepted named-slice semantic-pass count is 24"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -4661,6 +4791,11 @@
               "name": "clang_ast_if_assignment_call_accepts_u32_failed_address_shape",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_19.rs",
               "assertion": "pins the real-source uint32_t and 0xFFFFFFFF scalar/sentinel type shape"
+            },
+            {
+              "name": "clang_ast_if_assignment_call_record_pointer_member_accepts_and_runs",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -4685,6 +4820,11 @@
               "name": "assignment-call comparison fail-closed implementation boundary",
               "path": "crates/c2r-translator/src/clang_frontend/statements_split_parts/part_02.rs",
               "assertion": "requires a direct fixed-width integer DeclRef target and exactly one direct call while rejecting additional side effects"
+            },
+            {
+              "name": "record pointer field assignment-call target adjacent refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -4700,20 +4840,65 @@
               "name": "clang_ast_single_statement_else_if_keeps_assignment_inside_else",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_19.rs",
               "assertion": "uses an atomic call counter to prove the lifted assignment remains inside the outer else branch"
+            },
+            {
+              "name": "record pointer field assignment-call emitted Rust runtime test",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
         "c_rust_diff": {
-          "status": "gap",
-          "reason": "P0-T8 has no exact named-slice C oracle, Rust replay, schema diff, negative diff, unsafe ledger, or final verification; semantic-pass count remains 23"
+          "status": "covered",
+          "scope_note": "Covered only for the exact real-fdb-new-kv-alloc-compare source fragment under its fixture-scripted external-u32-return contract; later record-pointer target support remains candidate_context_only.",
+          "evidence": [
+            {
+              "name": "real-fdb-new-kv-alloc-compare C oracle",
+              "path": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-c-oracle.json"
+            },
+            {
+              "name": "real-fdb-new-kv-alloc-compare Rust replay",
+              "path": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-rust-report.json"
+            },
+            {
+              "name": "real-fdb-new-kv-alloc-compare schema diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-diff.json"
+            },
+            {
+              "name": "real-fdb-new-kv-alloc-compare negative diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-new-kv-alloc-compare unsafe ledger",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-unsafe-ledger.json"
+            },
+            {
+              "name": "real-fdb-new-kv-alloc-compare final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-final-verification.json",
+              "assertion": "generated_draft_semantic_pass=true for the exact named source fragment"
+            }
+          ]
         },
         "legacy_fallback": {
           "status": "not_applicable",
           "reason": "this is a generic clang frontend candidate capability and makes no legacy fallback claim"
         },
         "route_evidence": {
-          "status": "gap",
-          "reason": "candidate normalization and source scanning do not produce route-decision or validation-profile evidence"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "real-fdb-new-kv-alloc-compare route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-route-decision.json"
+            },
+            {
+              "name": "real-fdb-new-kv-alloc-compare validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-validation-profile.json"
+            },
+            {
+              "name": "real-fdb-new-kv-alloc-compare capability delta",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-capability-delta.json"
+            }
+          ]
         }
       },
       "positive_cases": [
@@ -4736,6 +4921,11 @@
           "name": "clang_ast_if_assignment_call_accepts_u32_failed_address_shape",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_19.rs",
           "assertion": "covers an unsigned 32-bit target and 4294967295 sentinel matching the two admitted real FlashDB shapes"
+        },
+        {
+          "name": "strict direct mutable record pointer field assignment-call candidate",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+          "proof_class": "candidate_context_only"
         }
       ],
       "negative_cases": [
@@ -4753,6 +4943,11 @@
           "name": "P0-T8 adjacent structural refusals",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_19.rs",
           "fail_closed_reason": "runtime-independent negatives pin right-side assignments, logical combinations, volatile/dereference targets, a second call, and while-context assignment-call comparisons outside the bounded IfCondition normalization"
+        },
+        {
+          "name": "record pointer field assignment-call adjacent structural refusals",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+          "fail_closed_reason": "local members, nested hops, readonly/volatile/effectful targets, logical composition, and a second call remain outside the strict direct mutable record-pointer field boundary"
         }
       ]
     },
@@ -4766,7 +4961,12 @@
         "IrStmt::DoWhile",
         "IrStmt::For",
         "Clang ForStmt top-level init comma chain over direct integer scalar assignments",
+        "Clang ForStmt ordered direct scalar inc/dec condition prelude and optional missing step",
+        "exact Clang NullStmt ignored in compound bodies or emitted as an empty single-statement body",
         "Clang DoStmt strict tail assignment-call comparison normalized to body-tail IrStmt::Assign plus pure sentinel comparison, with the same assignment inserted before current-level continue",
+        "Clang DoStmt assignment-call comparison with independent pure logical-and suffix",
+        "Clang DoStmt complete local record nested dot path tail assignment-call target",
+        "Clang IfStmt strict direct mutable record pointer integer field assignment-call comparison target",
         "final IrStmt::If accepted when both branches end in return values",
         "legacy CFG evidence for label/goto/switch/case/default",
         "unsupported_control_flow classification",
@@ -4850,6 +5050,26 @@
               "name": "clang_ast_fixture_rejects_do_while_tail_call_assignment_boundaries_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
               "assertion": "requires a dereference target, a second call, and while/if assignment conditions to remain fail-closed"
+            },
+            {
+              "name": "for condition ordered incdec runtime and refusal tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_14.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "missing for step and exact NullStmt no-clang tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_10_00.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "do-while pure suffix and nested local record target no-clang tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "if direct record pointer field assignment-call no-clang tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
             }
           ],
           "scope_note": "clang fixture replay and source_range diagnostics only; this does not claim Control IR, relooper support, Rust candidate lowering, or C/Rust semantic pass for switch/goto"
@@ -4873,6 +5093,21 @@
             {
               "name": "typed IR and legacy complex-control-flow fail-closed tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "missing-step and NullStmt adjacent refusal tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_10_00.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "do-while suffix and nested target refusal tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "if record pointer field target refusal tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -4904,6 +5139,26 @@
             {
               "name": "typed_ir_accepts_final_if_when_both_branches_return_values",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "for condition ordered incdec emitted Rust runtime tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_14.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "missing for step and NullStmt emitted Rust runtime tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_10_00.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "do-while pure suffix and nested local record emitted Rust runtime tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "if direct record pointer field assignment-call emitted Rust runtime test",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
