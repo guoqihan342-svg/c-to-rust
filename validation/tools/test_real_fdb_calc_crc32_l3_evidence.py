@@ -4,11 +4,67 @@ import subprocess
 import unittest
 from pathlib import Path
 
+from validation.tools import auto_migrate
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
+    def test_c2rust_safety_candidate_is_hash_bound_to_real_baseline_manifest(self) -> None:
+        evidence_dir = (
+            REPO_ROOT
+            / "validation"
+            / "evidence"
+            / "flashdb"
+            / "auto-translation"
+            / "real-fdb-calc-crc32"
+        )
+        manifest_path = evidence_dir / "l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json"
+        manifest = self._load(manifest_path)
+
+        candidate = auto_migrate.c2rust_crc32_safety_candidate_from_manifest(
+            manifest,
+            manifest_path=manifest_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(candidate["candidate_source"], "c2rust-function-level-baseline")
+        self.assertFalse(candidate["semantic_pass"])
+        self.assertEqual(candidate["baseline_manifest"]["sha256"], self._sha256(manifest_path))
+        self.assertEqual(candidate["baseline_output"], manifest["output"] | {"verified_sha256": True})
+        self.assertEqual(candidate["unsafe_reduction"]["baseline_total_unsafe"], 2)
+        self.assertEqual(candidate["unsafe_reduction"]["current_total_unsafe"], 0)
+        self.assertEqual(candidate["unsafe_reduction"]["reduced_by"], 2)
+        self.assertEqual(
+            candidate["repair_round"]["input_baseline"]["sha256"],
+            manifest["output"]["sha256"],
+        )
+        self.assertEqual(
+            candidate["repair_round"]["transformed_baseline_sha256"],
+            candidate["transformed"]["rust_sha256"],
+        )
+
+    def test_c2rust_safety_candidate_rejects_baseline_output_sha_drift(self) -> None:
+        evidence_dir = (
+            REPO_ROOT
+            / "validation"
+            / "evidence"
+            / "flashdb"
+            / "auto-translation"
+            / "real-fdb-calc-crc32"
+        )
+        manifest_path = evidence_dir / "l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json"
+        manifest = self._load(manifest_path)
+        manifest["output"] = {**manifest["output"], "sha256": "0" * 64}
+
+        with self.assertRaisesRegex(ValueError, "baseline output sha256 mismatch"):
+            auto_migrate.c2rust_crc32_safety_candidate_from_manifest(
+                manifest,
+                manifest_path=manifest_path,
+                repo_root=REPO_ROOT,
+            )
+
     def test_emit_reports_records_real_fdb_calc_crc32_replay_and_diff_gates(self) -> None:
         result = subprocess.run(
             [
