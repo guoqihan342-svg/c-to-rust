@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-interior-projection",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "One proven mutable owner root is projected to an interior record by a local alias; the declared deeper u32 state is assigned zero through that alias and observed on owner.",
+    "external_callee": null,
+    "interior_projection": {
+      "owner_parameter": "itr",
+      "projection_path": [
+        "curr_kv"
+      ],
+      "alias_local": "kv",
+      "alias_rust_type": "Kv",
+      "state_owner_field_path": [
+        "curr_kv",
+        "addr",
+        "start"
+      ],
+      "constant_assign": {
+        "rust_type": "u32",
+        "value": 0
+      },
+      "pointer_root_count": 1,
+      "noalias_required": []
+    },
+    "excluded_semantics": [
+      "fdb_kv_iterate statements, branches, loops, storage calls, and iterator effects outside exact line 1863",
+      "the full real fdb_kv and fdb_kv_iterator layouts, anonymous addr record ABI, alignment, or padding",
+      "any claim that kv and itr are independent or noalias roots"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "first_mismatch": null
+}

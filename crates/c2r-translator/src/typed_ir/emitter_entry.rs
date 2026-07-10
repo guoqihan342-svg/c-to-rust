@@ -81,7 +81,11 @@ fn emit_scalar_rust_from_ir_with_globals_and_policy(
         return Err("non-void function must end with a return value".to_string());
     }
     let mut context = EmitContext::from_function_and_globals_and_policy(function, globals, policy)?;
-    let definite_assignment = validate_definite_assignment(function, globals, &context)?;
+    let definite_assignment = if context.interior_reborrows.is_empty() {
+        validate_definite_assignment(function, globals, &context)?
+    } else {
+        validate_interior_reborrow_definite_assignment(&context)?
+    };
     context.mutable_record_pointer_read_fields =
         definite_assignment.mutable_record_pointer_read_fields;
     context.mutable_pointer_read_slots = definite_assignment.mutable_pointer_read_slots;
@@ -136,6 +140,12 @@ fn emit_scalar_rust_from_ir_with_globals_and_policy(
     }
     rust.push_str(" {\n");
     for (index, stmt) in function.body.iter().enumerate() {
+        if let Some(line) = emit_interior_reborrow_decl(stmt, 1, &mut symbols, &context)
+            .map_err(|detail| format!("stmt[{index}].{detail}"))?
+        {
+            rust.push_str(&line);
+            continue;
+        }
         let line = emit_stmt(
             stmt,
             &function.return_type,

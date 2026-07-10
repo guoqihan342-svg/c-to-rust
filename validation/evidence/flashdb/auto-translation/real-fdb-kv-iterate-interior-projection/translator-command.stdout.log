@@ -1,0 +1,17 @@
+{
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-interior-projection",
+  "status": "generated",
+  "artifact_paths": [
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-auto-translation-plan.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-auto-translation-events.jsonl",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-type-map.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-cfg.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-pointer-graph.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-ai-candidate-manifest.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-blocked-repairs.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-rust-draft.rs",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-clang-dry-run.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-clang-lowering-report.json"
+  ]
+}

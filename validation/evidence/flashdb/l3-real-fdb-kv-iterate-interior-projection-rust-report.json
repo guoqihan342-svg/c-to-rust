@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-interior-projection",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "One proven mutable owner root is projected to an interior record by a local alias; the declared deeper u32 state is assigned zero through that alias and observed on owner.",
+    "external_callee": null,
+    "interior_projection": {
+      "owner_parameter": "itr",
+      "projection_path": [
+        "curr_kv"
+      ],
+      "alias_local": "kv",
+      "alias_rust_type": "Kv",
+      "state_owner_field_path": [
+        "curr_kv",
+        "addr",
+        "start"
+      ],
+      "constant_assign": {
+        "rust_type": "u32",
+        "value": 0
+      },
+      "pointer_root_count": 1,
+      "noalias_required": []
+    },
+    "excluded_semantics": [
+      "fdb_kv_iterate statements, branches, loops, storage calls, and iterator effects outside exact line 1863",
+      "the full real fdb_kv and fdb_kv_iterator layouts, anonymous addr record ABI, alignment, or padding",
+      "any claim that kv and itr are independent or noalias roots"
+    ]
+  },
+  "status": "passed",
+  "replay_contract_kind": "record_interior_projection_u32_constant_state",
+  "replay_engine": "exact_generated_rust_replay_plus_declarative_field_check",
+  "generated_draft_replay_pass": true,
+  "generated_draft_semantic_pass": false,
+  "provenance": {
+    "status": "passed",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": false,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "<generated-replay-executable> --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/generated-rust-replay.stdout.log"
+    },
+    "refs": {
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-rust-draft.rs",
+        "sha256": "49772825156dff01f92c589325e60aac60d6064bb5f4f5671c57e250b33a632d"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/rust-check.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-rust-replay-test-draft.rs",
+        "sha256": "09fc47b3da0931ff9516a37a1f82fb760fa95a32eb363fe968c8111e1d8bfa32",
+        "declared_sha256": "09fc47b3da0931ff9516a37a1f82fb760fa95a32eb363fe968c8111e1d8bfa32"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/generated-rust-replay.stdout.log",
+        "sha256": "98d8de2652b49ee359df177fa507368b336adfdfdf6dcd35ed61a303a20b4073"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-rust-report.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      }
+    },
+    "safe_mutable_projection": {
+      "status": "passed",
+      "pointer_root_count": 1,
+      "projection_mode": "safe_mutable_reference",
+      "alias_local": "kv",
+      "projection_path": [
+        "curr_kv"
+      ],
+      "raw_pointer_count": 0,
+      "unsafe_count": 0
+    },
+    "fixture_state_model": {
+      "kind": "record_interior_projection_u32_constant_state",
+      "operation": "constant_assign",
+      "pointer_root_count": 1,
+      "projection_mode": "owner_interior_mutable",
+      "scope": "fixture_only",
+      "value": 0
+    }
+  },
+  "cases": [
+    {
+      "id": "already-zero",
+      "return_value": true,
+      "kv_addr_start": 0,
+      "status": "passed"
+    },
+    {
+      "id": "ordinary-address",
+      "return_value": true,
+      "kv_addr_start": 0,
+      "status": "passed"
+    },
+    {
+      "id": "maximum-address",
+      "return_value": true,
+      "kv_addr_start": 0,
+      "status": "passed"
+    }
+  ]
+}

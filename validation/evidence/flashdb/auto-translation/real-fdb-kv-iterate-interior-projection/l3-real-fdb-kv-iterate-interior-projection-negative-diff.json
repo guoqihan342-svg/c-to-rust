@@ -1,0 +1,49 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-interior-projection-negative-diff.json",
+    "sha256": "47883095a2bf75acfdf57672f5fa06cf8faf02d51f7453d3c95c0e426c6b22dc",
+    "status": "passed"
+  },
+  "accepted_negative_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-c2rust-baseline-manifest.json",
+    "sha256": "32fa9cf7ca8c19df63120067284b34218d9fb4d44fb2c0dd25899278d7a4946d",
+    "status": "skipped"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "accepted_value": 0,
+    "case_id": "already-zero",
+    "field": "kv_addr_start",
+    "mutated_value": 1
+  },
+  "mutation_detected": true,
+  "negative_diff_gate": "schema_aware_negative_diff",
+  "required_inputs": {
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "negative_diff_actual_status": "expected_failed",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed",
+    "schema_diff_required_first_mismatch": null,
+    "schema_diff_required_status": "passed"
+  },
+  "root_blocked_by": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-route-decision.json",
+    "sha256": "6425e2b645534c13c540485a4995f8ea97df6fafef2c51c0666f99e5653282e1",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-interior-projection",
+  "status": "expected_failed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "9e18893372961e666426ce0f908947f4003d5ad682c6701e3e45c7cf8b488851",
+    "status": "passed"
+  }
+}

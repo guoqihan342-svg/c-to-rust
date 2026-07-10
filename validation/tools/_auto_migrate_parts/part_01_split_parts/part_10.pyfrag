@@ -1,0 +1,52 @@
+def c_oracle_record_interior_projection_u32_constant_state_execution_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> dict[str, Any]:
+    contract = record_interior_projection_u32_constant_state_replay_contract(
+        spec, fixture_binding
+    )
+    if contract is None:
+        return {"declarations": "", "statements": ""}
+    owner = contract["owner"]
+    state = contract["state_output"]
+    result = contract["return"]
+    statements: list[str] = []
+    for case_binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding["expected_outputs"]
+        case_id = str(case_binding.get("id") or "case")
+        case_ident = c_safe_ident(case_id)
+        local_name = f"actual_{case_ident}_{owner['parameter']}"
+        state_expression = local_name + "." + ".".join(
+            str(field) for field in state["owner_field_path"]
+        )
+        expected_state = int(expected[str(state["fixture_field"])])
+        expected_return = "true" if expected[str(result["fixture_field"])] else "false"
+        actual_return = f"actual_{case_ident}_return"
+        statements.append(
+            f"  struct {owner['rust_type']} {local_name} = "
+            f"{scripted_record_c_initializer(owner['initializer'], payload)};\n"
+            f"  bool {actual_return} = {required_str(spec, 'function_name')}(&{local_name});\n"
+            f"  if ({actual_return} != {expected_return}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' return mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(result['fixture_field']) + ' matched')});\n"
+            f"  if ({state_expression} != {c_integer_literal('uint32_t', expected_state)}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' projected state mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(state['fixture_field']) + ' matched')});\n"
+        )
+    return {
+        "declarations": "",
+        "definitions_after_target": "",
+        "statements": "".join(statements),
+        "fixture_state_model": {
+            "kind": RECORD_INTERIOR_PROJECTION_U32_CONSTANT_STATE_KIND,
+            "scope": "fixture_only",
+            "operation": "constant_assign",
+            "value": 0,
+            "projection_mode": "owner_interior_mutable",
+            "pointer_root_count": 1,
+        },
+    }

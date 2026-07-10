@@ -1,0 +1,58 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=ada2be572f6ee45819aaa407975720c873413d8d5fc3660a83b75cf3d31e0b82",
+    "fixture_hash=0f6b4673062070085a57ff073e76a7d1e2696fbbe945e8f6c578fef1fb84d819",
+    "build_profile_hash=9f8db45f2e358167e1f031c6bb9bb8317cc7d349e5900fb1bf7adf353a92df7c",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edge_to_callee_binding": [],
+  "call_edges": [
+    {
+      "definition_status": "carrier_equivalent_mutable_pointer_to_projected_record",
+      "kind": "type",
+      "name": "fdb_kv_t",
+      "source": "inc/fdb_def.h:160"
+    }
+  ],
+  "callee_sources": [],
+  "direct_c_files": [
+    "src/fdb_kvdb.c"
+  ],
+  "direct_call_edges": [],
+  "direct_rust_files": [
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-rust-draft.rs"
+  ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
+  "external_direct_callees": [],
+  "fixture": "validation/l2_slices/fixtures/real-fdb-kv-iterate-interior-projection.json",
+  "global_dependencies": [],
+  "level": "L3",
+  "repo_commit": "58c7c661283194a30c870d19c389c8b4116420fc",
+  "schema_version": 1,
+  "signature_bindings": [],
+  "slice_id": "real-fdb-kv-iterate-interior-projection",
+  "slice_spec": {
+    "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-interior-projection.json",
+    "sha256": "ada2be572f6ee45819aaa407975720c873413d8d5fc3660a83b75cf3d31e0b82"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate_projection_probe"
+    ],
+    "globals": [],
+    "structs": [
+      "fdb_kv_t"
+    ]
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "stub_boundaries": [],
+  "target_id": "flashdb"
+}

@@ -1,0 +1,183 @@
+{
+  "alias_gate_identity": {
+    "alias_set_count": 0,
+    "aliasing_proven": true,
+    "decision": "not_applicable",
+    "precondition_count": 0,
+    "requires_noalias": false,
+    "risk_count": 0,
+    "risk_level": "none"
+  },
+  "build_profile_hash": "9f8db45f2e358167e1f031c6bb9bb8317cc7d349e5900fb1bf7adf353a92df7c",
+  "c2rust_baseline_identity": {
+    "sha256": "5095b484193ef0770b11124c300b8e93f0f315685253ac3b23623b99835269c0",
+    "status": "skipped"
+  },
+  "c_oracle_harness_identity": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-c-oracle-harness-draft.c",
+    "sha256": "8ae173e5b5822e096cf0aba3bf3ffa2c802b9560caf6d7382cc1e647122062f3",
+    "status": "draft"
+  },
+  "cache_input_fields": [
+    "source_commit",
+    "source_file_hashes",
+    "slice_spec_sha256",
+    "fixture_hash",
+    "build_profile_hash",
+    "competition_environment_identity",
+    "cargo_lock_hash",
+    "tool_versions",
+    "schema_versions",
+    "translator_version",
+    "translator_manifest_sha256",
+    "command_arguments",
+    "alias_gate_identity",
+    "effect_graph_identity",
+    "scalar_ub_contract_identity",
+    "oracle_boundary_contract_identity",
+    "c2rust_baseline_identity",
+    "route_decision_identity",
+    "validation_profile_identity",
+    "global_dependency_identity",
+    "c_oracle_harness_identity",
+    "translator_feature_set",
+    "clang_lowering_identity"
+  ],
+  "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+  "clang_lowering_identity": {
+    "clang_path": "/usr/bin/clang",
+    "clang_path_status": "configured",
+    "clang_version": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "enabled": true,
+    "features": [
+      "clang-lowering-report"
+    ],
+    "frontend": "clang_ast_dump_json",
+    "ignored_env_for_ast_dump": {
+      "LIBCLANG_PATH": {
+        "reason": "ignored_for_ast_dump",
+        "status": "not_configured",
+        "value": ""
+      }
+    },
+    "lane": "competition-clang-lane",
+    "required": true,
+    "requires_env": [
+      "CLANG_PATH"
+    ]
+  },
+  "command_arguments": [
+    "auto_migrate.py",
+    "--slice-spec",
+    "validation/slice-specs/flashdb-real-fdb-kv-iterate-interior-projection.json",
+    "--accept-existing-evidence",
+    "--emit-clang-lowering-report",
+    "--competition-clang-lane"
+  ],
+  "competition_environment_identity": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
+  "dependent_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-c2rust-baseline-manifest.json",
+      "sha256": "32fa9cf7ca8c19df63120067284b34218d9fb4d44fb2c0dd25899278d7a4946d",
+      "status": "skipped"
+    },
+    "route_decision": {
+      "level": "L1",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-route-decision.json",
+      "sha256": "6425e2b645534c13c540485a4995f8ea97df6fafef2c51c0666f99e5653282e1",
+      "status": "recorded"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-interior-projection/l3-real-fdb-kv-iterate-interior-projection-validation-profile.json",
+      "profile": "L1-dev",
+      "sha256": "9e18893372961e666426ce0f908947f4003d5ad682c6701e3e45c7cf8b488851",
+      "status": "passed"
+    }
+  },
+  "effect_graph_identity": {
+    "alias_gate_decision": "not_applicable",
+    "alias_sensitive": false,
+    "read_effect_count": 0,
+    "read_nodes": [],
+    "schema_version": 2,
+    "sha256": "861a492abc9f95b84e8ecbea2bef65c4b551a949c72a32ad33035fd0ea981b4e",
+    "write_effect_count": 1,
+    "write_nodes": [
+      "itr"
+    ]
+  },
+  "fixture_hash": "0f6b4673062070085a57ff073e76a7d1e2696fbbe945e8f6c578fef1fb84d819",
+  "global_dependency_identity": {
+    "count": 0,
+    "names": [],
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "invalidates": [
+    "context_pack",
+    "type_map",
+    "cfg",
+    "pointer_graph",
+    "c2rust_baseline",
+    "route_decision",
+    "validation_profile",
+    "rust_draft",
+    "patch_plan",
+    "ai_candidate",
+    "c_oracle",
+    "rust_replay",
+    "diff",
+    "negative_diff",
+    "unsafe_ledger",
+    "final_verification",
+    "auto_translation_manifest",
+    "summary"
+  ],
+  "oracle_boundary_contract_identity": {
+    "sha256": "62bd50be0d09eb2692d1e9177a50b34d3242ad19652b3b045ed2412d16a613e6",
+    "status": "sufficient_for_semantic_pass"
+  },
+  "route_decision_identity": {
+    "sha256": "b0cdde32229748ae9bd54446fa5b7fd320f3c6a261e174faf0907e8c15500cfb",
+    "status": "recorded"
+  },
+  "scalar_ub_contract_identity": {
+    "sha256": "64c066484b30fca601c1cd9d175a4676a28e372a192b9bd27734c4ddeb19133b",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "schema_versions": {
+    "auto_cache_metadata": 1,
+    "auto_translation_plan": 1,
+    "cfg": 1,
+    "evidence_manifest": 1,
+    "pointer_graph": 2,
+    "type_map": 1
+  },
+  "slice_id": "real-fdb-kv-iterate-interior-projection",
+  "slice_spec_sha256": "ada2be572f6ee45819aaa407975720c873413d8d5fc3660a83b75cf3d31e0b82",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_file_hashes": {
+    "src/fdb_kvdb.c": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b"
+  },
+  "target_id": "flashdb",
+  "tool_versions": {
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "openspec": "1.3.1",
+    "python": "Python 3.12.3",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "translator_feature_set": [
+    "clang-lowering-report"
+  ],
+  "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
+  "translator_version": "0.1.0",
+  "validation_profile_identity": {
+    "sha256": "c739da24e0d556144a6b7b89d6b8880a27ddce197d69c1e7bb5999632a5d5381",
+    "status": "passed"
+  }
+}

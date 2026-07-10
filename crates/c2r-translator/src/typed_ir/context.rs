@@ -18,6 +18,7 @@ struct EmitContext {
     assignment_call_sibling_record_read: Option<MutableRecordPointerFieldKey>,
     mutable_pointer_read_slots: HashSet<MutablePointerSlotKey>,
     zero_initialized_record_locals: HashSet<String>,
+    interior_reborrows: HashMap<String, InteriorReborrowPlan>,
     readonly_globals: HashMap<String, IrGlobal>,
 }
 
@@ -57,6 +58,7 @@ impl EmitContext {
         policy: EmitPolicy,
     ) -> Result<Self, String> {
         let assigned_vars = collect_assigned_vars(&function.body);
+        let interior_reborrows = analyze_interior_reborrow(function)?;
         let byte_cursor_sources = collect_byte_cursor_sources(&function.body);
         let mut byte_slice_params = HashSet::new();
         for source in byte_cursor_sources.values() {
@@ -105,8 +107,12 @@ impl EmitContext {
                 &mutable_pointer_write_params,
                 &policy,
             )?;
-        let mutable_record_pointer_write_params =
+        let mut mutable_record_pointer_write_params =
             collect_mutable_record_pointer_write_params(&function.body, &function.params, &policy)?;
+        for plan in interior_reborrows.values() {
+            mutable_record_pointer_write_params.insert(plan.owner.clone());
+            mutable_record_pointer_write_params.insert(plan.alias.clone());
+        }
         let readonly_record_pointer_array_index_params =
             collect_readonly_record_pointer_array_index_params(
                 &function.body,
@@ -163,6 +169,7 @@ impl EmitContext {
             assignment_call_sibling_record_read: None,
             mutable_pointer_read_slots: HashSet::new(),
             zero_initialized_record_locals,
+            interior_reborrows,
             readonly_globals,
         })
     }
@@ -223,12 +230,23 @@ impl EmitContext {
         self.zero_initialized_record_locals.contains(name)
     }
 
+    fn interior_reborrow(&self, alias: &str) -> Option<&InteriorReborrowPlan> {
+        self.interior_reborrows.get(alias)
+    }
+
     fn is_mutable_record_pointer_read_field(&self, name: &str, field: &str) -> bool {
-        self.mutable_record_pointer_read_fields
-            .contains(&MutableRecordPointerFieldKey {
+        let key = if let Some(plan) = self.interior_reborrow(name) {
+            MutableRecordPointerFieldKey {
+                base: plan.owner.clone(),
+                field: format!("{}.{}", plan.owner_field, field),
+            }
+        } else {
+            MutableRecordPointerFieldKey {
                 base: name.to_string(),
                 field: field.to_string(),
-            })
+            }
+        };
+        self.mutable_record_pointer_read_fields.contains(&key)
     }
 
     fn is_assignment_call_sibling_record_read(&self, name: &str, field: &str) -> bool {

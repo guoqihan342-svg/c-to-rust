@@ -64,11 +64,16 @@ def run_negative_execution(
             "generated Rust draft must contain exactly one declared mutation site"
         )
     match = matches[0]
-    mutated = original[: match.start()] + operator_to + original[match.end() :]
+    mutation_start, mutation_end = (
+        match.span("value") if "value" in pattern.groupindex else match.span()
+    )
+    if original[mutation_start:mutation_end] != operator_from:
+        raise ReporterError("declared mutation pattern did not select the expected operator")
+    mutated = original[:mutation_start] + operator_to + original[mutation_end:]
     if len(mutated) != len(original):
         raise ReporterError("declared mutation changed generated draft length")
     changed = [index for index, pair in enumerate(zip(original, mutated, strict=True)) if pair[0] != pair[1]]
-    if not changed or min(changed) < match.start() or max(changed) >= match.end():
+    if not changed or min(changed) < mutation_start or max(changed) >= mutation_end:
         raise ReporterError("generated Rust draft changed outside the unique declared mutation")
 
     output_root = output_dir.resolve()
@@ -175,7 +180,7 @@ def run_negative_execution(
             "operator_from": operator_from.decode("ascii"),
             "operator_to": operator_to.decode("ascii"),
             "mutation_count": 1,
-            "byte_offset": match.start(),
+            "byte_offset": mutation_start,
             "original_draft": path_ref(context.repo_root, draft_path, original_sha),
             "mutated_draft": content_ref(
                 context.repo_root,

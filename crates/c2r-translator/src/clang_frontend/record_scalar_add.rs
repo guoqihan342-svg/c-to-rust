@@ -20,6 +20,7 @@ pub fn lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
         kind: "missing_function_decl".to_string(),
         message: format!("clang AST JSON does not contain FunctionDecl named {function_name}"),
     })?;
+    validate_interior_reborrow_typedef_provenance(ast, function, target_abi)?;
     let mut function = function.clone();
     rewrite_enum_constant_decl_refs_to_integer_literals(&mut function, &enum_constant_inventory)?;
     let mut skeleton =

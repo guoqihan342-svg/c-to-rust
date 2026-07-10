@@ -1,0 +1,7 @@
+{
+  "blocked": [],
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-interior-projection",
+  "status": "none",
+  "target_id": "flashdb"
+}

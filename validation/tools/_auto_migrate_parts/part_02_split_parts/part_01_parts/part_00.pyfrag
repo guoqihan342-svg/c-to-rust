@@ -101,6 +101,12 @@ def generate_rust_replay_test_draft(
 
 
 def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    if record_interior_projection_u32_constant_state_replay_supported(
+        spec, fixture_binding
+    ):
+        return rust_replay_record_interior_projection_u32_constant_state_cases_source(
+            spec, fixture_binding
+        )
     if record_u32_field_scalar_wrapping_add_state_replay_supported(spec, fixture_binding):
         return rust_replay_record_u32_field_scalar_wrapping_add_state_cases_source(
             spec, fixture_binding

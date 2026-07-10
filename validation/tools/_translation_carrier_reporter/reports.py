@@ -28,6 +28,9 @@ from .field_scalar_add_reports import (
     build_negative_report as build_field_scalar_add_negative_report,
     build_report_claim as build_field_scalar_add_report_claim,
 )
+from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
+from .interior_projection_reports import build_negative_report as build_projection_negative_report
+from .interior_projection_reports import build_report_claim as build_projection_report_claim
 from .record_contract import KIND as RECORD_KIND
 from .sequence_contract import KIND as SEQUENCE_KIND
 from .sequence_model import mutated_observable_outputs, mutation_partition
@@ -135,6 +138,8 @@ def build_negative_report(
     common: dict[str, Any],
     execution: dict[str, Any],
 ) -> dict[str, Any]:
+    if context.contract.get("kind") == INTERIOR_PROJECTION_KIND:
+        return build_projection_negative_report(context, common, execution)
     if context.contract.get("kind") == CONSTANT_STATE_KIND:
         return build_constant_state_negative_report(context, common, execution)
     if context.contract.get("kind") == FIELD_ADD_KIND:
@@ -249,6 +254,8 @@ def build_sequence_negative_report(
 
 
 def report_claim(context: StaticContext) -> dict[str, Any]:
+    if context.contract.get("kind") == INTERIOR_PROJECTION_KIND:
+        return build_projection_report_claim(context)
     if context.contract.get("kind") == CONSTANT_STATE_KIND:
         return build_constant_state_report_claim(context)
     if context.contract.get("kind") == FIELD_ADD_KIND:

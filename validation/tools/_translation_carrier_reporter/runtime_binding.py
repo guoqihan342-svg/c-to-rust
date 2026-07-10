@@ -22,6 +22,7 @@ from .runtime_replay_validation import (
     validate_replay_payload,
     validate_replay_test_ref,
     validate_rust_check,
+    validate_safe_interior_projection_draft,
 )
 from .runtime_oracle_validation import (
     ensure_inside_repo,
@@ -208,6 +209,7 @@ def validate_generated_rust_replay(
             raise ReporterError(f"required generated Rust artifact is missing: {label}")
     draft_path = paths["rust_draft"].resolve()
     draft_sha = sha256_file(draft_path)
+    projection_safety = validate_safe_interior_projection_draft(context, draft_path)
     if lowering.get("typed_ir_candidate", {}).get("rust_draft_sha256") != draft_sha:
         raise ReporterError("generated Rust draft hash does not match lowering report")
 
@@ -288,6 +290,7 @@ def validate_generated_rust_replay(
             "draft": draft_path,
             "replay_test": replay_test_path,
         },
+        **({"safe_mutable_projection": projection_safety} if projection_safety else {}),
     }
     if is_state_replay_kind(context.contract):
         result["fixture_state_model"] = replay["fixture_state_model"]
