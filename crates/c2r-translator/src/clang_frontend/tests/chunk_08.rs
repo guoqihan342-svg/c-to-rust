@@ -76,3 +76,103 @@ fn do_while_tail_assignment_rewrite_only_enters_current_level_if_branches() {
     assert_eq!(do_while_body.as_slice(), [ClangStmtSkeleton::Continue]);
     assert_eq!(for_body.as_slice(), [ClangStmtSkeleton::Continue]);
 }
+
+#[test]
+fn assignment_call_comparison_contexts_admit_only_their_declared_operators() {
+    for (opcode, expected) in [
+        ("==", ClangBinaryOperator::Eq),
+        ("!=", ClangBinaryOperator::Neq),
+        ("<", ClangBinaryOperator::Lt),
+        ("<=", ClangBinaryOperator::Le),
+        (">", ClangBinaryOperator::Gt),
+        (">=", ClangBinaryOperator::Ge),
+    ] {
+        assert_eq!(
+            AssignmentCallComparisonContext::IfCondition.comparison_operator(Some(opcode)),
+            Some(expected)
+        );
+    }
+    assert_eq!(
+        AssignmentCallComparisonContext::DoWhileTail.comparison_operator(Some("!=")),
+        Some(ClangBinaryOperator::Neq)
+    );
+    assert_eq!(
+        AssignmentCallComparisonContext::DoWhileTail.comparison_operator(Some("==")),
+        None
+    );
+    assert_eq!(
+        AssignmentCallComparisonContext::IfCondition.comparison_operator(Some("&&")),
+        None
+    );
+}
+
+#[test]
+fn if_assignment_call_comparison_normalizes_to_assignment_and_pure_read() {
+    let condition = serde_json::json!({
+        "kind": "BinaryOperator",
+        "opcode": ">",
+        "type": { "qualType": "int" },
+        "inner": [
+            {
+                "kind": "ParenExpr",
+                "type": { "qualType": "int" },
+                "inner": [{
+                    "kind": "BinaryOperator",
+                    "opcode": "=",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "kind": "VarDecl", "name": "value" }
+                        },
+                        {
+                            "kind": "CallExpr",
+                            "type": { "qualType": "int" },
+                            "inner": [{
+                                "kind": "ImplicitCastExpr",
+                                "castKind": "FunctionToPointerDecay",
+                                "type": { "qualType": "int (*)(void)" },
+                                "inner": [{
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "int (void)" },
+                                    "referencedDecl": { "kind": "FunctionDecl", "name": "next_value" }
+                                }]
+                            }]
+                        }
+                    ]
+                }]
+            },
+            { "kind": "IntegerLiteral", "value": "0", "type": { "qualType": "int" } }
+        ]
+    });
+
+    let normalized = if_assignment_call_comparison_from_ast(&condition)
+        .expect("normalize strict if assignment-call comparison");
+    let AssignmentCallComparisonNormalization::Accepted {
+        assignment,
+        condition,
+    } = normalized
+    else {
+        panic!("expected accepted normalization");
+    };
+    assert!(matches!(
+        assignment,
+        ClangStmtSkeleton::Assign {
+            target: ClangExprSkeleton::DeclRef { name, .. },
+            value: ClangExprSkeleton::Call { callee, .. }
+        } if name == "value" && callee == "next_value"
+    ));
+    assert!(matches!(
+        condition,
+        ClangExprSkeleton::Binary {
+            op: ClangBinaryOperator::Gt,
+            lhs,
+            ..
+        } if matches!(
+            lhs.as_ref(),
+            ClangExprSkeleton::LValueToRValue { expr, .. }
+                if matches!(expr.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "value")
+        )
+    ));
+}

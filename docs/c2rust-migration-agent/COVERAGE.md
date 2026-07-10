@@ -105,7 +105,7 @@
 |------|------|------|
 | 表达式语句 | 已支持 | `value++;`、`++value;` |
 | `return` (with/without value) | 已支持 | |
-| `if` / `if-else` | 已支持 | 含 comparison condition；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留；单个 direct scalar inc/dec comparison operand 可在上述受限冲突检查后通过 ordered prelude 发射 |
+| `if` / `if-else` | 已支持 | 含 comparison condition；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留；单个 direct scalar inc/dec comparison operand 可在上述受限冲突检查后通过 ordered prelude 发射。窄形状 `if ((direct fixed-width integer scalar = exactly one direct call) compare pure_sentinel)` 会提升为前置 `Assign` + 读取目标标量的纯 `If` comparison，支持六个整数比较且保持单语句 else-if 归属；`fdb_kvdb.c:1018/:1076` 是真实正例，`:738` 的 nested second call 与 `:1870` 的 pointer/member target 是真实负例。右侧赋值、逻辑组合、复杂/volatile/atomic/deref target、第二副作用及 `while` 同形继续 fail-closed；该项只有 candidate evidence，不增加语义通过数 |
 | `while` | 已支持 | 含 postfix `size--`、窄形状 prefix `--size`，以及单个 direct scalar inc/dec comparison operand 的 per-iteration ordered prelude；`continue`/`break` runtime 测试锁定重新判断与退出语义；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | `do-while` | 已支持 | condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留；受限 direct scalar inc/dec comparison condition 在正常尾部和 `continue` 路径执行 ordered prelude，`break` 不执行 condition；严格 `(scalar = direct_call(...)) != sentinel` 尾条件可归一化为 body 尾部 assignment + 纯 comparison，当前层 `continue` 前会克隆同一尾赋值，再由既有 do-while emitter 执行纯 sentinel check，then/else 分支会递归改写但 nested `while`/`do-while`/`for` 不下钻；复杂/volatile/atomic target、第二 side effect、可选 `&&` 扩展继续 fail-closed；no-clang AST/runtime、赋值顺序和嵌套边界均有回归测试 |
 | `for` (scoped) | 窄支持 | init/condition/step 为简单形式；顶层 init 支持按从左到右顺序展开 direct integer scalar assignment comma chain（如 `i = start, j = i`）；memory target、call/deref RHS、inc/dec leaf、volatile 读写及 condition/step comma fail-closed；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
@@ -116,7 +116,7 @@
 | label | 不支持 | 仅作为 `goto` refusal 的 schema-bound CFG/relooper evidence 记录；clang AST fixture 已要求拒绝原因带 `source_range` |
 | `case` / `default` | 不支持 | 仅作为 `switch` refusal 的 schema-bound CFG/relooper evidence 记录；clang AST fixture 已要求拒绝原因带 `source_range` |
 
-真实 named-slice 验收补充（2026-07-10）：`real-fdb-tsl-to-blob` 的 exact generated draft 已通过 3-case C oracle、generated Rust replay、schema diff、negative diff、unsafe scan/ledger、route/profile 与 final verification，包含 clang-proven `uint32_t -> size_t` widening 和 mutable output identity return。该通过只对应绑定 fixture 与 SHA，不把通用 record layout/ABI/alias/provenance 标为已支持；coverage numerator 当前为 22。
+真实 named-slice 验收补充（2026-07-10）：`real-fdb-tsl-to-blob` 的 exact generated draft 已通过 3-case C oracle、generated Rust replay、schema diff、negative diff、unsafe scan/ledger、route/profile 与 final verification，包含 clang-proven `uint32_t -> size_t` widening 和 mutable output identity return；`real-fdb-is-str` 也已通过 8-case C oracle/Rust replay/diff/negative/unsafe/route/final-verification 链。两项都只证明各自绑定 fixture、SHA 与 observable contract，不外推为通用 record layout/ABI/alias/provenance、locale 或任意字符串证明；`translator_generated_semantic_pass_count` 当前为 23。
 
 ## 数组
 

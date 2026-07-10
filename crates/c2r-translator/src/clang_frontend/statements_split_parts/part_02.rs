@@ -1,5 +1,5 @@
 #[cfg(feature = "typed-ir")]
-enum DoWhileTailCallAssignmentNormalization {
+enum AssignmentCallComparisonNormalization {
     NotMatched,
     Rejected(String),
     Accepted {
@@ -16,20 +16,75 @@ enum DoWhileTailWrappedNode {
 }
 
 #[cfg(feature = "typed-ir")]
+#[derive(Clone, Copy)]
+enum AssignmentCallComparisonContext {
+    DoWhileTail,
+    IfCondition,
+}
+
+#[cfg(feature = "typed-ir")]
+impl AssignmentCallComparisonContext {
+    fn label(self) -> &'static str {
+        match self {
+            Self::DoWhileTail => "do-while tail",
+            Self::IfCondition => "if condition",
+        }
+    }
+
+    fn error_kind(self) -> &'static str {
+        match self {
+            Self::DoWhileTail => "invalid_do_stmt",
+            Self::IfCondition => "invalid_if_stmt",
+        }
+    }
+
+    fn comparison_operator(self, opcode: Option<&str>) -> Option<ClangBinaryOperator> {
+        match (self, opcode) {
+            (Self::DoWhileTail, Some("!=")) => Some(ClangBinaryOperator::Neq),
+            (Self::IfCondition, Some("==")) => Some(ClangBinaryOperator::Eq),
+            (Self::IfCondition, Some("!=")) => Some(ClangBinaryOperator::Neq),
+            (Self::IfCondition, Some("<")) => Some(ClangBinaryOperator::Lt),
+            (Self::IfCondition, Some("<=")) => Some(ClangBinaryOperator::Le),
+            (Self::IfCondition, Some(">")) => Some(ClangBinaryOperator::Gt),
+            (Self::IfCondition, Some(">=")) => Some(ClangBinaryOperator::Ge),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn do_while_tail_call_assignment_from_ast(
     condition: &Value,
-) -> Result<DoWhileTailCallAssignmentNormalization, ClangFrontendError> {
-    let condition = do_while_tail_strip_parens(condition)?;
-    if string_field(condition, "kind").as_deref() != Some("BinaryOperator")
-        || string_field(condition, "opcode").as_deref() != Some("!=")
-    {
-        return Ok(DoWhileTailCallAssignmentNormalization::NotMatched);
+) -> Result<AssignmentCallComparisonNormalization, ClangFrontendError> {
+    assignment_call_comparison_from_ast(condition, AssignmentCallComparisonContext::DoWhileTail)
+}
+
+#[cfg(feature = "typed-ir")]
+fn if_assignment_call_comparison_from_ast(
+    condition: &Value,
+) -> Result<AssignmentCallComparisonNormalization, ClangFrontendError> {
+    assignment_call_comparison_from_ast(condition, AssignmentCallComparisonContext::IfCondition)
+}
+
+#[cfg(feature = "typed-ir")]
+fn assignment_call_comparison_from_ast(
+    condition: &Value,
+    context: AssignmentCallComparisonContext,
+) -> Result<AssignmentCallComparisonNormalization, ClangFrontendError> {
+    let condition = do_while_tail_strip_parens(condition, context)?;
+    if string_field(condition, "kind").as_deref() != Some("BinaryOperator") {
+        return Ok(AssignmentCallComparisonNormalization::NotMatched);
     }
+    let Some(comparison_op) =
+        context.comparison_operator(string_field(condition, "opcode").as_deref())
+    else {
+        return Ok(AssignmentCallComparisonNormalization::NotMatched);
+    };
     let children = inner(condition);
     let [assignment_operand, sentinel_node] = children else {
         return Err(ClangFrontendError {
-            kind: "invalid_do_stmt".to_string(),
-            message: "do-while sentinel comparison must have two operands".to_string(),
+            kind: context.error_kind().to_string(),
+            message: format!("{} sentinel comparison must have two operands", context.label()),
         });
     };
 
@@ -38,40 +93,43 @@ fn do_while_tail_call_assignment_from_ast(
         assignment_operand,
         &mut comparison_conversions,
         DoWhileTailWrappedNode::Assignment,
+        context,
     )?
     else {
-        return Ok(DoWhileTailCallAssignmentNormalization::NotMatched);
+        return Ok(AssignmentCallComparisonNormalization::NotMatched);
     };
     let assignment_children = inner(assignment_node);
     let [target_node, value_node] = assignment_children else {
         return Err(ClangFrontendError {
             kind: "invalid_assignment_operator".to_string(),
-            message: "do-while tail assignment must have two operands".to_string(),
+            message: format!("{} assignment must have two operands", context.label()),
         });
     };
 
     if string_field(target_node, "kind").as_deref() != Some("DeclRefExpr") {
-        return Ok(DoWhileTailCallAssignmentNormalization::Rejected(
-            "do-while tail-call assignment target must be a direct non-volatile, non-atomic fixed-width integer DeclRef"
-                .to_string(),
-        ));
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment-call target must be a direct non-volatile, non-atomic fixed-width integer DeclRef",
+            context.label()
+        )));
     }
     let target = expr_skeleton_from_ast(target_node)?;
     let ClangExprSkeleton::DeclRef { ty: target_ty, .. } = &target else {
-        return Ok(DoWhileTailCallAssignmentNormalization::Rejected(
-            "do-while tail-call assignment target must be a direct non-volatile, non-atomic fixed-width integer DeclRef"
-                .to_string(),
-        ));
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment-call target must be a direct non-volatile, non-atomic fixed-width integer DeclRef",
+            context.label()
+        )));
     };
     if let Some(reason) = do_while_tail_fixed_integer_type_rejection_reason(target_ty) {
-        return Ok(DoWhileTailCallAssignmentNormalization::Rejected(format!(
-            "do-while tail-call assignment target must be a direct non-volatile, non-atomic fixed-width integer DeclRef: {reason}"
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment-call target must be a direct non-volatile, non-atomic fixed-width integer DeclRef: {reason}",
+            context.label()
         )));
     }
     let assignment_ty = expr_type(assignment_node)?;
     if !compound_assignment_types_match(target_ty, &assignment_ty) {
-        return Ok(DoWhileTailCallAssignmentNormalization::Rejected(format!(
-            "do-while tail-call assignment result type {} must match target type {}",
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment-call result type {} must match target type {}",
+            context.label(),
             assignment_ty.canonical, target_ty.canonical
         )));
     }
@@ -81,49 +139,56 @@ fn do_while_tail_call_assignment_from_ast(
         value_node,
         &mut value_conversions,
         DoWhileTailWrappedNode::Call,
+        context,
     )?
     else {
-        return Ok(DoWhileTailCallAssignmentNormalization::Rejected(
-            "do-while tail assignment RHS must be exactly one direct call, optionally wrapped in clang-proven integer conversions"
-                .to_string(),
-        ));
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment RHS must be exactly one direct call, optionally wrapped in clang-proven integer conversions",
+            context.label()
+        )));
     };
-    if let Some(reason) = do_while_tail_direct_call_rejection_reason(call_node)? {
-        return Ok(DoWhileTailCallAssignmentNormalization::Rejected(reason));
+    if let Some(reason) = do_while_tail_direct_call_rejection_reason(call_node, context)? {
+        return Ok(AssignmentCallComparisonNormalization::Rejected(reason));
     }
     let call_ty = expr_type(call_node)?;
     if let Some(reason) = do_while_tail_fixed_integer_type_rejection_reason(&call_ty) {
-        return Ok(DoWhileTailCallAssignmentNormalization::Rejected(format!(
-            "do-while tail assignment direct call must return a fixed-width integer: {reason}"
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment direct call must return a fixed-width integer: {reason}",
+            context.label()
         )));
     }
     if value_conversions.is_empty() {
         if !compound_assignment_types_match(target_ty, &call_ty) {
-            return Ok(DoWhileTailCallAssignmentNormalization::Rejected(format!(
-                "do-while tail assignment direct call return type {} must match target type {} or carry a clang-proven integer conversion",
+            return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+                "{} assignment direct call return type {} must match target type {} or carry a clang-proven integer conversion",
+                context.label(),
                 call_ty.canonical, target_ty.canonical
             )));
         }
     } else if !compound_assignment_types_match(target_ty, &expr_type(value_node)?) {
-        return Ok(DoWhileTailCallAssignmentNormalization::Rejected(
-            "do-while tail assignment converted RHS type must match its target type".to_string(),
-        ));
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment converted RHS type must match its target type",
+            context.label()
+        )));
     }
 
     if let Some(reason) = do_while_tail_additional_effect_rejection_reason(sentinel_node) {
-        return Ok(DoWhileTailCallAssignmentNormalization::Rejected(format!(
-            "do-while tail assignment sentinel must not contain a second side effect: {reason}"
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment sentinel must not contain a second side effect: {reason}",
+            context.label()
         )));
     }
     let sentinel = condition_expr_skeleton_from_ast(sentinel_node)?;
     let Some(sentinel_ty) = clang_expr_skeleton_type(&sentinel) else {
-        return Ok(DoWhileTailCallAssignmentNormalization::Rejected(
-            "do-while tail assignment sentinel has no supported result type".to_string(),
-        ));
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment sentinel has no supported result type",
+            context.label()
+        )));
     };
     if let Some(reason) = do_while_tail_fixed_integer_type_rejection_reason(sentinel_ty) {
-        return Ok(DoWhileTailCallAssignmentNormalization::Rejected(format!(
-            "do-while tail assignment sentinel must be a fixed-width integer expression: {reason}"
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment sentinel must be a fixed-width integer expression: {reason}",
+            context.label()
         )));
     }
 
@@ -132,29 +197,33 @@ fn do_while_tail_call_assignment_from_ast(
         value: value_expr_skeleton_from_ast(value_node)?,
     };
     let condition = ClangExprSkeleton::Binary {
-        op: ClangBinaryOperator::Neq,
+        op: comparison_op,
         lhs: Box::new(do_while_tail_assignment_read_skeleton(
             assignment_operand,
             &target,
             target_ty,
+            context,
         )?),
         rhs: Box::new(sentinel),
         ty: expr_type(condition)?,
     };
-    Ok(DoWhileTailCallAssignmentNormalization::Accepted {
+    Ok(AssignmentCallComparisonNormalization::Accepted {
         assignment,
         condition,
     })
 }
 
 #[cfg(feature = "typed-ir")]
-fn do_while_tail_strip_parens(mut expr: &Value) -> Result<&Value, ClangFrontendError> {
+fn do_while_tail_strip_parens(
+    mut expr: &Value,
+    context: AssignmentCallComparisonContext,
+) -> Result<&Value, ClangFrontendError> {
     while string_field(expr, "kind").as_deref() == Some("ParenExpr") {
         let children = inner(expr);
         let [operand] = children else {
             return Err(ClangFrontendError {
-                kind: "invalid_do_stmt".to_string(),
-                message: "parenthesized do-while operand must have one child".to_string(),
+                kind: context.error_kind().to_string(),
+                message: format!("parenthesized {} operand must have one child", context.label()),
             });
         };
         expr = operand;
@@ -167,8 +236,9 @@ fn do_while_tail_wrapped_node<'a>(
     expr: &'a Value,
     conversions: &mut Vec<&'a Value>,
     expected: DoWhileTailWrappedNode,
+    context: AssignmentCallComparisonContext,
 ) -> Result<Option<&'a Value>, ClangFrontendError> {
-    let expr = do_while_tail_strip_parens(expr)?;
+    let expr = do_while_tail_strip_parens(expr, context)?;
     let is_expected = match expected {
         DoWhileTailWrappedNode::Assignment => {
             string_field(expr, "kind").as_deref() == Some("BinaryOperator")
@@ -192,53 +262,58 @@ fn do_while_tail_wrapped_node<'a>(
     let children = inner(expr);
     let [operand] = children else {
         return Err(ClangFrontendError {
-            kind: "invalid_do_stmt".to_string(),
-            message: "integer conversion must have one operand".to_string(),
+            kind: context.error_kind().to_string(),
+            message: format!("{} integer conversion must have one operand", context.label()),
         });
     };
-    do_while_tail_wrapped_node(operand, conversions, expected)
+    do_while_tail_wrapped_node(operand, conversions, expected, context)
 }
 
 #[cfg(feature = "typed-ir")]
 fn do_while_tail_direct_call_rejection_reason(
     call: &Value,
+    context: AssignmentCallComparisonContext,
 ) -> Result<Option<String>, ClangFrontendError> {
     let children = inner(call);
     let Some((callee, args)) = children.split_first() else {
         return Err(ClangFrontendError {
             kind: "invalid_call_expr".to_string(),
-            message: "do-while tail CallExpr is missing callee".to_string(),
+            message: format!("{} assignment CallExpr is missing callee", context.label()),
         });
     };
-    if !do_while_tail_is_direct_function_callee(callee)? {
-        return Ok(Some(
-            "do-while tail assignment RHS call must use a direct FunctionDecl identifier"
-                .to_string(),
-        ));
+    if !do_while_tail_is_direct_function_callee(callee, context)? {
+        return Ok(Some(format!(
+            "{} assignment RHS call must use a direct FunctionDecl identifier",
+            context.label()
+        )));
     }
     for arg in args {
         if let Some(reason) = do_while_tail_additional_effect_rejection_reason(arg) {
             return Ok(Some(format!(
-                "do-while tail assignment RHS must contain exactly one call and no second side effect: {reason}"
+                "{} assignment RHS must contain exactly one call and no second side effect: {reason}",
+                context.label()
             )));
         }
     }
     match call_expr_skeleton_from_ast(call)? {
         ClangExprSkeleton::Call { .. } => Ok(None),
         ClangExprSkeleton::Unsupported { node, reason } => Ok(Some(format!(
-            "do-while tail assignment direct call is unsupported {node}: {reason}"
+            "{} assignment direct call is unsupported {node}: {reason}",
+            context.label()
         ))),
-        _ => Ok(Some(
-            "do-while tail assignment RHS must lower to exactly one direct call".to_string(),
-        )),
+        _ => Ok(Some(format!(
+            "{} assignment RHS must lower to exactly one direct call",
+            context.label()
+        ))),
     }
 }
 
 #[cfg(feature = "typed-ir")]
 fn do_while_tail_is_direct_function_callee(
     callee: &Value,
+    context: AssignmentCallComparisonContext,
 ) -> Result<bool, ClangFrontendError> {
-    let callee = do_while_tail_strip_parens(callee)?;
+    let callee = do_while_tail_strip_parens(callee, context)?;
     match string_field(callee, "kind").as_deref() {
         Some("ImplicitCastExpr")
             if matches!(
@@ -253,7 +328,7 @@ fn do_while_tail_is_direct_function_callee(
                     message: "direct function callee cast must have one operand".to_string(),
                 });
             };
-            do_while_tail_is_direct_function_callee(operand)
+            do_while_tail_is_direct_function_callee(operand, context)
         }
         Some("DeclRefExpr") => Ok(callee
             .get("referencedDecl")
@@ -304,8 +379,9 @@ fn do_while_tail_assignment_read_skeleton(
     expr: &Value,
     target: &ClangExprSkeleton,
     target_ty: &ClangTypeSkeleton,
+    context: AssignmentCallComparisonContext,
 ) -> Result<ClangExprSkeleton, ClangFrontendError> {
-    let expr = do_while_tail_strip_parens(expr)?;
+    let expr = do_while_tail_strip_parens(expr, context)?;
     match string_field(expr, "kind").as_deref() {
         Some("BinaryOperator") if string_field(expr, "opcode").as_deref() == Some("=") => {
             Ok(ClangExprSkeleton::LValueToRValue {
@@ -319,22 +395,27 @@ fn do_while_tail_assignment_read_skeleton(
             let children = inner(expr);
             let [operand] = children else {
                 return Err(ClangFrontendError {
-                    kind: "invalid_do_stmt".to_string(),
-                    message: "assignment result integer conversion must have one operand"
-                        .to_string(),
+                    kind: context.error_kind().to_string(),
+                    message: format!(
+                        "{} assignment result integer conversion must have one operand",
+                        context.label()
+                    ),
                 });
             };
             Ok(ClangExprSkeleton::Cast {
                 target: expr_type(expr)?,
                 expr: Box::new(do_while_tail_assignment_read_skeleton(
-                    operand, target, target_ty,
+                    operand, target, target_ty, context,
                 )?),
                 implicit: kind == "ImplicitCastExpr",
             })
         }
         _ => Err(ClangFrontendError {
-            kind: "invalid_do_stmt".to_string(),
-            message: "do-while tail assignment result has an unexpected AST wrapper".to_string(),
+            kind: context.error_kind().to_string(),
+            message: format!(
+                "{} assignment result has an unexpected AST wrapper",
+                context.label()
+            ),
         }),
     }
 }

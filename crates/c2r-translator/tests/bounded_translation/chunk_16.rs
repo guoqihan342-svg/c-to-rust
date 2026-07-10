@@ -257,10 +257,6 @@ fn clang_ast_fixture_rejects_do_while_tail_call_assignment_boundaries_without_cl
             "bad_while_tail_assign_shape",
             "opcode = is outside the current skeleton",
         ),
-        (
-            "bad_if_tail_assign_shape",
-            "opcode = is outside the current skeleton",
-        ),
     ] {
         let error = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
             .expect_err("out-of-bound tail assignment shape must fail closed");

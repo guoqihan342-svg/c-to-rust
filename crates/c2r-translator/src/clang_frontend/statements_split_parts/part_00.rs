@@ -449,8 +449,10 @@ fn compound_body_skeleton_from_ast(
 fn body_stmt_skeletons_from_ast(
     stmt: &Value,
 ) -> Result<Vec<ClangStmtSkeleton>, ClangFrontendError> {
-    if string_field(stmt, "kind").as_deref() != Some("DeclStmt") {
-        return Ok(vec![stmt_skeleton_from_ast(stmt)?]);
+    match string_field(stmt, "kind").as_deref() {
+        Some("IfStmt") => return if_stmt_skeletons_from_ast(stmt),
+        Some("DeclStmt") => {}
+        _ => return Ok(vec![stmt_skeleton_from_ast(stmt)?]),
     }
 
     let var_decls = decl_stmt_var_decls(stmt);
@@ -471,7 +473,7 @@ fn stmt_body_skeleton_from_ast(body: &Value) -> Result<Vec<ClangStmtSkeleton>, C
     if string_field(body, "kind").as_deref() == Some("CompoundStmt") {
         compound_body_skeleton_from_ast(body)
     } else {
-        Ok(vec![stmt_skeleton_from_ast(body)?])
+        body_stmt_skeletons_from_ast(body)
     }
 }
 

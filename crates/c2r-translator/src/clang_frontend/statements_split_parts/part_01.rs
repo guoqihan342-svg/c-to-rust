@@ -66,7 +66,46 @@ fn compound_assignment_integer_types_supported(
 #[cfg(feature = "typed-ir")]
 fn if_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
     let children = inner(stmt);
-    let (condition, then_body, else_body) = match children {
+    let (condition, then_body, else_body) = if_stmt_parts_from_children(children)?;
+    if_stmt_skeleton_from_parts(
+        condition_expr_skeleton_from_ast(condition)?,
+        then_body,
+        else_body,
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn if_stmt_skeletons_from_ast(
+    stmt: &Value,
+) -> Result<Vec<ClangStmtSkeleton>, ClangFrontendError> {
+    let children = inner(stmt);
+    let (condition, then_body, else_body) = if_stmt_parts_from_children(children)?;
+    match if_assignment_call_comparison_from_ast(condition)? {
+        AssignmentCallComparisonNormalization::NotMatched => Ok(vec![
+            if_stmt_skeleton_from_parts(
+                condition_expr_skeleton_from_ast(condition)?,
+                then_body,
+                else_body,
+            )?,
+        ]),
+        AssignmentCallComparisonNormalization::Rejected(reason) => {
+            Ok(vec![ClangStmtSkeleton::Unsupported { reason }])
+        }
+        AssignmentCallComparisonNormalization::Accepted {
+            assignment,
+            condition,
+        } => Ok(vec![
+            assignment,
+            if_stmt_skeleton_from_parts(condition, then_body, else_body)?,
+        ]),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn if_stmt_parts_from_children<'a>(
+    children: &'a [Value],
+) -> Result<(&'a Value, &'a Value, Option<&'a Value>), ClangFrontendError> {
+    Ok(match children {
         [condition, then_body] => (condition, then_body, None),
         [condition, then_body, else_body] => (condition, then_body, Some(else_body)),
         _ => {
@@ -75,14 +114,22 @@ fn if_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFro
                 message: "IfStmt must have condition and then body".to_string(),
             })
         }
-    };
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn if_stmt_skeleton_from_parts(
+    condition: ClangExprSkeleton,
+    then_body: &Value,
+    else_body: Option<&Value>,
+) -> Result<ClangStmtSkeleton, ClangFrontendError> {
     let else_body = match else_body {
         Some(else_body) => stmt_body_skeleton_from_ast(else_body)?,
         None => Vec::new(),
     };
 
     Ok(ClangStmtSkeleton::If {
-        condition: condition_expr_skeleton_from_ast(condition)?,
+        condition,
         then_body: stmt_body_skeleton_from_ast(then_body)?,
         else_body,
     })
@@ -114,13 +161,13 @@ fn do_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFro
     };
     let mut body = stmt_body_skeleton_from_ast(body)?;
     let condition = match do_while_tail_call_assignment_from_ast(condition)? {
-        DoWhileTailCallAssignmentNormalization::NotMatched => {
+        AssignmentCallComparisonNormalization::NotMatched => {
             condition_expr_skeleton_from_ast(condition)?
         }
-        DoWhileTailCallAssignmentNormalization::Rejected(reason) => {
+        AssignmentCallComparisonNormalization::Rejected(reason) => {
             return Ok(ClangStmtSkeleton::Unsupported { reason });
         }
-        DoWhileTailCallAssignmentNormalization::Accepted {
+        AssignmentCallComparisonNormalization::Accepted {
             assignment,
             condition,
         } => {

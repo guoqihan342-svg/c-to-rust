@@ -4638,6 +4638,125 @@
       ]
     },
     {
+      "id": "if-assignment-call-comparison-candidate",
+      "status": "covered",
+      "ir_constructs": [
+        "Clang IfStmt left-operand assignment-call comparison",
+        "preceding IrStmt::Assign plus pure IrStmt::If comparison normalization",
+        "direct non-volatile non-atomic fixed-width integer scalar target",
+        "exactly one direct call in the complete assignment RHS subtree",
+        "pure comparison operators == != < <= > >=",
+        "candidate_context_only with semantic-pass count unchanged at 23"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "clang_ast_if_assignment_call_comparisons_emit_in_order_and_run",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_19.rs",
+              "assertion": "replays a no-clang AST fixture through frontend lowering for all six comparisons and checks Assign precedes the pure If"
+            },
+            {
+              "name": "clang_ast_if_assignment_call_accepts_u32_failed_address_shape",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_19.rs",
+              "assertion": "pins the real-source uint32_t and 0xFFFFFFFF scalar/sentinel type shape"
+            }
+          ]
+        },
+        "handwritten_ir": {
+          "status": "not_applicable",
+          "reason": "the frontend normalization reuses existing IrStmt::Assign and IrStmt::If constructs instead of adding a hand-built IR capability"
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "fdb_kvdb.c nested second-call and member-chain target adjacent negatives",
+              "path": "sources/FlashDB/src/fdb_kvdb.c",
+              "assertion": "line 738 contains nested fdb_blob_make inside fdb_kv_get_blob and line 1870 assigns through kv->addr.start; neither is an admitted exact P0-T8 hit"
+            },
+            {
+              "name": "assignment_call_comparison_contexts_admit_only_their_declared_operators",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_08.rs",
+              "assertion": "pins six pure IfCondition comparisons, rejects logical &&, and keeps the DoWhileTail operator contract separate"
+            },
+            {
+              "name": "assignment-call comparison fail-closed implementation boundary",
+              "path": "crates/c2r-translator/src/clang_frontend/statements_split_parts/part_02.rs",
+              "assertion": "requires a direct fixed-width integer DeclRef target and exactly one direct call while rejecting additional side effects"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "clang_ast_if_assignment_call_comparisons_emit_in_order_and_run",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_19.rs",
+              "assertion": "executes emitted Rust for == != < <= > >= and observes true and false branches after the call assignment"
+            },
+            {
+              "name": "clang_ast_single_statement_else_if_keeps_assignment_inside_else",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_19.rs",
+              "assertion": "uses an atomic call counter to prove the lifted assignment remains inside the outer else branch"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "P0-T8 has no exact named-slice C oracle, Rust replay, schema diff, negative diff, unsafe ledger, or final verification; semantic-pass count remains 23"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "this is a generic clang frontend candidate capability and makes no legacy fallback claim"
+        },
+        "route_evidence": {
+          "status": "gap",
+          "reason": "candidate normalization and source scanning do not produce route-decision or validation-profile evidence"
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "FlashDB exact direct-scalar assignment-call comparison hits",
+          "path": "sources/FlashDB/src/fdb_kvdb.c",
+          "assertion": "line 1018 is direct uint32_t scalar assignment with != and line 1076 is direct uint32_t scalar assignment with ==; both RHS subtrees contain exactly one direct call"
+        },
+        {
+          "name": "assignment_call_comparison_contexts_admit_only_their_declared_operators",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_08.rs",
+          "assertion": "covers ==, !=, <, <=, >, and >= as generic pure IfCondition operators; this does not make fdb_kvdb.c:738 an exact positive"
+        },
+        {
+          "name": "if_assignment_call_comparison_normalizes_to_assignment_and_pure_read",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_08.rs",
+          "assertion": "requires a left-side direct scalar assignment from one direct call to normalize into an assignment followed by a pure comparison read"
+        },
+        {
+          "name": "clang_ast_if_assignment_call_accepts_u32_failed_address_shape",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_19.rs",
+          "assertion": "covers an unsigned 32-bit target and 4294967295 sentinel matching the two admitted real FlashDB shapes"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "fdb_kvdb.c:738 nested call is not an exact greater-than hit",
+          "path": "sources/FlashDB/src/fdb_kvdb.c",
+          "fail_closed_reason": "fdb_kv_get_blob contains nested fdb_blob_make in its argument subtree, so the assignment RHS contains a second call even though the outer comparison uses >"
+        },
+        {
+          "name": "fdb_kvdb.c:1870 member-chain assignment target remains complex",
+          "path": "sources/FlashDB/src/fdb_kvdb.c",
+          "fail_closed_reason": "kv->addr.start is a pointer/member-chain assignment target rather than one direct fixed-width integer scalar DeclRef"
+        },
+        {
+          "name": "P0-T8 adjacent structural refusals",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_19.rs",
+          "fail_closed_reason": "runtime-independent negatives pin right-side assignments, logical combinations, volatile/dereference targets, a second call, and while-context assignment-call comparisons outside the bounded IfCondition normalization"
+        }
+      ]
+    },
+    {
       "id": "complex-control-flow-fail-closed",
       "status": "covered",
       "ir_constructs": [
