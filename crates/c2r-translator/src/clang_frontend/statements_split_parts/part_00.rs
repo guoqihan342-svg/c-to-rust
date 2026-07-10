@@ -605,7 +605,7 @@ fn compound_assignment_target_type(
             ),
         },
         _ => Err(
-            "compound assignment target must be a simple variable, supported direct integer index, by-value record field, or direct mutable record pointer field"
+            "compound assignment target must be a simple variable or by-value record field, direct mutable record pointer field, or supported direct integer index"
                 .to_string(),
         ),
     }

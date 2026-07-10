@@ -355,7 +355,9 @@ fn emit_mutable_record_pointer_member_compound_assignment_value(
     if let Some(reason) =
         record_field_compound_assignment_value_rejection_reason(rhs, symbols, context)?
     {
-        return Err(reason);
+        return Err(format!(
+            "mutable record pointer field compound assignment RHS rejected: {reason}"
+        ));
     }
     let op_token = emit_binary_op(op)?;
     validate_binary_operand_types(op_token, lhs, rhs, ty)?;
