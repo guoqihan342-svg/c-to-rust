@@ -176,13 +176,17 @@ fn clang_direct_record_scalar_member_call_signature_rejection_reason(
             "direct record scalar member call callee lacks a verifiable signature".to_string(),
         );
     }
+    let mut verified_candidate = false;
     let mut last_unverifiable = None;
     for candidate in candidates {
         match validate_direct_record_scalar_member_signature_candidate(&candidate, args) {
-            Ok(()) => return None,
+            Ok(()) => verified_candidate = true,
             Err((true, reason)) => return Some(reason),
             Err((false, reason)) => last_unverifiable = Some(reason),
         }
+    }
+    if verified_candidate {
+        return None;
     }
     Some(last_unverifiable.unwrap_or_else(|| {
         "direct record scalar member call callee lacks a verifiable signature".to_string()

@@ -400,6 +400,38 @@ fn clang_ast_uses_desugared_fixed_width_member_call_signature_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_rejects_conflicting_desugared_record_scalar_call_signature_without_clang() {
+    let mut ast = direct_record_scalar_call_ast(
+        "ConflictingAliasRecord",
+        "word_value",
+        "consume_conflicting_word",
+        "forward_conflicting_word",
+        "record_value",
+    );
+    let call = direct_record_scalar_call_node_mut(&mut ast);
+    call["inner"][0]["type"] = serde_json::json!({
+        "qualType": "uint32_t (*)(uint32_t)",
+        "desugaredQualType": "uint32_t (*)(uint16_t)"
+    });
+    call["inner"][0]["inner"][0]["type"] = serde_json::json!({
+        "qualType": "uint32_t (uint32_t)",
+        "desugaredQualType": "uint32_t (uint16_t)"
+    });
+
+    let error = lower_function_and_globals_from_clang_ast_json_value(
+        &ast,
+        "forward_conflicting_word",
+    )
+    .expect_err("conflicting desugared member call signature must fail closed");
+    assert!(
+        error.message.contains("does not match parameter type"),
+        "{}",
+        error.message
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_rejects_indirect_record_scalar_member_call_without_clang() {
     let mut ast = direct_record_scalar_call_ast(
         "IndirectRecord",
