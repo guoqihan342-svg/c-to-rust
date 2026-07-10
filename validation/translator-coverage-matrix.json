@@ -392,6 +392,7 @@
         "typed_ir_scalar_admission_unresolved route floor",
         "IrExpr::IncDec prefix statement-position scalar Add/Sub desugar",
         "IrExpr::Unary.Neg/BitNot/Not over scalar inc/dec operand with ordered prelude",
+        "IrExpr::Binary comparison over one direct scalar inc/dec operand with ordered prelude",
         "no-clang AST fixture replay for scalar runtime preconditions/refusals"
       ],
       "dimension_status": {
@@ -434,6 +435,10 @@
             {
               "name": "typed_ir_emits_logical_not_value_with_incdec_operand",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_02.rs"
+            },
+            {
+              "name": "typed_ir_emits_value_comparison_with_incdec_operand_ordered_prelude",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_06_00.rs"
             }
           ]
         },
@@ -443,6 +448,10 @@
             {
               "name": "literal divisor and shift UB fail-closed tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_value_comparison_incdec_with_same_scalar_sibling_read",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_06_00.rs"
             }
           ]
         },
@@ -460,6 +469,10 @@
             {
               "name": "typed_ir_emits_logical_not_value_with_incdec_operand",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_02.rs"
+            },
+            {
+              "name": "typed_ir_emits_value_comparison_with_incdec_operand_ordered_prelude",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_06_00.rs"
             },
             {
               "name": "scalar-div-rem-contract generated Rust replay",
@@ -612,6 +625,10 @@
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_02.rs"
         },
         {
+          "name": "typed_ir_emits_value_comparison_with_incdec_operand_ordered_prelude",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_06_00.rs"
+        },
+        {
           "name": "typed_ir_emits_prefix_dec_statement_for_usize_scalar",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -649,6 +666,11 @@
         }
       ],
       "negative_cases": [
+        {
+          "name": "typed_ir_rejects_value_comparison_incdec_with_same_scalar_sibling_read",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_06_00.rs",
+          "fail_closed_reason": "a comparison sibling must not read the scalar modified by the other inc/dec operand"
+        },
         {
           "name": "typed_ir_rejects_division_by_zero_literal",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",

@@ -37,6 +37,11 @@ CANONICAL_BACKLOG_DOCS = {
     Path("docs/c2rust-migration-agent/future-vision-and-mvp.en.md"),
 }
 
+MOJIBAKE_SENSITIVE_DOCS = (
+    Path("docs/c2rust-migration-agent/future-vision-and-mvp.md"),
+    Path("docs/c2rust-migration-agent/COVERAGE.md"),
+)
+
 BACKLOG_ENTRYPOINT_TERMS = (
     "Next Steps",
     "下一步",
@@ -126,6 +131,22 @@ def _has_backlog_entrypoint_wording(text: str) -> bool:
 
 
 class DocMirrorContractTest(unittest.TestCase):
+    def test_canonical_chinese_docs_reject_mojibake_markers(self):
+        offenders = []
+
+        for rel in MOJIBAKE_SENSITIVE_DOCS:
+            text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+            markers = []
+            if "????" in text:
+                markers.append("four consecutive ASCII question marks")
+            if "\ufffd" in text:
+                markers.append("Unicode replacement character")
+            if markers:
+                offenders.append(f"{rel}: {', '.join(markers)}")
+
+        if offenders:
+            self.fail("Canonical Chinese docs contain mojibake markers:\n" + "\n".join(offenders))
+
     def test_chinese_docs_have_english_mirror_and_first_line_pointer(self):
         missing_mirrors = []
         missing_headers = []
