@@ -391,6 +391,7 @@
         "scalar_ub_contract_identity cache invalidation",
         "typed_ir_scalar_admission_unresolved route floor",
         "IrExpr::IncDec prefix statement-position scalar Add/Sub desugar",
+        "IrExpr::Unary.Neg/BitNot/Not over scalar inc/dec operand with ordered prelude",
         "no-clang AST fixture replay for scalar runtime preconditions/refusals"
       ],
       "dimension_status": {
@@ -425,6 +426,14 @@
             {
               "name": "scalar arithmetic typed IR contract tests including non-literal divisor/shift runtime preconditions",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_unary_minus_with_postfix_inc_operand and typed_ir_emits_bitnot_with_postfix_inc_operand",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_13.rs"
+            },
+            {
+              "name": "typed_ir_emits_logical_not_value_with_incdec_operand",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_02.rs"
             }
           ]
         },
@@ -443,6 +452,14 @@
             {
               "name": "unsigned wrapping runtime tests, signed checked runtime precondition tests, non-literal divisor/shift runtime precondition tests, and legal scalar emit compile checks",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "unary scalar side-effect operand emitted-Rust runtime tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_13.rs"
+            },
+            {
+              "name": "typed_ir_emits_logical_not_value_with_incdec_operand",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_02.rs"
             },
             {
               "name": "scalar-div-rem-contract generated Rust replay",
@@ -581,6 +598,18 @@
         {
           "name": "typed_ir_emits_postfix_inc_statement_for_i32_scalar",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+        },
+        {
+          "name": "typed_ir_emits_unary_minus_with_postfix_inc_operand",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_13.rs"
+        },
+        {
+          "name": "typed_ir_emits_bitnot_with_postfix_inc_operand",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_13.rs"
+        },
+        {
+          "name": "typed_ir_emits_logical_not_value_with_incdec_operand",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_02.rs"
         },
         {
           "name": "typed_ir_emits_prefix_dec_statement_for_usize_scalar",
@@ -3114,6 +3143,7 @@
         "multiple independent scalar inc/dec direct-call arguments with ordered prelude lowering",
         "one scalar inc/dec single-chain nested direct-call argument with independent ordinary scalar sibling arguments",
         "binary expression side-effect direct-call operand with an independent scalar sibling operand",
+        "logical-not expression over side-effect direct-call operand with ordered prelude",
         "modeled C memset(void *, int, size_t) statement with discarded void* return and 0..=255 byte literal precondition",
         "modeled C memcpy(void *, const void *, size_t) statement with discarded void* return and restrict/noalias precondition",
         "reserved C macro/stdlib/extern callee fail-closed",
@@ -3408,6 +3438,10 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "typed_ir_emits_logical_not_with_side_effect_call_operand",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_13.rs"
+            },
+            {
               "name": "bounded_call_args_allow_direct_null_pointer_arg",
               "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_01_split_parts/part_00.rs"
             },
@@ -3696,6 +3730,10 @@
             {
               "name": "typed_ir_emits_binary_with_side_effect_call_and_independent_plain_operand",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_logical_not_with_side_effect_call_operand",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_13.rs"
             },
             {
               "name": "typed_ir_emits_null_pointer_direct_call_arg",
@@ -4023,6 +4061,10 @@
         {
           "name": "typed_ir_emits_binary_with_side_effect_call_and_independent_plain_operand",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_logical_not_with_side_effect_call_operand",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_13.rs"
         },
         {
           "name": "bounded_call_args_allow_direct_null_pointer_arg",

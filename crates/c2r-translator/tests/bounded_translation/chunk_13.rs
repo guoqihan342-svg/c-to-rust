@@ -436,3 +436,178 @@ fn typed_ir_rejects_binary_same_var_read_with_side_effect_call_operand() {
         error.reason
     );
 }
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_unary_minus_with_postfix_inc_operand() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "unary_minus_postfix_inc_operand".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "result".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(ir_neg(
+                    IrExpr::IncDec {
+                        target: Box::new(ir_var("value", i32_ty.clone())),
+                        op: IrIncDecOp::Inc,
+                        prefix: false,
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_binary(
+                    IrBinOp::Add,
+                    ir_var("value", i32_ty.clone()),
+                    ir_var("result", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit unary minus over postfix inc operand");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn unary_minus_postfix_inc_operand(mut value: i32) -> i32"));
+    assert!(rust.contains("let post_inc_value: i32 = value;"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("let mut result: i32 = (-post_inc_value);"));
+    assert_rust_snippet_runs(
+        "typed-ir-unary-minus-postfix-inc-operand",
+        rust,
+        "    assert_eq!(unary_minus_postfix_inc_operand(5), 1);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_bitnot_with_postfix_inc_operand() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bitnot_postfix_inc_operand".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "result".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(ir_bitnot(
+                    IrExpr::IncDec {
+                        target: Box::new(ir_var("value", i32_ty.clone())),
+                        op: IrIncDecOp::Inc,
+                        prefix: false,
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_binary(
+                    IrBinOp::Add,
+                    ir_var("value", i32_ty.clone()),
+                    ir_var("result", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit bitnot over postfix inc operand");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn bitnot_postfix_inc_operand(mut value: i32) -> i32"));
+    assert!(rust.contains("let post_inc_value: i32 = value;"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("let mut result: i32 = !post_inc_value;"));
+    assert_rust_snippet_runs(
+        "typed-ir-bitnot-postfix-inc-operand",
+        rust,
+        "    assert_eq!(bitnot_postfix_inc_operand(5), 0);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_logical_not_with_side_effect_call_operand() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "logical_not_side_effect_call_operand".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "result".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(ir_not(
+                    IrExpr::Call {
+                        callee: "helper".to_string(),
+                        args: vec![IrExpr::IncDec {
+                            target: Box::new(ir_var("value", i32_ty.clone())),
+                            op: IrIncDecOp::Inc,
+                            prefix: false,
+                            ty: i32_ty.clone(),
+                            source_span: None,
+                        }],
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_binary(
+                    IrBinOp::Add,
+                    ir_var("value", i32_ty.clone()),
+                    ir_var("result", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit logical not over side-effect call operand");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn logical_not_side_effect_call_operand(mut value: i32) -> i32"));
+    assert!(rust.contains("let post_inc_value: i32 = value;"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains(
+        "let mut result: i32 = (if helper(post_inc_value) == 0i32 { 1i32 } else { 0i32 });"
+    ));
+    assert_rust_snippet_runs(
+        "typed-ir-logical-not-side-effect-call-operand",
+        &format!("fn helper(value: i32) -> i32 {{ value * 3 }}\n{rust}"),
+        "    assert_eq!(logical_not_side_effect_call_operand(0), 2);\n    assert_eq!(logical_not_side_effect_call_operand(5), 6);",
+    );
+}

@@ -110,6 +110,91 @@ fn emit_expr_with_prelude(
                 &format!("{path} lvalue-to-rvalue expr"),
             )
         }
+        IrExpr::Unary {
+            op, operand, ty, ..
+        } => match op {
+            IrUnOp::Neg => {
+                validate_signed_unary_minus_operand(operand, ty)
+                    .map_err(|detail| format!("{path} {detail}"))?;
+                let emitted = emit_expr_with_prelude(
+                    operand,
+                    symbols,
+                    context,
+                    indent_level,
+                    &format!("{path} unary minus operand"),
+                )?;
+                Ok(EmittedExpr {
+                    prelude: emitted.prelude,
+                    expr: format!("(-{})", emitted.expr),
+                })
+            }
+            IrUnOp::Not => {
+                let mut prelude_symbols = symbols.clone();
+                let emitted = match emit_expr_with_prelude(
+                    operand,
+                    &mut prelude_symbols,
+                    context,
+                    indent_level,
+                    &format!("{path} logical not operand"),
+                ) {
+                    Ok(emitted) => {
+                        *symbols = prelude_symbols;
+                        emitted
+                    }
+                    Err(_) => {
+                        return Ok(EmittedExpr {
+                            prelude: String::new(),
+                            expr: emit_logical_not_value_expr(operand, ty, symbols, context)
+                                .map_err(|detail| format!("{path} {detail}"))?,
+                        });
+                    }
+                };
+                if emitted.prelude.is_empty() {
+                    return Ok(EmittedExpr {
+                        prelude: String::new(),
+                        expr: emit_logical_not_value_expr(operand, ty, symbols, context)
+                            .map_err(|detail| format!("{path} {detail}"))?,
+                    });
+                }
+                if !is_c_int_type(ty) {
+                    return Err(format!(
+                        "{path} logical not result type must be C int, got {}",
+                        type_label(ty)
+                    ));
+                }
+                let operand_ty = expr_type(operand).ok_or_else(|| {
+                    format!("{path} logical not operand type is unsupported")
+                })?;
+                let operand_zero = zero_literal_for_type(operand_ty)
+                    .map_err(|detail| format!("{path} logical not operand zero {detail}"))?;
+                let one = emit_integer_literal(1, ty)
+                    .map_err(|detail| format!("{path} logical not true literal {detail}"))?;
+                let zero = emit_integer_literal(0, ty)
+                    .map_err(|detail| format!("{path} logical not false literal {detail}"))?;
+                Ok(EmittedExpr {
+                    prelude: emitted.prelude,
+                    expr: format!(
+                        "(if {} == {operand_zero} {{ {one} }} else {{ {zero} }})",
+                        emitted.expr
+                    ),
+                })
+            }
+            IrUnOp::BitNot => {
+                validate_expr_matches_type(operand, ty, "bitnot operand")
+                    .map_err(|detail| format!("{path} {detail}"))?;
+                let emitted = emit_expr_with_prelude(
+                    operand,
+                    symbols,
+                    context,
+                    indent_level,
+                    &format!("{path} bitnot operand"),
+                )?;
+                Ok(EmittedExpr {
+                    prelude: emitted.prelude,
+                    expr: format!("!{}", emitted.expr),
+                })
+            }
+        },
         IrExpr::ArrayToPointerDecay { .. } => Err(format!(
             "{path} array-to-pointer decay requires explicit lowering evidence"
         )),
