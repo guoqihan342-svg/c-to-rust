@@ -1,0 +1,243 @@
+SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND = (
+    "scripted_external_record_u32_call_bool_state"
+)
+SCRIPTED_EXTERNAL_RECORD_STUB_HELPERS = (
+    "__c2r_scripted_external_set_return",
+    "__c2r_scripted_external_reset_calls",
+    "__c2r_scripted_external_call_count",
+    "__c2r_scripted_external_call_args",
+)
+
+
+def scripted_external_record_u32_call_bool_state_replay_supported(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any] | None = None,
+) -> bool:
+    return (
+        scripted_external_record_u32_call_bool_state_replay_contract(spec, fixture_binding)
+        is not None
+    )
+
+
+def scripted_external_record_u32_call_bool_state_replay_contract(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    contract = spec.get("replay_contract")
+    if (
+        not isinstance(contract, dict)
+        or contract.get("kind") != SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND
+    ):
+        return None
+    if set(contract) != {
+        "schema_version",
+        "kind",
+        "external_callee",
+        "entry_arguments",
+        "state_output",
+        "return",
+        "noalias_required",
+    }:
+        raise ValueError("scripted record replay contract shape drifted")
+    if contract.get("schema_version") != 1:
+        raise ValueError("scripted record replay contract schema_version must be 1")
+
+    entry_arguments = contract.get("entry_arguments")
+    if not isinstance(entry_arguments, list) or not entry_arguments:
+        raise ValueError("scripted record replay requires entry arguments")
+    entry_by_name: dict[str, dict[str, Any]] = {}
+    fixture_fields: list[str] = []
+    for index, argument in enumerate(entry_arguments):
+        if not isinstance(argument, dict) or set(argument) != {
+            "parameter",
+            "c_type",
+            "rust_type",
+            "pass_mode",
+            "direction",
+            "initializer",
+        }:
+            raise ValueError(f"scripted record replay entry argument {index} shape drifted")
+        parameter = scripted_external_replay_identifier(
+            argument.get("parameter"), f"entry argument {index} parameter"
+        )
+        rust_type = scripted_external_replay_identifier(
+            argument.get("rust_type"), f"entry argument {index} rust_type"
+        )
+        pass_mode = argument.get("pass_mode")
+        if pass_mode not in {"mutable_ref", "value"}:
+            raise ValueError(
+                f"scripted record replay entry argument {index} pass_mode is unsupported"
+            )
+        direction = argument.get("direction")
+        if direction not in {"input", "inout"}:
+            raise ValueError(
+                f"scripted record replay entry argument {index} direction is unsupported"
+            )
+        expected_c_type = (
+            f"struct {rust_type} *" if pass_mode == "mutable_ref" else f"struct {rust_type}"
+        )
+        if normalize_c_type(str(argument.get("c_type") or "")) != normalize_c_type(
+            expected_c_type
+        ):
+            raise ValueError(
+                f"scripted record replay entry argument {index} C type drifted"
+            )
+        if parameter in entry_by_name:
+            raise ValueError("scripted record replay entry parameters must be unique")
+        initializer = scripted_record_validate_initializer(
+            argument.get("initializer"), f"entry argument {index} initializer"
+        )
+        if initializer["record_type"] != rust_type:
+            raise ValueError(
+                f"scripted record replay entry argument {index} initializer type drifted"
+            )
+        fixture_fields.extend(
+            fixture_field
+            for fixture_field, _ in scripted_record_initializer_fixture_paths(initializer)
+        )
+        entry_by_name[parameter] = argument
+
+    external = contract.get("external_callee")
+    if not isinstance(external, dict) or set(external) != {
+        "name",
+        "return_fixture_field",
+        "call_count_output",
+        "call_args_output",
+        "arguments",
+    }:
+        raise ValueError("scripted record replay external_callee shape drifted")
+    for key in ("name", "return_fixture_field", "call_count_output", "call_args_output"):
+        scripted_external_replay_identifier(external.get(key), f"external_callee {key}")
+    external_arguments = external.get("arguments")
+    if not isinstance(external_arguments, list) or not external_arguments:
+        raise ValueError("scripted record replay external arguments are missing")
+    external_parameter_names: set[str] = set()
+    for index, argument in enumerate(external_arguments):
+        if not isinstance(argument, dict) or set(argument) != {
+            "parameter",
+            "entry_parameter",
+            "field_path",
+        }:
+            raise ValueError(f"scripted record replay external argument {index} shape drifted")
+        external_parameter = scripted_external_replay_identifier(
+            argument.get("parameter"), f"external argument {index} parameter"
+        )
+        entry_parameter = scripted_external_replay_identifier(
+            argument.get("entry_parameter"), f"external argument {index} entry parameter"
+        )
+        if external_parameter in external_parameter_names:
+            raise ValueError("scripted record replay external parameters must be unique")
+        external_parameter_names.add(external_parameter)
+        entry_argument = entry_by_name.get(entry_parameter)
+        if entry_argument is None:
+            raise ValueError(
+                f"scripted record replay external argument {index} entry mapping is missing"
+            )
+        field_path = scripted_record_field_path(
+            argument.get("field_path"), f"external argument {index} field_path"
+        )
+        initializer_paths = dict(
+            scripted_record_initializer_fixture_paths(entry_argument["initializer"])
+        )
+        if field_path not in initializer_paths.values():
+            raise ValueError(
+                f"scripted record replay external argument {index} field_path is not initialized"
+            )
+
+    state_output = contract.get("state_output")
+    if not isinstance(state_output, dict) or set(state_output) != {
+        "parameter",
+        "field_path",
+        "fixture_field",
+        "rust_type",
+    }:
+        raise ValueError("scripted record replay state_output shape drifted")
+    state_parameter = scripted_external_replay_identifier(
+        state_output.get("parameter"), "state output parameter"
+    )
+    state_fixture_field = scripted_external_replay_identifier(
+        state_output.get("fixture_field"), "state output fixture field"
+    )
+    if state_output.get("rust_type") != "u32":
+        raise ValueError("scripted record replay state output rust_type must be u32")
+    state_argument = entry_by_name.get(state_parameter)
+    if state_argument is None or state_argument.get("pass_mode") != "mutable_ref":
+        raise ValueError("scripted record replay state output requires a mutable entry argument")
+    state_path = scripted_record_field_path(
+        state_output.get("field_path"), "state output field_path"
+    )
+    if state_path not in dict(
+        scripted_record_initializer_fixture_paths(state_argument["initializer"])
+    ).values():
+        raise ValueError("scripted record replay state output field_path is not initialized")
+
+    return_contract = contract.get("return")
+    if not isinstance(return_contract, dict) or set(return_contract) != {
+        "fixture_field",
+        "rust_type",
+    }:
+        raise ValueError("scripted record replay return shape drifted")
+    scripted_external_replay_identifier(
+        return_contract.get("fixture_field"), "return fixture field"
+    )
+    if return_contract.get("rust_type") != "bool":
+        raise ValueError("scripted record replay return rust_type must be bool")
+
+    declared_noalias = scripted_record_noalias_pairs(
+        contract.get("noalias_required"), "replay contract noalias_required"
+    )
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    if not isinstance(pointer_contract, dict) or pointer_contract.get("aliasing_proven") is not True:
+        raise ValueError("scripted record replay requires proven pointer aliasing metadata")
+    boundary_noalias = scripted_record_noalias_pairs(
+        pointer_contract.get("noalias_required"), "pointer contract noalias_required"
+    )
+    if declared_noalias != boundary_noalias:
+        raise ValueError("scripted record replay noalias contract drifted")
+    for left, right in declared_noalias:
+        if left not in entry_by_name or right not in entry_by_name:
+            raise ValueError("scripted record replay noalias parameter is undeclared")
+        if entry_by_name[left]["pass_mode"] != "mutable_ref" or entry_by_name[right][
+            "pass_mode"
+        ] != "mutable_ref":
+            raise ValueError("scripted record replay noalias pair must bind mutable references")
+    forwarded_mutable = sorted(
+        {
+            str(item["entry_parameter"])
+            for item in external_arguments
+            if entry_by_name[str(item["entry_parameter"])]["pass_mode"] == "mutable_ref"
+        }
+    )
+    required_noalias = {
+        (forwarded_mutable[left], forwarded_mutable[right])
+        for left in range(len(forwarded_mutable))
+        for right in range(left + 1, len(forwarded_mutable))
+    }
+    if declared_noalias != required_noalias:
+        raise ValueError(
+            "scripted record replay noalias contract must cover all forwarded mutable record pairs"
+        )
+
+    all_fixture_fields = [
+        *fixture_fields,
+        str(external["return_fixture_field"]),
+        str(state_output["fixture_field"]),
+        str(return_contract["fixture_field"]),
+        str(external["call_count_output"]),
+        str(external["call_args_output"]),
+    ]
+    if len(all_fixture_fields) != len(set(all_fixture_fields)):
+        raise ValueError("scripted record replay fixture and output fields must be unique")
+
+    scripted_record_validate_c_signatures(spec, contract, entry_by_name)
+    expected_behavior_fields = [
+        str(return_contract["fixture_field"]),
+        str(state_output["fixture_field"]),
+        str(external["call_count_output"]),
+        str(external["call_args_output"]),
+    ]
+    if behavior_fields(spec) != expected_behavior_fields:
+        raise ValueError("scripted record replay observable output mapping drifted")
+    if fixture_binding is not None:
+        scripted_record_validate_fixture_cases(spec, fixture_binding, contract, entry_by_name)
+    return contract

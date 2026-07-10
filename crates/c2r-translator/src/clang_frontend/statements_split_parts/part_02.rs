@@ -478,34 +478,37 @@ fn if_condition_record_pointer_member_target_rejection_reason(
                 }
                 member = base;
             }
-            Some(true) => match string_field(base, "kind").as_deref() {
-                Some("MemberExpr") => {
-                    return Ok(Some(
-                        "if condition assignment-call record-pointer target must not contain a second arrow or pointer member hop"
-                            .to_string(),
-                    ));
-                }
-                Some("DeclRefExpr") => {
-                    let root_ty = expr_type(base)?;
-                    if !clang_type_is_mutable_record_pointer(&root_ty) {
+            Some(true) => {
+                let base = if_condition_direct_record_pointer_root(base)?;
+                match string_field(base, "kind").as_deref() {
+                    Some("MemberExpr") => {
+                        return Ok(Some(
+                            "if condition assignment-call record-pointer target must not contain a second arrow or pointer member hop"
+                                .to_string(),
+                        ));
+                    }
+                    Some("DeclRefExpr") => {
+                        let root_ty = expr_type(base)?;
+                        if !clang_type_is_mutable_record_pointer(&root_ty) {
+                            return Ok(Some(format!(
+                                "root type {} must be a non-const mutable record pointer",
+                                root_ty.spelled
+                            )));
+                        }
+                        return Ok(None);
+                    }
+                    Some(kind) => {
                         return Ok(Some(format!(
-                            "root type {} must be a non-const mutable record pointer",
-                            root_ty.spelled
+                            "root must be a direct non-null mutable record pointer DeclRef, found {kind}"
                         )));
                     }
-                    return Ok(None);
+                    None => {
+                        return Ok(Some(
+                            "member base is missing its expression kind".to_string(),
+                        ));
+                    }
                 }
-                Some(kind) => {
-                    return Ok(Some(format!(
-                        "root must be a direct non-null mutable record pointer DeclRef, found {kind}"
-                    )));
-                }
-                None => {
-                    return Ok(Some(
-                        "member base is missing its expression kind".to_string(),
-                    ));
-                }
-            },
+            }
             None => {
                 return Ok(Some(
                     "member hop is missing its arrow/dot classification".to_string(),
@@ -513,6 +516,30 @@ fn if_condition_record_pointer_member_target_rejection_reason(
             }
         }
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn if_condition_direct_record_pointer_root(
+    expr: &Value,
+) -> Result<&Value, ClangFrontendError> {
+    if string_field(expr, "kind").as_deref() != Some("ImplicitCastExpr")
+        || string_field(expr, "castKind").as_deref() != Some("LValueToRValue")
+    {
+        return Ok(expr);
+    }
+    let children = inner(expr);
+    let [operand] = children else {
+        return Err(ClangFrontendError {
+            kind: "invalid_member_expr".to_string(),
+            message: "record-pointer lvalue-to-rvalue root cast must have one operand".to_string(),
+        });
+    };
+    let result_ty = expr_type(expr)?;
+    let operand_ty = expr_type(operand)?;
+    if result_ty != operand_ty {
+        return Ok(expr);
+    }
+    Ok(operand)
 }
 
 #[cfg(feature = "typed-ir")]

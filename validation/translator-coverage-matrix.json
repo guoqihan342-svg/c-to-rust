@@ -4825,7 +4825,7 @@
         "strict direct non-nullable mutable record pointer arrow-rooted pure dot-path integer field target",
         "exactly one direct call in the complete assignment RHS subtree",
         "pure comparison operators == != < <= > >=",
-        "candidate extensions remain candidate_context_only; accepted named-slice semantic-pass count is 24"
+        "record-pointer extensions are accepted only for the exact real-fdb-kv-iterate-next named slice; accepted named-slice semantic-pass count is 25"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -4850,6 +4850,11 @@
               "name": "clang_ast_if_assignment_call_record_pointer_nested_dot_member_accepts_and_runs",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "clang_ast_if_assignment_call_record_pointer_member_accepts_direct_lvalue_read_root",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "assertion": "accepts only a type-preserving LValueToRValue wrapper around the direct record-pointer root"
             }
           ]
         },
@@ -4919,7 +4924,7 @@
         },
         "c_rust_diff": {
           "status": "covered",
-          "scope_note": "Covered only for the exact real-fdb-new-kv-alloc-compare source fragment under its fixture-scripted external-u32-return contract; later record-pointer target support remains candidate_context_only.",
+          "scope_note": "Covered for the exact real-fdb-new-kv-alloc-compare scalar fragment and the exact real-fdb-kv-iterate-next record fragment under separate fixture-scripted external-u32-return contracts; neither claim extends to the containing functions or real external callees.",
           "evidence": [
             {
               "name": "real-fdb-new-kv-alloc-compare C oracle",
@@ -4945,6 +4950,31 @@
               "name": "real-fdb-new-kv-alloc-compare final verification",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-final-verification.json",
               "assertion": "generated_draft_semantic_pass=true for the exact named source fragment"
+            },
+            {
+              "name": "real-fdb-kv-iterate-next C oracle",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-c-oracle.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-next Rust replay",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-rust-report.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-next schema diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-next negative diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-next unsafe ledger",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-unsafe-ledger.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-next final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-final-verification.json",
+              "assertion": "generated_draft_semantic_pass=true for the exact nested record assignment-call source fragment"
             }
           ]
         },
@@ -4966,6 +4996,18 @@
             {
               "name": "real-fdb-new-kv-alloc-compare capability delta",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-capability-delta.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-next route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-route-decision.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-next validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-validation-profile.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-next capability delta",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-capability-delta.json"
             }
           ]
         }
@@ -5000,6 +5042,11 @@
           "name": "arrow-rooted nested record pointer field assignment-call candidate",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
           "proof_class": "candidate_context_only"
+        },
+        {
+          "name": "FlashDB exact nested record assignment-call named slice",
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-final-verification.json",
+          "assertion": "line 1870 is accepted only through the exact source carrier, explicit db/kv noalias contract, record fixture replay, diff, negative mutation, unsafe, and final gates"
         }
       ],
       "negative_cases": [
@@ -5009,9 +5056,9 @@
           "fail_closed_reason": "fdb_kv_get_blob contains nested fdb_blob_make in its argument subtree, so the assignment RHS contains a second call even though the outer comparison uses >"
         },
         {
-          "name": "fdb_kvdb.c:1870 member-chain assignment target remains complex",
-          "path": "sources/FlashDB/src/fdb_kvdb.c",
-          "fail_closed_reason": "kv->addr.start is a pointer/member-chain assignment target rather than one direct fixed-width integer scalar DeclRef"
+          "name": "record-pointer assignment-call root cast refusals",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+          "fail_closed_reason": "only a type-preserving LValueToRValue wrapper around a direct root is stripped; pointer BitCast and effectful roots remain rejected"
         },
         {
           "name": "P0-T8 adjacent structural refusals",
@@ -5032,6 +5079,11 @@
           "name": "multi-record direct-call noalias refusal",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_23.rs",
           "fail_closed_reason": "a complete record call-through pointer and mutable nested-field owner require explicit noalias provenance"
+        },
+        {
+          "name": "scripted record replay noalias binding drift refusal",
+          "path": "validation/tools/_test_auto_migrate_parts/class_part_11.py",
+          "fail_closed_reason": "the project-independent record replay contract must exactly match c_boundary.pointer_contract.noalias_required"
         }
       ]
     },

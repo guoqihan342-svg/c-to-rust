@@ -1,0 +1,448 @@
+{
+  "accepted_evidence_authoritative": false,
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-c2rust-baseline-manifest.json",
+        "sha256": "90f945d6db905881c148639b11c80d9754c9843ee7dc19fb5a58742bec76287d",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": true,
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-c2rust-baseline-manifest.json",
+          "sha256": "90f945d6db905881c148639b11c80d9754c9843ee7dc19fb5a58742bec76287d",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": true,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L1",
+        "status": "not_refused"
+      },
+      "route_level": "L1",
+      "route_status": "recorded",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:clang-lowered-typed-ir",
+      "fallback": false,
+      "selected": "clang-lowered-typed-ir",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [
+        {
+          "code": "signed_negation_no_overflow",
+          "detail": "C signed negation must not evaluate -MIN (C11 6.5) unless the slice contract models that UB boundary",
+          "ir_node": "IrExpr::Unary.Neg",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        }
+      ],
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "d16a6f179200ffaa9adafdd6f35567483b732e6b922fb971c3e2b775a2b0aedc",
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 1,
+        "source_fields": [
+          "c_boundary.scalar_arithmetic_contract",
+          "fixture_contract.scalar_input_domain",
+          "claim_boundary.must_not_claim"
+        ],
+        "status": "unresolved",
+        "unresolved": [
+          {
+            "code": "signed_negation_no_overflow",
+            "missing": [
+              "c_boundary.scalar_arithmetic_contract.signed_negation",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "unresolved"
+          }
+        ]
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-clang-lowering-report.json",
+        "sha256": "3d1744f5daead84265d9dd606d1cae938ef059f55a8e384d2ce272d0ee1df7e6",
+        "status": "lowered"
+      },
+      "status": "generated",
+      "typed_ir_sha256": "26c1a2df469cb5ce5e3d73f31e7347cd1bf10185dbd9a9ab9bec8e3fb4dc8390"
+    }
+  },
+  "competition_environment": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-next.json",
+      "fixture_sha256": "9f67ad323584c3184b22bdd36cd8ee0c833e4b89b460f76fc2c325fd2e02fd52",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "6a4911621637f85a504646f4867b8da26d57b32980a25c6c28b4b78b16579419",
+        "diff": "dcfeda544dfd565ef9dd5ffcf37268c28211a8a15234fc6783057aed26281d1f",
+        "negative_diff": "29de491905613c42104799ab0c8c58de0d4393dcc9874d0a6aa1d50ef3edb999",
+        "rust_report": "abf1a34e74c2adedcd04cdbbbf815772f9168d2c43d98ab1a603e91770ef77a4",
+        "unsafe_ledger": "452ad3e622d782a9e62ed1819c3b3d08d008add480ec105a3f5e5bebc4a75052",
+        "unsafe_scan": "bcb3ba8f81b1dae76bc9618e1fa2796513faad91977140153ea87d1a2c6c1e03"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-c-oracle.json",
+        "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-diff.json",
+        "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-negative-diff.json",
+        "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-rust-report.json",
+        "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-unsafe-scan.json"
+      },
+      "slice_id": "real-fdb-kv-iterate-next",
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "status": "accepted",
+      "target_id": "flashdb",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-c-oracle.json",
+        "sha256": "6a4911621637f85a504646f4867b8da26d57b32980a25c6c28b4b78b16579419",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-negative-diff.json",
+        "sha256": "29de491905613c42104799ab0c8c58de0d4393dcc9874d0a6aa1d50ef3edb999",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-rust-report.json",
+        "sha256": "abf1a34e74c2adedcd04cdbbbf815772f9168d2c43d98ab1a603e91770ef77a4",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-diff.json",
+        "sha256": "dcfeda544dfd565ef9dd5ffcf37268c28211a8a15234fc6783057aed26281d1f",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-unsafe-ledger.json",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-unsafe-scan.json",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "<generated-replay-executable> --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/generated-rust-replay.stdout.log"
+    },
+    "rust_check": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-rust-draft.rs",
+      "sha256": "d16a6f179200ffaa9adafdd6f35567483b732e6b922fb971c3e2b775a2b0aedc",
+      "status": "accepted_after_gates"
+    },
+    "schema_version": 1,
+    "slice_id": "real-fdb-kv-iterate-next",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "passed",
+    "target_id": "flashdb"
+  },
+  "generated_draft_semantic_pass": true,
+  "goal": "dev",
+  "loop_policy": {
+    "fixed_project_loop_count_required": false,
+    "source": "run_policy",
+    "stress_loops": null
+  },
+  "optional_gates": [
+    "negative_diff",
+    "evidence_cleanliness",
+    "fuzz_property",
+    "miri",
+    "kani"
+  ],
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "translation-carrier self-contained C plus tests/Makefile ABI",
+      "compile_commands": null,
+      "defines": [],
+      "flags": [],
+      "include_paths": [],
+      "tool_versions": {
+        "extract_source_slice": "0.1.0",
+        "translation_carrier_validator": "1"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 3,
+      "case_source": "fixture_contract",
+      "declared_case_count": 3,
+      "fixture_hash": "9f67ad323584c3184b22bdd36cd8ee0c833e4b89b460f76fc2c325fd2e02fd52",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-next.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_value",
+      "kv_addr_start",
+      "external_call_count",
+      "external_call_args"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": true,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "The carrier is lowered from its embedded c_source; no offline AST fixture is accepted for this provenance contract."
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "char_align": "unknown",
+      "char_width": 8,
+      "endianness": "little",
+      "int_align": "unknown",
+      "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
+      "long_long_width": 64,
+      "long_width": 64,
+      "plain_char_signed": true,
+      "pointer_align": "unknown",
+      "pointer_width": 64,
+      "short_align": "unknown",
+      "short_width": 16,
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {
+        "comparison": "assigned uint32_t return value is compared with UINT32_MAX",
+        "division_by_zero": "not_declared",
+        "shift_count": "not_declared",
+        "signed_division_overflow": "not_declared",
+        "signed_overflow": "not_declared",
+        "signed_right_shift": "not_declared",
+        "wrapping_profile": "not_declared"
+      }
+    }
+  },
+  "profile": "L1-dev",
+  "required_gate_status": {
+    "c_oracle_diff": "C_ORACLE_GENERATED",
+    "compile": "passed"
+  },
+  "required_gates": [
+    "compile",
+    "c_oracle_diff",
+    "unsafe_ledger",
+    "rust_tests"
+  ],
+  "route_level": "L1",
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "whole-project migration",
+        "fdb_kv_iterate semantic equivalence",
+        "get_next_kv_addr semantic equivalence",
+        "semantic equivalence without C oracle and exact generated Rust replay evidence"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "not_declared",
+      "covers_overflow_boundaries": false,
+      "parameters": []
+    },
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_gates": [],
+  "slice_id": "real-fdb-kv-iterate-next",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_identity": {
+    "repo_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_branch": "competition",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_root": "sources/FlashDB"
+  },
+  "status": "passed",
+  "target_id": "flashdb",
+  "tool_boundaries": {
+    "c_ub": [
+      "clang_diagnostics",
+      "sanitizer_oracle",
+      "unsupported_evidence"
+    ],
+    "rust_ub": [
+      "miri",
+      "unsafe_ledger",
+      "rust_verification_tools"
+    ]
+  }
+}

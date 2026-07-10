@@ -1,0 +1,17 @@
+{
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-next",
+  "status": "generated",
+  "artifact_paths": [
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-auto-translation-plan.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-auto-translation-events.jsonl",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-type-map.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-cfg.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-pointer-graph.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-ai-candidate-manifest.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-blocked-repairs.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-rust-draft.rs",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-clang-dry-run.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-clang-lowering-report.json"
+  ]
+}

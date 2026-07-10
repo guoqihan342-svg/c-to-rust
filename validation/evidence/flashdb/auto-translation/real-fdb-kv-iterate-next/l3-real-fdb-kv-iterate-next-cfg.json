@@ -1,0 +1,108 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=44096c9eafd1ddcbe96bc65b29c15ba904a55dcbccc1e31d409443c963f2ac9d",
+    "fixture_hash=9f67ad323584c3184b22bdd36cd8ee0c833e4b89b460f76fc2c325fd2e02fd52",
+    "build_profile_hash=10128e2ebc6ad62fcc9f46ba40772d47f35eaba4db108e8a57fe02a80dc00426",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [],
+          "lvalue_kinds": [],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "primitive_declaration",
+            "if",
+            "return"
+          ],
+          "statements": [
+            "decl sector",
+            "decl failed",
+            "if",
+            "return"
+          ],
+          "terminator": "return"
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "unsupported",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "if-2"
+        },
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return-3"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "fdb_kv_iterate_next_probe",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "bool fdb_kv_iterate_next_probe(struct Database * db, struct Sector sector_seed, struct Kv * kv)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 2,
+        "loop_count": 0,
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "b514c10c97134d240077250e5b4735298bad72b4",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-next",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-next.json",
+    "sha256": "44096c9eafd1ddcbe96bc65b29c15ba904a55dcbccc1e31d409443c963f2ac9d",
+    "status": "ready"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "unsupported_control_flow": []
+}

@@ -1,0 +1,87 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-next.json",
+    "fixture_sha256": "9f67ad323584c3184b22bdd36cd8ee0c833e4b89b460f76fc2c325fd2e02fd52",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "6a4911621637f85a504646f4867b8da26d57b32980a25c6c28b4b78b16579419",
+      "diff": "dcfeda544dfd565ef9dd5ffcf37268c28211a8a15234fc6783057aed26281d1f",
+      "negative_diff": "29de491905613c42104799ab0c8c58de0d4393dcc9874d0a6aa1d50ef3edb999",
+      "rust_report": "abf1a34e74c2adedcd04cdbbbf815772f9168d2c43d98ab1a603e91770ef77a4",
+      "unsafe_ledger": "452ad3e622d782a9e62ed1819c3b3d08d008add480ec105a3f5e5bebc4a75052",
+      "unsafe_scan": "bcb3ba8f81b1dae76bc9618e1fa2796513faad91977140153ea87d1a2c6c1e03"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-kv-iterate-next",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=44096c9eafd1ddcbe96bc65b29c15ba904a55dcbccc1e31d409443c963f2ac9d",
+    "fixture_hash=9f67ad323584c3184b22bdd36cd8ee0c833e4b89b460f76fc2c325fd2e02fd52",
+    "build_profile_hash=10128e2ebc6ad62fcc9f46ba40772d47f35eaba4db108e8a57fe02a80dc00426",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "translation-carrier self-contained C plus tests/Makefile ABI"
+    ],
+    "config_header_included": true,
+    "include_paths": []
+  },
+  "config_header": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "440a6729b37212eb8f8e528b9f89772f0e9900b40b0bdc2cf73df00800121f94"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "9f67ad323584c3184b22bdd36cd8ee0c833e4b89b460f76fc2c325fd2e02fd52",
+    "operation_count": 3,
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-next.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No whole fdb_kv_iterate function migration claim.",
+    "No real get_next_kv_addr implementation semantics claim.",
+    "No real FlashDB record layout, database state, iterator, or storage side-effect claim.",
+    "Fixture record fields only test record construction, argument forwarding, nested assignment, and sentinel comparison."
+  ],
+  "profile_id": "flashdb-real-fdb-kv-iterate-next-carrier",
+  "repo_commit": "b514c10c97134d240077250e5b4735298bad72b4",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-next",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

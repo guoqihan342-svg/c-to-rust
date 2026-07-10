@@ -490,6 +490,51 @@
     }
 
     #[test]
+    fn slice_source_translation_unit_preserves_complete_source_record_layouts() {
+        let spec = SliceSpec {
+            target_id: "generic".to_string(),
+            slice_id: "nested-record-call".to_string(),
+            function_name: "assign_nested".to_string(),
+            c_source: "struct Inner { int value; }; struct Outer { struct Inner inner; }; int read_next(struct Outer *slot); int assign_nested(struct Outer *slot) { return (slot->inner.value = read_next(slot)); }".to_string(),
+            c_boundary: CBoundary {
+                signatures: vec![
+                    CSignature {
+                        function: "assign_nested".to_string(),
+                        return_type: "int".to_string(),
+                        parameters: vec![CParameter {
+                            name: "slot".to_string(),
+                            c_type: "struct Outer *".to_string(),
+                            ..CParameter::default()
+                        }],
+                        ..CSignature::default()
+                    },
+                    CSignature {
+                        role: "external_direct_callee".to_string(),
+                        function: "read_next".to_string(),
+                        return_type: "int".to_string(),
+                        parameters: vec![CParameter {
+                            name: "slot".to_string(),
+                            c_type: "struct Outer *".to_string(),
+                            ..CParameter::default()
+                        }],
+                        ..CSignature::default()
+                    },
+                ],
+                ..CBoundary::default()
+            },
+            ..SliceSpec::default()
+        };
+
+        let source = slice_source_translation_unit(&spec);
+
+        assert!(source.contains("struct Inner;\nstruct Outer;\n"), "{source}");
+        assert_eq!(source.matches("struct Inner {").count(), 1, "{source}");
+        assert_eq!(source.matches("struct Outer {").count(), 1, "{source}");
+        assert!(!source.contains("int inner;"), "{source}");
+        assert!(source.contains("int read_next(struct Outer * slot);"), "{source}");
+    }
+
+    #[test]
     fn slice_source_translation_unit_does_not_redeclare_build_profile_defines() {
         let spec = SliceSpec {
             target_id: "libuv".to_string(),

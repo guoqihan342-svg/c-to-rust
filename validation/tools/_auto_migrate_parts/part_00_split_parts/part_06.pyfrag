@@ -1,0 +1,64 @@
+def scripted_record_validate_fixture_cases(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+    contract: dict[str, Any],
+    entry_by_name: dict[str, dict[str, Any]],
+) -> None:
+    cases = fixture_binding.get("case_bindings")
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("scripted record replay fixture cases are missing")
+    external = contract["external_callee"]
+    state_output = contract["state_output"]
+    return_contract = contract["return"]
+    expected_fields = {
+        str(return_contract["fixture_field"]),
+        str(state_output["fixture_field"]),
+        str(external["call_count_output"]),
+        str(external["call_args_output"]),
+    }
+    for case_binding in cases:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding.get("expected_outputs")
+        if not isinstance(payload, dict) or not isinstance(expected, dict):
+            raise ValueError("scripted record replay fixture case is incomplete")
+        if set(expected) != expected_fields:
+            raise ValueError("scripted record replay fixture expected output fields drifted")
+        for argument in contract["entry_arguments"]:
+            for fixture_field, _ in scripted_record_initializer_fixture_paths(
+                argument["initializer"]
+            ):
+                if not is_uint32_value(payload.get(fixture_field)):
+                    raise ValueError("scripted record replay fixture record field must be u32")
+        external_return = payload.get(str(external["return_fixture_field"]))
+        if not is_uint32_value(external_return):
+            raise ValueError("scripted record replay external return must be u32")
+        if type(expected.get(str(return_contract["fixture_field"]))) is not bool:
+            raise ValueError("scripted record replay expected return must be bool")
+        if expected[str(return_contract["fixture_field"])] != (external_return == (1 << 32) - 1):
+            raise ValueError("scripted record replay expected return disagrees with sentinel")
+        if expected.get(str(state_output["fixture_field"])) != external_return:
+            raise ValueError("scripted record replay expected state must equal scripted return")
+        if expected.get(str(external["call_count_output"])) != 1:
+            raise ValueError("scripted record replay expected call count must be one")
+        expected_args = [
+            scripted_record_fixture_value_for_observation(payload, item, entry_by_name)
+            for item in external["arguments"]
+        ]
+        if expected.get(str(external["call_args_output"])) != expected_args:
+            raise ValueError("scripted record replay expected call arguments drifted")
+
+
+def scripted_record_fixture_value_for_observation(
+    payload: dict[str, Any],
+    observation: dict[str, Any],
+    entry_by_name: dict[str, dict[str, Any]],
+) -> int:
+    entry_argument = entry_by_name[str(observation["entry_parameter"])]
+    path = tuple(str(item) for item in observation["field_path"])
+    fixture_by_path = {
+        field_path: fixture_field
+        for fixture_field, field_path in scripted_record_initializer_fixture_paths(
+            entry_argument["initializer"]
+        )
+    }
+    return int(payload[fixture_by_path[path]])

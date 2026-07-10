@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any
 
 from .contract import ReporterError, behavior_fields
+from .record_contract import (
+    KIND as RECORD_KIND,
+    negative_partition_probe_source as record_negative_partition_probe_source,
+)
 from .source_binding import StaticContext
 
 
@@ -161,6 +165,8 @@ def run_negative_execution(
 
 
 def partition_probe_source(context: StaticContext) -> str:
+    if context.contract.get("kind") == RECORD_KIND:
+        return record_negative_partition_probe_source(context)
     function_name = context.spec["function_name"]
     external = context.contract["external_callee"]
     inputs = context.contract["inputs"]

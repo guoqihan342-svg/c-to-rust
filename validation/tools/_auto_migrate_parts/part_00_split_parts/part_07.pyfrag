@@ -1,0 +1,126 @@
+def scripted_external_record_u32_call_bool_state_external_binding(
+    spec: dict[str, Any],
+    name: str,
+    return_type: str,
+    parameters: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    contract = scripted_external_record_u32_call_bool_state_replay_contract(spec)
+    if contract is None or name != contract["external_callee"]["name"]:
+        return None
+    external_arguments = contract["external_callee"]["arguments"]
+    entry_by_name = {
+        str(item["parameter"]): item for item in contract["entry_arguments"]
+    }
+    if normalize_c_type(return_type) != "uint32_t":
+        raise ValueError("scripted record replay descriptor return type drifted")
+    if [str(item.get("name") or "") for item in parameters] != [
+        str(item["parameter"]) for item in external_arguments
+    ]:
+        raise ValueError("scripted record replay descriptor parameter names drifted")
+    expected_types = [
+        f"struct {entry_by_name[str(item['entry_parameter'])]['rust_type']} *"
+        for item in external_arguments
+    ]
+    if [normalize_c_type(str(item.get("c_type") or "")) for item in parameters] != [
+        normalize_c_type(item) for item in expected_types
+    ]:
+        raise ValueError("scripted record replay descriptor parameter types drifted")
+    return contract
+
+
+def rust_check_scripted_external_record_u32_call_bool_state_stub(
+    callee: dict[str, Any],
+    text: str,
+    spec: dict[str, Any] | None,
+) -> str | None:
+    if not isinstance(spec, dict):
+        return None
+    contract = scripted_external_record_u32_call_bool_state_replay_contract(spec)
+    if contract is None or callee.get("name") != contract["external_callee"]["name"]:
+        return None
+    signature = rust_check_declared_callee_signature(callee)
+    name = rust_identifier(str(callee["name"]))
+    helper_presence = [helper in text for helper in SCRIPTED_EXTERNAL_RECORD_STUB_HELPERS]
+    if any(helper_presence):
+        if not all(helper_presence) or not rust_function_declared(text, name):
+            raise ValueError("scripted record replay Rust fixture stub is incomplete")
+        mark_rust_check_binding(
+            callee,
+            "fixture_only_scripted_external",
+            signature,
+            allowed_use="fixture_bound_rust_replay_only",
+        )
+        callee["rust_check_binding"].update(
+            {
+                "fixture_only": True,
+                "replay_contract_kind": SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND,
+            }
+        )
+        return None
+    if rust_function_declared(text, name):
+        raise ValueError("scripted record replay callee is already defined without fixture controls")
+
+    external_arguments = contract["external_callee"]["arguments"]
+    mark_rust_check_binding(
+        callee,
+        "fixture_only_scripted_external",
+        signature,
+        allowed_use="fixture_bound_rust_replay_only",
+    )
+    callee["rust_check_binding"].update(
+        {
+            "fixture_only": True,
+            "replay_contract_kind": SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND,
+        }
+    )
+    thread_locals = [
+        "    static __C2R_SCRIPTED_EXTERNAL_RETURN: std::cell::Cell<u32> = std::cell::Cell::new(0);",
+        "    static __C2R_SCRIPTED_EXTERNAL_CALL_COUNT: std::cell::Cell<usize> = std::cell::Cell::new(0);",
+        *(
+            f"    static __C2R_SCRIPTED_EXTERNAL_ARG{index}: std::cell::Cell<u32> = std::cell::Cell::new(0);"
+            for index in range(len(external_arguments))
+        ),
+    ]
+    reset_args = "\n".join(
+        f"    __C2R_SCRIPTED_EXTERNAL_ARG{index}.with(|slot| slot.set(0));"
+        for index in range(len(external_arguments))
+    )
+    returned_args = ",\n".join(
+        f"        __C2R_SCRIPTED_EXTERNAL_ARG{index}.with(std::cell::Cell::get)"
+        for index in range(len(external_arguments))
+    )
+    captured_args = "\n".join(
+        f"    __C2R_SCRIPTED_EXTERNAL_ARG{index}.with(|slot| slot.set({rust_identifier(str(item['parameter']))}.{'.'.join(str(field) for field in item['field_path'])}));"
+        for index, item in enumerate(external_arguments)
+    )
+    return f"""// Fixture-only scripted record external replay state; real callee semantics are not verified.
+std::thread_local! {{
+{chr(10).join(thread_locals)}
+}}
+
+fn __c2r_scripted_external_set_return(value: u32) {{
+    __C2R_SCRIPTED_EXTERNAL_RETURN.with(|slot| slot.set(value));
+}}
+
+fn __c2r_scripted_external_reset_calls() {{
+    __C2R_SCRIPTED_EXTERNAL_CALL_COUNT.with(|slot| slot.set(0));
+{reset_args}
+}}
+
+fn __c2r_scripted_external_call_count() -> usize {{
+    __C2R_SCRIPTED_EXTERNAL_CALL_COUNT.with(std::cell::Cell::get)
+}}
+
+fn __c2r_scripted_external_call_args() -> [u32; {len(external_arguments)}] {{
+    [
+{returned_args}
+    ]
+}}
+
+{signature} {{
+{captured_args}
+    __C2R_SCRIPTED_EXTERNAL_CALL_COUNT.with(|slot| {{
+        slot.set(slot.get().checked_add(1).expect("scripted external fixture call count overflow"));
+    }});
+    __C2R_SCRIPTED_EXTERNAL_RETURN.with(|slot| slot.get())
+}}"""

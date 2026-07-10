@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-next",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Fixture-created records are passed through the declared entry boundary; selected u32 fields observed by one scripted external call are recorded, its u32 return is assigned to the declared nested state field, and that field is compared with UINT32_MAX.",
+    "external_callee": "get_next_kv_addr",
+    "excluded_semantics": [
+      "fdb_kv_iterate control flow outside the exact line-1870 condition",
+      "real FlashDB database, sector, KV, iterator, storage, and pointer layouts",
+      "real get_next_kv_addr implementation behavior and side effects"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "first_mismatch": null
+}

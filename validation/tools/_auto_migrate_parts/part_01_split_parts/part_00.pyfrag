@@ -611,6 +611,7 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
         f"{global_comments}"
         f"{fixture_execution['declarations']}"
         f"{target_definition}"
+        f"{fixture_execution.get('definitions_after_target', '')}"
         "int main(void) {\n"
         f"  puts(\"oracle harness draft for {function_name}\");\n"
         f"  puts(\"fixture input: {fixture_path_text}\");\n"

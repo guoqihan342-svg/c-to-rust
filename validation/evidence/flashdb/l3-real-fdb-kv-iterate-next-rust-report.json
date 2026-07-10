@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-next",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Fixture-created records are passed through the declared entry boundary; selected u32 fields observed by one scripted external call are recorded, its u32 return is assigned to the declared nested state field, and that field is compared with UINT32_MAX.",
+    "external_callee": "get_next_kv_addr",
+    "excluded_semantics": [
+      "fdb_kv_iterate control flow outside the exact line-1870 condition",
+      "real FlashDB database, sector, KV, iterator, storage, and pointer layouts",
+      "real get_next_kv_addr implementation behavior and side effects"
+    ]
+  },
+  "status": "passed",
+  "replay_contract_kind": "scripted_external_record_u32_call_bool_state",
+  "replay_engine": "exact_generated_rust_replay_plus_declarative_field_check",
+  "generated_draft_replay_pass": true,
+  "generated_draft_semantic_pass": false,
+  "provenance": {
+    "status": "passed",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": false,
+    "fixture_external_stub": {
+      "kind": "scripted_external_record_u32_call_bool_state",
+      "scope": "fixture_only",
+      "semantics_verified": false
+    },
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "<generated-replay-executable> --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/generated-rust-replay.stdout.log"
+    },
+    "refs": {
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-rust-draft.rs",
+        "sha256": "d16a6f179200ffaa9adafdd6f35567483b732e6b922fb971c3e2b775a2b0aedc"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/rust-check.json",
+        "sha256": "cc3f54efa9020ab625ab024843b6f303716c05529cb2dde736268b8a6bfa30ff"
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-test-translation-generated.json",
+        "sha256": "4c2d9a7aeef76b864ae2bf37f8448892ee1da214c346d3dfab7d430b3c0237a5"
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-rust-replay-test-draft.rs",
+        "sha256": "13e433b8fc8067eb3cd7f0666a92a39d9dcda7313aa7488980780dabf19f229e",
+        "declared_sha256": "13e433b8fc8067eb3cd7f0666a92a39d9dcda7313aa7488980780dabf19f229e"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/generated-rust-replay.stdout.log",
+        "sha256": "5cd7c0467036be125d0938ac1fc8099ebdb6793b5d6e0ca139b4ee3db2391fcf"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-rust-report.json",
+        "sha256": "2cd03a17e635099dc58f665eaf38afda52eec03118d2dacf7fb38a045830bb4a"
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-test-translation-generated.json",
+        "sha256": "4c2d9a7aeef76b864ae2bf37f8448892ee1da214c346d3dfab7d430b3c0237a5"
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "failed-address",
+      "return_value": true,
+      "kv_addr_start": 4294967295,
+      "external_call_count": 1,
+      "external_call_args": [
+        17,
+        29,
+        41
+      ],
+      "status": "passed"
+    },
+    {
+      "id": "zero-address",
+      "return_value": false,
+      "kv_addr_start": 0,
+      "external_call_count": 1,
+      "external_call_args": [
+        3,
+        5,
+        7
+      ],
+      "status": "passed"
+    },
+    {
+      "id": "next-address",
+      "return_value": false,
+      "kv_addr_start": 8192,
+      "external_call_count": 1,
+      "external_call_args": [
+        305419896,
+        2271560481,
+        4096
+      ],
+      "status": "passed"
+    }
+  ]
+}

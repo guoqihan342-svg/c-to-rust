@@ -1,0 +1,64 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-c2rust-baseline-manifest.json",
+    "sha256": "90f945d6db905881c148639b11c80d9754c9843ee7dc19fb5a58742bec76287d",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir <rust-check-output> <draft>",
+  "error_count": 0,
+  "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [
+      {
+        "binding_status": "fixture_only_scripted_external",
+        "name": "get_next_kv_addr",
+        "semantics_verified": false,
+        "signature_ref": "sig-scripted-get-next-kv-addr",
+        "stub_kind": "compile_only"
+      }
+    ],
+    "declared_count": 1,
+    "declared_spec_count": 1,
+    "declared_spec_names": [
+      "get_next_kv_addr"
+    ],
+    "status": "recorded"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-route-decision.json",
+    "sha256": "e8238db5bee43ca0e1e6b7b3ae182bb98e980534e5aad2eb0989347068cb6440",
+    "status": "recorded"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "fixture_bound_rust_replay_only",
+    "bindings": [
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "fixture_only": true,
+        "name": "get_next_kv_addr",
+        "replay_contract_kind": "scripted_external_record_u32_call_bool_state",
+        "semantics_verified": false,
+        "signature": "fn get_next_kv_addr(db: &mut Database, sector: &mut Sector, kv: &mut Kv) -> u32",
+        "status": "fixture_only_scripted_external"
+      }
+    ],
+    "semantics_verified": false,
+    "status": "emitted"
+  },
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "f2fbae9d075ca95c17cc2c54c58fb12e7a84c88c69d51725a44332e37a0ee90b",
+    "status": "passed"
+  }
+}

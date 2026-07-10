@@ -7,7 +7,13 @@ import unittest
 from pathlib import Path
 
 from validation.tools._translation_carrier_reporter import emit_reports
-from validation.tools._translation_carrier_reporter.contract import ReporterError, U32_MAX
+from validation.tools._translation_carrier_reporter.contract import (
+    ReporterError,
+    U32_MAX,
+    parse_contract,
+    reference_outputs,
+    validate_cases,
+)
 
 
 class TranslationCarrierReporterTests(unittest.TestCase):
@@ -92,6 +98,20 @@ class TranslationCarrierReporterTests(unittest.TestCase):
         )
         for forbidden in ("flashdb", "new_kv", "alloc_kv", "real-fdb"):
             self.assertNotIn(forbidden, implementation.lower())
+
+    def test_record_contract_recomputes_outputs_and_rejects_empty_noalias(self) -> None:
+        spec = build_record_contract_model()
+        contract = parse_contract(spec)
+        cases = validate_cases(spec["fixture_contract"]["cases"], contract)
+
+        self.assertEqual(contract["kind"], "scripted_external_record_u32_call_bool_state")
+        self.assertEqual(reference_outputs(cases[0], contract), cases[0]["expected_outputs"])
+        self.assertEqual(reference_outputs(cases[1], contract), cases[1]["expected_outputs"])
+
+        spec["replay_contract"]["noalias_required"] = []
+        spec["c_boundary"]["pointer_contract"]["noalias_required"] = []
+        with self.assertRaisesRegex(ReporterError, "must cover all forwarded mutable record pairs"):
+            parse_contract(spec)
 
 
 def build_renamed_layout(root: Path) -> dict[str, object]:
@@ -510,6 +530,121 @@ def build_renamed_layout(root: Path) -> dict[str, object]:
         "rust_check_path": rust_check_path,
         "rust_draft_path": rust_draft_path,
         "replay_test_path": replay_test_path,
+    }
+
+
+def build_record_contract_model() -> dict[str, object]:
+    record_leaf = lambda record_type, name, fixture_field: {
+        "record_type": record_type,
+        "fields": [
+            {
+                "name": name,
+                "fixture_field": fixture_field,
+                "rust_type": "u32",
+            }
+        ],
+    }
+    fields = ["is_full", "item_value", "call_count", "call_args"]
+    cases = []
+    for case_id, owner, cursor, initial, scripted in (
+        ("full", 11, 22, 33, U32_MAX),
+        ("available", 5, 7, 9, 41),
+    ):
+        cases.append(
+            {
+                "id": case_id,
+                "owner_token": owner,
+                "cursor_offset": cursor,
+                "item_initial": initial,
+                "scripted_value": scripted,
+                "expected_outputs": {
+                    "is_full": scripted == U32_MAX,
+                    "item_value": scripted,
+                    "call_count": 1,
+                    "call_args": [owner, cursor, initial],
+                },
+            }
+        )
+    return {
+        "fixture_contract": {
+            "behavior_fields": fields,
+            "cases": cases,
+        },
+        "c_boundary": {
+            "pointer_contract": {
+                "aliasing_proven": True,
+                "noalias_required": [["owner", "item"]],
+            }
+        },
+        "replay_contract": {
+            "schema_version": 1,
+            "kind": "scripted_external_record_u32_call_bool_state",
+            "external_callee": {
+                "name": "claim_next",
+                "return_fixture_field": "scripted_value",
+                "call_count_output": "call_count",
+                "call_args_output": "call_args",
+                "arguments": [
+                    {
+                        "parameter": "owner",
+                        "entry_parameter": "owner",
+                        "field_path": ["token"],
+                    },
+                    {
+                        "parameter": "cursor",
+                        "entry_parameter": "cursor_seed",
+                        "field_path": ["offset"],
+                    },
+                    {
+                        "parameter": "item",
+                        "entry_parameter": "item",
+                        "field_path": ["position", "value"],
+                    },
+                ],
+            },
+            "entry_arguments": [
+                {
+                    "parameter": "owner",
+                    "c_type": "struct Owner *",
+                    "rust_type": "Owner",
+                    "pass_mode": "mutable_ref",
+                    "direction": "input",
+                    "initializer": record_leaf("Owner", "token", "owner_token"),
+                },
+                {
+                    "parameter": "cursor_seed",
+                    "c_type": "struct Cursor",
+                    "rust_type": "Cursor",
+                    "pass_mode": "value",
+                    "direction": "input",
+                    "initializer": record_leaf("Cursor", "offset", "cursor_offset"),
+                },
+                {
+                    "parameter": "item",
+                    "c_type": "struct Item *",
+                    "rust_type": "Item",
+                    "pass_mode": "mutable_ref",
+                    "direction": "inout",
+                    "initializer": {
+                        "record_type": "Item",
+                        "fields": [
+                            {
+                                "name": "position",
+                                "record": record_leaf("Position", "value", "item_initial"),
+                            }
+                        ],
+                    },
+                },
+            ],
+            "state_output": {
+                "parameter": "item",
+                "field_path": ["position", "value"],
+                "fixture_field": "item_value",
+                "rust_type": "u32",
+            },
+            "return": {"fixture_field": "is_full", "rust_type": "bool"},
+            "noalias_required": [["owner", "item"]],
+        },
     }
 
 

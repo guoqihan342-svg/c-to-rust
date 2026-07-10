@@ -1,0 +1,48 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-diff.json",
+    "sha256": "dcfeda544dfd565ef9dd5ffcf37268c28211a8a15234fc6783057aed26281d1f",
+    "status": "passed"
+  },
+  "accepted_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-c2rust-baseline-manifest.json",
+    "sha256": "90f945d6db905881c148639b11c80d9754c9843ee7dc19fb5a58742bec76287d",
+    "status": "skipped"
+  },
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "diff_gate": "schema_aware_c_rust_diff",
+  "first_mismatch": null,
+  "required_inputs": {
+    "c_oracle_actual_status": "C_ORACLE_GENERATED",
+    "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_actual_status": "passed",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-route-decision.json",
+    "sha256": "e8238db5bee43ca0e1e6b7b3ae182bb98e980534e5aad2eb0989347068cb6440",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-kv-iterate-next",
+  "status": "passed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "f2fbae9d075ca95c17cc2c54c58fb12e7a84c88c69d51725a44332e37a0ee90b",
+    "status": "passed"
+  }
+}

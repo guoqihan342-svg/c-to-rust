@@ -1,0 +1,135 @@
+def scripted_record_validate_initializer(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {"record_type", "fields"}:
+        raise ValueError(f"scripted record replay {label} shape drifted")
+    scripted_external_replay_identifier(value.get("record_type"), f"{label} record_type")
+    fields = value.get("fields")
+    if not isinstance(fields, list) or not fields:
+        raise ValueError(f"scripted record replay {label} fields are missing")
+    names: set[str] = set()
+    for index, field in enumerate(fields):
+        field_label = f"{label} field {index}"
+        if not isinstance(field, dict):
+            raise ValueError(f"scripted record replay {field_label} shape drifted")
+        name = scripted_external_replay_identifier(field.get("name"), f"{field_label} name")
+        if name in names:
+            raise ValueError(f"scripted record replay {label} field names must be unique")
+        names.add(name)
+        if set(field) == {"name", "fixture_field", "rust_type"}:
+            scripted_external_replay_identifier(
+                field.get("fixture_field"), f"{field_label} fixture_field"
+            )
+            if field.get("rust_type") != "u32":
+                raise ValueError(f"scripted record replay {field_label} rust_type must be u32")
+        elif set(field) == {"name", "record"}:
+            scripted_record_validate_initializer(field.get("record"), f"{field_label} record")
+        else:
+            raise ValueError(f"scripted record replay {field_label} shape drifted")
+    return value
+
+
+def scripted_record_initializer_fixture_paths(
+    initializer: dict[str, Any],
+    prefix: tuple[str, ...] = (),
+) -> list[tuple[str, tuple[str, ...]]]:
+    result: list[tuple[str, tuple[str, ...]]] = []
+    for field in initializer["fields"]:
+        path = (*prefix, str(field["name"]))
+        if "fixture_field" in field:
+            result.append((str(field["fixture_field"]), path))
+        else:
+            result.extend(scripted_record_initializer_fixture_paths(field["record"], path))
+    return result
+
+
+def scripted_record_field_path(value: Any, label: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"scripted record replay {label} must be a non-empty list")
+    return tuple(
+        scripted_external_replay_identifier(item, f"{label} component {index}")
+        for index, item in enumerate(value)
+    )
+
+
+def scripted_record_noalias_pairs(value: Any, label: str) -> set[tuple[str, str]]:
+    if not isinstance(value, list):
+        raise ValueError(f"scripted record replay {label} must be a list")
+    pairs: set[tuple[str, str]] = set()
+    for index, pair in enumerate(value):
+        if not isinstance(pair, list) or len(pair) != 2:
+            raise ValueError(f"scripted record replay {label}[{index}] must contain two names")
+        left = scripted_external_replay_identifier(pair[0], f"{label}[{index}][0]")
+        right = scripted_external_replay_identifier(pair[1], f"{label}[{index}][1]")
+        if left == right:
+            raise ValueError(f"scripted record replay {label}[{index}] must bind distinct names")
+        canonical = tuple(sorted((left, right)))
+        if canonical in pairs:
+            raise ValueError(f"scripted record replay {label} contains duplicate pairs")
+        pairs.add(canonical)
+    return pairs
+
+
+def scripted_record_validate_c_signatures(
+    spec: dict[str, Any],
+    contract: dict[str, Any],
+    entry_by_name: dict[str, dict[str, Any]],
+) -> None:
+    function_name = scripted_external_replay_identifier(spec.get("function_name"), "function name")
+    entry_signature = c_function_signature(spec)
+    if not entry_signature or entry_signature.get("function") != function_name:
+        raise ValueError("scripted record replay entry signature is missing")
+    if normalize_c_type(str(entry_signature.get("return_type") or "")) not in {"bool", "_Bool"}:
+        raise ValueError("scripted record replay entry return type must be bool")
+    entry_parameters = [
+        item for item in entry_signature.get("parameters", []) if isinstance(item, dict)
+    ]
+    entry_arguments = contract["entry_arguments"]
+    if [str(item.get("name") or "") for item in entry_parameters] != [
+        str(item["parameter"]) for item in entry_arguments
+    ]:
+        raise ValueError("scripted record replay entry parameters drifted")
+    if [normalize_c_type(str(item.get("c_type") or "")) for item in entry_parameters] != [
+        normalize_c_type(str(item["c_type"])) for item in entry_arguments
+    ]:
+        raise ValueError("scripted record replay entry parameter types drifted")
+    if [item.get("direction") for item in entry_parameters] != [
+        item["direction"] for item in entry_arguments
+    ]:
+        raise ValueError("scripted record replay entry parameter directions drifted")
+
+    external = contract["external_callee"]
+    external_name = str(external["name"])
+    c_boundary = spec.get("c_boundary")
+    declarations = [
+        item
+        for item in c_boundary.get("external_direct_callees", [])
+        if isinstance(item, dict) and item.get("name") == external_name
+    ]
+    if len(declarations) != 1:
+        raise ValueError("scripted record replay requires one declared external callee")
+    signature_ref = declarations[0].get("signature_ref")
+    signatures = [
+        item
+        for item in c_boundary.get("signatures", [])
+        if isinstance(item, dict)
+        and item.get("function") == external_name
+        and item.get("id") == signature_ref
+    ]
+    if len(signatures) != 1:
+        raise ValueError("scripted record replay external signature binding drifted")
+    signature = signatures[0]
+    if normalize_c_type(str(signature.get("return_type") or "")) != "uint32_t":
+        raise ValueError("scripted record replay external return type must be uint32_t")
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    external_arguments = external["arguments"]
+    if [str(item.get("name") or "") for item in parameters] != [
+        str(item["parameter"]) for item in external_arguments
+    ]:
+        raise ValueError("scripted record replay external parameters drifted")
+    expected_types = [
+        f"struct {entry_by_name[str(item['entry_parameter'])]['rust_type']} *"
+        for item in external_arguments
+    ]
+    if [normalize_c_type(str(item.get("c_type") or "")) for item in parameters] != [
+        normalize_c_type(item) for item in expected_types
+    ]:
+        raise ValueError("scripted record replay external parameter types drifted")

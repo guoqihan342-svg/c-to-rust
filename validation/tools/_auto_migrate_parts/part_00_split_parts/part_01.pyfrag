@@ -27,6 +27,28 @@
         return_rust_type = "u32"
         for param, rust_type in zip(parameters, ("u32", "u32", "usize"), strict=True):
             param["rust_type"] = rust_type
+    scripted_record_fixture_contract = (
+        scripted_external_record_u32_call_bool_state_external_binding(
+            spec,
+            name,
+            return_type,
+            parameters,
+        )
+    )
+    if scripted_record_fixture_contract is not None:
+        unsupported_reasons = []
+        return_rust_type = "u32"
+        entry_by_name = {
+            str(item["parameter"]): item
+            for item in scripted_record_fixture_contract["entry_arguments"]
+        }
+        for param, observation in zip(
+            parameters,
+            scripted_record_fixture_contract["external_callee"]["arguments"],
+            strict=True,
+        ):
+            record_type = entry_by_name[str(observation["entry_parameter"])]["rust_type"]
+            param["rust_type"] = f"&mut {record_type}"
     declared_external_compile_context = is_declared_external_context_signature(
         item,
         signature,
@@ -57,6 +79,10 @@
         stub_boundary = "scripted_fixture_only_no_real_callee_semantics"
         stub_generation = "generated_fixture_only_scripted_external"
         model_contract = "scripted_external_u32_call_bool_out"
+    if scripted_record_fixture_contract is not None:
+        stub_boundary = "scripted_fixture_only_no_real_callee_semantics"
+        stub_generation = "generated_fixture_only_scripted_external"
+        model_contract = SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND
     if accepted_named_slice:
         stub_kind = "accepted_named_slice_evidence"
         stub_boundary = "accepted_named_slice_context_only"
@@ -302,10 +328,18 @@ def external_stub_boundaries(context: dict[str, Any]) -> list[dict[str, Any]]:
                 "named_slice_evidence_reference_only"
                 if callee.get("stub_kind") == "accepted_named_slice_evidence"
                 else "fixture_bound_rust_replay_only"
-                if callee.get("model_contract") == "scripted_external_u32_call_bool_out"
+                if callee.get("model_contract")
+                in {
+                    "scripted_external_u32_call_bool_out",
+                    SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND,
+                }
                 else "standalone_rust_check_only"
             ),
-            "fixture_only": callee.get("model_contract") == "scripted_external_u32_call_bool_out",
+            "fixture_only": callee.get("model_contract")
+            in {
+                "scripted_external_u32_call_bool_out",
+                SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND,
+            },
             "semantics_verified": False,
         }
         for callee in context.get("declared", [])
@@ -691,6 +725,19 @@ def inject_external_callee_stubs(
     text = draft_path.read_text(encoding="utf-8")
     stubs = []
     for callee in callees:
+        scripted_record_stub = rust_check_scripted_external_record_u32_call_bool_state_stub(
+            callee, text, spec
+        )
+        if scripted_record_stub is not None:
+            stubs.append(scripted_record_stub)
+            continue
+        scripted_record_binding = callee.get("rust_check_binding")
+        if (
+            isinstance(scripted_record_binding, dict)
+            and scripted_record_binding.get("replay_contract_kind")
+            == SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND
+        ):
+            continue
         scripted_stub = rust_check_scripted_external_u32_call_bool_out_stub(callee, text, spec)
         if scripted_stub is not None:
             stubs.append(scripted_stub)

@@ -291,12 +291,16 @@ fn slice_source_struct_declarations(spec: &SliceSpec) -> String {
             collect_struct_names_from_type(&parameter.c_type, &mut structs);
         }
     }
+    let complete_source_structs = collect_complete_struct_names(&spec.c_source);
     let accepted_record_fields = collect_accepted_named_slice_record_fields(spec);
     let field_placeholders = collect_signature_record_pointer_field_placeholders(spec);
 
     structs
         .into_iter()
         .map(|name| {
+            if complete_source_structs.contains(&name) {
+                return format!("struct {name};\n");
+            }
             if let Some(fields) = accepted_record_fields
                 .get(&name)
                 .filter(|fields| !fields.is_empty())
@@ -740,6 +744,47 @@ fn collect_struct_names(source: &str) -> BTreeSet<String> {
     for window in tokens.windows(2) {
         if window[0] == "struct" && !is_builtin_type_token(&window[1]) {
             names.insert(window[1].clone());
+        }
+    }
+    names
+}
+
+fn collect_complete_struct_names(source: &str) -> BTreeSet<String> {
+    let searchable_source = c_source_without_strings_and_comments(source);
+    let bytes = searchable_source.as_bytes();
+    let mut names = BTreeSet::new();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if !is_c_ident_start(bytes[index]) {
+            index += 1;
+            continue;
+        }
+        let keyword_start = index;
+        index += 1;
+        while index < bytes.len() && is_c_ident_continue(bytes[index]) {
+            index += 1;
+        }
+        if &searchable_source[keyword_start..index] != "struct" {
+            continue;
+        }
+
+        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+        if index >= bytes.len() || !is_c_ident_start(bytes[index]) {
+            continue;
+        }
+        let name_start = index;
+        index += 1;
+        while index < bytes.len() && is_c_ident_continue(bytes[index]) {
+            index += 1;
+        }
+        let name = &searchable_source[name_start..index];
+        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+        if index < bytes.len() && bytes[index] == b'{' {
+            names.insert(name.to_string());
         }
     }
     names

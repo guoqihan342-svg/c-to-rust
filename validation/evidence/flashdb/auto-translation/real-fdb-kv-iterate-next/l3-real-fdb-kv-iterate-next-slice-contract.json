@@ -1,0 +1,173 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "definition_status": "carrier_equivalent_uint32_sentinel",
+        "kind": "macro",
+        "name": "FAILED_ADDR",
+        "source": "src/fdb_kvdb.c"
+      },
+      {
+        "definition_status": "deterministic_fixture_stimulus_only",
+        "kind": "callee",
+        "name": "get_next_kv_addr",
+        "source": "src/fdb_kvdb.c#get_next_kv_addr"
+      }
+    ],
+    "external_direct_callees": [
+      {
+        "definition_status": "deterministic_fixture_stimulus",
+        "name": "get_next_kv_addr",
+        "signature_ref": "sig-scripted-get-next-kv-addr",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "translation-carrier:scripted-get-next-kv-addr",
+        "stub_boundary": "scripted_fixture_only_no_real_callee_semantics"
+      }
+    ],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py plus translation_carrier validator",
+      "frontend": "live clang slice-source carrier",
+      "semantic_status": "exact source fragment and carrier provenance are checked; oracle/replay/diff gates are required for bounded semantic acceptance"
+    },
+    "files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "functions": [
+      "fdb_kv_iterate_next_probe"
+    ],
+    "oracle_source_mode": "embedded_slice_c_source",
+    "pointer_contract": {
+      "aliasing_proven": true,
+      "input_buffers": [
+        {
+          "c_type": "struct Database *",
+          "mutability": "read_write",
+          "name": "db",
+          "nullability": "non_null",
+          "ownership_role": "borrowed"
+        }
+      ],
+      "noalias_required": [
+        [
+          "db",
+          "kv"
+        ]
+      ],
+      "output_pointers": [
+        {
+          "c_type": "struct Kv *",
+          "mutability": "read_write",
+          "name": "kv",
+          "nullability": "non_null",
+          "ownership_role": "inout_param"
+        }
+      ]
+    },
+    "scalar_arithmetic_contract": {
+      "comparison": "assigned uint32_t return value is compared with UINT32_MAX",
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "signatures": [
+      {
+        "definition_status": "synthetic_translation_carrier",
+        "function": "fdb_kv_iterate_next_probe",
+        "id": "sig-fdb-kv-iterate-next-probe",
+        "parameters": [
+          {
+            "c_type": "struct Database *",
+            "direction": "input",
+            "name": "db"
+          },
+          {
+            "c_type": "struct Sector",
+            "direction": "input",
+            "name": "sector_seed"
+          },
+          {
+            "c_type": "struct Kv *",
+            "direction": "inout",
+            "name": "kv"
+          }
+        ],
+        "return_type": "bool"
+      },
+      {
+        "definition_status": "deterministic_fixture_stimulus",
+        "function": "get_next_kv_addr",
+        "id": "sig-scripted-get-next-kv-addr",
+        "parameters": [
+          {
+            "c_type": "struct Database *",
+            "direction": "input",
+            "name": "db"
+          },
+          {
+            "c_type": "struct Sector *",
+            "direction": "input",
+            "name": "sector"
+          },
+          {
+            "c_type": "struct Kv *",
+            "direction": "input",
+            "name": "kv"
+          }
+        ],
+        "return_type": "uint32_t"
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "whole-project migration",
+      "fdb_kv_iterate semantic equivalence",
+      "get_next_kv_addr semantic equivalence",
+      "semantic equivalence without C oracle and exact generated Rust replay evidence"
+    ],
+    "non_goals": [
+      "No whole fdb_kv_iterate function migration claim.",
+      "No real get_next_kv_addr implementation semantics claim.",
+      "No real FlashDB record layout, database state, iterator, or storage side-effect claim.",
+      "Fixture record fields only test record construction, argument forwarding, nested assignment, and sentinel comparison."
+    ]
+  },
+  "fixture": {
+    "hash": "9f67ad323584c3184b22bdd36cd8ee0c833e4b89b460f76fc2c325fd2e02fd52",
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-next.json"
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-rust-draft.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "name": "fdb_kv_iterate_next_probe",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.0
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-next",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb"
+}

@@ -175,6 +175,42 @@ fn clang_ast_if_assignment_call_record_pointer_member_accepts_and_runs() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_if_assignment_call_record_pointer_member_accepts_direct_lvalue_read_root() {
+    let function_name = "if_assign_call_record_ptr_member_lvalue_read";
+    let mut ast = if_assignment_call_record_pointer_member_fixture(function_name, "==");
+    let function = ast["inner"]
+        .as_array_mut()
+        .expect("translation unit declarations")
+        .iter_mut()
+        .find(|decl| decl["name"] == function_name)
+        .expect("renamed fixture function");
+    let arrow_member = &mut function["inner"][2]["inner"][0]["inner"][0]
+        ["inner"][0]["inner"][0]["inner"][0];
+    let base_ref = arrow_member["inner"][0].clone();
+    let base_type = base_ref["type"].clone();
+    arrow_member["inner"][0] = serde_json::json!({
+        "kind": "ImplicitCastExpr",
+        "castKind": "LValueToRValue",
+        "type": base_type,
+        "inner": [base_ref]
+    });
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
+        .expect("lower direct record-pointer lvalue read root");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit direct record-pointer lvalue read root");
+
+    assert!(
+        emitted
+            .rust
+            .contains("ctx.threshold = fetch_value(ctx, seed);"),
+        "{}",
+        emitted.rust
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_if_assignment_call_record_pointer_nested_dot_member_accepts_and_runs() {
     let function_name = "if_assign_call_record_ptr_nested_member";
     let ast = if_assignment_call_record_pointer_nested_member_fixture(function_name);
@@ -296,6 +332,37 @@ fn clang_ast_if_assignment_call_record_pointer_member_rejects_effectful_base() {
     assert!(
         error.message.contains("root must be a direct non-null"),
         "expected effectful base rejection, got {error:?}"
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_if_assignment_call_record_pointer_member_rejects_pointer_bitcast_root() {
+    let function_name = "bad_if_assign_call_pointer_bitcast";
+    let mut ast = if_assignment_call_record_pointer_member_fixture(function_name, "==");
+    let function = ast["inner"]
+        .as_array_mut()
+        .expect("translation unit declarations")
+        .iter_mut()
+        .find(|decl| decl["name"] == function_name)
+        .expect("renamed fixture function");
+    let arrow_member = &mut function["inner"][2]["inner"][0]["inner"][0]
+        ["inner"][0]["inner"][0]["inner"][0];
+    let base_ref = arrow_member["inner"][0].clone();
+    let base_type = base_ref["type"].clone();
+    arrow_member["inner"][0] = serde_json::json!({
+        "kind": "ImplicitCastExpr",
+        "castKind": "BitCast",
+        "type": base_type,
+        "inner": [base_ref]
+    });
+
+    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
+        .expect_err("pointer bitcast root must fail closed");
+
+    assert!(
+        error.message.contains("root must be a direct non-null"),
+        "expected pointer bitcast rejection, got {error:?}"
     );
 }
 

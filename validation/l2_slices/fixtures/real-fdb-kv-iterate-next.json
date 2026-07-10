@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-next",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "fixture_only",
+  "toolchain_status": "RUST_REPLAY_FIXTURE_ONLY",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:else-if-condition@1870"
+    ],
+    "signature": "(kv->addr.start = get_next_kv_addr(db, &sector, kv)) == FAILED_ADDR"
+  },
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "case_count": 3,
+  "cases": [
+    {
+      "id": "failed-address",
+      "coverage_kind": "sentinel-equal",
+      "db_generation": 17,
+      "sector_offset": 29,
+      "kv_initial_start": 41,
+      "external_return": 4294967295,
+      "expected_outputs": {
+        "return_value": true,
+        "kv_addr_start": 4294967295,
+        "external_call_count": 1,
+        "external_call_args": [17, 29, 41]
+      },
+      "status": "ok"
+    },
+    {
+      "id": "zero-address",
+      "coverage_kind": "sentinel-not-equal-zero",
+      "db_generation": 3,
+      "sector_offset": 5,
+      "kv_initial_start": 7,
+      "external_return": 0,
+      "expected_outputs": {
+        "return_value": false,
+        "kv_addr_start": 0,
+        "external_call_count": 1,
+        "external_call_args": [3, 5, 7]
+      },
+      "status": "ok"
+    },
+    {
+      "id": "next-address",
+      "coverage_kind": "sentinel-not-equal-nonzero",
+      "db_generation": 305419896,
+      "sector_offset": 2271560481,
+      "kv_initial_start": 4096,
+      "external_return": 8192,
+      "expected_outputs": {
+        "return_value": false,
+        "kv_addr_start": 8192,
+        "external_call_count": 1,
+        "external_call_args": [305419896, 2271560481, 4096]
+      },
+      "status": "ok"
+    }
+  ]
+}

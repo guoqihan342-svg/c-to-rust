@@ -3,19 +3,27 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .errors import ReporterError
+from .record_contract import (
+    KIND as RECORD_KIND,
+    behavior_fields as record_behavior_fields,
+    parse_contract as parse_record_contract,
+    reference_outputs as record_reference_outputs,
+    replay_outputs as record_replay_outputs,
+    validate_cases as validate_record_cases,
+)
+
 
 KIND = "scripted_external_u32_call_bool_out"
 U32_MAX = (1 << 32) - 1
 
 
-class ReporterError(ValueError):
-    pass
-
-
 def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
     contract = require_dict(spec.get("replay_contract"), "replay_contract")
+    if contract.get("kind") == RECORD_KIND:
+        return parse_record_contract(spec)
     if contract.get("kind") != KIND:
-        raise ReporterError(f"replay_contract.kind must be {KIND}")
+        raise ReporterError(f"unsupported replay_contract.kind: {contract.get('kind')}")
     if contract.get("schema_version") != 1:
         raise ReporterError("replay_contract.schema_version must be 1")
 
@@ -64,6 +72,8 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def behavior_fields(contract: dict[str, Any]) -> list[str]:
+    if contract.get("kind") == RECORD_KIND:
+        return record_behavior_fields(contract)
     external = contract["external_callee"]
     return [
         str(contract["return"]["fixture_field"]),
@@ -74,6 +84,8 @@ def behavior_fields(contract: dict[str, Any]) -> list[str]:
 
 
 def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]:
+    if contract.get("kind") == RECORD_KIND:
+        return validate_record_cases(cases, contract)
     if not isinstance(cases, list) or not cases:
         raise ReporterError("fixture cases must be a non-empty list")
     ids: set[str] = set()
@@ -109,6 +121,8 @@ def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]
 
 
 def reference_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    if contract.get("kind") == RECORD_KIND:
+        return record_reference_outputs(case, contract)
     external = contract["external_callee"]
     args = [case[item["fixture_field"]] for item in contract["inputs"]]
     assigned_value = 0
@@ -123,6 +137,8 @@ def reference_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[st
 
 
 def replay_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    if contract.get("kind") == RECORD_KIND:
+        return record_replay_outputs(case, contract)
     external = contract["external_callee"]
     external_return = case[external["return_fixture_field"]]
     forwarded = [case[item["fixture_field"]] for item in contract["inputs"]]

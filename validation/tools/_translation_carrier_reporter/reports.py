@@ -14,6 +14,7 @@ from .contract import (
 )
 from .runtime_binding import load_runtime_provenance
 from .negative_execution import run_negative_execution
+from .record_contract import KIND as RECORD_KIND
 from .source_binding import StaticContext, load_static_context
 
 
@@ -165,14 +166,22 @@ def build_negative_report(
 
 def report_claim(context: StaticContext) -> dict[str, Any]:
     external_name = context.contract["external_callee"]["name"]
+    if context.contract.get("kind") == RECORD_KIND:
+        verified_behavior = (
+            "Fixture-created records are passed through the declared entry boundary; selected "
+            "u32 fields observed by one scripted external call are recorded, its u32 return is "
+            "assigned to the declared nested state field, and that field is compared with UINT32_MAX."
+        )
+    else:
+        verified_behavior = (
+            "A fixture-scripted u32 external return is assigned to the declared output and compared "
+            "with UINT32_MAX; one call and its declared arguments are observed."
+        )
     return {
         "scope": "source_fragment_only",
         "whole_function_semantics_verified": False,
         "external_callee_semantics_verified": False,
-        "verified_behavior": (
-            "A fixture-scripted u32 external return is assigned to the declared output and compared "
-            "with UINT32_MAX; one call and its declared arguments are observed."
-        ),
+        "verified_behavior": verified_behavior,
         "external_callee": external_name,
         "excluded_semantics": list(context.claim_boundary["excluded_semantics"]),
     }

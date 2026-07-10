@@ -1,0 +1,133 @@
+def c_oracle_scripted_external_record_u32_call_bool_state_execution_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> dict[str, Any]:
+    contract = scripted_external_record_u32_call_bool_state_replay_contract(
+        spec, fixture_binding
+    )
+    if contract is None:
+        return {"declarations": "", "statements": ""}
+    external = contract["external_callee"]
+    external_arguments = external["arguments"]
+    entry_by_name = {
+        str(item["parameter"]): item for item in contract["entry_arguments"]
+    }
+    external_name = str(external["name"])
+    static_args = "\n".join(
+        f"static uint32_t c2r_scripted_external_arg{index} = 0u;"
+        for index in range(len(external_arguments))
+    )
+    external_parameters = ",\n".join(
+        f"    struct {entry_by_name[str(item['entry_parameter'])]['rust_type']} *{item['parameter']}"
+        for item in external_arguments
+    )
+    capture_args = "\n".join(
+        f"    c2r_scripted_external_arg{index} = {item['parameter']}->{'.'.join(str(field) for field in item['field_path'])};"
+        for index, item in enumerate(external_arguments)
+    )
+    definitions = f"""/* Fixture-only scripted record external; real external callee semantics are not verified. */
+static uint32_t c2r_scripted_external_return = 0u;
+static size_t c2r_scripted_external_call_count = 0u;
+{static_args}
+
+uint32_t {external_name}(
+{external_parameters})
+{{
+    c2r_scripted_external_call_count += 1u;
+{capture_args}
+    return c2r_scripted_external_return;
+}}
+
+"""
+
+    statements: list[str] = []
+    state_output = contract["state_output"]
+    return_contract = contract["return"]
+    for case_binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding["expected_outputs"]
+        case_id = str(case_binding.get("id") or "case")
+        case_ident = c_safe_ident(case_id)
+        local_names: dict[str, str] = {}
+        declarations: list[str] = []
+        call_arguments: list[str] = []
+        for argument in contract["entry_arguments"]:
+            parameter = str(argument["parameter"])
+            local_name = f"actual_{case_ident}_{parameter}"
+            local_names[parameter] = local_name
+            initializer = scripted_record_c_initializer(argument["initializer"], payload)
+            declarations.append(
+                f"  struct {argument['rust_type']} {local_name} = {initializer};\n"
+            )
+            call_arguments.append(
+                f"&{local_name}" if argument["pass_mode"] == "mutable_ref" else local_name
+            )
+        expected_args = [
+            int(value) for value in expected[str(external["call_args_output"])]
+        ]
+        expected_return = bool(expected[str(return_contract["fixture_field"] )])
+        expected_state = int(expected[str(state_output["fixture_field"] )])
+        expected_count = int(expected[str(external["call_count_output"] )])
+        actual_return_name = f"actual_{case_ident}_return"
+        state_local = local_names[str(state_output["parameter"])]
+        state_expression = f"{state_local}.{'.'.join(str(field) for field in state_output['field_path'])}"
+        reset_args = "".join(
+            f"  c2r_scripted_external_arg{index} = 0u;\n"
+            for index in range(len(external_arguments))
+        )
+        args_condition = " ||\n".join(
+            f"      c2r_scripted_external_arg{index} != {c_integer_literal('uint32_t', value)}"
+            for index, value in enumerate(expected_args)
+        )
+        expected_return_literal = "true" if expected_return else "false"
+        statements.append(
+            f"  c2r_scripted_external_return = {c_integer_literal('uint32_t', int(payload[str(external['return_fixture_field'])]))};\n"
+            "  c2r_scripted_external_call_count = 0u;\n"
+            f"{reset_args}"
+            f"{''.join(declarations)}"
+            f"  bool {actual_return_name} = {required_str(spec, 'function_name')}({', '.join(call_arguments)});\n"
+            f"  if ({actual_return_name} != {expected_return_literal}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' return mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(return_contract['fixture_field']) + ' matched')});\n"
+            f"  if ({state_expression} != {c_integer_literal('uint32_t', expected_state)}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' state mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(state_output['fixture_field']) + ' matched')});\n"
+            f"  if (c2r_scripted_external_call_count != {c_integer_literal('size_t', expected_count)}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' external call count mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(external['call_count_output']) + ' matched')});\n"
+            f"  if ({args_condition}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' external call args mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(external['call_args_output']) + ' matched')});\n"
+        )
+    return {
+        "declarations": "",
+        "definitions_after_target": definitions,
+        "statements": "".join(statements),
+        "fixture_external_stub": {
+            "kind": SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND,
+            "scope": "fixture_only",
+            "semantics_verified": False,
+        },
+    }
+
+
+def scripted_record_c_initializer(
+    initializer: dict[str, Any],
+    payload: dict[str, Any],
+) -> str:
+    fields: list[str] = []
+    for field in initializer["fields"]:
+        if "fixture_field" in field:
+            value = c_integer_literal("uint32_t", int(payload[str(field["fixture_field"])]))
+        else:
+            value = scripted_record_c_initializer(field["record"], payload)
+        fields.append(f".{field['name']} = {value}")
+    return "{ " + ", ".join(fields) + " }"
