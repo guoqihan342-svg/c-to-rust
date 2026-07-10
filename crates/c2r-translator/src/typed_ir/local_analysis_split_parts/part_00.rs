@@ -1,7 +1,49 @@
 fn collect_assigned_vars(body: &[IrStmt]) -> HashSet<String> {
     let mut assigned_vars = HashSet::new();
     collect_assigned_vars_from_body(body, &mut assigned_vars);
+    collect_nested_local_record_assigned_vars(body, &mut assigned_vars);
     assigned_vars
+}
+
+fn collect_nested_local_record_assigned_vars(body: &[IrStmt], assigned_vars: &mut HashSet<String>) {
+    for stmt in body {
+        match stmt {
+            IrStmt::Assign { target, .. } => {
+                if let Ok(Some(path)) = local_record_member_path_from_expr(target) {
+                    assigned_vars.insert(path.root_name.to_string());
+                }
+            }
+            IrStmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_nested_local_record_assigned_vars(then_body, assigned_vars);
+                collect_nested_local_record_assigned_vars(else_body, assigned_vars);
+            }
+            IrStmt::While { body, .. } | IrStmt::DoWhile { body, .. } => {
+                collect_nested_local_record_assigned_vars(body, assigned_vars);
+            }
+            IrStmt::For {
+                init, step, body, ..
+            } => {
+                collect_nested_local_record_assigned_vars(init, assigned_vars);
+                if let Some(step) = step.as_deref() {
+                    collect_nested_local_record_assigned_vars(
+                        std::slice::from_ref(step),
+                        assigned_vars,
+                    );
+                }
+                collect_nested_local_record_assigned_vars(body, assigned_vars);
+            }
+            IrStmt::Decl { .. }
+            | IrStmt::Return { .. }
+            | IrStmt::Break { .. }
+            | IrStmt::Continue { .. }
+            | IrStmt::Expr { .. }
+            | IrStmt::Unsupported { .. } => {}
+        }
+    }
 }
 
 fn collect_zero_initialized_record_locals(body: &[IrStmt]) -> Result<HashSet<String>, String> {

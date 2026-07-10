@@ -68,7 +68,10 @@ fn do_while_tail_call_assignment_from_ast(
     let [assignment_comparison, suffix_node] = children else {
         return Err(ClangFrontendError {
             kind: context.error_kind().to_string(),
-            message: format!("{} logical condition must have two operands", context.label()),
+            message: format!(
+                "{} logical condition must have two operands",
+                context.label()
+            ),
         });
     };
 
@@ -133,8 +136,8 @@ fn do_while_tail_pure_suffix_shape_rejection_reason(expr: &Value) -> Option<Stri
     if string_field(expr, "kind").as_deref() == Some("BinaryOperator") {
         match string_field(expr, "opcode").as_deref() {
             Some(
-                "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | "=="
-                | "!=" | "<" | "<=" | ">" | ">=",
+                "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | "==" | "!=" | "<"
+                | "<=" | ">" | ">=",
             ) => {}
             Some("&&" | "||") => {
                 return Some("nested short-circuit operators are outside this slice".to_string());
@@ -181,7 +184,10 @@ fn assignment_call_comparison_from_ast(
     let [assignment_operand, sentinel_node] = children else {
         return Err(ClangFrontendError {
             kind: context.error_kind().to_string(),
-            message: format!("{} sentinel comparison must have two operands", context.label()),
+            message: format!(
+                "{} sentinel comparison must have two operands",
+                context.label()
+            ),
         });
     };
 
@@ -203,22 +209,41 @@ fn assignment_call_comparison_from_ast(
         });
     };
 
-    if string_field(target_node, "kind").as_deref() != Some("DeclRefExpr") {
+    let target_is_direct_scalar =
+        string_field(target_node, "kind").as_deref() == Some("DeclRefExpr");
+    let target_is_local_record_member =
+        string_field(target_node, "kind").as_deref() == Some("MemberExpr");
+    if !target_is_direct_scalar && !target_is_local_record_member {
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment-call target must be a direct non-volatile, non-atomic fixed-width integer DeclRef or a local complete-record pure dot-path integer member",
+            context.label()
+        )));
+    }
+    let target = expr_skeleton_from_ast(target_node)?;
+    let Some(target_ty) = clang_expr_skeleton_type(&target) else {
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment-call target must be a direct non-volatile, non-atomic fixed-width integer DeclRef or a local complete-record pure dot-path integer member",
+            context.label()
+        )));
+    };
+    if target_is_local_record_member {
+        if let Some(reason) =
+            do_while_tail_local_record_member_target_rejection_reason(target_node)?
+        {
+            return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+                "{} assignment-call local record member target is unsupported: {reason}",
+                context.label()
+            )));
+        }
+    } else if !matches!(&target, ClangExprSkeleton::DeclRef { .. }) {
         return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
             "{} assignment-call target must be a direct non-volatile, non-atomic fixed-width integer DeclRef",
             context.label()
         )));
     }
-    let target = expr_skeleton_from_ast(target_node)?;
-    let ClangExprSkeleton::DeclRef { ty: target_ty, .. } = &target else {
-        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
-            "{} assignment-call target must be a direct non-volatile, non-atomic fixed-width integer DeclRef",
-            context.label()
-        )));
-    };
     if let Some(reason) = do_while_tail_fixed_integer_type_rejection_reason(target_ty) {
         return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
-            "{} assignment-call target must be a direct non-volatile, non-atomic fixed-width integer DeclRef: {reason}",
+            "{} assignment-call target must be a direct scalar or local complete-record pure dot-path non-volatile, non-atomic fixed-width integer: {reason}",
             context.label()
         )));
     }
@@ -227,7 +252,8 @@ fn assignment_call_comparison_from_ast(
         return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
             "{} assignment-call result type {} must match target type {}",
             context.label(),
-            assignment_ty.canonical, target_ty.canonical
+            assignment_ty.canonical,
+            target_ty.canonical
         )));
     }
 
@@ -311,6 +337,72 @@ fn assignment_call_comparison_from_ast(
 }
 
 #[cfg(feature = "typed-ir")]
+fn do_while_tail_local_record_member_target_rejection_reason(
+    target: &Value,
+) -> Result<Option<String>, ClangFrontendError> {
+    let mut member = target;
+    let mut member_count = 0usize;
+    loop {
+        if string_field(member, "kind").as_deref() != Some("MemberExpr") {
+            return Ok(Some(
+                "path contains an expression other than a direct DeclRef root and dot members"
+                    .to_string(),
+            ));
+        }
+        if member.get("isArrow").and_then(Value::as_bool) != Some(false) {
+            return Ok(Some(
+                "path contains an arrow or unknown member hop".to_string(),
+            ));
+        }
+        let children = inner(member);
+        let [base] = children else {
+            return Err(ClangFrontendError {
+                kind: "invalid_member_expr".to_string(),
+                message: "assignment-call target MemberExpr must have one base operand".to_string(),
+            });
+        };
+        let base_ty = expr_type(base)?;
+        if clang_type_is_volatile(&base_ty) || do_while_tail_type_is_atomic(&base_ty) {
+            return Ok(Some(format!(
+                "member base type {} is volatile or atomic",
+                base_ty.spelled
+            )));
+        }
+        if !matches!(base_ty.kind, ClangTypeKind::Record { .. }) {
+            return Ok(Some(format!(
+                "member base type {} is not a complete by-value record",
+                base_ty.spelled
+            )));
+        }
+        member_count += 1;
+
+        match string_field(base, "kind").as_deref() {
+            Some("MemberExpr") => member = base,
+            Some("DeclRefExpr") => {
+                if member_count == 0
+                    || base
+                        .get("referencedDecl")
+                        .and_then(|decl| string_field(decl, "kind"))
+                        .as_deref()
+                        != Some("VarDecl")
+                {
+                    return Ok(Some(
+                        "root must be a direct local by-value record variable".to_string(),
+                    ));
+                }
+                return Ok(None);
+            }
+            Some(kind) => {
+                return Ok(Some(format!(
+                    "path contains unsupported {kind} before its root"
+                )));
+            }
+            None => return Ok(Some("path base is missing its expression kind".to_string())),
+        }
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn do_while_tail_strip_parens(
     mut expr: &Value,
     context: AssignmentCallComparisonContext,
@@ -320,7 +412,10 @@ fn do_while_tail_strip_parens(
         let [operand] = children else {
             return Err(ClangFrontendError {
                 kind: context.error_kind().to_string(),
-                message: format!("parenthesized {} operand must have one child", context.label()),
+                message: format!(
+                    "parenthesized {} operand must have one child",
+                    context.label()
+                ),
             });
         };
         expr = operand;
@@ -341,9 +436,7 @@ fn do_while_tail_wrapped_node<'a>(
             string_field(expr, "kind").as_deref() == Some("BinaryOperator")
                 && string_field(expr, "opcode").as_deref() == Some("=")
         }
-        DoWhileTailWrappedNode::Call => {
-            string_field(expr, "kind").as_deref() == Some("CallExpr")
-        }
+        DoWhileTailWrappedNode::Call => string_field(expr, "kind").as_deref() == Some("CallExpr"),
     };
     if is_expected {
         return Ok(Some(expr));
@@ -360,7 +453,10 @@ fn do_while_tail_wrapped_node<'a>(
     let [operand] = children else {
         return Err(ClangFrontendError {
             kind: context.error_kind().to_string(),
-            message: format!("{} integer conversion must have one operand", context.label()),
+            message: format!(
+                "{} integer conversion must have one operand",
+                context.label()
+            ),
         });
     };
     do_while_tail_wrapped_node(operand, conversions, expected, context)
@@ -447,10 +543,7 @@ fn do_while_tail_additional_effect_rejection_reason(expr: &Value) -> Option<Stri
             return Some("contains a second compound assignment or memory write".to_string());
         }
         Some("UnaryOperator")
-            if matches!(
-                string_field(expr, "opcode").as_deref(),
-                Some("++" | "--")
-            ) =>
+            if matches!(string_field(expr, "opcode").as_deref(), Some("++" | "--")) =>
         {
             return Some("contains a second increment/decrement side effect".to_string());
         }
@@ -518,9 +611,7 @@ fn do_while_tail_assignment_read_skeleton(
 }
 
 #[cfg(feature = "typed-ir")]
-fn do_while_tail_fixed_integer_type_rejection_reason(
-    ty: &ClangTypeSkeleton,
-) -> Option<String> {
+fn do_while_tail_fixed_integer_type_rejection_reason(ty: &ClangTypeSkeleton) -> Option<String> {
     if clang_type_is_volatile(ty) {
         return Some(format!("type {} is volatile", ty.spelled));
     }
@@ -528,11 +619,7 @@ fn do_while_tail_fixed_integer_type_rejection_reason(
         return Some(format!("type {} is atomic", ty.spelled));
     }
     match &ty.kind {
-        ClangTypeKind::Integer { width, .. }
-            if matches!(*width, 8 | 16 | 32 | 64 | 128) =>
-        {
-            None
-        }
+        ClangTypeKind::Integer { width, .. } if matches!(*width, 8 | 16 | 32 | 64 | 128) => None,
         ClangTypeKind::Integer { width, .. } => Some(format!(
             "type {} has unsupported integer width {width}",
             ty.spelled

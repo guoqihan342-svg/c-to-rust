@@ -114,6 +114,9 @@ fn emit_expr(
             is_arrow,
             ..
         } => {
+            if let Some(path_expr) = emit_local_record_member_expr(expr, symbols)? {
+                return Ok(path_expr);
+            }
             if let Some(path_expr) = emit_nested_record_pointer_member_expr(expr, symbols, context)?
             {
                 return Ok(path_expr);
@@ -171,8 +174,8 @@ fn emit_mutable_pointer_deref_expr(
             type_label(ptr_ty)
         )
     })?;
-    let element_ty =
-        emit_scalar_type(element_ty).map_err(|detail| format!("mutable deref element has {detail}"))?;
+    let element_ty = emit_scalar_type(element_ty)
+        .map_err(|detail| format!("mutable deref element has {detail}"))?;
     let deref_ty =
         emit_scalar_type(ty).map_err(|detail| format!("mutable deref result has {detail}"))?;
     if deref_ty != element_ty {
@@ -248,6 +251,9 @@ fn emit_member_expr(
         }
         return emit_readonly_record_pointer_member_expr(base, field, ty, symbols, context);
     }
+    if let Some(path) = local_record_member_path_from_parts(base, field, ty, is_arrow)? {
+        return emit_local_record_member_path(&path, symbols);
+    }
     let IrExpr::Var {
         name: base_name,
         ty: base_ty,
@@ -269,6 +275,165 @@ fn emit_member_expr(
     let base_name = emit_identifier(base_name, "member base")?;
     let field = emit_identifier(field, "member field")?;
     Ok(format!("{base_name}.{field}"))
+}
+
+#[derive(Clone, Debug)]
+struct LocalRecordMemberPath<'a> {
+    root_name: &'a str,
+    fields: Vec<&'a str>,
+    ty: &'a IrType,
+}
+
+fn local_record_member_path_from_expr(
+    expr: &IrExpr,
+) -> Result<Option<LocalRecordMemberPath<'_>>, String> {
+    let IrExpr::Member {
+        base,
+        field,
+        ty,
+        is_arrow,
+        ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    local_record_member_path_from_parts(base, field, ty, *is_arrow)
+}
+
+fn local_record_member_path_from_parts<'a>(
+    base: &'a IrExpr,
+    field: &'a str,
+    ty: &'a IrType,
+    is_arrow: bool,
+) -> Result<Option<LocalRecordMemberPath<'a>>, String> {
+    if is_arrow {
+        return Ok(None);
+    }
+    let mut members = Vec::new();
+    let Some((root_name, root_ty)) = collect_local_record_member_path_parts(base, &mut members)?
+    else {
+        return Ok(None);
+    };
+    members.push((field, ty));
+
+    let mut current_ty = root_ty;
+    let mut fields = Vec::with_capacity(members.len());
+    for (member_field, member_ty) in members {
+        let IrTypeKind::Record {
+            name: record_name,
+            fields: Some(record_fields),
+        } = &current_ty.kind
+        else {
+            return Err(format!(
+                "local record member base {} has incomplete or non-record type {}",
+                root_name,
+                type_label(current_ty)
+            ));
+        };
+        let declared_field = record_fields
+            .iter()
+            .find(|declared| declared.name == member_field)
+            .ok_or_else(|| {
+                format!("complete local record {record_name} has no field {member_field}")
+            })?;
+        if !local_record_member_types_match(member_ty, &declared_field.ty) {
+            return Err(format!(
+                "local record member {record_name}.{member_field} type {} does not match declared type {}",
+                type_label(member_ty),
+                type_label(&declared_field.ty)
+            ));
+        }
+        fields.push(member_field);
+        current_ty = &declared_field.ty;
+    }
+    emit_scalar_type(current_ty).map_err(|detail| {
+        format!(
+            "local record member {}.{} has {detail}",
+            root_name,
+            fields.join(".")
+        )
+    })?;
+    Ok(Some(LocalRecordMemberPath {
+        root_name,
+        fields,
+        ty: current_ty,
+    }))
+}
+
+fn collect_local_record_member_path_parts<'a>(
+    expr: &'a IrExpr,
+    members: &mut Vec<(&'a str, &'a IrType)>,
+) -> Result<Option<(&'a str, &'a IrType)>, String> {
+    match expr {
+        IrExpr::Var { name, ty, .. } => Ok(Some((name, ty))),
+        IrExpr::Member {
+            base,
+            field,
+            ty,
+            is_arrow: false,
+            ..
+        } => {
+            let Some(root) = collect_local_record_member_path_parts(base, members)? else {
+                return Ok(None);
+            };
+            members.push((field, ty));
+            Ok(Some(root))
+        }
+        IrExpr::Member { is_arrow: true, .. } => Ok(None),
+        _ => Ok(None),
+    }
+}
+
+fn local_record_member_types_match(actual: &IrType, declared: &IrType) -> bool {
+    match (&actual.kind, &declared.kind) {
+        (
+            IrTypeKind::Record {
+                name: actual_name, ..
+            },
+            IrTypeKind::Record {
+                name: declared_name,
+                ..
+            },
+        ) => actual_name == declared_name && actual.is_const == declared.is_const,
+        _ => types_match_ignoring_spelling(actual, declared),
+    }
+}
+
+fn emit_local_record_member_expr(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+) -> Result<Option<String>, String> {
+    let Some(path) = local_record_member_path_from_expr(expr)? else {
+        return Ok(None);
+    };
+    emit_local_record_member_path(&path, symbols).map(Some)
+}
+
+fn emit_local_record_member_path(
+    path: &LocalRecordMemberPath<'_>,
+    symbols: &HashSet<String>,
+) -> Result<String, String> {
+    if !symbols.contains(path.root_name) {
+        return Err(format!(
+            "local record member base {} is not declared",
+            path.root_name
+        ));
+    }
+    emit_scalar_type(path.ty).map_err(|detail| {
+        format!(
+            "local record member {}.{} has {detail}",
+            path.root_name,
+            path.fields.join(".")
+        )
+    })?;
+    let root = emit_identifier(path.root_name, "local record member base")?;
+    let fields = path
+        .fields
+        .iter()
+        .map(|field| emit_identifier(field, "local record member field"))
+        .collect::<Result<Vec<_>, _>>()?
+        .join(".");
+    Ok(format!("{root}.{fields}"))
 }
 
 fn emit_nested_record_pointer_member_expr(
