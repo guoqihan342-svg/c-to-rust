@@ -1,0 +1,201 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "do_while_postinc_paths",
+      "type": {
+        "qualType": "int (int, int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "limit",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DoStmt",
+              "inner": [
+                {
+                  "kind": "CompoundStmt",
+                  "inner": [
+                    {
+                      "kind": "IfStmt",
+                      "inner": [
+                        {
+                          "kind": "BinaryOperator",
+                          "opcode": "==",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "inner": [
+                            {
+                              "kind": "ImplicitCastExpr",
+                              "castKind": "LValueToRValue",
+                              "type": {
+                                "qualType": "int"
+                              },
+                              "inner": [
+                                {
+                                  "kind": "DeclRefExpr",
+                                  "referencedDecl": {
+                                    "kind": "ParmVarDecl",
+                                    "name": "value"
+                                  },
+                                  "type": {
+                                    "qualType": "int"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "kind": "IntegerLiteral",
+                              "value": "1",
+                              "type": {
+                                "qualType": "int"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "ContinueStmt"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "IfStmt",
+                      "inner": [
+                        {
+                          "kind": "BinaryOperator",
+                          "opcode": "==",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "inner": [
+                            {
+                              "kind": "ImplicitCastExpr",
+                              "castKind": "LValueToRValue",
+                              "type": {
+                                "qualType": "int"
+                              },
+                              "inner": [
+                                {
+                                  "kind": "DeclRefExpr",
+                                  "referencedDecl": {
+                                    "kind": "ParmVarDecl",
+                                    "name": "value"
+                                  },
+                                  "type": {
+                                    "qualType": "int"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "kind": "IntegerLiteral",
+                              "value": "3",
+                              "type": {
+                                "qualType": "int"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "BreakStmt"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "<",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "UnaryOperator",
+                      "opcode": "++",
+                      "isPostfix": true,
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "value"
+                          },
+                          "type": {
+                            "qualType": "int"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "limit"
+                          },
+                          "type": {
+                            "qualType": "int"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "value"
+                      },
+                      "type": {
+                        "qualType": "int"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
