@@ -20,6 +20,21 @@ HOST_PATH_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+MUTABLE_AUTO_ARTIFACT_CYCLE_BOUNDARY = (
+    "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter "
+    "validation; this reference is field-bound rather than hash-bound to avoid cyclic or "
+    "stale sha256 bindings."
+)
+
+
+def field_bound_ref(root: Path, path: Path, **fields: Any) -> dict[str, Any]:
+    return {
+        "path": path.relative_to(root).as_posix(),
+        "binding_mode": "field_bound",
+        **fields,
+        "cycle_boundary": MUTABLE_AUTO_ARTIFACT_CYCLE_BOUNDARY,
+    }
+
 
 def load_runtime_provenance(
     context: StaticContext,
@@ -144,17 +159,22 @@ def load_runtime_provenance(
         "refs": {
             **context.refs,
             "translator_input": file_ref(context.repo_root, paths["translator_input"]),
-            "translation_plan": file_ref(context.repo_root, paths["translation_plan"]),
-            "clang_lowering_report": file_ref(context.repo_root, paths["clang_lowering_report"]),
-            "c_oracle_status": {
-                "path": paths["c_oracle_status"].relative_to(context.repo_root).as_posix(),
-                "status": status.get("status"),
-                "semantic_pass": status.get("semantic_pass"),
-                "cycle_boundary": (
-                    "The status file is field-bound rather than hash-bound because accepted-oracle "
-                    "promotion writes the accepted root report hash back into this status artifact."
-                ),
-            },
+            "translation_plan": field_bound_ref(
+                context.repo_root,
+                paths["translation_plan"],
+                status=plan.get("status"),
+            ),
+            "clang_lowering_report": field_bound_ref(
+                context.repo_root,
+                paths["clang_lowering_report"],
+                status=lowering.get("status"),
+            ),
+            "c_oracle_status": field_bound_ref(
+                context.repo_root,
+                paths["c_oracle_status"],
+                status=status.get("status"),
+                semantic_pass=status.get("semantic_pass"),
+            ),
             "c_oracle_harness": file_ref(context.repo_root, harness_path),
             **generated_replay["refs"],
         },
@@ -189,13 +209,17 @@ def validate_generated_rust_replay(
         if paths["test_translation"].is_file()
         else None
     )
+    replay_source_artifact = test_translation
     replay = test_translation
     replay_source_path = paths["test_translation"]
     if replay is None and candidate_report is not None:
         replay = candidate_report.get("replay")
+        replay_source_artifact = candidate_report
         replay_source_path = paths["candidate_rust_report"]
     if not isinstance(replay, dict):
         raise ReporterError("generated Rust replay evidence is missing")
+    if not isinstance(replay_source_artifact, dict):
+        raise ReporterError("generated Rust replay source artifact is missing")
     validate_replay_payload(context, replay)
 
     replay_test_path, replay_test_sha = validate_replay_test_ref(context, replay)
@@ -208,8 +232,16 @@ def validate_generated_rust_replay(
 
     refs = {
         "generated_rust_draft": file_ref(context.repo_root, draft_path),
-        "rust_check": file_ref(context.repo_root, paths["rust_check"]),
-        "generated_replay_evidence": file_ref(context.repo_root, replay_source_path),
+        "rust_check": field_bound_ref(
+            context.repo_root,
+            paths["rust_check"],
+            status=rust_check.get("status"),
+        ),
+        "generated_replay_evidence": replay_artifact_ref(
+            context.repo_root,
+            replay_source_path,
+            replay_source_artifact,
+        ),
         "generated_replay_test": {
             **file_ref(context.repo_root, replay_test_path),
             "declared_sha256": replay_test_sha,
@@ -218,9 +250,17 @@ def validate_generated_rust_replay(
         "generated_replay_stderr": file_ref(context.repo_root, stderr_path),
     }
     if candidate_report is not None:
-        refs["candidate_rust_report"] = file_ref(context.repo_root, paths["candidate_rust_report"])
+        refs["candidate_rust_report"] = replay_artifact_ref(
+            context.repo_root,
+            paths["candidate_rust_report"],
+            candidate_report,
+        )
     if test_translation is not None:
-        refs["test_translation"] = file_ref(context.repo_root, paths["test_translation"])
+        refs["test_translation"] = replay_artifact_ref(
+            context.repo_root,
+            paths["test_translation"],
+            test_translation,
+        )
     return {
         "status": "passed",
         "generated_draft_replay_pass": True,
@@ -233,6 +273,20 @@ def validate_generated_rust_replay(
             "replay_test": replay_test_path,
         },
     }
+
+
+def replay_artifact_ref(
+    root: Path,
+    path: Path,
+    artifact: dict[str, Any],
+) -> dict[str, Any]:
+    return field_bound_ref(
+        root,
+        path,
+        status=artifact.get("status"),
+        generated_draft_replay_pass=artifact.get("generated_draft_replay_pass"),
+        generated_draft_semantic_pass=artifact.get("generated_draft_semantic_pass"),
+    )
 
 
 def validate_rust_check(context: StaticContext, rust_check: dict[str, Any]) -> None:
