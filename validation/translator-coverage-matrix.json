@@ -2699,6 +2699,7 @@
         "readonly record pointer fixed integer array field indexing",
         "fixed integer arrays retained in complete record inventory",
         "direct record scalar member as compound assignment RHS",
+        "direct mutable record pointer u32 field wrapping add from a distinct readonly record pointer u32 field with explicit noalias evidence",
         "complete local record nested dot path as do-while tail assignment-call target",
         "direct record integer scalar member as direct-call argument",
         "unique complete named nested record inventory with anonymous-record preservation",
@@ -2791,6 +2792,18 @@
             {
               "name": "named nested record inventory and mutable borrow refusal replay",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_22.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "distinct record-pointer compound field read no-clang replay",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_25.rs",
+              "assertion": "renamed AST fixture lowers a distinct readonly record field into a mutable record field wrapping add under the exact noalias pair",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "distinct record-pointer compound field read real clang smoke",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_25_split_parts/part_01.rs",
+              "assertion": "opt-in live clang smoke emits and runs u32 wrapping_add for renamed record types and fields",
               "proof_class": "candidate_context_only"
             }
           ]
@@ -2982,6 +2995,12 @@
               "name": "nested record inventory and duplicate mutable borrow refusals",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_22.rs",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "distinct record-pointer compound field read noalias and adjacent refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_25_split_parts/part_02.rs",
+              "fail_closed_reason": "missing or reversed noalias evidence, same-owner reads, second arrow hops, and effectful call RHS expressions remain outside the bounded compound-field-read contract",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -3097,12 +3116,18 @@
               "name": "arrow-rooted nested record pointer field emitted Rust runtime test",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "distinct record-pointer compound field read emitted Rust runtime test",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_25_split_parts/part_01.rs",
+              "assertion": "emits cursor.walked.wrapping_add(ledger.step_size) and checks u32 overflow behavior",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
         "c_rust_diff": {
           "status": "covered",
-          "scope_note": "real-fdb-blob-make has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence. The refreshed real-fdb-kv-set exact generated draft consumes accepted named-slice record-field evidence to emit a non-opaque FdbBlob and passes the uninitialized-DB return-code fixture gates. The real-fdb-kv-to-blob and real-fdb-tsl-to-blob exact generated drafts pass generated_draft_acceptance with embedded-slice C oracles, generated Rust replay, schema diff, negative diff, unsafe scan/ledger, and final verification semantic_pass=true. The TSL slice also binds a clang-proven uint32_t-to-size_t widening. These count only for their bound named slices and do not generalize record-field semantic acceptance, layout/ABI proof, or initialized KV/TSL semantics.",
+          "scope_note": "real-fdb-blob-make has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence. The refreshed real-fdb-kv-set exact generated draft consumes accepted named-slice record-field evidence to emit a non-opaque FdbBlob and passes the uninitialized-DB return-code fixture gates. The real-fdb-kv-to-blob and real-fdb-tsl-to-blob exact generated drafts pass generated_draft_acceptance with embedded-slice C oracles, generated Rust replay, schema diff, negative diff, unsafe scan/ledger, and final verification semantic_pass=true. The TSL slice also binds a clang-proven uint32_t-to-size_t widening. real-fdb-kv-iterate-traversed-len passes the same semantic gate for the exact line-1892 u32 wrapping-add fragment with an explicit db/itr noalias contract. These count only for their bound named slices and do not generalize record-field semantic acceptance, layout/ABI proof, the containing fdb_kv_iterate function, or the FlashDB project.",
           "evidence": [
             {
               "name": "real-fdb-blob-make final verification",
@@ -3188,6 +3213,31 @@
               "name": "real-fdb-tsl-to-blob generated Rust replay",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-test-translation-generated.json",
               "proof_class": "generated_draft_replay_passed"
+            },
+            {
+              "name": "real-fdb-kv-iterate-traversed-len C oracle",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-traversed-len-c-oracle.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-traversed-len Rust replay",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-traversed-len-rust-report.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-traversed-len schema diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-traversed-len-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-traversed-len negative diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-traversed-len-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-traversed-len unsafe ledger",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-unsafe-ledger.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-traversed-len final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-final-verification.json",
+              "assertion": "generated_draft_semantic_pass=true for the exact line-1892 traversed_len wrapping-add fragment"
             }
           ]
         },
@@ -3317,9 +3367,21 @@
               "name": "real-fdb-blob-make C oracle harness diagnostic execution",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-status.json",
               "proof_class": "committed_wsl_local_simulation_matched_not_oracle"
+            },
+            {
+              "name": "real-fdb-kv-iterate-traversed-len route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-route-decision.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-traversed-len validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-validation-profile.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-traversed-len capability delta",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-capability-delta.json"
             }
           ],
-          "reason": "committed named-slice candidate provenance plus Rust compile/replay, accepted C oracle/diff evidence, and fixture-bound replay evidence now exist for the bounded fdb_blob_make, real-fdb-kv-set, real-fdb-kv-to-blob, and real-fdb-tsl-to-blob slices; initialized KV/TSL semantics, external callee semantics, and general record layout/ABI remain separate gaps"
+          "reason": "committed named-slice candidate provenance plus Rust compile/replay, accepted C oracle/diff evidence, and fixture-bound replay evidence now exist for the bounded fdb_blob_make, real-fdb-kv-set, real-fdb-kv-to-blob, real-fdb-tsl-to-blob, and real-fdb-kv-iterate-traversed-len slices; the traversed-len claim is limited to line 1892, while initialized KV/TSL semantics, the containing iterator function, external callee semantics, and general record layout/ABI remain separate gaps"
         }
       },
       "positive_cases": [
@@ -3449,6 +3511,16 @@
           "name": "clang_ast_dump_emits_readonly_record_pointer_raw_pointer_field_return_when_enabled",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_11_00.rs",
           "proof_class": "optional_real_clang_smoke"
+        },
+        {
+          "name": "clang_ast_distinct_record_pointer_compound_read_wraps_and_runs",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_25_split_parts/part_01.rs",
+          "proof_class": "candidate_context_only"
+        },
+        {
+          "name": "real-fdb-kv-iterate-traversed-len strict named-slice semantic verification",
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-final-verification.json",
+          "assertion": "accepts only the exact line-1892 source fragment and does not claim the containing function or project"
         }
       ],
       "negative_cases": [
@@ -3526,6 +3598,16 @@
           "name": "clang_ast_fixture_rejects_real_fdb_tsl_to_blob_without_exact_noalias_refs",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_17.rs",
           "fail_closed_reason": "the real TSL-to-blob nested record-pointer field-copy candidate requires the exact input/output noalias proof bound by the slice contract"
+        },
+        {
+          "name": "clang_ast_distinct_record_pointer_compound_read_requires_exact_noalias_pair",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_25_split_parts/part_02.rs",
+          "fail_closed_reason": "the distinct readonly/mutable record-pointer wrapping-add candidate requires the exact directed noalias pair"
+        },
+        {
+          "name": "clang_ast_record_pointer_compound_read_nearest_boundaries_fail_closed",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_25_split_parts/part_02.rs",
+          "fail_closed_reason": "same-owner reads, second arrow hops, and effectful call RHS expressions remain outside the bounded compound-field-read contract"
         }
       ]
     },
