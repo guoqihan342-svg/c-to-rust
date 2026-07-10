@@ -279,7 +279,7 @@ class _JudgeEntrypointsValidatorTestsPart04:
             artifacts, _payload = write_exact_competition_smoke_fixture(
                 root,
                 run_id="smoke-exact-glm-hash-bound-stdout-test",
-                availability_stdout="provider/GLM-5.10\nopencode/not-GLM-5.1\nglm-5.1\n",
+                availability_stdout="provider/GLM-5.10\nopencode/not-GLM-5.1\nglm-5.10\n",
                 command_log_stdout="provider/GLM-5.1\n",
             )
 

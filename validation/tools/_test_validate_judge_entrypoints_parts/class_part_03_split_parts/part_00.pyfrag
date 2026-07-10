@@ -243,7 +243,7 @@ class _JudgeEntrypointsValidatorTestsPart03:
             (
                 "non_glm_model",
                 tamper_model,
-                r"opencode_agent_runtime.workers\[0\].handoff_contract.opencode_argv --model must be GLM-5.1",
+                r"opencode_agent_runtime.workers\[0\].handoff_contract.opencode_argv --model must be resolved model id GLM-5.1",
             ),
             (
                 "non_max_variant",

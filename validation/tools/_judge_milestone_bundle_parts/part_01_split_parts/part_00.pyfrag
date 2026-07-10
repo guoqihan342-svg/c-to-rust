@@ -184,6 +184,12 @@ def opencode_preflight_summary_publishable(summary: dict[str, Any]) -> bool:
         return False
     if summary.get("required_model") != validator.COMPETITION_OPENCODE_MODEL:
         return False
+    resolved_model_id = summary.get("resolved_model_id")
+    if not isinstance(resolved_model_id, str) or not validator.opencode_model_id_matches_required(
+        resolved_model_id,
+        validator.COMPETITION_OPENCODE_MODEL,
+    ):
+        return False
     if summary.get("model_availability_status") != "available":
         return False
     if summary.get("model_listed") is not True:

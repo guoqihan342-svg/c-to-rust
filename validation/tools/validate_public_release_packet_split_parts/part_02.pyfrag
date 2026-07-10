@@ -73,6 +73,10 @@
         raise ValueError(f"{label}.model_availability_status must match preflight_report.opencode_model_availability.status")
     if availability.get("required_model") != proof.get("required_model"):
         raise ValueError(f"{label}.required_model must match preflight_report.opencode_model_availability.required_model")
+    if availability.get("resolved_model_id") != proof.get("resolved_model_id"):
+        raise ValueError(
+            f"{label}.resolved_model_id must match preflight_report.opencode_model_availability.resolved_model_id"
+        )
     if availability.get("opencode_command") != proof.get("opencode_command"):
         raise ValueError(f"{label}.opencode_command must match preflight_report.opencode_model_availability.opencode_command")
     if availability.get("model_listed") is not proof.get("model_listed"):
@@ -88,7 +92,13 @@
         expected_hash = availability.get(f"{stream}_sha256")
         if expected_hash != checked_logs[stream]["sha256"]:
             raise ValueError(f"{label}.model_probe_logs.{stream}.sha256 must match preflight_report log sha256")
-    judge_validator.validate_opencode_model_probe_log_hashes(availability, label, repo_root=repo_root)
+    probed_model_id = judge_validator.validate_opencode_model_probe_log_hashes(
+        availability,
+        label,
+        repo_root=repo_root,
+    )
+    if probed_model_id != proof.get("resolved_model_id"):
+        raise ValueError(f"{label}.resolved_model_id must match hash-bound model probe stdout")
 
 
 def require_opencode_preflight_session_contract(
@@ -156,7 +166,25 @@ def require_opencode_preflight_session_contract(
     )
     if report_argv != handoff_argv:
         raise ValueError(f"{label}.argv must match handoff_contract.opencode_argv")
-    judge_validator.validate_opencode_run_argv_binding(report_argv, f"{label}.argv", launch_policy=preflight_policy)
+    availability = require_object(
+        preflight_payload.get("opencode_model_availability"),
+        f"{label}.opencode_model_availability",
+    )
+    resolved_model_id = judge_validator.require_string(
+        availability.get("resolved_model_id"),
+        f"{label}.opencode_model_availability.resolved_model_id",
+    )
+    if not judge_validator.opencode_model_id_matches_required(
+        resolved_model_id,
+        preflight_policy["opencode_model"],
+    ):
+        raise ValueError(f"{label}.opencode_model_availability.resolved_model_id must match required model")
+    judge_validator.validate_opencode_run_argv_binding(
+        report_argv,
+        f"{label}.argv",
+        launch_policy=preflight_policy,
+        expected_model_id=resolved_model_id,
+    )
     handoff_command_line = judge_validator.require_string(
         handoff_payload.get("opencode_command_line"),
         f"{label}.handoff_contract.opencode_command_line",

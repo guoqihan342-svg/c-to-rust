@@ -335,7 +335,14 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "preflight-run", opencode_variant: str = "max") -> Path:
+def write_passing_opencode_preflight_report(
+    path: Path,
+    *,
+    run_id: str = "preflight-run",
+    opencode_variant: str = "max",
+    resolved_model_id: str = "GLM-5.1",
+    opencode_skip_permissions: bool = False,
+) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     base_root = path.parent.parent if path.parent.name == "harness" else path.parent
     harness_dir = base_root / "harness"
@@ -365,7 +372,7 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
             "status": "written",
         },
     )
-    model_stdout = "GLM-5.1\n"
+    model_stdout = f"{resolved_model_id}\n"
     model_stderr = ""
     model_stdout_path = logs_dir / "opencode-models.stdout.log"
     model_stderr_path = logs_dir / "opencode-models.stderr.log"
@@ -381,7 +388,7 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
         "opencode_model": "GLM-5.1",
         "opencode_agent": "c2rust-migrator",
         "opencode_variant": opencode_variant,
-        "opencode_skip_permissions": False,
+        "opencode_skip_permissions": opencode_skip_permissions,
     }
     preflight_argv = [
         "opencode",
@@ -393,11 +400,13 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
         "--variant",
         opencode_variant,
         "--model",
-        "GLM-5.1",
+        resolved_model_id,
         "--agent",
         "c2rust-migrator",
-        "Execute test preflight marker.",
     ]
+    if opencode_skip_permissions:
+        preflight_argv.append("--dangerously-skip-permissions")
+    preflight_argv.append("Execute test preflight marker.")
     preflight_command_line = harness.shell_command_line(preflight_argv)
     write_json(
         contract_path,
@@ -490,7 +499,7 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
                     "failure_reason": "",
                     "opencode_command": "opencode",
                     "required_model": "GLM-5.1",
-                    "resolved_model_id": "GLM-5.1",
+                    "resolved_model_id": resolved_model_id,
                     "argv": ["opencode", "models"],
                     "process_returncode": 0,
                     "model_listed": True,

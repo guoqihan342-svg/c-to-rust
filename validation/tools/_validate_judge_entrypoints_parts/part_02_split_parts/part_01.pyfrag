@@ -273,7 +273,13 @@ def require_string_argv(value: Any, label: str) -> list[str]:
     return value
 
 
-def validate_opencode_run_argv_binding(value: Any, label: str, *, launch_policy: dict[str, Any]) -> list[str]:
+def validate_opencode_run_argv_binding(
+    value: Any,
+    label: str,
+    *,
+    launch_policy: dict[str, Any],
+    expected_model_id: str | None = None,
+) -> list[str]:
     argv = require_string_argv(value, label)
     if len(argv) < 3 or not opencode_command_argv_matches(argv[0], launch_policy["opencode_command"]) or argv[1] != "run":
         raise ValueError(f"{label} must run opencode run")
@@ -321,8 +327,12 @@ def validate_opencode_run_argv_binding(value: Any, label: str, *, launch_policy:
         raise ValueError(f"{label} --format must be json")
     if flags["--variant"] != launch_policy["opencode_variant"]:
         raise ValueError(f"{label} --variant must be {launch_policy['opencode_variant']}")
-    if flags["--model"] != launch_policy["opencode_model"]:
-        raise ValueError(f"{label} --model must be {launch_policy['opencode_model']}")
+    actual_model_id = flags["--model"]
+    if expected_model_id is not None:
+        if actual_model_id != expected_model_id:
+            raise ValueError(f"{label} --model must be resolved model id {expected_model_id}")
+    elif not opencode_model_id_matches_required(actual_model_id, launch_policy["opencode_model"]):
+        raise ValueError(f"{label} --model must match required model {launch_policy['opencode_model']}")
     expected_agent = launch_policy.get("opencode_agent")
     if expected_agent is None and "--agent" in flags:
         raise ValueError(f"{label} --agent must be absent")
@@ -336,19 +346,35 @@ def validate_opencode_run_argv_binding(value: Any, label: str, *, launch_policy:
 
 def opencode_model_id_matches_required(model_id: str, required_model: str) -> bool:
     candidate = model_id.strip().strip("`'\"*,")
-    if candidate == required_model:
+    required = required_model.strip()
+    if candidate.casefold() == required.casefold():
         return True
     if "/" in candidate:
-        return candidate.rsplit("/", 1)[1] == required_model
+        return candidate.rsplit("/", 1)[1].casefold() == required.casefold()
     return False
 
 
 def opencode_models_output_mentions_required_model(stdout: str, required_model: str) -> bool:
+    return bool(opencode_model_ids_matching_required(stdout, required_model))
+
+
+def opencode_model_ids_matching_required(stdout: str, required_model: str) -> list[str]:
+    matches: list[str] = []
     for line in stdout.splitlines():
         for token in re.split(r"\s+", line.strip()):
-            if token and opencode_model_id_matches_required(token, required_model):
-                return True
-    return False
+            candidate = token.strip().strip("`'\"*,")
+            if candidate and opencode_model_id_matches_required(candidate, required_model):
+                matches.append(candidate)
+    return list(dict.fromkeys(matches))
+
+
+def resolve_opencode_model_id(stdout: str, required_model: str, label: str) -> str:
+    matches = opencode_model_ids_matching_required(stdout, required_model)
+    if not matches:
+        raise ValueError(f"{label} must list {required_model}")
+    if len(matches) != 1:
+        raise ValueError(f"{label} has ambiguous matches for {required_model}: {matches}")
+    return matches[0]
 
 
 def shell_command_line(argv: list[Any]) -> str:

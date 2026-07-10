@@ -391,6 +391,7 @@ def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, l
             "status": "available",
             "opencode_command": "opencode",
             "required_model": "GLM-5.1",
+            "resolved_model_id": "GLM-5.1",
             "argv": ["opencode", "models"],
             "model_listed": True,
             "process_returncode": 0,

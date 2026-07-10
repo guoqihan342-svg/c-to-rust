@@ -74,6 +74,7 @@
             handoff_payload.get("opencode_argv"),
             f"{label}.handoff_contract.opencode_argv",
             launch_policy=handoff_policy,
+            expected_model_id=expected_preflight["resolved_model_id"],
         )
         opencode_command_line = require_string(
             handoff_payload.get("opencode_command_line"),
@@ -387,7 +388,12 @@ def judge_evidence_ref_key_allowed(name: str, allowed_ref_keys: set[str]) -> boo
     return bool(re.fullmatch(r"internal_review_checklist_[2-9][0-9]*", name))
 
 
-def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+def validate_opencode_safety_transform_attempt_contract(
+    ref: dict[str, Any],
+    *,
+    repo_root: Path,
+    expected_model_id: str | None = None,
+) -> dict[str, Any]:
     binding = validate_artifact_binding_shape(ref, "opencode_safety_transform_attempt", repo_root=repo_root)
     payload = load_json(repo_path(binding["path"], repo_root=repo_root))
     if payload.get("report_kind") != "opencode-safety-transform-attempt":

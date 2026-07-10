@@ -426,6 +426,7 @@ class _JudgeEntrypointsValidatorTestsPart06:
                 "status": "available",
                 "opencode_command": "opencode",
                 "required_model": "GLM-5.1",
+                "resolved_model_id": "GLM-5.1",
                 "process_returncode": 0,
                 "model_listed": True,
             },

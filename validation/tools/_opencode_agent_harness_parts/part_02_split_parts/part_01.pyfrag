@@ -351,6 +351,9 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str, repo_root:
             "reason": "deterministic_replay_command",
         }
     missing: list[str] = []
+    file_resolved_model_id: str | None = None
+    preflight_payload: dict[str, Any] | None = None
+    preflight_file: Path | None = None
     preflight = worker.get("opencode_preflight_report")
     if not isinstance(preflight, dict):
         missing.append("opencode_preflight_report")
@@ -388,6 +391,31 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str, repo_root:
                     )
                     if file_contract.get("status") != "executed":
                         missing.append("opencode_preflight_report.file_contract_status")
+                    file_availability = (
+                        preflight_payload.get("opencode_model_availability")
+                        if isinstance(preflight_payload.get("opencode_model_availability"), dict)
+                        else {}
+                    )
+                    candidate_file_model_id = file_availability.get("resolved_model_id")
+                    if not isinstance(candidate_file_model_id, str) or not opencode_model_id_matches_required(
+                        candidate_file_model_id,
+                        COMPETITION_OPENCODE_MODEL,
+                    ):
+                        missing.append("opencode_preflight_report.file_resolved_model_id")
+                    else:
+                        try:
+                            probed_file_model_id = validate_opencode_model_probe_log_hashes(
+                                file_availability,
+                                repo_root=repo_root,
+                                report_path=preflight_file,
+                            )
+                        except SystemExit:
+                            missing.append("opencode_preflight_report.file_model_probe")
+                        else:
+                            if probed_file_model_id != candidate_file_model_id:
+                                missing.append("opencode_preflight_report.file_resolved_model_id_drift")
+                            else:
+                                file_resolved_model_id = candidate_file_model_id
     if preflight.get("contract_status") != "executed":
         missing.append("opencode_preflight_report.contract_status")
     policy = preflight.get("launch_policy")
@@ -431,6 +459,14 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str, repo_root:
         missing.append("opencode_preflight_report.opencode_model_availability.opencode_command")
     if availability.get("required_model") != COMPETITION_OPENCODE_MODEL:
         missing.append("opencode_preflight_report.opencode_model_availability.required_model")
+    resolved_model_id = availability.get("resolved_model_id")
+    if not isinstance(resolved_model_id, str) or not opencode_model_id_matches_required(
+        resolved_model_id,
+        COMPETITION_OPENCODE_MODEL,
+    ):
+        missing.append("opencode_preflight_report.opencode_model_availability.resolved_model_id")
+    elif file_resolved_model_id is not None and resolved_model_id != file_resolved_model_id:
+        missing.append("opencode_preflight_report.opencode_model_availability.resolved_model_id_drift")
     if availability.get("model_listed") is not True:
         missing.append("opencode_preflight_report.opencode_model_availability.model_listed")
     try:
@@ -439,6 +475,18 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str, repo_root:
         model_probe_returncode = 1
     if model_probe_returncode != 0:
         missing.append("opencode_preflight_report.opencode_model_availability.process_returncode")
+    if preflight_payload is not None and preflight_file is not None and file_resolved_model_id is not None:
+        try:
+            validate_opencode_run_argv_binding(
+                preflight_payload.get("argv"),
+                label="opencode replay preflight report argv",
+                launch_policy=normalize_opencode_launch_policy(policy),
+                expected_model_id=file_resolved_model_id,
+                report_path=preflight_file,
+                repo_root=repo_root,
+            )
+        except SystemExit:
+            missing.append("opencode_preflight_report.file_argv")
     if missing:
         return {
             "status": "blocked",
@@ -463,6 +511,7 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str, repo_root:
             "status": "available",
             "opencode_command": COMPETITION_OPENCODE_COMMAND,
             "required_model": COMPETITION_OPENCODE_MODEL,
+            "resolved_model_id": resolved_model_id,
             "required_agent": COMPETITION_OPENCODE_AGENT,
             "process_returncode": model_probe_returncode,
             "model_listed": True,

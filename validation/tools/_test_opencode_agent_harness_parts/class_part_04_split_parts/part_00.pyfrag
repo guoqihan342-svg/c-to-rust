@@ -255,19 +255,21 @@ class _OpenCodeAgentHarnessTestPart04:
             judge_index = out_root / "harness" / "judge-evidence-index.json"
             resume_manifest = out_root / "harness" / "resume-manifest.json"
             verified_baseline_ref = verified_unsafe_baseline_ref_for_tests()
-            for path in [db_path, assignment, request, summary, report, preflight, evaluate_report, judge_index]:
+            for path in [db_path, assignment, request, summary, report, evaluate_report, judge_index]:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("{}\n", encoding="utf-8")
-            preflight.write_text(
-                json.dumps(
-                    {
-                        "report_kind": "opencode-preflight",
-                        "status": "passed",
-                        "contract_verification": {"status": "executed"},
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
+            write_passing_opencode_preflight_report(
+                preflight,
+                run_id="run-resume",
+                opencode_skip_permissions=True,
+            )
+            preflight_binding = harness.validate_opencode_preflight_report(
+                preflight,
+                expected_run_id="run-resume",
+                opencode_model="GLM-5.1",
+                opencode_agent="c2rust-migrator",
+                opencode_skip_permissions=True,
+                repo_root=REPO_ROOT,
             )
 
             runtime_env = harness.opencode_runtime_env_contract(
@@ -287,27 +289,7 @@ class _OpenCodeAgentHarnessTestPart04:
                 "source_commit": "abc123",
                 "source_sha256": "f" * 64,
                 "summary_status": "failed",
-                "opencode_preflight_report": {
-                    "path": repo_rel(preflight),
-                    "sha256": harness.sha256_file(preflight),
-                    "status": "passed",
-                    "contract_status": "executed",
-                    "launch_policy": {
-                        "opencode_command": "opencode",
-                        "opencode_model": "GLM-5.1",
-                        "opencode_agent": "c2rust-migrator",
-                        "opencode_variant": "max",
-                        "opencode_skip_permissions": True,
-                    },
-                    "opencode_runtime_env": runtime_env,
-                    "opencode_model_availability": {
-                        "status": "available",
-                        "opencode_command": "opencode",
-                        "required_model": "GLM-5.1",
-                        "process_returncode": 0,
-                        "model_listed": True,
-                    },
-                },
+                "opencode_preflight_report": preflight_binding,
             }
             manifest = harness.build_resume_manifest(
                 db_path=db_path,

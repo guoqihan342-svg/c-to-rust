@@ -395,6 +395,155 @@
                 replay["replay_safety"]["missing_constraints"],
             )
 
+    def test_resume_replay_blocks_passed_preflight_without_resolved_model_id(self) -> None:
+        with temp_repo_dir() as tmp:
+            preflight = write_passing_opencode_preflight_report(
+                Path(tmp) / "competition-out" / "harness" / "opencode-preflight-report.json",
+                run_id="run-resume",
+            )
+            binding = harness.validate_opencode_preflight_report(
+                preflight,
+                expected_run_id="run-resume",
+                opencode_model="GLM-5.1",
+                opencode_agent="c2rust-migrator",
+                repo_root=REPO_ROOT,
+            )
+            payload = json.loads(preflight.read_text(encoding="utf-8"))
+            payload["opencode_model_availability"].pop("resolved_model_id")
+            write_json(preflight, payload)
+            binding["sha256"] = harness.sha256_file(preflight)
+            binding["opencode_model_availability"].pop("resolved_model_id")
+
+            safety = harness.resume_worker_replay_safety(
+                {"worker_id": "worker-001", "opencode_preflight_report": binding},
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(safety["status"], "blocked")
+            self.assertTrue(
+                any("resolved_model_id" in constraint for constraint in safety["missing_constraints"]),
+                safety,
+            )
+
+    def test_resume_replay_accepts_provider_qualified_lowercase_resolved_model_id(self) -> None:
+        with temp_repo_dir() as tmp:
+            resolved_model_id = "zai/glm-5.1"
+            preflight = write_passing_opencode_preflight_report(
+                Path(tmp) / "competition-out" / "harness" / "opencode-preflight-report.json",
+                run_id="run-resume",
+                resolved_model_id=resolved_model_id,
+            )
+            binding = harness.validate_opencode_preflight_report(
+                preflight,
+                expected_run_id="run-resume",
+                opencode_model="GLM-5.1",
+                opencode_agent="c2rust-migrator",
+                repo_root=REPO_ROOT,
+            )
+
+            safety = harness.resume_worker_replay_safety(
+                {"worker_id": "worker-001", "opencode_preflight_report": binding},
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(safety["status"], "ready")
+            self.assertEqual(
+                safety["opencode_model_availability"]["resolved_model_id"],
+                resolved_model_id,
+            )
+
+    def test_resume_replay_blocks_resolved_model_id_drift_from_hash_bound_stdout(self) -> None:
+        with temp_repo_dir() as tmp:
+            preflight = write_passing_opencode_preflight_report(
+                Path(tmp) / "competition-out" / "harness" / "opencode-preflight-report.json",
+                run_id="run-resume",
+                resolved_model_id="zai/glm-5.1",
+            )
+            binding = harness.validate_opencode_preflight_report(
+                preflight,
+                expected_run_id="run-resume",
+                opencode_model="GLM-5.1",
+                opencode_agent="c2rust-migrator",
+                repo_root=REPO_ROOT,
+            )
+            payload = json.loads(preflight.read_text(encoding="utf-8"))
+            availability = payload["opencode_model_availability"]
+            stdout_path = REPO_ROOT / availability["logs"]["stdout"]
+            model_stdout = "other/glm-5.1\n"
+            stdout_path.write_text(model_stdout, encoding="utf-8")
+            availability["stdout_sha256"] = harness.sha256_text(model_stdout)
+            write_json(preflight, payload)
+            binding["sha256"] = harness.sha256_file(preflight)
+
+            safety = harness.resume_worker_replay_safety(
+                {"worker_id": "worker-001", "opencode_preflight_report": binding},
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(safety["status"], "blocked")
+
+    def test_resume_replay_blocks_ambiguous_hash_bound_model_stdout(self) -> None:
+        with temp_repo_dir() as tmp:
+            preflight = write_passing_opencode_preflight_report(
+                Path(tmp) / "competition-out" / "harness" / "opencode-preflight-report.json",
+                run_id="run-resume",
+                resolved_model_id="zai/glm-5.1",
+            )
+            binding = harness.validate_opencode_preflight_report(
+                preflight,
+                expected_run_id="run-resume",
+                opencode_model="GLM-5.1",
+                opencode_agent="c2rust-migrator",
+                repo_root=REPO_ROOT,
+            )
+            payload = json.loads(preflight.read_text(encoding="utf-8"))
+            availability = payload["opencode_model_availability"]
+            stdout_path = REPO_ROOT / availability["logs"]["stdout"]
+            model_stdout = "zai/glm-5.1\nother/glm-5.1\n"
+            stdout_path.write_text(model_stdout, encoding="utf-8")
+            availability["stdout_sha256"] = harness.sha256_text(model_stdout)
+            write_json(preflight, payload)
+            binding["sha256"] = harness.sha256_file(preflight)
+
+            safety = harness.resume_worker_replay_safety(
+                {"worker_id": "worker-001", "opencode_preflight_report": binding},
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(safety["status"], "blocked")
+
+    def test_resume_replay_blocks_preflight_argv_model_drift(self) -> None:
+        with temp_repo_dir() as tmp:
+            preflight = write_passing_opencode_preflight_report(
+                Path(tmp) / "competition-out" / "harness" / "opencode-preflight-report.json",
+                run_id="run-resume",
+                resolved_model_id="zai/glm-5.1",
+            )
+            binding = harness.validate_opencode_preflight_report(
+                preflight,
+                expected_run_id="run-resume",
+                opencode_model="GLM-5.1",
+                opencode_agent="c2rust-migrator",
+                repo_root=REPO_ROOT,
+            )
+            payload = json.loads(preflight.read_text(encoding="utf-8"))
+            model_index = payload["argv"].index("--model") + 1
+            payload["argv"][model_index] = "other/glm-5.1"
+            write_json(preflight, payload)
+            binding["sha256"] = harness.sha256_file(preflight)
+
+            safety = harness.resume_worker_replay_safety(
+                {"worker_id": "worker-001", "opencode_preflight_report": binding},
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(safety["status"], "blocked")
+
     def test_resume_manifest_marks_opencode_replay_blocked_without_preflight_contract(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"

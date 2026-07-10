@@ -646,6 +646,7 @@
         "opencode_model": {"type": "string"},
         "opencode_variant": {"const": "max"},
         "required_model": {"type": "string"},
+        "resolved_model_id": {"type": "string", "minLength": 1},
         "model_availability_status": {"type": "string"},
         "model_listed": {"type": "boolean"},
         "model_probe_argv": {"type": "array", "items": {"type": "string"}},
@@ -668,7 +669,13 @@
         "semantic_gate": {"const": false},
         "translation_coverage_numerator": {"const": 0},
         "boundary": {"type": "string", "minLength": 1}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "passed"}}, "required": ["status"]},
+          "then": {"required": ["resolved_model_id"]}
+        }
+      ]
     }
   }
 }

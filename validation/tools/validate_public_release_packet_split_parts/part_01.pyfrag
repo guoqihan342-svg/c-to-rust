@@ -39,11 +39,11 @@ def require_opencode_patch_boundary_contract(packet: dict[str, Any], *, repo_roo
         boundary.get("translation_coverage_numerator"),
         "opencode_patch_boundary.translation_coverage_numerator",
     )
-    require_opencode_safety_transform_attempt_boundary_contract(packet, boundary, repo_root=repo_root)
     proof = require_object(
         boundary.get("opencode_preflight_proof_summary"),
         "opencode_patch_boundary.opencode_preflight_proof_summary",
     )
+    expected_model_id: str | None = None
     if boundary.get("opencode_runtime_enabled") is True or proof.get("status") == "passed":
         require_opencode_preflight_proof_summary_contract(
             proof,
@@ -53,6 +53,16 @@ def require_opencode_patch_boundary_contract(packet: dict[str, Any], *, repo_roo
                 require_object(packet.get("competition_host_readiness"), "competition_host_readiness")
             ),
         )
+        expected_model_id = judge_validator.require_string(
+            proof.get("resolved_model_id"),
+            "opencode_patch_boundary.opencode_preflight_proof_summary.resolved_model_id",
+        )
+    require_opencode_safety_transform_attempt_boundary_contract(
+        packet,
+        boundary,
+        repo_root=repo_root,
+        expected_model_id=expected_model_id,
+    )
 
 
 def require_opencode_safety_transform_attempt_boundary_contract(
@@ -60,6 +70,7 @@ def require_opencode_safety_transform_attempt_boundary_contract(
     boundary: dict[str, Any],
     *,
     repo_root: Path,
+    expected_model_id: str | None = None,
 ) -> None:
     label = "opencode_patch_boundary.opencode_safety_transform_attempt"
     summary = require_object(boundary.get("opencode_safety_transform_attempt"), label)
@@ -106,6 +117,7 @@ def require_opencode_safety_transform_attempt_boundary_contract(
     attempt_result = judge_validator.validate_opencode_safety_transform_attempt_contract(
         published_ref,
         repo_root=repo_root,
+        expected_model_id=expected_model_id,
     )
     expected = {
         "unit_count": attempt_result["unit_count"],
@@ -493,6 +505,12 @@ def require_opencode_preflight_proof_summary_contract(
         raise ValueError(f"{label}.opencode_variant must be {judge_validator.COMPETITION_OPENCODE_VARIANT}")
     if proof.get("required_model") != judge_validator.COMPETITION_OPENCODE_MODEL:
         raise ValueError(f"{label}.required_model must be {judge_validator.COMPETITION_OPENCODE_MODEL}")
+    resolved_model_id = proof.get("resolved_model_id")
+    if not isinstance(resolved_model_id, str) or not judge_validator.opencode_model_id_matches_required(
+        resolved_model_id,
+        judge_validator.COMPETITION_OPENCODE_MODEL,
+    ):
+        raise ValueError(f"{label}.resolved_model_id must match {judge_validator.COMPETITION_OPENCODE_MODEL}")
     if proof.get("model_availability_status") != "available":
         raise ValueError(f"{label}.model_availability_status must be available")
     if proof.get("model_listed") is not True:

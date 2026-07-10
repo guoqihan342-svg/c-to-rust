@@ -499,7 +499,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
         "--variant",
         "max",
         "--model",
-        "GLM-5.1",
+        "zhipu/GLM-5.1",
         "--agent",
         "c2rust-migrator",
         opencode_prompt,

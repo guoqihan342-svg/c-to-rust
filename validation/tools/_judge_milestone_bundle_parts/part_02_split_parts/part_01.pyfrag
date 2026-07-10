@@ -171,6 +171,7 @@ def opencode_preflight_proof_summary_from_index(
             "opencode_model": launch_policy.get("opencode_model"),
             "opencode_variant": launch_policy.get("opencode_variant"),
             "required_model": availability.get("required_model"),
+            "resolved_model_id": availability.get("resolved_model_id"),
             "model_availability_status": availability.get("status"),
             "model_listed": availability.get("model_listed"),
             "model_probe_argv": availability.get("argv") if isinstance(availability.get("argv"), list) else [],
@@ -256,6 +257,14 @@ def opencode_preflight_summary_passed(
         return False
     if summary.get("required_model") != validator.COMPETITION_OPENCODE_MODEL:
         return False
+    resolved_model_id = summary.get("resolved_model_id")
+    if not isinstance(resolved_model_id, str) or not validator.opencode_model_id_matches_required(
+        resolved_model_id,
+        validator.COMPETITION_OPENCODE_MODEL,
+    ):
+        return False
+    if availability.get("resolved_model_id") != resolved_model_id:
+        return False
     if summary.get("model_availability_status") != "available":
         return False
     if summary.get("model_listed") is not True:
@@ -280,11 +289,13 @@ def opencode_preflight_summary_passed(
     ):
         return False
     try:
-        validator.validate_opencode_model_probe_log_hashes(
+        probed_model_id = validator.validate_opencode_model_probe_log_hashes(
             availability,
             "opencode_preflight_proof_summary",
             repo_root=repo_root,
         )
+        if probed_model_id != summary.get("resolved_model_id"):
+            return False
     except ValueError:
         return False
     if not opencode_preflight_session_contract_passed(
@@ -367,6 +378,13 @@ def opencode_preflight_session_contract_passed(
             report_argv,
             "opencode_preflight_proof_summary.preflight_report.argv",
             launch_policy=preflight_policy,
+            expected_model_id=validator.require_string(
+                validator.require_object(
+                    preflight_payload.get("opencode_model_availability"),
+                    "opencode_preflight_proof_summary.opencode_model_availability",
+                ).get("resolved_model_id"),
+                "opencode_preflight_proof_summary.opencode_model_availability.resolved_model_id",
+            ),
         )
         handoff_command_line = validator.require_string(
             handoff_payload.get("opencode_command_line"),

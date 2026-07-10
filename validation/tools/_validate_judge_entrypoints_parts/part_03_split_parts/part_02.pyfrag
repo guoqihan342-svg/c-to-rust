@@ -42,6 +42,7 @@
         handoff_payload.get("opencode_argv"),
         "opencode_safety_transform_attempt.handoff_contract.opencode_argv",
         launch_policy=launch_policy,
+        expected_model_id=expected_model_id,
     )
     opencode_command_line = require_string(
         handoff_payload.get("opencode_command_line"),

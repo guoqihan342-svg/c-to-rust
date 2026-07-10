@@ -3,7 +3,7 @@ def validate_opencode_model_probe_log_hashes(
     *,
     repo_root: Path,
     report_path: Path,
-) -> None:
+) -> str:
     logs = model_availability.get("logs")
     if not isinstance(logs, dict):
         raise SystemExit(
@@ -33,11 +33,19 @@ def validate_opencode_model_probe_log_hashes(
             )
         if stream == "stdout":
             required_model = str(model_availability.get("required_model", ""))
-            if not opencode_models_output_mentions_required_model(log_text, required_model):
+            try:
+                resolved_model_id = resolve_opencode_model_id(log_text, required_model)
+            except SystemExit as error:
+                raise SystemExit(
+                    f"opencode preflight model availability stdout has ambiguous {required_model}: "
+                    f"{repo_relative(report_path, repo_root=repo_root)}"
+                ) from error
+            if resolved_model_id is None:
                 raise SystemExit(
                     f"opencode preflight model availability stdout missing {required_model}: "
                     f"{repo_relative(report_path, repo_root=repo_root)}"
                 )
+    return resolved_model_id
 
 
 def opencode_model_id_matches_required(model_id: str, required_model: str) -> bool:

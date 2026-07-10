@@ -252,6 +252,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode") ->
                 "status": "available",
                 "opencode_command": "opencode",
                 "required_model": "GLM-5.1",
+                "resolved_model_id": "GLM-5.1",
                 "argv": ["opencode", "models"],
                 "process_returncode": 0,
                 "model_listed": True,

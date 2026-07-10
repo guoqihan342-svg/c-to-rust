@@ -207,6 +207,13 @@ def build_opencode_preflight_proof_rollup(sources: list[dict[str, Any]]) -> dict
     selected["passed_source_count"] = len(passed)
     if len(passed) != len(sources):
         selected["status"] = "failed"
+    resolved_model_ids = [summary.get("resolved_model_id") for summary in passed]
+    if (
+        not resolved_model_ids
+        or not all(isinstance(model_id, str) and model_id for model_id in resolved_model_ids)
+        or len(set(resolved_model_ids)) != 1
+    ):
+        selected["status"] = "failed"
     return selected
 
 

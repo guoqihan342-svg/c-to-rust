@@ -27,11 +27,16 @@
             "opencode preflight model availability argv must be opencode models: "
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
-    validate_opencode_model_probe_log_hashes(
+    probed_model_id = validate_opencode_model_probe_log_hashes(
         model_availability,
         repo_root=repo_root,
         report_path=report_path,
     )
+    if probed_model_id != availability_binding["resolved_model_id"]:
+        raise SystemExit(
+            "opencode preflight resolved model id must match hash-bound models stdout: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
     opencode_runtime_env = validate_opencode_runtime_env_contract(
         report.get("opencode_runtime_env"),
         context="opencode preflight report",

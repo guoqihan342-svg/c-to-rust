@@ -68,6 +68,7 @@
                     "opencode_command": "opencode",
                     "opencode_model": "GLM-5.1",
                     "required_model": "GLM-5.1",
+                    "resolved_model_id": "GLM-5.1",
                     "model_listed": True,
                 },
             },
@@ -127,6 +128,7 @@
                     "opencode_model": "GLM-5.1",
                     "opencode_variant": "max",
                     "required_model": "GLM-5.1",
+                    "resolved_model_id": "GLM-5.1",
                     "model_availability_status": "available",
                     "model_listed": True,
                     "process_returncode": 0,
@@ -147,7 +149,7 @@
         self.assertEqual(publishability["required_agent"], "c2rust-migrator")
         self.assertTrue(publishability["opencode_glm51_publishable"])
 
-    def test_publishability_requires_competition_opencode_agent_and_variant(self) -> None:
+    def test_publishability_requires_competition_opencode_runtime_binding(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 
         def publishability_for(summary_overrides: dict) -> dict:
@@ -162,6 +164,7 @@
                 "opencode_model": "GLM-5.1",
                 "opencode_variant": "max",
                 "required_model": "GLM-5.1",
+                "resolved_model_id": "GLM-5.1",
                 "model_availability_status": "available",
                 "model_listed": True,
                 "process_returncode": 0,
@@ -188,13 +191,30 @@
                 },
             )
 
-        for overrides in [{"opencode_agent": "general"}, {"opencode_variant": "small"}]:
+        for overrides in [
+            {"opencode_agent": "general"},
+            {"opencode_variant": "small"},
+            {"resolved_model_id": None},
+            {"resolved_model_id": "zai/glm-5.2"},
+        ]:
             with self.subTest(overrides=overrides):
                 publishability = publishability_for(overrides)
 
                 self.assertFalse(publishability["opencode_glm51_publishable"])
                 self.assertFalse(publishability["external_milestone_claim_ready"])
                 self.assertEqual(publishability["status"], "internal_preview")
+
+    def test_opencode_preflight_rollup_rejects_resolved_model_drift(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        rollup = bundle.build_opencode_preflight_proof_rollup(
+            [
+                {"preflight_proof_summary": {"status": "passed", "resolved_model_id": "zai/glm-5.1"}},
+                {"preflight_proof_summary": {"status": "passed", "resolved_model_id": "zhipu/glm-5.1"}},
+            ]
+        )
+
+        self.assertEqual(rollup["status"], "failed")
 
     def test_known_gaps_keep_c2rust_baseline_gap_without_verified_baseline_exhibit(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
