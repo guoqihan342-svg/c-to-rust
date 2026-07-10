@@ -309,6 +309,53 @@ def opencode_runtime_process_env(
     return process_env
 
 
+def opencode_credential_source_metadata(
+    source: str,
+    *,
+    require_present: bool = False,
+) -> dict[str, Any] | None:
+    if source == OPENCODE_CREDENTIAL_SOURCE_NONE:
+        return None
+    if source != OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV:
+        raise SystemExit(
+            "opencode_credential_source must be one of: " + ", ".join(OPENCODE_CREDENTIAL_SOURCES)
+        )
+    present = OPENCODE_CREDENTIAL_ENV_NAME in os.environ and bool(os.environ[OPENCODE_CREDENTIAL_ENV_NAME])
+    metadata = {
+        "kind": OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV,
+        "env_name": OPENCODE_CREDENTIAL_ENV_NAME,
+        "present": present,
+    }
+    if require_present and not present:
+        raise SystemExit(
+            f"{OPENCODE_CREDENTIAL_ENV_NAME} is required for "
+            f"--opencode-credential-source {OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV}"
+        )
+    return metadata
+
+
+def redact_opencode_completed_process(
+    completed: subprocess.CompletedProcess[str],
+) -> tuple[subprocess.CompletedProcess[str], int]:
+    secret = os.environ.get(OPENCODE_CREDENTIAL_ENV_NAME)
+    if not secret:
+        return completed, 0
+    stdout = completed.stdout or ""
+    stderr = completed.stderr or ""
+    redaction_count = stdout.count(secret) + stderr.count(secret)
+    if redaction_count == 0:
+        return completed, 0
+    return (
+        subprocess.CompletedProcess(
+            completed.args,
+            completed.returncode,
+            stdout=stdout.replace(secret, OPENCODE_REDACTION_TOKEN),
+            stderr=stderr.replace(secret, OPENCODE_REDACTION_TOKEN),
+        ),
+        redaction_count,
+    )
+
+
 def opencode_launch_policy(
     *,
     opencode_command: str,
@@ -317,6 +364,7 @@ def opencode_launch_policy(
     opencode_variant: str,
     opencode_skip_permissions: bool,
     opencode_allow_non_competition_model: bool = False,
+    opencode_credential_source: str = OPENCODE_CREDENTIAL_SOURCE_NONE,
 ) -> dict[str, Any]:
     if opencode_command != COMPETITION_OPENCODE_COMMAND:
         raise SystemExit(f"opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
@@ -330,13 +378,20 @@ def opencode_launch_policy(
         raise SystemExit(f"opencode_agent must be {COMPETITION_OPENCODE_AGENT}")
     if opencode_variant != COMPETITION_OPENCODE_VARIANT:
         raise SystemExit(f"opencode_variant must be {COMPETITION_OPENCODE_VARIANT}")
-    return {
+    policy = {
         "opencode_command": opencode_command,
         "opencode_model": opencode_model,
         "opencode_agent": opencode_agent,
         "opencode_variant": opencode_variant,
         "opencode_skip_permissions": bool(opencode_skip_permissions),
     }
+    credential_source = opencode_credential_source_metadata(
+        opencode_credential_source,
+        require_present=opencode_credential_source == OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV,
+    )
+    if credential_source is not None:
+        policy["opencode_credential_source"] = credential_source
+    return policy
 
 
 def normalize_opencode_launch_policy(

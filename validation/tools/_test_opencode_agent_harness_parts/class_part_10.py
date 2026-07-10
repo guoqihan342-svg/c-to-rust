@@ -1,4 +1,117 @@
 class _OpenCodeAgentHarnessTestPart10:
+    def test_opencode_preflight_cli_dispatches_inherited_env_credential_source(self) -> None:
+        argv = [
+            "opencode_agent_harness.py",
+            "opencode-preflight",
+            "--run-id",
+            "preflight-run",
+            "--out-root",
+            "target/opencode-preflight",
+            "--opencode-credential-source",
+            "inherited-env",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()), patch.object(
+            harness,
+            "run_opencode_preflight",
+            return_value={"exit_code": 0, "status": "passed"},
+        ) as preflight:
+            self.assertEqual(harness.main(), 0)
+
+        self.assertEqual(preflight.call_args.kwargs["opencode_credential_source"], "inherited-env")
+
+    def test_opencode_preflight_inherited_env_fails_before_model_probe_when_missing(self) -> None:
+        with temp_repo_dir() as tmp:
+            calls: list[list[str]] = []
+
+            def runner_should_not_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                raise AssertionError("OpenCode must not run without the inherited credential env")
+
+            with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(
+                SystemExit,
+                "OPENCODE_AUTH_CONTENT is required",
+            ):
+                harness.run_opencode_preflight(
+                    out_root=Path(tmp) / "opencode-preflight",
+                    run_id="preflight-run",
+                    opencode_credential_source="inherited-env",
+                    command_runner=runner_should_not_run,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(calls, [])
+
+    def test_opencode_preflight_inherited_env_records_metadata_and_redacts_outputs(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "opencode-preflight"
+            secret = "synthetic-opencode-secret-for-redaction"
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(
+                        argv,
+                        0,
+                        stdout=f"GLM-5.1 {secret}\n",
+                        stderr=f"probe diagnostic {secret}\n",
+                    )
+                contract_path = out_root / "harness" / "opencode-preflight-contract.json"
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                marker_path = REPO_ROOT / contract["expected_marker_path"]
+                write_valid_preflight_marker(marker_path, run_id="preflight-run")
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "message": secret,
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {
+                                    "command": contract["worker_command_line"],
+                                    "workdir": str(REPO_ROOT),
+                                },
+                                "status": "completed",
+                            },
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(
+                    argv,
+                    0,
+                    stdout=stdout + "\n",
+                    stderr=f"session diagnostic {secret}\n",
+                )
+
+            with patch.dict(os.environ, {"OPENCODE_AUTH_CONTENT": secret}, clear=False):
+                result = harness.run_opencode_preflight(
+                    out_root=out_root,
+                    run_id="preflight-run",
+                    opencode_credential_source="inherited-env",
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            credential_metadata = {
+                "kind": "inherited-env",
+                "env_name": "OPENCODE_AUTH_CONTENT",
+                "present": True,
+            }
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(result["launch_policy"]["opencode_credential_source"], credential_metadata)
+            self.assertEqual(result["redaction_count"], 4)
+            self.assertEqual(result["opencode_model_availability"]["redaction_count"], 2)
+            session_path = REPO_ROOT / result["opencode_session_evidence"]["path"]
+            session = json.loads(session_path.read_text(encoding="utf-8"))
+            self.assertEqual(session["redaction_count"], 2)
+
+            artifact_text = "\n".join(
+                path.read_text(encoding="utf-8")
+                for path in out_root.rglob("*")
+                if path.is_file()
+            )
+            self.assertNotIn(secret, artifact_text)
+            self.assertIn("[REDACTED]", artifact_text)
+
     def test_retry_worker_annotates_measured_unsafe_reduction_metrics_for_parent_merge(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"

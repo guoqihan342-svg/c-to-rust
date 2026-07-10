@@ -156,6 +156,7 @@ def run_opencode_preflight(
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
     opencode_allow_non_competition_model: bool = False,
+    opencode_credential_source: str = OPENCODE_CREDENTIAL_SOURCE_NONE,
     timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
@@ -191,6 +192,7 @@ def run_opencode_preflight(
         opencode_variant=opencode_variant,
         opencode_skip_permissions=opencode_skip_permissions,
         opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+        opencode_credential_source=opencode_credential_source,
     )
     argv = build_opencode_preflight_argv(
         opencode_command=opencode_command,
@@ -274,6 +276,7 @@ def run_opencode_preflight(
             },
             "report_path": repo_relative(report_path, repo_root=repo_root),
             "root_cause_key": root_cause_key,
+            "redaction_count": int(model_availability.get("redaction_count", 0)),
             "h9_blocker": opencode_h9_blocker(
                 root_cause_key=root_cause_key,
                 launch_policy=launch_policy,
@@ -313,6 +316,7 @@ def run_opencode_preflight(
             stdout="",
             stderr=f"{type(exc).__name__}: {exc}\n",
         )
+    completed, session_redaction_count = redact_opencode_completed_process(completed)
     stdout_path = logs_dir / "opencode-preflight.stdout.log"
     stderr_path = logs_dir / "opencode-preflight.stderr.log"
     atomic_write_text(stdout_path, completed.stdout or "")
@@ -324,6 +328,7 @@ def run_opencode_preflight(
         stdout_path=stdout_path,
         stderr_path=stderr_path,
         opencode_runtime_env=opencode_runtime_env,
+        redaction_count=session_redaction_count,
         repo_root=repo_root,
     )
     session_evidence = load_json(repo_path(Path(session_binding["path"]), repo_root=repo_root))
@@ -389,6 +394,7 @@ def run_opencode_preflight(
             "stderr": repo_relative(stderr_path, repo_root=repo_root),
         },
         "report_path": repo_relative(report_path, repo_root=repo_root),
+        "redaction_count": int(model_availability.get("redaction_count", 0)) + session_redaction_count,
         "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
     }
     if timed_out:

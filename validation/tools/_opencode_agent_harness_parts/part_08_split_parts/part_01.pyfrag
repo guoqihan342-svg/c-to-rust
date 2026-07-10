@@ -395,6 +395,7 @@ def write_opencode_session_evidence(
     stderr_path: Path,
     repo_root: Path,
     opencode_runtime_env: dict[str, Any] | None = None,
+    redaction_count: int = 0,
 ) -> dict[str, str]:
     stdout = completed.stdout or ""
     evidence: dict[str, Any] = {
@@ -404,6 +405,7 @@ def write_opencode_session_evidence(
         "stderr_path": repo_relative(stderr_path, repo_root=repo_root),
         "stdout_sha256": sha256_file(stdout_path),
         "stderr_sha256": sha256_file(stderr_path),
+        "redaction_count": redaction_count,
     }
     if opencode_runtime_env is not None:
         evidence["opencode_runtime_env"] = opencode_runtime_env

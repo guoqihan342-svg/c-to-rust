@@ -2,6 +2,7 @@
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
             opencode_allow_non_competition_model=args.opencode_allow_non_competition_model,
+            opencode_credential_source=args.opencode_credential_source,
             timeout_seconds=args.timeout_seconds,
         )
     elif args.command == "write-preflight-marker":

@@ -50,6 +50,14 @@ COMPETITION_OPENCODE_COMMAND = "opencode"
 COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
 COMPETITION_OPENCODE_VARIANT = "max"
 COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
+OPENCODE_CREDENTIAL_ENV_NAME = "OPENCODE_AUTH_CONTENT"
+OPENCODE_CREDENTIAL_SOURCE_NONE = "none"
+OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV = "inherited-env"
+OPENCODE_CREDENTIAL_SOURCES = (
+    OPENCODE_CREDENTIAL_SOURCE_NONE,
+    OPENCODE_CREDENTIAL_SOURCE_INHERITED_ENV,
+)
+OPENCODE_REDACTION_TOKEN = "[REDACTED]"
 ALLOWED_PROOF_CLASSES = frozenset(
     {"competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"}
 )
@@ -293,6 +301,11 @@ def main() -> int:
     preflight_parser.add_argument("--opencode-variant", default="max")
     preflight_parser.add_argument("--opencode-skip-permissions", action="store_true")
     preflight_parser.add_argument("--opencode-allow-non-competition-model", action="store_true")
+    preflight_parser.add_argument(
+        "--opencode-credential-source",
+        choices=OPENCODE_CREDENTIAL_SOURCES,
+        default=OPENCODE_CREDENTIAL_SOURCE_NONE,
+    )
     preflight_parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS)
 
     preflight_marker_parser = subcommands.add_parser("write-preflight-marker")

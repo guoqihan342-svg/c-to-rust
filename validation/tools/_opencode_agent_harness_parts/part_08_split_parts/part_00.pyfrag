@@ -119,6 +119,7 @@ def run_opencode_model_availability_probe(
             stdout="",
             stderr=f"{type(exc).__name__}: {exc}\n",
         )
+    completed, redaction_count = redact_opencode_completed_process(completed)
     stdout = completed.stdout or ""
     stderr = completed.stderr or ""
     stdout_path = logs_dir / "opencode-models.stdout.log"
@@ -153,6 +154,7 @@ def run_opencode_model_availability_probe(
         "listed_model_sample": opencode_models_output_sample(stdout),
         "stdout_sha256": sha256_text(stdout),
         "stderr_sha256": sha256_text(stderr),
+        "redaction_count": redaction_count,
         "logs": {
             "stdout": repo_relative(stdout_path, repo_root=repo_root),
             "stderr": repo_relative(stderr_path, repo_root=repo_root),
@@ -208,6 +210,7 @@ def write_opencode_not_launched_session_evidence(
         "status": "not-launched",
         "root_cause_key": root_cause_key,
         "process_returncode": None,
+        "redaction_count": 0,
         "stdout_path": repo_relative(stdout_path, repo_root=repo_root),
         "stderr_path": repo_relative(stderr_path, repo_root=repo_root),
         "opencode_runtime_env": opencode_runtime_env,
