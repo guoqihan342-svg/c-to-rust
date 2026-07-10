@@ -551,11 +551,21 @@ def validate_generated_draft_acceptance_payload(
         raise SystemExit(f"{label}.generated_draft_acceptance rust_draft_sha256 drift")
 
     rust_check_path = evidence_dir / "rust-check.json"
+    rust_check_ref = acceptance.get("rust_check")
     require_ref(
-        acceptance.get("rust_check"),
+        rust_check_ref,
         rust_check_path,
         f"{label}.generated_draft_acceptance.rust_check",
     )
+    if isinstance(rust_check_ref, dict) and not rust_check_ref.get("sha256"):
+        if rust_check_ref.get("binding_mode") != "field_bound":
+            raise SystemExit(
+                f"{label}.generated_draft_acceptance.rust_check missing field_bound binding_mode"
+            )
+        if not isinstance(rust_check_ref.get("cycle_boundary"), str) or not rust_check_ref["cycle_boundary"]:
+            raise SystemExit(
+                f"{label}.generated_draft_acceptance.rust_check missing cycle_boundary"
+            )
     if load_json(rust_check_path).get("status") != "passed":
         raise SystemExit(f"{label}.generated_draft_acceptance requires rust_check.status=passed")
 

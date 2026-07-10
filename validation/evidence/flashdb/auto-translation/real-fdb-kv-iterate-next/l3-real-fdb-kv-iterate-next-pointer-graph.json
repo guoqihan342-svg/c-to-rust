@@ -1,18 +1,50 @@
 {
   "alias_contract": {
-    "complete_alias_safety": false,
-    "decision": "not_applicable",
+    "complete_alias_safety": true,
+    "decision": "allow",
     "evidence_refs": [],
-    "proven": false,
-    "requires_noalias": false,
-    "source": "no read/write pointer pair"
+    "proven": true,
+    "requires_noalias": true,
+    "source": "c_boundary.pointer_contract.aliasing_proven=true"
   },
-  "alias_risks": [],
-  "alias_sets": [],
+  "alias_risks": [
+    {
+      "evidence_source": "c_boundary.pointer_contract.aliasing_proven=true",
+      "gate_decision": "allow",
+      "id": "alias-risk-1",
+      "pointer_nodes": [
+        "db",
+        "kv"
+      ],
+      "read_effects": [
+        "*db",
+        "*kv"
+      ],
+      "requires_noalias": true,
+      "risk_level": "proven_noalias",
+      "write_effects": [
+        "*db",
+        "*kv"
+      ]
+    }
+  ],
+  "alias_sets": [
+    {
+      "evidence": "c_boundary.pointer_contract.aliasing_proven=true",
+      "id": "alias-set-1",
+      "members": [
+        "db",
+        "kv"
+      ],
+      "relationship": "known_distinct",
+      "risk": "proven_noalias"
+    }
+  ],
   "applicability": {
     "has_pointer_surface": true,
     "triggers": [
-      "pointer_parameter"
+      "pointer_parameter",
+      "alias_sensitive_state"
     ]
   },
   "cache_invalidation_keys": [
@@ -22,23 +54,73 @@
     "build_profile_hash=10128e2ebc6ad62fcc9f46ba40772d47f35eaba4db108e8a57fe02a80dc00426",
     "translator_version=0.1.0",
     "schema_version=1",
-    "alias_gate=not_applicable",
+    "alias_gate=allow",
+    "alias_risk_count=1",
+    "aliasing_proven=true",
     "effect_graph",
-    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
+    "effect_graph_sha256=6c1ab49ddd7c6b6f5a67e87e43f4d5a344067b183db68e7dbc08ba0ca36d35a1"
   ],
   "context_pack_ref": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-context-pack.json",
   "dependency_edges": [],
   "effect_graph": {
-    "edges": [],
-    "effects": [],
+    "edges": [
+      {
+        "evidence": "alias-risk-1 covers db/kv",
+        "from_effect": "effect-1",
+        "relationship": "requires_noalias",
+        "to_effect": "effect-4"
+      },
+      {
+        "evidence": "alias-risk-1 covers kv/db",
+        "from_effect": "effect-3",
+        "relationship": "requires_noalias",
+        "to_effect": "effect-2"
+      }
+    ],
+    "effects": [
+      {
+        "expression": "*db",
+        "id": "effect-1",
+        "kind": "read",
+        "pointer_node": "db",
+        "source": "pointer_nodes.read_effects"
+      },
+      {
+        "expression": "*db",
+        "id": "effect-2",
+        "kind": "write",
+        "pointer_node": "db",
+        "source": "pointer_nodes.write_effects"
+      },
+      {
+        "expression": "*kv",
+        "id": "effect-3",
+        "kind": "read",
+        "pointer_node": "kv",
+        "source": "pointer_nodes.read_effects"
+      },
+      {
+        "expression": "*kv",
+        "id": "effect-4",
+        "kind": "write",
+        "pointer_node": "kv",
+        "source": "pointer_nodes.write_effects"
+      }
+    ],
     "summary": {
-      "alias_gate_decision": "not_applicable",
-      "alias_sensitive": false,
+      "alias_gate_decision": "allow",
+      "alias_sensitive": true,
       "external_state": [],
-      "read_count": 0,
-      "reads": [],
-      "write_count": 0,
-      "writes": []
+      "read_count": 2,
+      "reads": [
+        "db",
+        "kv"
+      ],
+      "write_count": 2,
+      "writes": [
+        "db",
+        "kv"
+      ]
     }
   },
   "level": "L3",
@@ -54,7 +136,7 @@
         "line_end": 1,
         "line_start": 1
       },
-      "source_statement": "",
+      "source_statement": "*db",
       "translation_rule_id": "bounded-input-buffer-read",
       "unsafe_expected": false
     },
@@ -69,7 +151,7 @@
         "line_end": 1,
         "line_start": 1
       },
-      "source_statement": "",
+      "source_statement": "*kv",
       "translation_rule_id": "bounded-pointer-index-write",
       "unsafe_expected": false
     }
@@ -85,9 +167,13 @@
       "mutability": "write_only",
       "nullability": "unknown",
       "ownership_role": "out_param",
-      "read_effects": [],
+      "read_effects": [
+        "*db"
+      ],
       "symbol": "db",
-      "write_effects": []
+      "write_effects": [
+        "*db"
+      ]
     },
     {
       "boundary_decisions": [
@@ -101,19 +187,24 @@
       "mutability": "write_only",
       "nullability": "unknown",
       "ownership_role": "out_param",
-      "read_effects": [],
+      "read_effects": [
+        "*kv"
+      ],
       "symbol": "kv",
-      "write_effects": []
+      "write_effects": [
+        "*kv"
+      ]
     }
   ],
-  "repo_commit": "b514c10c97134d240077250e5b4735298bad72b4",
+  "repo_commit": "62e9d638bc5a189f295f5ca37278ac8ed98d4651",
   "risk_summary": {
     "alias_gate": {
-      "complete_alias_safety": false,
-      "decision": "not_applicable",
-      "reason": "slice has no input/output pointer alias surface",
-      "requires_noalias": false,
-      "risk_level": "none"
+      "complete_alias_safety": true,
+      "decision": "allow",
+      "evidence_source": "c_boundary.pointer_contract.aliasing_proven=true",
+      "requires_noalias": true,
+      "risk_count": 1,
+      "risk_level": "proven_noalias"
     },
     "blocked_reasons": [],
     "known_gaps": [],
@@ -133,7 +224,18 @@
       "unsafe_expected": false
     }
   ],
-  "safe_boundary_preconditions": [],
+  "safe_boundary_preconditions": [
+    {
+      "applies_to": [
+        "db",
+        "kv"
+      ],
+      "id": "alias-precondition-1",
+      "kind": "noalias",
+      "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+      "required": true
+    }
+  ],
   "schema_version": 2,
   "slice_id": "real-fdb-kv-iterate-next",
   "source_boundary": {

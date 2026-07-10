@@ -147,7 +147,7 @@
   "fixture": "validation/l2_slices/fixtures/real-fdb-kv-iterate-next.json",
   "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "b514c10c97134d240077250e5b4735298bad72b4",
+  "repo_commit": "62e9d638bc5a189f295f5ca37278ac8ed98d4651",
   "schema_version": 1,
   "signature_bindings": [
     {

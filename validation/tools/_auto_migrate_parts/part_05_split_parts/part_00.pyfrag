@@ -452,7 +452,15 @@ def generated_draft_acceptance_binding(
         "generated_draft_semantic_pass": passed,
         "generated_draft_replay_pass": replay.get("generated_draft_replay_pass") is True,
         "rust_draft": draft_ref,
-        "rust_check": evidence_ref(evidence_dir / "rust-check.json", rust_check.get("status", "unknown")),
+        "rust_check": {
+            "path": rel(evidence_dir / "rust-check.json"),
+            "status": rust_check.get("status", "unknown"),
+            "binding_mode": "field_bound",
+            "cycle_boundary": (
+                "rust-check is field-bound because final route and validation-profile refs are added "
+                "after generated-draft acceptance is computed"
+            ),
+        },
         "replay_execution": replay.get("replay_execution", {}),
         "accepted_evidence_refs": accepted_refs,
         "accepted_evidence_binding": accepted_binding_summary(accepted) if accepted else None,

@@ -54,11 +54,17 @@
       },
       "rust_check": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/rust-check.json",
-        "sha256": "cc3f54efa9020ab625ab024843b6f303716c05529cb2dde736268b8a6bfa30ff"
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
       },
       "generated_replay_evidence": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-test-translation-generated.json",
-        "sha256": "4c2d9a7aeef76b864ae2bf37f8448892ee1da214c346d3dfab7d430b3c0237a5"
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
       },
       "generated_replay_test": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-rust-replay-test-draft.rs",
@@ -75,11 +81,19 @@
       },
       "candidate_rust_report": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-rust-report.json",
-        "sha256": "2cd03a17e635099dc58f665eaf38afda52eec03118d2dacf7fb38a045830bb4a"
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
       },
       "test_translation": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-test-translation-generated.json",
-        "sha256": "4c2d9a7aeef76b864ae2bf37f8448892ee1da214c346d3dfab7d430b3c0237a5"
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
       }
     }
   },

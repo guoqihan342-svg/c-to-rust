@@ -89,7 +89,7 @@
         },
         "stderr": {
           "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next/same-replay-run.stderr.log",
-          "sha256": "a544f43ff0a69d9b663b511fec8212e414d7784ccfc4b355bdff198fd4610e06"
+          "sha256": "5a2050780af162933328d0b156bdbc46408ec723f7482af7a041644ca6eff49d"
         }
       },
       "expected_run_failure": true
@@ -133,7 +133,7 @@
           },
           "stderr": {
             "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next/partition-case-0-run.stderr.log",
-            "sha256": "20aac6c595283b8aa61c4c91d828422d19e11efa351a20596ac7b09a489d5d4c"
+            "sha256": "d3b5f7c3df78728309d2116ae8848842c654441e20bced0de387980e4d483f22"
           }
         },
         {
@@ -153,7 +153,7 @@
           },
           "stderr": {
             "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next/partition-case-1-run.stderr.log",
-            "sha256": "0137d8feae69e76e8a945ac96e00093ec95abbd78eeb4711914b9e63cd61be7b"
+            "sha256": "208e0d5b7cc440bdf6035aee4a35e9730d46464e26b3ddc46695125d7a91f53f"
           }
         },
         {
@@ -173,7 +173,7 @@
           },
           "stderr": {
             "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next/partition-case-2-run.stderr.log",
-            "sha256": "98d8cd89807b269fe473f185af589ff87594bdc880a81d478668878019d2f8c7"
+            "sha256": "123f1e36776bc87d757bf3d8b78174ece57b00dffb3019bf4c36aa444edcc855"
           }
         }
       ],
@@ -183,7 +183,9 @@
       "comparison_false_case_ids": [
         "zero-address",
         "next-address"
-      ]
+      ],
+      "sequence_exhaustion_case_ids": [],
+      "observable_mismatch_case_ids": []
     }
   },
   "first_mismatch": {
