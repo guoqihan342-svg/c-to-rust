@@ -40,13 +40,12 @@ impl AssignmentCallComparisonContext {
 
     fn comparison_operator(self, opcode: Option<&str>) -> Option<ClangBinaryOperator> {
         match (self, opcode) {
-            (Self::DoWhileTail, Some("!=")) => Some(ClangBinaryOperator::Neq),
-            (Self::IfCondition, Some("==")) => Some(ClangBinaryOperator::Eq),
-            (Self::IfCondition, Some("!=")) => Some(ClangBinaryOperator::Neq),
-            (Self::IfCondition, Some("<")) => Some(ClangBinaryOperator::Lt),
-            (Self::IfCondition, Some("<=")) => Some(ClangBinaryOperator::Le),
-            (Self::IfCondition, Some(">")) => Some(ClangBinaryOperator::Gt),
-            (Self::IfCondition, Some(">=")) => Some(ClangBinaryOperator::Ge),
+            (_, Some("==")) => Some(ClangBinaryOperator::Eq),
+            (_, Some("!=")) => Some(ClangBinaryOperator::Neq),
+            (_, Some("<")) => Some(ClangBinaryOperator::Lt),
+            (_, Some("<=")) => Some(ClangBinaryOperator::Le),
+            (_, Some(">")) => Some(ClangBinaryOperator::Gt),
+            (_, Some(">=")) => Some(ClangBinaryOperator::Ge),
             _ => None,
         }
     }
@@ -56,7 +55,105 @@ impl AssignmentCallComparisonContext {
 fn do_while_tail_call_assignment_from_ast(
     condition: &Value,
 ) -> Result<AssignmentCallComparisonNormalization, ClangFrontendError> {
-    assignment_call_comparison_from_ast(condition, AssignmentCallComparisonContext::DoWhileTail)
+    let context = AssignmentCallComparisonContext::DoWhileTail;
+    let condition = do_while_tail_strip_parens(condition, context)?;
+    if string_field(condition, "kind").as_deref() != Some("BinaryOperator") {
+        return assignment_call_comparison_from_ast(condition, context);
+    }
+    let logical_opcode = string_field(condition, "opcode");
+    let Some(logical_op @ ("&&" | "||")) = logical_opcode.as_deref() else {
+        return assignment_call_comparison_from_ast(condition, context);
+    };
+    let children = inner(condition);
+    let [assignment_comparison, suffix_node] = children else {
+        return Err(ClangFrontendError {
+            kind: context.error_kind().to_string(),
+            message: format!("{} logical condition must have two operands", context.label()),
+        });
+    };
+
+    let (assignment, assignment_condition) =
+        match assignment_call_comparison_from_ast(assignment_comparison, context)? {
+            AssignmentCallComparisonNormalization::Accepted {
+                assignment,
+                condition,
+            } => (assignment, condition),
+            AssignmentCallComparisonNormalization::NotMatched => {
+                return Ok(AssignmentCallComparisonNormalization::NotMatched);
+            }
+            AssignmentCallComparisonNormalization::Rejected(reason) => {
+                return Ok(AssignmentCallComparisonNormalization::Rejected(reason));
+            }
+        };
+    if logical_op == "||" {
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} assignment-call comparison only supports a pure suffix joined by &&",
+            context.label()
+        )));
+    }
+    if let Some(reason) = do_while_tail_additional_effect_rejection_reason(suffix_node) {
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} && suffix must not contain a side effect: {reason}",
+            context.label()
+        )));
+    }
+    if let Some(reason) = do_while_tail_pure_suffix_shape_rejection_reason(suffix_node) {
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} && suffix must be one pure scalar or comparison expression: {reason}",
+            context.label()
+        )));
+    }
+    let suffix = condition_expr_skeleton_from_ast(suffix_node)?;
+    let Some(suffix_ty) = clang_expr_skeleton_type(&suffix) else {
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} && suffix has no supported scalar result type",
+            context.label()
+        )));
+    };
+    if let Some(reason) = do_while_tail_fixed_integer_type_rejection_reason(suffix_ty) {
+        return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
+            "{} && suffix must have a fixed-width integer result: {reason}",
+            context.label()
+        )));
+    }
+
+    Ok(AssignmentCallComparisonNormalization::Accepted {
+        assignment,
+        condition: ClangExprSkeleton::Binary {
+            op: ClangBinaryOperator::LogAnd,
+            lhs: Box::new(assignment_condition),
+            rhs: Box::new(suffix),
+            ty: expr_type(condition)?,
+        },
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn do_while_tail_pure_suffix_shape_rejection_reason(expr: &Value) -> Option<String> {
+    if string_field(expr, "kind").as_deref() == Some("BinaryOperator") {
+        match string_field(expr, "opcode").as_deref() {
+            Some(
+                "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | "=="
+                | "!=" | "<" | "<=" | ">" | ">=",
+            ) => {}
+            Some("&&" | "||") => {
+                return Some("nested short-circuit operators are outside this slice".to_string());
+            }
+            Some(opcode) => {
+                return Some(format!("binary operator {opcode} is outside this slice"));
+            }
+            None => return Some("binary operator is missing its opcode".to_string()),
+        }
+    } else if matches!(
+        string_field(expr, "kind").as_deref(),
+        Some("ConditionalOperator" | "BinaryConditionalOperator")
+    ) {
+        return Some("conditional operators are outside this slice".to_string());
+    }
+
+    inner(expr)
+        .iter()
+        .find_map(do_while_tail_pure_suffix_shape_rejection_reason)
 }
 
 #[cfg(feature = "typed-ir")]
