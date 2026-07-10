@@ -52,7 +52,10 @@ class TranslationCarrierRecordConstantStateReporterTests(unittest.TestCase):
                 execution["same_generated_replay_harness"]["run"]["returncode"], 0
             )
             mutated_path = REPO_ROOT / execution["mutation"]["mutated_draft"]["path"]
-            self.assertIn("parcel.route.marker = 1;", mutated_path.read_text(encoding="utf-8"))
+            self.assertIn(
+                "parcel.route.marker = (1i32 as u32);",
+                mutated_path.read_text(encoding="utf-8"),
+            )
 
     def test_reporter_recomputes_contract_cases_and_provenance(self) -> None:
         spec, fixture = build_constant_state_spec()

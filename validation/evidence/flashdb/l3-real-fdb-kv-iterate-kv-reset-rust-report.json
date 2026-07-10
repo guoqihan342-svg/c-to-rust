@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-kv-reset",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Fixture-created records cross the declared entry boundary; the declared nested u32 field is assigned constant zero, and the declared constant bool result is observed.",
+    "external_callee": null,
+    "field_update": {
+      "operation": "constant_assign",
+      "target_parameter": "kv",
+      "target_field_path": [
+        "addr",
+        "start"
+      ],
+      "rust_type": "u32",
+      "value": 0
+    },
+    "excluded_semantics": [
+      "the identical text at line 1871 and every fdb_kv_iterate branch or loop effect outside exact line 1891",
+      "the real fdb_kv_t nested record layout, typedefs, alignment, or ABI",
+      "sector transitions, storage behavior, and cross-iteration effects"
+    ]
+  },
+  "status": "passed",
+  "replay_contract_kind": "record_u32_field_constant_state",
+  "replay_engine": "exact_generated_rust_replay_plus_declarative_field_check",
+  "generated_draft_replay_pass": true,
+  "generated_draft_semantic_pass": false,
+  "provenance": {
+    "status": "passed",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": false,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "<generated-replay-executable> --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/generated-rust-replay.stdout.log"
+    },
+    "refs": {
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-rust-draft.rs",
+        "sha256": "60b2f4539df287143fb012ce4c418999cc2034697be2976ee738e3a016d135d5"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/rust-check.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-rust-replay-test-draft.rs",
+        "sha256": "3fd318ed5df846111af4f6a5a6f3085acc173216b96317c43f70d6dd222bd3aa",
+        "declared_sha256": "3fd318ed5df846111af4f6a5a6f3085acc173216b96317c43f70d6dd222bd3aa"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/generated-rust-replay.stdout.log",
+        "sha256": "c1fe187d4b7b7947d8037c3914aac9e49248b7f48d30275408987eaed9579673"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-rust-report.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      }
+    },
+    "fixture_state_model": {
+      "kind": "record_u32_field_constant_state",
+      "operation": "constant_assign",
+      "scope": "fixture_only",
+      "value": 0
+    }
+  },
+  "cases": [
+    {
+      "id": "already-zero",
+      "return_value": true,
+      "kv_addr_start": 0,
+      "status": "passed"
+    },
+    {
+      "id": "ordinary-address",
+      "return_value": true,
+      "kv_addr_start": 0,
+      "status": "passed"
+    },
+    {
+      "id": "maximum-address",
+      "return_value": true,
+      "kv_addr_start": 0,
+      "status": "passed"
+    }
+  ]
+}

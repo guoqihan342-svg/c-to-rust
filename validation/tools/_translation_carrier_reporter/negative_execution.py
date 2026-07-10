@@ -51,7 +51,7 @@ def run_negative_execution(
         raise ReporterError("rustc is required for generated-draft negative replay")
     original = draft_path.read_bytes()
     if context.contract.get("kind") == CONSTANT_STATE_KIND:
-        pattern = re.compile(rb"\b0(?=(?:u32)?\s*;)")
+        pattern = re.compile(rb"\b0(?=(?:u32|i32\s+as\s+u32\))?\s*;)")
         operator_from = b"0"
         operator_to = b"1"
     elif context.contract.get("kind") == FIELD_ADD_KIND:

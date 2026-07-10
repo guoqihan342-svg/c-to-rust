@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-kv-reset",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:assignment@1891"
+    ]
+  },
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start"
+  ],
+  "case_count": 3,
+  "cases": [
+    {
+      "id": "already-zero",
+      "input_ref": "cases[0].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-kv-reset.json",
+      "inputs": {
+        "kv_initial_start": 0
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "kv_addr_start": 0
+      }
+    },
+    {
+      "id": "ordinary-address",
+      "input_ref": "cases[1].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-kv-reset.json",
+      "inputs": {
+        "kv_initial_start": 8192
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "kv_addr_start": 0
+      }
+    },
+    {
+      "id": "maximum-address",
+      "input_ref": "cases[2].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-kv-reset.json",
+      "inputs": {
+        "kv_initial_start": 4294967295
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "kv_addr_start": 0
+      }
+    }
+  ]
+}

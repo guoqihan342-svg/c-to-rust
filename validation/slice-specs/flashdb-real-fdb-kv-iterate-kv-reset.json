@@ -1,0 +1,362 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-kv-reset",
+  "level": "L3",
+  "status": "draft",
+  "l1_evidence": {
+    "path": "validation/evidence/flashdb/l1-native-build.json",
+    "status": "required",
+    "accepted": false
+  },
+  "function_name": "fdb_kv_iterate_kv_reset_probe",
+  "c_source": "struct Address { uint32_t start; };\nstruct Kv { struct Address addr; };\nstatic bool fdb_kv_iterate_kv_reset_probe(struct Kv *kv)\n{\n        kv->addr.start = 0;\n    return true;\n}\n",
+  "translation_carrier": {
+    "kind": "exact_source_fragment_wrapper",
+    "carrier_function": "fdb_kv_iterate_kv_reset_probe",
+    "carrier_source_sha256": "3a0a063c999a79777666751256ae08dbd0fe1b6d3c76f4515ddc229abce0f8bd",
+    "embedding_mode": "verbatim_once",
+    "frontend_contract": "live_clang_slice_source",
+    "source_text_normalization": "utf8_universal_newlines",
+    "source_file_hash_mode": "raw_bytes",
+    "artifact_source_hash_mode": "lf_stable_text",
+    "real_source": {
+      "file": "src/fdb_kvdb.c",
+      "containing_function": {
+        "name": "fdb_kv_iterate",
+        "line_start": 1860,
+        "line_end": 1896,
+        "sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d",
+        "hash_mode": "trimmed_normalized_span",
+        "declaration_text": "bool fdb_kv_iterate("
+      },
+      "fragment": {
+        "kind": "expression_statement",
+        "line_start": 1891,
+        "line_end": 1891,
+        "sha256": "1f38b034a8abb925890452096236bc00bc24e1d11dfc8ca50331d2e166f5b534",
+        "hash_mode": "normalized_line_span_with_newline",
+        "text": "        kv->addr.start = 0;\n"
+      }
+    },
+    "claim_boundary": {
+      "scope": "source_fragment_only",
+      "whole_function_semantics_verified": false,
+      "external_callee_semantics_verified": false,
+      "excluded_semantics": [
+        "the identical text at line 1871 and every fdb_kv_iterate branch or loop effect outside exact line 1891",
+        "the real fdb_kv_t nested record layout, typedefs, alignment, or ABI",
+        "sector transitions, storage behavior, and cross-iteration effects"
+      ]
+    }
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "fixture_hash": "66a20d15931ec173c4c42440da89c76c85fd784055dc2837b2bfb77ec4c4dc0f",
+  "source_root": "sources/FlashDB",
+  "source_file": "src/fdb_kvdb.c",
+  "source_file_hashes": {
+    "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+  },
+  "source": {
+    "source_root": "sources/FlashDB",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "repo_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_branch": "competition"
+  },
+  "c_boundary": {
+    "oracle_source_mode": "embedded_slice_c_source",
+    "files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "functions": [
+      "fdb_kv_iterate_kv_reset_probe"
+    ],
+    "signatures": [
+      {
+        "id": "sig-fdb-kv-iterate-kv-reset-probe",
+        "function": "fdb_kv_iterate_kv_reset_probe",
+        "return_type": "bool",
+        "parameters": [
+          {
+            "name": "kv",
+            "c_type": "struct Kv *",
+            "direction": "inout"
+          }
+        ],
+        "definition_status": "synthetic_translation_carrier"
+      }
+    ],
+    "direct_dependencies": [],
+    "pointer_contract": {
+      "input_buffers": [],
+      "output_pointers": [
+        {
+          "name": "kv",
+          "c_type": "struct Kv *",
+          "nullability": "non_null",
+          "ownership_role": "inout_param",
+          "mutability": "read_write",
+          "read_effects": [],
+          "write_effects": [
+            "kv.addr.start"
+          ]
+        }
+      ],
+      "aliasing_proven": true,
+      "noalias_required": []
+    },
+    "scalar_arithmetic_contract": {
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "not_declared",
+      "division_by_zero": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "shift_count": "not_declared",
+      "signed_right_shift": "not_declared",
+      "comparison": "pure uint32_t constant-zero assignment has no arithmetic precondition"
+    },
+    "external_direct_callees": [],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py plus translation_carrier validator",
+      "frontend": "live clang slice-source carrier",
+      "semantic_status": "exact source fragment and carrier provenance are checked; oracle/replay/diff gates are required for bounded semantic acceptance"
+    }
+  },
+  "build_profile": {
+    "profile_id": "flashdb-real-fdb-kv-iterate-kv-reset-carrier",
+    "compiler_command_source": "translation-carrier self-contained C plus tests/Makefile ABI",
+    "include_paths": [],
+    "oracle_harness_includes": [],
+    "defines": [],
+    "clang_available": true,
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "char_width": 8,
+      "plain_char_signed": true,
+      "short_width": 16,
+      "long_width": 64,
+      "long_long_width": 64,
+      "pointer_width": 64
+    },
+    "target_triple": "x86_64-unknown-linux-gnu",
+    "abi": "x86_64-unknown-linux-gnu",
+    "preprocessing_mode": "manual_flags",
+    "tool_versions": {
+      "extract_source_slice": "0.1.0",
+      "translation_carrier_validator": "1"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "mode": "live_clang_slice_source",
+      "diagnostics": [
+        "The carrier is lowered from its embedded c_source; no offline AST fixture is accepted for this provenance contract."
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "real-fdb-kv-iterate-kv-reset-fixture",
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-kv-reset.json",
+    "hash": "66a20d15931ec173c4c42440da89c76c85fd784055dc2837b2bfb77ec4c4dc0f",
+    "cases": [
+      {
+        "id": "already-zero",
+        "input_ref": "cases[0].inputs",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-kv-reset.json",
+        "inputs": {
+          "kv_initial_start": 0
+        },
+        "expected_outputs": {
+          "return_value": true,
+          "kv_addr_start": 0
+        }
+      },
+      {
+        "id": "ordinary-address",
+        "input_ref": "cases[1].inputs",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-kv-reset.json",
+        "inputs": {
+          "kv_initial_start": 8192
+        },
+        "expected_outputs": {
+          "return_value": true,
+          "kv_addr_start": 0
+        }
+      },
+      {
+        "id": "maximum-address",
+        "input_ref": "cases[2].inputs",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-kv-reset.json",
+        "inputs": {
+          "kv_initial_start": 4294967295
+        },
+        "expected_outputs": {
+          "return_value": true,
+          "kv_addr_start": 0
+        }
+      }
+    ],
+    "observable_outputs": [
+      "return_value",
+      "kv_addr_start"
+    ],
+    "behavior_fields": [
+      "return_value",
+      "kv_addr_start"
+    ],
+    "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-reset-c-oracle.json",
+    "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-reset-rust-report.json",
+    "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-reset-diff.json",
+    "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-reset-negative-diff.json",
+    "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-unsafe-ledger.json"
+  },
+  "replay_contract": {
+    "schema_version": 1,
+    "kind": "record_u32_field_constant_state",
+    "entry_arguments": [
+      {
+        "parameter": "kv",
+        "c_type": "struct Kv *",
+        "rust_type": "Kv",
+        "pass_mode": "mutable_ref",
+        "direction": "inout",
+        "initializer": {
+          "record_type": "Kv",
+          "fields": [
+            {
+              "name": "addr",
+              "record": {
+                "record_type": "Address",
+                "fields": [
+                  {
+                    "name": "start",
+                    "fixture_field": "kv_initial_start",
+                    "rust_type": "u32"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "state_output": {
+      "parameter": "kv",
+      "field_path": [
+        "addr",
+        "start"
+      ],
+      "fixture_field": "kv_addr_start",
+      "rust_type": "u32"
+    },
+    "state_update": {
+      "operation": "constant_assign",
+      "rust_type": "u32",
+      "value": 0
+    },
+    "return": {
+      "fixture_field": "return_value",
+      "rust_type": "bool",
+      "value": true
+    },
+    "noalias_required": []
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-rust-draft.rs",
+    "public_api": [
+      {
+        "name": "fdb_kv_iterate_kv_reset_probe",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.0,
+      "ledger_required": true
+    }
+  },
+  "memory_model": {
+    "alias_contract": {
+      "decision": "allow",
+      "proven": true,
+      "requires_noalias": false,
+      "complete_alias_safety": true,
+      "source": "The carrier has one non-null mutable record root, so there is no cross-root alias pair to prove."
+    },
+    "ownership_contract": {
+      "inputs": [
+        "fixture-created Kv record with nested Address field"
+      ],
+      "outputs": [
+        "return_value",
+        "kv.addr.start after constant-zero assignment"
+      ],
+      "borrow_model": "one exclusive mutable Kv reference with no second pointer root",
+      "unsafe_boundary": "No raw pointer is emitted; the single-root carrier has an empty complete noalias pair set."
+    },
+    "length_companions": [],
+    "effect_graph": {
+      "effects": [
+        {
+          "id": "reset-kv-address",
+          "pointer_node": "kv",
+          "kind": "write",
+          "expression": "kv->addr.start = 0",
+          "source": "src/fdb_kvdb.c:1891"
+        }
+      ],
+      "edges": [],
+      "summary": {
+        "reads": [],
+        "writes": [
+          "kv.addr.start"
+        ],
+        "external_state": [],
+        "alias_sensitive": false
+      }
+    }
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No whole fdb_kv_iterate function migration claim.",
+      "No claim for the identical line-1871 branch-local reset.",
+      "No iterator loop-control, traversed-length update, sector transition, or external callee claim.",
+      "No real FlashDB Kv/Address layout, typedef, alignment, or ABI claim."
+    ],
+    "must_not_claim": [
+      "whole-project migration",
+      "fdb_kv_iterate semantic equivalence",
+      "FlashDB layout or ABI equivalence",
+      "semantic equivalence without C oracle and exact generated Rust replay evidence"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.source_file_hashes",
+    "source_root",
+    "source_file",
+    "source_file_hashes",
+    "translation_carrier",
+    "c_boundary.signatures",
+    "c_boundary.external_direct_callees",
+    "c_boundary.pointer_contract",
+    "build_profile.profile_id",
+    "build_profile.target",
+    "fixture_contract.hash",
+    "replay_contract",
+    "memory_model.alias_contract",
+    "translator_version"
+  ]
+}

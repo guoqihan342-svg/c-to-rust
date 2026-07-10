@@ -139,7 +139,7 @@ pub struct Route { pub marker: u32, pub guard: u32 }
 pub struct Parcel { pub label: u32, pub route: Route }
 
 pub fn clear_nested_marker(parcel: &mut Parcel) -> bool {
-    parcel.route.marker = 0;
+    parcel.route.marker = (0i32 as u32);
     true
 }
 """
