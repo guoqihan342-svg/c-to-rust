@@ -1,0 +1,258 @@
+{
+  "accepted_evidence_authoritative": false,
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-is-str.json",
+    "fixture_sha256": "cd906cfa80f9666dcecbd873b7c65a7089a28a880948e729907b953861c440e6",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "3ab5316fa6666d75914f749217cdaca2d4e47fde99a581b279f11d369bb1d864",
+      "diff": "1069b89e15a6a69e1d7afb6c2a9cd3fc93691fe6db8e55acafcbc4cb186f6bf7",
+      "negative_diff": "095871ac97cf522380138e0b923db433ffa0cbc2e9a83592be5871c9a93a139e",
+      "rust_report": "6e878a57da4a46edb5becba9e8fc37a9a9d2db1d2a28fc5acd4cc5e0ac765741",
+      "unsafe_ledger": "2d1a22e46a3b19da45b89aa6761b38179fd4e39b02258b6337bbd1afeff765d0",
+      "unsafe_scan": "ab4ab2c889cf61c68b253b0818dc8d41beb9e7dda1f7685ff33d50dc6184f8e8"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-is-str-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-is-str-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-is-str-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-is-str-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-is-str",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "alias_gate": {
+    "complete_alias_safety": false,
+    "decision": "not_applicable",
+    "preconditions": [],
+    "requires_noalias": false,
+    "risk_count": 0,
+    "risk_level": "none"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-c2rust-baseline-manifest.json",
+    "sha256": "2f90f5d9b0a3aeee8ce4731be5bbc4afeffe40b93eb88dd6f4b65403b04ea386",
+    "status": "skipped"
+  },
+  "c_oracle_status": "C_ORACLE_GENERATED",
+  "external_callee_scope": {
+    "blocked_count": 0,
+    "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
+    "semantics_verified": false,
+    "status": "not_applicable",
+    "stub_kind": "none"
+  },
+  "fixture": {
+    "path": "validation/l2_slices/fixtures/real-fdb-is-str.json",
+    "sha256": "cd906cfa80f9666dcecbd873b7c65a7089a28a880948e729907b953861c440e6"
+  },
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-is-str.json",
+      "fixture_sha256": "cd906cfa80f9666dcecbd873b7c65a7089a28a880948e729907b953861c440e6",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "3ab5316fa6666d75914f749217cdaca2d4e47fde99a581b279f11d369bb1d864",
+        "diff": "1069b89e15a6a69e1d7afb6c2a9cd3fc93691fe6db8e55acafcbc4cb186f6bf7",
+        "negative_diff": "095871ac97cf522380138e0b923db433ffa0cbc2e9a83592be5871c9a93a139e",
+        "rust_report": "6e878a57da4a46edb5becba9e8fc37a9a9d2db1d2a28fc5acd4cc5e0ac765741",
+        "unsafe_ledger": "2d1a22e46a3b19da45b89aa6761b38179fd4e39b02258b6337bbd1afeff765d0",
+        "unsafe_scan": "ab4ab2c889cf61c68b253b0818dc8d41beb9e7dda1f7685ff33d50dc6184f8e8"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/flashdb/l3-real-fdb-is-str-c-oracle.json",
+        "diff": "validation/evidence/flashdb/l3-real-fdb-is-str-diff.json",
+        "negative_diff": "validation/evidence/flashdb/l3-real-fdb-is-str-negative-diff.json",
+        "rust_report": "validation/evidence/flashdb/l3-real-fdb-is-str-rust-report.json",
+        "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-unsafe-scan.json"
+      },
+      "slice_id": "real-fdb-is-str",
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "status": "accepted",
+      "target_id": "flashdb",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-is-str-c-oracle.json",
+        "sha256": "3ab5316fa6666d75914f749217cdaca2d4e47fde99a581b279f11d369bb1d864",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-is-str-negative-diff.json",
+        "sha256": "095871ac97cf522380138e0b923db433ffa0cbc2e9a83592be5871c9a93a139e",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-is-str-rust-report.json",
+        "sha256": "6e878a57da4a46edb5becba9e8fc37a9a9d2db1d2a28fc5acd4cc5e0ac765741",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-is-str-diff.json",
+        "sha256": "1069b89e15a6a69e1d7afb6c2a9cd3fc93691fe6db8e55acafcbc4cb186f6bf7",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-unsafe-ledger.json",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-unsafe-scan.json",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-zxgm_i18\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-zxgm_i18\\generated_replay.exe'",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-zxgm_i18\\generated_replay.exe' --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/generated-rust-replay.stdout.log"
+    },
+    "rust_check": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-rust-draft.rs",
+      "sha256": "ada797476b878d6522dae28f9a659956c4b81a0a28bbe5a50b2a04deda06f60a",
+      "status": "accepted_after_gates"
+    },
+    "schema_version": 1,
+    "slice_id": "real-fdb-is-str",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "passed",
+    "target_id": "flashdb"
+  },
+  "generated_draft_semantic_pass": true,
+  "negative_diff_mutation_detected": true,
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "tests/Makefile",
+      "compile_commands": null,
+      "defines": [],
+      "flags": [],
+      "include_paths": [
+        "inc",
+        "tests"
+      ],
+      "tool_versions": {
+        "extract_source_slice": "0.1.0"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 8,
+      "case_source": "fixture_contract",
+      "declared_case_count": 8,
+      "fixture_hash": "cd906cfa80f9666dcecbd873b7c65a7089a28a880948e729907b953861c440e6",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-is-str.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_value"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": true,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "Deterministic FunctionDecl fixture extracted from the pinned FlashDB source and stripped of host paths and unstable AST ids."
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "char_align": "unknown",
+      "char_width": 8,
+      "endianness": "little",
+      "int_align": "unknown",
+      "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
+      "long_long_width": 64,
+      "long_width": 64,
+      "plain_char_signed": true,
+      "pointer_align": "unknown",
+      "pointer_width": 64,
+      "short_align": "unknown",
+      "short_width": 16,
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {
+        "comparison": "unsigned result is compared with 127u - ' ' (95)",
+        "division_by_zero": "not_declared",
+        "integer_promotion": "uint8_t element promotes to int before subtraction",
+        "shift_count": "not_declared",
+        "signed_division_overflow": "not_declared",
+        "signed_overflow": "runtime_precondition_no_overflow",
+        "signed_right_shift": "not_declared",
+        "subtraction": "value[i] - ' ' is within signed int range for every uint8_t input",
+        "unsigned_conversion": "the subtraction result converts modulo 2^32 to unsigned int",
+        "wrapping_profile": "not_declared"
+      }
+    }
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-route-decision.json",
+    "sha256": "5fc90713da35fd875467b355fbf136811af72656ef1222b15deb03f67656fb00",
+    "status": "recorded"
+  },
+  "rust_check_status": "passed",
+  "rust_report_status": "passed",
+  "schema_diff_status": "passed",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "skipped_gates": [],
+  "slice_id": "real-fdb-is-str",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "unsafe_status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "024ccbf2678b5150a06044595fc22dc54eac91ac4a5a0a8ed98127e7579c7482",
+    "status": "passed"
+  },
+  "validation_profile_status": "passed",
+  "verified_unsafe_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-c2rust-verified-unsafe-baseline.json",
+    "sha256": "1ff2f507aa76852e969ddf05ef766df42e6c207e99be4a518fccc324273396c8",
+    "status": "blocked"
+  },
+  "version_config_status": "recorded"
+}

@@ -1,0 +1,71 @@
+{
+  "case_count": 8,
+  "cases": [
+    {
+      "coverage_kind": "empty",
+      "id": "empty",
+      "return_value": true,
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "all-printable",
+      "id": "all-printable",
+      "return_value": true,
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "lower-and-upper-printable-boundaries",
+      "id": "printable-boundaries",
+      "return_value": true,
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "0x1f-below-lower-bound",
+      "id": "below-printable-range",
+      "return_value": false,
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "0x7f-upper-exclusive-boundary",
+      "id": "upper-exclusive-boundary",
+      "return_value": false,
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "0xff-unsigned-cast-boundary",
+      "id": "u8-max",
+      "return_value": false,
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "internal-nul",
+      "id": "internal-nul",
+      "return_value": false,
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "read-declared-prefix-only",
+      "id": "prefix-length",
+      "return_value": true,
+      "status": "ok"
+    }
+  ],
+  "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+  "fixture": "validation/l2_slices/fixtures/real-fdb-is-str.json",
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/fdb_is_str.rs",
+  "schema_version": 1,
+  "slice_id": "real-fdb-is-str",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_is_str"
+    ],
+    "signature": "static bool fdb_is_str(uint8_t *value, size_t len)"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb"
+}

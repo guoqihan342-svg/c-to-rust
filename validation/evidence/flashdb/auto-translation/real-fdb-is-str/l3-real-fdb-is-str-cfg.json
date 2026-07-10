@@ -1,0 +1,123 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=e91e92711bf5754cc5df45500b61ed6524bd3c7ddaaa26dc5210d8c9b1fd6271",
+    "fixture_hash=cd906cfa80f9666dcecbd873b7c65a7089a28a880948e729907b953861c440e6",
+    "build_profile_hash=edfe8eacf6948be6231a2af615151d577a5d58c9b38d980cc065989842bbfa68",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [
+            {
+              "decision": "bounded_input_buffer",
+              "lvalue_kind": "bounded_input_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "decl i",
+              "statement_index": 0,
+              "translation_rule_id": "bounded-input-buffer-read"
+            }
+          ],
+          "lvalue_kinds": [
+            "bounded_input_buffer"
+          ],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "primitive_declaration",
+            "for",
+            "return",
+            "bounded_input_buffer_read"
+          ],
+          "statements": [
+            "decl i",
+            "for",
+            "return"
+          ],
+          "terminator": "return"
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "unsupported",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "for-1"
+        },
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return-2"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "fdb_is_str",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "bool fdb_is_str(uint8_t * value, size_t len)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 1,
+        "loop_count": 1,
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "eadc3c209ec4511c09441ae98870f7ea5c9582d9",
+  "schema_version": 1,
+  "slice_id": "real-fdb-is-str",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-is-str.json",
+    "sha256": "e91e92711bf5754cc5df45500b61ed6524bd3c7ddaaa26dc5210d8c9b1fd6271",
+    "status": "ready"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "unsupported_control_flow": []
+}

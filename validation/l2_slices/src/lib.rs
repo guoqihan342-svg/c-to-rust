@@ -6,6 +6,7 @@ pub mod enum_constant;
 pub mod external_direct_callee;
 pub mod fdb_blob_make;
 pub mod fdb_calc_crc32;
+pub mod fdb_is_str;
 pub mod fdb_kv_del;
 pub mod fdb_kv_set;
 pub mod fdb_kv_to_blob;

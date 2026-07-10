@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-is-str",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "fixture_only",
+  "toolchain_status": "RUST_REPLAY_FIXTURE_ONLY",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_is_str"
+    ],
+    "signature": "static bool fdb_is_str(uint8_t *value, size_t len)"
+  },
+  "compared_fields": [
+    "return_value"
+  ],
+  "case_count": 8,
+  "cases": [
+    {
+      "id": "empty",
+      "coverage_kind": "empty",
+      "value_hex": "",
+      "len": 0,
+      "expected_outputs": {
+        "return_value": true
+      },
+      "status": "ok"
+    },
+    {
+      "id": "all-printable",
+      "coverage_kind": "all-printable",
+      "value_hex": "466c617368444220312e3021",
+      "len": 12,
+      "expected_outputs": {
+        "return_value": true
+      },
+      "status": "ok"
+    },
+    {
+      "id": "printable-boundaries",
+      "coverage_kind": "lower-and-upper-printable-boundaries",
+      "value_hex": "207e",
+      "len": 2,
+      "expected_outputs": {
+        "return_value": true
+      },
+      "status": "ok"
+    },
+    {
+      "id": "below-printable-range",
+      "coverage_kind": "0x1f-below-lower-bound",
+      "value_hex": "1f",
+      "len": 1,
+      "expected_outputs": {
+        "return_value": false
+      },
+      "status": "ok"
+    },
+    {
+      "id": "upper-exclusive-boundary",
+      "coverage_kind": "0x7f-upper-exclusive-boundary",
+      "value_hex": "7f",
+      "len": 1,
+      "expected_outputs": {
+        "return_value": false
+      },
+      "status": "ok"
+    },
+    {
+      "id": "u8-max",
+      "coverage_kind": "0xff-unsigned-cast-boundary",
+      "value_hex": "ff",
+      "len": 1,
+      "expected_outputs": {
+        "return_value": false
+      },
+      "status": "ok"
+    },
+    {
+      "id": "internal-nul",
+      "coverage_kind": "internal-nul",
+      "value_hex": "4142004344",
+      "len": 5,
+      "expected_outputs": {
+        "return_value": false
+      },
+      "status": "ok"
+    },
+    {
+      "id": "prefix-length",
+      "coverage_kind": "read-declared-prefix-only",
+      "value_hex": "41427f00ff",
+      "len": 2,
+      "expected_outputs": {
+        "return_value": true
+      },
+      "status": "ok"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-is-str-negative-diff.json",
+    "sha256": "095871ac97cf522380138e0b923db433ffa0cbc2e9a83592be5871c9a93a139e",
+    "status": "passed"
+  },
+  "accepted_negative_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-c2rust-baseline-manifest.json",
+    "sha256": "2f90f5d9b0a3aeee8ce4731be5bbc4afeffe40b93eb88dd6f4b65403b04ea386",
+    "status": "skipped"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "upper-exclusive-boundary",
+    "field": "return_value",
+    "mutated_c_value": true,
+    "rust_value": false
+  },
+  "mutation_detected": true,
+  "negative_diff_gate": "schema_aware_negative_diff",
+  "required_inputs": {
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "negative_diff_actual_status": "expected_failed",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed",
+    "schema_diff_required_first_mismatch": null,
+    "schema_diff_required_status": "passed"
+  },
+  "root_blocked_by": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-route-decision.json",
+    "sha256": "5fc90713da35fd875467b355fbf136811af72656ef1222b15deb03f67656fb00",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-is-str",
+  "status": "expected_failed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "024ccbf2678b5150a06044595fc22dc54eac91ac4a5a0a8ed98127e7579c7482",
+    "status": "passed"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "ai_required_for_default_pipeline": false,
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-c2rust-baseline-manifest.json",
+    "sha256": "2f90f5d9b0a3aeee8ce4731be5bbc4afeffe40b93eb88dd6f4b65403b04ea386",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=e91e92711bf5754cc5df45500b61ed6524bd3c7ddaaa26dc5210d8c9b1fd6271",
+    "fixture_hash=cd906cfa80f9666dcecbd873b7c65a7089a28a880948e729907b953861c440e6",
+    "build_profile_hash=edfe8eacf6948be6231a2af615151d577a5d58c9b38d980cc065989842bbfa68",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "candidates": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-route-decision.json",
+    "sha256": "5fc90713da35fd875467b355fbf136811af72656ef1222b15deb03f67656fb00",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "slice_id": "real-fdb-is-str",
+  "status": "not_used",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "024ccbf2678b5150a06044595fc22dc54eac91ac4a5a0a8ed98127e7579c7482",
+    "status": "passed"
+  }
+}

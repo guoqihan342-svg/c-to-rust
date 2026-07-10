@@ -1,0 +1,74 @@
+{
+  "active_frontend": {
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "kind": "clang_ast_dump_json",
+    "required_env": [
+      "CLANG_PATH"
+    ],
+    "uses_libclang": false
+  },
+  "artifact_kind": "clang-dry-run",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "dry_run": {
+    "active_frontend": {
+      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+      "kind": "clang_ast_dump_json",
+      "required_env": [
+        "CLANG_PATH"
+      ],
+      "uses_libclang": false
+    },
+    "arguments": [
+      "-Isources/FlashDB/inc",
+      "-Isources/FlashDB/tests"
+    ],
+    "claim_boundary": {
+      "affects_manifest_status": false,
+      "affects_semantic_pass": false,
+      "authoritative_evidence": false,
+      "role": "diagnostic_only"
+    },
+    "compile_commands": null,
+    "diagnostics": [
+      "LIBCLANG_PATH is observed only as ignored legacy metadata; active lowering uses clang AST dump JSON via CLANG_PATH"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "function_name": "fdb_is_str",
+    "source_file": "src/fdb_kvdb.c",
+    "source_root": "sources/FlashDB",
+    "status": "diagnostic_only"
+  },
+  "errors": [],
+  "frontend": "clang",
+  "metadata": {
+    "function_source_span": {
+      "byte_end": 23888,
+      "byte_start": 23620,
+      "file": "src/fdb_kvdb.c",
+      "line_end": 620,
+      "line_start": 609,
+      "sha256": "c4df17736abd9a983c121d88740aa053193d6122a98f0a77691af665967e28a3"
+    },
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b"
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-is-str",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "diagnostic_only",
+  "target_id": "flashdb"
+}

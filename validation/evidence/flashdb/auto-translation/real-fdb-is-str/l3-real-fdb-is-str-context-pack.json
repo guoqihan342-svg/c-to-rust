@@ -1,0 +1,78 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=e91e92711bf5754cc5df45500b61ed6524bd3c7ddaaa26dc5210d8c9b1fd6271",
+    "fixture_hash=cd906cfa80f9666dcecbd873b7c65a7089a28a880948e729907b953861c440e6",
+    "build_profile_hash=edfe8eacf6948be6231a2af615151d577a5d58c9b38d980cc065989842bbfa68",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edge_to_callee_binding": [],
+  "call_edges": [
+    {
+      "definition_status": "real_source_bound",
+      "kind": "type",
+      "name": "bool",
+      "source": "inc/flashdb.h"
+    },
+    {
+      "definition_status": "real_source_bound",
+      "kind": "type",
+      "name": "uint8_t",
+      "source": "inc/flashdb.h"
+    },
+    {
+      "definition_status": "real_source_bound",
+      "kind": "type",
+      "name": "size_t",
+      "source": "inc/flashdb.h"
+    },
+    {
+      "definition_status": "function_local_real_source_bound",
+      "kind": "macro",
+      "name": "__is_print",
+      "source": "src/fdb_kvdb.c:611"
+    }
+  ],
+  "callee_sources": [],
+  "direct_c_files": [
+    "src/fdb_kvdb.c"
+  ],
+  "direct_call_edges": [],
+  "direct_rust_files": [
+    "validation/l2_slices/src/fdb_is_str.rs"
+  ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
+  "external_direct_callees": [],
+  "fixture": "validation/l2_slices/fixtures/real-fdb-is-str.json",
+  "global_dependencies": [],
+  "level": "L3",
+  "repo_commit": "eadc3c209ec4511c09441ae98870f7ea5c9582d9",
+  "schema_version": 1,
+  "signature_bindings": [],
+  "slice_id": "real-fdb-is-str",
+  "slice_spec": {
+    "path": "validation/slice-specs/flashdb-real-fdb-is-str.json",
+    "sha256": "e91e92711bf5754cc5df45500b61ed6524bd3c7ddaaa26dc5210d8c9b1fd6271"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_is_str"
+    ],
+    "globals": [],
+    "structs": [
+      "bool",
+      "uint8_t",
+      "size_t"
+    ]
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "stub_boundaries": [],
+  "target_id": "flashdb"
+}

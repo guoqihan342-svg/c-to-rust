@@ -1,0 +1,96 @@
+{
+  "accepted_boundary": "Accepted C oracle report is bound to the declared readable-prefix and byte-classification fixture; generated Rust draft remains non-authoritative.",
+  "case_count": 8,
+  "cases": [
+    {
+      "id": "empty",
+      "return_value": true,
+      "status": "passed"
+    },
+    {
+      "id": "all-printable",
+      "return_value": true,
+      "status": "passed"
+    },
+    {
+      "id": "printable-boundaries",
+      "return_value": true,
+      "status": "passed"
+    },
+    {
+      "id": "below-printable-range",
+      "return_value": false,
+      "status": "passed"
+    },
+    {
+      "id": "upper-exclusive-boundary",
+      "return_value": false,
+      "status": "passed"
+    },
+    {
+      "id": "u8-max",
+      "return_value": false,
+      "status": "passed"
+    },
+    {
+      "id": "internal-nul",
+      "return_value": false,
+      "status": "passed"
+    },
+    {
+      "id": "prefix-length",
+      "return_value": true,
+      "status": "passed"
+    }
+  ],
+  "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+  "compared_fields": [
+    "return_value"
+  ],
+  "fixture": "validation/l2_slices/fixtures/real-fdb-is-str.json",
+  "generator": "validation/l2_slices/src/bin/emit_reports.rs::emit_real_fdb_is_str",
+  "level": "L3",
+  "provenance": {
+    "compile_execution": {
+      "semantic_pass": false,
+      "status": "compile_succeeded_not_oracle",
+      "toolchain_adapter": "wsl",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE"
+    },
+    "cycle_boundary": "This provenance intentionally omits the root c-oracle self hash; auto-translation evidence records the accepted c-oracle hash after regeneration.",
+    "evidence_refs": {
+      "c_oracle_status": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-c-oracle-status.json",
+      "evidence_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-evidence-manifest.json",
+      "slice_spec": "validation/slice-specs/flashdb-real-fdb-is-str.json",
+      "version_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-version-manifest.json"
+    },
+    "fixture_identity": "cd906cfa80f9666dcecbd873b7c65a7089a28a880948e729907b953861c440e6",
+    "harness_draft_ref": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-c-oracle-harness-draft.c",
+      "sha256": "8d223824e65fbbfb5b1d7ff01af4ba37f01c98e45e547e833e31e35745a36159",
+      "status": "draft"
+    },
+    "source_file_hashes": {
+      "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320",
+      "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+      "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+    },
+    "source_span_sha256": "c4df17736abd9a983c121d88740aa053193d6122a98f0a77691af665967e28a3"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-is-str",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_is_str"
+    ],
+    "signature": "static bool fdb_is_str(uint8_t *value, size_t len)"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

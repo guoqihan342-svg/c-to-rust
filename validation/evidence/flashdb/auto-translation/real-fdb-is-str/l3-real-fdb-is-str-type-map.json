@@ -1,0 +1,72 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-translator-input.json",
+    "sha256": "f6b2fd3886961b8358532bd4541805c248c7920dc2362de4d16bd059d46138f4",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=e91e92711bf5754cc5df45500b61ed6524bd3c7ddaaa26dc5210d8c9b1fd6271",
+    "fixture_hash=cd906cfa80f9666dcecbd873b7c65a7089a28a880948e729907b953861c440e6",
+    "build_profile_hash=edfe8eacf6948be6231a2af615151d577a5d58c9b38d980cc065989842bbfa68",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "bool",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "unsupported",
+      "rust_type": "u8",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "value",
+      "c_type": "uint8_t *",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "pointer",
+      "rust_type": "&[u8]",
+      "source": "translator_rule",
+      "translation_rule_id": "pointer-contract safe Rust boundary"
+    },
+    {
+      "c_name": "len",
+      "c_type": "size_t",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "unsupported",
+      "rust_type": "usize",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "i",
+      "c_type": "size_t",
+      "confidence": "proven",
+      "id": "type-4",
+      "kind": "unsupported",
+      "rust_type": "usize",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "eadc3c209ec4511c09441ae98870f7ea5c9582d9",
+  "schema_version": 1,
+  "slice_id": "real-fdb-is-str",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-is-str.json",
+    "sha256": "e91e92711bf5754cc5df45500b61ed6524bd3c7ddaaa26dc5210d8c9b1fd6271",
+    "status": "ready"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

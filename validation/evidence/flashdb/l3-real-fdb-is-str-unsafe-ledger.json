@@ -1,0 +1,22 @@
+{
+  "audit_status": "passed",
+  "audited_modules": [
+    "validation/l2_slices/src/fdb_is_str.rs"
+  ],
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "introduced_unsafe": [],
+  "level": "L3",
+  "policy": {
+    "audit_required_even_when_zero": true,
+    "first_party_non_test_unsafe_limit": 0,
+    "registered_unsafe_required": true
+  },
+  "registered_unsafe": [],
+  "schema_version": 1,
+  "scope": "first-party non-test Rust source for the named real-fdb-is-str reference module",
+  "slice_id": "real-fdb-is-str",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb"
+}

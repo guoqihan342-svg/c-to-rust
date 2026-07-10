@@ -1,0 +1,17 @@
+{
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-is-str",
+  "status": "generated",
+  "artifact_paths": [
+    "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-auto-translation-plan.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-auto-translation-events.jsonl",
+    "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-type-map.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-cfg.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-pointer-graph.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-ai-candidate-manifest.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-blocked-repairs.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-rust-draft.rs",
+    "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-clang-dry-run.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-clang-lowering-report.json"
+  ]
+}

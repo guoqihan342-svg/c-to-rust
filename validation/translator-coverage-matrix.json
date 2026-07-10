@@ -2052,6 +2052,7 @@
         },
         "c_rust_diff": {
           "status": "covered",
+          "scope_note": "The exact real-fdb-is-str generated draft is accepted only for the pinned FlashDB source span and eight declared readable-prefix fixtures. Its embedded-slice C oracle, generated Rust replay, schema diff, 0x7f negative mutation, unsafe scan/ledger, and final verification pass. This does not generalize locale or execution-character-set behavior, null-pointer len-zero behavior, arbitrary strings, or arbitrary mutable-pointer alias safety.",
           "evidence": [
             {
               "name": "sum_i32_ptr_arith diff evidence",
@@ -2077,6 +2078,33 @@
             {
               "name": "sum-i32-buffer generated replay",
               "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-test-translation-generated.json"
+            },
+            {
+              "name": "real-fdb-is-str final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-final-verification.json",
+              "proof_class": "generated_draft_acceptance_bound_named_slice_fixture"
+            },
+            {
+              "name": "real-fdb-is-str embedded-slice C oracle status",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-c-oracle-status.json",
+              "proof_class": "embedded_slice_c_oracle_compile_and_run"
+            },
+            {
+              "name": "real-fdb-is-str C/Rust diff",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-diff.json"
+            },
+            {
+              "name": "real-fdb-is-str 0x7f negative diff",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-is-str generated Rust replay",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-test-translation-generated.json",
+              "proof_class": "generated_draft_replay_passed"
+            },
+            {
+              "name": "real-fdb-is-str unsafe ledger",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-unsafe-ledger.json"
             }
           ]
         },
@@ -2106,6 +2134,36 @@
             {
               "name": "sum-i32-buffer validation profile",
               "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-validation-profile.json"
+            },
+            {
+              "name": "real-fdb-is-str L1 candidate route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-route-decision.json",
+              "proof_class": "committed_l1_generated_draft_acceptance_bound_fixture"
+            },
+            {
+              "name": "real-fdb-is-str validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-validation-profile.json",
+              "proof_class": "committed_l1_generated_draft_acceptance_bound_fixture"
+            },
+            {
+              "name": "real-fdb-is-str clang lowering report",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-clang-lowering-report.json",
+              "proof_class": "committed_no_clang_fixture_candidate_provenance"
+            },
+            {
+              "name": "real-fdb-is-str rust check",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/rust-check.json",
+              "proof_class": "committed_rust_check_passed_fixture_bound_acceptance"
+            },
+            {
+              "name": "real-fdb-is-str generated Rust draft",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-rust-draft.rs",
+              "proof_class": "accepted_after_generated_draft_gates"
+            },
+            {
+              "name": "real-fdb-is-str generated Rust replay",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-is-str/l3-real-fdb-is-str-test-translation-generated.json",
+              "proof_class": "generated_draft_replay_passed"
             },
             {
               "name": "clang_lowered_type_map_records_unused_readonly_8_bit_pointer_as_raw_candidate",

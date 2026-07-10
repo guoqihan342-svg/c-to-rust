@@ -1,0 +1,49 @@
+def readonly_byte_slice_bool_return_replay_supported(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any] | None = None,
+) -> bool:
+    return readonly_byte_slice_bool_return_replay_contract(spec, fixture_binding) is not None
+
+
+def rust_replay_readonly_byte_slice_bool_return_cases_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> str:
+    contract = readonly_byte_slice_bool_return_replay_contract(spec, fixture_binding)
+    if contract is None:
+        return "    // TODO: bind readonly byte slice fixture cases.\n"
+    function_name = safe_ident(required_str(spec, "function_name"))
+    input_contract = contract["input"]
+    length_field = str(input_contract["length_field"])
+    case_literals: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        case_payload = oracle_fixture_input_payload(spec, case_binding)
+        expected_outputs = case_binding["expected_outputs"]
+        values = readonly_byte_slice_fixture_values(input_contract, case_payload)
+        value_literal = ", ".join(f"{value}u8" for value in values)
+        case_literals.append(
+            "        FixtureCase { "
+            f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+            f"value: &[{value_literal}], "
+            f"len: {int(case_payload[length_field])}usize, "
+            f"return_value: {str(bool(expected_outputs['return_value'])).lower()} "
+            "},\n"
+        )
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        value: &'static [u8],\n",
+        "        len: usize,\n",
+        "        return_value: bool,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+        *case_literals,
+        "    ];\n",
+        f"    assert_eq!(fixture_cases.len(), {len(case_literals)}usize, \"fixture case count drifted\");\n",
+        "    for case in fixture_cases {\n",
+        f"        let actual = {function_name}(case.value, case.len);\n",
+        '        assert_eq!(actual, case.return_value, "{} return_value drifted", case.id);\n',
+        "    }\n",
+    ]
+    return "".join(lines)

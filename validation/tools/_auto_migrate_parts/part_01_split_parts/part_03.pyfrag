@@ -1,0 +1,163 @@
+def readonly_byte_slice_bool_return_replay_contract(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    contract = spec.get("replay_contract")
+    if not isinstance(contract, dict) or contract.get("kind") != "readonly_byte_slice_bool_return":
+        return None
+    if contract.get("schema_version") != 1:
+        raise ValueError("readonly byte slice replay contract schema_version must be 1")
+    if behavior_fields(spec) != ["return_value"]:
+        raise ValueError("readonly byte slice replay contract requires return_value behavior")
+
+    input_contract = contract.get("input")
+    output_contract = contract.get("output")
+    if not isinstance(input_contract, dict) or not isinstance(output_contract, dict):
+        raise ValueError("readonly byte slice replay contract requires input and output objects")
+    required_input = {
+        "parameter",
+        "fixture_field",
+        "fixture_encoding",
+        "fixture_scalar_type",
+        "length_parameter",
+        "length_field",
+    }
+    if not required_input.issubset(input_contract):
+        raise ValueError("readonly byte slice replay contract input mapping is incomplete")
+    if input_contract.get("fixture_scalar_type") != "u8":
+        raise ValueError("readonly byte slice replay contract only supports u8 fixtures")
+    if input_contract.get("fixture_encoding") not in {"u8_array", "hex"}:
+        raise ValueError("readonly byte slice replay contract fixture encoding must be u8_array or hex")
+    if output_contract != {"fixture_field": "return_value", "rust_type": "bool"}:
+        raise ValueError("readonly byte slice replay contract output must map return_value to bool")
+
+    parameter_name = str(input_contract.get("parameter") or "")
+    fixture_field = str(input_contract.get("fixture_field") or "")
+    length_parameter = str(input_contract.get("length_parameter") or "")
+    length_field = str(input_contract.get("length_field") or "")
+    for label, value in (
+        ("parameter", parameter_name),
+        ("fixture_field", fixture_field),
+        ("length_parameter", length_parameter),
+        ("length_field", length_field),
+    ):
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
+            raise ValueError(f"readonly byte slice replay contract {label} must be an identifier")
+    if parameter_name == length_parameter or fixture_field == length_field:
+        raise ValueError("readonly byte slice replay contract value and length mappings must differ")
+
+    signature = c_function_signature(spec)
+    if normalize_c_type(str(signature.get("return_type") or "")) not in {"bool", "_Bool"}:
+        raise ValueError("readonly byte slice replay contract requires a bool C return type")
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 2:
+        raise ValueError("readonly byte slice replay contract requires exactly two C parameters")
+    actual_parameters = {str(item.get("name") or ""): item for item in parameters}
+    pointer_parameter = actual_parameters.get(parameter_name)
+    length_parameter_spec = actual_parameters.get(length_parameter)
+    if not isinstance(pointer_parameter, dict) or not isinstance(length_parameter_spec, dict):
+        raise ValueError("readonly byte slice replay contract parameters do not match the C signature")
+    pointer_type = normalize_c_type(str(pointer_parameter.get("c_type") or ""))
+    if pointer_type not in {"uint8_t *", "const uint8_t *"}:
+        raise ValueError("readonly byte slice replay contract requires a uint8_t pointer")
+    if pointer_parameter.get("direction") != "input":
+        raise ValueError("readonly byte slice replay contract pointer must be an input")
+    if normalize_c_type(str(length_parameter_spec.get("c_type") or "")) != "size_t":
+        raise ValueError("readonly byte slice replay contract length must use size_t")
+    if length_parameter_spec.get("direction") != "input":
+        raise ValueError("readonly byte slice replay contract length must be an input")
+
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    input_buffers = pointer_contract.get("input_buffers", []) if isinstance(pointer_contract, dict) else []
+    buffer_contract = next(
+        (
+            item
+            for item in input_buffers
+            if isinstance(item, dict) and item.get("name") == parameter_name
+        ),
+        None,
+    )
+    if not isinstance(buffer_contract, dict):
+        raise ValueError("readonly byte slice replay contract requires an input buffer pointer contract")
+    if buffer_contract.get("mutability") != "read_only":
+        raise ValueError("readonly byte slice replay contract requires read_only pointer mutability")
+    if buffer_contract.get("length_companion") != length_parameter:
+        raise ValueError("readonly byte slice replay contract length companion drifted")
+
+    if fixture_binding is not None:
+        case_bindings = fixture_binding.get("case_bindings", [])
+        if not case_bindings:
+            raise ValueError("readonly byte slice replay contract requires fixture cases")
+        for case_binding in case_bindings:
+            if not isinstance(case_binding, dict):
+                raise ValueError("readonly byte slice replay fixture binding must be an object")
+            case_payload = oracle_fixture_input_payload(spec, case_binding)
+            expected_outputs = case_binding.get("expected_outputs")
+            if not isinstance(case_payload, dict) or not isinstance(expected_outputs, dict):
+                raise ValueError("readonly byte slice replay fixture case is incomplete")
+            values = readonly_byte_slice_fixture_values(input_contract, case_payload)
+            length = case_payload.get(length_field)
+            expected = expected_outputs.get("return_value")
+            if not is_size_value(length) or int(length) > len(values):
+                raise ValueError("readonly byte slice replay fixture length exceeds its byte list")
+            if not isinstance(expected, bool):
+                raise ValueError("readonly byte slice replay expected return_value must be bool")
+    return contract
+
+
+def readonly_byte_slice_fixture_values(
+    input_contract: dict[str, Any],
+    case_payload: dict[str, Any],
+) -> list[int]:
+    fixture_field = str(input_contract.get("fixture_field") or "")
+    raw_value = case_payload.get(fixture_field)
+    encoding = input_contract.get("fixture_encoding")
+    if encoding == "u8_array":
+        if not is_byte_list(raw_value):
+            raise ValueError("readonly byte slice replay fixture value must be a byte list")
+        return [int(value) for value in raw_value]
+    if encoding == "hex":
+        if not isinstance(raw_value, str) or len(raw_value) % 2 != 0:
+            raise ValueError("readonly byte slice replay hex fixture must contain complete bytes")
+        if raw_value and re.fullmatch(r"[0-9A-Fa-f]+", raw_value) is None:
+            raise ValueError("readonly byte slice replay hex fixture contains a non-hex character")
+        return list(bytes.fromhex(raw_value))
+    raise ValueError("readonly byte slice replay fixture encoding is unsupported")
+
+
+def c_oracle_readonly_byte_slice_bool_return_execution_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> dict[str, str]:
+    contract = readonly_byte_slice_bool_return_replay_contract(spec, fixture_binding)
+    if contract is None:
+        return {"declarations": "", "statements": ""}
+    input_contract = contract["input"]
+    length_field = str(input_contract["length_field"])
+    function_name = required_str(spec, "function_name")
+    declarations: list[str] = []
+    statements: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        case_payload = oracle_fixture_input_payload(spec, case_binding)
+        expected_outputs = case_binding["expected_outputs"]
+        values = readonly_byte_slice_fixture_values(input_contract, case_payload)
+        length = int(case_payload[length_field])
+        expected = bool(expected_outputs["return_value"])
+        case_id = str(case_binding.get("id") or "case")
+        case_ident = c_safe_ident(case_id)
+        buffer_name = f"{case_ident}_value"
+        actual_name = f"actual_{case_ident}_return_value"
+        initializer = c_byte_array_initializer(values) if values else "0"
+        declarations.append(f"static uint8_t {buffer_name}[] = {{ {initializer} }};\n")
+        expected_literal = "true" if expected else "false"
+        statements.append(
+            f"  bool {actual_name} = {function_name}({buffer_name}, (size_t){length});\n"
+            f"  if ({actual_name} != {expected_literal}) {{\n"
+            "    fprintf(stderr, "
+            f"{c_string_literal(case_id + ' return_value mismatch: expected ' + str(expected).lower() + ' got %d\\n')}, "
+            f"(int){actual_name});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' return_value matched')});\n"
+        )
+    return {"declarations": "".join(declarations) + "\n", "statements": "".join(statements)}

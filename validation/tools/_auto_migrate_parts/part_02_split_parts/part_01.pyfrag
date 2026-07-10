@@ -106,6 +106,8 @@ def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict
     if fdb_kv_set_replay_supported(spec):
         return rust_replay_fdb_kv_set_cases_source(spec, fixture_binding)
     if behavior_fields(spec) != ["return_code"]:
+        if readonly_byte_slice_bool_return_replay_supported(spec, fixture_binding):
+            return rust_replay_readonly_byte_slice_bool_return_cases_source(spec, fixture_binding)
         if fdb_blob_make_replay_supported(spec):
             return rust_replay_fdb_blob_make_cases_source(spec, fixture_binding)
         if fdb_kv_to_blob_replay_supported(spec):
@@ -1795,6 +1797,7 @@ def rust_check_has_harness_only_external_bindings(rust_check: dict[str, Any]) ->
 def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) -> bool:
     if (
         behavior_fields(spec) != ["return_code"]
+        and not readonly_byte_slice_bool_return_replay_supported(spec)
         and not fdb_blob_make_replay_supported(spec)
         and not fdb_kv_to_blob_replay_supported(spec)
         and not record_pointer_identity_return_replay_supported(spec)
