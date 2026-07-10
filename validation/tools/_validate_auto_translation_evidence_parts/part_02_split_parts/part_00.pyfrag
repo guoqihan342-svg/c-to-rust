@@ -557,7 +557,11 @@ def validate_generated_draft_acceptance_payload(
         rust_check_path,
         f"{label}.generated_draft_acceptance.rust_check",
     )
-    if isinstance(rust_check_ref, dict) and not rust_check_ref.get("sha256"):
+    if (
+        isinstance(rust_check_ref, dict)
+        and not rust_check_ref.get("sha256")
+        and acceptance.get("unsafe_gate_source") == "generated_draft_unsafe_gates"
+    ):
         if rust_check_ref.get("binding_mode") != "field_bound":
             raise SystemExit(
                 f"{label}.generated_draft_acceptance.rust_check missing field_bound binding_mode"

@@ -4825,7 +4825,7 @@
         "strict direct non-nullable mutable record pointer arrow-rooted pure dot-path integer field target",
         "exactly one direct call in the complete assignment RHS subtree",
         "pure comparison operators == != < <= > >=",
-        "record-pointer extensions are accepted only for the exact real-fdb-kv-iterate-next named slice; accepted named-slice semantic-pass count is 25"
+        "the if record-pointer extension is accepted only for the exact real-fdb-kv-iterate-next named slice; overall accepted named-slice semantic-pass count is 26"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -5102,6 +5102,8 @@
         "Clang DoStmt strict tail assignment-call comparison normalized to body-tail IrStmt::Assign plus pure sentinel comparison, with the same assignment inserted before current-level continue",
         "Clang DoStmt assignment-call comparison with independent pure logical-and suffix",
         "Clang DoStmt complete local record nested dot path tail assignment-call target",
+        "Clang DoStmt direct mutable record-pointer field tail assignment-call target",
+        "same-owner direct scalar sibling field read as the single pure external-call argument",
         "Clang IfStmt strict direct mutable record pointer arrow-rooted pure dot-path integer field assignment-call comparison target",
         "final IrStmt::If accepted when both branches end in return values",
         "legacy CFG evidence for label/goto/switch/case/default",
@@ -5206,6 +5208,18 @@
               "name": "if direct record pointer field assignment-call no-clang tests",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "do-while record-pointer assignment-call and sibling-read no-clang tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_24.rs",
+              "assertion": "requires a renamed record-pointer target plus one same-owner pure scalar sibling argument to lower and execute while adjacent pointer hops, effects, casts, type drift, and second calls remain fail-closed",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "do-while record-pointer assignment-call real clang smoke",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_24_split_parts/part_01.rs",
+              "assertion": "requires live clang AST to lower the renamed arrow target and sibling scalar read, emit Rust, and execute exactly one sentinel-ending call",
+              "proof_class": "candidate_context_only"
             }
           ],
           "scope_note": "clang fixture replay and source_range diagnostics only; this does not claim Control IR, relooper support, Rust candidate lowering, or C/Rust semantic pass for switch/goto"
@@ -5243,6 +5257,11 @@
             {
               "name": "if record pointer field target refusal tests",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "do-while record-pointer target and sibling-read adjacent refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_24.rs",
               "proof_class": "candidate_context_only"
             }
           ]
@@ -5295,6 +5314,11 @@
               "name": "if direct record pointer field assignment-call emitted Rust runtime test",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_21.rs",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "do-while record-pointer assignment-call emitted Rust runtime tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_24.rs",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -5325,9 +5349,34 @@
               "name": "while-countdown-positive generated draft final verification",
               "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-final-verification.json",
               "assertion": "generated_draft_semantic_pass=true for the exact named while countdown slice"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-tail C oracle",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-c-oracle.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-tail Rust sequence replay",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-rust-report.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-tail schema diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-tail negative diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-tail unsafe ledger",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-unsafe-ledger.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-tail final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-final-verification.json",
+              "assertion": "generated_draft_semantic_pass=true for the exact line-1893 do-while tail fragment"
             }
           ],
-          "scope_note": "covers the named while-countdown-positive slice only; goto/switch/relooper support remains fail-closed evidence, not a C/Rust semantic pass claim"
+          "scope_note": "covers the named while-countdown-positive slice and the exact real-fdb-kv-iterate-sector-tail line-1893 fragment only; the surrounding iterator body, real external callee, and goto/switch/relooper support remain outside the semantic claim"
         },
         "legacy_fallback": {
           "status": "covered",
@@ -5352,6 +5401,18 @@
             {
               "name": "while-countdown-positive capability delta",
               "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-capability-delta.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-tail route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-route-decision.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-tail validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-validation-profile.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-sector-tail capability delta",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-capability-delta.json"
             },
             {
               "name": "auto-migration L4 route refusal evidence for switch/goto",
@@ -5434,6 +5495,18 @@
           "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_08.rs"
         },
         {
+          "name": "clang_ast_do_while_assignment_call_record_pointer_target_and_sibling_read_runs",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_24.rs"
+        },
+        {
+          "name": "clang_ast_dump_do_while_assignment_call_record_pointer_target_and_sibling_read_runs",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_24_split_parts/part_01.rs"
+        },
+        {
+          "name": "real-fdb-kv-iterate-sector-tail strict semantic validator",
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-final-verification.json"
+        },
+        {
           "name": "typed_ir_for_nested_while_continue_does_not_emit_outer_step",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -5504,6 +5577,16 @@
           "name": "clang_ast_fixture_rejects_do_while_tail_call_assignment_boundaries_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_16.rs",
           "fail_closed_reason": "strict do-while tail assignment-call normalization is regression-tested to exclude dereference targets, a second call, and assignment conditions outside DoStmt"
+        },
+        {
+          "name": "clang_ast_do_while_record_pointer_assignment_call_frontend_boundaries_fail_closed",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_24.rs",
+          "fail_closed_reason": "second arrow hops, readonly/nullable/volatile/atomic or cast roots, logical suffixes, second calls, effectful sibling reads, and type drift remain outside the bounded record-pointer tail contract"
+        },
+        {
+          "name": "sequence replay contract drift refusals",
+          "path": "validation/tools/test_auto_migrate_sequence_replay.py",
+          "fail_closed_reason": "empty sequences, missing sentinels, call-count drift, signature drift, and incomplete noalias pairs are rejected before replay"
         },
         {
           "name": "unsupported_goto_blocks_translation_without_false_success",

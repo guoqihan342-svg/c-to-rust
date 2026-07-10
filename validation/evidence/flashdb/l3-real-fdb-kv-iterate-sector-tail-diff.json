@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-sector-tail",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "itr_sector_addr",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Fixture-created records cross the declared entry boundary; a finite u32 sequence drives a do-while tail, mixed record-reference and scalar-field arguments are traced per call, and the declared mutable state stops at the explicit sentinel within the call bound.",
+    "external_callee": "get_next_sector_addr",
+    "excluded_semantics": [
+      "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1893 do-while tail",
+      "real FlashDB database, sector, iterator, storage, and pointer layouts",
+      "real get_next_sector_addr implementation behavior and side effects"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "first_mismatch": null
+}

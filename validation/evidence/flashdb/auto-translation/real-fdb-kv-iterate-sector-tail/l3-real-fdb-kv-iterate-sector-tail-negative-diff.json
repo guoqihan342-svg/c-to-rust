@@ -1,0 +1,49 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-negative-diff.json",
+    "sha256": "0805871587ec59c2bdfefeea4e087f899e30395f83ced3bed934b158089b5da2",
+    "status": "passed"
+  },
+  "accepted_negative_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-c2rust-baseline-manifest.json",
+    "sha256": "76af49b74e60d9ba15d5ea2d9785f7ba24d5802eb9740a3a5b26b67331554aec",
+    "status": "skipped"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "accepted_value": 4294967295,
+    "case_id": "one-sector-then-failed",
+    "field": "itr_sector_addr",
+    "mutated_value": 4096
+  },
+  "mutation_detected": true,
+  "negative_diff_gate": "schema_aware_negative_diff",
+  "required_inputs": {
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "negative_diff_actual_status": "expected_failed",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed",
+    "schema_diff_required_first_mismatch": null,
+    "schema_diff_required_status": "passed"
+  },
+  "root_blocked_by": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-route-decision.json",
+    "sha256": "7c08a48e76ee9ba7fb31c47c714e8c55351c7289f8893818eabef96dd056ffe6",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-sector-tail",
+  "status": "expected_failed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "8bd36d1c0f90fdb0e8cc03a0c587551b58f72822c9aceddfd643b2eb35310b4c",
+    "status": "passed"
+  }
+}

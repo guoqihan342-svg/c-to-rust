@@ -246,7 +246,7 @@ fn assignment_call_comparison_from_ast(
                     )?
                 {
                     return Ok(AssignmentCallComparisonNormalization::Rejected(format!(
-                        "{} assignment-call record-pointer member target is unsupported: {reason}",
+                        "{} assignment-call record-pointer arrow member target is unsupported: {reason}",
                         context.label()
                     )));
                 }

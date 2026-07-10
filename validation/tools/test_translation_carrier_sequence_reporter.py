@@ -13,6 +13,7 @@ from validation.tools._translation_carrier_reporter.contract import (
     validate_cases,
 )
 from validation.tools.sequence_replay_test_support import (
+    FIELDS,
     build_sequence_spec,
     renamed_rust_draft,
     sha256_file,
@@ -56,6 +57,8 @@ class TranslationCarrierSequenceReporterTests(unittest.TestCase):
                 negative["partition_detection"]["observable_mismatch_case_ids"],
                 ["marker-later"],
             )
+            self.assertIn(negative["first_mismatch"]["field"], FIELDS)
+            self.assertEqual(negative["mismatches"][0]["field"], "scripted_return_sequence")
             execution = negative["actual_mutation_execution"]
             self.assertEqual(
                 execution["same_generated_replay_harness"]["run"]["returncode"], 101

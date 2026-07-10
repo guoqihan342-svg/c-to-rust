@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-sector-tail",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:do-while-tail@1893"
+    ]
+  },
+  "compared_fields": [
+    "return_value",
+    "itr_sector_addr",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "case_count": 3,
+  "cases": [
+    {
+      "id": "failed-address-first",
+      "input_ref": "cases[0].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-tail.json",
+      "inputs": {
+        "db_generation": 17,
+        "sector_offset": 29,
+        "itr_traversed_len": 41,
+        "itr_initial_sector_addr": 0,
+        "external_return_sequence": [
+          4294967295
+        ]
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "itr_sector_addr": 4294967295,
+        "external_call_count": 1,
+        "external_call_args": [
+          [
+            17,
+            29,
+            41
+          ]
+        ]
+      }
+    },
+    {
+      "id": "one-sector-then-failed",
+      "input_ref": "cases[1].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-tail.json",
+      "inputs": {
+        "db_generation": 3,
+        "sector_offset": 5,
+        "itr_traversed_len": 7,
+        "itr_initial_sector_addr": 99,
+        "external_return_sequence": [
+          4096,
+          4294967295
+        ]
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "itr_sector_addr": 4294967295,
+        "external_call_count": 2,
+        "external_call_args": [
+          [
+            3,
+            5,
+            7
+          ],
+          [
+            3,
+            5,
+            7
+          ]
+        ]
+      }
+    },
+    {
+      "id": "two-sectors-then-failed",
+      "input_ref": "cases[2].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-tail.json",
+      "inputs": {
+        "db_generation": 305419896,
+        "sector_offset": 2271560481,
+        "itr_traversed_len": 8192,
+        "itr_initial_sector_addr": 17,
+        "external_return_sequence": [
+          12288,
+          16384,
+          4294967295
+        ]
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "itr_sector_addr": 4294967295,
+        "external_call_count": 3,
+        "external_call_args": [
+          [
+            305419896,
+            2271560481,
+            8192
+          ],
+          [
+            305419896,
+            2271560481,
+            8192
+          ],
+          [
+            305419896,
+            2271560481,
+            8192
+          ]
+        ]
+      }
+    }
+  ]
+}

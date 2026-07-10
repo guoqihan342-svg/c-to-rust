@@ -1,0 +1,64 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-c2rust-baseline-manifest.json",
+    "sha256": "76af49b74e60d9ba15d5ea2d9785f7ba24d5802eb9740a3a5b26b67331554aec",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir <rust-check-output> <draft>",
+  "error_count": 0,
+  "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [
+      {
+        "binding_status": "fixture_only_scripted_external",
+        "name": "get_next_sector_addr",
+        "semantics_verified": false,
+        "signature_ref": "sig-scripted-get-next-sector-addr",
+        "stub_kind": "compile_only"
+      }
+    ],
+    "declared_count": 1,
+    "declared_spec_count": 1,
+    "declared_spec_names": [
+      "get_next_sector_addr"
+    ],
+    "status": "recorded"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-route-decision.json",
+    "sha256": "7c08a48e76ee9ba7fb31c47c714e8c55351c7289f8893818eabef96dd056ffe6",
+    "status": "recorded"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "fixture_bound_rust_replay_only",
+    "bindings": [
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "fixture_only": true,
+        "name": "get_next_sector_addr",
+        "replay_contract_kind": "scripted_external_record_u32_sequence_do_while_state",
+        "semantics_verified": false,
+        "signature": "fn get_next_sector_addr(db: &mut Database, sector: &mut Sector, traversed_len: u32) -> u32",
+        "status": "fixture_only_scripted_external"
+      }
+    ],
+    "semantics_verified": false,
+    "status": "emitted"
+  },
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "8bd36d1c0f90fdb0e8cc03a0c587551b58f72822c9aceddfd643b2eb35310b4c",
+    "status": "passed"
+  }
+}

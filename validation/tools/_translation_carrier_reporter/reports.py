@@ -206,6 +206,11 @@ def build_sequence_negative_report(
                 )
     if not mismatches:
         raise ReporterError("sequence comparison mutation produced no declared mismatch")
+    observable_fields = set(behavior_fields(context.contract))
+    first_observable_mismatch = next(
+        (item for item in mismatches if item.get("field") in observable_fields),
+        mismatches[0],
+    )
     partition = execution["partition_replay"]
     return {
         **common,
@@ -219,7 +224,7 @@ def build_sequence_negative_report(
             "observable_mismatch_case_ids": partition["observable_mismatch_case_ids"],
         },
         "actual_mutation_execution": execution,
-        "first_mismatch": mismatches[0],
+        "first_mismatch": first_observable_mismatch,
         "mismatches": mismatches,
     }
 

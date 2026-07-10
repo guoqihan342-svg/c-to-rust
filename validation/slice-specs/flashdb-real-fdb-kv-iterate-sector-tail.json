@@ -1,0 +1,612 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-sector-tail",
+  "level": "L3",
+  "status": "draft",
+  "l1_evidence": {
+    "path": "validation/evidence/flashdb/l1-native-build.json",
+    "status": "required",
+    "accepted": false
+  },
+  "function_name": "fdb_kv_iterate_sector_tail_probe",
+  "c_source": "#define FAILED_ADDR ((uint32_t)-1)\nstruct Database { uint32_t generation; };\nstruct Sector { uint32_t offset; };\nstruct FdbKvIterator { uint32_t sector_addr; uint32_t traversed_len; };\nuint32_t get_next_sector_addr(struct Database *db, struct Sector *sector, uint32_t traversed_len);\nstatic bool fdb_kv_iterate_sector_tail_probe(struct Database *db, struct Sector sector_seed, struct FdbKvIterator *itr)\n{\n    struct Sector sector = sector_seed;\n    do {\n    } while ((itr->sector_addr = get_next_sector_addr(db, &sector, itr->traversed_len)) != FAILED_ADDR);\n    return true;\n}\n",
+  "translation_carrier": {
+    "kind": "exact_source_fragment_wrapper",
+    "carrier_function": "fdb_kv_iterate_sector_tail_probe",
+    "carrier_source_sha256": "480d04ba1acb98ae10e1701e0e41073965999ce48f39d210b01696d23668852b",
+    "embedding_mode": "verbatim_once",
+    "frontend_contract": "live_clang_slice_source",
+    "source_text_normalization": "utf8_universal_newlines",
+    "source_file_hash_mode": "raw_bytes",
+    "artifact_source_hash_mode": "lf_stable_text",
+    "real_source": {
+      "file": "src/fdb_kvdb.c",
+      "containing_function": {
+        "name": "fdb_kv_iterate",
+        "line_start": 1860,
+        "line_end": 1896,
+        "sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d",
+        "hash_mode": "trimmed_normalized_span",
+        "declaration_text": "bool fdb_kv_iterate("
+      },
+      "fragment": {
+        "kind": "do_while_condition_tail",
+        "line_start": 1893,
+        "line_end": 1893,
+        "sha256": "ce942bb4914f3e5f37ccdbda190581b93b5b9bb9718e3941d3c779924574c2d2",
+        "hash_mode": "normalized_line_span_with_newline",
+        "text": "    } while ((itr->sector_addr = get_next_sector_addr(db, &sector, itr->traversed_len)) != FAILED_ADDR);\n"
+      }
+    },
+    "claim_boundary": {
+      "scope": "source_fragment_only",
+      "whole_function_semantics_verified": false,
+      "external_callee_semantics_verified": false,
+      "excluded_semantics": [
+        "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1893 do-while tail",
+        "real FlashDB database, sector, iterator, storage, and pointer layouts",
+        "real get_next_sector_addr implementation behavior and side effects"
+      ]
+    }
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "fixture_hash": "97515db5f1fb2cdd3a177239d77c297b3714af2a4e27145dbf93df259ae242d2",
+  "source_root": "sources/FlashDB",
+  "source_file": "src/fdb_kvdb.c",
+  "source_file_hashes": {
+    "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+  },
+  "source": {
+    "source_root": "sources/FlashDB",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "repo_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_branch": "competition"
+  },
+  "c_boundary": {
+    "oracle_source_mode": "embedded_slice_c_source",
+    "files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "functions": [
+      "fdb_kv_iterate_sector_tail_probe"
+    ],
+    "signatures": [
+      {
+        "id": "sig-fdb-kv-iterate-sector-tail-probe",
+        "function": "fdb_kv_iterate_sector_tail_probe",
+        "return_type": "bool",
+        "parameters": [
+          {
+            "name": "db",
+            "c_type": "struct Database *",
+            "direction": "input"
+          },
+          {
+            "name": "sector_seed",
+            "c_type": "struct Sector",
+            "direction": "input"
+          },
+          {
+            "name": "itr",
+            "c_type": "struct FdbKvIterator *",
+            "direction": "inout"
+          }
+        ],
+        "definition_status": "synthetic_translation_carrier"
+      },
+      {
+        "id": "sig-scripted-get-next-sector-addr",
+        "function": "get_next_sector_addr",
+        "return_type": "uint32_t",
+        "parameters": [
+          {
+            "name": "db",
+            "c_type": "struct Database *",
+            "direction": "input"
+          },
+          {
+            "name": "sector",
+            "c_type": "struct Sector *",
+            "direction": "input"
+          },
+          {
+            "name": "traversed_len",
+            "c_type": "uint32_t",
+            "direction": "input"
+          }
+        ],
+        "definition_status": "deterministic_fixture_stimulus"
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "macro",
+        "name": "FAILED_ADDR",
+        "source": "src/fdb_kvdb.c",
+        "definition_status": "carrier_equivalent_uint32_sentinel"
+      },
+      {
+        "kind": "callee",
+        "name": "get_next_sector_addr",
+        "source": "src/fdb_kvdb.c#get_next_sector_addr",
+        "definition_status": "deterministic_fixture_stimulus_only"
+      }
+    ],
+    "pointer_contract": {
+      "input_buffers": [
+        {
+          "name": "db",
+          "c_type": "struct Database *",
+          "nullability": "non_null",
+          "ownership_role": "borrowed",
+          "mutability": "read_write",
+          "read_effects": [
+            "db.generation"
+          ],
+          "write_effects": []
+        }
+      ],
+      "output_pointers": [
+        {
+          "name": "itr",
+          "c_type": "struct FdbKvIterator *",
+          "nullability": "non_null",
+          "ownership_role": "inout_param",
+          "mutability": "read_write",
+          "read_effects": [
+            "itr.traversed_len"
+          ],
+          "write_effects": [
+            "itr.sector_addr"
+          ]
+        }
+      ],
+      "aliasing_proven": true,
+      "noalias_required": [
+        [
+          "db",
+          "itr"
+        ]
+      ]
+    },
+    "scalar_arithmetic_contract": {
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "not_declared",
+      "division_by_zero": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "shift_count": "not_declared",
+      "signed_right_shift": "not_declared",
+      "comparison": "assigned uint32_t return sequence is compared with UINT32_MAX after each do-while iteration"
+    },
+    "external_direct_callees": [
+      {
+        "name": "get_next_sector_addr",
+        "signature_ref": "sig-scripted-get-next-sector-addr",
+        "source_ref": "translation-carrier:scripted-get-next-sector-addr",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "definition_status": "deterministic_fixture_stimulus",
+        "stub_boundary": "scripted_fixture_only_no_real_callee_semantics"
+      }
+    ],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py plus translation_carrier validator",
+      "frontend": "live clang slice-source carrier",
+      "semantic_status": "exact source fragment and carrier provenance are checked; oracle/replay/diff gates are required for bounded semantic acceptance"
+    }
+  },
+  "build_profile": {
+    "profile_id": "flashdb-real-fdb-kv-iterate-sector-tail-carrier",
+    "compiler_command_source": "translation-carrier self-contained C plus tests/Makefile ABI",
+    "include_paths": [],
+    "oracle_harness_includes": [],
+    "defines": [],
+    "clang_available": true,
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "char_width": 8,
+      "plain_char_signed": true,
+      "short_width": 16,
+      "long_width": 64,
+      "long_long_width": 64,
+      "pointer_width": 64
+    },
+    "target_triple": "x86_64-unknown-linux-gnu",
+    "abi": "x86_64-unknown-linux-gnu",
+    "preprocessing_mode": "manual_flags",
+    "tool_versions": {
+      "extract_source_slice": "0.1.0",
+      "translation_carrier_validator": "1"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "mode": "live_clang_slice_source",
+      "diagnostics": [
+        "The carrier is lowered from its embedded c_source; no offline AST fixture is accepted for this provenance contract."
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "real-fdb-kv-iterate-sector-tail-fixture",
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-tail.json",
+    "hash": "97515db5f1fb2cdd3a177239d77c297b3714af2a4e27145dbf93df259ae242d2",
+    "cases": [
+      {
+        "id": "failed-address-first",
+        "input_ref": "cases[0].inputs",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-tail.json",
+        "inputs": {
+          "db_generation": 17,
+          "sector_offset": 29,
+          "itr_traversed_len": 41,
+          "itr_initial_sector_addr": 0,
+          "external_return_sequence": [
+            4294967295
+          ]
+        },
+        "expected_outputs": {
+          "return_value": true,
+          "itr_sector_addr": 4294967295,
+          "external_call_count": 1,
+          "external_call_args": [
+            [
+              17,
+              29,
+              41
+            ]
+          ]
+        }
+      },
+      {
+        "id": "one-sector-then-failed",
+        "input_ref": "cases[1].inputs",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-tail.json",
+        "inputs": {
+          "db_generation": 3,
+          "sector_offset": 5,
+          "itr_traversed_len": 7,
+          "itr_initial_sector_addr": 99,
+          "external_return_sequence": [
+            4096,
+            4294967295
+          ]
+        },
+        "expected_outputs": {
+          "return_value": true,
+          "itr_sector_addr": 4294967295,
+          "external_call_count": 2,
+          "external_call_args": [
+            [
+              3,
+              5,
+              7
+            ],
+            [
+              3,
+              5,
+              7
+            ]
+          ]
+        }
+      },
+      {
+        "id": "two-sectors-then-failed",
+        "input_ref": "cases[2].inputs",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-tail.json",
+        "inputs": {
+          "db_generation": 305419896,
+          "sector_offset": 2271560481,
+          "itr_traversed_len": 8192,
+          "itr_initial_sector_addr": 17,
+          "external_return_sequence": [
+            12288,
+            16384,
+            4294967295
+          ]
+        },
+        "expected_outputs": {
+          "return_value": true,
+          "itr_sector_addr": 4294967295,
+          "external_call_count": 3,
+          "external_call_args": [
+            [
+              305419896,
+              2271560481,
+              8192
+            ],
+            [
+              305419896,
+              2271560481,
+              8192
+            ],
+            [
+              305419896,
+              2271560481,
+              8192
+            ]
+          ]
+        }
+      }
+    ],
+    "observable_outputs": [
+      "return_value",
+      "itr_sector_addr",
+      "external_call_count",
+      "external_call_args"
+    ],
+    "behavior_fields": [
+      "return_value",
+      "itr_sector_addr",
+      "external_call_count",
+      "external_call_args"
+    ],
+    "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-c-oracle.json",
+    "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-rust-report.json",
+    "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-diff.json",
+    "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-negative-diff.json",
+    "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-unsafe-ledger.json"
+  },
+  "replay_contract": {
+    "schema_version": 1,
+    "kind": "scripted_external_record_u32_sequence_do_while_state",
+    "external_callee": {
+      "name": "get_next_sector_addr",
+      "return_sequence_fixture_field": "external_return_sequence",
+      "call_count_output": "external_call_count",
+      "call_args_output": "external_call_args",
+      "arguments": [
+        {
+          "parameter": "db",
+          "mode": "record_ref",
+          "entry_parameter": "db",
+          "field_path": [
+            "generation"
+          ]
+        },
+        {
+          "parameter": "sector",
+          "mode": "record_ref",
+          "entry_parameter": "sector_seed",
+          "field_path": [
+            "offset"
+          ]
+        },
+        {
+          "parameter": "traversed_len",
+          "mode": "scalar_field_value",
+          "entry_parameter": "itr",
+          "field_path": [
+            "traversed_len"
+          ]
+        }
+      ]
+    },
+    "entry_arguments": [
+      {
+        "parameter": "db",
+        "c_type": "struct Database *",
+        "rust_type": "Database",
+        "pass_mode": "mutable_ref",
+        "direction": "input",
+        "initializer": {
+          "record_type": "Database",
+          "fields": [
+            {
+              "name": "generation",
+              "fixture_field": "db_generation",
+              "rust_type": "u32"
+            }
+          ]
+        }
+      },
+      {
+        "parameter": "sector_seed",
+        "c_type": "struct Sector",
+        "rust_type": "Sector",
+        "pass_mode": "value",
+        "direction": "input",
+        "initializer": {
+          "record_type": "Sector",
+          "fields": [
+            {
+              "name": "offset",
+              "fixture_field": "sector_offset",
+              "rust_type": "u32"
+            }
+          ]
+        }
+      },
+      {
+        "parameter": "itr",
+        "c_type": "struct FdbKvIterator *",
+        "rust_type": "FdbKvIterator",
+        "pass_mode": "mutable_ref",
+        "direction": "inout",
+        "initializer": {
+          "record_type": "FdbKvIterator",
+          "fields": [
+            {
+              "name": "sector_addr",
+              "fixture_field": "itr_initial_sector_addr",
+              "rust_type": "u32"
+            },
+            {
+              "name": "traversed_len",
+              "fixture_field": "itr_traversed_len",
+              "rust_type": "u32"
+            }
+          ]
+        }
+      }
+    ],
+    "state_output": {
+      "parameter": "itr",
+      "field_path": [
+        "sector_addr"
+      ],
+      "fixture_field": "itr_sector_addr",
+      "rust_type": "u32"
+    },
+    "loop": {
+      "sentinel": 4294967295,
+      "comparison": "not_equal",
+      "max_calls": 8
+    },
+    "return": {
+      "fixture_field": "return_value",
+      "rust_type": "bool",
+      "value": true
+    },
+    "noalias_required": [
+      [
+        "db",
+        "itr"
+      ]
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-rust-draft.rs",
+    "public_api": [
+      {
+        "name": "fdb_kv_iterate_sector_tail_probe",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.0,
+      "ledger_required": true
+    }
+  },
+  "memory_model": {
+    "alias_contract": {
+      "decision": "requires_noalias_contract",
+      "proven": true,
+      "requires_noalias": true,
+      "complete_alias_safety": true,
+      "source": "The carrier requires db and itr to be distinct mutable record roots; sector is a by-value local."
+    },
+    "ownership_contract": {
+      "inputs": [
+        "fixture-created Database, Sector, and FdbKvIterator records",
+        "scripted finite return sequence"
+      ],
+      "outputs": [
+        "return_value",
+        "itr.sector_addr",
+        "external call count and per-call argument rows"
+      ],
+      "borrow_model": "distinct mutable Database and FdbKvIterator borrows plus one mutable local Sector borrow",
+      "unsafe_boundary": "No raw pointer is emitted; the explicit db/itr noalias pair is required."
+    },
+    "length_companions": [],
+    "effect_graph": {
+      "effects": [
+        {
+          "id": "read-traversed-length",
+          "pointer_node": "itr",
+          "kind": "read",
+          "expression": "itr->traversed_len",
+          "source": "src/fdb_kvdb.c:1893"
+        },
+        {
+          "id": "external-call",
+          "pointer_node": "db,sector,itr",
+          "kind": "call",
+          "expression": "get_next_sector_addr(db, &sector, itr->traversed_len)",
+          "source": "src/fdb_kvdb.c:1893"
+        },
+        {
+          "id": "assign-sector-address",
+          "pointer_node": "itr",
+          "kind": "write",
+          "expression": "itr->sector_addr receives each external return",
+          "source": "src/fdb_kvdb.c:1893"
+        }
+      ],
+      "edges": [
+        {
+          "from_effect": "read-traversed-length",
+          "to_effect": "external-call",
+          "relationship": "data_influences"
+        },
+        {
+          "from_effect": "external-call",
+          "to_effect": "assign-sector-address",
+          "relationship": "data_influences"
+        },
+        {
+          "from_effect": "external-call",
+          "to_effect": "assign-sector-address",
+          "relationship": "requires_noalias",
+          "evidence": "c_boundary.pointer_contract.noalias_required binds db and itr"
+        }
+      ],
+      "summary": {
+        "reads": [
+          "db.generation",
+          "sector.offset",
+          "itr.traversed_len",
+          "scripted return sequence"
+        ],
+        "writes": [
+          "itr.sector_addr after each call"
+        ],
+        "external_state": [
+          "fixture-local sequence cursor, call counter, and per-call argument capture"
+        ],
+        "alias_sensitive": true
+      }
+    }
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No whole fdb_kv_iterate function migration claim.",
+      "No loop-body sector/KV/traversed_len mutation claim outside the exact line-1893 tail.",
+      "No real get_next_sector_addr implementation semantics claim.",
+      "Fixture records only test repeated argument forwarding, nested assignment, and sentinel termination."
+    ],
+    "must_not_claim": [
+      "whole-project migration",
+      "fdb_kv_iterate semantic equivalence",
+      "get_next_sector_addr semantic equivalence",
+      "semantic equivalence without C oracle and exact generated Rust sequence replay evidence"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.source_file_hashes",
+    "source_root",
+    "source_file",
+    "source_file_hashes",
+    "translation_carrier",
+    "c_boundary.signatures",
+    "c_boundary.external_direct_callees",
+    "c_boundary.pointer_contract",
+    "build_profile.profile_id",
+    "build_profile.target",
+    "fixture_contract.hash",
+    "replay_contract",
+    "memory_model.alias_contract",
+    "translator_version"
+  ]
+}

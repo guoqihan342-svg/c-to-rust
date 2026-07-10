@@ -493,6 +493,7 @@
                 "kind": {
                   "enum": [
                     "if_condition_header",
+                    "do_while_condition_tail",
                     "expression_statement",
                     "return_statement"
                   ]

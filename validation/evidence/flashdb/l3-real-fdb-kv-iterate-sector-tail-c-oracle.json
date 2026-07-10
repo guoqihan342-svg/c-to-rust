@@ -1,0 +1,297 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-sector-tail",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "itr_sector_addr",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Fixture-created records cross the declared entry boundary; a finite u32 sequence drives a do-while tail, mixed record-reference and scalar-field arguments are traced per call, and the declared mutable state stops at the explicit sentinel within the call bound.",
+    "external_callee": "get_next_sector_addr",
+    "excluded_semantics": [
+      "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1893 do-while tail",
+      "real FlashDB database, sector, iterator, storage, and pointer layouts",
+      "real get_next_sector_addr implementation behavior and side effects"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:do-while-tail@1893"
+    ]
+  },
+  "provenance": {
+    "binding_mode": "executed_harness",
+    "evidence_refs": {
+      "slice_spec": {
+        "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-sector-tail.json",
+        "sha256": "86a129ab5e7d6311b1884a817fc4dbeb666cd4664208395aae7fd1ad5fb3a9cb"
+      },
+      "fixture": {
+        "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-tail.json",
+        "sha256": "97515db5f1fb2cdd3a177239d77c297b3714af2a4e27145dbf93df259ae242d2"
+      },
+      "real_source": {
+        "path": "sources/FlashDB/src/fdb_kvdb.c",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+        "artifact_lf_stable_sha256": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b",
+        "containing_function_sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d",
+        "source_fragment_sha256": "ce942bb4914f3e5f37ccdbda190581b93b5b9bb9718e3941d3c779924574c2d2"
+      },
+      "translation_carrier": {
+        "kind": "exact_source_fragment_wrapper",
+        "carrier_function": "fdb_kv_iterate_sector_tail_probe",
+        "carrier_source_sha256": "480d04ba1acb98ae10e1701e0e41073965999ce48f39d210b01696d23668852b"
+      },
+      "translator_input": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-translator-input.json",
+        "sha256": "c9bb2a73d4f604d0174618343484f7ba266f2903a06ffe439c2acdf224acaf78"
+      },
+      "translation_plan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-auto-translation-plan.json",
+        "binding_mode": "field_bound",
+        "status": "draft_generated",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "clang_lowering_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-clang-lowering-report.json",
+        "binding_mode": "field_bound",
+        "status": "lowered",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "c_oracle_status": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-c-oracle-status.json",
+        "binding_mode": "field_bound",
+        "status": "DRAFT_GENERATED",
+        "semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "c_oracle_harness": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-c-oracle-harness-draft.c",
+        "sha256": "57c47dc29145fcfed527811079b0747166bc7325c307f06c6a2027a5034fe27f"
+      },
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-rust-draft.rs",
+        "sha256": "7765a0e7d4ae288c4d0a724b794a1d0885e312274ca431ad2ff65ac094f95e8f"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/rust-check.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-rust-replay-test-draft.rs",
+        "sha256": "5ded13260e00946048add1de9abe2ab3888c174e495af0bcb795bd47288b8584",
+        "declared_sha256": "5ded13260e00946048add1de9abe2ab3888c174e495af0bcb795bd47288b8584"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/generated-rust-replay.stdout.log",
+        "sha256": "2bd0127c35a96bc1e768f9058b684c2293f05213ea0bcf4a2391b98dcb0400b6"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-rust-report.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      }
+    },
+    "compile_execution": {
+      "argv": [
+        "cc",
+        "-std=c99",
+        "l3-real-fdb-kv-iterate-sector-tail-c-oracle-harness-draft.c",
+        "-o",
+        "l3-real-fdb-kv-iterate-sector-tail-c-oracle-harness-draft.exe"
+      ],
+      "attempted": true,
+      "compiler_candidates": [
+        "cc",
+        "gcc",
+        "clang"
+      ],
+      "compiler_name": "cc",
+      "compiler_path": "cc",
+      "diagnostics": [
+        "C oracle compile command succeeded, but execution/diff gates are still required."
+      ],
+      "execution_argv": [
+        "cc",
+        "-std=c99",
+        "l3-real-fdb-kv-iterate-sector-tail-c-oracle-harness-draft.c",
+        "-o",
+        "l3-real-fdb-kv-iterate-sector-tail-c-oracle-harness-draft.exe"
+      ],
+      "harness_execution": {
+        "argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-c-oracle-harness-draft.exe"
+        ],
+        "attempted": true,
+        "diagnostics": [
+          "C oracle harness executed, but execution output has not passed oracle diff gates."
+        ],
+        "output_gate": {
+          "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+          "compared_fields": [
+            "return_value",
+            "itr_sector_addr",
+            "external_call_count",
+            "external_call_args"
+          ],
+          "diagnostics": [
+            "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+          ],
+          "expected_stdout_fragments": [
+            "fixture case failed-address-first return_value matched",
+            "fixture case failed-address-first itr_sector_addr matched",
+            "fixture case failed-address-first external_call_count matched",
+            "fixture case failed-address-first external_call_args matched",
+            "fixture case one-sector-then-failed return_value matched",
+            "fixture case one-sector-then-failed itr_sector_addr matched",
+            "fixture case one-sector-then-failed external_call_count matched",
+            "fixture case one-sector-then-failed external_call_args matched",
+            "fixture case two-sectors-then-failed return_value matched",
+            "fixture case two-sectors-then-failed itr_sector_addr matched",
+            "fixture case two-sectors-then-failed external_call_count matched",
+            "fixture case two-sectors-then-failed external_call_args matched"
+          ],
+          "fixture_expected_output_status": "declared_not_executed",
+          "gate": "c_oracle_harness_output",
+          "matched_stdout_fragments": [
+            "fixture case failed-address-first return_value matched",
+            "fixture case failed-address-first itr_sector_addr matched",
+            "fixture case failed-address-first external_call_count matched",
+            "fixture case failed-address-first external_call_args matched",
+            "fixture case one-sector-then-failed return_value matched",
+            "fixture case one-sector-then-failed itr_sector_addr matched",
+            "fixture case one-sector-then-failed external_call_count matched",
+            "fixture case one-sector-then-failed external_call_args matched",
+            "fixture case two-sectors-then-failed return_value matched",
+            "fixture case two-sectors-then-failed itr_sector_addr matched",
+            "fixture case two-sectors-then-failed external_call_count matched",
+            "fixture case two-sectors-then-failed external_call_args matched"
+          ],
+          "missing_stdout_fragments": [],
+          "schema_version": 1,
+          "semantic_pass": false,
+          "status": "matched_not_oracle"
+        },
+        "returncode": 0,
+        "semantic_pass": false,
+        "status": "exited_zero_not_oracle",
+        "stderr": "",
+        "stdout": "oracle harness draft for fdb_kv_iterate_sector_tail_probe\nfixture input: validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-tail.json\nfixture case failed-address-first return_value matched\nfixture case failed-address-first itr_sector_addr matched\nfixture case failed-address-first external_call_count matched\nfixture case failed-address-first external_call_args matched\nfixture case one-sector-then-failed return_value matched\nfixture case one-sector-then-failed itr_sector_addr matched\nfixture case one-sector-then-failed external_call_count matched\nfixture case one-sector-then-failed external_call_args matched\nfixture case two-sectors-then-failed return_value matched\nfixture case two-sectors-then-failed itr_sector_addr matched\nfixture case two-sectors-then-failed external_call_count matched\nfixture case two-sectors-then-failed external_call_args matched\n",
+        "timeout_seconds": 30,
+        "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail",
+        "execution_argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-c-oracle-harness-draft.exe"
+        ]
+      },
+      "requested_compiler": "cc",
+      "returncode": 0,
+      "semantic_pass": false,
+      "status": "compile_succeeded_not_oracle",
+      "stderr": "",
+      "stdout": "",
+      "toolchain_adapter": "local",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail",
+      "command_recording": "portable_logical_argv"
+    }
+  },
+  "cases": [
+    {
+      "id": "failed-address-first",
+      "return_value": true,
+      "itr_sector_addr": 4294967295,
+      "external_call_count": 1,
+      "external_call_args": [
+        [
+          17,
+          29,
+          41
+        ]
+      ],
+      "status": "passed"
+    },
+    {
+      "id": "one-sector-then-failed",
+      "return_value": true,
+      "itr_sector_addr": 4294967295,
+      "external_call_count": 2,
+      "external_call_args": [
+        [
+          3,
+          5,
+          7
+        ],
+        [
+          3,
+          5,
+          7
+        ]
+      ],
+      "status": "passed"
+    },
+    {
+      "id": "two-sectors-then-failed",
+      "return_value": true,
+      "itr_sector_addr": 4294967295,
+      "external_call_count": 3,
+      "external_call_args": [
+        [
+          305419896,
+          2271560481,
+          8192
+        ],
+        [
+          305419896,
+          2271560481,
+          8192
+        ],
+        [
+          305419896,
+          2271560481,
+          8192
+        ]
+      ],
+      "status": "passed"
+    }
+  ]
+}

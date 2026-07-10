@@ -4,7 +4,9 @@
             self.assertIn("accepted_negative_diff", negative)
 
     def test_l4_refused_accept_existing_evidence_can_be_authoritative_when_requested(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+        target_root = REPO_ROOT / "target"
+        target_root.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-", dir=target_root) as tmp:
             tmp_path = Path(tmp)
             spec = self._accepted_evidence_spec(tmp_path, include_toolchain_marker=True)
             spec.update(
