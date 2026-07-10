@@ -1,0 +1,31 @@
+{
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-ledger.json",
+    "sha256": "d02ae59743718bfa9a6c9efabc5238924a4911f49e5da5ff41fe210208603af9",
+    "status": "passed"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-c2rust-baseline-manifest.json",
+    "sha256": "b8950715fffbb5c37afa0e97544a89ec9bf7a2506405a610387c64c0500b5249",
+    "status": "skipped"
+  },
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-route-decision.json",
+    "sha256": "c15850512564d8bdfe9e40dc07cc7ecaab11336d87a4336446c7ed216d488bc5",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-tsl-to-blob",
+  "status": "passed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "6c24642cdb17466fac158b42eb1f99eace67455f1573942eb45400020332478c",
+    "status": "passed"
+  }
+}

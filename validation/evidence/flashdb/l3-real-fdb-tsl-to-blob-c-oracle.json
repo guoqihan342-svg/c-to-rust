@@ -1,0 +1,85 @@
+{
+  "accepted_boundary": "Accepted C oracle report is bound to the declared TSL field-copy fixture and compile/harness evidence; generated Rust draft remains non-authoritative.",
+  "case_count": 3,
+  "cases": [
+    {
+      "blob.saved.addr": 0,
+      "blob.saved.len": 0,
+      "blob.saved.meta_addr": 0,
+      "id": "all-zero",
+      "return_same_blob": true,
+      "status": "passed"
+    },
+    {
+      "blob.saved.addr": 4352,
+      "blob.saved.len": 128,
+      "blob.saved.meta_addr": 4096,
+      "id": "nominal-tsl",
+      "return_same_blob": true,
+      "status": "passed"
+    },
+    {
+      "blob.saved.addr": 4294967295,
+      "blob.saved.len": 4294967295,
+      "blob.saved.meta_addr": 4294967295,
+      "id": "u32-max",
+      "return_same_blob": true,
+      "status": "passed"
+    }
+  ],
+  "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+  "compared_fields": [
+    "return_same_blob",
+    "blob.saved.addr",
+    "blob.saved.meta_addr",
+    "blob.saved.len"
+  ],
+  "fixture": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+  "generator": "validation/l2_slices/src/bin/emit_reports.rs::emit_real_fdb_tsl_to_blob",
+  "level": "L3",
+  "provenance": {
+    "compile_execution": {
+      "semantic_pass": false,
+      "status": "compile_succeeded_not_oracle",
+      "toolchain_adapter": "local",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE"
+    },
+    "cycle_boundary": "This provenance intentionally omits the root c-oracle self hash; auto-translation evidence records the accepted c-oracle hash after regeneration.",
+    "evidence_refs": {
+      "c_oracle_status": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-c-oracle-status.json",
+      "evidence_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-evidence-manifest.json",
+      "slice_spec": "validation/slice-specs/flashdb-real-fdb-tsl-to-blob.json",
+      "version_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-version-manifest.json"
+    },
+    "fixture_identity": "real-fdb-tsl-to-blob-fixture",
+    "harness_draft_ref": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-c-oracle-harness-draft.c",
+      "sha256": "488fc36472269300ad6746acbb3bc4556e62bb66a906506d92273ba870fe654c",
+      "status": "draft"
+    },
+    "source_file_hashes": {
+      "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320",
+      "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+      "src/fdb_tsdb.c": "1d56d3820d627fdc468368d1c4a848231834b6dcb513a0c01ea94ac13c9d259b"
+    },
+    "source_span_sha256": "8ef7ff7e6efef00fa804a08a43e993e87ef4562edabfed4823047be1e3a588d3"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-tsl-to-blob",
+  "source_boundary": {
+    "files": [
+      "src/fdb_tsdb.c",
+      "inc/fdb_def.h",
+      "inc/flashdb.h"
+    ],
+    "functions": [
+      "fdb_tsl_to_blob"
+    ],
+    "signature": "fdb_blob_t fdb_tsl_to_blob(fdb_tsl_t tsl, fdb_blob_t blob)"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

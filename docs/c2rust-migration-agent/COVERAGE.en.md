@@ -112,6 +112,8 @@ This document honestly lists C language constructs that are "currently supported
 | label | Unsupported | Recorded only as schema-bound CFG/relooper evidence for `goto` refusal; the clang AST fixture now requires refusal reasons to include `source_range` |
 | `case` / `default` | Unsupported | Recorded only as schema-bound CFG/relooper evidence for `switch` refusal; the clang AST fixture now requires refusal reasons to include `source_range` |
 
+Real named-slice acceptance supplement (2026-07-10): the exact generated draft for `real-fdb-tsl-to-blob` passes a three-case C oracle, generated Rust replay, schema diff, negative diff, unsafe scan/ledger, route/profile, and final verification, including the clang-proven `uint32_t -> size_t` widening and mutable-output identity return. This pass is limited to the bound fixture and SHA; it does not mark general record layout/ABI/alias/provenance as supported. The coverage numerator is now 22.
+
 ## Arrays
 
 | Construct | Status | Notes |

@@ -1,0 +1,62 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-translator-input.json",
+    "sha256": "54201c744219ddd06bf64a27957cea141829ca0b927ebf2d75485b0107a7351d",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=aad37f7e99fc551672b3194e110cb6cff0c8a6575c7da6dc774ddf04ae60e05d",
+    "fixture_hash=real-fdb-tsl-to-blob-fixture",
+    "build_profile_hash=076a1beb152475948d447d4f0dc344477bd094906642aba83833cd30d856a69a",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "fdb_blob_t",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "unsupported",
+      "rust_type": "&mut FdbBlob",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "tsl",
+      "c_type": "fdb_tsl_t",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "unsupported",
+      "rust_type": "&mut FdbTsl",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "blob",
+      "c_type": "fdb_blob_t",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "unsupported",
+      "rust_type": "&mut FdbBlob",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "c57de97a310bd246ce119a4e3b02ce7299157edd",
+  "schema_version": 1,
+  "slice_id": "real-fdb-tsl-to-blob",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-tsl-to-blob.json",
+    "sha256": "aad37f7e99fc551672b3194e110cb6cff0c8a6575c7da6dc774ddf04ae60e05d",
+    "status": "ready"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

@@ -1,0 +1,89 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=aad37f7e99fc551672b3194e110cb6cff0c8a6575c7da6dc774ddf04ae60e05d",
+    "fixture_hash=real-fdb-tsl-to-blob-fixture",
+    "build_profile_hash=076a1beb152475948d447d4f0dc344477bd094906642aba83833cd30d856a69a",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edge_to_callee_binding": [],
+  "call_edges": [
+    {
+      "definition_status": "real_source_bound",
+      "kind": "type",
+      "name": "fdb_tsl_t",
+      "source": "inc/fdb_def.h#typedef struct fdb_tsl *fdb_tsl_t",
+      "source_span": {
+        "file": "inc/fdb_def.h",
+        "line_end": 182,
+        "line_start": 173,
+        "sha256": "3ea6f8228b86f860601c25ef46dfc9fad593400c889c1fb7bd6f69cbfe1033b3"
+      }
+    },
+    {
+      "definition_status": "real_source_bound",
+      "kind": "type",
+      "name": "fdb_blob_t",
+      "source": "inc/fdb_def.h#typedef struct fdb_blob *fdb_blob_t",
+      "source_span": {
+        "file": "inc/fdb_def.h",
+        "line_end": 325,
+        "line_start": 316,
+        "sha256": "4bb85f67932dbdcd01609594dc44517f680ff89b4e51e6c9f9d0270d548ce95a"
+      }
+    },
+    {
+      "definition_status": "real_source_bound",
+      "kind": "config",
+      "name": "fdb_tsl_to_blob prototype",
+      "source": "inc/flashdb.h#fdb_tsl_to_blob",
+      "source_span": {
+        "file": "inc/flashdb.h",
+        "line_end": 67,
+        "line_start": 67,
+        "sha256": "18e394d325138e7ec54f37a860f9fa761e9997577a54466a06205ae1f05d8a36"
+      }
+    }
+  ],
+  "callee_sources": [],
+  "direct_c_files": [
+    "src/fdb_tsdb.c"
+  ],
+  "direct_call_edges": [],
+  "direct_rust_files": [
+    "validation/l2_slices/src/fdb_tsl_to_blob.rs"
+  ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
+  "external_direct_callees": [],
+  "fixture": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+  "global_dependencies": [],
+  "level": "L3",
+  "repo_commit": "c57de97a310bd246ce119a4e3b02ce7299157edd",
+  "schema_version": 1,
+  "signature_bindings": [],
+  "slice_id": "real-fdb-tsl-to-blob",
+  "slice_spec": {
+    "path": "validation/slice-specs/flashdb-real-fdb-tsl-to-blob.json",
+    "sha256": "aad37f7e99fc551672b3194e110cb6cff0c8a6575c7da6dc774ddf04ae60e05d"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "src/fdb_tsdb.c"
+    ],
+    "functions": [
+      "fdb_tsl_to_blob"
+    ],
+    "globals": [],
+    "structs": [
+      "fdb_tsl_t",
+      "fdb_blob_t"
+    ]
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "stub_boundaries": [],
+  "target_id": "flashdb"
+}

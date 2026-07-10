@@ -1,0 +1,350 @@
+{
+  "alias_contract": {
+    "complete_alias_safety": false,
+    "decision": "allow",
+    "evidence_refs": [],
+    "proven": true,
+    "requires_noalias": false,
+    "source": "c_boundary.pointer_contract.aliasing_proven=true"
+  },
+  "alias_risks": [
+    {
+      "evidence_source": "c_boundary.pointer_contract.aliasing_proven=true",
+      "gate_decision": "allow",
+      "id": "alias-risk-1",
+      "pointer_nodes": [
+        "tsl",
+        "blob"
+      ],
+      "read_effects": [
+        "tsl->addr.log",
+        "tsl->addr.index",
+        "tsl->log_len"
+      ],
+      "requires_noalias": false,
+      "risk_level": "proven_noalias",
+      "write_effects": [
+        "blob->saved.addr",
+        "blob->saved.meta_addr",
+        "blob->saved.len"
+      ]
+    }
+  ],
+  "alias_sets": [
+    {
+      "evidence": "c_boundary.pointer_contract.aliasing_proven=true",
+      "id": "alias-set-1",
+      "members": [
+        "tsl",
+        "blob"
+      ],
+      "relationship": "known_distinct",
+      "risk": "proven_noalias"
+    }
+  ],
+  "applicability": {
+    "has_pointer_surface": true,
+    "triggers": [
+      "pointer_parameter",
+      "alias_sensitive_state"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=aad37f7e99fc551672b3194e110cb6cff0c8a6575c7da6dc774ddf04ae60e05d",
+    "fixture_hash=real-fdb-tsl-to-blob-fixture",
+    "build_profile_hash=076a1beb152475948d447d4f0dc344477bd094906642aba83833cd30d856a69a",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=allow",
+    "alias_risk_count=1",
+    "aliasing_proven=true",
+    "effect_graph",
+    "effect_graph_sha256=95d259ce73448c2e3151c43efa903c16bc5ef63632fd514e01ae69269a44d4cf"
+  ],
+  "context_pack_ref": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-context-pack.json",
+  "dependency_edges": [],
+  "effect_graph": {
+    "edges": [
+      {
+        "evidence": "alias-risk-1 covers tsl/blob",
+        "from_effect": "effect-1",
+        "relationship": "may_alias",
+        "to_effect": "effect-4"
+      },
+      {
+        "evidence": "alias-risk-1 covers tsl/blob",
+        "from_effect": "effect-1",
+        "relationship": "may_alias",
+        "to_effect": "effect-5"
+      },
+      {
+        "evidence": "alias-risk-1 covers tsl/blob",
+        "from_effect": "effect-1",
+        "relationship": "may_alias",
+        "to_effect": "effect-6"
+      },
+      {
+        "evidence": "alias-risk-1 covers tsl/blob",
+        "from_effect": "effect-2",
+        "relationship": "may_alias",
+        "to_effect": "effect-4"
+      },
+      {
+        "evidence": "alias-risk-1 covers tsl/blob",
+        "from_effect": "effect-2",
+        "relationship": "may_alias",
+        "to_effect": "effect-5"
+      },
+      {
+        "evidence": "alias-risk-1 covers tsl/blob",
+        "from_effect": "effect-2",
+        "relationship": "may_alias",
+        "to_effect": "effect-6"
+      },
+      {
+        "evidence": "alias-risk-1 covers tsl/blob",
+        "from_effect": "effect-3",
+        "relationship": "may_alias",
+        "to_effect": "effect-4"
+      },
+      {
+        "evidence": "alias-risk-1 covers tsl/blob",
+        "from_effect": "effect-3",
+        "relationship": "may_alias",
+        "to_effect": "effect-5"
+      },
+      {
+        "evidence": "alias-risk-1 covers tsl/blob",
+        "from_effect": "effect-3",
+        "relationship": "may_alias",
+        "to_effect": "effect-6"
+      }
+    ],
+    "effects": [
+      {
+        "expression": "tsl->addr.log",
+        "id": "effect-1",
+        "kind": "read",
+        "pointer_node": "tsl",
+        "source": "pointer_nodes.read_effects"
+      },
+      {
+        "expression": "tsl->addr.index",
+        "id": "effect-2",
+        "kind": "read",
+        "pointer_node": "tsl",
+        "source": "pointer_nodes.read_effects"
+      },
+      {
+        "expression": "tsl->log_len",
+        "id": "effect-3",
+        "kind": "read",
+        "pointer_node": "tsl",
+        "source": "pointer_nodes.read_effects"
+      },
+      {
+        "expression": "blob->saved.addr",
+        "id": "effect-4",
+        "kind": "write",
+        "pointer_node": "blob",
+        "source": "pointer_nodes.write_effects"
+      },
+      {
+        "expression": "blob->saved.meta_addr",
+        "id": "effect-5",
+        "kind": "write",
+        "pointer_node": "blob",
+        "source": "pointer_nodes.write_effects"
+      },
+      {
+        "expression": "blob->saved.len",
+        "id": "effect-6",
+        "kind": "write",
+        "pointer_node": "blob",
+        "source": "pointer_nodes.write_effects"
+      }
+    ],
+    "summary": {
+      "alias_gate_decision": "allow",
+      "alias_sensitive": true,
+      "external_state": [],
+      "read_count": 3,
+      "reads": [
+        "tsl"
+      ],
+      "write_count": 3,
+      "writes": [
+        "blob"
+      ]
+    }
+  },
+  "level": "L3",
+  "pointer_decisions": [
+    {
+      "decision": "bounded_input_buffer",
+      "id": "pointer-decision-1",
+      "lvalue_kind": "bounded_input_buffer",
+      "pointer_node": "tsl",
+      "reason": "bounded translator pointer/lvalue decision",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "source_statement": "tsl->addr.log",
+      "translation_rule_id": "bounded-input-buffer-read",
+      "unsafe_expected": false
+    },
+    {
+      "decision": "readonly_record_pointer_nested_scalar_field_read",
+      "id": "pointer-decision-2",
+      "lvalue_kind": "pointer_write",
+      "pointer_node": "tsl",
+      "reason": "bounded translator pointer/lvalue decision",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "source_statement": "tsl->addr.log",
+      "translation_rule_id": "pointer-field-write",
+      "unsafe_expected": false
+    },
+    {
+      "decision": "bounded_pointer_index",
+      "id": "pointer-decision-3",
+      "lvalue_kind": "bounded_pointer_index",
+      "pointer_node": "blob",
+      "reason": "bounded translator pointer/lvalue decision",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "source_statement": "blob->saved.addr",
+      "translation_rule_id": "bounded-pointer-index-write",
+      "unsafe_expected": false
+    },
+    {
+      "decision": "mutable_record_pointer_nested_scalar_field_write_identity_return",
+      "id": "pointer-decision-4",
+      "lvalue_kind": "pointer_write",
+      "pointer_node": "blob",
+      "reason": "bounded translator pointer/lvalue decision",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "source_statement": "blob->saved.addr",
+      "translation_rule_id": "pointer-field-write",
+      "unsafe_expected": false
+    }
+  ],
+  "pointer_nodes": [
+    {
+      "boundary_decisions": [
+        "bounded_input_buffer",
+        "readonly_record_pointer_nested_scalar_field_read"
+      ],
+      "c_type": "fdb_tsl_t",
+      "id": "tsl",
+      "kind": "struct_pointer",
+      "mutability": "write_only",
+      "nullability": "unknown",
+      "ownership_role": "out_param",
+      "read_effects": [
+        "tsl->addr.log",
+        "tsl->addr.index",
+        "tsl->log_len"
+      ],
+      "symbol": "tsl",
+      "write_effects": []
+    },
+    {
+      "boundary_decisions": [
+        "bounded_pointer_index",
+        "mutable_record_pointer_nested_scalar_field_write_identity_return"
+      ],
+      "buffer_role": "output",
+      "c_type": "fdb_blob_t",
+      "id": "blob",
+      "kind": "buffer",
+      "length_companion": "len",
+      "mutability": "write_only",
+      "nullability": "unknown",
+      "ownership_role": "out_param",
+      "read_effects": [],
+      "symbol": "blob",
+      "write_effects": [
+        "blob->saved.addr",
+        "blob->saved.meta_addr",
+        "blob->saved.len"
+      ]
+    }
+  ],
+  "repo_commit": "c57de97a310bd246ce119a4e3b02ce7299157edd",
+  "risk_summary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "allow",
+      "evidence_source": "c_boundary.pointer_contract.aliasing_proven=true",
+      "requires_noalias": false,
+      "risk_count": 1,
+      "risk_level": "proven_noalias"
+    },
+    "blocked_reasons": [],
+    "known_gaps": [
+      "No full project migration claim.",
+      "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+      "No claim that this candidate-only replay proves general record layout, ABI, alias, or lifetime semantics."
+    ],
+    "unsafe_expected": false
+  },
+  "rust_mapping": [
+    {
+      "boundary_kind": "safe_wrapper",
+      "pointer_node": "tsl",
+      "strategy": "safe public API boundary generated by bounded translator",
+      "unsafe_expected": false
+    },
+    {
+      "boundary_kind": "safe_wrapper",
+      "pointer_node": "blob",
+      "strategy": "safe public API boundary generated by bounded translator",
+      "unsafe_expected": false
+    }
+  ],
+  "safe_boundary_preconditions": [
+    {
+      "applies_to": [
+        "tsl",
+        "blob"
+      ],
+      "id": "alias-precondition-1",
+      "kind": "noalias",
+      "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+      "required": false
+    }
+  ],
+  "schema_version": 2,
+  "slice_id": "real-fdb-tsl-to-blob",
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "src/fdb_tsdb.c"
+    ],
+    "functions": [
+      "fdb_tsl_to_blob"
+    ],
+    "globals": [],
+    "structs": [
+      "fdb_tsl_t",
+      "fdb_blob_t"
+    ]
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb"
+}

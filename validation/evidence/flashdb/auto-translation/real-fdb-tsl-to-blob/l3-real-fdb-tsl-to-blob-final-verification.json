@@ -1,0 +1,262 @@
+{
+  "accepted_evidence_authoritative": false,
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+    "fixture_sha256": "2918e72208f7b2e0b169aeeb3c39067fc94927bd33ca5d9dc27e2f5c47a1a113",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "007a620a987b47aa982e8bd576c17961b144a26c5a514c38fcd47784b2e264da",
+      "diff": "d550bab43589255f5f9478e574c185d6b8f8424a921177e746c218f6677a5236",
+      "negative_diff": "d96388675fbb1fc04b1f5d9fb527d517c0636ae287806ded653686071273d9e7",
+      "rust_report": "5bf39bbeefcb9c67e5e347f1dbfbaaab39c09d51bb6ac33fc35f16cba970c2c9",
+      "unsafe_ledger": "d02ae59743718bfa9a6c9efabc5238924a4911f49e5da5ff41fe210208603af9",
+      "unsafe_scan": "0c09e8a510620b719cc34588d4f3e4cdd201347049b269e3909447c179549638"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-tsl-to-blob",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "alias_gate": {
+    "complete_alias_safety": false,
+    "decision": "allow",
+    "preconditions": [
+      {
+        "applies_to": [
+          "tsl",
+          "blob"
+        ],
+        "id": "alias-precondition-1",
+        "kind": "noalias",
+        "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+        "required": false
+      }
+    ],
+    "requires_noalias": false,
+    "risk_count": 1,
+    "risk_level": "proven_noalias"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-c2rust-baseline-manifest.json",
+    "sha256": "b8950715fffbb5c37afa0e97544a89ec9bf7a2506405a610387c64c0500b5249",
+    "status": "skipped"
+  },
+  "c_oracle_status": "C_ORACLE_GENERATED",
+  "external_callee_scope": {
+    "blocked_count": 0,
+    "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
+    "semantics_verified": false,
+    "status": "not_applicable",
+    "stub_kind": "none"
+  },
+  "fixture": {
+    "path": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+    "sha256": "2918e72208f7b2e0b169aeeb3c39067fc94927bd33ca5d9dc27e2f5c47a1a113"
+  },
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+      "fixture_sha256": "2918e72208f7b2e0b169aeeb3c39067fc94927bd33ca5d9dc27e2f5c47a1a113",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "007a620a987b47aa982e8bd576c17961b144a26c5a514c38fcd47784b2e264da",
+        "diff": "d550bab43589255f5f9478e574c185d6b8f8424a921177e746c218f6677a5236",
+        "negative_diff": "d96388675fbb1fc04b1f5d9fb527d517c0636ae287806ded653686071273d9e7",
+        "rust_report": "5bf39bbeefcb9c67e5e347f1dbfbaaab39c09d51bb6ac33fc35f16cba970c2c9",
+        "unsafe_ledger": "d02ae59743718bfa9a6c9efabc5238924a4911f49e5da5ff41fe210208603af9",
+        "unsafe_scan": "0c09e8a510620b719cc34588d4f3e4cdd201347049b269e3909447c179549638"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-c-oracle.json",
+        "diff": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-diff.json",
+        "negative_diff": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-negative-diff.json",
+        "rust_report": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-rust-report.json",
+        "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-scan.json"
+      },
+      "slice_id": "real-fdb-tsl-to-blob",
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "status": "accepted",
+      "target_id": "flashdb",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-c-oracle.json",
+        "sha256": "007a620a987b47aa982e8bd576c17961b144a26c5a514c38fcd47784b2e264da",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-negative-diff.json",
+        "sha256": "d96388675fbb1fc04b1f5d9fb527d517c0636ae287806ded653686071273d9e7",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-rust-report.json",
+        "sha256": "5bf39bbeefcb9c67e5e347f1dbfbaaab39c09d51bb6ac33fc35f16cba970c2c9",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-diff.json",
+        "sha256": "d550bab43589255f5f9478e574c185d6b8f8424a921177e746c218f6677a5236",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-ledger.json",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-scan.json",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-lkyfhu2u/generated_replay.rs -o /tmp/c2r-generated-replay-lkyfhu2u/generated_replay.exe",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "/tmp/c2r-generated-replay-lkyfhu2u/generated_replay.exe --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/generated-rust-replay.stdout.log"
+    },
+    "rust_check": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-rust-draft.rs",
+      "sha256": "0756a4a6fb7fc7398432f425eae5609450865e1022bd5ba2bda1839d51b83909",
+      "status": "accepted_after_gates"
+    },
+    "schema_version": 1,
+    "slice_id": "real-fdb-tsl-to-blob",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "passed",
+    "target_id": "flashdb"
+  },
+  "generated_draft_semantic_pass": true,
+  "negative_diff_mutation_detected": true,
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "tests/Makefile",
+      "compile_commands": null,
+      "defines": [],
+      "flags": [],
+      "include_paths": [
+        "inc",
+        "tests"
+      ],
+      "tool_versions": {
+        "clang": "WSL Ubuntu clang 18.1.3",
+        "extract_source_slice": "0.1.0"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 3,
+      "case_source": "fixture_contract",
+      "declared_case_count": 3,
+      "fixture_hash": "real-fdb-tsl-to-blob-fixture",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_same_blob",
+      "blob.saved.addr",
+      "blob.saved.meta_addr",
+      "blob.saved.len"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": true,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "Offline fixture is cropped from `clang -std=c11 -Itests -Iinc -Xclang -ast-dump=json -fsyntax-only src/fdb_tsdb.c` on x86_64 WSL; ids, locations, comments, and unrelated declarations are omitted."
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "char_align": "unknown",
+      "char_width": 8,
+      "endianness": "little",
+      "int_align": "unknown",
+      "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
+      "long_long_width": 64,
+      "long_width": 64,
+      "plain_char_signed": true,
+      "pointer_align": "unknown",
+      "pointer_width": 64,
+      "short_align": "unknown",
+      "short_width": 16,
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {}
+    }
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-route-decision.json",
+    "sha256": "c15850512564d8bdfe9e40dc07cc7ecaab11336d87a4336446c7ed216d488bc5",
+    "status": "recorded"
+  },
+  "rust_check_status": "passed",
+  "rust_report_status": "passed",
+  "schema_diff_status": "passed",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "skipped_gates": [],
+  "slice_id": "real-fdb-tsl-to-blob",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "unsafe_status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "6c24642cdb17466fac158b42eb1f99eace67455f1573942eb45400020332478c",
+    "status": "passed"
+  },
+  "validation_profile_status": "passed",
+  "verified_unsafe_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-c2rust-verified-unsafe-baseline.json",
+    "sha256": "48b87fe3eb19bc967c049ddeba66c7c4b37e19b52024b2c3b012aeaa577df369",
+    "status": "blocked"
+  },
+  "version_config_status": "recorded"
+}

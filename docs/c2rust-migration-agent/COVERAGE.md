@@ -114,6 +114,8 @@
 | label | 不支持 | 仅作为 `goto` refusal 的 schema-bound CFG/relooper evidence 记录；clang AST fixture 已要求拒绝原因带 `source_range` |
 | `case` / `default` | 不支持 | 仅作为 `switch` refusal 的 schema-bound CFG/relooper evidence 记录；clang AST fixture 已要求拒绝原因带 `source_range` |
 
+真实 named-slice 验收补充（2026-07-10）：`real-fdb-tsl-to-blob` 的 exact generated draft 已通过 3-case C oracle、generated Rust replay、schema diff、negative diff、unsafe scan/ledger、route/profile 与 final verification，包含 clang-proven `uint32_t -> size_t` widening 和 mutable output identity return。该通过只对应绑定 fixture 与 SHA，不把通用 record layout/ABI/alias/provenance 标为已支持；coverage numerator 当前为 22。
+
 ## 数组
 
 | 构造 | 状态 | 说明 |

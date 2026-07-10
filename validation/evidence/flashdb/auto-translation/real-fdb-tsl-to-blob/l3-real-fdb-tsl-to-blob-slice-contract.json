@@ -1,0 +1,193 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "definition_status": "real_source_bound",
+        "kind": "type",
+        "name": "fdb_tsl_t",
+        "source": "inc/fdb_def.h#typedef struct fdb_tsl *fdb_tsl_t",
+        "source_span": {
+          "file": "inc/fdb_def.h",
+          "line_end": 182,
+          "line_start": 173,
+          "sha256": "3ea6f8228b86f860601c25ef46dfc9fad593400c889c1fb7bd6f69cbfe1033b3"
+        }
+      },
+      {
+        "definition_status": "real_source_bound",
+        "kind": "type",
+        "name": "fdb_blob_t",
+        "source": "inc/fdb_def.h#typedef struct fdb_blob *fdb_blob_t",
+        "source_span": {
+          "file": "inc/fdb_def.h",
+          "line_end": 325,
+          "line_start": 316,
+          "sha256": "4bb85f67932dbdcd01609594dc44517f680ff89b4e51e6c9f9d0270d548ce95a"
+        }
+      },
+      {
+        "definition_status": "real_source_bound",
+        "kind": "config",
+        "name": "fdb_tsl_to_blob prototype",
+        "source": "inc/flashdb.h#fdb_tsl_to_blob",
+        "source_span": {
+          "file": "inc/flashdb.h",
+          "line_end": 67,
+          "line_start": 67,
+          "sha256": "18e394d325138e7ec54f37a860f9fa761e9997577a54466a06205ae1f05d8a36"
+        }
+      }
+    ],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py",
+      "frontend": "bounded-c-source-scanner",
+      "semantic_status": "syntax-indexed real source plus offline WSL clang AST; candidate context only"
+    },
+    "files": [
+      {
+        "path": "src/fdb_tsdb.c",
+        "role": "source",
+        "sha256": "1d56d3820d627fdc468368d1c4a848231834b6dcb513a0c01ea94ac13c9d259b"
+      }
+    ],
+    "functions": [
+      "fdb_tsl_to_blob"
+    ],
+    "oracle_source_mode": "embedded_slice_c_source",
+    "pointer_contract": {
+      "actual_argument_noalias_proof": {
+        "actual_arguments": [
+          {
+            "object": "address of the fixture-local struct fdb_tsl object",
+            "parameter": "tsl"
+          },
+          {
+            "object": "address of the distinct fixture-local struct fdb_blob object",
+            "parameter": "blob"
+          }
+        ],
+        "construction": "Each fixture case constructs distinct local struct fdb_tsl and struct fdb_blob objects before calling fdb_tsl_to_blob.",
+        "parameter_pair": [
+          "tsl",
+          "blob"
+        ],
+        "proven": true
+      },
+      "alias_contract": {
+        "complete_alias_safety": false,
+        "decision": "requires_noalias_contract",
+        "proven": true,
+        "requires_noalias": true,
+        "source": "The fixture and replay pass distinct TSL and blob objects to the actual tsl/blob parameters; generated safe references must fail closed without this pair."
+      },
+      "aliasing_proven": true,
+      "input_buffers": [
+        {
+          "c_type": "fdb_tsl_t",
+          "mutability": "read_only",
+          "name": "tsl",
+          "nullability": "unknown",
+          "ownership_role": "observer",
+          "read_effects": [
+            "tsl->addr.log",
+            "tsl->addr.index",
+            "tsl->log_len"
+          ],
+          "translation_rule_id": "readonly_record_pointer_nested_scalar_field_read",
+          "write_effects": []
+        }
+      ],
+      "noalias_required": [
+        [
+          "tsl",
+          "blob"
+        ]
+      ],
+      "output_pointers": [
+        {
+          "c_type": "fdb_blob_t",
+          "mutability": "read_write",
+          "name": "blob",
+          "nullability": "unknown",
+          "ownership_role": "inout_param",
+          "read_effects": [],
+          "translation_rule_id": "mutable_record_pointer_nested_scalar_field_write_identity_return",
+          "write_effects": [
+            "blob->saved.addr",
+            "blob->saved.meta_addr",
+            "blob->saved.len"
+          ]
+        }
+      ]
+    },
+    "signatures": [
+      {
+        "c_source": "fdb_blob_t fdb_tsl_to_blob(fdb_tsl_t tsl, fdb_blob_t blob)\n{\n    blob->saved.addr = tsl->addr.log;\n    blob->saved.meta_addr = tsl->addr.index;\n    blob->saved.len = tsl->log_len;\n\n    return blob;\n}",
+        "definition_status": "real_source_bound",
+        "function": "fdb_tsl_to_blob",
+        "id": "sig-fdb-tsl-to-blob",
+        "parameters": [
+          {
+            "c_type": "fdb_tsl_t",
+            "direction": "input",
+            "name": "tsl"
+          },
+          {
+            "c_type": "fdb_blob_t",
+            "direction": "inout",
+            "name": "blob"
+          }
+        ],
+        "return_type": "fdb_blob_t",
+        "source_span": {
+          "byte_end": 31123,
+          "byte_start": 30924,
+          "file": "src/fdb_tsdb.c",
+          "line_end": 864,
+          "line_start": 857,
+          "sha256": "8ef7ff7e6efef00fa804a08a43e993e87ef4562edabfed4823047be1e3a588d3"
+        }
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-project migration",
+      "semantic equivalence without C oracle and Rust replay evidence",
+      "generated fdb_tsl_to_blob Rust draft is semantically accepted"
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+      "No claim that the candidate proves general record layout, ABI, alias, or lifetime semantics.",
+      "The L2 Rust module is reference/replay evidence only and does not itself prove generated-draft semantics."
+    ]
+  },
+  "fixture": {
+    "hash": "real-fdb-tsl-to-blob-fixture",
+    "path": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json"
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/fdb_tsl_to_blob.rs",
+    "public_api": [
+      {
+        "boundary_kind": "internal_ffi",
+        "name": "fdb_tsl_to_blob",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-tsl-to-blob",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb"
+}

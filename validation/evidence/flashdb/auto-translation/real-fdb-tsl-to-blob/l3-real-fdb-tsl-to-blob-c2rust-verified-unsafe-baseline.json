@@ -1,0 +1,121 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+    "fixture_sha256": "2918e72208f7b2e0b169aeeb3c39067fc94927bd33ca5d9dc27e2f5c47a1a113",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "007a620a987b47aa982e8bd576c17961b144a26c5a514c38fcd47784b2e264da",
+      "diff": "d550bab43589255f5f9478e574c185d6b8f8424a921177e746c218f6677a5236",
+      "negative_diff": "d96388675fbb1fc04b1f5d9fb527d517c0636ae287806ded653686071273d9e7",
+      "rust_report": "5bf39bbeefcb9c67e5e347f1dbfbaaab39c09d51bb6ac33fc35f16cba970c2c9",
+      "unsafe_ledger": "d02ae59743718bfa9a6c9efabc5238924a4911f49e5da5ff41fe210208603af9",
+      "unsafe_scan": "0c09e8a510620b719cc34588d4f3e4cdd201347049b269e3909447c179549638"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-tsl-to-blob",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "blocked_reasons": [
+    "c2rust_baseline_not_generated",
+    "c2rust_output_missing",
+    "c2rust_compile_not_passed",
+    "c2rust_compile_artifact_missing",
+    "No Rust replay harness currently calls this exact C2Rust output sha."
+  ],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-c2rust-baseline-manifest.json",
+    "sha256": "b8950715fffbb5c37afa0e97544a89ec9bf7a2506405a610387c64c0500b5249",
+    "status": "skipped"
+  },
+  "c2rust_output": null,
+  "claim_boundary": {
+    "accepted_evidence_reused": false,
+    "compile_only_is_semantic_pass": false,
+    "generated_draft_semantic_pass": false,
+    "scope": "C2Rust baseline verification status artifact; blocked until direct C2Rust output replay, diff, negative diff, unsafe ledger, and final verification are all bound to the same output.",
+    "semantic_pass": false
+  },
+  "compile_artifact": null,
+  "direct_c2rust_replay": {
+    "artifact": null,
+    "c2rust_output": null,
+    "compile_artifact": null,
+    "observable_replay_pass": false,
+    "reason": "No Rust replay harness currently calls this exact C2Rust output sha.",
+    "semantic_pass": false,
+    "status": "blocked"
+  },
+  "entry_function": "fdb_tsl_to_blob",
+  "fixture": {
+    "hash": "real-fdb-tsl-to-blob-fixture",
+    "path": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json"
+  },
+  "gate_refs": {
+    "c_oracle": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-c-oracle-status.json",
+      "sha256": "c1fc18937078da37af648233650b233d58b46d1b692771766bd4241c2d8096be",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "final_verification": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-final-verification.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-negative-diff.json",
+      "sha256": "5973d5b0e699b1a942a323c8a0ca5aa8e23e23c6f57cbab7f30ebfb9ca70a233",
+      "status": "passed"
+    },
+    "rust_replay": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-rust-report.json",
+      "sha256": "5b6b0279e3d28dafe41f76cc8f46fe8f277967514be28313a0fe3c8c1f812bdf",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-diff.json",
+      "sha256": "32b5931d5a570dfa78e40525741d4c91058f365b5cb173ea29f2ca45d1743001",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-ledger.json",
+      "sha256": "82d0e78c26a64b13e0b7bf6294ac557ca1cea6df3ba6f3a37ed6aaa8c0eb4512",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-scan.json",
+      "sha256": "36b34f8efd1777af9801ced3ec042ffb859d6ea5af4e5655115211fdf69e4ba7",
+      "status": "passed"
+    }
+  },
+  "generated_draft_semantic_pass": false,
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-route-decision.json",
+    "sha256": "c15850512564d8bdfe9e40dc07cc7ecaab11336d87a4336446c7ed216d488bc5",
+    "status": "recorded"
+  },
+  "same_output_gate_refs": null,
+  "schema_version": 1,
+  "semantic_claim_source": "blocked_missing_direct_c2rust_replay",
+  "semantic_pass": false,
+  "slice_id": "real-fdb-tsl-to-blob",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "blocked",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "6c24642cdb17466fac158b42eb1f99eace67455f1573942eb45400020332478c",
+    "status": "passed"
+  }
+}

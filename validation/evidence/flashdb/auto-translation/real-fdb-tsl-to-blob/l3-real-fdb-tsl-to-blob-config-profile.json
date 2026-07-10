@@ -1,0 +1,89 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+    "fixture_sha256": "2918e72208f7b2e0b169aeeb3c39067fc94927bd33ca5d9dc27e2f5c47a1a113",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "007a620a987b47aa982e8bd576c17961b144a26c5a514c38fcd47784b2e264da",
+      "diff": "d550bab43589255f5f9478e574c185d6b8f8424a921177e746c218f6677a5236",
+      "negative_diff": "d96388675fbb1fc04b1f5d9fb527d517c0636ae287806ded653686071273d9e7",
+      "rust_report": "5bf39bbeefcb9c67e5e347f1dbfbaaab39c09d51bb6ac33fc35f16cba970c2c9",
+      "unsafe_ledger": "d02ae59743718bfa9a6c9efabc5238924a4911f49e5da5ff41fe210208603af9",
+      "unsafe_scan": "0c09e8a510620b719cc34588d4f3e4cdd201347049b269e3909447c179549638"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-tsl-to-blob-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-tsl-to-blob",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=aad37f7e99fc551672b3194e110cb6cff0c8a6575c7da6dc774ddf04ae60e05d",
+    "fixture_hash=real-fdb-tsl-to-blob-fixture",
+    "build_profile_hash=076a1beb152475948d447d4f0dc344477bd094906642aba83833cd30d856a69a",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "tests/Makefile"
+    ],
+    "config_header_included": true,
+    "include_paths": [
+      "inc",
+      "tests"
+    ]
+  },
+  "config_header": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "54201c744219ddd06bf64a27957cea141829ca0b927ebf2d75485b0107a7351d"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "real-fdb-tsl-to-blob-fixture",
+    "operation_count": 3,
+    "path": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No full project migration claim.",
+    "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+    "No claim that this candidate-only replay proves general record layout, ABI, alias, or lifetime semantics."
+  ],
+  "profile_id": "flashdb-real-fdb-tsl-to-blob-real-source",
+  "repo_commit": "c57de97a310bd246ce119a4e3b02ce7299157edd",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-tsl-to-blob",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

@@ -32,7 +32,7 @@ python3 -B -m validation.tools.run_judge_entrypoints --config config/competition
 
 启用 `--require-local-artifacts` 时，`validate_judge_entrypoints` 还会通过 `validate_competition_run_summary.py` 深校验非 smoke `competition_summary`，覆盖 workflow metrics、before/after refs、repair history、unsafe 账本、final-gate 规则和 slice counts。
 
-?? public packet ????? C2Rust baseline manifest ???? route-governance ? milestone scorecard?`raw_c2rust.c2rust_baseline_rollup` ? evidence root ????? manifest/source/compile-pass ????? raw C2Rust `semantic_gate=false` ? `translation_coverage_numerator=0`???? typed-IR generated-draft acceptance ????????????? `translator_generated_semantic_pass_count=21`????? `real-fdb-calc-crc32`?`real-fdb-blob-make`?`real-fdb-kv-del`?`real-fdb-kv-set`?`real-fdb-kv-to-blob`?`zlib-ng/adler32-step` ??? demo exact typed-IR drafts?
+同一 public packet 现在把 C2Rust baseline manifest 状态纳入 route-governance 与 milestone scorecard：`raw_c2rust.c2rust_baseline_rollup` 按 evidence root 去重并展示 manifest/source/compile-pass 数，同时保持 raw C2Rust `semantic_gate=false`、`translation_coverage_numerator=0`；typed-IR generated-draft acceptance 独立计数。coverage matrix 当前派生 `translator_generated_semantic_pass_count=22`，包括 `real-fdb-calc-crc32`、`real-fdb-blob-make`、`real-fdb-kv-del`、`real-fdb-kv-set`、`real-fdb-kv-to-blob`、`real-fdb-tsl-to-blob`、`zlib-ng/adler32-step` 和一组 demo exact typed-IR drafts。
 
 首选真实 FlashDB 运行路径：
 
@@ -103,4 +103,4 @@ python3 -B validation/tools/milestone_release_report.py --competition-summary ta
 - `target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`
 
-????? FlashDB exhibit ? `real-fdb-calc-crc32` ?? accepted-evidence before/after artifacts??? unsafe 2 -> 0?`judge-demo-report.json.repair_summary` ?????? workflow metrics / before-after exhibit ?? repair/retry/rollback ?????? validator ? oracle?C2Rust baseline ???? generated + compile-only + direct replay observable-passed evidence???? `candidate_context_only` / `semantic_pass=false`?typed-IR generated Rust draft ??? exact draft ? `generated_draft_acceptance.status=passed` ??? translator-generated semantic pass??? numerator ? 21?
+边界：真实 FlashDB exhibit 为 `real-fdb-calc-crc32` 绑定 accepted-evidence before/after artifacts，并记录 unsafe 2 -> 0。`judge-demo-report.json.repair_summary` 只聚合已绑定 workflow metrics / before-after exhibit 中的 repair/retry/rollback 字段，不能替代 validator 或 oracle。C2Rust baseline 现在具有 generated + compile-only + direct replay observable-passed evidence，但仍为 `candidate_context_only` / `semantic_pass=false`；typed-IR generated Rust draft 只有 exact draft 的 `generated_draft_acceptance.status=passed` 才计入 translator-generated semantic pass，当前 numerator 为 22。

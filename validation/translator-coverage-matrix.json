@@ -2853,7 +2853,7 @@
         },
         "c_rust_diff": {
           "status": "covered",
-          "scope_note": "real-fdb-blob-make has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence. The refreshed real-fdb-kv-set exact generated draft now consumes accepted named-slice record-field evidence to emit a non-opaque FdbBlob and passes the uninitialized-DB return-code fixture gates. The real-fdb-kv-to-blob exact generated draft now passes generated_draft_acceptance with an embedded-slice C oracle, generated Rust replay, schema diff, negative diff, unsafe scan/ledger, and final verification semantic_pass=true. These count only for their bound named slices and do not generalize record-field semantic acceptance, layout/ABI proof, or initialized KV semantics.",
+          "scope_note": "real-fdb-blob-make has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence. The refreshed real-fdb-kv-set exact generated draft consumes accepted named-slice record-field evidence to emit a non-opaque FdbBlob and passes the uninitialized-DB return-code fixture gates. The real-fdb-kv-to-blob and real-fdb-tsl-to-blob exact generated drafts pass generated_draft_acceptance with embedded-slice C oracles, generated Rust replay, schema diff, negative diff, unsafe scan/ledger, and final verification semantic_pass=true. The TSL slice also binds a clang-proven uint32_t-to-size_t widening. These count only for their bound named slices and do not generalize record-field semantic acceptance, layout/ABI proof, or initialized KV/TSL semantics.",
           "evidence": [
             {
               "name": "real-fdb-blob-make final verification",
@@ -2915,6 +2915,29 @@
             {
               "name": "real-fdb-kv-to-blob generated Rust replay",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-test-translation-generated.json",
+              "proof_class": "generated_draft_replay_passed"
+            },
+            {
+              "name": "real-fdb-tsl-to-blob final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-final-verification.json",
+              "proof_class": "generated_draft_acceptance_bound_named_slice_fixture"
+            },
+            {
+              "name": "real-fdb-tsl-to-blob embedded-slice C oracle status",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-c-oracle-status.json",
+              "proof_class": "embedded_slice_c_oracle_compile_and_run"
+            },
+            {
+              "name": "real-fdb-tsl-to-blob C/Rust diff",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-diff.json"
+            },
+            {
+              "name": "real-fdb-tsl-to-blob negative diff",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-tsl-to-blob generated Rust replay",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-test-translation-generated.json",
               "proof_class": "generated_draft_replay_passed"
             }
           ]
@@ -2997,6 +3020,36 @@
               "proof_class": "generated_draft_replay_passed"
             },
             {
+              "name": "real-fdb-tsl-to-blob L1 candidate route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-route-decision.json",
+              "proof_class": "committed_l1_generated_draft_acceptance_bound_fixture"
+            },
+            {
+              "name": "real-fdb-tsl-to-blob validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-validation-profile.json",
+              "proof_class": "committed_l1_generated_draft_acceptance_bound_fixture"
+            },
+            {
+              "name": "real-fdb-tsl-to-blob clang lowering report",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-clang-lowering-report.json",
+              "proof_class": "committed_no_clang_fixture_candidate_provenance"
+            },
+            {
+              "name": "real-fdb-tsl-to-blob rust check",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/rust-check.json",
+              "proof_class": "committed_rust_check_passed_fixture_bound_acceptance"
+            },
+            {
+              "name": "real-fdb-tsl-to-blob generated Rust draft",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-rust-draft.rs",
+              "proof_class": "accepted_after_generated_draft_gates"
+            },
+            {
+              "name": "real-fdb-tsl-to-blob generated Rust replay",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-test-translation-generated.json",
+              "proof_class": "generated_draft_replay_passed"
+            },
+            {
               "name": "real-fdb-blob-make rust check",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/rust-check.json",
               "proof_class": "committed_rust_check_passed"
@@ -3017,7 +3070,7 @@
               "proof_class": "committed_wsl_local_simulation_matched_not_oracle"
             }
           ],
-          "reason": "committed named-slice candidate provenance plus Rust compile/replay, accepted C oracle/diff evidence, and fixture-bound replay evidence now exist for the bounded fdb_blob_make, real-fdb-kv-set, and real-fdb-kv-to-blob slices; initialized KV semantics, external callee semantics, and general record layout/ABI remain separate gaps"
+          "reason": "committed named-slice candidate provenance plus Rust compile/replay, accepted C oracle/diff evidence, and fixture-bound replay evidence now exist for the bounded fdb_blob_make, real-fdb-kv-set, real-fdb-kv-to-blob, and real-fdb-tsl-to-blob slices; initialized KV/TSL semantics, external callee semantics, and general record layout/ABI remain separate gaps"
         }
       },
       "positive_cases": [
@@ -3085,6 +3138,10 @@
         {
           "name": "clang_ast_fixture_replays_real_fdb_kv_to_blob_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_00_02.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_real_fdb_tsl_to_blob_with_u32_widening_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_17.rs"
         },
         {
           "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
@@ -3215,6 +3272,11 @@
           "name": "typed_ir_rejects_nested_record_pointer_scalar_field_copy_without_noalias",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_03.rs",
           "fail_closed_reason": "nested record pointer scalar field copy with readonly and mutable record pointer params requires explicit noalias evidence"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_real_fdb_tsl_to_blob_without_exact_noalias_refs",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_17.rs",
+          "fail_closed_reason": "the real TSL-to-blob nested record-pointer field-copy candidate requires the exact input/output noalias proof bound by the slice contract"
         }
       ]
     },
