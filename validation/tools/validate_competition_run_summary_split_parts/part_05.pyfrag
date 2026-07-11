@@ -89,6 +89,69 @@ def validate_fresh_ai_manifest(
     status = manifest.get("status")
     if status not in {"generated", "blocked"}:
         reasons.append("ai_first_manifest_not_invoked")
+    provider_accounting_required = (
+        isinstance(manifest.get("schema_version"), int)
+        and not isinstance(manifest.get("schema_version"), bool)
+        and manifest["schema_version"] >= 2
+        and status in {"generated", "blocked"}
+    )
+    explicit_provider_accounting = (
+        "provider_invocations" in manifest or "provider_preflight" in manifest
+    )
+    complete_provider_accounting = all(
+        key in manifest for key in ("provider_invocations", "provider_preflight")
+    )
+    if provider_accounting_required and not complete_provider_accounting:
+        reasons.append("ai_manifest_provider_accounting_missing")
+    validate_provider_accounting = (
+        provider_accounting_required or explicit_provider_accounting
+    )
+    provider_invocations = manifest.get(
+        "provider_invocations",
+        0 if provider_accounting_required else 1,
+    )
+    provider_preflight = manifest.get("provider_preflight")
+    if (
+        isinstance(provider_invocations, bool)
+        or not isinstance(provider_invocations, int)
+        or provider_invocations not in {0, 1}
+    ):
+        reasons.append("ai_manifest_provider_invocations_invalid")
+        provider_invocations = 0
+    if validate_provider_accounting:
+        preflight_status = (
+            provider_preflight.get("status") if isinstance(provider_preflight, dict) else None
+        )
+        source_span_status = (
+            provider_preflight.get("source_span_status")
+            if isinstance(provider_preflight, dict)
+            else None
+        )
+        if (
+            preflight_status not in {"ready", "blocked"}
+            or not isinstance(source_span_status, str)
+            or not source_span_status
+        ):
+            reasons.append("ai_manifest_provider_preflight_invalid")
+        elif (
+            preflight_status == "ready"
+            and source_span_status not in READY_SOURCE_SPAN_STATUSES
+        ) or (
+            preflight_status == "blocked"
+            and source_span_status not in BLOCKED_SOURCE_SPAN_STATUSES
+        ):
+            reasons.append("ai_manifest_provider_preflight_source_status_mismatch")
+        if provider_invocations == 0:
+            failure = manifest.get("failure")
+            if (
+                status != "blocked"
+                or preflight_status != "blocked"
+                or not isinstance(failure, dict)
+                or failure.get("kind") != "context_not_provider_ready"
+            ):
+                reasons.append("ai_manifest_zero_invocation_preflight_invalid")
+        elif preflight_status != "ready":
+            reasons.append("ai_manifest_invoked_preflight_not_ready")
     if manifest_path is None:
         reasons.append("ai_manifest_path_missing")
     else:
@@ -97,6 +160,31 @@ def validate_fresh_ai_manifest(
             ref = bindings.get(key) if isinstance(bindings, dict) else None
             if not nested_ai_ref_is_hash_bound(ref, owner_path=manifest_path, summary_path=summary_path, repo_root=repo_root):
                 reasons.append(f"ai_manifest_{key}_binding_invalid")
+        if validate_provider_accounting and isinstance(bindings, dict):
+            context_ref = bindings.get("context_pack")
+            context_path = (
+                resolve_nested_ai_artifact(
+                    context_ref.get("path"),
+                    owner_path=manifest_path,
+                    summary_path=summary_path,
+                    repo_root=repo_root,
+                )
+                if isinstance(context_ref, dict) and isinstance(context_ref.get("path"), str)
+                else None
+            )
+            try:
+                context_payload = load_json(context_path) if context_path is not None else None
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                context_payload = None
+            if not isinstance(context_payload, dict):
+                reasons.append("ai_manifest_provider_preflight_context_unreadable")
+            else:
+                recomputed_preflight = evaluate_provider_readiness(context_payload)
+                if provider_preflight != recomputed_preflight:
+                    reasons.append("ai_manifest_provider_preflight_context_mismatch")
+                recomputed_invocations = int(recomputed_preflight["status"] == "ready")
+                if provider_invocations != recomputed_invocations:
+                    reasons.append("ai_manifest_provider_invocations_context_mismatch")
     candidates = manifest.get("candidates")
     if not isinstance(candidates, list):
         reasons.append("ai_manifest_candidates_invalid")
@@ -143,10 +231,12 @@ def validate_fresh_ai_manifest(
         )
         valid_repairs += repair_rounds
         reasons.extend(repair_reasons)
+    if provider_invocations == 0 and valid_repairs:
+        reasons.append("ai_manifest_zero_invocation_cannot_have_repairs")
     return {
         "candidate": candidate,
         "repair_rounds": valid_repairs,
-        "invocations": 1 + valid_repairs if status in {"generated", "blocked"} else 0,
+        "invocations": provider_invocations + valid_repairs if status in {"generated", "blocked"} else 0,
         "reasons": sorted(set(reasons)),
     }
 

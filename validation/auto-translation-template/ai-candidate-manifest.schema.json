@@ -10,6 +10,8 @@
     "slice_id": {"type": "string"},
     "status": {"enum": ["not_used", "recorded", "generated", "blocked", "stale", "incomplete"]},
     "ai_required_for_default_pipeline": {"type": "boolean"},
+    "provider_invocations": {"type": "integer", "minimum": 0, "maximum": 1},
+    "provider_preflight": {"$ref": "#/definitions/providerPreflight"},
     "candidates": {"type": "array", "items": {"$ref": "#/definitions/candidate"}},
     "generator": {"$ref": "#/definitions/generator"},
     "bindings": {"$ref": "#/definitions/bindings"},
@@ -20,6 +22,18 @@
     "cache_invalidation_keys": {"type": "array", "items": {"type": "string"}}
   },
   "allOf": [
+    {
+      "if": {
+        "required": ["schema_version", "status"],
+        "properties": {
+          "schema_version": {"minimum": 2},
+          "status": {"enum": ["generated", "blocked"]}
+        }
+      },
+      "then": {
+        "required": ["provider_invocations", "provider_preflight"]
+      }
+    },
     {
       "if": {"properties": {"status": {"const": "generated"}}},
       "then": {
@@ -51,6 +65,38 @@
         "properties": {
           "ai_required_for_default_pipeline": {"const": true},
           "candidates": {"maxItems": 0}
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["provider_invocations"],
+        "properties": {"provider_invocations": {"const": 0}}
+      },
+      "then": {
+        "required": ["provider_preflight", "failure"],
+        "properties": {
+          "status": {"const": "blocked"},
+          "provider_preflight": {
+            "properties": {"status": {"const": "blocked"}}
+          },
+          "failure": {
+            "properties": {"kind": {"const": "context_not_provider_ready"}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["provider_invocations"],
+        "properties": {"provider_invocations": {"const": 1}}
+      },
+      "then": {
+        "required": ["provider_preflight"],
+        "properties": {
+          "provider_preflight": {
+            "properties": {"status": {"const": "ready"}}
+          }
         }
       }
     }
@@ -97,6 +143,36 @@
         "resolved_model": {"type": "string", "minLength": 1},
         "agent": {"type": "string", "minLength": 1},
         "variant": {"type": "string", "minLength": 1}
+      }
+    },
+    "providerPreflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "source_span_status"],
+      "properties": {
+        "status": {"enum": ["ready", "blocked"]},
+        "source_span_status": {
+          "enum": [
+            "real_source_bound",
+            "inline_slice_spec",
+            "inline_translation_carrier_bound",
+            "blocked_path_outside_source_root",
+            "source_file_missing",
+            "blocked_source_hash_mismatch",
+            "source_span_too_large",
+            "source_span_empty",
+            "source_span_coordinates_missing",
+            "blocked_span_hash_mismatch",
+            "omitted_too_large",
+            "unsupported_source_encoding",
+            "source_span_unavailable",
+            "blocked_translation_carrier_contract",
+            "source_binding_incomplete",
+            "source_root_not_ready",
+            "source_file_changed_during_read",
+            "invalid_context_shape"
+          ]
+        }
       }
     },
     "bindings": {

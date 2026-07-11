@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -11,9 +12,13 @@ from .context_security import (
     sha256_bytes,
     sha256_path,
 )
+from .context_source_carrier import (
+    MAX_CARRIER_SOURCE_BYTES,
+    build_translation_carrier_context,
+)
 
 
-MAX_SOURCE_SPAN_BYTES = 32_000
+MAX_SOURCE_SPAN_BYTES = MAX_CARRIER_SOURCE_BYTES
 
 
 def build_source_context(
@@ -46,34 +51,72 @@ def build_source_context(
         "sha256": full_sha256,
         "size_bytes": source_path.stat().st_size,
     }
-    if expected_full_sha256 and expected_full_sha256 != full_sha256:
-        return {
-            **base,
-            "input": binding,
-            "span": {
-                "status": "blocked_source_hash_mismatch",
-                "expected_source_sha256": expected_full_sha256,
-                "actual_source_sha256": full_sha256,
-            },
-        }, source_file
+    if expected_full_sha256:
+        source_hash_match_mode = path_hash_match_mode(
+            source_path,
+            expected_full_sha256,
+            actual_sha256=full_sha256,
+        )
+        if source_hash_match_mode is None:
+            return {
+                **base,
+                "input": binding,
+                "span": {
+                    "status": "blocked_source_hash_mismatch",
+                    "expected_source_sha256": expected_full_sha256,
+                    "actual_source_sha256": full_sha256,
+                },
+            }, source_file
+        binding["declared_sha256"] = expected_full_sha256
+        binding["hash_match_mode"] = source_hash_match_mode
+
+    carrier_context = build_translation_carrier_context(
+        spec,
+        source_path=source_path,
+        source_file=source_file,
+        input_binding=binding,
+        base=base,
+        known_roots=known_roots,
+    )
+    if carrier_context is not None:
+        if sha256_path(source_path) != full_sha256:
+            return {
+                **base,
+                "input": binding,
+                "span": {"status": "source_file_changed_during_read"},
+            }, source_file
+        return carrier_context, source_file
 
     try:
         content_bytes, coordinates = extract_span(source_path, descriptor, spec.get("c_source"))
     except ValueError as error:
         return {**base, "input": binding, "span": {"status": str(error)}}, source_file
-    content_sha256 = sha256_bytes(content_bytes)
-    expected_span_sha256 = descriptor.get("sha256")
-    if isinstance(expected_span_sha256, str) and expected_span_sha256 and expected_span_sha256 != content_sha256:
+    if sha256_path(source_path) != full_sha256:
         return {
             **base,
             "input": binding,
-            "span": {
-                "status": "blocked_span_hash_mismatch",
-                "expected_sha256": expected_span_sha256,
-                "actual_sha256": content_sha256,
-                **coordinates,
-            },
+            "span": {"status": "source_file_changed_during_read"},
         }, source_file
+    content_sha256 = sha256_bytes(content_bytes)
+    expected_span_sha256 = descriptor.get("sha256")
+    span_hash_match_mode = None
+    if isinstance(expected_span_sha256, str) and expected_span_sha256:
+        span_hash_match_mode = bytes_hash_match_mode(
+            content_bytes,
+            expected_span_sha256,
+            actual_sha256=content_sha256,
+        )
+        if span_hash_match_mode is None:
+            return {
+                **base,
+                "input": binding,
+                "span": {
+                    "status": "blocked_span_hash_mismatch",
+                    "expected_sha256": expected_span_sha256,
+                    "actual_sha256": content_sha256,
+                    **coordinates,
+                },
+            }, source_file
     if len(content_bytes) > MAX_SOURCE_SPAN_BYTES:
         return {
             **base,
@@ -93,17 +136,64 @@ def build_source_context(
             "input": binding,
             "span": {"status": "unsupported_source_encoding", "sha256": content_sha256, **coordinates},
         }, source_file
+    span = {
+        "status": "real_source_bound",
+        "sha256": content_sha256,
+        "size_bytes": len(content_bytes),
+        "content": redact_text(content, known_roots),
+        **coordinates,
+    }
+    if span_hash_match_mode is not None:
+        span["declared_sha256"] = expected_span_sha256
+        span["hash_match_mode"] = span_hash_match_mode
     return {
         **base,
         "input": binding,
-        "span": {
-            "status": "real_source_bound",
-            "sha256": content_sha256,
-            "size_bytes": len(content_bytes),
-            "content": redact_text(content, known_roots),
-            **coordinates,
-        },
+        "span": span,
     }, source_file
+
+
+def path_hash_match_mode(path: Path, expected_sha256: str, *, actual_sha256: str) -> str | None:
+    if actual_sha256 == expected_sha256:
+        return "exact"
+    normalized_lf = hashlib.sha256()
+    normalized_crlf = hashlib.sha256()
+    pending_carriage_return = False
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(64 * 1024), b""):
+            if pending_carriage_return:
+                chunk = b"\r" + chunk
+                pending_carriage_return = False
+            if chunk.endswith(b"\r"):
+                chunk = chunk[:-1]
+                pending_carriage_return = True
+            normalized = chunk.replace(b"\r\n", b"\n")
+            normalized_lf.update(normalized)
+            normalized_crlf.update(normalized.replace(b"\n", b"\r\n"))
+    if pending_carriage_return:
+        normalized_lf.update(b"\r")
+        normalized_crlf.update(b"\r")
+    if expected_sha256 in {normalized_lf.hexdigest(), normalized_crlf.hexdigest()}:
+        return "newline_equivalent"
+    return None
+
+
+def bytes_hash_match_mode(data: bytes, expected_sha256: str, *, actual_sha256: str) -> str | None:
+    if actual_sha256 == expected_sha256:
+        return "exact"
+    normalized_lf = data.replace(b"\r\n", b"\n")
+    normalized_crlf = normalized_lf.replace(b"\n", b"\r\n")
+    if expected_sha256 in {sha256_bytes(normalized_lf), sha256_bytes(normalized_crlf)}:
+        return "newline_equivalent"
+    return None
+
+
+def strip_final_newline(data: bytes) -> bytes:
+    if data.endswith(b"\r\n"):
+        return data[:-2]
+    if data.endswith(b"\n"):
+        return data[:-1]
+    return data
 
 
 def source_descriptor(spec: dict[str, Any]) -> dict[str, Any]:
@@ -149,7 +239,13 @@ def source_descriptor(spec: dict[str, Any]) -> dict[str, Any]:
 def extract_span(path: Path, descriptor: dict[str, Any], inline_source: Any) -> tuple[bytes, dict[str, int]]:
     byte_start = descriptor.get("byte_start")
     byte_end = descriptor.get("byte_end")
-    if isinstance(byte_start, int) and isinstance(byte_end, int) and 0 <= byte_start < byte_end:
+    if (
+        isinstance(byte_start, int)
+        and not isinstance(byte_start, bool)
+        and isinstance(byte_end, int)
+        and not isinstance(byte_end, bool)
+        and 0 <= byte_start < byte_end
+    ):
         requested = byte_end - byte_start
         if requested > MAX_SOURCE_SPAN_BYTES:
             raise ValueError("source_span_too_large")
@@ -157,17 +253,40 @@ def extract_span(path: Path, descriptor: dict[str, Any], inline_source: Any) -> 
             stream.seek(byte_start)
             content = stream.read(requested)
         expected = descriptor.get("sha256")
-        if isinstance(expected, str) and sha256_bytes(content) != expected:
+        if not isinstance(expected, str) or not expected:
+            return content, {"byte_start": byte_start, "byte_end": byte_end}
+        if bytes_hash_match_mode(content, expected, actual_sha256=sha256_bytes(content)) is not None:
+            return content, {"byte_start": byte_start, "byte_end": byte_end}
+        if isinstance(expected, str):
             with path.open("rb") as stream:
                 stream.seek(byte_start)
                 inclusive = stream.read(requested + 1)
-            if sha256_bytes(inclusive) == expected:
+            if bytes_hash_match_mode(
+                inclusive,
+                expected,
+                actual_sha256=sha256_bytes(inclusive),
+            ) is not None:
                 return inclusive, {"byte_start": byte_start, "byte_end": byte_end, "byte_end_inclusive": 1}
-        return content, {"byte_start": byte_start, "byte_end": byte_end}
+        line_start = descriptor.get("line_start")
+        line_end = descriptor.get("line_end")
+        if not (
+            isinstance(line_start, int)
+            and not isinstance(line_start, bool)
+            and isinstance(line_end, int)
+            and not isinstance(line_end, bool)
+            and 1 <= line_start <= line_end
+        ):
+            return content, {"byte_start": byte_start, "byte_end": byte_end}
 
     line_start = descriptor.get("line_start")
     line_end = descriptor.get("line_end")
-    if isinstance(line_start, int) and isinstance(line_end, int) and 1 <= line_start <= line_end:
+    if (
+        isinstance(line_start, int)
+        and not isinstance(line_start, bool)
+        and isinstance(line_end, int)
+        and not isinstance(line_end, bool)
+        and 1 <= line_start <= line_end
+    ):
         selected: list[bytes] = []
         total = 0
         with path.open("rb") as stream:
@@ -182,7 +301,31 @@ def extract_span(path: Path, descriptor: dict[str, Any], inline_source: Any) -> 
                 selected.append(line)
         if not selected:
             raise ValueError("source_span_empty")
-        return b"".join(selected), {"line_start": line_start, "line_end": line_end}
+        content = b"".join(selected)
+        expected = descriptor.get("sha256")
+        if isinstance(expected, str) and expected:
+            match_mode = bytes_hash_match_mode(
+                content,
+                expected,
+                actual_sha256=sha256_bytes(content),
+            )
+            if match_mode is None:
+                without_final_newline = strip_final_newline(content)
+                if (
+                    without_final_newline != content
+                    and bytes_hash_match_mode(
+                        without_final_newline,
+                        expected,
+                        actual_sha256=sha256_bytes(without_final_newline),
+                    )
+                    is not None
+                ):
+                    return without_final_newline, {
+                        "line_start": line_start,
+                        "line_end": line_end,
+                        "line_end_excludes_newline": 1,
+                    }
+        return content, {"line_start": line_start, "line_end": line_end}
 
     if isinstance(inline_source, str) and inline_source:
         needle = inline_source.encode("utf-8")

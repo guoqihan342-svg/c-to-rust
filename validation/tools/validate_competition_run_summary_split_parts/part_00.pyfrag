@@ -13,6 +13,12 @@ from typing import Any
 
 import jsonschema
 
+from validation.tools._ai_candidate_harness_parts.provider_readiness import (
+    BLOCKED_SOURCE_SPAN_STATUSES,
+    READY_SOURCE_SPAN_STATUSES,
+    evaluate_provider_readiness,
+)
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_PATH = REPO_ROOT / "validation" / "competition-run-summary.schema.json"

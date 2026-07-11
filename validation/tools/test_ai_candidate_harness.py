@@ -12,6 +12,7 @@ import jsonschema
 
 from validation.tools import ai_candidate_harness
 from validation.tools import auto_migrate
+from validation.tools import validate_competition_run_summary as summary_validator
 from validation.tools import validate_auto_translation_evidence as evidence_validator
 from validation.tools._ai_candidate_harness_parts import provider
 
@@ -23,7 +24,6 @@ def minimal_spec(source_root: str) -> dict[str, object]:
         "slice_id": "generic-scale",
         "function_name": "scale_value",
         "c_source": "int scale_value(int value) { return value * 3; }",
-        "source_root": source_root,
         "source_file": "src/math.c",
         "source_commit": "abc123",
         "source_file_hashes": {"src/math.c": "a" * 64},
@@ -71,7 +71,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             encoded = json.dumps(context)
             self.assertNotIn(source_root, encoded)
             self.assertNotIn("must-not-leak", encoded)
-            self.assertIn("<source-root>", encoded)
+            self.assertIn("<host-path>", encoded)
             self.assertFalse(context["claim_boundary"]["semantic_gate"])
 
     def test_generate_candidate_writes_hash_bound_nonsemantic_manifest(self) -> None:
@@ -101,6 +101,8 @@ class AiCandidateHarnessTests(unittest.TestCase):
 
             self.assertEqual(manifest["status"], "generated")
             self.assertTrue(manifest["ai_required_for_default_pipeline"])
+            self.assertEqual(1, manifest["provider_invocations"])
+            self.assertEqual("ready", manifest["provider_preflight"]["status"])
             self.assertFalse(manifest["claim_boundary"]["semantic_gate"])
             self.assertFalse(manifest["candidates"][0]["semantic_pass"])
             self.assert_manifest_schema(manifest)
@@ -109,6 +111,59 @@ class AiCandidateHarnessTests(unittest.TestCase):
             candidate = out_dir / manifest["candidates"][0]["artifact"]["path"]
             self.assertTrue(candidate.is_file())
             self.assertIn("wrapping_mul", candidate.read_text(encoding="utf-8"))
+
+            tampered = json.loads(json.dumps(manifest))
+            tampered["status"] = "blocked"
+            tampered["candidates"] = []
+            tampered["provider_invocations"] = 0
+            tampered["provider_preflight"] = {
+                "status": "blocked",
+                "source_span_status": "source_binding_incomplete",
+            }
+            tampered["failure"] = {
+                "kind": "context_not_provider_ready",
+                "message": "tampered",
+            }
+            tampered_validation = summary_validator.validate_fresh_ai_manifest(
+                tampered,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-migrator",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertIn(
+                "ai_manifest_provider_preflight_context_mismatch",
+                tampered_validation["reasons"],
+            )
+            self.assertIn(
+                "ai_manifest_provider_invocations_context_mismatch",
+                tampered_validation["reasons"],
+            )
+
+            missing_accounting = json.loads(json.dumps(manifest))
+            missing_accounting.pop("provider_invocations")
+            missing_accounting.pop("provider_preflight")
+            with self.assertRaises(jsonschema.ValidationError):
+                self.assert_manifest_schema(missing_accounting)
+            missing_validation = summary_validator.validate_fresh_ai_manifest(
+                missing_accounting,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-migrator",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertIn(
+                "ai_manifest_provider_accounting_missing",
+                missing_validation["reasons"],
+            )
 
             canonical = out_dir / "l3-generic-scale-rust-draft.rs"
             applied = ai_candidate_harness.apply_generated_candidate(
@@ -265,6 +320,114 @@ class AiCandidateHarnessTests(unittest.TestCase):
 
             self.assertEqual(calls, 1)
             self.assertEqual(manifest["failure"]["kind"], "provider_timeout")
+
+    def test_source_context_failure_blocks_without_provider_invocation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-context-preflight-") as tmp:
+            root = Path(tmp)
+            spec = minimal_spec(str(root))
+            spec.pop("c_source")
+            spec_path = root / "slice.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            context = ai_candidate_harness.build_context_pack(spec_path)
+            calls = 0
+
+            def runner(_argv: list[str], _timeout: int) -> ai_candidate_harness.ProviderExecution:
+                nonlocal calls
+                calls += 1
+                raise AssertionError("provider runner must not be called")
+
+            out_dir = root / "out"
+            manifest = ai_candidate_harness.generate_candidate(
+                context,
+                out_dir=out_dir,
+                runner=runner,
+            )
+
+            self.assertEqual(0, calls)
+            self.assertEqual("blocked", manifest["status"])
+            self.assertEqual(0, manifest["provider_invocations"])
+            self.assertEqual(
+                {"status": "blocked", "source_span_status": "source_span_unavailable"},
+                manifest["provider_preflight"],
+            )
+            self.assertEqual("context_not_provider_ready", manifest["failure"]["kind"])
+            self.assertEqual(b"", (out_dir / "l3-generic-scale-ai-response.jsonl").read_bytes())
+            self.assert_manifest_schema(manifest)
+
+            validation = summary_validator.validate_fresh_ai_manifest(
+                manifest,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-migrator",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertEqual([], validation["reasons"])
+            self.assertEqual(0, validation["invocations"])
+
+            drifted = json.loads(json.dumps(manifest))
+            drifted["provider_invocations"] = 1
+            rejected = summary_validator.validate_fresh_ai_manifest(
+                drifted,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-migrator",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertIn(
+                "ai_manifest_invoked_preflight_not_ready",
+                rejected["reasons"],
+            )
+
+            source_status_drift = json.loads(json.dumps(manifest))
+            source_status_drift["provider_preflight"]["source_span_status"] = "real_source_bound"
+            source_status_rejected = summary_validator.validate_fresh_ai_manifest(
+                source_status_drift,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-migrator",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertIn(
+                "ai_manifest_provider_preflight_source_status_mismatch",
+                source_status_rejected["reasons"],
+            )
+
+    def test_rejected_declared_source_root_cannot_fall_back_to_inline_ready(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-rejected-root-") as tmp:
+            root = Path(tmp)
+            spec = minimal_spec(str(root))
+            spec["source_root"] = "../outside"
+            spec_path = root / "slice.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            context = ai_candidate_harness.build_context_pack(spec_path)
+            calls = 0
+
+            def runner(_argv: list[str], _timeout: int) -> ai_candidate_harness.ProviderExecution:
+                nonlocal calls
+                calls += 1
+                raise AssertionError("provider runner must not be called")
+
+            manifest = ai_candidate_harness.generate_candidate(
+                context,
+                out_dir=root / "out",
+                runner=runner,
+            )
+
+            self.assertEqual(0, calls)
+            self.assertEqual("rejected_untrusted_absolute_or_parent_path", context["source_root"]["status"])
+            self.assertEqual("source_root_not_ready", manifest["provider_preflight"]["source_span_status"])
 
     def test_timeout_with_provider_balance_diagnostic_uses_actionable_classification(self) -> None:
         execution = provider.ProviderExecution(

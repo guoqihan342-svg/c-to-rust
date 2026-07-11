@@ -268,10 +268,12 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 | 顺序 | 工作 | 当前停止条件 |
 | ---: | --- | --- |
-| 1 | P0-A8 fresh exact repair/strict 闭环 | 已完成；后续只修回归 |
-| 2 | P0-A9 通用 raw C2Rust/C2Rust+repair 同门禁物化 | 已完成；后续只修回归和基于跨项目失败数据调优 |
-| 3 | P0-A10 固定套件 harness 闭包 | 输入、一次性执行器、strict summary 和 provider 熔断已完成；剩余真实 GLM candidate 后的一次完整套件验收与成功率 |
-| 4 | P0-A6 真实 GLM-5.1 与比赛主机复验 | 有效资源包和 competition-exact host 可用；不得用模拟结果代替 |
+| 1 | P0-A11 provider admission 与零调用证据 | 已完成；后续只修回归 |
+| 2 | P0-A12 文件化 prompt transport | candidate 与 repair 均不再把大 ContextPack 放入进程 argv |
+| 3 | P0-A13 内容寻址 AI candidate cache | 只复用 hash/策略完全一致且可重开的成功响应；失败不得缓存 |
+| 4 | P0-A14 受限展开编译 response file | 在 source root 内按深度、文件数和总字节上限补齐真实编译参数 |
+| 5 | P0-A10 固定套件真实验收 | 资源恢复后只运行一次完整套件并发布可复核指标 |
+| 6 | P0-A6 / P0-H9 比赛主机复验 | 有效资源包和 competition-exact host 可用；不得用模拟结果代替 |
 
 任何阶段都先运行一次有限构造集合，再按失败频率扩展 translator/ContextPack；禁止继续按 FlashDB 行号堆规则，也禁止为了等待外部资源停止可独立完成的 harness 工作。
 
@@ -279,7 +281,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   OpenCode `zai/glm-5.1` 读取 hash-bound ContextPack，输出单一结构化 Rust candidate；记录 provider、logical/resolved model、variant、prompt、输入、原始响应、解析结果和候选 SHA-256。模型输出、聊天文本和文件写入本身都保持 `semantic_gate=false`。无凭据、超时、响应格式错误或候选缺失必须结构化 blocked，不得静默回退后冒充 AI 已运行。
 
-  当前进度：候选生成器、schema-v2 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、余额/鉴权/超时分类和 `auto_migrate --ai-first-candidate` 已实现。WSL 能列出并实际启动 `zai/glm-5.1`。OpenCode 会把 provider 错误写入受限日志后继续内部重试，旧 harness 因外层 30/180 秒先到而把空响应记为 `provider_timeout`；2026-07-12 新增的日志偏移诊断绑定首选日志及调用前偏移，首次创建日志时从偏移 0 读取，并且只提取固定哨兵、不保存原始日志或密钥。单次真实调用已把根因还原为 `provider_insufficient_balance`。因此尚无真实 GLM candidate，本项保持未完成。模型可见、进程已启动和确定性 fallback 通过都不能替代候选证据。
+  当前进度：候选生成器、schema-v2 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、source-span provider readiness、余额/鉴权/启动/超时分类和 `auto_migrate --ai-first-candidate` 已实现。missing、越界、hash 漂移、超限或编码不支持的 source span 会在启动 OpenCode 前结构化为 `context_not_provider_ready`，并记录 `provider_invocations=0`；summary validator 会重开 hash-bound ContextPack 独立复算 preflight 与调用计数。LF/CRLF 等价由 full-source 流式 hash 和 span hash 共同校验；fragment wrapper 还必须通过 carrier、containing-function、真实 upstream fragment 的 SHA/text/claim 合同和 `verbatim_once` 嵌入校验，才标记为 `inline_translation_carrier_bound`，且仍不声明 whole-function 语义。在保留三条 pinned checkout 的 P0-A10 输入工作树中，固定 12 项在 Windows/WSL 均为 provider-ready 12/12；普通新 worktree 未物化这些 ignored checkout 时不具备该前置条件。WSL 能列出并实际启动 `zai/glm-5.1`。OpenCode 会把 provider 错误写入受限日志后继续内部重试，旧 harness 因外层 30/180 秒先到而把空响应记为 `provider_timeout`；2026-07-12 新增的日志偏移诊断覆盖非零退出、超时和首次创建日志，只提取固定哨兵、不保存原始日志或密钥。单次真实调用已把根因还原为 `provider_insufficient_balance`。因此尚无真实 GLM candidate，本项保持未完成。模型可见、进程已启动和确定性 fallback 通过都不能替代候选证据。
 
 - [x] **P0-A7：项目级 ContextPack 与编译上下文闭环**
 
@@ -303,11 +305,27 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   建立不超过 20 个 case 的固定集合：至少覆盖 3 个真实 C 项目和 10 个不同 construct family。阶段验收只运行一次有限集合，不执行 1,000/10,000 轮或循环压力测试。发布 AI invocation、candidate generation、rustc compile、semantic acceptance、refused/blocked、repair rounds 和 route selection 指标；成功率不得用重复同类切片放大。
 
-  当前进度：输入和 harness 闭包已完成。`validation/ai-finite-cross-project-suite.json` 固定 12 个 case、3 个真实项目和 12 个唯一 construct family，其中 8 个为真实 upstream function slice，4 个为绑定真实 upstream fragment 的通用可执行 carrier；synthetic/unbound provenance 均为 0。`project_sources` 固定 repository、repo-relative checkout root 和 commit，validator 离线核验 Git HEAD、origin、tracked-clean 状态、spec/fixture SHA、source file/span SHA 以及 line/byte 对齐；只允许 LF/CRLF 换行等价，不允许内容漂移或项目标签伪造。Windows 与 WSL `--require-all-ready` 均为 `ready=12/blocked=0`。
+  当前进度：输入和 harness 闭包已完成。`validation/ai-finite-cross-project-suite.json` 固定 12 个 case、3 个真实项目和 12 个唯一 construct family，其中 8 个为真实 upstream function slice，4 个为绑定真实 upstream fragment 的通用可执行 carrier；synthetic/unbound provenance 均为 0。`project_sources` 固定 repository、repo-relative checkout root 和 commit，validator 离线核验 Git HEAD、origin、tracked-clean 状态、spec/fixture SHA、source file/span SHA 以及 line/byte 对齐；只允许 LF/CRLF 换行等价，不允许内容漂移或项目标签伪造。在保留三条 pinned checkout 的 P0-A10 输入工作树中，Windows 与 WSL `--require-all-ready` 均为 `ready=12/blocked=0`。
 
-  `run_ai_finite_cross_project_suite.py` 现在把 12 个 spec 一次传给同一个 competition runner，禁止 accepted-evidence shortcut 和外层重试；suite/summary 均做 SHA 绑定，底层 summary validator 未通过时上层不复制任何指标。WSL local simulation 可显式使用离线 Cargo cache，但 summary 必须记录 `bypassed_for_local_cache`，`competition-exact` 会拒绝该旁路。连续两次相同的共享 provider 故障（timeout、余额不足或鉴权失败）会打开固定阈值熔断；不同 kind 会重置连续计数。只有实际调用项计入 slices/workflow/AI units，剩余项记录为 skipped，不制造 `not_invoked` 单元。
+  `run_ai_finite_cross_project_suite.py` 现在把 12 个 spec 一次传给同一个 competition runner，禁止 accepted-evidence shortcut 和外层重试；suite/summary 均做 SHA 绑定，底层 summary validator 未通过时上层不复制任何指标。WSL local simulation 可显式使用离线 Cargo cache，但 summary 必须记录 `bypassed_for_local_cache`，`competition-exact` 会拒绝该旁路。余额不足、鉴权失败或 provider 无法启动会在首次失败后打开熔断，timeout 保持连续两次阈值；不同 kind 会重置连续计数。只有实际调用项计入 slices/workflow/AI units，剩余项记录为 skipped，不制造 `not_invoked` 单元；ContextPack preflight 拒绝项则显式记录为零次 provider 调用。
 
   2026-07-12 的有限熔断演练在约 65 秒内完成：请求 12 项，实际调用 2 项，跳过 10 项；`slices.attempted=2`、`workflow_metrics.units_total=2`、`ai_translation_metrics.units_total=2`、`invocations=2`、`blocked=2`、`abnormal=0`，独立 summary validator 返回 0。该历史运行按当时代码记录为两个 `provider_timeout`；后续受限日志诊断确认底层错误为余额/资源包不足，但不回写旧工件。当前没有 candidate、compile 或 semantic acceptance，所以本项仍未完成，也不得发布跨项目成功率。下一步只在 GLM 资源包恢复后对同一固定套件再运行一次完整阶段验收，再发布 generation、compile、semantic、refused/blocked、repair 和 route 指标；不得为绕过 provider 故障更换测试项或硬编码项目。
+
+- [x] **P0-A11：provider admission 与零调用证据闭环**
+
+  candidate producer 在进程启动前重开 ContextPack 的真实 source/span/carrier 绑定。路径逃逸、hash/声明不完整、读取中途漂移、无效坐标、超限、编码失败或被条件编译屏蔽的 fragment 全部结构化拒绝，并记录 `provider_invocations=0`。summary validator 不信任 manifest 自报，而是重开 hash-bound ContextPack 复算 readiness 和调用数。该门只决定是否值得调用模型，不提升语义状态。
+
+- [ ] **P0-A12：文件化 prompt transport**
+
+  candidate 与 repair prompt 先写入 repo-scoped、hash-bound 文件，再使用 OpenCode 的文件输入参数和固定短消息启动，避免 Windows/WSL argv 长度差异。manifest 必须记录 transport、prompt path/hash 和实际命令策略；日志与公开工件不得复制完整 prompt、密钥或宿主路径。完成条件是大 ContextPack/repair candidate 不再进入 argv，现有解析、超时、诊断和严格门禁行为保持不变。
+
+- [ ] **P0-A13：内容寻址 AI candidate cache**
+
+  cache key 只由 ContextPack payload hash、prompt schema/version、resolved model、agent、variant 和解析合同组成。只缓存成功解析且 candidate/raw-response 均可按 SHA 重开的结果；provider failure、超时、拒绝和未通过解析的响应不得缓存。命中后仍需走完整 common gates，记录 `cache_hit` 与零次新增 provider 调用，且保持 `semantic_gate=false`；任何绑定漂移都删除命中资格并重新调用模型。
+
+- [ ] **P0-A14：受限展开编译 response file**
+
+  仅展开 source root 内的相对 `@file`，限制递归深度、文件数、单文件/总字节并检测环；每个 response file 记录 repo/logical path 与 SHA。解析失败、路径逃逸或预算超限必须 fail-closed，不能静默丢失 include、define、target ABI 等参数。完成后用不同真实 C 项目验证，不新增项目名、函数名或 fixture 特判。
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 
