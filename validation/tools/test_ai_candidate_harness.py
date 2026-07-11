@@ -15,6 +15,7 @@ from validation.tools import auto_migrate
 from validation.tools import validate_competition_run_summary as summary_validator
 from validation.tools import validate_auto_translation_evidence as evidence_validator
 from validation.tools._ai_candidate_harness_parts import provider
+from validation.tools._ai_candidate_harness_parts import prompt_transport
 
 
 def minimal_spec(source_root: str) -> dict[str, object]:
@@ -78,7 +79,13 @@ class AiCandidateHarnessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="ai-candidate-") as tmp:
             root = Path(tmp)
             spec_path = root / "slice.json"
-            spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
+            spec = minimal_spec(str(root))
+            spec["c_source"] = (
+                "int scale_value(int value) { /*"
+                + ("context" * 2_500)
+                + "*/ return value * 3; }"
+            )
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
             context = ai_candidate_harness.build_context_pack(spec_path)
             observed_argv: list[str] = []
 
@@ -91,7 +98,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
                     "",
                 )
 
-            out_dir = root / "out"
+            out_dir = root / "out with spaces"
             manifest = ai_candidate_harness.generate_candidate(
                 context,
                 out_dir=out_dir,
@@ -108,6 +115,24 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assert_manifest_schema(manifest)
             self.assertIn("--model", observed_argv)
             self.assertIn("zai/glm-5.1", observed_argv)
+            self.assertEqual(3, manifest["schema_version"])
+            self.assertEqual(
+                prompt_transport.prompt_transport_contract(),
+                manifest["generator"]["prompt_transport"],
+            )
+            file_args = [arg for arg in observed_argv if arg.startswith("--file=")]
+            self.assertEqual(1, len(file_args))
+            attached_prompt = Path(file_args[0].split("=", 1)[1])
+            self.assertEqual(out_dir / "l3-generic-scale-ai-prompt.txt", attached_prompt)
+            self.assertEqual(prompt_transport.PROMPT_FILE_MESSAGE, observed_argv[-1])
+            self.assertNotIn("Task mode: generate-candidate", observed_argv)
+            self.assertLess(sum(len(arg.encode("utf-8")) for arg in observed_argv), 2_048)
+            self.assertGreater(attached_prompt.stat().st_size, 16_000)
+            self.assertTrue(
+                attached_prompt.read_text(encoding="utf-8").startswith(
+                    "Task mode: generate-candidate"
+                )
+            )
             candidate = out_dir / manifest["candidates"][0]["artifact"]["path"]
             self.assertTrue(candidate.is_file())
             self.assertIn("wrapping_mul", candidate.read_text(encoding="utf-8"))
@@ -142,6 +167,24 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assertIn(
                 "ai_manifest_provider_invocations_context_mismatch",
                 tampered_validation["reasons"],
+            )
+
+            transport_drift = json.loads(json.dumps(manifest))
+            transport_drift["generator"]["prompt_transport"]["message_sha256"] = "0" * 64
+            transport_validation = summary_validator.validate_fresh_ai_manifest(
+                transport_drift,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-migrator",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertIn(
+                "ai_manifest_generator_does_not_match_execution_policy",
+                transport_validation["reasons"],
             )
 
             missing_accounting = json.loads(json.dumps(manifest))

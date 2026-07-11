@@ -16,6 +16,7 @@ from .provider import (
     provider_command_prefix,
     subprocess_runner,
 )
+from .prompt_transport import prompt_file_arguments
 from .repair_contract import (
     MAX_REPAIR_RESPONSE_BYTES,
     normalize_validation_result,
@@ -107,7 +108,7 @@ def coordinate_repairs(
         atomic_write_json(failure_path, failures)
         prompt = render_repair_prompt(context_pack, current_source, failures)
         atomic_write_bytes(prompt_path, prompt.encode("utf-8"))
-        argv = repair_argv(opencode_command, resolved_model, agent, variant, prompt)
+        argv = repair_argv(opencode_command, resolved_model, agent, variant, prompt_path)
 
         try:
             execution = provider_runner(argv, timeout_seconds)
@@ -254,7 +255,7 @@ def materialize_repair(
     return source, artifact_binding(patch_path)
 
 
-def repair_argv(command: str, model: str, agent: str, variant: str, prompt: str) -> list[str]:
+def repair_argv(command: str, model: str, agent: str, variant: str, prompt_path: Path) -> list[str]:
     return [
         *provider_command_prefix(command),
         "run",
@@ -270,7 +271,7 @@ def repair_argv(command: str, model: str, agent: str, variant: str, prompt: str)
         agent,
         "--variant",
         variant,
-        prompt,
+        *prompt_file_arguments(prompt_path),
     ]
 
 

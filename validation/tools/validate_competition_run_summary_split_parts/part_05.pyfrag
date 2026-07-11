@@ -82,6 +82,12 @@ def validate_fresh_ai_manifest(
         "agent": policy["agent"],
         "variant": policy["variant"],
     }
+    if (
+        isinstance(manifest.get("schema_version"), int)
+        and not isinstance(manifest.get("schema_version"), bool)
+        and manifest["schema_version"] >= 3
+    ):
+        expected_generator["prompt_transport"] = prompt_transport_contract()
     if not isinstance(generator, dict) or any(generator.get(key) != value for key, value in expected_generator.items()):
         reasons.append("ai_manifest_generator_does_not_match_execution_policy")
     if manifest.get("ai_required_for_default_pipeline") is not True:
@@ -228,6 +234,11 @@ def validate_fresh_ai_manifest(
             summary_path=summary_path,
             repo_root=repo_root,
             candidate=candidate if bound_repair is not None else None,
+            require_transport=(
+                isinstance(manifest.get("schema_version"), int)
+                and not isinstance(manifest.get("schema_version"), bool)
+                and manifest["schema_version"] >= 3
+            ),
         )
         valid_repairs += repair_rounds
         reasons.extend(repair_reasons)
@@ -248,6 +259,7 @@ def validate_bound_ai_repair_report(
     summary_path: Path,
     repo_root: Path,
     candidate: dict[str, Any] | None,
+    require_transport: bool,
 ) -> tuple[int, list[str]]:
     reasons: list[str] = []
     if manifest_path is None or not nested_ai_ref_is_hash_bound(
@@ -266,6 +278,15 @@ def validate_bound_ai_repair_report(
     if report_path is None:
         return 0, ["ai_repair_report_missing"]
     report = load_json(report_path)
+    if require_transport:
+        generator = report.get("generator")
+        if report.get("schema_version") != 2:
+            reasons.append("ai_repair_report_schema_version_invalid")
+        if (
+            not isinstance(generator, dict)
+            or generator.get("prompt_transport") != prompt_transport_contract()
+        ):
+            reasons.append("ai_repair_report_prompt_transport_invalid")
     if ref.get("status") != report.get("status") or ref.get("semantic_pass") is not False:
         reasons.append("ai_repair_report_status_or_claim_drift")
     boundary = report.get("claim_boundary")

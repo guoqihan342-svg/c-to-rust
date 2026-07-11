@@ -269,7 +269,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 顺序 | 工作 | 当前停止条件 |
 | ---: | --- | --- |
 | 1 | P0-A11 provider admission 与零调用证据 | 已完成；后续只修回归 |
-| 2 | P0-A12 文件化 prompt transport | candidate 与 repair 均不再把大 ContextPack 放入进程 argv |
+| 2 | P0-A12 文件化 prompt transport | 已完成；后续只修 transport/CLI 兼容回归 |
 | 3 | P0-A13 内容寻址 AI candidate cache | 只复用 hash/策略完全一致且可重开的成功响应；失败不得缓存 |
 | 4 | P0-A14 受限展开编译 response file | 在 source root 内按深度、文件数和总字节上限补齐真实编译参数 |
 | 5 | P0-A10 固定套件真实验收 | 资源恢复后只运行一次完整套件并发布可复核指标 |
@@ -281,7 +281,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   OpenCode `zai/glm-5.1` 读取 hash-bound ContextPack，输出单一结构化 Rust candidate；记录 provider、logical/resolved model、variant、prompt、输入、原始响应、解析结果和候选 SHA-256。模型输出、聊天文本和文件写入本身都保持 `semantic_gate=false`。无凭据、超时、响应格式错误或候选缺失必须结构化 blocked，不得静默回退后冒充 AI 已运行。
 
-  当前进度：候选生成器、schema-v2 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、source-span provider readiness、余额/鉴权/启动/超时分类和 `auto_migrate --ai-first-candidate` 已实现。missing、越界、hash 漂移、超限或编码不支持的 source span 会在启动 OpenCode 前结构化为 `context_not_provider_ready`，并记录 `provider_invocations=0`；summary validator 会重开 hash-bound ContextPack 独立复算 preflight 与调用计数。LF/CRLF 等价由 full-source 流式 hash 和 span hash 共同校验；fragment wrapper 还必须通过 carrier、containing-function、真实 upstream fragment 的 SHA/text/claim 合同和 `verbatim_once` 嵌入校验，才标记为 `inline_translation_carrier_bound`，且仍不声明 whole-function 语义。在保留三条 pinned checkout 的 P0-A10 输入工作树中，固定 12 项在 Windows/WSL 均为 provider-ready 12/12；普通新 worktree 未物化这些 ignored checkout 时不具备该前置条件。WSL 能列出并实际启动 `zai/glm-5.1`。OpenCode 会把 provider 错误写入受限日志后继续内部重试，旧 harness 因外层 30/180 秒先到而把空响应记为 `provider_timeout`；2026-07-12 新增的日志偏移诊断覆盖非零退出、超时和首次创建日志，只提取固定哨兵、不保存原始日志或密钥。单次真实调用已把根因还原为 `provider_insufficient_balance`。因此尚无真实 GLM candidate，本项保持未完成。模型可见、进程已启动和确定性 fallback 通过都不能替代候选证据。
+  当前进度：候选生成器、schema-v3 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、source-span provider readiness、余额/鉴权/启动/超时分类和 `auto_migrate --ai-first-candidate` 已实现。missing、越界、hash 漂移、超限或编码不支持的 source span 会在启动 OpenCode 前结构化为 `context_not_provider_ready`，并记录 `provider_invocations=0`；summary validator 会重开 hash-bound ContextPack 独立复算 preflight 与调用计数。LF/CRLF 等价由 full-source 流式 hash 和 span hash 共同校验；fragment wrapper 还必须通过 carrier、containing-function、真实 upstream fragment 的 SHA/text/claim 合同和 `verbatim_once` 嵌入校验，才标记为 `inline_translation_carrier_bound`，且仍不声明 whole-function 语义。在保留三条 pinned checkout 的 P0-A10 输入工作树中，固定 12 项在 Windows/WSL 均为 provider-ready 12/12；普通新 worktree 未物化这些 ignored checkout 时不具备该前置条件。WSL 能列出并实际启动 `zai/glm-5.1`。OpenCode 会把 provider 错误写入受限日志后继续内部重试，旧 harness 因外层 30/180 秒先到而把空响应记为 `provider_timeout`；2026-07-12 新增的日志偏移诊断覆盖非零退出、超时和首次创建日志，只提取固定哨兵、不保存原始日志或密钥。单次真实调用已把根因还原为 `provider_insufficient_balance`。因此尚无真实 GLM candidate，本项保持未完成。模型可见、进程已启动和确定性 fallback 通过都不能替代候选证据。
 
 - [x] **P0-A7：项目级 ContextPack 与编译上下文闭环**
 
@@ -315,9 +315,11 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   candidate producer 在进程启动前重开 ContextPack 的真实 source/span/carrier 绑定。路径逃逸、hash/声明不完整、读取中途漂移、无效坐标、超限、编码失败或被条件编译屏蔽的 fragment 全部结构化拒绝，并记录 `provider_invocations=0`。summary validator 不信任 manifest 自报，而是重开 hash-bound ContextPack 复算 readiness 和调用数。该门只决定是否值得调用模型，不提升语义状态。
 
-- [ ] **P0-A12：文件化 prompt transport**
+- [x] **P0-A12：文件化 prompt transport**
 
   candidate 与 repair prompt 先写入 repo-scoped、hash-bound 文件，再使用 OpenCode 的文件输入参数和固定短消息启动，避免 Windows/WSL argv 长度差异。manifest 必须记录 transport、prompt path/hash 和实际命令策略；日志与公开工件不得复制完整 prompt、密钥或宿主路径。完成条件是大 ContextPack/repair candidate 不再进入 argv，现有解析、超时、诊断和严格门禁行为保持不变。
+
+  完成证据：candidate 和 bounded repair 共用 `opencode-file-attachment-v1`，argv 只保留 `--file=<prompt-path>` 与固定短消息；完整 prompt 仍以 SHA 绑定文件保留。schema-v3 manifest 与 schema-v2 repair report 记录 file option/style、固定消息 SHA 和 `inline_prompt_in_argv=false`；summary 与 exact-evidence validator 均独立拒绝 transport 漂移。Windows/WSL 各 167 项 AI candidate、repair、router、exact evidence 和 competition summary 回归通过；WSL 显式使用 `/root/.cargo/bin` 比赛工具链 PATH。
 
 - [ ] **P0-A13：内容寻址 AI candidate cache**
 
