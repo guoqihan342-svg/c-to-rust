@@ -23,6 +23,7 @@ MAX_ASSUMPTION_BYTES = 1_024
 OPENCODE_LOG_PATH_ENV = "OPENCODE_LOG_PATH"
 PROVIDER_BALANCE_SENTINEL = "provider_error=insufficient_balance"
 PROVIDER_AUTH_SENTINEL = "provider_error=authentication_failed"
+PROVIDER_INVOCATION_SENTINEL = "provider_error=invocation_failed"
 
 
 @dataclass(frozen=True)
@@ -321,6 +322,11 @@ def classify_provider_failure(execution: ProviderExecution) -> dict[str, str] | 
         or "authentication" in combined
     ):
         return {"kind": "provider_authentication_failed", "message": "OpenCode provider authentication failed"}
+    if PROVIDER_INVOCATION_SENTINEL in combined:
+        return {
+            "kind": "provider_invocation_failed",
+            "message": "OpenCode provider process could not be started",
+        }
     if execution.timed_out:
         return {"kind": "provider_timeout", "message": "OpenCode candidate generation timed out"}
     if execution.returncode != 0:
@@ -380,6 +386,12 @@ def subprocess_runner(argv: list[str], timeout_seconds: int) -> ProviderExecutio
             encoding="utf-8",
             errors="replace",
             timeout=timeout_seconds,
+        )
+    except OSError:
+        return ProviderExecution(
+            returncode=127,
+            stdout="",
+            stderr=PROVIDER_INVOCATION_SENTINEL,
         )
     except subprocess.TimeoutExpired as error:
         stderr = append_provider_log_diagnostic(

@@ -418,6 +418,32 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assertEqual("", execution.stderr)
             self.assertIsNone(provider.classify_provider_failure(execution))
 
+    def test_subprocess_runner_sanitizes_provider_launch_failure(self) -> None:
+        argv = [
+            "opencode",
+            "run",
+            "--model",
+            "zai/glm-5.1",
+            "--agent",
+            "c2rust-migrator",
+            "prompt",
+        ]
+        sensitive_detail = "C:/private/provider/opencode.exe"
+        with mock.patch.object(
+            provider.subprocess,
+            "run",
+            side_effect=FileNotFoundError(sensitive_detail),
+        ):
+            execution = provider.subprocess_runner(argv, 30)
+
+        self.assertEqual(127, execution.returncode)
+        self.assertEqual(provider.PROVIDER_INVOCATION_SENTINEL, execution.stderr)
+        self.assertNotIn(sensitive_detail, execution.stderr)
+        self.assertEqual(
+            "provider_invocation_failed",
+            provider.classify_provider_failure(execution)["kind"],
+        )
+
     def test_applied_ai_candidate_becomes_agent_route_primary_without_semantic_claim(self) -> None:
         ai_candidate = {
             "candidate_id": "opencode-glm51-1",
