@@ -6,6 +6,7 @@ from .constant_state_contract import KIND as CONSTANT_STATE_KIND
 from .field_add_contract import KIND as FIELD_ADD_KIND
 from .field_scalar_add_contract import KIND as FIELD_SCALAR_ADD_KIND
 from .field_postfix_increment_contract import KIND as FIELD_POSTFIX_INCREMENT_KIND
+from .owner_interior_usize_add_contract import KIND as OWNER_INTERIOR_USIZE_ADD_KIND
 from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
 from .reset_add_while_continue_contract import KIND as RESET_ADD_CONTINUE_KIND
 from .reset_add_while_continue_model import expected_fixture_state_model as reset_add_model
@@ -15,6 +16,7 @@ STATE_REPLAY_KINDS = frozenset(
     {
         CONSTANT_STATE_KIND, FIELD_ADD_KIND, FIELD_SCALAR_ADD_KIND,
         FIELD_POSTFIX_INCREMENT_KIND,
+        OWNER_INTERIOR_USIZE_ADD_KIND,
         INTERIOR_PROJECTION_KIND, RESET_ADD_CONTINUE_KIND,
     }
 )
@@ -49,4 +51,14 @@ def expected_fixture_state_model(contract: dict[str, Any]) -> dict[str, Any]:
         }
     if kind == FIELD_POSTFIX_INCREMENT_KIND:
         return {**model, "operation": "wrapping_add", "increment": 1}
+    if kind == OWNER_INTERIOR_USIZE_ADD_KIND:
+        return {
+            **model,
+            "operation": "wrapping_add",
+            "projection_mode": "owner_interior_mutable",
+            "pointer_root_count": 1,
+            "conversion": "u32_to_usize",
+            "source_bits": 32,
+            "target_bits": 64,
+        }
     raise ValueError(f"unsupported fixture state model kind: {kind}")

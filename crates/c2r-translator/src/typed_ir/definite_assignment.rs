@@ -123,9 +123,18 @@ impl DefiniteAssignmentState {
                             == format!("{}.{}", plan.owner_path.join("."), field_path.join("."))
                 })
         });
+        let owner_sibling_size_add_read = self.interior_reborrows.values().any(|plan| {
+            plan.allows_owner_sibling_size_add_read
+                && key.base == plan.owner
+                && key
+                    .field
+                    .strip_prefix(&format!("{}.", plan.owner_path.join(".")))
+                    .is_some_and(|field| !field.is_empty() && !field.contains('.'))
+        });
         if !self.mutable_record_pointer_fields.contains(key)
             && !initialized_call_root
             && !entry_initialized_reborrow_path
+            && !owner_sibling_size_add_read
         {
             return Err(format!(
                 "mutable record pointer field {}.{} is read before definite assignment",

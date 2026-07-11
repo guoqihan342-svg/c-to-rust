@@ -137,6 +137,43 @@
                 self.assertIn("c2rust-migrator", text)
                 self.assertIn("max", text)
 
+    def test_opencode_agent_is_bounded_exact_command_executor(self) -> None:
+        agent_path = REPO_ROOT / ".opencode" / "agents" / "c2rust-migrator.md"
+        agent_bytes = agent_path.read_bytes()
+        agent = agent_bytes.decode("utf-8")
+
+        self.assertLessEqual(len(agent_bytes), 1536)
+        for required_text in [
+            "`opencode` + `GLM-5.1` + `c2rust-migrator` + `max`",
+            "## Required Preflight",
+            "## Superpowers Workflow Boundary",
+            "The first and only tool call",
+            "prompt's `Command line:` string",
+            "do not pre-read or inspect files",
+            "do not glob, read, grep, list, explore, edit, or diagnose",
+            "do not spawn subagents",
+            "do not infer or run any substitute command",
+            "opencode-safety-transform-attempt",
+            "handoff_contract",
+            "opencode_session_evidence",
+            "contract_verification",
+            "never semantic evidence",
+        ]:
+            with self.subTest(required_text=required_text):
+                self.assertIn(required_text, agent)
+
+        for forbidden_text in [
+            "## Primary Entrypoints",
+            "## Roles",
+            "## Guardrails",
+            "## Output",
+            "assign-slice",
+            "record-worker-summary",
+            "write-merge-plan",
+        ]:
+            with self.subTest(forbidden_text=forbidden_text):
+                self.assertNotIn(forbidden_text, agent)
+
     def test_legacy_validation_profile_is_readme_only_redirect(self) -> None:
         self.assertTrue(COMPAT_PROFILE_DIR.exists())
         files = sorted(

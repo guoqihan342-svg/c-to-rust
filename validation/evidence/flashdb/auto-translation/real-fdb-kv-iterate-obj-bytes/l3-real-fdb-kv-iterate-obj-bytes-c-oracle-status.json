@@ -1,0 +1,26 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-obj-bytes-c-oracle.json",
+    "sha256": "d0825246aec612bf53b310616b135c3080d67f9814ea4c852357d9781645cdf4",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 3,
+  "fixture": "validation/l2_slices/fixtures/real-fdb-kv-iterate-obj-bytes.json",
+  "fixture_sha256": "e02a534008ee2572a432b8a44242876ed6565d9ffbfbb92baa284d05e247623b",
+  "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-c-oracle-harness-draft.c",
+    "sha256": "d94052dbe15a00736af5031fd468de86e131e08a65e93c774750ea5d39ce4992",
+    "status": "draft"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-kv-iterate-obj-bytes",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_slice_id": "real-fdb-kv-iterate-obj-bytes",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

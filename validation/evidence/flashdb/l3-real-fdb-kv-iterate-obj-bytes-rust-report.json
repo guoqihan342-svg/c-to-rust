@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-obj-bytes",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "itr_iterated_obj_bytes"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "One mutable owner record root exposes an interior mutable alias. Its direct u32 rhs is losslessly widened under the bound LP64 ABI and wrapping-added to a non-overlapping direct usize accumulator; the fixed bool result is observed.",
+    "external_callee": null,
+    "field_update": {
+      "operation": "wrapping_add",
+      "target_owner_field_path": [
+        "iterated_obj_bytes"
+      ],
+      "source_owner_field_path": [
+        "curr_kv",
+        "len"
+      ],
+      "projection_path": [
+        "curr_kv"
+      ],
+      "widening": {
+        "conversion": "u32_to_usize",
+        "source_rust_type": "u32",
+        "target_rust_type": "usize",
+        "source_bits": 32,
+        "target_bits": 64,
+        "signedness": "unsigned",
+        "lossless": true,
+        "target_abi_binding": "build_profile.target+c_boundary.target_abi_contract"
+      }
+    },
+    "excluded_semantics": [
+      "source lines 1882-1883 and their iterated_value_bytes and early-return behavior",
+      "the enclosing condition and iterator loop control around line 1881",
+      "real FlashDB iterator and KV layout or ABI",
+      "whole-project FlashDB behavior"
+    ]
+  },
+  "status": "passed",
+  "replay_contract_kind": "record_owner_interior_u32_to_usize_wrapping_add_state",
+  "replay_engine": "exact_generated_rust_replay_plus_declarative_field_check",
+  "generated_draft_replay_pass": true,
+  "generated_draft_semantic_pass": false,
+  "provenance": {
+    "status": "passed",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": false,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "<generated-replay-executable> --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/generated-rust-replay.stdout.log"
+    },
+    "refs": {
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-rust-draft.rs",
+        "sha256": "bddb321b5fca6e5d2e40610a25c885656431c37ff10de3dcde560de493c1ea16"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/rust-check.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-rust-replay-test-draft.rs",
+        "sha256": "917a17cd95f416e4c93aa4771b271d48223ff376dac142450a698ce0471c7e9b",
+        "declared_sha256": "917a17cd95f416e4c93aa4771b271d48223ff376dac142450a698ce0471c7e9b"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/generated-rust-replay.stdout.log",
+        "sha256": "c221c98f4d9a960ac81c28259e5c2d698dd5bcfcb88972e87c0497365c8b18ae"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-rust-report.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      }
+    },
+    "fixture_state_model": {
+      "conversion": "u32_to_usize",
+      "kind": "record_owner_interior_u32_to_usize_wrapping_add_state",
+      "operation": "wrapping_add",
+      "pointer_root_count": 1,
+      "projection_mode": "owner_interior_mutable",
+      "scope": "fixture_only",
+      "source_bits": 32,
+      "target_bits": 64
+    }
+  },
+  "cases": [
+    {
+      "id": "ordinary-add",
+      "return_value": true,
+      "itr_iterated_obj_bytes": 16,
+      "status": "passed"
+    },
+    {
+      "id": "zero-rhs",
+      "return_value": true,
+      "itr_iterated_obj_bytes": 42,
+      "status": "passed"
+    },
+    {
+      "id": "usize-wrap",
+      "return_value": true,
+      "itr_iterated_obj_bytes": 1,
+      "status": "passed"
+    }
+  ]
+}

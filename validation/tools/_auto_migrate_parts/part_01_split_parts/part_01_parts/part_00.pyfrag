@@ -177,6 +177,12 @@ def oracle_fixture_execution_source(
         return c_oracle_record_u32_field_wrapping_add_state_execution_source(
             spec, fixture_binding
         )
+    if record_owner_interior_u32_to_usize_wrapping_add_state_replay_contract(
+        spec, fixture_binding
+    ) is not None:
+        return c_oracle_record_owner_interior_u32_to_usize_wrapping_add_state_execution_source(
+            spec, fixture_binding
+        )
     if scripted_external_record_u32_sequence_do_while_state_replay_contract(
         spec, fixture_binding
     ) is not None:

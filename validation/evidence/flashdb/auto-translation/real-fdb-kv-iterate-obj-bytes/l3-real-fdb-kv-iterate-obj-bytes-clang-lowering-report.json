@@ -1,0 +1,802 @@
+{
+  "artifact_kind": "clang-lowering-report",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "diagnostics": [
+    "clang lowering used slice-spec c_source with declared external callee prototypes; project macros were not expanded"
+  ],
+  "durable_evidence": {
+    "clang_path": "/usr/bin/clang",
+    "clang_version": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+    "competition_environment": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "frontend": "clang_ast_dump_json",
+    "hash_algorithm": "sha256",
+    "rust_draft_sha256": "bddb321b5fca6e5d2e40610a25c885656431c37ff10de3dcde560de493c1ea16",
+    "typed_ir_sha256": "7aa09694a3d8d555677fe2418e361332f978801a745ef9670845809ce07aa100"
+  },
+  "errors": [],
+  "fixture_hash": "e02a534008ee2572a432b8a44242876ed6565d9ffbfbb92baa284d05e247623b",
+  "frontend": "clang",
+  "function_name": "fdb_kv_iterate_obj_bytes_probe",
+  "lowering_report": {
+    "arguments": [
+      "--slice-source-from-spec",
+      "<host>/c2r-slice-source-flashdb-real-fdb-kv-iterate-obj-bytes-71293.c",
+      "src/fdb_kvdb.c"
+    ],
+    "clang_path": "<host>/clang",
+    "diagnostics": [
+      "clang lowering used slice-spec c_source with declared external callee prototypes; project macros were not expanded"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "errors": [],
+    "frontend": "clang_slice_source",
+    "function_ir": {
+      "body": [
+        {
+          "Decl": {
+            "init": {
+              "AddrOf": {
+                "operand": {
+                  "Member": {
+                    "base": {
+                      "Var": {
+                        "name": "itr",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "struct FdbKvIterator *",
+                          "is_const": false,
+                          "kind": {
+                            "Pointer": {
+                              "pointee": {
+                                "canonical": "struct FdbKvIterator",
+                                "is_const": false,
+                                "kind": {
+                                  "Record": {
+                                    "fields": [
+                                      {
+                                        "name": "curr_kv",
+                                        "ty": {
+                                          "canonical": "struct FdbKv",
+                                          "is_const": false,
+                                          "kind": {
+                                            "Record": {
+                                              "fields": [
+                                                {
+                                                  "name": "len",
+                                                  "ty": {
+                                                    "canonical": "uint32_t",
+                                                    "is_const": false,
+                                                    "kind": {
+                                                      "Integer": {
+                                                        "signed": false,
+                                                        "width": 32
+                                                      }
+                                                    },
+                                                    "source_span": null,
+                                                    "spelled": "uint32_t",
+                                                    "width_bits": 32
+                                                  }
+                                                }
+                                              ],
+                                              "name": "FdbKv"
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "struct FdbKv",
+                                          "width_bits": null
+                                        }
+                                      },
+                                      {
+                                        "name": "iterated_obj_bytes",
+                                        "ty": {
+                                          "canonical": "size_t",
+                                          "is_const": false,
+                                          "kind": {
+                                            "Integer": {
+                                              "signed": false,
+                                              "width": 64
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "size_t",
+                                          "width_bits": 64
+                                        }
+                                      }
+                                    ],
+                                    "name": "FdbKvIterator"
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "struct FdbKvIterator",
+                                "width_bits": null
+                              }
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "struct FdbKvIterator *",
+                          "width_bits": null
+                        }
+                      }
+                    },
+                    "field": "curr_kv",
+                    "is_arrow": true,
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "struct FdbKv",
+                      "is_const": false,
+                      "kind": {
+                        "Record": {
+                          "fields": [
+                            {
+                              "name": "len",
+                              "ty": {
+                                "canonical": "uint32_t",
+                                "is_const": false,
+                                "kind": {
+                                  "Integer": {
+                                    "signed": false,
+                                    "width": 32
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "uint32_t",
+                                "width_bits": 32
+                              }
+                            }
+                          ],
+                          "name": "FdbKv"
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "struct FdbKv",
+                      "width_bits": null
+                    }
+                  }
+                },
+                "source_span": null,
+                "ty": {
+                  "canonical": "struct FdbKv *",
+                  "is_const": false,
+                  "kind": {
+                    "Pointer": {
+                      "pointee": {
+                        "canonical": "struct FdbKv",
+                        "is_const": false,
+                        "kind": {
+                          "Record": {
+                            "fields": [
+                              {
+                                "name": "len",
+                                "ty": {
+                                  "canonical": "uint32_t",
+                                  "is_const": false,
+                                  "kind": {
+                                    "Integer": {
+                                      "signed": false,
+                                      "width": 32
+                                    }
+                                  },
+                                  "source_span": null,
+                                  "spelled": "uint32_t",
+                                  "width_bits": 32
+                                }
+                              }
+                            ],
+                            "name": "FdbKv"
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "struct FdbKv",
+                        "width_bits": null
+                      }
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "struct FdbKv *",
+                  "width_bits": null
+                }
+              }
+            },
+            "name": "kv",
+            "source_span": null,
+            "ty": {
+              "canonical": "struct FdbKv *",
+              "is_const": false,
+              "kind": {
+                "Pointer": {
+                  "pointee": {
+                    "canonical": "struct FdbKv",
+                    "is_const": false,
+                    "kind": {
+                      "Record": {
+                        "fields": [
+                          {
+                            "name": "len",
+                            "ty": {
+                              "canonical": "uint32_t",
+                              "is_const": false,
+                              "kind": {
+                                "Integer": {
+                                  "signed": false,
+                                  "width": 32
+                                }
+                              },
+                              "source_span": null,
+                              "spelled": "uint32_t",
+                              "width_bits": 32
+                            }
+                          }
+                        ],
+                        "name": "FdbKv"
+                      }
+                    },
+                    "source_span": null,
+                    "spelled": "struct FdbKv",
+                    "width_bits": null
+                  }
+                }
+              },
+              "source_span": null,
+              "spelled": "struct FdbKv *",
+              "width_bits": null
+            }
+          }
+        },
+        {
+          "Assign": {
+            "source_span": null,
+            "target": {
+              "Member": {
+                "base": {
+                  "Var": {
+                    "name": "itr",
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "struct FdbKvIterator *",
+                      "is_const": false,
+                      "kind": {
+                        "Pointer": {
+                          "pointee": {
+                            "canonical": "struct FdbKvIterator",
+                            "is_const": false,
+                            "kind": {
+                              "Record": {
+                                "fields": [
+                                  {
+                                    "name": "curr_kv",
+                                    "ty": {
+                                      "canonical": "struct FdbKv",
+                                      "is_const": false,
+                                      "kind": {
+                                        "Record": {
+                                          "fields": [
+                                            {
+                                              "name": "len",
+                                              "ty": {
+                                                "canonical": "uint32_t",
+                                                "is_const": false,
+                                                "kind": {
+                                                  "Integer": {
+                                                    "signed": false,
+                                                    "width": 32
+                                                  }
+                                                },
+                                                "source_span": null,
+                                                "spelled": "uint32_t",
+                                                "width_bits": 32
+                                              }
+                                            }
+                                          ],
+                                          "name": "FdbKv"
+                                        }
+                                      },
+                                      "source_span": null,
+                                      "spelled": "struct FdbKv",
+                                      "width_bits": null
+                                    }
+                                  },
+                                  {
+                                    "name": "iterated_obj_bytes",
+                                    "ty": {
+                                      "canonical": "size_t",
+                                      "is_const": false,
+                                      "kind": {
+                                        "Integer": {
+                                          "signed": false,
+                                          "width": 64
+                                        }
+                                      },
+                                      "source_span": null,
+                                      "spelled": "size_t",
+                                      "width_bits": 64
+                                    }
+                                  }
+                                ],
+                                "name": "FdbKvIterator"
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "struct FdbKvIterator",
+                            "width_bits": null
+                          }
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "struct FdbKvIterator *",
+                      "width_bits": null
+                    }
+                  }
+                },
+                "field": "iterated_obj_bytes",
+                "is_arrow": true,
+                "source_span": null,
+                "ty": {
+                  "canonical": "size_t",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": false,
+                      "width": 64
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "size_t",
+                  "width_bits": 64
+                }
+              }
+            },
+            "value": {
+              "Binary": {
+                "lhs": {
+                  "Member": {
+                    "base": {
+                      "Var": {
+                        "name": "itr",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "struct FdbKvIterator *",
+                          "is_const": false,
+                          "kind": {
+                            "Pointer": {
+                              "pointee": {
+                                "canonical": "struct FdbKvIterator",
+                                "is_const": false,
+                                "kind": {
+                                  "Record": {
+                                    "fields": [
+                                      {
+                                        "name": "curr_kv",
+                                        "ty": {
+                                          "canonical": "struct FdbKv",
+                                          "is_const": false,
+                                          "kind": {
+                                            "Record": {
+                                              "fields": [
+                                                {
+                                                  "name": "len",
+                                                  "ty": {
+                                                    "canonical": "uint32_t",
+                                                    "is_const": false,
+                                                    "kind": {
+                                                      "Integer": {
+                                                        "signed": false,
+                                                        "width": 32
+                                                      }
+                                                    },
+                                                    "source_span": null,
+                                                    "spelled": "uint32_t",
+                                                    "width_bits": 32
+                                                  }
+                                                }
+                                              ],
+                                              "name": "FdbKv"
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "struct FdbKv",
+                                          "width_bits": null
+                                        }
+                                      },
+                                      {
+                                        "name": "iterated_obj_bytes",
+                                        "ty": {
+                                          "canonical": "size_t",
+                                          "is_const": false,
+                                          "kind": {
+                                            "Integer": {
+                                              "signed": false,
+                                              "width": 64
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "size_t",
+                                          "width_bits": 64
+                                        }
+                                      }
+                                    ],
+                                    "name": "FdbKvIterator"
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "struct FdbKvIterator",
+                                "width_bits": null
+                              }
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "struct FdbKvIterator *",
+                          "width_bits": null
+                        }
+                      }
+                    },
+                    "field": "iterated_obj_bytes",
+                    "is_arrow": true,
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "size_t",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": false,
+                          "width": 64
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "size_t",
+                      "width_bits": 64
+                    }
+                  }
+                },
+                "op": "Add",
+                "rhs": {
+                  "Cast": {
+                    "expr": {
+                      "LValueToRValue": {
+                        "expr": {
+                          "Member": {
+                            "base": {
+                              "Var": {
+                                "name": "kv",
+                                "source_span": null,
+                                "ty": {
+                                  "canonical": "struct FdbKv *",
+                                  "is_const": false,
+                                  "kind": {
+                                    "Pointer": {
+                                      "pointee": {
+                                        "canonical": "struct FdbKv",
+                                        "is_const": false,
+                                        "kind": {
+                                          "Record": {
+                                            "fields": [
+                                              {
+                                                "name": "len",
+                                                "ty": {
+                                                  "canonical": "uint32_t",
+                                                  "is_const": false,
+                                                  "kind": {
+                                                    "Integer": {
+                                                      "signed": false,
+                                                      "width": 32
+                                                    }
+                                                  },
+                                                  "source_span": null,
+                                                  "spelled": "uint32_t",
+                                                  "width_bits": 32
+                                                }
+                                              }
+                                            ],
+                                            "name": "FdbKv"
+                                          }
+                                        },
+                                        "source_span": null,
+                                        "spelled": "struct FdbKv",
+                                        "width_bits": null
+                                      }
+                                    }
+                                  },
+                                  "source_span": null,
+                                  "spelled": "struct FdbKv *",
+                                  "width_bits": null
+                                }
+                              }
+                            },
+                            "field": "len",
+                            "is_arrow": true,
+                            "source_span": null,
+                            "ty": {
+                              "canonical": "uint32_t",
+                              "is_const": false,
+                              "kind": {
+                                "Integer": {
+                                  "signed": false,
+                                  "width": 32
+                                }
+                              },
+                              "source_span": null,
+                              "spelled": "uint32_t",
+                              "width_bits": 32
+                            }
+                          }
+                        },
+                        "source_span": null,
+                        "target": {
+                          "canonical": "uint32_t",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": false,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "uint32_t",
+                          "width_bits": 32
+                        }
+                      }
+                    },
+                    "implicit": true,
+                    "source_span": null,
+                    "target": {
+                      "canonical": "size_t",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": false,
+                          "width": 64
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "size_t",
+                      "width_bits": 64
+                    }
+                  }
+                },
+                "source_span": null,
+                "ty": {
+                  "canonical": "size_t",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": false,
+                      "width": 64
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "size_t",
+                  "width_bits": 64
+                }
+              }
+            }
+          }
+        },
+        {
+          "Return": {
+            "source_span": null,
+            "value": {
+              "LitInt": {
+                "source_span": null,
+                "spelling": "1",
+                "ty": {
+                  "canonical": "_Bool",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": false,
+                      "width": 8
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "bool",
+                  "width_bits": 8
+                },
+                "value": 1
+              }
+            }
+          }
+        }
+      ],
+      "name": "fdb_kv_iterate_obj_bytes_probe",
+      "params": [
+        {
+          "name": "itr",
+          "source_span": null,
+          "ty": {
+            "canonical": "struct FdbKvIterator *",
+            "is_const": false,
+            "kind": {
+              "Pointer": {
+                "pointee": {
+                  "canonical": "struct FdbKvIterator",
+                  "is_const": false,
+                  "kind": {
+                    "Record": {
+                      "fields": [
+                        {
+                          "name": "curr_kv",
+                          "ty": {
+                            "canonical": "struct FdbKv",
+                            "is_const": false,
+                            "kind": {
+                              "Record": {
+                                "fields": [
+                                  {
+                                    "name": "len",
+                                    "ty": {
+                                      "canonical": "uint32_t",
+                                      "is_const": false,
+                                      "kind": {
+                                        "Integer": {
+                                          "signed": false,
+                                          "width": 32
+                                        }
+                                      },
+                                      "source_span": null,
+                                      "spelled": "uint32_t",
+                                      "width_bits": 32
+                                    }
+                                  }
+                                ],
+                                "name": "FdbKv"
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "struct FdbKv",
+                            "width_bits": null
+                          }
+                        },
+                        {
+                          "name": "iterated_obj_bytes",
+                          "ty": {
+                            "canonical": "size_t",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": false,
+                                "width": 64
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "size_t",
+                            "width_bits": 64
+                          }
+                        }
+                      ],
+                      "name": "FdbKvIterator"
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "struct FdbKvIterator",
+                  "width_bits": null
+                }
+              }
+            },
+            "source_span": null,
+            "spelled": "struct FdbKvIterator *",
+            "width_bits": null
+          }
+        }
+      ],
+      "return_type": {
+        "canonical": "_Bool",
+        "is_const": false,
+        "kind": {
+          "Integer": {
+            "signed": false,
+            "width": 8
+          }
+        },
+        "source_span": null,
+        "spelled": "bool",
+        "width_bits": 8
+      },
+      "source_span": null
+    },
+    "function_name": "fdb_kv_iterate_obj_bytes_probe",
+    "globals": [],
+    "source_file": "sources/FlashDB/src/fdb_kvdb.c",
+    "status": "lowered"
+  },
+  "metadata": {
+    "clang_ast_fixture": null,
+    "compile_commands": null,
+    "function_source_span": null,
+    "logical_source_file": "src/fdb_kvdb.c",
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b"
+    },
+    "source_root": "sources/FlashDB"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-obj-bytes",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_file": "sources/FlashDB/src/fdb_kvdb.c",
+  "status": "lowered",
+  "target_id": "flashdb",
+  "translation_carrier": {
+    "artifact_source_hash_mode": "lf_stable_text",
+    "carrier_function": "fdb_kv_iterate_obj_bytes_probe",
+    "carrier_source_sha256": "cba5189dd14d446faa64210efd7360875623d961091a490a4688d4570a7f6a6f",
+    "claim_boundary": {
+      "excluded_semantics": [
+        "source lines 1882-1883 and their iterated_value_bytes and early-return behavior",
+        "the enclosing condition and iterator loop control around line 1881",
+        "real FlashDB iterator and KV layout or ABI",
+        "whole-project FlashDB behavior"
+      ],
+      "external_callee_semantics_verified": false,
+      "scope": "source_fragment_only",
+      "whole_function_semantics_verified": false
+    },
+    "embedding_mode": "verbatim_once",
+    "frontend_contract": "live_clang_slice_source",
+    "kind": "exact_source_fragment_wrapper",
+    "real_source": {
+      "containing_function": {
+        "declaration_text": "bool fdb_kv_iterate(",
+        "hash_mode": "trimmed_normalized_span",
+        "line_end": 1896,
+        "line_start": 1860,
+        "name": "fdb_kv_iterate",
+        "sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d"
+      },
+      "file": "src/fdb_kvdb.c",
+      "fragment": {
+        "hash_mode": "normalized_line_span_with_newline",
+        "kind": "expression_statement",
+        "line_end": 1881,
+        "line_start": 1881,
+        "sha256": "b318f25dd8a9fe01fd24056ff7e58ebe5cce3c2c6203732e98a0dbaf30bbdc1e",
+        "text": "                        itr->iterated_obj_bytes += kv->len;\n"
+      }
+    },
+    "source_file_hash_mode": "raw_bytes",
+    "source_text_normalization": "utf8_universal_newlines"
+  },
+  "typed_ir_candidate": {
+    "candidate_route": {
+      "candidate_generator": "GenericTypedIrEmitter",
+      "delete_when": [],
+      "deprecated": false,
+      "fallback": null,
+      "reasons": [
+        {
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
+        }
+      ],
+      "replacement": null,
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
+      "suggested_required_gates": [
+        "rustc_smoke",
+        "typed_ir_contract_tests"
+      ],
+      "token_cost": 0
+    },
+    "readonly_globals": [],
+    "runtime_preconditions": [],
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "bddb321b5fca6e5d2e40610a25c885656431c37ff10de3dcde560de493c1ea16",
+    "semantic_pass": false,
+    "status": "generated",
+    "typed_ir_sha256": "7aa09694a3d8d555677fe2418e361332f978801a745ef9670845809ce07aa100"
+  }
+}

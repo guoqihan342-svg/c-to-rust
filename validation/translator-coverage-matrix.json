@@ -2713,7 +2713,8 @@
         "empty-body do-while tail assignment-call into a nested u32 field through a safe interior reborrow where the same alias is the target and one direct call argument",
         "side-effect-free false empty-then else-if carrier wrapper normalization",
         "explicit u32 cast of a statically proven negative integer literal sentinel",
-        "direct mutable record pointer u32 field statement-position postfix increment with wrapping semantics"
+        "direct mutable record pointer u32 field statement-position postfix increment with wrapping semantics",
+        "single mutable owner interior alias u32 field read into sibling LP64 usize wrapping add"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -2892,6 +2893,17 @@
               "name": "record pointer u32 postfix increment no-clang AST fixture",
               "path": "crates/c2r-translator/fixtures/clang_ast/record_pointer_u32_postfix_inc_ast.json",
               "proof_class": "committed_no_clang_fixture_candidate_provenance"
+            },
+            {
+              "name": "owner-interior sibling size add no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/interior_alias_owner_sibling_size_add_ast.json",
+              "proof_class": "committed_no_clang_fixture_candidate_provenance"
+            },
+            {
+              "name": "owner-interior sibling size add no-clang candidate",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_34.rs",
+              "assertion": "renamed owner, alias, record, and field names lower one interior u32 field read into a sibling LP64 usize wrapping add without project-specific names",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
@@ -3281,12 +3293,18 @@
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_33.rs",
               "assertion": "executes zero, ordinary, and u32::MAX wrapping cases after emitting a field assignment with wrapping_add(1u32)",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "owner-interior sibling size add emitted Rust runtime test",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_34.rs",
+              "assertion": "executes zero, ordinary, and LP64 usize wrap cases after widening the interior u32 field and emitting a safe sibling wrapping_add",
+              "proof_class": "candidate_context_only"
             }
           ]
         },
         "c_rust_diff": {
           "status": "covered",
-          "scope_note": "real-fdb-blob-make has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence. The refreshed real-fdb-kv-set exact generated draft consumes accepted named-slice record-field evidence to emit a non-opaque FdbBlob and passes the uninitialized-DB return-code fixture gates. The real-fdb-kv-to-blob and real-fdb-tsl-to-blob exact generated drafts pass generated_draft_acceptance with embedded-slice C oracles, generated Rust replay, schema diff, negative diff, unsafe scan/ledger, and final verification semantic_pass=true. The TSL slice also binds a clang-proven uint32_t-to-size_t widening. real-fdb-kv-iterate-traversed-len passes the same semantic gate for the exact line-1892 u32 wrapping-add fragment with an explicit db/itr noalias contract. real-fdb-kv-iterate-kv-reset passes only for the exact named slice bound to fdb_kvdb.c:1891; the identical source text at fdb_kvdb.c:1871 is not automatically covered. real-fdb-kv-iterate-sector-start passes only for the exact named slice bound to fdb_kvdb.c:1869; SECTOR_HDR_DATA_SIZE is modeled only as a fixture-bound same-name u32 parameter and does not prove the real FDB_WG_ALIGN macro expansion, sizeof, layout, alignment, or ABI. real-fdb-kv-iterate-interior-projection passes only for exact line 1863. real-fdb-kv-iterate-sector-advance-continue passes only for exact lines 1871-1873. real-fdb-kv-iterate-next-sector-advance-continue composes exact lines 1870-1873 with one fixture-only external call, safe kv reborrow, mutable db/itr roots under the exact noalias pair, four hit/miss fixtures, and current-level continue. real-fdb-kv-iterate-zero-start-next-sector-advance-continue composes exact lines 1868-1874 with mutually exclusive zero-start and assignment-call paths, five discriminating partitions, an exact-u32 fixture-bound header offset, and the same db/itr noalias proof. real-fdb-kv-iterate-iterated-count passes only for exact line-1880 direct u32 record-pointer postfix increment, one mutable root, and three finite zero/ordinary/wrap fixtures. These count only for their bound named slices and do not generalize record-field semantic acceptance or prove the enclosing branch/loop, the complete fdb_kv_iterate function, record layout/ABI, or the FlashDB project.",
+          "scope_note": "real-fdb-blob-make has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence. The refreshed real-fdb-kv-set exact generated draft consumes accepted named-slice record-field evidence to emit a non-opaque FdbBlob and passes the uninitialized-DB return-code fixture gates. The real-fdb-kv-to-blob and real-fdb-tsl-to-blob exact generated drafts pass generated_draft_acceptance with embedded-slice C oracles, generated Rust replay, schema diff, negative diff, unsafe scan/ledger, and final verification semantic_pass=true. The TSL slice also binds a clang-proven uint32_t-to-size_t widening. real-fdb-kv-iterate-traversed-len passes the same semantic gate for the exact line-1892 u32 wrapping-add fragment with an explicit db/itr noalias contract. real-fdb-kv-iterate-kv-reset passes only for the exact named slice bound to fdb_kvdb.c:1891; the identical source text at fdb_kvdb.c:1871 is not automatically covered. real-fdb-kv-iterate-sector-start passes only for the exact named slice bound to fdb_kvdb.c:1869; SECTOR_HDR_DATA_SIZE is modeled only as a fixture-bound same-name u32 parameter and does not prove the real FDB_WG_ALIGN macro expansion, sizeof, layout, alignment, or ABI. real-fdb-kv-iterate-interior-projection passes only for exact line 1863. real-fdb-kv-iterate-sector-advance-continue passes only for exact lines 1871-1873. real-fdb-kv-iterate-next-sector-advance-continue composes exact lines 1870-1873 with one fixture-only external call, safe kv reborrow, mutable db/itr roots under the exact noalias pair, four hit/miss fixtures, and current-level continue. real-fdb-kv-iterate-zero-start-next-sector-advance-continue composes exact lines 1868-1874 with mutually exclusive zero-start and assignment-call paths, five discriminating partitions, an exact-u32 fixture-bound header offset, and the same db/itr noalias proof. real-fdb-kv-iterate-iterated-count passes only for exact line-1880 direct u32 record-pointer postfix increment, one mutable root, and three finite zero/ordinary/wrap fixtures. real-fdb-kv-iterate-obj-bytes passes only for exact line 1881 with one mutable owner, one scoped interior alias, a sibling LP64 size_t target, u32-to-usize widening, and three finite zero/ordinary/wrap fixtures. These count only for their bound named slices and do not generalize record-field semantic acceptance or prove the enclosing branch/loop, the complete fdb_kv_iterate function, record layout/ABI, or the FlashDB project.",
           "evidence": [
             {
               "name": "real-fdb-blob-make final verification",
@@ -3572,6 +3590,31 @@
               "name": "real-fdb-kv-iterate-iterated-count final verification",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-final-verification.json",
               "assertion": "generated_draft_semantic_pass=true only for exact fdb_kvdb.c:1880 with one mutable record root and three finite u32 wrapping partitions"
+            },
+            {
+              "name": "real-fdb-kv-iterate-obj-bytes C oracle",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-obj-bytes-c-oracle.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-obj-bytes Rust report",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-obj-bytes-rust-report.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-obj-bytes schema diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-obj-bytes-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-obj-bytes negative diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-obj-bytes-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-obj-bytes generated-draft unsafe ledger",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-generated-draft-unsafe-ledger.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-obj-bytes final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-final-verification.json",
+              "assertion": "generated_draft_semantic_pass=true only for exact fdb_kvdb.c:1881 with one owner-interior alias, LP64 u32-to-usize widening, and three finite wrapping partitions"
             }
           ]
         },
@@ -3797,9 +3840,21 @@
             {
               "name": "real-fdb-kv-iterate-iterated-count capability delta",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-capability-delta.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-obj-bytes route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-route-decision.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-obj-bytes validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-validation-profile.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-obj-bytes capability delta",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-capability-delta.json"
             }
           ],
-          "reason": "committed named-slice candidate provenance plus Rust compile/replay, accepted C oracle/diff evidence, and fixture-bound replay evidence now include real-fdb-kv-iterate-iterated-count for exact line 1880; it proves one direct u32 record-pointer postfix increment through one mutable root over three finite wrapping partitions. The enclosing branch/loop, complete fdb_kv_iterate, layout, ABI, and the FlashDB project remain separate gaps."
+          "reason": "committed named-slice candidate provenance plus Rust compile/replay, accepted C oracle/diff evidence, and fixture-bound replay evidence now include exact line 1880 direct u32 postfix increment and exact line 1881 owner-interior u32-to-LP64-usize sibling accumulation. Each uses three finite wrapping partitions. The enclosing branch/loop, complete fdb_kv_iterate, layout, whole ABI, and the FlashDB project remain separate gaps."
         }
       },
       "positive_cases": [
@@ -4021,6 +4076,17 @@
           "name": "real-fdb-kv-iterate-iterated-count strict named-slice semantic verification",
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-final-verification.json",
           "assertion": "accepts only exact fdb_kvdb.c:1880 with one mutable root and three finite u32 cases; enclosing control flow, whole function, layout, ABI, and the FlashDB project remain outside the claim"
+        },
+        {
+          "name": "owner-interior sibling size add generic candidate",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_34.rs",
+          "assertion": "candidate-only renamed AST replay emits and executes a safe u32-to-LP64-usize sibling wrapping add without project-specific names",
+          "proof_class": "candidate_context_only"
+        },
+        {
+          "name": "real-fdb-kv-iterate-obj-bytes strict named-slice semantic verification",
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-final-verification.json",
+          "assertion": "accepts only exact fdb_kvdb.c:1881 with one mutable owner, one interior alias, and three finite LP64 cases; enclosing control flow, whole function, layout, whole ABI, and the FlashDB project remain outside the claim"
         }
       ],
       "negative_cases": [
@@ -4038,6 +4104,11 @@
           "name": "interior_reborrow_do_while_tail_rejects_nonempty_body_and_comparison_drift",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_32_split_parts/part_01.rs",
           "fail_closed_reason": "the T22 candidate admits only an empty original C body normalized to one tail assignment and an exact != comparison"
+        },
+        {
+          "name": "owner_sibling_size_add_rejects_unsafe_alias_type_and_effect_drift",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_34.rs",
+          "fail_closed_reason": "owner-interior sibling accumulation requires LP64 target ABI, exact pointer-typedef provenance, one scoped alias read, non-overlapping fields, no owner/alias noalias fiction, and no extra effects"
         },
         {
           "name": "typed_ir_rejects_assignment_call_sibling_read_when_owner_is_mutably_borrowed",

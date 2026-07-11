@@ -822,6 +822,8 @@ fn direct_record_scalar_member_is_readable(
     };
     let supported_base = if *is_arrow {
         readonly_record_pointer_read_pointee_type(base_name, base_ty, context).is_some()
+            || (context.allows_owner_sibling_size_add_read(base_name)
+                && mutable_record_pointer_pointee_type(base_ty).is_some())
             || (context.is_interior_reborrow_call_root(base_name)
                 && mutable_record_pointer_pointee_type(base_ty).is_some())
     } else {

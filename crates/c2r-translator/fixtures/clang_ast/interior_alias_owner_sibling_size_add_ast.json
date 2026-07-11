@@ -1,0 +1,238 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "TypedefDecl",
+      "name": "size_t",
+      "type": {
+        "qualType": "unsigned long"
+      }
+    },
+    {
+      "kind": "RecordDecl",
+      "tagUsed": "struct",
+      "name": "Element",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "kind": "FieldDecl",
+          "name": "quantity",
+          "type": {
+            "qualType": "unsigned int"
+          }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "stamp",
+          "type": {
+            "qualType": "unsigned int"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "RecordDecl",
+      "tagUsed": "struct",
+      "name": "Container",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "kind": "FieldDecl",
+          "name": "selected",
+          "type": {
+            "qualType": "struct Element"
+          }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "total",
+          "type": {
+            "desugaredQualType": "unsigned long",
+            "qualType": "size_t"
+          }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "other_total",
+          "type": {
+            "desugaredQualType": "unsigned long",
+            "qualType": "size_t"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "TypedefDecl",
+      "name": "ElementRef",
+      "type": {
+        "qualType": "struct Element *"
+      }
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "accumulate_quantity",
+      "type": {
+        "qualType": "_Bool (struct Container *)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "container",
+          "type": {
+            "qualType": "struct Container *"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "element",
+                  "init": "c",
+                  "type": {
+                    "desugaredQualType": "struct Element *",
+                    "qualType": "ElementRef"
+                  },
+                  "inner": [
+                    {
+                      "kind": "UnaryOperator",
+                      "opcode": "&",
+                      "type": {
+                        "qualType": "struct Element *"
+                      },
+                      "inner": [
+                        {
+                          "kind": "MemberExpr",
+                          "name": "selected",
+                          "isArrow": true,
+                          "type": {
+                            "qualType": "struct Element"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "qualType": "struct Container *"
+                              },
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "container"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "CompoundAssignOperator",
+              "opcode": "+=",
+              "type": {
+                "desugaredQualType": "unsigned long",
+                "qualType": "size_t"
+              },
+              "computeLHSType": {
+                "desugaredQualType": "unsigned long",
+                "qualType": "size_t"
+              },
+              "computeResultType": {
+                "desugaredQualType": "unsigned long",
+                "qualType": "size_t"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "total",
+                  "isArrow": true,
+                  "type": {
+                    "desugaredQualType": "unsigned long",
+                    "qualType": "size_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "struct Container *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "container"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "IntegralCast",
+                  "type": {
+                    "desugaredQualType": "unsigned long",
+                    "qualType": "size_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "unsigned int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "MemberExpr",
+                          "name": "quantity",
+                          "isArrow": true,
+                          "type": {
+                            "qualType": "unsigned int"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "desugaredQualType": "struct Element *",
+                                "qualType": "ElementRef"
+                              },
+                              "referencedDecl": {
+                                "kind": "VarDecl",
+                                "name": "element"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "IntegralToBoolean",
+                  "type": {
+                    "qualType": "_Bool"
+                  },
+                  "inner": [
+                    {
+                      "kind": "IntegerLiteral",
+                      "value": "1",
+                      "type": {
+                        "qualType": "int"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

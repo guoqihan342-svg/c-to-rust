@@ -1,0 +1,62 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-translator-input.json",
+    "sha256": "ef44e0aadeed636e8fadd7dada0fb42b934ae7f355acaa15a3f2497b51ec84f7",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=8c67a57439f546f744dfc80e5f8500f203a69e397d1715bacbb5964ea12a5f41",
+    "fixture_hash=e02a534008ee2572a432b8a44242876ed6565d9ffbfbb92baa284d05e247623b",
+    "build_profile_hash=efe7aad87f39cfa5c70567e2cbe4e829579e6c2d301eab80bc9d300b93637cc4",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "bool",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "unsupported",
+      "rust_type": "u8",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "itr",
+      "c_type": "struct FdbKvIterator *",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "pointer",
+      "rust_type": "&mut FdbKvIterator",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "kv",
+      "c_type": "struct FdbKv *",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "pointer",
+      "rust_type": "&mut FdbKv",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "34634b13f9c5b132a1d24067a49ec5addacc8d9c",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-obj-bytes",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-obj-bytes.json",
+    "sha256": "8c67a57439f546f744dfc80e5f8500f203a69e397d1715bacbb5964ea12a5f41",
+    "status": "ready"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

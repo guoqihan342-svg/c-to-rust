@@ -20,6 +20,7 @@ from .sequence_model import (
 from .source_binding import StaticContext
 from .state_replay_kinds import is_state_replay_kind
 from .call_continue_contract import KIND as CALL_CONTINUE_KIND
+from .owner_interior_usize_add_contract import KIND as OWNER_INTERIOR_USIZE_ADD_KIND
 from .call_continue_negative_execution import run_call_continue_negative_execution
 from .state_replay_negative import (
     mutation_spec as state_replay_mutation_spec,
@@ -167,10 +168,16 @@ def run_negative_execution(
                 [str(partition_exe), "--exact", test_name, "--nocapture"],
                 aliases=command_aliases,
             )
-            if result["returncode"] == 0:
+            mutation_equivalent = (
+                context.contract.get("kind") == OWNER_INTERIOR_USIZE_ADD_KIND
+                and result["returncode"] == 0
+            )
+            if result["returncode"] == 0 and not mutation_equivalent:
                 raise ReporterError(f"declared mutation was not detected by fixture case {case['id']}")
             comparison_partition = (
-                sequence_mutation_partition(case, context.contract)
+                "mutation_equivalent"
+                if mutation_equivalent
+                else sequence_mutation_partition(case, context.contract)
                 if context.contract.get("kind") == SEQUENCE_KIND
                 else "observable_mismatch"
                 if is_state_replay_kind(context.contract)

@@ -6,7 +6,7 @@ fn record_field_compound_assignment_value_rejection_reason(
         ClangExprSkeleton::DeclRef { ty, .. }
         | ClangExprSkeleton::IntegerLiteral { ty, .. }
         | ClangExprSkeleton::SizeOfType { ty, .. } => {
-            if matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
+            if compound_assignment_integer_type_supported_before_abi_binding(ty) {
                 None
             } else {
                 Some(format!(
@@ -16,7 +16,7 @@ fn record_field_compound_assignment_value_rejection_reason(
             }
         }
         ClangExprSkeleton::Cast { target, expr, .. } => {
-            if !matches!(&target.kind, ClangTypeKind::Integer { .. }) {
+            if !compound_assignment_integer_type_supported_before_abi_binding(target) {
                 return Some(format!(
                     "record field compound assignment RHS cast target must be an integer; got {}",
                     target.spelled
@@ -25,7 +25,7 @@ fn record_field_compound_assignment_value_rejection_reason(
             record_field_compound_assignment_value_rejection_reason(expr)
         }
         ClangExprSkeleton::LValueToRValue { target, expr } => {
-            if !matches!(&target.kind, ClangTypeKind::Integer { .. }) {
+            if !compound_assignment_integer_type_supported_before_abi_binding(target) {
                 return Some(format!(
                     "record field compound assignment RHS lvalue-to-rvalue target must be an integer; got {}",
                     target.spelled
@@ -37,7 +37,7 @@ fn record_field_compound_assignment_value_rejection_reason(
                         .to_string(),
                 );
             };
-            if !matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
+            if !compound_assignment_integer_type_supported_before_abi_binding(ty) {
                 return Some(format!(
                     "record field compound assignment RHS lvalue-to-rvalue source must be an integer; got {}",
                     ty.spelled
@@ -78,7 +78,7 @@ fn record_field_compound_assignment_value_is_direct_record_scalar_member(
     else {
         return false;
     };
-    if !matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
+    if !compound_assignment_integer_type_supported_before_abi_binding(ty) {
         return false;
     }
     match (is_arrow, base.as_ref()) {
@@ -126,9 +126,21 @@ fn compound_assignment_integer_types_supported(
     compute_lhs_ty: &ClangTypeSkeleton,
     compute_result_ty: &ClangTypeSkeleton,
 ) -> bool {
-    matches!(&target_ty.kind, ClangTypeKind::Integer { .. })
-        && matches!(&compute_lhs_ty.kind, ClangTypeKind::Integer { .. })
+    compound_assignment_integer_type_supported_before_abi_binding(target_ty)
+        && compound_assignment_integer_type_supported_before_abi_binding(compute_lhs_ty)
         && compound_assignment_types_match(compute_lhs_ty, compute_result_ty)
+}
+
+#[cfg(feature = "typed-ir")]
+fn compound_assignment_integer_type_supported_before_abi_binding(
+    ty: &ClangTypeSkeleton,
+) -> bool {
+    matches!(&ty.kind, ClangTypeKind::Integer { .. })
+        || matches!(
+            &ty.kind,
+            ClangTypeKind::Unsupported { reason }
+                if reason.contains("requires target ABI width provenance")
+        )
 }
 
 #[cfg(feature = "typed-ir")]

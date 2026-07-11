@@ -20,11 +20,11 @@ input.c
 
 | Item | Current value | Exact meaning |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 36 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
+| `translator_generated_semantic_pass_count` | 37 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
 | `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
-| Active translator track | P0-T28 | Audit `fdb_kvdb.c:1881-1883` and select the next smallest generic construct that can be strictly accepted |
+| Active translator track | P0-T30 | Audit `fdb_kvdb.c:1882-1883` and the `:1880-1883` composition, prioritizing a new construct family instead of duplicate counting |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |
-| Latest development stage | P0-T27 | Source-backed strict acceptance for the `:1880` u32 mutable record-pointer postfix increment is complete; the count is now 36 |
+| Latest development stage | P0-T29 | Source-backed strict acceptance for the `:1881` owner-interior u32-to-LP64-usize sibling accumulation is complete; the count is now 37 |
 | Current strict regression | `26/34` | Run `20260711T061416Z`; eight historical evidence drifts remain |
 | Current proof class | `wsl-local-simulation` | Valid for development and approximation, but not `competition-exact` |
 
@@ -234,9 +234,21 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   The line-1880 source span and normalized hash, three bounded fixtures, C oracle, generated Rust replay, schema diff, `wrapping_add` to `wrapping_sub` negative mutation, unsafe ledger, route/profile, and final verification are complete. All 12 strict binding checks pass in the WSL competition clang lane with `semantic_pass=true` and `generated_draft_semantic_pass=true`, moving the matrix-derived count from 35 to 36. The claim covers only a direct u32 field postfix increment through one mutable record root over zero, ordinary, and wrap cases; the enclosing branch/loop, whole function, layout, ABI, and FlashDB project remain excluded.
 
-- [ ] **P0-T28: next-slice decision gate for `fdb_kvdb.c:1881-1883`**
+- [x] **P0-T28: generic owner-interior sibling accumulation candidate for `fdb_kvdb.c:1881`**
 
-  Audit the remaining condition, early return, and control-flow composition line by line, then select the smallest project-independent construct. Establish candidate and fail-closed boundaries before deciding whether to enter source-backed semantic closure; production translation must not depend on function names, field names, slice IDs, or fixture values.
+  - The selected construct is line 1881, `itr->iterated_obj_bytes += kv->len`. Because `kv` comes from `&itr->curr_kv`, this is one mutable owner with a scoped interior alias read and a non-overlapping sibling write, not two noalias pointer roots.
+  - Generic frontend/typed-IR generation requires an explicit LP64 target ABI, a u32 source field, a `size_t`/usize target field, pointer-typedef alias provenance, non-overlapping paths, and no additional alias use or side effect before it emits `wrapping_add(kv.len as usize)`.
+  - A renamed no-clang AST fixture and six focused tests pin ordinary, zero, and LP64 wrap cases plus fail-closed behavior for missing ABI, overlapping paths, a second pointer hop, alias reuse, type drift, fictional noalias, and terminal-statement drift.
+
+  This stage is project-independent candidate generation only. Production behavior does not depend on project, function, field, slice, or fixture names, and the semantic count remains 36.
+
+- [x] **P0-T29: source-backed semantic closure for `fdb_kvdb.c:1881`**
+
+  The exact line-1881 source span, pointer-typedef carrier, and LP64 ABI are bound to three finite fixtures covering ordinary, zero-addend, and usize-wrap cases. The actually compiled and executed C oracle, generated Rust replay, schema diff, negative mutation, unsafe ledger, route/profile, and final verification all pass. The WSL competition clang lane reports `schema_status=passed`, `semantic_pass=true`, and `generated_draft_semantic_pass=true` across all 12 strict binding classes, moving the matrix-derived count from 36 to 37. The claim covers only one owner, one scoped interior alias, and one u32-to-usize sibling wrapping add at line 1881; lines 1882-1883, the enclosing branch/loop, complete function, real layout/whole ABI, and the FlashDB project remain excluded.
+
+- [ ] **P0-T30: composition decision gate for `fdb_kvdb.c:1882-1883` and `:1880-1883`**
+
+  Audit the `iterated_value_bytes` update, threshold condition, and early return line by line, then determine whether their composition introduces a new generic conversion, expression, short-circuit, or control-flow capability. Do not increase the semantic numerator if the slice only repeats an existing record-field construct. Establish the smallest candidate and nearest fail-closed boundaries before entering source-backed closure.
 
 ### P0-A: AI/Harness Efficiency
 
@@ -253,6 +265,10 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 - [x] **P0-A3: deterministic-first admission gate**
 
   `mode=auto` selects deterministic execution before OpenCode preflight only when every worker binds accepted evidence, an existing evidence root, a source hash, and a slice spec with no repair policy. Mixed or unbound input is refused before fanout as `auto_route_unbound`; `competition-exact`, hostless rehearsal, and explicit OpenCode attestation cannot auto-downgrade. This route only avoids model calls with no expected information gain and remains `semantic_gate=false`.
+
+- [x] **P0-A4: compact the OpenCode worker context while preserving the exact contract**
+
+  `.opencode/agents/c2rust-migrator.md` was reduced from 5408 bytes to 1439 bytes while preserving `opencode + GLM-5.1 + c2rust-migrator + max`, Required Preflight, the non-gating Superpowers boundary, the first-and-only exact Command line tool call, prohibitions on exploration/editing/subagents/substitute commands, hash-bound handoff/session/contract verification, and the non-semantic chat boundary. The bundle manifest and profile contract tests were updated. This only reduces model context and ambiguity; it remains `semantic_gate=false`.
 
 ### P0-B: Competition Host and OpenCode
 
@@ -311,11 +327,14 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 | P0-T25 | Strict source-backed acceptance for the `:1876` discarded direct-call body | 34 -> 35 |
 | P0-T26 | Select and validate the `:1880` u32 mutable record-pointer postfix increment candidate | 35 -> 35 (candidate only) |
 | P0-T27 | Strict source-backed acceptance for the `:1880` u32 mutable record-pointer postfix increment | 35 -> 36 |
+| P0-T28 | Select and validate the `:1881` owner-interior u32-to-LP64-usize sibling accumulation candidate | 36 -> 36 (candidate only) |
+| P0-T29 | Strict source-backed acceptance for the `:1881` owner-interior sibling accumulation | 36 -> 37 |
 
 Validation run bindings:
 
 | Validation | Binding | Result |
 | --- | --- | --- |
+| P0-T29 strict validator | WSL competition clang lane, 2026-07-11 | `schema_status=passed`, `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; only three bounded fixtures ran, with no 1,000/10,000-round or other loop stress test |
 | P0-T27 strict validator | WSL competition clang lane, 2026-07-11 | `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; only three bounded fixtures ran and no loop stress was run |
 | P0-T25 strict validator | WSL competition clang lane, 2026-07-11 | `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; three bounded fixtures cover 1/2/3 ordered body/tail calls; no loop stress was run |
 | P0-T24 / P0-A1 / P0-A2 stage validation | WSL local simulation, 2026-07-11 | translator library `228`, bounded `665`, and integer conversion `4` passed, with `133` real-clang opt-in tests ignored by default; three real-clang focused tests, Python auto-migrate `155`, and OpenCode harness `192` passed; no loop stress was run |

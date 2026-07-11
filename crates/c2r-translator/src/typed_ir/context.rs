@@ -237,6 +237,11 @@ impl EmitContext {
         self.interior_reborrows.get(alias)
     }
 
+    fn allows_owner_sibling_size_add_read(&self, alias: &str) -> bool {
+        self.interior_reborrow(alias)
+            .is_some_and(|plan| plan.allows_owner_sibling_size_add_read)
+    }
+
     fn is_interior_reborrow_call_pair(&self, left: &str, right: &str) -> bool {
         self.interior_reborrows.values().any(|plan| {
             plan.call_root.as_deref().is_some_and(|root| {

@@ -1,0 +1,51 @@
+def c_oracle_record_owner_interior_u32_to_usize_wrapping_add_state_execution_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> dict[str, Any]:
+    contract = record_owner_interior_u32_to_usize_wrapping_add_state_replay_contract(
+        spec, fixture_binding
+    )
+    if contract is None:
+        return {"declarations": "", "statements": ""}
+    owner = contract["owner"]
+    state = contract["state_output"]
+    rhs = contract["rhs"]
+    result = contract["return"]
+    statements: list[str] = []
+    for case_binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding["expected_outputs"]
+        case_id = str(case_binding.get("id") or "case")
+        ident = c_safe_ident(case_id)
+        local = f"actual_{ident}_{owner['parameter']}"
+        state_expression = f"{local}." + ".".join(str(item) for item in state["owner_field_path"])
+        rhs_expression = f"{local}." + ".".join(str(item) for item in rhs["owner_field_path"])
+        computed = f"expected_{ident}_usize_state"
+        actual_return = f"actual_{ident}_return"
+        expected_state = int(expected[str(state["fixture_field"])])
+        expected_return = "true" if expected[str(result["fixture_field"])] else "false"
+        statements.append(
+            f"  struct {owner['rust_type']} {local} = "
+            f"{record_owner_interior_c_initializer(owner['initializer'], payload)};\n"
+            f"  size_t {computed} = {state_expression} + (size_t){rhs_expression};\n"
+            f"  if ({computed} != {c_integer_literal('size_t', expected_state)}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' declared usize state mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  bool {actual_return} = {required_str(spec, 'function_name')}(&{local});\n"
+            f"  if ({actual_return} != {expected_return}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' return mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(result['fixture_field']) + ' matched')});\n"
+            f"  if ({state_expression} != {computed}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' usize state mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(state['fixture_field']) + ' matched')});\n"
+        )
+    return {
+        "declarations": "",
+        "definitions_after_target": "",
+        "statements": "".join(statements),
+        "fixture_state_model": record_owner_interior_usize_add_fixture_state_model(),
+    }

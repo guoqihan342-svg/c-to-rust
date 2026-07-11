@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-obj-bytes",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "itr_iterated_obj_bytes"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "One mutable owner record root exposes an interior mutable alias. Its direct u32 rhs is losslessly widened under the bound LP64 ABI and wrapping-added to a non-overlapping direct usize accumulator; the fixed bool result is observed.",
+    "external_callee": null,
+    "field_update": {
+      "operation": "wrapping_add",
+      "target_owner_field_path": [
+        "iterated_obj_bytes"
+      ],
+      "source_owner_field_path": [
+        "curr_kv",
+        "len"
+      ],
+      "projection_path": [
+        "curr_kv"
+      ],
+      "widening": {
+        "conversion": "u32_to_usize",
+        "source_rust_type": "u32",
+        "target_rust_type": "usize",
+        "source_bits": 32,
+        "target_bits": 64,
+        "signedness": "unsigned",
+        "lossless": true,
+        "target_abi_binding": "build_profile.target+c_boundary.target_abi_contract"
+      }
+    },
+    "excluded_semantics": [
+      "source lines 1882-1883 and their iterated_value_bytes and early-return behavior",
+      "the enclosing condition and iterator loop control around line 1881",
+      "real FlashDB iterator and KV layout or ABI",
+      "whole-project FlashDB behavior"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "first_mismatch": null
+}

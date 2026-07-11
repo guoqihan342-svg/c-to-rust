@@ -1,0 +1,447 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-obj-bytes",
+  "level": "L3",
+  "status": "draft",
+  "l1_evidence": {
+    "path": "validation/evidence/flashdb/l1-native-build.json",
+    "status": "required",
+    "accepted": false
+  },
+  "function_name": "fdb_kv_iterate_obj_bytes_probe",
+  "c_source": "#include <stdbool.h>\n#include <stddef.h>\n#include <stdint.h>\nstruct FdbKv { uint32_t len; };\ntypedef struct FdbKv *fdb_kv_t;\nstruct FdbKvIterator { struct FdbKv curr_kv; size_t iterated_obj_bytes; };\nstatic bool fdb_kv_iterate_obj_bytes_probe(struct FdbKvIterator *itr)\n{\n    fdb_kv_t kv = &itr->curr_kv;\n                        itr->iterated_obj_bytes += kv->len;\n    return true;\n}\n",
+  "translation_carrier": {
+    "kind": "exact_source_fragment_wrapper",
+    "carrier_function": "fdb_kv_iterate_obj_bytes_probe",
+    "carrier_source_sha256": "cba5189dd14d446faa64210efd7360875623d961091a490a4688d4570a7f6a6f",
+    "embedding_mode": "verbatim_once",
+    "frontend_contract": "live_clang_slice_source",
+    "source_text_normalization": "utf8_universal_newlines",
+    "source_file_hash_mode": "raw_bytes",
+    "artifact_source_hash_mode": "lf_stable_text",
+    "real_source": {
+      "file": "src/fdb_kvdb.c",
+      "containing_function": {
+        "name": "fdb_kv_iterate",
+        "line_start": 1860,
+        "line_end": 1896,
+        "sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d",
+        "hash_mode": "trimmed_normalized_span",
+        "declaration_text": "bool fdb_kv_iterate("
+      },
+      "fragment": {
+        "kind": "expression_statement",
+        "line_start": 1881,
+        "line_end": 1881,
+        "sha256": "b318f25dd8a9fe01fd24056ff7e58ebe5cce3c2c6203732e98a0dbaf30bbdc1e",
+        "hash_mode": "normalized_line_span_with_newline",
+        "text": "                        itr->iterated_obj_bytes += kv->len;\n"
+      }
+    },
+    "claim_boundary": {
+      "scope": "source_fragment_only",
+      "whole_function_semantics_verified": false,
+      "external_callee_semantics_verified": false,
+      "excluded_semantics": [
+        "source lines 1882-1883 and their iterated_value_bytes and early-return behavior",
+        "the enclosing condition and iterator loop control around line 1881",
+        "real FlashDB iterator and KV layout or ABI",
+        "whole-project FlashDB behavior"
+      ]
+    }
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "fixture_hash": "e02a534008ee2572a432b8a44242876ed6565d9ffbfbb92baa284d05e247623b",
+  "source_root": "sources/FlashDB",
+  "source_file": "src/fdb_kvdb.c",
+  "source_file_hashes": {
+    "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+  },
+  "source": {
+    "source_root": "sources/FlashDB",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "repo_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_branch": "competition"
+  },
+  "c_boundary": {
+    "oracle_source_mode": "embedded_slice_c_source",
+    "files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "functions": [
+      "fdb_kv_iterate_obj_bytes_probe"
+    ],
+    "signatures": [
+      {
+        "id": "sig-fdb-kv-iterate-obj-bytes-probe",
+        "function": "fdb_kv_iterate_obj_bytes_probe",
+        "return_type": "bool",
+        "parameters": [
+          {
+            "name": "itr",
+            "c_type": "struct FdbKvIterator *",
+            "direction": "inout"
+          }
+        ],
+        "definition_status": "synthetic_translation_carrier"
+      }
+    ],
+    "direct_dependencies": [],
+    "pointer_contract": {
+      "input_buffers": [],
+      "output_pointers": [
+        {
+          "name": "itr",
+          "c_type": "struct FdbKvIterator *",
+          "nullability": "non_null",
+          "ownership_role": "inout_param",
+          "mutability": "read_write",
+          "read_effects": [
+            "itr.curr_kv.len",
+            "itr.iterated_obj_bytes"
+          ],
+          "write_effects": [
+            "itr.iterated_obj_bytes"
+          ]
+        }
+      ],
+      "aliasing_proven": true,
+      "noalias_required": []
+    },
+    "target_abi_contract": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "char_width": 8,
+      "plain_char_signed": true,
+      "short_width": 16,
+      "long_width": 64,
+      "long_long_width": 64,
+      "pointer_width": 64,
+      "size_t_width": 64
+    },
+    "scalar_arithmetic_contract": {
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "not_declared",
+      "division_by_zero": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "shift_count": "not_declared",
+      "signed_right_shift": "not_declared",
+      "comparison": "uint32_t kv->len is losslessly widened to LP64 size_t before unsigned modulo-2^64 compound addition"
+    },
+    "external_direct_callees": [],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py plus translation_carrier validator",
+      "frontend": "live clang slice-source carrier",
+      "semantic_status": "exact source fragment and carrier provenance are checked; oracle/replay/diff gates are required for bounded semantic acceptance"
+    }
+  },
+  "build_profile": {
+    "profile_id": "flashdb-real-fdb-kv-iterate-obj-bytes-carrier",
+    "compiler_command_source": "translation-carrier self-contained C plus tests/Makefile ABI",
+    "include_paths": [],
+    "oracle_harness_includes": [],
+    "defines": [],
+    "clang_available": true,
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "char_width": 8,
+      "plain_char_signed": true,
+      "short_width": 16,
+      "long_width": 64,
+      "long_long_width": 64,
+      "pointer_width": 64,
+      "size_t_width": 64
+    },
+    "target_triple": "x86_64-unknown-linux-gnu",
+    "abi": "x86_64-unknown-linux-gnu",
+    "preprocessing_mode": "manual_flags",
+    "tool_versions": {
+      "extract_source_slice": "0.1.0",
+      "translation_carrier_validator": "1"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "mode": "live_clang_slice_source",
+      "diagnostics": [
+        "The carrier is lowered from its embedded c_source; no offline AST fixture is accepted for this provenance contract."
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "real-fdb-kv-iterate-obj-bytes-fixture",
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-obj-bytes.json",
+    "hash": "e02a534008ee2572a432b8a44242876ed6565d9ffbfbb92baa284d05e247623b",
+    "cases": [
+      {
+        "id": "ordinary-add",
+        "input_ref": "cases[0].inputs",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-obj-bytes.json",
+        "inputs": {
+          "itr_initial_iterated_obj_bytes": 11,
+          "itr_curr_kv_len": 5
+        },
+        "expected_outputs": {
+          "return_value": true,
+          "itr_iterated_obj_bytes": 16
+        }
+      },
+      {
+        "id": "zero-rhs",
+        "input_ref": "cases[1].inputs",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-obj-bytes.json",
+        "inputs": {
+          "itr_initial_iterated_obj_bytes": 42,
+          "itr_curr_kv_len": 0
+        },
+        "expected_outputs": {
+          "return_value": true,
+          "itr_iterated_obj_bytes": 42
+        }
+      },
+      {
+        "id": "usize-wrap",
+        "input_ref": "cases[2].inputs",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-obj-bytes.json",
+        "inputs": {
+          "itr_initial_iterated_obj_bytes": 18446744073709551614,
+          "itr_curr_kv_len": 3
+        },
+        "expected_outputs": {
+          "return_value": true,
+          "itr_iterated_obj_bytes": 1
+        }
+      }
+    ],
+    "observable_outputs": [
+      "return_value",
+      "itr_iterated_obj_bytes"
+    ],
+    "behavior_fields": [
+      "return_value",
+      "itr_iterated_obj_bytes"
+    ],
+    "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-obj-bytes-c-oracle.json",
+    "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-obj-bytes-rust-report.json",
+    "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-obj-bytes-diff.json",
+    "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-obj-bytes-negative-diff.json",
+    "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-unsafe-ledger.json"
+  },
+  "replay_contract": {
+    "schema_version": 1,
+    "kind": "record_owner_interior_u32_to_usize_wrapping_add_state",
+    "owner": {
+      "parameter": "itr",
+      "c_type": "struct FdbKvIterator *",
+      "rust_type": "FdbKvIterator",
+      "pass_mode": "mutable_ref",
+      "direction": "inout",
+      "initializer": {
+        "record_type": "FdbKvIterator",
+        "fields": [
+          {
+            "name": "curr_kv",
+            "record": {
+              "record_type": "FdbKv",
+              "fields": [
+                {
+                  "name": "len",
+                  "fixture_field": "itr_curr_kv_len",
+                  "rust_type": "u32"
+                }
+              ]
+            }
+          },
+          {
+            "name": "iterated_obj_bytes",
+            "fixture_field": "itr_initial_iterated_obj_bytes",
+            "rust_type": "usize"
+          }
+        ]
+      }
+    },
+    "projection_path": [
+      "curr_kv"
+    ],
+    "alias": {
+      "local": "kv",
+      "c_type": "fdb_kv_t",
+      "rust_type": "FdbKv",
+      "pass_mode": "mutable_ref"
+    },
+    "state_output": {
+      "owner_field_path": [
+        "iterated_obj_bytes"
+      ],
+      "fixture_field": "itr_iterated_obj_bytes",
+      "rust_type": "usize"
+    },
+    "rhs": {
+      "alias_field_path": [
+        "len"
+      ],
+      "owner_field_path": [
+        "curr_kv",
+        "len"
+      ],
+      "rust_type": "u32",
+      "mode": "direct_field_value"
+    },
+    "widening": {
+      "conversion": "u32_to_usize",
+      "source_rust_type": "u32",
+      "target_rust_type": "usize",
+      "source_bits": 32,
+      "target_bits": 64,
+      "signedness": "unsigned",
+      "lossless": true,
+      "target_abi_binding": "build_profile.target+c_boundary.target_abi_contract"
+    },
+    "state_update": {
+      "operation": "wrapping_add"
+    },
+    "return": {
+      "fixture_field": "return_value",
+      "rust_type": "bool",
+      "value": true
+    },
+    "noalias_required": []
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-obj-bytes/l3-real-fdb-kv-iterate-obj-bytes-rust-draft.rs",
+    "public_api": [
+      {
+        "name": "fdb_kv_iterate_obj_bytes_probe",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.0,
+      "ledger_required": true
+    }
+  },
+  "memory_model": {
+    "alias_contract": {
+      "decision": "allow",
+      "proven": true,
+      "requires_noalias": false,
+      "complete_alias_safety": true,
+      "source": "kv is a scoped interior mutable projection of the sole mutable iterator owner, not an independent pointer root."
+    },
+    "ownership_contract": {
+      "inputs": [
+        "fixture-created FdbKvIterator with nested curr_kv record"
+      ],
+      "outputs": [
+        "return_value",
+        "itr.iterated_obj_bytes after LP64 usize wrapping addition"
+      ],
+      "borrow_model": "one mutable FdbKvIterator reference with a scoped mutable reborrow of itr.curr_kv",
+      "unsafe_boundary": "No raw pointer is emitted and no cross-root noalias assumption is required."
+    },
+    "length_companions": [],
+    "effect_graph": {
+      "effects": [
+        {
+          "id": "project-current-kv",
+          "pointer_node": "itr.curr_kv",
+          "kind": "compute",
+          "expression": "kv = &itr->curr_kv",
+          "source": "translation carrier local setup"
+        },
+        {
+          "id": "read-current-kv-length",
+          "pointer_node": "itr.curr_kv",
+          "kind": "read",
+          "expression": "kv->len",
+          "source": "src/fdb_kvdb.c:1881"
+        },
+        {
+          "id": "update-iterated-object-bytes",
+          "pointer_node": "itr",
+          "kind": "read_write",
+          "expression": "itr->iterated_obj_bytes += kv->len",
+          "source": "src/fdb_kvdb.c:1881"
+        }
+      ],
+      "edges": [
+        {
+          "from_effect": "project-current-kv",
+          "to_effect": "read-current-kv-length",
+          "relationship": "data_influences"
+        },
+        {
+          "from_effect": "read-current-kv-length",
+          "to_effect": "update-iterated-object-bytes",
+          "relationship": "data_influences"
+        }
+      ],
+      "summary": {
+        "reads": [
+          "itr.curr_kv.len",
+          "itr.iterated_obj_bytes"
+        ],
+        "writes": [
+          "itr.iterated_obj_bytes"
+        ],
+        "external_state": [],
+        "alias_sensitive": true
+      }
+    }
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No source line 1882 iterated_value_bytes update claim.",
+      "No source line 1883 early-return claim.",
+      "No enclosing condition or iterator loop-control claim.",
+      "No whole fdb_kv_iterate function migration claim.",
+      "No real FlashDB iterator/KV layout or whole ABI claim.",
+      "No FlashDB whole-project migration claim.",
+      "Fixture records only test one owner-interior u32-to-LP64-usize wrapping addition and fixed true return."
+    ],
+    "must_not_claim": [
+      "source lines 1882-1883 semantic equivalence",
+      "enclosing condition or loop semantic equivalence",
+      "fdb_kv_iterate semantic equivalence",
+      "FlashDB layout or whole ABI equivalence",
+      "whole-project FlashDB migration",
+      "semantic equivalence without C oracle and exact generated Rust replay evidence"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.source_file_hashes",
+    "source_root",
+    "source_file",
+    "source_file_hashes",
+    "translation_carrier",
+    "c_boundary.signatures",
+    "c_boundary.external_direct_callees",
+    "c_boundary.pointer_contract",
+    "c_boundary.target_abi_contract",
+    "build_profile.profile_id",
+    "build_profile.target",
+    "build_profile.clang_ast_fixture",
+    "build_profile.bounded_translation_test",
+    "fixture_contract.hash",
+    "replay_contract",
+    "memory_model.alias_contract",
+    "translator_version"
+  ]
+}

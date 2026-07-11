@@ -1,0 +1,132 @@
+RECORD_OWNER_INTERIOR_U32_TO_USIZE_WRAPPING_ADD_STATE_KIND = (
+    "record_owner_interior_u32_to_usize_wrapping_add_state"
+)
+
+
+def record_owner_interior_u32_to_usize_wrapping_add_state_replay_supported(
+    spec: dict[str, Any], fixture_binding: dict[str, Any] | None = None
+) -> bool:
+    return record_owner_interior_u32_to_usize_wrapping_add_state_replay_contract(
+        spec, fixture_binding
+    ) is not None
+
+
+def record_owner_interior_u32_to_usize_wrapping_add_state_replay_contract(
+    spec: dict[str, Any], fixture_binding: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    raw = spec.get("replay_contract")
+    if not isinstance(raw, dict) or raw.get("kind") != RECORD_OWNER_INTERIOR_U32_TO_USIZE_WRAPPING_ADD_STATE_KIND:
+        return None
+    from validation.tools._translation_carrier_reporter.errors import ReporterError
+    from validation.tools._translation_carrier_reporter.owner_interior_usize_add_contract import (
+        initializer_fixture_paths,
+        parse_contract,
+    )
+
+    try:
+        contract = parse_contract(spec)
+    except ReporterError as exc:
+        raise ValueError(str(exc)) from exc
+    if fixture_binding is not None:
+        fields = [contract["return"]["fixture_field"], contract["state_output"]["fixture_field"]]
+        fixture_types = {
+            name: rust_type
+            for name, _, rust_type in initializer_fixture_paths(contract["owner"]["initializer"])
+        }
+        cases = fixture_binding.get("case_bindings")
+        if not isinstance(cases, list) or not cases:
+            raise ValueError("owner interior usize-add fixture cases are missing")
+        mutation_observed = False
+        for case in cases:
+            payload = oracle_fixture_input_payload(spec, case)
+            expected = case.get("expected_outputs")
+            if not isinstance(payload, dict) or set(payload) != set(fixture_types):
+                raise ValueError("owner interior usize-add fixture input fields drifted")
+            for name, rust_type in fixture_types.items():
+                valid = is_uint32_value(payload.get(name)) if rust_type == "u32" else is_u64_value(payload.get(name))
+                if not valid:
+                    raise ValueError(f"owner interior usize-add {name} value drifted")
+            if not isinstance(expected, dict) or set(expected) != set(fields):
+                raise ValueError("owner interior usize-add expected output fields drifted")
+            if expected != record_owner_interior_usize_add_expected_outputs(payload, contract):
+                raise ValueError("owner interior usize-add expected outputs drifted")
+            mutation_observed = mutation_observed or (
+                record_owner_interior_usize_sub_state(payload, contract) != expected[fields[1]]
+            )
+        if not mutation_observed:
+            raise ValueError("owner interior usize-add fixtures do not observe mutation")
+    return contract
+
+
+def record_owner_interior_usize_add_expected_outputs(
+    payload: dict[str, Any], contract: dict[str, Any]
+) -> dict[str, Any]:
+    state = record_owner_interior_field_value(payload, contract, contract["state_output"]["owner_field_path"])
+    rhs = record_owner_interior_field_value(payload, contract, contract["rhs"]["owner_field_path"])
+    return {
+        str(contract["return"]["fixture_field"]): bool(contract["return"]["value"]),
+        str(contract["state_output"]["fixture_field"]): (state + rhs) & 0xFFFFFFFFFFFFFFFF,
+    }
+
+
+def record_owner_interior_usize_sub_state(
+    payload: dict[str, Any], contract: dict[str, Any]
+) -> int:
+    state = record_owner_interior_field_value(payload, contract, contract["state_output"]["owner_field_path"])
+    rhs = record_owner_interior_field_value(payload, contract, contract["rhs"]["owner_field_path"])
+    return (state - rhs) & 0xFFFFFFFFFFFFFFFF
+
+
+def record_owner_interior_field_value(
+    payload: dict[str, Any], contract: dict[str, Any], path_value: list[str]
+) -> int:
+    from validation.tools._translation_carrier_reporter.owner_interior_usize_add_contract import (
+        initializer_fixture_paths,
+    )
+
+    fixtures = {
+        path: name
+        for name, path, _ in initializer_fixture_paths(contract["owner"]["initializer"])
+    }
+    return int(payload[fixtures[tuple(path_value)]])
+
+
+def record_owner_interior_c_initializer(
+    initializer: dict[str, Any], payload: dict[str, Any]
+) -> str:
+    fields: list[str] = []
+    for field in initializer["fields"]:
+        if "fixture_field" in field:
+            c_type = "uint32_t" if field["rust_type"] == "u32" else "size_t"
+            value = c_integer_literal(c_type, int(payload[str(field["fixture_field"])]))
+        else:
+            value = record_owner_interior_c_initializer(field["record"], payload)
+        fields.append(f".{field['name']} = {value}")
+    return f"(struct {initializer['record_type']}){{ " + ", ".join(fields) + " }"
+
+
+def record_owner_interior_rust_initializer(
+    initializer: dict[str, Any], payload: dict[str, Any]
+) -> str:
+    fields: list[str] = []
+    for field in initializer["fields"]:
+        if "fixture_field" in field:
+            rust_type = str(field["rust_type"])
+            value = f"{int(payload[str(field['fixture_field'])])}{rust_type}"
+        else:
+            value = record_owner_interior_rust_initializer(field["record"], payload)
+        fields.append(f"{safe_ident(str(field['name']))}: {value}")
+    return f"{safe_ident(str(initializer['record_type']))} {{ " + ", ".join(fields) + " }"
+
+
+def record_owner_interior_usize_add_fixture_state_model() -> dict[str, Any]:
+    return {
+        "kind": RECORD_OWNER_INTERIOR_U32_TO_USIZE_WRAPPING_ADD_STATE_KIND,
+        "scope": "fixture_only",
+        "operation": "wrapping_add",
+        "projection_mode": "owner_interior_mutable",
+        "pointer_root_count": 1,
+        "conversion": "u32_to_usize",
+        "source_bits": 32,
+        "target_bits": 64,
+    }

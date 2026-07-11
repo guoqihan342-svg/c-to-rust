@@ -1,0 +1,6 @@
+
+thread '__c2r_negative_partition_case_2' (71274) panicked at <translation-carrier-negative>/mutated_partition_replay.rs:38:5:
+assertion `left == right` failed: usize-wrap state drifted
+  left: 18446744073709551611
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
