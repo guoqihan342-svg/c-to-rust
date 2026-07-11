@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -14,14 +16,21 @@ from typing import Any
 
 DEFAULT_SUITE = "validation/ai-finite-cross-project-suite.json"
 MAX_JSON_BYTES = 2 * 1024 * 1024
+GIT_TIMEOUT_SECONDS = 5
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 REQUIRED_PROJECTS = {"flashdb", "zlib-ng", "libuv"}
 PROVENANCE_KINDS = {
     "real_upstream_source_slice",
+    "real_upstream_source_fragment",
     "real_project_synthetic_carrier",
     "real_project_unbound_slice",
 }
+FRESH_SOURCE_PROVENANCE_KINDS = {
+    "real_upstream_source_slice",
+    "real_upstream_source_fragment",
+}
+FRAGMENT_HASH_MODE = "normalized_line_span_with_newline"
 FORBIDDEN_ROUTING_INPUTS = {
     "function_name",
     "project_id",
@@ -66,6 +75,48 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(64 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _newline_variants(raw: bytes) -> tuple[bytes, ...]:
+    normalized_lf = raw.replace(b"\r\n", b"\n")
+    normalized_crlf = normalized_lf.replace(b"\n", b"\r\n")
+    return tuple(dict.fromkeys((raw, normalized_lf, normalized_crlf)))
+
+
+def _matches_sha256(raw: bytes, expected: str) -> bool:
+    return hashlib.sha256(raw).hexdigest() == expected
+
+
+def _line_span_byte_range(raw: bytes, line_start: int, line_end: int) -> tuple[int, set[int]] | None:
+    if not raw:
+        return None
+    line_starts = [0]
+    line_starts.extend(index + 1 for index, byte in enumerate(raw) if byte == 0x0A and index + 1 < len(raw))
+    if line_end > len(line_starts):
+        return None
+    byte_start = line_starts[line_start - 1]
+    final_line_start = line_starts[line_end - 1]
+    newline_at = raw.find(b"\n", final_line_start)
+    if newline_at < 0:
+        return byte_start, {len(raw)}
+    byte_end_without_newline = newline_at
+    if newline_at > final_line_start and raw[newline_at - 1] == 0x0D:
+        byte_end_without_newline -= 1
+    return byte_start, {byte_end_without_newline, newline_at + 1}
+
+
+def _span_range_matches_variant(raw: bytes, span: dict[str, Any]) -> bool:
+    expected = _line_span_byte_range(raw, span["line_start"], span["line_end"])
+    if expected is None:
+        return False
+    byte_start, allowed_byte_ends = expected
+    return span["byte_start"] == byte_start and span["byte_end"] in allowed_byte_ends
+
+
+def _span_matches_variant(raw: bytes, span: dict[str, Any]) -> bool:
+    return _span_range_matches_variant(raw, span) and _matches_sha256(
+        raw[span["byte_start"] : span["byte_end"]], span["sha256"]
+    )
 
 
 def _expect_keys(value: dict[str, Any], expected: set[str], label: str) -> None:
@@ -126,6 +177,7 @@ def _validate_policy(suite: dict[str, Any]) -> None:
             "purpose",
             "limits",
             "required_real_projects",
+            "project_sources",
             "translation_policy",
             "items",
         },
@@ -187,6 +239,104 @@ def _validate_policy(suite: dict[str, Any]) -> None:
         raise SuiteContractError("preflight must not claim semantic acceptance or translation coverage")
 
 
+def _validate_project_sources(value: Any) -> dict[str, dict[str, str]]:
+    if not isinstance(value, dict) or set(value) != REQUIRED_PROJECTS:
+        raise SuiteContractError("project_sources must exactly contain flashdb, zlib-ng, and libuv")
+    result: dict[str, dict[str, str]] = {}
+    for project_id in sorted(REQUIRED_PROJECTS):
+        source = value[project_id]
+        label = f"project_sources.{project_id}"
+        if not isinstance(source, dict):
+            raise SuiteContractError(f"{label} must be an object")
+        _expect_keys(source, {"repository", "root", "commit"}, label)
+        repository = _expect_string(source["repository"], f"{label}.repository")
+        root = _expect_string(source["root"], f"{label}.root")
+        commit = _expect_string(source["commit"], f"{label}.commit")
+        _relative_parts(root, f"{label}.root")
+        if not COMMIT_RE.fullmatch(commit):
+            raise SuiteContractError(f"{label}.commit must be a pinned commit")
+        result[project_id] = {"repository": repository, "root": root, "commit": commit}
+    return result
+
+
+def _run_git(checkout: Path, operation: str, *args: str) -> tuple[str | None, str | None]:
+    env = os.environ.copy()
+    env["GIT_NO_LAZY_FETCH"] = "1"
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(checkout), *args],
+            capture_output=True,
+            check=False,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+            timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError:
+        return None, "project_source_git_unavailable"
+    except subprocess.TimeoutExpired:
+        return None, f"project_source_git_{operation}_timeout"
+    except OSError:
+        return None, f"project_source_git_{operation}_failed"
+    if completed.returncode != 0:
+        return None, f"project_source_git_{operation}_failed"
+    return completed.stdout.strip(), None
+
+
+def _normalize_repository_url(value: str) -> str:
+    normalized = value.rstrip("/")
+    if normalized.endswith(".git"):
+        normalized = normalized[:-4]
+    return normalized.rstrip("/")
+
+
+def _preflight_project_source(source: dict[str, str], repo_root: Path) -> list[str]:
+    try:
+        checkout = _safe_relative_path(repo_root, source["root"], "project_sources.root")
+    except OSError:
+        return ["project_source_checkout_path_failed"]
+    if not checkout.is_dir():
+        return ["project_source_checkout_missing"]
+
+    top_level, error = _run_git(checkout, "checkout", "rev-parse", "--show-toplevel")
+    if error is not None:
+        return [error]
+    try:
+        is_checkout_root = top_level is not None and Path(top_level).resolve() == checkout.resolve()
+    except OSError:
+        return ["project_source_checkout_path_failed"]
+    if not is_checkout_root:
+        return ["project_source_not_checkout_root"]
+
+    reasons: list[str] = []
+    head, error = _run_git(checkout, "head", "rev-parse", "HEAD")
+    if error is not None:
+        reasons.append(error)
+    elif head != source["commit"]:
+        reasons.append("project_source_head_mismatch")
+
+    origin, error = _run_git(checkout, "origin", "remote", "get-url", "origin")
+    if error is not None:
+        reasons.append(error)
+    elif origin is None or _normalize_repository_url(origin) != _normalize_repository_url(source["repository"]):
+        reasons.append("project_source_repository_mismatch")
+
+    status, error = _run_git(
+        checkout,
+        "status",
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=no",
+        "--ignore-submodules=none",
+    )
+    if error is not None:
+        reasons.append(error)
+    elif status:
+        reasons.append("project_source_tracked_dirty")
+    return reasons
+
+
 def _validate_span_shape(span: Any, label: str) -> dict[str, Any] | None:
     if span is None:
         return None
@@ -233,6 +383,31 @@ def _spec_spans(spec: dict[str, Any], source_path: str) -> list[dict[str, Any]]:
     return result
 
 
+def _spec_fragment_span(spec: dict[str, Any], source_path: str) -> dict[str, Any] | None:
+    carrier = spec.get("translation_carrier")
+    real_source = carrier.get("real_source") if isinstance(carrier, dict) else None
+    if not isinstance(real_source, dict) or real_source.get("file") != source_path:
+        return None
+    fragment = real_source.get("fragment")
+    if not isinstance(fragment, dict) or fragment.get("hash_mode") != FRAGMENT_HASH_MODE:
+        return None
+    extracted = {
+        "line_start": fragment.get("line_start"),
+        "line_end": fragment.get("line_end"),
+        "sha256": fragment.get("sha256"),
+    }
+    if (
+        not isinstance(extracted["line_start"], int)
+        or extracted["line_start"] < 1
+        or not isinstance(extracted["line_end"], int)
+        or extracted["line_end"] < extracted["line_start"]
+        or not isinstance(extracted["sha256"], str)
+        or not SHA256_RE.fullmatch(extracted["sha256"])
+    ):
+        return None
+    return extracted
+
+
 def _validate_item_shape(item: Any, index: int) -> tuple[dict[str, Any], dict[str, Any] | None]:
     label = f"items[{index}]"
     if not isinstance(item, dict):
@@ -259,7 +434,7 @@ def _validate_item_shape(item: Any, index: int) -> tuple[dict[str, Any], dict[st
         raise SuiteContractError(f"{label}.provenance_kind is unsupported")
     if not isinstance(item["fresh_executable"], bool):
         raise SuiteContractError(f"{label}.fresh_executable must be boolean")
-    if item["fresh_executable"] and provenance != "real_upstream_source_slice":
+    if item["fresh_executable"] and provenance not in FRESH_SOURCE_PROVENANCE_KINDS:
         raise SuiteContractError(f"{label} cannot declare synthetic or unbound provenance fresh-executable")
 
     spec_ref = item["slice_spec"]
@@ -301,13 +476,29 @@ def _validate_item_shape(item: Any, index: int) -> tuple[dict[str, Any], dict[st
     return item, _validate_span_shape(source["span"], f"{label}.source_binding.span")
 
 
-def _preflight_item(item: dict[str, Any], span: dict[str, Any] | None, repo_root: Path) -> dict[str, Any]:
+def _preflight_item(
+    item: dict[str, Any],
+    span: dict[str, Any] | None,
+    repo_root: Path,
+    project_sources: dict[str, dict[str, str]],
+    project_source_reasons: dict[str, list[str]],
+) -> dict[str, Any]:
     reasons: list[str] = []
     spec_ref = item["slice_spec"]
     source_ref = item["source_binding"]
     fixture_ref = item["fixture"]
     spec_path = _safe_relative_path(repo_root, spec_ref["path"], f"{item['id']}.slice_spec.path")
     fixture_path = _safe_relative_path(repo_root, fixture_ref["path"], f"{item['id']}.fixture.path")
+
+    project_source = project_sources.get(item["project_id"])
+    if project_source is None:
+        reasons.append("project_source_registry_missing")
+    else:
+        if source_ref["root"] != project_source["root"]:
+            reasons.append("project_source_root_binding_mismatch")
+        if source_ref["source_commit"] != project_source["commit"]:
+            reasons.append("project_source_commit_binding_mismatch")
+        reasons.extend(project_source_reasons[item["project_id"]])
 
     spec: dict[str, Any] | None = None
     if not spec_path.is_file():
@@ -336,9 +527,18 @@ def _preflight_item(item: dict[str, Any], span: dict[str, Any] | None, repo_root
         if _spec_source_hash(spec, source_ref["path"]) != source_ref["file_sha256"]:
             reasons.append("source_file_hash_binding_mismatch")
         if span is not None:
-            expected = {**span, "file": source_ref["path"]}
-            if expected not in _spec_spans(spec, source_ref["path"]):
-                reasons.append("source_span_binding_mismatch")
+            if item["provenance_kind"] == "real_upstream_source_fragment":
+                expected_fragment = {
+                    "line_start": span["line_start"],
+                    "line_end": span["line_end"],
+                    "sha256": span["sha256"],
+                }
+                if _spec_fragment_span(spec, source_ref["path"]) != expected_fragment:
+                    reasons.append("source_span_binding_mismatch")
+            else:
+                expected = {**span, "file": source_ref["path"]}
+                if expected not in _spec_spans(spec, source_ref["path"]):
+                    reasons.append("source_span_binding_mismatch")
         fixture_contract = spec.get("fixture_contract")
         if not isinstance(fixture_contract, dict) or fixture_contract.get("path") != fixture_ref["path"]:
             reasons.append("fixture_binding_mismatch")
@@ -372,13 +572,18 @@ def _preflight_item(item: dict[str, Any], span: dict[str, Any] | None, repo_root
         if not source_path.is_file():
             reasons.append("source_file_missing")
         else:
-            if source_ref["file_sha256"] is not None and _sha256(source_path) != source_ref["file_sha256"]:
+            raw = source_path.read_bytes()
+            variants = _newline_variants(raw)
+            if source_ref["file_sha256"] is not None and not any(
+                _matches_sha256(variant, source_ref["file_sha256"]) for variant in variants
+            ):
                 reasons.append("source_file_sha256_mismatch")
             if span is not None:
-                raw = source_path.read_bytes()
-                if span["byte_end"] > len(raw):
+                if all(span["byte_end"] > len(variant) for variant in variants):
                     reasons.append("source_span_out_of_bounds")
-                elif hashlib.sha256(raw[span["byte_start"] : span["byte_end"]]).hexdigest() != span["sha256"]:
+                elif not any(_span_range_matches_variant(variant, span) for variant in variants):
+                    reasons.append("source_span_line_range_mismatch")
+                elif not any(_span_matches_variant(variant, span) for variant in variants):
                     reasons.append("source_span_sha256_mismatch")
 
     deduped_reasons = list(dict.fromkeys(reasons))
@@ -401,6 +606,14 @@ def validate_suite(suite_path: Path | str, repo_root: Path | str | None = None) 
         path = root / path
     suite = _load_json(path, "AI finite cross-project suite")
     _validate_policy(suite)
+    project_sources = _validate_project_sources(suite["project_sources"])
+    project_source_reasons: dict[str, list[str]] = {}
+    project_source_cache: dict[tuple[str, str, str], list[str]] = {}
+    for project_id, source in project_sources.items():
+        cache_key = (source["repository"], source["root"], source["commit"])
+        if cache_key not in project_source_cache:
+            project_source_cache[cache_key] = _preflight_project_source(source, root)
+        project_source_reasons[project_id] = project_source_cache[cache_key]
 
     items = suite["items"]
     if not isinstance(items, list) or not 1 <= len(items) <= 20:
@@ -418,7 +631,10 @@ def validate_suite(suite_path: Path | str, repo_root: Path | str | None = None) 
     if len(projects) < 3 or not REQUIRED_PROJECTS.issubset(projects):
         raise SuiteContractError("suite must include real FlashDB, zlib-ng, and libuv entries")
 
-    results = [_preflight_item(item, span, root) for item, span in shaped]
+    results = [
+        _preflight_item(item, span, root, project_sources, project_source_reasons)
+        for item, span in shaped
+    ]
     ready = sum(item["status"] == "ready" for item in results)
     blocked = len(results) - ready
     provenance_counts = {
