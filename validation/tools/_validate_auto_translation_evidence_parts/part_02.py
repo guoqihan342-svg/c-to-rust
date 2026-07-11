@@ -5,7 +5,9 @@ from sys import _getframe as _C2RSplitFrame
 
 _C2R_SPLIT_PARTS_DIR = _C2RSplitPath(_C2RSplitFrame().f_code.co_filename).with_name("part_02_split_parts")
 _C2R_SPLIT_PART_NAMES = (
-    "part_00.pyfrag",
+    "part_00_00.pyfrag",
+    "part_00_01.pyfrag",
+    "part_00_02.pyfrag",
     "part_01.pyfrag",
     "part_02.pyfrag",
     "part_03.pyfrag",

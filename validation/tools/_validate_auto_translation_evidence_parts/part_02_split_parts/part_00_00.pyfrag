@@ -1,0 +1,215 @@
+def validate_c2rust_baseline_candidate_binding(
+    c2rust_candidate: dict[str, Any],
+    *,
+    evidence_dir: Path | None,
+    prefix: str | None,
+    strict: bool,
+) -> None:
+    if strict and c2rust_candidate.get("generated_draft_semantic_pass") is not False:
+        raise SystemExit(
+            "route_decision.candidate_generation.c2rust_baseline.generated_draft_semantic_pass "
+            "must be false"
+        )
+    if strict and "output_ref" not in c2rust_candidate:
+        raise SystemExit("route_decision.candidate_generation.c2rust_baseline.output_ref missing")
+    manifest_ref = c2rust_candidate.get("baseline_manifest")
+    if manifest_ref is None:
+        if strict:
+            raise SystemExit("route_decision.candidate_generation.c2rust_baseline.baseline_manifest missing")
+        return
+    if not isinstance(manifest_ref, dict):
+        raise SystemExit("route_decision.candidate_generation.c2rust_baseline.baseline_manifest must be an object")
+    manifest_path = (
+        evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
+        if evidence_dir is not None and prefix is not None
+        else resolve_ref_path(str(manifest_ref.get("path", "")))
+    )
+    require_ref(
+        manifest_ref,
+        manifest_path,
+        "route_decision.candidate_generation.c2rust_baseline.baseline_manifest",
+        require_sha=True,
+    )
+    baseline = load_json(manifest_path)
+    for field in ["status", "reason", "correctness_role"]:
+        if c2rust_candidate.get(field) != baseline.get(field):
+            raise SystemExit(f"route_decision.candidate_generation.c2rust_baseline {field} drift")
+    output_ref = c2rust_candidate.get("output_ref")
+    baseline_status = str(baseline.get("status", "missing"))
+    baseline_output = baseline.get("output")
+    if baseline_status == "generated":
+        if not isinstance(baseline_output, dict):
+            raise SystemExit("c2rust_baseline generated status requires output object")
+        validate_c2rust_baseline_generation_status(baseline, baseline_output, manifest_path)
+        validate_c2rust_baseline_compile_status(baseline, baseline_output, manifest_path)
+        expected_output = {
+            "path": str(baseline_output.get("path", "")),
+            "status": baseline_status,
+            "sha256": str(baseline_output.get("sha256", "")),
+        }
+        if output_ref != expected_output:
+            raise SystemExit("route_decision.candidate_generation.c2rust_baseline output_ref drift")
+        require_file_ref(
+            output_ref,
+            "route_decision.candidate_generation.c2rust_baseline.output_ref",
+            require_status=True,
+        )
+        return
+    if output_ref is not None:
+        raise SystemExit("route_decision.candidate_generation.c2rust_baseline output_ref drift")
+
+
+def validate_verified_unsafe_baseline_artifact(
+    evidence_dir: Path,
+    prefix: str,
+    verified_path: Path,
+    baseline_path: Path,
+) -> None:
+    verified = load_json(verified_path)
+    baseline = load_json(baseline_path)
+    require_ref(
+        verified.get("c2rust_baseline"),
+        baseline_path,
+        "verified_unsafe_baseline.c2rust_baseline",
+        require_sha=True,
+    )
+    expected_output = c2rust_baseline_expected_output_ref(baseline)
+    expected_compile_artifact = c2rust_baseline_expected_compile_artifact_ref(baseline)
+    if expected_output is None:
+        if verified.get("c2rust_output") is not None:
+            raise SystemExit("verified_unsafe_baseline c2rust_output drift")
+    elif verified.get("c2rust_output") != expected_output:
+        raise SystemExit("verified_unsafe_baseline c2rust_output drift")
+    if expected_compile_artifact is None:
+        if verified.get("compile_artifact") is not None:
+            raise SystemExit("verified_unsafe_baseline compile_artifact drift")
+    elif verified.get("compile_artifact") != expected_compile_artifact:
+        raise SystemExit("verified_unsafe_baseline compile_artifact drift")
+
+    semantic_source = verified.get("semantic_claim_source")
+    if semantic_source in FORBIDDEN_UNSAFE_SEMANTIC_CLAIM_SOURCES:
+        raise SystemExit(f"verified_unsafe_baseline semantic_claim_source cannot be compile-only: {semantic_source}")
+    direct = verified.get("direct_c2rust_replay")
+    verified_passed = verified.get("status") == "passed" or verified.get("semantic_pass") is True
+    if not isinstance(direct, dict):
+        if verified_passed:
+            raise SystemExit("verified_unsafe_baseline passed status requires direct_c2rust_replay")
+        return
+
+    direct_source = direct.get("semantic_claim_source") or direct.get("source")
+    if direct_source in FORBIDDEN_UNSAFE_SEMANTIC_CLAIM_SOURCES:
+        raise SystemExit(f"direct_c2rust_replay cannot use compile-only semantic source: {direct_source}")
+    direct_status = direct.get("status")
+    if direct_status != "passed":
+        if verified_passed:
+            raise SystemExit("verified_unsafe_baseline passed status requires passed direct_c2rust_replay")
+        if direct.get("semantic_pass") is True:
+            raise SystemExit("direct_c2rust_replay semantic_pass requires passed status")
+        return
+    if expected_output is None:
+        raise SystemExit("direct_c2rust_replay requires generated c2rust_output")
+    if direct.get("c2rust_output") != expected_output:
+        raise SystemExit("direct_c2rust_replay c2rust_output drift")
+    if expected_compile_artifact is not None and direct.get("compile_artifact") != expected_compile_artifact:
+        raise SystemExit("direct_c2rust_replay compile_artifact drift")
+
+    direct_payload = direct
+    direct_artifact_ref = direct.get("artifact")
+    if direct_artifact_ref is not None:
+        direct_path = evidence_dir / f"{prefix}-c2rust-direct-replay.json"
+        require_ref(
+            direct_artifact_ref,
+            direct_path,
+            "verified_unsafe_baseline.direct_c2rust_replay.artifact",
+            require_sha=True,
+        )
+        direct_payload = load_json(direct_path)
+        if direct_payload.get("c2rust_output") != expected_output:
+            raise SystemExit("direct_c2rust_replay c2rust_output drift")
+        if expected_compile_artifact is not None and direct_payload.get("compile_artifact") != expected_compile_artifact:
+            raise SystemExit("direct_c2rust_replay compile_artifact drift")
+    if direct_payload.get("replay_kind") != "direct_c2rust_output_replay":
+        raise SystemExit("direct_c2rust_replay must bind direct C2Rust output replay")
+    if direct_payload.get("correctness_role") != "direct_replay_evidence":
+        raise SystemExit("direct_c2rust_replay correctness_role must be direct_replay_evidence")
+    payload_source = direct_payload.get("semantic_claim_source") or direct_payload.get("source")
+    if payload_source in FORBIDDEN_UNSAFE_SEMANTIC_CLAIM_SOURCES:
+        raise SystemExit(f"direct_c2rust_replay cannot use compile-only semantic source: {payload_source}")
+    if direct_payload.get("semantic_pass") is True and direct_payload.get("observable_replay_pass") is not True:
+        raise SystemExit("direct_c2rust_replay semantic_pass requires observable_replay_pass")
+    if verified_passed:
+        if semantic_source != "verified_unsafe_baseline_gates":
+            raise SystemExit(
+                "verified_unsafe_baseline passed status requires semantic_claim_source=verified_unsafe_baseline_gates"
+            )
+        if verified.get("blocked_reasons") not in (None, []):
+            raise SystemExit("verified_unsafe_baseline passed status requires empty blocked_reasons")
+        validate_verified_unsafe_baseline_same_output_gate_refs(
+            evidence_dir,
+            prefix,
+            verified,
+            expected_output,
+            expected_compile_artifact,
+            direct_artifact_ref,
+        )
+
+
+def validate_verified_unsafe_baseline_same_output_gate_refs(
+    evidence_dir: Path,
+    prefix: str,
+    verified: dict[str, Any],
+    expected_output: dict[str, Any] | None,
+    expected_compile_artifact: dict[str, Any] | None,
+    direct_artifact_ref: Any,
+) -> None:
+    if expected_output is None:
+        raise SystemExit("verified_unsafe_baseline same_output_gate_refs require generated c2rust_output")
+    if not isinstance(direct_artifact_ref, dict):
+        raise SystemExit("verified_unsafe_baseline same_output_gate_refs require direct_c2rust_replay artifact")
+    gate_refs = verified.get("same_output_gate_refs")
+    if not isinstance(gate_refs, dict):
+        raise SystemExit("verified_unsafe_baseline same_output_gate_refs missing")
+    missing = sorted(set(C2RUST_VERIFIED_BASELINE_SAME_OUTPUT_GATES) - set(gate_refs))
+    if missing:
+        raise SystemExit(f"verified_unsafe_baseline same_output_gate_refs missing gates: {', '.join(missing)}")
+
+    for gate, suffix in C2RUST_VERIFIED_BASELINE_SAME_OUTPUT_GATES.items():
+        label = f"verified_unsafe_baseline.same_output_gate_refs.{gate}"
+        gate_ref = gate_refs.get(gate)
+        if not isinstance(gate_ref, dict):
+            raise SystemExit(f"{label} must be an object")
+        if gate_ref.get("c2rust_output") != expected_output:
+            raise SystemExit(f"{label} c2rust_output drift")
+        if expected_compile_artifact is not None and gate_ref.get("compile_artifact") != expected_compile_artifact:
+            raise SystemExit(f"{label} compile_artifact drift")
+        if gate_ref.get("binding") != "same_c2rust_output":
+            raise SystemExit(f"{label} binding must be same_c2rust_output")
+        expected_path = evidence_dir / f"{prefix}-{suffix}.json"
+        require_ref(gate_ref, expected_path, label, require_sha=gate != "final_verification")
+
+
+def c2rust_baseline_expected_output_ref(baseline: dict[str, Any]) -> dict[str, Any] | None:
+    if baseline.get("status") != "generated":
+        return None
+    output = baseline.get("output")
+    if not isinstance(output, dict):
+        return None
+    path = output.get("path")
+    sha = output.get("sha256")
+    if not isinstance(path, str) or not path or not isinstance(sha, str) or not sha:
+        return None
+    return {"path": path, "status": "generated", "sha256": sha}
+
+
+def c2rust_baseline_expected_compile_artifact_ref(baseline: dict[str, Any]) -> dict[str, Any] | None:
+    compile_status = baseline.get("compile")
+    if not isinstance(compile_status, dict) or compile_status.get("status") != "passed":
+        return None
+    artifact = compile_status.get("artifact")
+    if not isinstance(artifact, dict):
+        return None
+    path = artifact.get("path")
+    sha = artifact.get("sha256")
+    if not isinstance(path, str) or not path or not isinstance(sha, str) or not sha:
+        return None
+    return {"path": path, "status": "compiled", "sha256": sha}

@@ -1,0 +1,233 @@
+
+
+def validate_c2rust_baseline_generation_status(
+    baseline: dict[str, Any],
+    baseline_output: dict[str, Any],
+    manifest_path: Path,
+) -> None:
+    generation = baseline.get("generation")
+    if not isinstance(generation, dict):
+        raise SystemExit(f"c2rust_baseline generated status requires generation block in {manifest_path}")
+    compile_commands = generation.get("compile_commands")
+    require_file_ref(compile_commands, "c2rust_baseline.generation.compile_commands")
+    command = generation.get("command")
+    if not isinstance(command, dict):
+        raise SystemExit(f"c2rust_baseline generated status requires generation command in {manifest_path}")
+    if command.get("exit_status") != "passed" or command.get("returncode") != 0:
+        raise SystemExit(f"c2rust_baseline generation command did not pass in {manifest_path}")
+    argv = command.get("argv")
+    if not isinstance(argv, list) or not argv or not all(isinstance(item, str) and item for item in argv):
+        raise SystemExit(f"c2rust_baseline generation command missing argv in {manifest_path}")
+    for key in ["stdout_log", "stderr_log"]:
+        log_ref = command.get(key)
+        if not isinstance(log_ref, str) or not log_ref:
+            raise SystemExit(f"c2rust_baseline generation command missing {key} in {manifest_path}")
+        log_path = resolve_ref_path(log_ref)
+        if not log_path.exists() or not log_path.is_file():
+            raise SystemExit(f"c2rust_baseline generation command {key} points to missing file: {log_path}")
+    generated_files = generation.get("generated_files")
+    if not isinstance(generated_files, list) or not generated_files:
+        raise SystemExit(f"c2rust_baseline generated status requires generated_files in {manifest_path}")
+    for index, generated_file in enumerate(generated_files):
+        require_file_ref(generated_file, f"c2rust_baseline.generation.generated_files[{index}]")
+    if baseline_output.get("source_files") != generated_files:
+        raise SystemExit(f"c2rust_baseline output.source_files drift from generation.generated_files in {manifest_path}")
+
+
+def validate_c2rust_baseline_compile_status(
+    baseline: dict[str, Any],
+    baseline_output: dict[str, Any],
+    manifest_path: Path,
+) -> None:
+    compile_status = baseline.get("compile")
+    if not isinstance(compile_status, dict):
+        raise SystemExit(f"c2rust_baseline generated status requires compile status in {manifest_path}")
+    if compile_status.get("semantic_pass") is not False:
+        raise SystemExit(f"c2rust_baseline compile status cannot claim semantic_pass in {manifest_path}")
+    candidate_output = compile_status.get("candidate_output")
+    if not isinstance(candidate_output, dict):
+        raise SystemExit(f"c2rust_baseline compile status missing candidate_output in {manifest_path}")
+    expected_candidate_output = {
+        "path": str(baseline_output.get("path", "")),
+        "status": "generated",
+        "sha256": str(baseline_output.get("sha256", "")),
+    }
+    if candidate_output != expected_candidate_output:
+        raise SystemExit(f"c2rust_baseline compile candidate_output drift in {manifest_path}")
+    require_file_ref(candidate_output, "c2rust_baseline.compile.candidate_output", require_status=True)
+    artifact = compile_status.get("artifact")
+    if compile_status.get("status") == "passed":
+        require_file_ref(artifact, "c2rust_baseline.compile.artifact", require_status=True)
+    elif artifact is not None:
+        raise SystemExit(f"c2rust_baseline compile artifact must be null unless compile passed in {manifest_path}")
+
+
+def validate_global_dependency_requirements(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:
+    slice_spec = load_json(slice_spec_path)
+    expected = global_dependency_requirements(slice_spec)
+    expected_names = [item["name"] for item in expected]
+
+    type_map_path = evidence_dir / f"{prefix}-type-map.json"
+    context_path = evidence_dir / f"{prefix}-context-pack.json"
+    oracle_path = evidence_dir / f"{prefix}-c-oracle-status.json"
+    pointer_path = evidence_dir / f"{prefix}-pointer-graph.json"
+    cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
+    slice_contract_path = evidence_dir / f"{prefix}-slice-contract.json"
+
+    type_map = load_json(type_map_path)
+    context = load_json(context_path)
+    oracle = load_json(oracle_path)
+    pointer = load_json(pointer_path)
+    cache = load_json(cache_path)
+    slice_contract = load_json(slice_contract_path)
+
+    if not expected:
+        reject_unexpected_global_requirements(
+            [
+                (type_map.get("global_dependencies"), type_map_path, "type_map.global_dependencies"),
+                (context.get("global_dependencies"), context_path, "context_pack.global_dependencies"),
+                (oracle.get("global_linkage_requirements"), oracle_path, "c_oracle.global_linkage_requirements"),
+                (
+                    global_dependency_requirements(slice_contract),
+                    slice_contract_path,
+                    "slice_contract.c_boundary.direct_dependencies",
+                ),
+                (context.get("source_boundary", {}).get("globals", []), context_path, "source_boundary.globals"),
+                (pointer.get("source_boundary", {}).get("globals", []), pointer_path, "source_boundary.globals"),
+            ]
+        )
+        require_empty_global_dependency_identity(cache, cache_path)
+        return
+
+    require_global_requirements(type_map.get("global_dependencies"), expected, type_map_path, "type_map.global_dependencies")
+    require_global_requirements(context.get("global_dependencies"), expected, context_path, "context_pack.global_dependencies")
+    require_global_requirements(
+        oracle.get("global_linkage_requirements"),
+        expected,
+        oracle_path,
+        "c_oracle.global_linkage_requirements",
+    )
+    require_global_requirements(
+        global_dependency_requirements(slice_contract),
+        expected,
+        slice_contract_path,
+        "slice_contract.c_boundary.direct_dependencies",
+    )
+
+    context_globals = context.get("source_boundary", {}).get("globals", [])
+    pointer_globals = pointer.get("source_boundary", {}).get("globals", [])
+    require_exact_names(context_globals, expected_names, context_path, "source_boundary.globals")
+    require_exact_names(pointer_globals, expected_names, pointer_path, "source_boundary.globals")
+
+    identity = cache.get("global_dependency_identity")
+    if not isinstance(identity, dict):
+        raise SystemExit(f"global dependency identity missing from {cache_path}")
+    identity_names = identity.get("names", [])
+    require_exact_names(identity_names, expected_names, cache_path, "global_dependency_identity.names")
+    if "global_dependency_identity" not in cache.get("cache_input_fields", []):
+        raise SystemExit(f"global dependency identity missing from cache_input_fields in {cache_path}")
+    expected_identity_sha = sha256_json(expected)
+    if identity.get("count") != len(expected):
+        raise SystemExit(f"global dependency identity count mismatch in {cache_path}")
+    if identity.get("sha256") != expected_identity_sha:
+        raise SystemExit(
+            f"global dependency identity sha256 mismatch in {cache_path}: {identity.get('sha256')} != {expected_identity_sha}"
+        )
+
+    harness_path = resolve_ref_path(str(oracle.get("harness_draft", "")))
+    if not harness_path.exists():
+        raise SystemExit(f"global dependency oracle harness draft missing: {harness_path}")
+    harness_text = harness_path.read_text(encoding="utf-8")
+    for name in expected_names:
+        if f"global dependency: {name}" not in harness_text:
+            raise SystemExit(f"global dependency {name!r} missing from oracle harness draft {harness_path}")
+
+
+def global_dependency_requirements(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    dependencies = payload.get("c_boundary", {}).get("direct_dependencies", [])
+    requirements: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for dependency in dependencies:
+        if dependency.get("kind") != "global":
+            continue
+        name = str(dependency.get("name") or "")
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        span = dependency.get("source_span") if isinstance(dependency.get("source_span"), dict) else {
+            "file": "slice-spec",
+            "line_start": 1,
+            "line_end": 1,
+        }
+        requirements.append(
+            {
+                "name": name,
+                "kind": "global",
+                "source": dependency.get("source", "slice_spec"),
+                "definition_status": dependency.get("definition_status", "declared"),
+                "source_span": span,
+                "sha256": dependency.get("sha256") or span.get("sha256") or "",
+                "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+                "semantic_status": "required_before_acceptance",
+            }
+        )
+    return requirements
+
+
+def require_global_requirements(value: Any, expected: list[dict[str, Any]], path: Path, label: str) -> None:
+    if not isinstance(value, list):
+        raise SystemExit(f"global dependency evidence missing {label} in {path}")
+    by_name = {str(item.get("name")): item for item in value if isinstance(item, dict) and item.get("name")}
+    expected_names = [item["name"] for item in expected]
+    actual_names = [str(item.get("name")) for item in value if isinstance(item, dict) and item.get("name")]
+    require_exact_names(actual_names, expected_names, path, label)
+    for expected_item in expected:
+        name = expected_item["name"]
+        actual = by_name.get(name)
+        if actual is None:
+            raise SystemExit(f"global dependency {name!r} missing from {path}:{label}")
+        if actual != expected_item:
+            raise SystemExit(f"global dependency {name!r} drift in {path}:{label}")
+
+
+def reject_unexpected_global_requirements(items: list[tuple[Any, Path, str]]) -> None:
+    for value, path, label in items:
+        if value is None:
+            continue
+        if isinstance(value, list):
+            if value:
+                raise SystemExit(f"unexpected global dependency evidence in {path}:{label}")
+            continue
+        raise SystemExit(f"unexpected global dependency evidence in {path}:{label}")
+
+
+def require_empty_global_dependency_identity(cache: dict[str, Any], path: Path) -> None:
+    identity = cache.get("global_dependency_identity")
+    if identity is None:
+        return
+    expected_identity = {"sha256": sha256_json([]), "count": 0, "names": []}
+    if identity != expected_identity:
+        raise SystemExit(f"unexpected global dependency identity in {path}")
+
+
+def require_exact_names(actual_names: Any, expected_names: list[str], path: Path, label: str) -> None:
+    if not isinstance(actual_names, list):
+        raise SystemExit(f"global dependency evidence missing {label} in {path}")
+    if sorted(str(name) for name in actual_names) != sorted(expected_names):
+        raise SystemExit(f"global dependency names drift in {path}:{label}")
+
+
+def l4_refuses_candidate_generation(route: dict[str, Any]) -> bool:
+    return (
+        route.get("level") == "L4"
+        and route.get("status") == "refused"
+        and route.get("translator", {}).get("candidate_generation_allowed") is False
+    )
+
+
+def generated_draft_acceptance_passed(acceptance: Any) -> bool:
+    return (
+        isinstance(acceptance, dict)
+        and acceptance.get("status") == "passed"
+        and acceptance.get("generated_draft_semantic_pass") is True
+    )
