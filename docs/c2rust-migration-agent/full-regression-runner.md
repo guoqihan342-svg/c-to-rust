@@ -35,7 +35,7 @@ This runs:
 
 ## Repeated Full Rounds
 
-需要检查 runner 自身的重复执行稳定性时，可以使用小批量轮次；这些轮次仍不包含循环压力测试：
+需要检查 runner 自身的重复执行稳定性时，可以使用小批量轮次；这些轮次仍不包含循环压力测试。`-Rounds` 和 `-StartRound` 均硬限制为 `1..3`，不允许千次或万次重复回归：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 3
@@ -55,6 +55,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -RunI
 
 By default the runner stops at the first failed step. Use `-ContinueOnFailure` only when collecting a failure matrix.
 
+显式诊断压力测试也受到硬上限约束：只有同时传入 `-RunStress -StressLoops N` 才会启用，且 `N` 必须在 `1..100`。常规验收保持 `StressLoops=0`。
+
 ## Evidence Files
 
 Each run emits:
@@ -73,5 +75,6 @@ All of these live under `target/`, which is ignored by git.
 - Performance: routine full regression does not run a performance stress step and does not claim a benchmark threshold.
 - Reliability: routine full regression checks committed replay/diff behavior. It does not prove repeated file-backend, crash-power-loss, or hardware reliability.
 - Routine runner policy: loop stress is disabled by default and is not part of normal acceptance. `flashDB_rust` retains a standalone stress command only for separately approved diagnostics.
+- Bounded execution policy: repeated full regression is capped at three rounds and optional stress diagnostics are capped at 100 loops. One-thousand and ten-thousand iteration runs are not accepted by this runner.
 - Branch coverage: cargo tests and Superpowers gates cover main behavior paths, but this runner does not claim line or branch coverage percentage.
 - C/Rust equivalence: accepted L3 evidence is checked where committed. Full FlashDB C semantic equivalence still depends on the C oracle boundary and fixture scope.

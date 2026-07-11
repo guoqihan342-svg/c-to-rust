@@ -2,7 +2,7 @@ fn emit_add_i32_pair_ptr_arith_performance_smoke(
     report: &AddI32PairPtrArithOracleReport,
     evidence_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let iterations = 10_000_u64;
+    let iterations = PERFORMANCE_SMOKE_ITERATIONS;
     let mut calls = 0_u64;
     for _ in 0..iterations {
         for case in &report.cases {

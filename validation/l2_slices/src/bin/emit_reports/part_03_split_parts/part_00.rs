@@ -236,7 +236,7 @@ fn emit_libuv_performance_smoke(
     report: &LibuvIp4OracleReport,
     evidence_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let iterations = 10_000_u64;
+    let iterations = PERFORMANCE_SMOKE_ITERATIONS;
     let mut calls = 0_u64;
     for _ in 0..iterations {
         for case in &report.cases {
@@ -267,7 +267,7 @@ fn emit_store_add_one_performance_smoke(
     report: &StoreAddOneOracleReport,
     evidence_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let iterations = 10_000_u64;
+    let iterations = PERFORMANCE_SMOKE_ITERATIONS;
     let mut calls = 0_u64;
     for _ in 0..iterations {
         for case in &report.cases {
@@ -299,7 +299,7 @@ fn emit_sum_i32_buffer_performance_smoke(
     report: &SumI32BufferOracleReport,
     evidence_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let iterations = 10_000_u64;
+    let iterations = PERFORMANCE_SMOKE_ITERATIONS;
     let mut calls = 0_u64;
     for _ in 0..iterations {
         for case in &report.cases {
@@ -331,7 +331,7 @@ fn emit_call_expression_chain_performance_smoke(
     report: &CallExpressionChainOracleReport,
     evidence_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let iterations = 10_000_u64;
+    let iterations = PERFORMANCE_SMOKE_ITERATIONS;
     let mut calls = 0_u64;
     for _ in 0..iterations {
         for case in &report.cases {
@@ -363,7 +363,7 @@ fn emit_signed_rshift_contract_performance_smoke(
     report: &SignedRshiftContractOracleReport,
     evidence_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let iterations = 10_000_u64;
+    let iterations = PERFORMANCE_SMOKE_ITERATIONS;
     let mut calls = 0_u64;
     for _ in 0..iterations {
         for case in &report.cases {
@@ -395,7 +395,7 @@ fn emit_external_direct_callee_performance_smoke(
     report: &ExternalDirectCalleeOracleReport,
     evidence_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let iterations = 10_000_u64;
+    let iterations = PERFORMANCE_SMOKE_ITERATIONS;
     let mut calls = 0_u64;
     for _ in 0..iterations {
         for case in &report.cases {
@@ -427,7 +427,7 @@ fn emit_sum_i32_ptr_arith_performance_smoke(
     report: &SumI32PtrArithOracleReport,
     evidence_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let iterations = 10_000_u64;
+    let iterations = PERFORMANCE_SMOKE_ITERATIONS;
     let mut calls = 0_u64;
     for _ in 0..iterations {
         for case in &report.cases {
@@ -459,7 +459,7 @@ fn emit_copy_i32_ptr_arith_performance_smoke(
     report: &CopyI32PtrArithOracleReport,
     evidence_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let iterations = 10_000_u64;
+    let iterations = PERFORMANCE_SMOKE_ITERATIONS;
     let mut calls = 0_u64;
     for _ in 0..iterations {
         for case in &report.cases {

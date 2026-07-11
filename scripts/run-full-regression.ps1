@@ -1,11 +1,11 @@
 param(
-    [ValidateRange(1, 1000000)]
+    [ValidateRange(1, 3)]
     [int] $Rounds = 1,
 
-    [ValidateRange(0, 100000000)]
+    [ValidateRange(0, 100)]
     [int] $StressLoops = 0,
 
-    [ValidateRange(1, 1000000)]
+    [ValidateRange(1, 3)]
     [int] $StartRound = 1,
 
     [string] $RunId = "",

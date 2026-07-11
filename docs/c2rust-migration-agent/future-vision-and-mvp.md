@@ -167,7 +167,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 ### 2.5 当前已验证与未验证边界
 
-当前已在 WSL competition-like lane 验证：P0-T20 的 C oracle、generated Rust replay、diff、negative mutation、unsafe gate 和严格 validator。日常全量回归不执行循环压力测试，压力循环不再是常规验收条件。易变的测试数量只在第 5 节按运行或提交绑定记录。
+当前已在 WSL competition-like lane 验证：P0-T20 的 C oracle、generated Rust replay、diff、negative mutation、unsafe gate 和严格 validator。日常全量回归不执行循环压力测试，压力循环不再是常规验收条件；runner 最多重复 3 轮，单独批准的诊断压力测试最多 100 次，不接受 1,000/10,000 次运行。易变的测试数量只在第 5 节按运行或提交绑定记录。
 
 当前尚未验证：目标 kernel、Rust/Cargo 1.96、Node/npm 目标版本、真实 Huawei host package/runtime 差异、比赛资源上限、真实主机 `COMPETITION_EXACT_HOST=1` attestation、完整 OpenCode preflight marker、GLM-5.1 worker/session artifacts、全入口 competition-exact judge bundle 和 public packet。因此 P0-H9 仍未关闭。
 

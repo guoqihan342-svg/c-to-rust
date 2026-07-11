@@ -165,7 +165,7 @@ Use `--dry-run` for plan inspection and `--entrypoint-id` for focused debugging.
 
 ### 2.5 Currently Proven and Unproven Boundaries
 
-The WSL competition-like lane currently proves the P0-T20 C oracle, generated Rust replay, diff, negative mutation, unsafe gates, and strict validator. Routine full regression runs no loop stress step, and loop stress is no longer a normal acceptance condition. Volatile test counts are recorded only in section 5 with a run or commit binding.
+The WSL competition-like lane currently proves the P0-T20 C oracle, generated Rust replay, diff, negative mutation, unsafe gates, and strict validator. Routine full regression runs no loop stress step, and loop stress is no longer a normal acceptance condition. The runner is capped at three repeated rounds, separately approved diagnostic stress is capped at 100 loops, and 1,000/10,000-iteration runs are rejected. Volatile test counts are recorded only in section 5 with a run or commit binding.
 
 Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Huawei host package/runtime differences, competition resource limits, real-host `COMPETITION_EXACT_HOST=1` attestation, a complete OpenCode preflight marker, GLM-5.1 worker/session artifacts, and the full competition-exact judge bundle/public packet. P0-H9 therefore remains open.
 

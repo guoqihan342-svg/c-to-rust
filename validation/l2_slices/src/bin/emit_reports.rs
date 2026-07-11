@@ -14,6 +14,8 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
+const PERFORMANCE_SMOKE_ITERATIONS: u64 = 100;
+
 include!("emit_reports/part_00.rs");
 include!("emit_reports/part_01.rs");
 include!("emit_reports/part_02.rs");
