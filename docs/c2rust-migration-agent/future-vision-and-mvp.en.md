@@ -22,9 +22,9 @@ input.c
 | --- | ---: | --- |
 | `translator_generated_semantic_pass_count` | 35 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
 | `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
-| Active translator track | P0-T26 | Audit and select the smallest generic slice within `fdb_kvdb.c:1877-1883` |
+| Active translator track | P0-T27 | Build strict source-backed acceptance for the generic u32 record-pointer postfix increment at `fdb_kvdb.c:1880` |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |
-| Latest development stage | P0-T25 | The `:1876` discarded direct-call body has source-backed strict semantic closure and raises the count to 35 |
+| Latest development stage | P0-T26 | The project-independent `:1880` u32 mutable record-pointer postfix increment candidate is complete; the count remains 35 |
 | Current strict regression | `26/34` | Run `20260711T061416Z`; eight historical evidence drifts remain |
 | Current proof class | `wsl-local-simulation` | Valid for development and approximation, but not `competition-exact` |
 
@@ -221,9 +221,18 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   The source-bound spec, three bounded fixtures, fixture-only `read_kv`/`get_next_kv_addr` dual-call contract, C oracle, generated Rust replay, schema diff, body-call-suppression negative diff, unsafe ledger, route/profile, and final verification are complete. All 12 strict binding checks pass in the WSL competition clang lane with `semantic_pass=true` and `generated_draft_semantic_pass=true`, moving the matrix-derived count from 34 to 35. The claim covers only the line-1876 call shape, argument forwarding, and fixture order; line 1885 is synthetic scaffold, and real callee side effects and whole-loop semantics remain excluded.
 
-- [ ] **P0-T26: next-slice decision gate for `fdb_kvdb.c:1877-1883`**
+- [x] **P0-T26: next-slice decision gate for `fdb_kvdb.c:1877-1883`**
 
-  Audit the two-field short-circuit condition, status constant, three statistics updates, and early return. Select the smallest project-independent construct that does not depend on real `read_kv` side effects. Pin nearest positive/negative cases, alias and integer-promotion boundaries, and the source span before separating candidate generation from source-backed acceptance.
+  - The selected construct is line 1880, `itr->iterated_cnt++`: a statement-position postfix increment whose value is discarded and whose target is a u32 field on a direct mutable record-pointer root.
+  - A focused no-clang AST fixture proves normalization to field assignment plus unsigned add. The Rust candidate uses `wrapping_add(1u32)` and runs `0 -> 1`, an ordinary value, and `u32::MAX -> 0`.
+  - Existing fail-closed boundaries remain pinned for const record pointers, nested/non-direct bases, and missing mutable ownership evidence.
+  - The stop boundary excludes lines 1876-1879 and 1881-1885, real `read_kv` side effects, the condition and early return, owner-interior-alias composition, the whole loop, and FlashDB ABI. Production behavior must not depend on project, function, slice, field, or fixture names.
+
+  This stage is project-independent candidate generation only. Status remains `candidate_context_only`, and the semantic count remains 35.
+
+- [ ] **P0-T27: source-backed semantic closure for `fdb_kvdb.c:1880`**
+
+  Pin the line-1880 source span and normalized hash, then build three bounded fixtures, a C oracle, generated Rust replay, schema/negative diff, unsafe evidence, route/profile, and final verification. The coverage numerator must not increase before the strict gates pass.
 
 ### P0-A: AI/Harness Efficiency
 
@@ -296,6 +305,7 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 | P0-T23 | Strict source-backed acceptance for the `:1885` owner-interior-alias do-while tail | 33 -> 34 |
 | P0-T24 | Select and implement the `:1876` discarded direct-call body candidate | 34 -> 34 (candidate only) |
 | P0-T25 | Strict source-backed acceptance for the `:1876` discarded direct-call body | 34 -> 35 |
+| P0-T26 | Select and validate the `:1880` u32 mutable record-pointer postfix increment candidate | 35 -> 35 (candidate only) |
 
 Validation run bindings:
 

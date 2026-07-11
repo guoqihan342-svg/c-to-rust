@@ -24,9 +24,9 @@ input.c
 | --- | ---: | --- |
 | `translator_generated_semantic_pass_count` | 35 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
-| 当前翻译主线 | P0-T26 | 审计并选择 `fdb_kvdb.c:1877-1883` 的最小通用切片 |
+| 当前翻译主线 | P0-T27 | 为 `fdb_kvdb.c:1880` 的通用 u32 record-pointer postfix increment 建立 source-backed 严格验收 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-T25 | `:1876` discarded direct-call body 已完成 source-backed 严格语义闭环，计数增至 35 |
+| 最近开发阶段 | P0-T26 | 已完成 `:1880` u32 mutable record-pointer postfix increment 的 project-independent candidate，计数保持 35 |
 | 当前严格回归 | `26/34` | run `20260711T061416Z`；8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -223,9 +223,18 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   已完成 source-bound spec、3 个有限 fixture、fixture-only `read_kv`/`get_next_kv_addr` 双调用合同、C oracle、generated Rust replay、schema diff、body-call suppression negative diff、unsafe ledger、route/profile 和 final verification。WSL competition clang lane 的 strict validator 12 类绑定检查全部通过，`semantic_pass=true`、`generated_draft_semantic_pass=true`，matrix 派生计数由 34 更新为 35。声明只覆盖 line 1876 的调用形状、参数转发和 fixture 顺序；line 1885 仅为 synthetic scaffold，真实 `read_kv`/`get_next_kv_addr` 副作用和完整循环不在范围内。
 
-- [ ] **P0-T26：`fdb_kvdb.c:1877-1883` 下一切片决策门**
+- [x] **P0-T26：`fdb_kvdb.c:1877-1883` 下一切片决策门**
 
-  逐项审计双字段短路条件、状态常量、三个统计累加和 early return，选择不依赖真实 `read_kv` 副作用的最小 project-independent construct。先固定最近邻正/负例、alias/整数提升边界和 source span；候选生成、source-backed 验收和语义计数必须分阶段完成。
+  - 选择 line 1880 的 `itr->iterated_cnt++`，通用 construct 是 statement-position、结果被丢弃、直接 mutable record-pointer root 的 u32 字段后置自增。
+  - 新增独立 no-clang AST fixture，确认 frontend 规范化为 field assignment + unsigned add；Rust candidate 使用 `wrapping_add(1u32)`，运行边界覆盖 `0 -> 1`、普通值和 `u32::MAX -> 0`。
+  - 最近邻负例继续固定 const record pointer、nested/non-direct base 和缺失 mutable ownership evidence 的 fail-closed 行为。
+  - 停止边界排除 lines 1876-1879、1881-1885、真实 `read_kv` 副作用、条件与 early return、owner-interior-alias 组合、完整循环和 FlashDB ABI；生产 translator 不读取项目名、函数名、slice id、字段名或 fixture 常量。
+
+  当前仅完成 project-independent candidate generation，状态保持 `candidate_context_only`，语义计数保持 35。
+
+- [ ] **P0-T27：`fdb_kvdb.c:1880` source-backed 语义闭环**
+
+  固定 line 1880 source span 和 normalized hash，建立 3 个有限 fixture、C oracle、generated Rust replay、schema/negative diff、unsafe、route/profile 和 final-verification 证据。严格门通过前不得增加 coverage numerator。
 
 ### P0-A：AI/Harness 效率
 
@@ -298,6 +307,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | P0-T23 | `:1885` owner-interior-alias do-while tail source-backed 严格验收 | 33 -> 34 |
 | P0-T24 | 选择并实现 `:1876` discarded direct-call body candidate | 34 -> 34（candidate only） |
 | P0-T25 | `:1876` discarded direct-call body source-backed 严格验收 | 34 -> 35 |
+| P0-T26 | 选择并验证 `:1880` u32 mutable record-pointer postfix increment candidate | 35 -> 35（candidate only） |
 
 验证运行绑定：
 
