@@ -1,0 +1,310 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+from validation.tools._ai_candidate_harness_parts.router import (
+    route_candidates,
+    selection_policy_sha256,
+)
+from validation.tools._validate_ai_exact_evidence_parts import validate_evidence
+from validation.tools._validate_ai_exact_evidence_parts.io import EvidenceError
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CLI = REPO_ROOT / "validation" / "tools" / "validate_ai_exact_evidence.py"
+AUTO_MIGRATE = REPO_ROOT / "validation" / "tools" / "auto_migrate.py"
+GATES = (
+    "rustc", "generated_replay", "schema_diff", "negative_mutation",
+    "unsafe_scan", "unsafe_ledger", "alias_contract", "abi_contract",
+    "oracle_contract", "final_verification",
+)
+SOURCES = {
+    "compile": ("rustc",),
+    "oracle": ("oracle_contract",),
+    "replay": ("generated_replay",),
+    "schema_diff": ("schema_diff",),
+    "negative_diff": ("negative_mutation",),
+    "unsafe": ("unsafe_scan", "unsafe_ledger"),
+    "alias_abi": ("alias_contract", "abi_contract"),
+    "final_verification": ("final_verification",),
+}
+
+
+def write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes((json.dumps(payload, indent=2, sort_keys=True) + "\n").encode())
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def router_gates(gates: dict, candidate_sha: str) -> dict:
+    output = {}
+    for name, sources in SOURCES.items():
+        passed = all(
+            gates[source]["status"] == ("expected_failed" if source == "negative_mutation" else "passed")
+            for source in sources
+        )
+        output[name] = {
+            "status": "passed" if passed else "failed",
+            "candidate_sha256": candidate_sha,
+            "source_gates": list(sources),
+        }
+    return output
+
+
+class Fixture:
+    def __init__(self, root: Path, *, fallback: bool = False, no_selection: bool = False) -> None:
+        self.root = root
+        self.evidence_root = root / "evidence"
+        self.directory = self.evidence_root / "demo" / "auto-translation" / "add-one"
+        self.directory.mkdir(parents=True)
+        ai = self.add_candidate(
+            "ai", b"pub fn add_one(v: i32) -> i32 { v + 1 }\n",
+            not fallback and not no_selection,
+        )
+        candidates = [{
+            "candidate_id": "opencode-glm51-1",
+            "source": "opencode-ai",
+            "artifact_sha256": ai["sha"],
+            "gate_results": ai["router_gates"],
+        }]
+        evidence = {"ai": ai["ref"]}
+        selected_bytes = ai["bytes"]
+        if fallback:
+            typed = self.add_candidate("typed", b"pub fn add_one(v: i32) -> i32 { v.wrapping_add(1) }\n", True)
+            candidates.append({
+                "candidate_id": "typed-ir:clang-lowered",
+                "source": "typed-ir",
+                "artifact_sha256": typed["sha"],
+                "gate_results": typed["router_gates"],
+            })
+            evidence["typed_ir"] = typed["ref"]
+            selected_bytes = typed["bytes"]
+        self.canonical = self.directory / "l3-add-one-rust-draft.rs"
+        self.canonical.write_bytes(selected_bytes)
+        router = route_candidates(candidates, provider_invocations=1)
+        router.update({
+            "candidate_evidence": evidence,
+            "canonical_draft_sha256": digest(self.canonical),
+            "semantic_pass": router["selected_candidate_id"] is not None,
+        })
+        self.router = self.directory / "l3-add-one-ai-router.json"
+        write_json(self.router, router)
+        self.manifest = self.directory / "l3-add-one-auto-translation-manifest.json"
+        semantic_pass = router["selected_candidate_id"] is not None
+        write_json(self.manifest, {
+            "target_id": "demo",
+            "slice_id": "add-one",
+            "ai_exact_validation": {
+                "path": self.router.name,
+                "sha256": digest(self.router),
+                "status": "passed" if semantic_pass else "failed",
+                "semantic_pass": semantic_pass,
+            },
+        })
+
+    def add_candidate(self, label: str, source: bytes, passed: bool) -> dict:
+        attempt = self.directory / "ai-exact-attempts" / label
+        attempt.mkdir(parents=True)
+        candidate = attempt / "candidate.rs"
+        candidate.write_bytes(source)
+        candidate_sha = digest(candidate)
+        gates = {}
+        for index, name in enumerate(GATES, 1):
+            status = "expected_failed" if name == "negative_mutation" else "passed"
+            if not passed and name == "rustc":
+                status = "failed"
+            payload = {"candidate_sha256": candidate_sha, "status": status}
+            if name == "final_verification":
+                payload.update({
+                    "status": "passed" if passed else "failed",
+                    "semantic_pass": passed,
+                    "required_gates": list(GATES[:-1]),
+                })
+            gates[name] = payload
+            write_json(attempt / f"{index:02d}-{name}.json", payload)
+        index_payload = {
+            "schema_version": 1,
+            "candidate_sha256": candidate_sha,
+            "gates": {
+                name: {"path": f"{index:02d}-{name}.json", "sha256": digest(attempt / f"{index:02d}-{name}.json")}
+                for index, name in enumerate(GATES, 1)
+            },
+        }
+        gate_index = attempt / "gate-index.json"
+        write_json(gate_index, index_payload)
+        projected = router_gates(gates, candidate_sha)
+        summary = {
+            "schema_version": 1,
+            "status": "passed" if passed else "failed",
+            "candidate_sha256": candidate_sha,
+            "semantic_pass": passed,
+            "gate_index": {"path": gate_index.relative_to(self.directory).as_posix(), "sha256": digest(gate_index)},
+            "gates": gates,
+            "router_gate_results": projected,
+        }
+        summary_path = self.directory / f"l3-add-one-{label}-exact-validation.json"
+        write_json(summary_path, summary)
+        return {
+            "bytes": source,
+            "sha": candidate_sha,
+            "router_gates": projected,
+            "ref": {"path": summary_path.name, "sha256": digest(summary_path), "status": summary["status"]},
+        }
+
+    def rebind_router(self) -> None:
+        manifest = read_json(self.manifest)
+        manifest["ai_exact_validation"]["sha256"] = digest(self.router)
+        write_json(self.manifest, manifest)
+
+    def rebind_summary(self, key: str = "ai") -> None:
+        router = read_json(self.router)
+        summary = self.directory / router["candidate_evidence"][key]["path"]
+        router["candidate_evidence"][key]["sha256"] = digest(summary)
+        write_json(self.router, router)
+        self.rebind_router()
+
+
+class ValidateAiExactEvidenceTests(unittest.TestCase):
+    def validate(self, fixture: Fixture, *, required: bool = True) -> dict:
+        return validate_evidence(
+            target_id="demo", slice_id="add-one", evidence_root=fixture.evidence_root,
+            require_semantic_pass=required,
+        )
+
+    def test_ai_and_typed_fallback_positive_paths(self) -> None:
+        for fallback in (False, True):
+            with self.subTest(fallback=fallback), tempfile.TemporaryDirectory() as tmp:
+                fixture = Fixture(Path(tmp), fallback=fallback)
+                report = self.validate(fixture)
+                expected = "typed-ir:clang-lowered" if fallback else "opencode-glm51-1"
+                self.assertEqual(report["selected_candidate_id"], expected)
+                self.assertTrue(report["semantic_pass"])
+                self.assertGreaterEqual(report["checked_artifacts"], 15)
+
+    def test_cli_outputs_structured_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Fixture(Path(tmp))
+            result = subprocess.run([
+                sys.executable, str(CLI), "--target-id", "demo", "--slice-id", "add-one",
+                "--evidence-root", str(fixture.evidence_root), "--require-semantic-pass",
+            ], cwd=REPO_ROOT, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["status"], "passed")
+
+    def test_no_selected_candidate_remains_semantic_false(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Fixture(Path(tmp), no_selection=True)
+            report = self.validate(fixture, required=False)
+            self.assertIsNone(report["selected_candidate_id"])
+            self.assertFalse(report["semantic_pass"])
+            with self.assertRaisesRegex(EvidenceError, "semantic pass is required"):
+                self.validate(fixture, required=True)
+
+    def test_validator_accepts_real_auto_migrate_exact_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            provider = root / "provider.py"
+            provider.write_text(
+                "import json\n"
+                "payload={'schema_version':1,'candidate':{'language':'rust',"
+                "'source':'pub fn add_one(value: i32) -> i32 { value.wrapping_add(1) }\\n'},"
+                "'assumptions':[]}\n"
+                "print(json.dumps({'type':'message.part.updated','part':{'type':'text',"
+                "'text':json.dumps(payload)}}))\n",
+                encoding="utf-8",
+            )
+            out_root = root / "evidence"
+            generated = subprocess.run([
+                sys.executable, str(AUTO_MIGRATE), "--slice-spec",
+                str(REPO_ROOT / "validation" / "slice-specs" / "demo-add-one.json"),
+                "--out-root", str(out_root), "--emit-clang-lowering-report",
+                "--ai-first-candidate", "--ai-opencode-command",
+                f'"{sys.executable}" "{provider}"',
+            ], cwd=REPO_ROOT, text=True, capture_output=True)
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            report = validate_evidence(
+                target_id="demo", slice_id="add-one", evidence_root=out_root,
+                require_semantic_pass=True,
+            )
+            self.assertTrue(report["semantic_pass"])
+            self.assertEqual(report["selected_candidate_id"], "opencode-glm51-1")
+
+    def test_missing_path_hash_and_manifest_hash_drift_are_rejected(self) -> None:
+        cases = ("missing", "path_escape", "gate_hash", "manifest_hash")
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                fixture = Fixture(Path(tmp))
+                attempt = fixture.directory / "ai-exact-attempts" / "ai"
+                if case == "missing":
+                    (attempt / "01-rustc.json").unlink()
+                elif case == "path_escape":
+                    outside = fixture.root / "outside.json"
+                    write_json(outside, {"status": "passed"})
+                    index = read_json(attempt / "gate-index.json")
+                    index["gates"]["rustc"] = {"path": str(outside), "sha256": digest(outside)}
+                    write_json(attempt / "gate-index.json", index)
+                    self._rebind_index(fixture)
+                elif case == "gate_hash":
+                    (attempt / "01-rustc.json").write_text("{}\n", encoding="utf-8")
+                else:
+                    router = read_json(fixture.router)
+                    router["semantic_pass"] = False
+                    write_json(fixture.router, router)
+                with self.assertRaises(EvidenceError):
+                    self.validate(fixture)
+
+    def test_gate_policy_selected_and_accepted_proof_tampering_is_rejected(self) -> None:
+        for case in ("gate", "policy", "selected", "accepted"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                fixture = Fixture(Path(tmp))
+                router = read_json(fixture.router)
+                summary_path = fixture.directory / router["candidate_evidence"]["ai"]["path"]
+                if case == "gate":
+                    summary = read_json(summary_path)
+                    summary["gates"]["rustc"]["status"] = "failed"
+                    write_json(summary_path, summary)
+                    fixture.rebind_summary()
+                elif case == "policy":
+                    router["selection_policy"]["stage"] = "tampered"
+                    router["selection_policy_sha256"] = selection_policy_sha256(router["selection_policy"])
+                    write_json(fixture.router, router)
+                    fixture.rebind_router()
+                elif case == "selected":
+                    router["selected_candidate_id"] = None
+                    router["semantic_pass"] = False
+                    write_json(fixture.router, router)
+                    fixture.rebind_router()
+                else:
+                    summary = read_json(summary_path)
+                    summary["accepted_evidence_binding"] = {"status": "accepted"}
+                    write_json(summary_path, summary)
+                    fixture.rebind_summary()
+                with self.assertRaises(EvidenceError):
+                    self.validate(fixture)
+
+    @staticmethod
+    def _rebind_index(fixture: Fixture) -> None:
+        router = read_json(fixture.router)
+        summary_path = fixture.directory / router["candidate_evidence"]["ai"]["path"]
+        summary = read_json(summary_path)
+        index_path = fixture.directory / summary["gate_index"]["path"]
+        summary["gate_index"]["sha256"] = digest(index_path)
+        write_json(summary_path, summary)
+        fixture.rebind_summary()
+
+
+if __name__ == "__main__":
+    unittest.main()
