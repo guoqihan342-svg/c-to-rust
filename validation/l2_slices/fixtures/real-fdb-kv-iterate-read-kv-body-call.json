@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "status": "accepted_fixture_input",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:read-kv-body-call@1876"
+    ]
+  },
+  "compared_fields": [
+    "return_value",
+    "itr_kv_addr_start",
+    "body_call_count",
+    "body_call_args",
+    "external_call_count",
+    "external_call_args",
+    "call_order"
+  ],
+  "case_count": 3,
+  "cases": [
+    {
+      "id": "failed-address-first",
+      "input_ref": "cases[0].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-read-kv-body-call.json",
+      "inputs": {
+        "db_generation": 17,
+        "sector_offset": 29,
+        "itr_initial_kv_addr_start": 0,
+        "external_return_sequence": [
+          4294967295
+        ]
+      },
+      "expected_outputs": {
+        "return_value": false,
+        "itr_kv_addr_start": 4294967295,
+        "body_call_count": 1,
+        "body_call_args": [
+          [
+            17,
+            0
+          ]
+        ],
+        "external_call_count": 1,
+        "external_call_args": [
+          [
+            17,
+            29,
+            0
+          ]
+        ],
+        "call_order": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "one-kv-then-failed",
+      "input_ref": "cases[1].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-read-kv-body-call.json",
+      "inputs": {
+        "db_generation": 3,
+        "sector_offset": 5,
+        "itr_initial_kv_addr_start": 99,
+        "external_return_sequence": [
+          4096,
+          4294967295
+        ]
+      },
+      "expected_outputs": {
+        "return_value": false,
+        "itr_kv_addr_start": 4294967295,
+        "body_call_count": 2,
+        "body_call_args": [
+          [
+            3,
+            99
+          ],
+          [
+            3,
+            4096
+          ]
+        ],
+        "external_call_count": 2,
+        "external_call_args": [
+          [
+            3,
+            5,
+            99
+          ],
+          [
+            3,
+            5,
+            4096
+          ]
+        ],
+        "call_order": [
+          1,
+          2,
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "two-kvs-then-failed",
+      "input_ref": "cases[2].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-read-kv-body-call.json",
+      "inputs": {
+        "db_generation": 305419896,
+        "sector_offset": 2271560481,
+        "itr_initial_kv_addr_start": 17,
+        "external_return_sequence": [
+          12288,
+          16384,
+          4294967295
+        ]
+      },
+      "expected_outputs": {
+        "return_value": false,
+        "itr_kv_addr_start": 4294967295,
+        "body_call_count": 3,
+        "body_call_args": [
+          [
+            305419896,
+            17
+          ],
+          [
+            305419896,
+            12288
+          ],
+          [
+            305419896,
+            16384
+          ]
+        ],
+        "external_call_count": 3,
+        "external_call_args": [
+          [
+            305419896,
+            2271560481,
+            17
+          ],
+          [
+            305419896,
+            2271560481,
+            12288
+          ],
+          [
+            305419896,
+            2271560481,
+            16384
+          ]
+        ],
+        "call_order": [
+          1,
+          2,
+          1,
+          2,
+          1,
+          2
+        ]
+      }
+    }
+  ]
+}

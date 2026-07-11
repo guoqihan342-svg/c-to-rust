@@ -8,6 +8,7 @@
         "status": "completed" if failed_workers == 0 and not merge_failed else "failed",
         "run_id": run_id,
         "mode": mode,
+        "semantic_gate": False,
         "plan_path": repo_relative(plan_path, repo_root=repo_root),
         "worker_count": len(worker_results),
         "failed_workers": failed_workers,
@@ -32,6 +33,11 @@
         "workers": worker_results,
         "merge_plan": merge_plan,
     }
+    if execution_route is not None:
+        report["requested_mode"] = execution_route.get("requested_mode")
+        report["effective_mode"] = execution_route.get("effective_mode")
+        report["route_reason"] = execution_route.get("reason")
+        report["execution_route"] = execution_route
     if opencode_preflight_binding is not None:
         report["opencode_preflight_report"] = opencode_preflight_binding
         credential_source = opencode_preflight_binding.get("opencode_credential_source")

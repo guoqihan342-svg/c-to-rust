@@ -54,7 +54,15 @@ def run_negative_execution(
         raise ReporterError("rustc is required for generated-draft negative replay")
     original = draft_path.read_bytes()
     state_mutation = state_replay_mutation_spec(context.contract)
-    if state_mutation is not None:
+    body = context.contract.get("body_callee")
+    suppress_body_call = (
+        context.contract.get("kind") == SEQUENCE_KIND and isinstance(body, dict)
+    )
+    if suppress_body_call:
+        pattern = body_call_statement_pattern(str(body["name"]))
+        operator_from = b"body_call"
+        operator_to = b"suppressed"
+    elif state_mutation is not None:
         pattern, operator_from, operator_to = state_mutation
     elif context.contract.get("kind") == SEQUENCE_KIND:
         if context.contract.get("schema_version") == 2:
@@ -87,12 +95,22 @@ def run_negative_execution(
             "generated Rust draft must contain exactly one declared mutation site"
         )
     match = matches[0]
-    mutation_start, mutation_end = (
-        match.span("value") if "value" in pattern.groupindex else match.span()
-    )
-    if original[mutation_start:mutation_end] != operator_from:
+    if suppress_body_call:
+        mutation_start, mutation_end = match.span("statement")
+    else:
+        mutation_start, mutation_end = (
+            match.span("value") if "value" in pattern.groupindex else match.span()
+        )
+    if not suppress_body_call and original[mutation_start:mutation_end] != operator_from:
         raise ReporterError("declared mutation pattern did not select the expected operator")
-    mutated = original[:mutation_start] + operator_to + original[mutation_end:]
+    if suppress_body_call:
+        mutated, confirmed_start, confirmed_end = suppress_body_call_statement(
+            original, str(body["name"])
+        )
+        if (confirmed_start, confirmed_end) != (mutation_start, mutation_end):
+            raise ReporterError("body-call suppression selected an unstable mutation site")
+    else:
+        mutated = original[:mutation_start] + operator_to + original[mutation_end:]
     if len(mutated) != len(original):
         raise ReporterError("declared mutation changed generated draft length")
     changed = [index for index, pair in enumerate(zip(original, mutated, strict=True)) if pair[0] != pair[1]]
@@ -198,10 +216,18 @@ def run_negative_execution(
         for item in case_runs
         if item["comparison_partition"] == "observable_mismatch"
     ]
+    body_mismatch_ids = [
+        item["case_id"]
+        for item in case_runs
+        if item["comparison_partition"] == "body_call_observable_mismatch"
+    ]
     return {
         "mutation": {
             "operator_from": operator_from.decode("ascii"),
             "operator_to": operator_to.decode("ascii"),
+            "mutation_kind": (
+                "body_call_suppression" if suppress_body_call else "operator_replacement"
+            ),
             "mutation_count": 1,
             "byte_offset": mutation_start,
             "original_draft": path_ref(context.repo_root, draft_path, original_sha),
@@ -241,6 +267,7 @@ def run_negative_execution(
             "comparison_false_case_ids": false_ids,
             "sequence_exhaustion_case_ids": exhausted_ids,
             "observable_mismatch_case_ids": mismatch_ids,
+            "body_call_observable_mismatch_case_ids": body_mismatch_ids,
         },
         "artifacts": artifacts,
     }
@@ -289,6 +316,31 @@ fn __c2r_negative_partition_case_{index}() {{
 """
         )
     return "".join(tests)
+
+
+def body_call_statement_pattern(callee_name: str) -> re.Pattern[bytes]:
+    return re.compile(
+        rb"(?m)^(?P<statement>[ \t]*(?:let[ \t]+_[ \t]*=[ \t]*)?"
+        + re.escape(callee_name.encode("utf-8"))
+        + rb"[ \t]*\([^;\r\n]*\)[ \t]*;[ \t]*)(?:\r)?$"
+    )
+
+
+def suppress_body_call_statement(
+    source: bytes, callee_name: str
+) -> tuple[bytes, int, int]:
+    matches = list(body_call_statement_pattern(callee_name).finditer(source))
+    if len(matches) != 1:
+        raise ReporterError(
+            "generated Rust draft must contain exactly one standalone body callee invocation"
+        )
+    start, end = matches[0].span("statement")
+    width = end - start
+    if width < 2:
+        raise ReporterError("generated Rust body callee statement is too short to suppress")
+    replacement = b"//" + (b"x" * (width - 2))
+    mutated = source[:start] + replacement + source[end:]
+    return mutated, start, end
 
 
 def rust_string(value: Any) -> str:

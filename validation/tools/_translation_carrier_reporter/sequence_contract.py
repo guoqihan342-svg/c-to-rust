@@ -29,7 +29,7 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
     schema_version = contract.get("schema_version")
     if schema_version not in {1, 2}:
         raise ReporterError("sequence replay contract schema_version must be 1 or 2")
-    if set(contract) != {
+    required_fields = {
         "schema_version",
         "kind",
         "external_callee",
@@ -38,8 +38,11 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
         "loop",
         "return",
         "noalias_required",
-    }:
+    }
+    if set(contract) not in {frozenset(required_fields), frozenset((*required_fields, "body_callee"))}:
         raise ReporterError("sequence replay contract shape drifted")
+    if "body_callee" in contract and schema_version != 2:
+        raise ReporterError("sequence replay body_callee requires schema_version 2")
 
     entries = contract.get("entry_arguments")
     if not isinstance(entries, list) or not entries:
@@ -92,71 +95,50 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
         "call_args_output",
     ):
         require_identifier(external.get(key), f"external_callee.{key}")
-    observations = external.get("arguments")
-    if not isinstance(observations, list) or not observations:
-        raise ReporterError("external_callee.arguments are missing")
-    external_names: set[str] = set()
-    owner_alias_state_keys: list[tuple[str, tuple[str, ...]]] = []
-    for index, raw_observation in enumerate(observations):
-        observation = require_dict(raw_observation, f"external_callee.arguments[{index}]")
-        mode = observation.get("mode")
-        supported_modes = {"record_ref", "scalar_field_value"}
-        if schema_version == 2:
-            supported_modes.add("owner_interior_alias")
-        if mode not in supported_modes:
-            raise ReporterError(f"external_callee.arguments[{index}].mode is unsupported")
-        expected_shape = {"parameter", "mode", "entry_parameter", "field_path"}
-        if mode == "owner_interior_alias":
-            expected_shape.update({"projection_path", "alias_local"})
-        if set(observation) != expected_shape:
-            raise ReporterError(f"external_callee.arguments[{index}] shape drifted")
-        name = require_identifier(
-            observation.get("parameter"), f"external_callee.arguments[{index}].parameter"
-        )
-        entry_name = require_identifier(
-            observation.get("entry_parameter"),
-            f"external_callee.arguments[{index}].entry_parameter",
-        )
-        if name in external_names or entry_name not in entry_by_name:
-            raise ReporterError(f"external_callee.arguments[{index}] binding drifted")
-        external_names.add(name)
-        path = field_path(
-            observation.get("field_path"), f"external_callee.arguments[{index}].field_path"
-        )
-        combined_path = path
-        if mode == "owner_interior_alias":
-            require_identifier(
-                observation.get("alias_local"),
-                f"external_callee.arguments[{index}].alias_local",
-            )
-            owner_entry = entry_by_name[entry_name]
-            if owner_entry["pass_mode"] != "mutable_ref":
-                raise ReporterError(
-                    f"external_callee.arguments[{index}] owner entry must use mutable_ref"
-                )
-            projection_path = field_path(
-                observation.get("projection_path"),
-                f"external_callee.arguments[{index}].projection_path",
-            )
-            initializer_record_type(
-                owner_entry["initializer"],
-                projection_path,
-                f"external_callee.arguments[{index}].projection_path",
-            )
-            combined_path = (*projection_path, *path)
-            owner_alias_state_keys.append((entry_name, combined_path))
-        initialized_paths = {
-            initialized_path
-            for _, initialized_path in initializer_fixture_paths(
-                entry_by_name[entry_name]["initializer"]
-            )
-        }
-        if combined_path not in initialized_paths:
-            raise ReporterError(f"external_callee.arguments[{index}] field path is not initialized")
+    owner_alias_state_keys = validate_observations(
+        external.get("arguments"),
+        label="external_callee.arguments",
+        schema_version=schema_version,
+        entry_by_name=entry_by_name,
+    )
 
     if schema_version == 2 and len(owner_alias_state_keys) != 1:
         raise ReporterError(
             "sequence replay schema_version 2 requires exactly one owner interior alias"
+        )
+
+    body = contract.get("body_callee")
+    if body is not None:
+        body = require_dict(body, "body_callee")
+        if set(body) != {
+            "name",
+            "return_value",
+            "call_count_output",
+            "call_args_output",
+            "call_order_output",
+            "event_id",
+            "tail_event_id",
+            "arguments",
+        }:
+            raise ReporterError("body_callee shape drifted")
+        for key in ("name", "call_count_output", "call_args_output", "call_order_output"):
+            require_identifier(body.get(key), f"body_callee.{key}")
+        if body["name"] == external["name"]:
+            raise ReporterError("body and sequence callees must differ")
+        return_value = body.get("return_value")
+        if type(return_value) is not int or not -(1 << 31) <= return_value < (1 << 31):
+            raise ReporterError("body_callee.return_value must be an i32 integer")
+        for key in ("event_id", "tail_event_id"):
+            value = body.get(key)
+            if type(value) is not int or not 0 <= value <= U32_MAX:
+                raise ReporterError(f"body_callee.{key} must be a u32 integer")
+        if body["event_id"] == body["tail_event_id"]:
+            raise ReporterError("body_callee event ids must be unique")
+        validate_observations(
+            body.get("arguments"),
+            label="body_callee.arguments",
+            schema_version=schema_version,
+            entry_by_name=entry_by_name,
         )
 
     state = require_dict(contract.get("state_output"), "state_output")
@@ -211,9 +193,78 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
 
 def behavior_fields(contract: dict[str, Any]) -> list[str]:
     external = contract["external_callee"]
-    return [
+    prefix = [
         str(contract["return"]["fixture_field"]),
         str(contract["state_output"]["fixture_field"]),
+    ]
+    body = contract.get("body_callee")
+    if isinstance(body, dict):
+        return [
+            *prefix,
+            str(body["call_count_output"]),
+            str(body["call_args_output"]),
+            str(external["call_count_output"]),
+            str(external["call_args_output"]),
+            str(body["call_order_output"]),
+        ]
+    return [
+        *prefix,
         str(external["call_count_output"]),
         str(external["call_args_output"]),
     ]
+
+
+def validate_observations(
+    raw_observations: Any,
+    *,
+    label: str,
+    schema_version: int,
+    entry_by_name: dict[str, dict[str, Any]],
+) -> list[tuple[str, tuple[str, ...]]]:
+    if not isinstance(raw_observations, list) or not raw_observations:
+        raise ReporterError(f"{label} are missing")
+    names: set[str] = set()
+    owner_alias_state_keys: list[tuple[str, tuple[str, ...]]] = []
+    for index, raw_observation in enumerate(raw_observations):
+        item_label = f"{label}[{index}]"
+        observation = require_dict(raw_observation, item_label)
+        mode = observation.get("mode")
+        supported_modes = {"record_ref", "scalar_field_value"}
+        if schema_version == 2:
+            supported_modes.add("owner_interior_alias")
+        if mode not in supported_modes:
+            raise ReporterError(f"{item_label}.mode is unsupported")
+        expected_shape = {"parameter", "mode", "entry_parameter", "field_path"}
+        if mode == "owner_interior_alias":
+            expected_shape.update({"projection_path", "alias_local"})
+        if set(observation) != expected_shape:
+            raise ReporterError(f"{item_label} shape drifted")
+        name = require_identifier(observation.get("parameter"), f"{item_label}.parameter")
+        entry_name = require_identifier(
+            observation.get("entry_parameter"), f"{item_label}.entry_parameter"
+        )
+        if name in names or entry_name not in entry_by_name:
+            raise ReporterError(f"{item_label} binding drifted")
+        names.add(name)
+        path = field_path(observation.get("field_path"), f"{item_label}.field_path")
+        combined_path = path
+        if mode == "owner_interior_alias":
+            require_identifier(observation.get("alias_local"), f"{item_label}.alias_local")
+            owner_entry = entry_by_name[entry_name]
+            if owner_entry["pass_mode"] != "mutable_ref":
+                raise ReporterError(f"{item_label} owner entry must use mutable_ref")
+            projection_path = field_path(
+                observation.get("projection_path"), f"{item_label}.projection_path"
+            )
+            initializer_record_type(owner_entry["initializer"], projection_path, f"{item_label}.projection_path")
+            combined_path = (*projection_path, *path)
+            owner_alias_state_keys.append((entry_name, combined_path))
+        initialized_paths = {
+            initialized_path
+            for _, initialized_path in initializer_fixture_paths(
+                entry_by_name[entry_name]["initializer"]
+            )
+        }
+        if combined_path not in initialized_paths:
+            raise ReporterError(f"{item_label} field path is not initialized")
+    return owner_alias_state_keys

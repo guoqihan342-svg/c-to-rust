@@ -306,6 +306,7 @@ def run_plan(
     max_workers: int = 1,
     timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     repair_trace: dict[str, Any] | None = None,
+    execution_route: dict[str, Any] | None = None,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
@@ -313,6 +314,8 @@ def run_plan(
     out_root = repo_path(out_root, repo_root=repo_root)
     plan_path = repo_path(plan_path, repo_root=repo_root)
     plan = load_json(plan_path)
+    if mode not in {"deterministic", "opencode"}:
+        raise SystemExit("run-plan mode=auto requires run-batch-profile admission")
     if plan.get("run_id") != run_id:
         raise SystemExit(f"plan run_id {plan.get('run_id')} does not match requested run_id {run_id}")
     units = plan.get("units")

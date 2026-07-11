@@ -224,6 +224,7 @@ def build_sequence_negative_report(
     expected_ids = [str(case["id"]) for case in context.cases]
     if detected_ids != expected_ids:
         raise ReporterError("actual sequence negative replay case ids drifted")
+    body = context.contract.get("body_callee")
     mismatches: list[dict[str, Any]] = []
     for case in context.cases:
         partition = mutation_partition(case, context.contract)
@@ -258,16 +259,30 @@ def build_sequence_negative_report(
         mismatches[0],
     )
     partition = execution["partition_replay"]
+    if isinstance(body, dict):
+        if (
+            partition.get("body_call_observable_mismatch_case_ids") != expected_ids
+            or partition.get("sequence_exhaustion_case_ids") != []
+            or partition.get("observable_mismatch_case_ids") != []
+        ):
+            raise ReporterError("body-call suppression partitions drifted")
     return {
         **common,
         "status": "expected_failed",
         "expected_failure": True,
         "mutation_detected": True,
-        "mutation": "loop comparison operator != changed to ==",
+        "mutation": (
+            "body callee invocation suppressed"
+            if isinstance(body, dict)
+            else "loop comparison operator != changed to =="
+        ),
         "detected_case_ids": detected_ids,
         "partition_detection": {
             "sequence_exhaustion_case_ids": partition["sequence_exhaustion_case_ids"],
             "observable_mismatch_case_ids": partition["observable_mismatch_case_ids"],
+            "body_call_observable_mismatch_case_ids": partition.get(
+                "body_call_observable_mismatch_case_ids", []
+            ),
         },
         "actual_mutation_execution": execution,
         "first_mismatch": first_observable_mismatch,
@@ -290,7 +305,15 @@ def report_claim(context: StaticContext) -> dict[str, Any]:
         return build_field_scalar_add_report_claim(context)
     external_name = context.contract["external_callee"]["name"]
     if context.contract.get("kind") == SEQUENCE_KIND:
-        if context.contract.get("schema_version") == 2:
+        body = context.contract.get("body_callee")
+        if isinstance(body, dict):
+            verified_behavior = (
+                "Fixture-created records cross the declared entry boundary; one fixed-i32 body stub and "
+                "one finite-u32-sequence tail stub record their arguments and shared call order per "
+                "iteration, while the declared owner interior mutable alias reaches the sentinel within "
+                "the call bound. Real semantics of both callees remain excluded."
+            )
+        elif context.contract.get("schema_version") == 2:
             verified_behavior = (
                 "Fixture-created records cross the declared entry boundary; a finite u32 sequence drives "
                 "a do-while tail through a declared owner interior mutable alias, call arguments are traced "
@@ -344,4 +367,14 @@ def report_claim(context: StaticContext) -> dict[str, Any]:
                 list(pair) for pair in context.contract["noalias_required"]
             ],
         }
+        body = context.contract.get("body_callee")
+        if isinstance(body, dict):
+            claim["body_callee"] = body["name"]
+            claim["sequence_replay"]["body_call"] = {
+                "return_value": body["return_value"],
+                "argument_modes": [item["mode"] for item in body["arguments"]],
+                "event_id": body["event_id"],
+                "tail_event_id": body["tail_event_id"],
+                "shared_order_output": body["call_order_output"],
+            }
     return claim

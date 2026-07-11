@@ -8,6 +8,7 @@ def rust_replay_scripted_external_record_u32_sequence_do_while_state_cases_sourc
     if contract is None:
         return "    // TODO: bind scripted sequence fixture cases.\n"
     external = contract["external_callee"]
+    body = contract.get("body_callee")
     state = contract["state_output"]
     result = contract["return"]
     function_name = safe_ident(required_str(spec, "function_name"))
@@ -39,6 +40,23 @@ def rust_replay_scripted_external_record_u32_sequence_do_while_state_cases_sourc
             f"{local_names[str(state['parameter'])]}."
             + ".".join(str(field) for field in state["field_path"])
         )
+        body_assertions: list[str] = []
+        if isinstance(body, dict):
+            body_rows = ", ".join(
+                "[" + ", ".join(f"{int(value)}u32" for value in row) + "]"
+                for row in expected[str(body["call_args_output"])]
+            )
+            call_order = ", ".join(
+                f"{int(value)}u32"
+                for value in expected[str(body["call_order_output"])]
+            )
+            body_assertions.extend(
+                [
+                    f"        assert_eq!(__c2r_scripted_body_call_count(), {int(expected[str(body['call_count_output'])])}usize, \"{{}} body call count drifted\", case_id);\n",
+                    f"        assert_eq!(__c2r_scripted_body_call_args(), vec![{body_rows}], \"{{}} body call arguments drifted\", case_id);\n",
+                    f"        assert_eq!(__c2r_scripted_call_order(), vec![{call_order}], \"{{}} body/tail call order drifted\", case_id);\n",
+                ]
+            )
         blocks.extend(
             [
                 "    {\n",
@@ -51,6 +69,7 @@ def rust_replay_scripted_external_record_u32_sequence_do_while_state_cases_sourc
                 f"        assert_eq!({state_expression}, {int(expected[str(state['fixture_field'])])}u32, \"{{}} state drifted\", case_id);\n",
                 f"        assert_eq!(__c2r_scripted_external_call_count(), {int(expected[str(external['call_count_output'])])}usize, \"{{}} external call count drifted\", case_id);\n",
                 f"        assert_eq!(__c2r_scripted_external_call_args(), vec![{rows}], \"{{}} external call arguments drifted\", case_id);\n",
+                *body_assertions,
                 "    }\n",
             ]
         )

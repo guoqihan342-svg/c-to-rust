@@ -1,0 +1,88 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics bind independent oracle/replay/diff evidence and stable generated-draft unsafe gates; final accepted reports are downstream and cannot hash-bind themselves.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-read-kv-body-call.json",
+    "fixture_sha256": "7938b42d3d60cdd0e6c39b6c2c83183c77579d460e2de7a4e153c9da2066784e",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "219208192f76f107328fe017e29fedc526f5b1ee8a5084016df738ef438048d2",
+      "diff": "daf4054290e8590c26b1d2239f1b667751bda2c8efebe86ff383922f01445708",
+      "negative_diff": "ee9b9983bff42b7c6d466e50367ab4910e4079c7bf1e0d08535f189a6d3474ae",
+      "rust_report": "6ca1d65aea745336943c836d2661b29f1efb349373cb6238faa3250da9f2b13a",
+      "unsafe_ledger": "19f7815eba957d0c68e98b0c3f5370b9abf4f6f83b6da8b59af5cef3ea51cdcd",
+      "unsafe_scan": "2792ceef00a8c1a36f3d1b1d370c2d29920cd56c146ba9fe88a1c34e45de1bfd"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-generated-draft-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-generated-draft-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED",
+    "unsafe_gate_source": "generated_draft_unsafe_gates"
+  },
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=dd97b6231453763831ff84032df84f472c3bef75f393532d3fb103bc12b84e85",
+    "fixture_hash=7938b42d3d60cdd0e6c39b6c2c83183c77579d460e2de7a4e153c9da2066784e",
+    "build_profile_hash=380e3fdbf83e1b61c8f187270ae381a249d10debf11e3aa090a3d3dc61c4e585",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "translation-carrier self-contained C plus tests/Makefile ABI"
+    ],
+    "config_header_included": true,
+    "include_paths": []
+  },
+  "config_header": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "de4053685c46069e3c4e285389a814e0006a77f41d381aa4a312452d7a889fca"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "7938b42d3d60cdd0e6c39b6c2c83183c77579d460e2de7a4e153c9da2066784e",
+    "operation_count": 3,
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-read-kv-body-call.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No whole fdb_kv_iterate function migration claim.",
+    "No real source semantics claim for lines 1877-1885; line 1885 is used only as a synthetic, previously accepted fixture scaffold.",
+    "No real read_kv implementation behavior, mutation, storage access, return-value, or side-effect claim.",
+    "No real get_next_kv_addr implementation semantics claim.",
+    "Fixture records only test the exact line-1876 call shape, argument forwarding through the db/itr.current boundary, deterministic call order, synthetic tail assignment, and sentinel termination."
+  ],
+  "profile_id": "flashdb-real-fdb-kv-iterate-read-kv-body-call-carrier",
+  "repo_commit": "1e5d2e685ed6b33416ea72ad40f4d6950e05a22c",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

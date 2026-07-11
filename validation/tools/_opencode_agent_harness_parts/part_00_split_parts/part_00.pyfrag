@@ -235,7 +235,7 @@ def main() -> int:
         required=True,
         choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
     )
-    run_plan_parser.add_argument("--mode", choices=["deterministic", "opencode"], default="deterministic")
+    run_plan_parser.add_argument("--mode", choices=["auto", "deterministic", "opencode"], default="deterministic")
     run_plan_parser.add_argument("--opencode-command", default="opencode")
     run_plan_parser.add_argument("--opencode-model")
     run_plan_parser.add_argument("--opencode-agent")

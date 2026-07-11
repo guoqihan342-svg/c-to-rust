@@ -1,0 +1,254 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_available": true,
+    "compiler_command_source": "translation-carrier self-contained C plus tests/Makefile ABI",
+    "defines": [],
+    "include_paths": [],
+    "target": {
+      "char_width": 8,
+      "endianness": "little",
+      "int_width": 32,
+      "long_long_width": 64,
+      "long_width": 64,
+      "plain_char_signed": true,
+      "pointer_width": 64,
+      "short_width": 16,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "definition_status": "carrier_equivalent_uint32_sentinel",
+        "kind": "macro",
+        "name": "FAILED_ADDR",
+        "source": "src/fdb_kvdb.c"
+      },
+      {
+        "definition_status": "deterministic_fixture_stimulus_only",
+        "kind": "callee",
+        "name": "read_kv",
+        "source": "src/fdb_kvdb.c#read_kv"
+      },
+      {
+        "definition_status": "deterministic_fixture_stimulus_only",
+        "kind": "callee",
+        "name": "get_next_kv_addr",
+        "source": "src/fdb_kvdb.c#get_next_kv_addr"
+      }
+    ],
+    "external_direct_callees": [
+      {
+        "definition_status": "deterministic_fixture_stimulus",
+        "name": "read_kv",
+        "signature_ref": "sig-scripted-read-kv",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "translation-carrier:scripted-read-kv",
+        "stub_boundary": "scripted_fixture_only_no_real_callee_semantics"
+      },
+      {
+        "definition_status": "deterministic_fixture_stimulus",
+        "name": "get_next_kv_addr",
+        "signature_ref": "sig-scripted-get-next-kv-addr",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "translation-carrier:scripted-get-next-kv-addr",
+        "stub_boundary": "scripted_fixture_only_no_real_callee_semantics"
+      }
+    ],
+    "pointer_contract": {
+      "aliasing_proven": true,
+      "input_buffers": [
+        {
+          "c_type": "struct Database *",
+          "mutability": "read_write",
+          "name": "db",
+          "nullability": "non_null",
+          "ownership_role": "borrowed",
+          "read_effects": [
+            "db.generation"
+          ],
+          "write_effects": []
+        }
+      ],
+      "interior_aliases": [
+        {
+          "alias_kind": "owner_interior_alias",
+          "c_type": "struct Kv *",
+          "independent_mutable_root": false,
+          "name": "kv",
+          "owner_parameter": "itr",
+          "projection_path": [
+            "current"
+          ]
+        }
+      ],
+      "noalias_required": [
+        [
+          "db",
+          "itr"
+        ]
+      ],
+      "output_pointers": [
+        {
+          "c_type": "struct Owner *",
+          "mutability": "read_write",
+          "name": "itr",
+          "nullability": "non_null",
+          "ownership_role": "inout_param",
+          "read_effects": [
+            "itr.current.addr.start"
+          ],
+          "write_effects": [
+            "itr.current.addr.start"
+          ]
+        }
+      ]
+    },
+    "scalar_arithmetic_contract": {
+      "comparison": "the synthetic line-1885 scaffold compares each assigned uint32_t fixture return with UINT32_MAX",
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "signatures": [
+      {
+        "definition_status": "synthetic_translation_carrier",
+        "function": "fdb_kv_iterate_read_kv_body_call_probe",
+        "id": "sig-fdb-kv-iterate-read-kv-body-call-probe",
+        "parameters": [
+          {
+            "c_type": "struct Database *",
+            "direction": "input",
+            "name": "db"
+          },
+          {
+            "c_type": "struct Sector",
+            "direction": "input",
+            "name": "sector_seed"
+          },
+          {
+            "c_type": "struct Owner *",
+            "direction": "inout",
+            "name": "itr"
+          }
+        ],
+        "return_type": "bool"
+      },
+      {
+        "definition_status": "deterministic_fixture_stimulus",
+        "function": "read_kv",
+        "id": "sig-scripted-read-kv",
+        "parameters": [
+          {
+            "c_type": "struct Database *",
+            "direction": "input",
+            "name": "db"
+          },
+          {
+            "c_type": "struct Kv *",
+            "direction": "inout",
+            "name": "kv"
+          }
+        ],
+        "return_type": "int"
+      },
+      {
+        "definition_status": "deterministic_fixture_stimulus",
+        "function": "get_next_kv_addr",
+        "id": "sig-scripted-get-next-kv-addr",
+        "parameters": [
+          {
+            "c_type": "struct Database *",
+            "direction": "input",
+            "name": "db"
+          },
+          {
+            "c_type": "struct Sector *",
+            "direction": "input",
+            "name": "sector"
+          },
+          {
+            "c_type": "struct Kv *",
+            "direction": "inout",
+            "name": "kv"
+          }
+        ],
+        "return_type": "uint32_t"
+      }
+    ]
+  },
+  "c_source": "#include <stdbool.h>\n#include <stdint.h>\n#define FAILED_ADDR ((uint32_t)-1)\nstruct Database { uint32_t generation; };\nstruct Sector { uint32_t offset; };\nstruct Address { uint32_t start; };\nstruct Kv { struct Address addr; };\ntypedef struct Kv *fdb_kv_t;\nstruct Owner { struct Kv current; };\nint read_kv(struct Database *db, struct Kv *kv);\nuint32_t get_next_kv_addr(struct Database *db, struct Sector *sector, struct Kv *kv);\nstatic bool fdb_kv_iterate_read_kv_body_call_probe(struct Database *db, struct Sector sector_seed, struct Owner *itr)\n{\n    fdb_kv_t kv = &itr->current;\n    struct Sector sector = sector_seed;\n    bool run_once = true;\n    while (run_once) {\n        run_once = false;\n        do {\n                    read_kv(db, kv);\n                } while ((kv->addr.start = get_next_kv_addr(db, &sector, kv)) != FAILED_ADDR);\n        return false;\n    }\n    return true;\n}\n",
+  "fixture_hash": "7938b42d3d60cdd0e6c39b6c2c83183c77579d460e2de7a4e153c9da2066784e",
+  "function_name": "fdb_kv_iterate_read_kv_body_call_probe",
+  "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_file": "src/fdb_kvdb.c",
+  "source_file_hashes": {
+    "src/fdb_kvdb.c": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b"
+  },
+  "source_files": [
+    {
+      "path": "src/fdb_kvdb.c",
+      "role": "source",
+      "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+    }
+  ],
+  "source_root": "sources/FlashDB",
+  "target_id": "flashdb",
+  "translation_carrier": {
+    "artifact_source_hash_mode": "lf_stable_text",
+    "carrier_function": "fdb_kv_iterate_read_kv_body_call_probe",
+    "carrier_source_sha256": "f317902b57a59230c4bc896c1e54bf26544e010ee33e08f82f34740eea469415",
+    "claim_boundary": {
+      "excluded_semantics": [
+        "real source lines 1877-1885, including the real conditional, iterator statistics, return, loop-tail control flow, and assignment-call semantics",
+        "real read_kv implementation behavior, side effects, return semantics, and storage access",
+        "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1876 call statement",
+        "real FlashDB database, sector, iterator, KV, address, storage, and pointer layouts",
+        "complete fdb_kv_iterate function semantics"
+      ],
+      "external_callee_semantics_verified": false,
+      "scope": "source_fragment_only",
+      "whole_function_semantics_verified": false
+    },
+    "embedding_mode": "verbatim_once",
+    "frontend_contract": "live_clang_slice_source",
+    "kind": "exact_source_fragment_wrapper",
+    "real_source": {
+      "containing_function": {
+        "declaration_text": "bool fdb_kv_iterate(",
+        "hash_mode": "trimmed_normalized_span",
+        "line_end": 1896,
+        "line_start": 1860,
+        "name": "fdb_kv_iterate",
+        "sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d"
+      },
+      "file": "src/fdb_kvdb.c",
+      "fragment": {
+        "hash_mode": "normalized_line_span_with_newline",
+        "kind": "expression_statement",
+        "line_end": 1876,
+        "line_start": 1876,
+        "sha256": "10948836c8ce66dea9de8d52dd04882b110c70acdabd785634c9e6d2660f2940",
+        "text": "                    read_kv(db, kv);\n"
+      }
+    },
+    "source_file_hash_mode": "raw_bytes",
+    "source_text_normalization": "utf8_universal_newlines"
+  }
+}

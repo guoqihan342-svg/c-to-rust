@@ -42,9 +42,13 @@ def validate_noalias(
         raise ReporterError("pointer aliasing metadata is not proven")
     if declared != noalias_pairs(pointer.get("noalias_required"), "pointer noalias_required"):
         raise ReporterError("noalias contract drifted")
+    callees = [contract["external_callee"]]
+    if isinstance(contract.get("body_callee"), dict):
+        callees.append(contract["body_callee"])
     roots = {
         str(item["entry_parameter"])
-        for item in contract["external_callee"]["arguments"]
+        for callee in callees
+        for item in callee["arguments"]
         if item["mode"] in {"record_ref", "owner_interior_alias"}
         and entry_by_name[str(item["entry_parameter"])]["pass_mode"] == "mutable_ref"
     }
@@ -84,25 +88,41 @@ def validate_signatures(
     if [item.get("direction") for item in actual_entry] != [item["direction"] for item in entries]:
         raise ReporterError("sequence replay entry parameter directions drifted")
 
-    external = contract["external_callee"]
+    callees = [(contract["external_callee"], "uint32_t", "external")]
+    if isinstance(contract.get("body_callee"), dict):
+        callees.append((contract["body_callee"], "int", "body"))
+    for callee, return_type, label in callees:
+        validate_callee_signature(
+            boundary, signatures, callee, return_type, label, entry_by_name
+        )
+
+
+def validate_callee_signature(
+    boundary: dict[str, Any],
+    signatures: list[Any],
+    callee: dict[str, Any],
+    return_type: str,
+    label: str,
+    entry_by_name: dict[str, dict[str, Any]],
+) -> None:
     declarations = [
         item
         for item in boundary.get("external_direct_callees", [])
-        if isinstance(item, dict) and item.get("name") == external["name"]
+        if isinstance(item, dict) and item.get("name") == callee["name"]
     ]
     if len(declarations) != 1:
-        raise ReporterError("sequence replay external declaration drifted")
-    external_matches = [
+        raise ReporterError(f"sequence replay {label} declaration drifted")
+    matches = [
         item
         for item in signatures
         if isinstance(item, dict)
-        and item.get("function") == external["name"]
+        and item.get("function") == callee["name"]
         and item.get("id") == declarations[0].get("signature_ref")
     ]
-    if len(external_matches) != 1 or normalize_c_type(external_matches[0].get("return_type")) != "uint32_t":
-        raise ReporterError("sequence replay external signature drifted")
-    observations = external["arguments"]
-    actual_external = [item for item in external_matches[0].get("parameters", []) if isinstance(item, dict)]
+    if len(matches) != 1 or normalize_c_type(matches[0].get("return_type")) != return_type:
+        raise ReporterError(f"sequence replay {label} signature drifted")
+    observations = callee["arguments"]
+    actual_external = [item for item in matches[0].get("parameters", []) if isinstance(item, dict)]
     expected_types = []
     for index, item in enumerate(observations):
         entry = entry_by_name[str(item["entry_parameter"])]
@@ -113,14 +133,14 @@ def validate_signatures(
             record_type = initializer_record_type(
                 entry["initializer"],
                 projection_path,
-                f"external_callee.arguments[{index}].projection_path",
+                f"{label}_callee.arguments[{index}].projection_path",
             )
             expected_types.append(f"struct {record_type} *")
         else:
             expected_types.append("uint32_t")
     if [item.get("name") for item in actual_external] != [item["parameter"] for item in observations]:
-        raise ReporterError("sequence replay external parameters drifted")
+        raise ReporterError(f"sequence replay {label} parameters drifted")
     if [normalize_c_type(item.get("c_type")) for item in actual_external] != [
         normalize_c_type(item) for item in expected_types
     ]:
-        raise ReporterError("sequence replay external parameter types drifted")
+        raise ReporterError(f"sequence replay {label} parameter types drifted")

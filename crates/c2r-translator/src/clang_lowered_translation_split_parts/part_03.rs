@@ -2,4 +2,5 @@
 mod clang_lowered_ir_evidence_tests {
     include!("part_03_split_parts/part_00.rs");
     include!("part_03_split_parts/part_01.rs");
+    include!("part_03_split_parts/part_02.rs");
 }

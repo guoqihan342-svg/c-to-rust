@@ -22,11 +22,11 @@ input.c
 
 | 项目 | 当前值 | 准确含义 |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 34 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
+| `translator_generated_semantic_pass_count` | 35 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
-| 当前翻译主线 | P0-T25 | 为 `fdb_kvdb.c:1876` discarded direct-call body candidate 建立 source-backed 语义证据 |
+| 当前翻译主线 | P0-T26 | 审计并选择 `fdb_kvdb.c:1877-1883` 的最小通用切片 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-T24 | 已实现 `:1876` interior-reborrow do-while 单一 discarded direct-call body 通用 candidate；尚未计入语义通过 |
+| 最近开发阶段 | P0-T25 | `:1876` discarded direct-call body 已完成 source-backed 严格语义闭环，计数增至 35 |
 | 当前严格回归 | `26/34` | run `20260711T061416Z`；8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -219,9 +219,13 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   当前已完成 project-independent no-clang AST lowering、Rust emission/runtime 顺序验证和相邻负例；状态为 `candidate_context_only`，语义计数保持 34。
 
-- [ ] **P0-T25：`fdb_kvdb.c:1876` source-backed 语义闭环**
+- [x] **P0-T25：`fdb_kvdb.c:1876` source-backed 语义闭环**
 
-  为 P0-T24 candidate 建立 source-bound spec、有限 fixture、fixture-only external call contract、C oracle、Rust replay、schema/negative diff、unsafe ledger、route/profile 和 final verification。只有 WSL competition lane strict validator 全部通过后才能增加语义计数。
+  已完成 source-bound spec、3 个有限 fixture、fixture-only `read_kv`/`get_next_kv_addr` 双调用合同、C oracle、generated Rust replay、schema diff、body-call suppression negative diff、unsafe ledger、route/profile 和 final verification。WSL competition clang lane 的 strict validator 12 类绑定检查全部通过，`semantic_pass=true`、`generated_draft_semantic_pass=true`，matrix 派生计数由 34 更新为 35。声明只覆盖 line 1876 的调用形状、参数转发和 fixture 顺序；line 1885 仅为 synthetic scaffold，真实 `read_kv`/`get_next_kv_addr` 副作用和完整循环不在范围内。
+
+- [ ] **P0-T26：`fdb_kvdb.c:1877-1883` 下一切片决策门**
+
+  逐项审计双字段短路条件、状态常量、三个统计累加和 early return，选择不依赖真实 `read_kv` 副作用的最小 project-independent construct。先固定最近邻正/负例、alias/整数提升边界和 source span；候选生成、source-backed 验收和语义计数必须分阶段完成。
 
 ### P0-A：AI/Harness 效率
 
@@ -234,6 +238,10 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 - [x] **P0-A2：`CLANG_PATH` 裸命令名与比赛 PATH 合同一致**
 
   Rust clang frontend 现在同时接受现有显式路径和由进程 `PATH` 解析的裸命令名，例如 `CLANG_PATH=clang`；带目录分隔符但不存在的显式路径仍保持 fail closed。WSL 上的 clang 18 最小 TU smoke 与 3 个真实 clang auto-migrate 正/负例均通过。该修复只恢复候选生成通道，不提升任何语义计数。
+
+- [x] **P0-A3：deterministic-first admission gate**
+
+  `mode=auto` 只在全部 worker 绑定 accepted evidence、现存 evidence root、source hash、slice spec 且没有 repair policy 时，于 OpenCode preflight 前选择 deterministic。mixed/unbound 输入在 fanout 前以 `auto_route_unbound` 拒绝；`competition-exact`、hostless rehearsal 和显式 OpenCode attestation 不允许自动降级。该路由只减少无增益模型调用，`semantic_gate=false`。
 
 ### P0-B：比赛主机与 OpenCode
 
@@ -289,11 +297,13 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | P0-T22 | 选择并实现 `:1885` interior-reborrow do-while tail candidate | 33 -> 33（candidate only） |
 | P0-T23 | `:1885` owner-interior-alias do-while tail source-backed 严格验收 | 33 -> 34 |
 | P0-T24 | 选择并实现 `:1876` discarded direct-call body candidate | 34 -> 34（candidate only） |
+| P0-T25 | `:1876` discarded direct-call body source-backed 严格验收 | 34 -> 35 |
 
 验证运行绑定：
 
 | 验证项 | 绑定 | 结果 |
 | --- | --- | --- |
+| P0-T25 严格 validator | WSL competition clang lane，2026-07-11 | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过；3 个有限 fixture 案例覆盖 1/2/3 次 body/tail 有序调用；未执行循环压力测试 |
 | P0-T24 / P0-A1 / P0-A2 阶段验收 | WSL local simulation，2026-07-11 | translator library `228`、bounded `665`、integer conversion `4` 全通过，`133` 个 real-clang opt-in 默认忽略；3 个真实 clang focused tests、Python auto-migrate `155`、OpenCode harness `192` 全通过；未执行循环压力测试 |
 | P0-T23 严格 validator | WSL competition clang lane，2026-07-11 | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过；3 个有限 fixture 案例覆盖 1/2/3 次调用 |
 | P0-T22 translator candidate | 当前工作树，2026-07-11 | library `228` 通过；bounded `659` 通过、`133` 个 real-clang opt-in 忽略；integer conversion `4` 通过；coverage matrix passed |

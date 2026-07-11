@@ -1,0 +1,6 @@
+
+thread '__c2r_negative_partition_case_2' (65693) panicked at <translation-carrier-negative>/mutated_partition_replay.rs:154:5:
+assertion `left == right` failed: two-kvs-then-failed body call count drifted
+  left: 0
+ right: 3
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -1,0 +1,412 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "itr_kv_addr_start",
+    "body_call_count",
+    "body_call_args",
+    "external_call_count",
+    "external_call_args",
+    "call_order"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Fixture-created records cross the declared entry boundary; one fixed-i32 body stub and one finite-u32-sequence tail stub record their arguments and shared call order per iteration, while the declared owner interior mutable alias reaches the sentinel within the call bound. Real semantics of both callees remain excluded.",
+    "external_callee": "get_next_kv_addr",
+    "excluded_semantics": [
+      "real source lines 1877-1885, including the real conditional, iterator statistics, return, loop-tail control flow, and assignment-call semantics",
+      "real read_kv implementation behavior, side effects, return semantics, and storage access",
+      "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1876 call statement",
+      "real FlashDB database, sector, iterator, KV, address, storage, and pointer layouts",
+      "complete fdb_kv_iterate function semantics"
+    ],
+    "sequence_replay": {
+      "schema_version": 2,
+      "argument_modes": [
+        "record_ref",
+        "record_ref",
+        "owner_interior_alias"
+      ],
+      "interior_alias_bindings": [
+        {
+          "entry_parameter": "itr",
+          "projection_path": [
+            "current"
+          ],
+          "alias_local": "kv",
+          "field_path": [
+            "addr",
+            "start"
+          ]
+        }
+      ],
+      "noalias_required": [
+        [
+          "db",
+          "itr"
+        ]
+      ],
+      "body_call": {
+        "return_value": 0,
+        "argument_modes": [
+          "record_ref",
+          "owner_interior_alias"
+        ],
+        "event_id": 1,
+        "tail_event_id": 2,
+        "shared_order_output": "call_order"
+      }
+    },
+    "body_callee": "read_kv"
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:read-kv-body-call@1876"
+    ]
+  },
+  "provenance": {
+    "binding_mode": "executed_harness",
+    "evidence_refs": {
+      "slice_spec": {
+        "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-read-kv-body-call.json",
+        "sha256": "dd97b6231453763831ff84032df84f472c3bef75f393532d3fb103bc12b84e85"
+      },
+      "fixture": {
+        "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-read-kv-body-call.json",
+        "sha256": "7938b42d3d60cdd0e6c39b6c2c83183c77579d460e2de7a4e153c9da2066784e"
+      },
+      "real_source": {
+        "path": "sources/FlashDB/src/fdb_kvdb.c",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+        "artifact_lf_stable_sha256": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b",
+        "containing_function_sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d",
+        "source_fragment_sha256": "10948836c8ce66dea9de8d52dd04882b110c70acdabd785634c9e6d2660f2940"
+      },
+      "translation_carrier": {
+        "kind": "exact_source_fragment_wrapper",
+        "carrier_function": "fdb_kv_iterate_read_kv_body_call_probe",
+        "carrier_source_sha256": "f317902b57a59230c4bc896c1e54bf26544e010ee33e08f82f34740eea469415"
+      },
+      "translator_input": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-translator-input.json",
+        "sha256": "de4053685c46069e3c4e285389a814e0006a77f41d381aa4a312452d7a889fca"
+      },
+      "translation_plan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-auto-translation-plan.json",
+        "binding_mode": "field_bound",
+        "status": "draft_generated",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "clang_lowering_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-clang-lowering-report.json",
+        "binding_mode": "field_bound",
+        "status": "lowered",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "c_oracle_status": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle-status.json",
+        "binding_mode": "field_bound",
+        "status": "DRAFT_GENERATED",
+        "semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "c_oracle_harness": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle-harness-draft.c",
+        "sha256": "450964b44e3d5d3a66262ee8da3b8bd1253326f9d021d0553346ae950b242543"
+      },
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-rust-draft.rs",
+        "sha256": "c9d4c8bfd3a6ca157f7949092f34f1c6f024614c68057ce905d8478d442ebbf7"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/rust-check.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-rust-replay-test-draft.rs",
+        "sha256": "579f48542c886645ce8e1a73855d6b64fd91402749043274490977dcae19fb53",
+        "declared_sha256": "579f48542c886645ce8e1a73855d6b64fd91402749043274490977dcae19fb53"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/generated-rust-replay.stdout.log",
+        "sha256": "9aa87e33d47e85b15963befaa8561af093cdf948f79f8645224fb717238f98a2"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-rust-report.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      }
+    },
+    "compile_execution": {
+      "argv": [
+        "cc",
+        "-std=c99",
+        "l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle-harness-draft.c",
+        "-o",
+        "l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle-harness-draft.exe"
+      ],
+      "attempted": true,
+      "compiler_candidates": [
+        "cc",
+        "gcc",
+        "clang"
+      ],
+      "compiler_name": "cc",
+      "compiler_path": "cc",
+      "diagnostics": [
+        "C oracle compile command succeeded, but execution/diff gates are still required."
+      ],
+      "execution_argv": [
+        "cc",
+        "-std=c99",
+        "l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle-harness-draft.c",
+        "-o",
+        "l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle-harness-draft.exe"
+      ],
+      "harness_execution": {
+        "argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle-harness-draft.exe"
+        ],
+        "attempted": true,
+        "diagnostics": [
+          "C oracle harness executed, but execution output has not passed oracle diff gates."
+        ],
+        "output_gate": {
+          "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+          "compared_fields": [
+            "return_value",
+            "itr_kv_addr_start",
+            "body_call_count",
+            "body_call_args",
+            "external_call_count",
+            "external_call_args",
+            "call_order"
+          ],
+          "diagnostics": [
+            "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+          ],
+          "expected_stdout_fragments": [
+            "fixture case failed-address-first return_value matched",
+            "fixture case failed-address-first itr_kv_addr_start matched",
+            "fixture case failed-address-first body_call_count matched",
+            "fixture case failed-address-first body_call_args matched",
+            "fixture case failed-address-first external_call_count matched",
+            "fixture case failed-address-first external_call_args matched",
+            "fixture case failed-address-first call_order matched",
+            "fixture case one-kv-then-failed return_value matched",
+            "fixture case one-kv-then-failed itr_kv_addr_start matched",
+            "fixture case one-kv-then-failed body_call_count matched",
+            "fixture case one-kv-then-failed body_call_args matched",
+            "fixture case one-kv-then-failed external_call_count matched",
+            "fixture case one-kv-then-failed external_call_args matched",
+            "fixture case one-kv-then-failed call_order matched",
+            "fixture case two-kvs-then-failed return_value matched",
+            "fixture case two-kvs-then-failed itr_kv_addr_start matched",
+            "fixture case two-kvs-then-failed body_call_count matched",
+            "fixture case two-kvs-then-failed body_call_args matched",
+            "fixture case two-kvs-then-failed external_call_count matched",
+            "fixture case two-kvs-then-failed external_call_args matched",
+            "fixture case two-kvs-then-failed call_order matched"
+          ],
+          "fixture_expected_output_status": "declared_not_executed",
+          "gate": "c_oracle_harness_output",
+          "matched_stdout_fragments": [
+            "fixture case failed-address-first return_value matched",
+            "fixture case failed-address-first itr_kv_addr_start matched",
+            "fixture case failed-address-first body_call_count matched",
+            "fixture case failed-address-first body_call_args matched",
+            "fixture case failed-address-first external_call_count matched",
+            "fixture case failed-address-first external_call_args matched",
+            "fixture case failed-address-first call_order matched",
+            "fixture case one-kv-then-failed return_value matched",
+            "fixture case one-kv-then-failed itr_kv_addr_start matched",
+            "fixture case one-kv-then-failed body_call_count matched",
+            "fixture case one-kv-then-failed body_call_args matched",
+            "fixture case one-kv-then-failed external_call_count matched",
+            "fixture case one-kv-then-failed external_call_args matched",
+            "fixture case one-kv-then-failed call_order matched",
+            "fixture case two-kvs-then-failed return_value matched",
+            "fixture case two-kvs-then-failed itr_kv_addr_start matched",
+            "fixture case two-kvs-then-failed body_call_count matched",
+            "fixture case two-kvs-then-failed body_call_args matched",
+            "fixture case two-kvs-then-failed external_call_count matched",
+            "fixture case two-kvs-then-failed external_call_args matched",
+            "fixture case two-kvs-then-failed call_order matched"
+          ],
+          "missing_stdout_fragments": [],
+          "schema_version": 1,
+          "semantic_pass": false,
+          "status": "matched_not_oracle"
+        },
+        "returncode": 0,
+        "semantic_pass": false,
+        "status": "exited_zero_not_oracle",
+        "stderr": "",
+        "stdout": "oracle harness draft for fdb_kv_iterate_read_kv_body_call_probe\nfixture input: validation/l2_slices/fixtures/real-fdb-kv-iterate-read-kv-body-call.json\nfixture case failed-address-first return_value matched\nfixture case failed-address-first itr_kv_addr_start matched\nfixture case failed-address-first external_call_count matched\nfixture case failed-address-first external_call_args matched\nfixture case failed-address-first body_call_count matched\nfixture case failed-address-first body_call_args matched\nfixture case failed-address-first call_order matched\nfixture case one-kv-then-failed return_value matched\nfixture case one-kv-then-failed itr_kv_addr_start matched\nfixture case one-kv-then-failed external_call_count matched\nfixture case one-kv-then-failed external_call_args matched\nfixture case one-kv-then-failed body_call_count matched\nfixture case one-kv-then-failed body_call_args matched\nfixture case one-kv-then-failed call_order matched\nfixture case two-kvs-then-failed return_value matched\nfixture case two-kvs-then-failed itr_kv_addr_start matched\nfixture case two-kvs-then-failed external_call_count matched\nfixture case two-kvs-then-failed external_call_args matched\nfixture case two-kvs-then-failed body_call_count matched\nfixture case two-kvs-then-failed body_call_args matched\nfixture case two-kvs-then-failed call_order matched\n",
+        "timeout_seconds": 30,
+        "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call",
+        "execution_argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle-harness-draft.exe"
+        ]
+      },
+      "requested_compiler": "cc",
+      "returncode": 0,
+      "semantic_pass": false,
+      "status": "compile_succeeded_not_oracle",
+      "stderr": "",
+      "stdout": "",
+      "toolchain_adapter": "local",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call",
+      "command_recording": "portable_logical_argv"
+    }
+  },
+  "cases": [
+    {
+      "id": "failed-address-first",
+      "return_value": false,
+      "itr_kv_addr_start": 4294967295,
+      "body_call_count": 1,
+      "body_call_args": [
+        [
+          17,
+          0
+        ]
+      ],
+      "external_call_count": 1,
+      "external_call_args": [
+        [
+          17,
+          29,
+          0
+        ]
+      ],
+      "call_order": [
+        1,
+        2
+      ],
+      "status": "passed"
+    },
+    {
+      "id": "one-kv-then-failed",
+      "return_value": false,
+      "itr_kv_addr_start": 4294967295,
+      "body_call_count": 2,
+      "body_call_args": [
+        [
+          3,
+          99
+        ],
+        [
+          3,
+          4096
+        ]
+      ],
+      "external_call_count": 2,
+      "external_call_args": [
+        [
+          3,
+          5,
+          99
+        ],
+        [
+          3,
+          5,
+          4096
+        ]
+      ],
+      "call_order": [
+        1,
+        2,
+        1,
+        2
+      ],
+      "status": "passed"
+    },
+    {
+      "id": "two-kvs-then-failed",
+      "return_value": false,
+      "itr_kv_addr_start": 4294967295,
+      "body_call_count": 3,
+      "body_call_args": [
+        [
+          305419896,
+          17
+        ],
+        [
+          305419896,
+          12288
+        ],
+        [
+          305419896,
+          16384
+        ]
+      ],
+      "external_call_count": 3,
+      "external_call_args": [
+        [
+          305419896,
+          2271560481,
+          17
+        ],
+        [
+          305419896,
+          2271560481,
+          12288
+        ],
+        [
+          305419896,
+          2271560481,
+          16384
+        ]
+      ],
+      "call_order": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        2
+      ],
+      "status": "passed"
+    }
+  ]
+}

@@ -1,0 +1,348 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "itr_kv_addr_start",
+    "body_call_count",
+    "body_call_args",
+    "external_call_count",
+    "external_call_args",
+    "call_order"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Fixture-created records cross the declared entry boundary; one fixed-i32 body stub and one finite-u32-sequence tail stub record their arguments and shared call order per iteration, while the declared owner interior mutable alias reaches the sentinel within the call bound. Real semantics of both callees remain excluded.",
+    "external_callee": "get_next_kv_addr",
+    "excluded_semantics": [
+      "real source lines 1877-1885, including the real conditional, iterator statistics, return, loop-tail control flow, and assignment-call semantics",
+      "real read_kv implementation behavior, side effects, return semantics, and storage access",
+      "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1876 call statement",
+      "real FlashDB database, sector, iterator, KV, address, storage, and pointer layouts",
+      "complete fdb_kv_iterate function semantics"
+    ],
+    "sequence_replay": {
+      "schema_version": 2,
+      "argument_modes": [
+        "record_ref",
+        "record_ref",
+        "owner_interior_alias"
+      ],
+      "interior_alias_bindings": [
+        {
+          "entry_parameter": "itr",
+          "projection_path": [
+            "current"
+          ],
+          "alias_local": "kv",
+          "field_path": [
+            "addr",
+            "start"
+          ]
+        }
+      ],
+      "noalias_required": [
+        [
+          "db",
+          "itr"
+        ]
+      ],
+      "body_call": {
+        "return_value": 0,
+        "argument_modes": [
+          "record_ref",
+          "owner_interior_alias"
+        ],
+        "event_id": 1,
+        "tail_event_id": 2,
+        "shared_order_output": "call_order"
+      }
+    },
+    "body_callee": "read_kv"
+  },
+  "status": "expected_failed",
+  "expected_failure": true,
+  "mutation_detected": true,
+  "mutation": "body callee invocation suppressed",
+  "detected_case_ids": [
+    "failed-address-first",
+    "one-kv-then-failed",
+    "two-kvs-then-failed"
+  ],
+  "partition_detection": {
+    "sequence_exhaustion_case_ids": [],
+    "observable_mismatch_case_ids": [],
+    "body_call_observable_mismatch_case_ids": [
+      "failed-address-first",
+      "one-kv-then-failed",
+      "two-kvs-then-failed"
+    ]
+  },
+  "actual_mutation_execution": {
+    "mutation": {
+      "operator_from": "body_call",
+      "operator_to": "suppressed",
+      "mutation_kind": "body_call_suppression",
+      "mutation_count": 1,
+      "byte_offset": 4056,
+      "original_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-rust-draft.rs",
+        "sha256": "c9d4c8bfd3a6ca157f7949092f34f1c6f024614c68057ce905d8478d442ebbf7"
+      },
+      "mutated_draft": {
+        "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/mutated-rust-draft.rs",
+        "sha256": "a903e144c97811688e992178d5a12352c8375af03a1b74a60757a13ad6cbb8be"
+      }
+    },
+    "same_generated_replay_harness": {
+      "compile": {
+        "argv": [
+          "rustc",
+          "--edition=2021",
+          "--test",
+          "--error-format=json",
+          "<translation-carrier-negative>/mutated_same_replay.rs",
+          "-o",
+          "<translation-carrier-negative>/mutated_same_replay.exe"
+        ],
+        "returncode": 0,
+        "stdout": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/same-replay-compile.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/same-replay-compile.stderr.log",
+          "sha256": "86b02fe62bfa3fd6412da70f50bb47bc3a17dace64e61dfd9509b10d93f6724a"
+        }
+      },
+      "run": {
+        "argv": [
+          "<translation-carrier-negative>/mutated_same_replay.exe",
+          "--nocapture"
+        ],
+        "returncode": 101,
+        "stdout": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/same-replay-run.stdout.log",
+          "sha256": "a841bd5107da788c3efcabbe22962e329822f1409dd0d120c7ec675eb66ba8ac"
+        },
+        "stderr": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/same-replay-run.stderr.log",
+          "sha256": "3a51b5f1798fa9b050f9674d154688f88ee7c6f26ad6c06eac2f88a1baee9b76"
+        }
+      },
+      "expected_run_failure": true
+    },
+    "partition_replay": {
+      "compile": {
+        "argv": [
+          "rustc",
+          "--edition=2021",
+          "--test",
+          "--error-format=json",
+          "<translation-carrier-negative>/mutated_partition_replay.rs",
+          "-o",
+          "<translation-carrier-negative>/mutated_partition_replay.exe"
+        ],
+        "returncode": 0,
+        "stdout": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/partition-replay-compile.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/partition-replay-compile.stderr.log",
+          "sha256": "bbd85340ff3a453100c474ba2c34c52f7b3514eddc12208dabaadc48e2557319"
+        }
+      },
+      "case_runs": [
+        {
+          "case_id": "failed-address-first",
+          "comparison_partition": "body_call_observable_mismatch",
+          "test_name": "__c2r_negative_partition_case_0",
+          "argv": [
+            "<translation-carrier-negative>/mutated_partition_replay.exe",
+            "--exact",
+            "__c2r_negative_partition_case_0",
+            "--nocapture"
+          ],
+          "returncode": 101,
+          "stdout": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/partition-case-0-run.stdout.log",
+            "sha256": "c075a06cffaafdbe291b8aed0f1ce11cc68b91505519021e87a62bd3441e28e7"
+          },
+          "stderr": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/partition-case-0-run.stderr.log",
+            "sha256": "0bab278080710504539560f2b82847b7e7b98bff3f293d63b366f620bcf28b75"
+          }
+        },
+        {
+          "case_id": "one-kv-then-failed",
+          "comparison_partition": "body_call_observable_mismatch",
+          "test_name": "__c2r_negative_partition_case_1",
+          "argv": [
+            "<translation-carrier-negative>/mutated_partition_replay.exe",
+            "--exact",
+            "__c2r_negative_partition_case_1",
+            "--nocapture"
+          ],
+          "returncode": 101,
+          "stdout": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/partition-case-1-run.stdout.log",
+            "sha256": "bb10f513217107ccbd5374f70988817c02b97cbcb19b87292ddc3b1fc0045686"
+          },
+          "stderr": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/partition-case-1-run.stderr.log",
+            "sha256": "d4e9a5461f6277b65b2fab02a4873bd16679051e7af7a06fbd868ddbfa98688e"
+          }
+        },
+        {
+          "case_id": "two-kvs-then-failed",
+          "comparison_partition": "body_call_observable_mismatch",
+          "test_name": "__c2r_negative_partition_case_2",
+          "argv": [
+            "<translation-carrier-negative>/mutated_partition_replay.exe",
+            "--exact",
+            "__c2r_negative_partition_case_2",
+            "--nocapture"
+          ],
+          "returncode": 101,
+          "stdout": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/partition-case-2-run.stdout.log",
+            "sha256": "7f1c6349fd984855881bd6d957108b77577d26a3d860fe5994627a82829ddb4b"
+          },
+          "stderr": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-read-kv-body-call/partition-case-2-run.stderr.log",
+            "sha256": "d25e46e41ab10567c4237737b2bdac9e12ae678b688225487a53aa2a205b7af5"
+          }
+        }
+      ],
+      "comparison_true_case_ids": [],
+      "comparison_false_case_ids": [],
+      "sequence_exhaustion_case_ids": [],
+      "observable_mismatch_case_ids": [],
+      "body_call_observable_mismatch_case_ids": [
+        "failed-address-first",
+        "one-kv-then-failed",
+        "two-kvs-then-failed"
+      ]
+    }
+  },
+  "first_mismatch": {
+    "case_id": "failed-address-first",
+    "field": "body_call_count",
+    "accepted_value": 1,
+    "mutated_value": 0
+  },
+  "mismatches": [
+    {
+      "case_id": "failed-address-first",
+      "field": "body_call_count",
+      "accepted_value": 1,
+      "mutated_value": 0
+    },
+    {
+      "case_id": "failed-address-first",
+      "field": "body_call_args",
+      "accepted_value": [
+        [
+          17,
+          0
+        ]
+      ],
+      "mutated_value": []
+    },
+    {
+      "case_id": "failed-address-first",
+      "field": "call_order",
+      "accepted_value": [
+        1,
+        2
+      ],
+      "mutated_value": [
+        2
+      ]
+    },
+    {
+      "case_id": "one-kv-then-failed",
+      "field": "body_call_count",
+      "accepted_value": 2,
+      "mutated_value": 0
+    },
+    {
+      "case_id": "one-kv-then-failed",
+      "field": "body_call_args",
+      "accepted_value": [
+        [
+          3,
+          99
+        ],
+        [
+          3,
+          4096
+        ]
+      ],
+      "mutated_value": []
+    },
+    {
+      "case_id": "one-kv-then-failed",
+      "field": "call_order",
+      "accepted_value": [
+        1,
+        2,
+        1,
+        2
+      ],
+      "mutated_value": [
+        2,
+        2
+      ]
+    },
+    {
+      "case_id": "two-kvs-then-failed",
+      "field": "body_call_count",
+      "accepted_value": 3,
+      "mutated_value": 0
+    },
+    {
+      "case_id": "two-kvs-then-failed",
+      "field": "body_call_args",
+      "accepted_value": [
+        [
+          305419896,
+          17
+        ],
+        [
+          305419896,
+          12288
+        ],
+        [
+          305419896,
+          16384
+        ]
+      ],
+      "mutated_value": []
+    },
+    {
+      "case_id": "two-kvs-then-failed",
+      "field": "call_order",
+      "accepted_value": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        2
+      ],
+      "mutated_value": [
+        2,
+        2,
+        2
+      ]
+    }
+  ]
+}

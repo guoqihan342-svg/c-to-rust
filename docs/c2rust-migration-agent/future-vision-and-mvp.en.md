@@ -20,11 +20,11 @@ input.c
 
 | Item | Current value | Exact meaning |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 34 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
+| `translator_generated_semantic_pass_count` | 35 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
 | `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
-| Active translator track | P0-T25 | Build source-backed semantic evidence for the `fdb_kvdb.c:1876` discarded direct-call body candidate |
+| Active translator track | P0-T26 | Audit and select the smallest generic slice within `fdb_kvdb.c:1877-1883` |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |
-| Latest development stage | P0-T24 | The generic `:1876` single discarded direct-call body inside an interior-reborrow do-while is implemented but not counted as semantic acceptance |
+| Latest development stage | P0-T25 | The `:1876` discarded direct-call body has source-backed strict semantic closure and raises the count to 35 |
 | Current strict regression | `26/34` | Run `20260711T061416Z`; eight historical evidence drifts remain |
 | Current proof class | `wsl-local-simulation` | Valid for development and approximation, but not `competition-exact` |
 
@@ -217,9 +217,13 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   Project-independent no-clang AST lowering, emitted-Rust runtime order checks, and adjacent negatives are complete. Status is `candidate_context_only`; the semantic count remains 34.
 
-- [ ] **P0-T25: source-backed semantic closure for `fdb_kvdb.c:1876`**
+- [x] **P0-T25: source-backed semantic closure for `fdb_kvdb.c:1876`**
 
-  Build the source-bound spec, bounded fixture, fixture-only external-call contract, C oracle, Rust replay, schema/negative diff, unsafe ledger, route/profile, and final verification for P0-T24. Increment the count only after the WSL competition lane strict validator passes every gate.
+  The source-bound spec, three bounded fixtures, fixture-only `read_kv`/`get_next_kv_addr` dual-call contract, C oracle, generated Rust replay, schema diff, body-call-suppression negative diff, unsafe ledger, route/profile, and final verification are complete. All 12 strict binding checks pass in the WSL competition clang lane with `semantic_pass=true` and `generated_draft_semantic_pass=true`, moving the matrix-derived count from 34 to 35. The claim covers only the line-1876 call shape, argument forwarding, and fixture order; line 1885 is synthetic scaffold, and real callee side effects and whole-loop semantics remain excluded.
+
+- [ ] **P0-T26: next-slice decision gate for `fdb_kvdb.c:1877-1883`**
+
+  Audit the two-field short-circuit condition, status constant, three statistics updates, and early return. Select the smallest project-independent construct that does not depend on real `read_kv` side effects. Pin nearest positive/negative cases, alias and integer-promotion boundaries, and the source span before separating candidate generation from source-backed acceptance.
 
 ### P0-A: AI/Harness Efficiency
 
@@ -232,6 +236,10 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 - [x] **P0-A2: align bare `CLANG_PATH` command names with the competition PATH contract**
 
   The Rust clang frontend now accepts both an existing explicit path and a bare command name resolved by the process `PATH`, such as `CLANG_PATH=clang`; an explicit path containing separators still fails closed when it does not exist. The WSL clang 18 minimum-TU smoke and three real-clang auto-migrate positive/negative tests pass. This restores candidate generation only and does not increase the semantic count.
+
+- [x] **P0-A3: deterministic-first admission gate**
+
+  `mode=auto` selects deterministic execution before OpenCode preflight only when every worker binds accepted evidence, an existing evidence root, a source hash, and a slice spec with no repair policy. Mixed or unbound input is refused before fanout as `auto_route_unbound`; `competition-exact`, hostless rehearsal, and explicit OpenCode attestation cannot auto-downgrade. This route only avoids model calls with no expected information gain and remains `semantic_gate=false`.
 
 ### P0-B: Competition Host and OpenCode
 
@@ -287,11 +295,13 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 | P0-T22 | Select and implement the `:1885` interior-reborrow do-while tail candidate | 33 -> 33 (candidate only) |
 | P0-T23 | Strict source-backed acceptance for the `:1885` owner-interior-alias do-while tail | 33 -> 34 |
 | P0-T24 | Select and implement the `:1876` discarded direct-call body candidate | 34 -> 34 (candidate only) |
+| P0-T25 | Strict source-backed acceptance for the `:1876` discarded direct-call body | 34 -> 35 |
 
 Validation run bindings:
 
 | Validation | Binding | Result |
 | --- | --- | --- |
+| P0-T25 strict validator | WSL competition clang lane, 2026-07-11 | `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; three bounded fixtures cover 1/2/3 ordered body/tail calls; no loop stress was run |
 | P0-T24 / P0-A1 / P0-A2 stage validation | WSL local simulation, 2026-07-11 | translator library `228`, bounded `665`, and integer conversion `4` passed, with `133` real-clang opt-in tests ignored by default; three real-clang focused tests, Python auto-migrate `155`, and OpenCode harness `192` passed; no loop stress was run |
 | P0-T23 strict validator | WSL competition clang lane, 2026-07-11 | `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; three bounded fixtures cover 1/2/3 calls |
 | P0-T22 translator candidate | current worktree, 2026-07-11 | library `228` passed; bounded `659` passed with `133` real-clang opt-in ignores; integer conversion `4` passed; coverage matrix passed |

@@ -1,0 +1,131 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics bind independent oracle/replay/diff evidence and stable generated-draft unsafe gates; final accepted reports are downstream and cannot hash-bind themselves.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-read-kv-body-call.json",
+    "fixture_sha256": "7938b42d3d60cdd0e6c39b6c2c83183c77579d460e2de7a4e153c9da2066784e",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "219208192f76f107328fe017e29fedc526f5b1ee8a5084016df738ef438048d2",
+      "diff": "daf4054290e8590c26b1d2239f1b667751bda2c8efebe86ff383922f01445708",
+      "negative_diff": "ee9b9983bff42b7c6d466e50367ab4910e4079c7bf1e0d08535f189a6d3474ae",
+      "rust_report": "6ca1d65aea745336943c836d2661b29f1efb349373cb6238faa3250da9f2b13a",
+      "unsafe_ledger": "19f7815eba957d0c68e98b0c3f5370b9abf4f6f83b6da8b59af5cef3ea51cdcd",
+      "unsafe_scan": "2792ceef00a8c1a36f3d1b1d370c2d29920cd56c146ba9fe88a1c34e45de1bfd"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-generated-draft-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-generated-draft-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED",
+    "unsafe_gate_source": "generated_draft_unsafe_gates"
+  },
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics bind independent oracle/replay/diff evidence and stable generated-draft unsafe gates; final accepted reports are downstream and cannot hash-bind themselves.",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-read-kv-body-call.json",
+      "fixture_sha256": "7938b42d3d60cdd0e6c39b6c2c83183c77579d460e2de7a4e153c9da2066784e",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "219208192f76f107328fe017e29fedc526f5b1ee8a5084016df738ef438048d2",
+        "diff": "daf4054290e8590c26b1d2239f1b667751bda2c8efebe86ff383922f01445708",
+        "negative_diff": "ee9b9983bff42b7c6d466e50367ab4910e4079c7bf1e0d08535f189a6d3474ae",
+        "rust_report": "6ca1d65aea745336943c836d2661b29f1efb349373cb6238faa3250da9f2b13a",
+        "unsafe_ledger": "19f7815eba957d0c68e98b0c3f5370b9abf4f6f83b6da8b59af5cef3ea51cdcd",
+        "unsafe_scan": "2792ceef00a8c1a36f3d1b1d370c2d29920cd56c146ba9fe88a1c34e45de1bfd"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle.json",
+        "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-diff.json",
+        "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-negative-diff.json",
+        "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-rust-report.json",
+        "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-generated-draft-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-generated-draft-unsafe-scan.json"
+      },
+      "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "status": "accepted",
+      "target_id": "flashdb",
+      "toolchain_status": "C_ORACLE_GENERATED",
+      "unsafe_gate_source": "generated_draft_unsafe_gates"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle.json",
+        "sha256": "219208192f76f107328fe017e29fedc526f5b1ee8a5084016df738ef438048d2",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-negative-diff.json",
+        "sha256": "ee9b9983bff42b7c6d466e50367ab4910e4079c7bf1e0d08535f189a6d3474ae",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-rust-report.json",
+        "sha256": "6ca1d65aea745336943c836d2661b29f1efb349373cb6238faa3250da9f2b13a",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-diff.json",
+        "sha256": "daf4054290e8590c26b1d2239f1b667751bda2c8efebe86ff383922f01445708",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-generated-draft-unsafe-ledger.json",
+        "sha256": "19f7815eba957d0c68e98b0c3f5370b9abf4f6f83b6da8b59af5cef3ea51cdcd",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-generated-draft-unsafe-scan.json",
+        "sha256": "2792ceef00a8c1a36f3d1b1d370c2d29920cd56c146ba9fe88a1c34e45de1bfd",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "<generated-replay-executable> --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/generated-rust-replay.stdout.log"
+    },
+    "rust_check": {
+      "binding_mode": "field_bound",
+      "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-rust-draft.rs",
+      "sha256": "c9d4c8bfd3a6ca157f7949092f34f1c6f024614c68057ce905d8478d442ebbf7",
+      "status": "accepted_after_gates"
+    },
+    "schema_version": 1,
+    "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "passed",
+    "target_id": "flashdb",
+    "unsafe_gate_source": "generated_draft_unsafe_gates"
+  },
+  "generated_draft_semantic_pass": true,
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+  "status": "passed",
+  "summary": "Auto-translation run completed with accepted C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and final-verification evidence binding.",
+  "target_id": "flashdb"
+}

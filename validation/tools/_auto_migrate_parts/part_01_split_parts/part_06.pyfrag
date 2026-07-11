@@ -8,6 +8,7 @@ def c_oracle_scripted_external_record_u32_sequence_do_while_state_execution_sour
     if contract is None:
         return {"declarations": "", "statements": ""}
     external = contract["external_callee"]
+    body = contract.get("body_callee")
     observations = external["arguments"]
     entries = {str(item["parameter"]): item for item in contract["entry_arguments"]}
     max_calls = int(contract["loop"]["max_calls"])
@@ -54,6 +55,70 @@ uint32_t {external['name']}(
 }}
 
 """
+    if isinstance(body, dict):
+        body_parameter_lines = []
+        for item in body["arguments"]:
+            if item["mode"] == "scalar_field_value":
+                body_parameter_lines.append(f"    uint32_t {item['parameter']}")
+            elif item["mode"] == "owner_interior_alias":
+                body_parameter_lines.append(
+                    f"    struct {scripted_sequence_alias_record_type(item, entries)} *{item['parameter']}"
+                )
+            else:
+                body_parameter_lines.append(
+                    f"    struct {entries[str(item['entry_parameter'])]['rust_type']} *{item['parameter']}"
+                )
+        body_parameters = ",\n".join(body_parameter_lines)
+        body_captures = "\n".join(
+            (
+                f"    c2r_scripted_body_call_args[c2r_scripted_body_call_count][{index}] = {item['parameter']};"
+                if item["mode"] == "scalar_field_value"
+                else f"    c2r_scripted_body_call_args[c2r_scripted_body_call_count][{index}] = {item['parameter']}->{'.'.join(str(field) for field in item['field_path'])};"
+            )
+            for index, item in enumerate(body["arguments"])
+        )
+        body_arg_count = len(body["arguments"])
+        definitions = f"""/* Fixture-only body/tail observers; real external callee semantics are not verified. */
+static const uint32_t *c2r_scripted_external_sequence = NULL;
+static size_t c2r_scripted_external_sequence_len = 0u;
+static size_t c2r_scripted_external_sequence_index = 0u;
+static size_t c2r_scripted_external_call_count = 0u;
+static uint32_t c2r_scripted_external_call_args[{max_calls}][{arg_count}];
+static size_t c2r_scripted_body_call_count = 0u;
+static uint32_t c2r_scripted_body_call_args[{max_calls}][{body_arg_count}];
+static size_t c2r_scripted_call_order_count = 0u;
+static uint32_t c2r_scripted_call_order[{max_calls * 2}];
+
+int {body['name']}(
+{body_parameters})
+{{
+    if (c2r_scripted_body_call_count >= {max_calls}u ||
+        c2r_scripted_call_order_count >= {max_calls * 2}u) {{
+        fputs("scripted body observer call limit exceeded\\n", stderr);
+        exit(86);
+    }}
+{body_captures}
+    c2r_scripted_body_call_count += 1u;
+    c2r_scripted_call_order[c2r_scripted_call_order_count++] = {c_integer_literal('uint32_t', int(body['event_id']))};
+    return {c_integer_literal('int', int(body['return_value']))};
+}}
+
+uint32_t {external['name']}(
+{parameters})
+{{
+    if (c2r_scripted_external_sequence_index >= c2r_scripted_external_sequence_len ||
+        c2r_scripted_external_call_count >= {max_calls}u ||
+        c2r_scripted_call_order_count >= {max_calls * 2}u) {{
+        fputs("scripted external return sequence exhausted\\n", stderr);
+        exit(86);
+    }}
+{captures}
+    c2r_scripted_external_call_count += 1u;
+    c2r_scripted_call_order[c2r_scripted_call_order_count++] = {c_integer_literal('uint32_t', int(body['tail_event_id']))};
+    return c2r_scripted_external_sequence[c2r_scripted_external_sequence_index++];
+}}
+
+"""
 
     statements: list[str] = []
     state = contract["state_output"]
@@ -91,6 +156,46 @@ uint32_t {external['name']}(
             for row, values in enumerate(expected_rows)
             for column, value in enumerate(values)
         )
+        body_resets = ""
+        body_checks = ""
+        if isinstance(body, dict):
+            expected_body_count = int(expected[str(body["call_count_output"])])
+            expected_body_rows = expected[str(body["call_args_output"])]
+            expected_order = expected[str(body["call_order_output"])]
+            body_args_checks = "".join(
+                f"  if (c2r_scripted_body_call_args[{row}][{column}] != {c_integer_literal('uint32_t', int(value))}) {{\n"
+                f"    fprintf(stderr, {c_string_literal(case_id + ' body call args mismatch\\n')});\n"
+                "    return 1;\n"
+                "  }\n"
+                for row, values in enumerate(expected_body_rows)
+                for column, value in enumerate(values)
+            )
+            order_checks = "".join(
+                f"  if (c2r_scripted_call_order[{index}] != {c_integer_literal('uint32_t', int(value))}) {{\n"
+                f"    fprintf(stderr, {c_string_literal(case_id + ' call order mismatch\\n')});\n"
+                "    return 1;\n"
+                "  }\n"
+                for index, value in enumerate(expected_order)
+            )
+            body_resets = (
+                "  c2r_scripted_body_call_count = 0u;\n"
+                "  c2r_scripted_call_order_count = 0u;\n"
+            )
+            body_checks = (
+                f"  if (c2r_scripted_body_call_count != {c_integer_literal('size_t', expected_body_count)}) {{\n"
+                f"    fprintf(stderr, {c_string_literal(case_id + ' body call count mismatch\\n')});\n"
+                "    return 1;\n"
+                "  }\n"
+                f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(body['call_count_output']) + ' matched')});\n"
+                f"{body_args_checks}"
+                f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(body['call_args_output']) + ' matched')});\n"
+                f"  if (c2r_scripted_call_order_count != {c_integer_literal('size_t', len(expected_order))}) {{\n"
+                f"    fprintf(stderr, {c_string_literal(case_id + ' call order count mismatch\\n')});\n"
+                "    return 1;\n"
+                "  }\n"
+                f"{order_checks}"
+                f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(body['call_order_output']) + ' matched')});\n"
+            )
         expected_return = "true" if expected[str(result["fixture_field"])] else "false"
         statements.append(
             f"  const uint32_t {sequence_name}[] = {{ {sequence_literal} }};\n"
@@ -98,6 +203,7 @@ uint32_t {external['name']}(
             f"  c2r_scripted_external_sequence_len = sizeof({sequence_name}) / sizeof({sequence_name}[0]);\n"
             "  c2r_scripted_external_sequence_index = 0u;\n"
             "  c2r_scripted_external_call_count = 0u;\n"
+            f"{body_resets}"
             f"{''.join(declarations)}"
             f"  bool actual_{case_ident}_return = {required_str(spec, 'function_name')}({', '.join(call_arguments)});\n"
             f"  if (actual_{case_ident}_return != {expected_return}) {{\n"
@@ -117,14 +223,18 @@ uint32_t {external['name']}(
             f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(external['call_count_output']) + ' matched')});\n"
             f"{args_checks}"
             f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(external['call_args_output']) + ' matched')});\n"
+            f"{body_checks}"
         )
+    fixture_external_stub = {
+        "kind": SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND,
+        "scope": "fixture_only",
+        "semantics_verified": False,
+    }
+    if isinstance(body, dict):
+        fixture_external_stub["callees"] = [external["name"], body["name"]]
     return {
         "declarations": "#include <stdlib.h>\n",
         "definitions_after_target": definitions,
         "statements": "".join(statements),
-        "fixture_external_stub": {
-            "kind": SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND,
-            "scope": "fixture_only",
-            "semantics_verified": False,
-        },
+        "fixture_external_stub": fixture_external_stub,
     }

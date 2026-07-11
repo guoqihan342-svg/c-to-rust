@@ -1,0 +1,6 @@
+
+thread 'replay_real_fdb_kv_iterate_read_kv_body_call_fixture_contract' (65667) panicked at <translation-carrier-negative>/mutated_same_replay.rs:129:9:
+assertion `left == right` failed: failed-address-first body call count drifted
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

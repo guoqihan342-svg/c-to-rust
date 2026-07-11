@@ -1,0 +1,81 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-c2rust-baseline-manifest.json",
+    "sha256": "5ccef7fca47aaa15624f9ebdc10e02ae136da0f7c78bb36982ba7a2871c88d1b",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir <rust-check-output> <draft>",
+  "error_count": 0,
+  "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [
+      {
+        "binding_status": "fixture_only_scripted_external",
+        "name": "get_next_kv_addr",
+        "semantics_verified": false,
+        "signature_ref": "sig-scripted-get-next-kv-addr",
+        "stub_kind": "compile_only"
+      },
+      {
+        "binding_status": "fixture_only_scripted_external",
+        "name": "read_kv",
+        "semantics_verified": false,
+        "signature_ref": "sig-scripted-read-kv",
+        "stub_kind": "compile_only"
+      }
+    ],
+    "declared_count": 2,
+    "declared_spec_count": 2,
+    "declared_spec_names": [
+      "get_next_kv_addr",
+      "read_kv"
+    ],
+    "status": "recorded"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-route-decision.json",
+    "sha256": "6e52cc8acc6eb2c95eb05d52e6bd0f850f103957e4dcb178a5a714df18c54d68",
+    "status": "recorded"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "fixture_bound_rust_replay_only",
+    "bindings": [
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "fixture_only": true,
+        "name": "get_next_kv_addr",
+        "replay_contract_kind": "scripted_external_record_u32_sequence_do_while_state",
+        "semantics_verified": false,
+        "signature": "fn get_next_kv_addr(db: &mut Database, sector: &mut Sector, kv: &mut Kv) -> u32",
+        "status": "fixture_only_scripted_external"
+      },
+      {
+        "allowed_use": "fixture_bound_rust_replay_only",
+        "fixture_only": true,
+        "name": "read_kv",
+        "replay_contract_kind": "scripted_external_record_u32_sequence_do_while_state",
+        "semantics_verified": false,
+        "signature": "fn read_kv(db: &mut Database, kv: &mut Kv) -> i32",
+        "status": "fixture_only_scripted_external"
+      }
+    ],
+    "semantics_verified": false,
+    "status": "emitted"
+  },
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "4e08189f88bd9cf246e934acd7d1378e8d91d316a5d2d4a64f93d2c4d3f1985f",
+    "status": "passed"
+  }
+}

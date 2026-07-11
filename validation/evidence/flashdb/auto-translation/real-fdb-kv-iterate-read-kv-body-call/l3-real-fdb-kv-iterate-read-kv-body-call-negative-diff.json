@@ -1,0 +1,49 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-negative-diff.json",
+    "sha256": "ee9b9983bff42b7c6d466e50367ab4910e4079c7bf1e0d08535f189a6d3474ae",
+    "status": "passed"
+  },
+  "accepted_negative_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-c2rust-baseline-manifest.json",
+    "sha256": "5ccef7fca47aaa15624f9ebdc10e02ae136da0f7c78bb36982ba7a2871c88d1b",
+    "status": "skipped"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "accepted_value": 1,
+    "case_id": "failed-address-first",
+    "field": "body_call_count",
+    "mutated_value": 0
+  },
+  "mutation_detected": true,
+  "negative_diff_gate": "schema_aware_negative_diff",
+  "required_inputs": {
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "negative_diff_actual_status": "expected_failed",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed",
+    "schema_diff_required_first_mismatch": null,
+    "schema_diff_required_status": "passed"
+  },
+  "root_blocked_by": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-route-decision.json",
+    "sha256": "6e52cc8acc6eb2c95eb05d52e6bd0f850f103957e4dcb178a5a714df18c54d68",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+  "status": "expected_failed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "4e08189f88bd9cf246e934acd7d1378e8d91d316a5d2d4a64f93d2c4d3f1985f",
+    "status": "passed"
+  }
+}

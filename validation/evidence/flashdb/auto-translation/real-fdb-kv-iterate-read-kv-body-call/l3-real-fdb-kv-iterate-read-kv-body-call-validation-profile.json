@@ -1,0 +1,460 @@
+{
+  "accepted_evidence_authoritative": false,
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-c2rust-baseline-manifest.json",
+        "sha256": "5ccef7fca47aaa15624f9ebdc10e02ae136da0f7c78bb36982ba7a2871c88d1b",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": true,
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-c2rust-baseline-manifest.json",
+          "sha256": "5ccef7fca47aaa15624f9ebdc10e02ae136da0f7c78bb36982ba7a2871c88d1b",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": true,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L1",
+        "status": "not_refused"
+      },
+      "route_level": "L1",
+      "route_status": "recorded",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:clang-lowered-typed-ir",
+      "fallback": false,
+      "selected": "clang-lowered-typed-ir",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [
+        {
+          "code": "signed_negation_no_overflow",
+          "detail": "C signed negation must not evaluate -MIN (C11 6.5) unless the slice contract models that UB boundary",
+          "ir_node": "IrExpr::Unary.Neg",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        }
+      ],
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "c9d4c8bfd3a6ca157f7949092f34f1c6f024614c68057ce905d8478d442ebbf7",
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 1,
+        "source_fields": [
+          "c_boundary.scalar_arithmetic_contract",
+          "fixture_contract.scalar_input_domain",
+          "claim_boundary.must_not_claim"
+        ],
+        "status": "unresolved",
+        "unresolved": [
+          {
+            "code": "signed_negation_no_overflow",
+            "missing": [
+              "c_boundary.scalar_arithmetic_contract.signed_negation",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "unresolved"
+          }
+        ]
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-clang-lowering-report.json",
+        "sha256": "3ff2d0a147c4132c8509d3a0dafa514ac32c5bd3891383725f1ac41c63157ba7",
+        "status": "lowered"
+      },
+      "status": "generated",
+      "typed_ir_sha256": "64e4e843d1ec3c954fe1d1b5a9d5e6d5417ad7959272a6c7de37f211473e087c"
+    }
+  },
+  "competition_environment": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics bind independent oracle/replay/diff evidence and stable generated-draft unsafe gates; final accepted reports are downstream and cannot hash-bind themselves.",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-read-kv-body-call.json",
+      "fixture_sha256": "7938b42d3d60cdd0e6c39b6c2c83183c77579d460e2de7a4e153c9da2066784e",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "219208192f76f107328fe017e29fedc526f5b1ee8a5084016df738ef438048d2",
+        "diff": "daf4054290e8590c26b1d2239f1b667751bda2c8efebe86ff383922f01445708",
+        "negative_diff": "ee9b9983bff42b7c6d466e50367ab4910e4079c7bf1e0d08535f189a6d3474ae",
+        "rust_report": "6ca1d65aea745336943c836d2661b29f1efb349373cb6238faa3250da9f2b13a",
+        "unsafe_ledger": "19f7815eba957d0c68e98b0c3f5370b9abf4f6f83b6da8b59af5cef3ea51cdcd",
+        "unsafe_scan": "2792ceef00a8c1a36f3d1b1d370c2d29920cd56c146ba9fe88a1c34e45de1bfd"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle.json",
+        "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-diff.json",
+        "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-negative-diff.json",
+        "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-rust-report.json",
+        "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-generated-draft-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-generated-draft-unsafe-scan.json"
+      },
+      "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "status": "accepted",
+      "target_id": "flashdb",
+      "toolchain_status": "C_ORACLE_GENERATED",
+      "unsafe_gate_source": "generated_draft_unsafe_gates"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle.json",
+        "sha256": "219208192f76f107328fe017e29fedc526f5b1ee8a5084016df738ef438048d2",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-negative-diff.json",
+        "sha256": "ee9b9983bff42b7c6d466e50367ab4910e4079c7bf1e0d08535f189a6d3474ae",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-rust-report.json",
+        "sha256": "6ca1d65aea745336943c836d2661b29f1efb349373cb6238faa3250da9f2b13a",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-diff.json",
+        "sha256": "daf4054290e8590c26b1d2239f1b667751bda2c8efebe86ff383922f01445708",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-generated-draft-unsafe-ledger.json",
+        "sha256": "19f7815eba957d0c68e98b0c3f5370b9abf4f6f83b6da8b59af5cef3ea51cdcd",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-generated-draft-unsafe-scan.json",
+        "sha256": "2792ceef00a8c1a36f3d1b1d370c2d29920cd56c146ba9fe88a1c34e45de1bfd",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "<generated-replay-executable> --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/generated-rust-replay.stdout.log"
+    },
+    "rust_check": {
+      "binding_mode": "field_bound",
+      "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-rust-draft.rs",
+      "sha256": "c9d4c8bfd3a6ca157f7949092f34f1c6f024614c68057ce905d8478d442ebbf7",
+      "status": "accepted_after_gates"
+    },
+    "schema_version": 1,
+    "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "passed",
+    "target_id": "flashdb",
+    "unsafe_gate_source": "generated_draft_unsafe_gates"
+  },
+  "generated_draft_semantic_pass": true,
+  "goal": "dev",
+  "loop_policy": {
+    "fixed_project_loop_count_required": false,
+    "source": "run_policy",
+    "stress_loops": null
+  },
+  "optional_gates": [
+    "negative_diff",
+    "evidence_cleanliness",
+    "fuzz_property",
+    "miri",
+    "kani"
+  ],
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "translation-carrier self-contained C plus tests/Makefile ABI",
+      "compile_commands": null,
+      "defines": [],
+      "flags": [],
+      "include_paths": [],
+      "tool_versions": {
+        "extract_source_slice": "0.1.0",
+        "translation_carrier_validator": "1"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 3,
+      "case_source": "fixture_contract",
+      "declared_case_count": 3,
+      "fixture_hash": "7938b42d3d60cdd0e6c39b6c2c83183c77579d460e2de7a4e153c9da2066784e",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-read-kv-body-call.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_value",
+      "itr_kv_addr_start",
+      "body_call_count",
+      "body_call_args",
+      "external_call_count",
+      "external_call_args",
+      "call_order"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": true,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "The carrier is lowered from its embedded c_source; no offline AST fixture is accepted for this provenance contract."
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "char_align": "unknown",
+      "char_width": 8,
+      "endianness": "little",
+      "int_align": "unknown",
+      "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
+      "long_long_width": 64,
+      "long_width": 64,
+      "plain_char_signed": true,
+      "pointer_align": "unknown",
+      "pointer_width": 64,
+      "short_align": "unknown",
+      "short_width": 16,
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {
+        "comparison": "the synthetic line-1885 scaffold compares each assigned uint32_t fixture return with UINT32_MAX",
+        "division_by_zero": "not_declared",
+        "shift_count": "not_declared",
+        "signed_division_overflow": "not_declared",
+        "signed_overflow": "not_declared",
+        "signed_right_shift": "not_declared",
+        "wrapping_profile": "not_declared"
+      }
+    }
+  },
+  "profile": "L1-dev",
+  "required_gate_status": {
+    "c_oracle_diff": "C_ORACLE_GENERATED",
+    "compile": "passed"
+  },
+  "required_gates": [
+    "compile",
+    "c_oracle_diff",
+    "unsafe_ledger",
+    "rust_tests"
+  ],
+  "route_level": "L1",
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "whole-project migration",
+        "complete fdb_kv_iterate semantic equivalence",
+        "real source lines 1877-1885 semantic equivalence",
+        "read_kv semantic equivalence or real side effects",
+        "get_next_kv_addr semantic equivalence",
+        "kv as a third mutable root",
+        "semantic equivalence without C oracle and exact generated Rust sequence replay evidence"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "not_declared",
+      "covers_overflow_boundaries": false,
+      "parameters": []
+    },
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_gates": [],
+  "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_identity": {
+    "repo_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_branch": "competition",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_root": "sources/FlashDB"
+  },
+  "status": "passed",
+  "target_id": "flashdb",
+  "tool_boundaries": {
+    "c_ub": [
+      "clang_diagnostics",
+      "sanitizer_oracle",
+      "unsupported_evidence"
+    ],
+    "rust_ub": [
+      "miri",
+      "unsafe_ledger",
+      "rust_verification_tools"
+    ]
+  }
+}

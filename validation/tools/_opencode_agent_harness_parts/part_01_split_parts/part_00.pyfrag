@@ -254,6 +254,7 @@ def write_blocked_batch_preflight_report(
     proof_class: str,
     proof_class_resolution: dict[str, Any],
     mode: str,
+    execution_route: dict[str, Any],
     preflight_result: dict[str, Any],
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
@@ -302,6 +303,10 @@ def write_blocked_batch_preflight_report(
         "proof_class": proof_class,
         "proof_class_resolution": proof_class_resolution,
         "mode": mode,
+        "requested_mode": execution_route["requested_mode"],
+        "effective_mode": execution_route["effective_mode"],
+        "route_reason": execution_route["reason"],
+        "execution_route": execution_route,
         "worker_count": 0,
         "opencode_preflight_report": preflight_binding,
         "stale_artifact_cleanup": stale_artifact_cleanup,
@@ -418,6 +423,241 @@ def proof_class_override_cli_suffix(
     return f" --proof-class {proof_class}"
 
 
+def resolve_batch_execution_route(
+    profile: dict[str, Any],
+    proof_class: str,
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    requested_mode = profile_string(profile, "mode", default="deterministic") or "deterministic"
+    route: dict[str, Any] = {
+        "requested_mode": requested_mode,
+        "effective_mode": requested_mode if requested_mode in {"deterministic", "opencode"} else None,
+        "reason": f"explicit_{requested_mode}" if requested_mode in {"deterministic", "opencode"} else "auto_route_unbound",
+        "semantic_gate": False,
+    }
+    if requested_mode not in {"auto", "deterministic", "opencode"}:
+        raise SystemExit(f"unsupported mode in batch profile: {requested_mode}")
+    if requested_mode != "auto":
+        route["status"] = "selected"
+        return route
+
+    blockers: list[dict[str, Any]] = []
+    if proof_class == "competition-exact":
+        blockers.append({"kind": "competition_exact_requires_explicit_opencode"})
+    if profile_bool(profile, "opencode_hostless_rehearsal", default=False):
+        blockers.append({"kind": "hostless_rehearsal_requires_explicit_opencode"})
+    explicit_attestation_fields = [
+        field
+        for field in (
+            "opencode_preflight_report",
+            "opencode_command",
+            "opencode_model",
+            "opencode_agent",
+            "opencode_variant",
+            "opencode_skip_permissions",
+            "opencode_allow_non_competition_model",
+            "opencode_credential_source",
+        )
+        if field in profile
+        and profile.get(field) not in (None, "", False, OPENCODE_CREDENTIAL_SOURCE_NONE)
+    ]
+    if explicit_attestation_fields:
+        blockers.append(
+            {
+                "kind": "explicit_opencode_attestation_requires_explicit_opencode",
+                "fields": explicit_attestation_fields,
+            }
+        )
+    if profile.get("attempt_evidence_policy") is not None:
+        blockers.append({"kind": "attempt_evidence_policy_disables_auto_route"})
+
+    worker_bindings: list[dict[str, Any]] = []
+
+    def inspect_worker_binding(
+        *,
+        worker_id: str,
+        reuse_accepted_evidence: bool,
+        accepted_evidence_root: str | None,
+        slice_spec: str | None,
+        source_repo_root: str | None,
+        source_file: str | None,
+    ) -> None:
+        binding: dict[str, Any] = {
+            "worker_id": worker_id,
+            "reuse_accepted_evidence": reuse_accepted_evidence,
+            "accepted_evidence_root": accepted_evidence_root,
+            "slice_spec": slice_spec,
+            "hash_bound": False,
+            "status": "unbound",
+        }
+        worker_blockers: list[str] = []
+        if not reuse_accepted_evidence:
+            worker_blockers.append("reuse_accepted_evidence_not_enabled")
+        if not accepted_evidence_root:
+            worker_blockers.append("accepted_evidence_root_missing")
+        else:
+            evidence_root = repo_path(Path(accepted_evidence_root), repo_root=repo_root)
+            if not evidence_root.is_dir():
+                worker_blockers.append("accepted_evidence_root_not_found")
+        if not slice_spec:
+            worker_blockers.append("slice_spec_missing")
+        if not source_repo_root or not source_file:
+            worker_blockers.append("source_binding_missing")
+        if slice_spec and source_repo_root and source_file:
+            try:
+                source_file_rel = checked_relative_path(source_file).as_posix()
+                source_path = repo_path(Path(source_repo_root) / source_file_rel, repo_root=repo_root)
+                spec_path = repo_path(Path(slice_spec), repo_root=repo_root)
+                if not source_path.is_file():
+                    worker_blockers.append("source_file_not_found")
+                if not spec_path.is_file():
+                    worker_blockers.append("slice_spec_not_found")
+                if source_path.is_file() and spec_path.is_file():
+                    spec = load_json(spec_path)
+                    bound_sha256 = explicit_worker_slice_spec_source_sha256(spec, source_file_rel)
+                    source_sha256 = sha256_file(source_path)
+                    binding["source_sha256"] = source_sha256
+                    binding["bound_source_sha256"] = bound_sha256
+                    binding["hash_bound"] = bool(
+                        isinstance(bound_sha256, str)
+                        and re.fullmatch(r"[0-9a-f]{64}", bound_sha256)
+                        and bound_sha256 == source_sha256
+                    )
+                    if not binding["hash_bound"]:
+                        worker_blockers.append("slice_spec_source_hash_unbound")
+            except (OSError, SystemExit, ValueError, TypeError, json.JSONDecodeError):
+                worker_blockers.append("slice_spec_binding_invalid")
+        if worker_blockers:
+            binding["blockers"] = sorted(set(worker_blockers))
+            blockers.append(
+                {
+                    "kind": "worker_not_deterministic_accepted_evidence_bound",
+                    "worker_id": worker_id,
+                    "blockers": binding["blockers"],
+                }
+            )
+        else:
+            binding["status"] = "bound"
+        worker_bindings.append(binding)
+
+    if profile.get("workers") is not None:
+        workers = profile_worker_list(profile)
+        for index, worker in enumerate(workers, start=1):
+            inspect_worker_binding(
+                worker_id=profile_string(worker, "worker_id", default=f"worker-{index}") or f"worker-{index}",
+                reuse_accepted_evidence=profile_bool(
+                    worker,
+                    "reuse_accepted_evidence",
+                    default=profile_bool(profile, "reuse_accepted_evidence", default=False),
+                ),
+                accepted_evidence_root=profile_string(
+                    worker,
+                    "accepted_evidence_root",
+                    default=profile_string(profile, "accepted_evidence_root"),
+                ),
+                slice_spec=profile_string(worker, "slice_spec"),
+                source_repo_root=profile_string(worker, "source_repo_root"),
+                source_file=profile_string(worker, "source_file"),
+            )
+    else:
+        functions = profile_string_list(profile, "functions")
+        slice_specs = profile_string_list(profile, "slice_specs")
+        if not functions:
+            blockers.append({"kind": "auto_route_requires_explicit_functions"})
+        specs_by_function: dict[str, str] = {}
+        for slice_spec in slice_specs:
+            spec_path = repo_path(Path(slice_spec), repo_root=repo_root)
+            if not spec_path.is_file():
+                continue
+            try:
+                spec = load_json(spec_path)
+            except (OSError, SystemExit, ValueError, TypeError, json.JSONDecodeError):
+                continue
+            function_name = spec.get("function_name")
+            if isinstance(function_name, str) and function_name and function_name not in specs_by_function:
+                specs_by_function[function_name] = slice_spec
+        for function in functions:
+            inspect_worker_binding(
+                worker_id=function,
+                reuse_accepted_evidence=profile_bool(profile, "reuse_accepted_evidence", default=False),
+                accepted_evidence_root=profile_string(profile, "accepted_evidence_root"),
+                slice_spec=specs_by_function.get(function),
+                source_repo_root=profile_string(profile, "source_repo_root"),
+                source_file=profile_string(profile, "source_file"),
+            )
+
+    route["worker_bindings"] = worker_bindings
+    route["worker_count"] = len(worker_bindings)
+    if not worker_bindings:
+        blockers.append({"kind": "auto_route_has_no_workers"})
+    if blockers:
+        route["status"] = "blocked"
+        route["blockers"] = blockers
+        return route
+    route.update(
+        {
+            "status": "selected",
+            "effective_mode": "deterministic",
+            "reason": "all_workers_hash_bound_accepted_evidence",
+        }
+    )
+    return route
+
+
+def write_blocked_batch_execution_route_report(
+    *,
+    profile: dict[str, Any],
+    profile_path: Path,
+    run_id: str,
+    out_root: Path,
+    profile_proof_class: str,
+    proof_class: str,
+    proof_class_resolution: dict[str, Any],
+    execution_route: dict[str, Any],
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    report_path = out_root / "harness" / "batch-profile-report.json"
+    stale_artifact_cleanup = cleanup_blocked_batch_preflight_stale_artifacts(
+        out_root=out_root,
+        repo_root=repo_root,
+    )
+    result = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "batch-profile-report",
+        "status": "blocked",
+        "exit_code": 1,
+        "blocked_phase": "execution-route-admission",
+        "root_cause_key": "auto_route_unbound",
+        "profile_id": profile_required_string(profile, "profile_id"),
+        "profile_path": repo_relative(profile_path, repo_root=repo_root),
+        "profile_sha256": sha256_file(profile_path),
+        "run_id": run_id,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "profile_proof_class": profile_proof_class,
+        "proof_class": proof_class,
+        "proof_class_resolution": proof_class_resolution,
+        "mode": execution_route["requested_mode"],
+        "requested_mode": execution_route["requested_mode"],
+        "effective_mode": execution_route["effective_mode"],
+        "route_reason": execution_route["reason"],
+        "execution_route": execution_route,
+        "worker_count": 0,
+        "stale_artifact_cleanup": stale_artifact_cleanup,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "evidence_boundary": (
+            "Automatic routing stopped before preflight, ledger initialization, planning, or worker fanout. "
+            "The admission decision is operational metadata only and does not accept translation semantics."
+        ),
+        "next_required_action": "bind_all_workers_or_select_explicit_mode",
+        "report_path": repo_relative(report_path, repo_root=repo_root),
+    }
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_path, result)
+    return result
+
+
 def run_batch_profile(
     *,
     profile_path: Path,
@@ -445,10 +685,21 @@ def run_batch_profile(
         profile,
         proof_class_override=proof_class_override,
     )
+    execution_route = resolve_batch_execution_route(profile, proof_class, repo_root=repo_root)
+    if execution_route["status"] == "blocked":
+        return write_blocked_batch_execution_route_report(
+            profile=profile,
+            profile_path=profile_path,
+            run_id=run_id,
+            out_root=out_root,
+            profile_proof_class=profile_proof_class,
+            proof_class=proof_class,
+            proof_class_resolution=proof_class_resolution,
+            execution_route=execution_route,
+            repo_root=repo_root,
+        )
+    mode = str(execution_route["effective_mode"])
     require_competition_exact_host_attestation(proof_class, context="run-batch-profile")
-    mode = profile_string(profile, "mode", default="deterministic")
-    if mode not in {"deterministic", "opencode"}:
-        raise SystemExit(f"unsupported mode in batch profile: {mode}")
     profile_credential_source = (
         profile_string(
             profile,
@@ -512,6 +763,7 @@ def run_batch_profile(
                 proof_class=proof_class,
                 proof_class_resolution=proof_class_resolution,
                 mode=mode,
+                execution_route=execution_route,
                 preflight_result=preflight_result,
                 repo_root=repo_root,
             )

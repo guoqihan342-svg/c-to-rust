@@ -35,6 +35,7 @@ for _C2R_PART_NAME in (
     "class_part_08.py",
     "class_part_09.py",
     "class_part_10.py",
+    "class_part_11.py",
 ):
     _C2R_PART_PATH = _C2R_PARTS_DIR / _C2R_PART_NAME
     exec(
@@ -58,6 +59,7 @@ class OpenCodeAgentHarnessTest(
     _OpenCodeAgentHarnessTestPart08,
     _OpenCodeAgentHarnessTestPart09,
     _OpenCodeAgentHarnessTestPart10,
+    _OpenCodeAgentHarnessTestPart11,
     unittest.TestCase,
 ):
     pass

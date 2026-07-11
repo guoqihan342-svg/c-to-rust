@@ -192,6 +192,10 @@
                     "--emit-clang-lowering-report",
                 ],
                 cwd=REPO_ROOT,
+                env={
+                    **os.environ,
+                    "CLANG_PATH": str(Path(tmp) / "missing-clang"),
+                },
                 text=True,
                 capture_output=True,
                 check=True,
@@ -262,7 +266,23 @@
                 dependency_names,
                 {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
             )
-            self.assertEqual(context_pack["direct_call_edges"], [])
+            direct_call_edges = context_pack["direct_call_edges"]
+            self.assertEqual(
+                direct_call_edges,
+                plan["translation_summary"]["call_expressions"],
+            )
+            if direct_call_edges:
+                self.assertEqual(
+                    {item["callee"] for item in direct_call_edges},
+                    {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+                )
+                self.assertTrue(
+                    all(
+                        item["callee_scope"] == "external_direct_callee"
+                        and item["stub_status"] in {"compile_only", "accepted_named_slice_evidence"}
+                        for item in direct_call_edges
+                    )
+                )
             external_context = plan["inputs"]["external_callee_context"]
             self.assertEqual(external_context["status"], "recorded")
             self.assertEqual(external_context["declared_count"], 4)

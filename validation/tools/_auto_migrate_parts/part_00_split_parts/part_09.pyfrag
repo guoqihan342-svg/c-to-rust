@@ -20,6 +20,15 @@ def scripted_sequence_validate_noalias(
         if item["mode"] in {"record_ref", "owner_interior_alias"}
         and entry_by_name[str(item["entry_parameter"])]["pass_mode"] == "mutable_ref"
     }
+    body = contract.get("body_callee")
+    if isinstance(body, dict):
+        roots.update(
+            str(item["entry_parameter"])
+            for item in body["arguments"]
+            if item["mode"] in {"record_ref", "owner_interior_alias"}
+            and entry_by_name[str(item["entry_parameter"])]["pass_mode"]
+            == "mutable_ref"
+        )
     roots.add(str(contract["state_output"]["parameter"]))
     required = {
         tuple(sorted((left, right)))
@@ -54,28 +63,62 @@ def scripted_sequence_validate_c_signatures(
     if [item.get("direction") for item in parameters] != [item["direction"] for item in entries]:
         raise ValueError("scripted sequence replay entry parameter directions drifted")
 
-    external = contract["external_callee"]
     boundary = spec.get("c_boundary", {})
-    declarations = [
-        item
-        for item in boundary.get("external_direct_callees", [])
-        if isinstance(item, dict) and item.get("name") == external["name"]
-    ]
-    if len(declarations) != 1:
-        raise ValueError("scripted sequence replay requires one declared external callee")
-    signatures = [
-        item
-        for item in boundary.get("signatures", [])
-        if isinstance(item, dict)
-        and item.get("function") == external["name"]
-        and item.get("id") == declarations[0].get("signature_ref")
-    ]
-    if len(signatures) != 1 or normalize_c_type(str(signatures[0].get("return_type") or "")) != "uint32_t":
-        raise ValueError("scripted sequence replay external signature binding drifted")
-    actual = [item for item in signatures[0].get("parameters", []) if isinstance(item, dict)]
-    observations = external["arguments"]
-    if [str(item.get("name") or "") for item in actual] != [str(item["parameter"]) for item in observations]:
-        raise ValueError("scripted sequence replay external parameters drifted")
+    callees = [(contract["external_callee"], "uint32_t", "external")]
+    if isinstance(contract.get("body_callee"), dict):
+        callees.append((contract["body_callee"], "int", "body"))
+    for callee, return_type, label in callees:
+        declarations = [
+            item
+            for item in boundary.get("external_direct_callees", [])
+            if isinstance(item, dict) and item.get("name") == callee["name"]
+        ]
+        if len(declarations) != 1:
+            raise ValueError(
+                f"scripted sequence replay requires one declared {label} callee"
+            )
+        signatures = [
+            item
+            for item in boundary.get("signatures", [])
+            if isinstance(item, dict)
+            and item.get("function") == callee["name"]
+            and item.get("id") == declarations[0].get("signature_ref")
+        ]
+        if (
+            len(signatures) != 1
+            or normalize_c_type(str(signatures[0].get("return_type") or ""))
+            != return_type
+        ):
+            raise ValueError(
+                f"scripted sequence replay {label} signature binding drifted"
+            )
+        actual = [
+            item
+            for item in signatures[0].get("parameters", [])
+            if isinstance(item, dict)
+        ]
+        observations = callee["arguments"]
+        if [str(item.get("name") or "") for item in actual] != [
+            str(item["parameter"]) for item in observations
+        ]:
+            raise ValueError(
+                f"scripted sequence replay {label} parameters drifted"
+            )
+        expected_types = scripted_sequence_expected_c_argument_types(
+            observations, entry_by_name
+        )
+        if [
+            normalize_c_type(str(item.get("c_type") or "")) for item in actual
+        ] != [normalize_c_type(item) for item in expected_types]:
+            raise ValueError(
+                f"scripted sequence replay {label} parameter types drifted"
+            )
+
+
+def scripted_sequence_expected_c_argument_types(
+    observations: list[dict[str, Any]],
+    entry_by_name: dict[str, dict[str, Any]],
+) -> list[str]:
     expected_types = []
     for item in observations:
         if item["mode"] == "scalar_field_value":
@@ -88,10 +131,7 @@ def scripted_sequence_validate_c_signatures(
             expected_types.append(
                 f"struct {entry_by_name[str(item['entry_parameter'])]['rust_type']} *"
             )
-    if [normalize_c_type(str(item.get("c_type") or "")) for item in actual] != [
-        normalize_c_type(item) for item in expected_types
-    ]:
-        raise ValueError("scripted sequence replay external parameter types drifted")
+    return expected_types
 
 
 def scripted_sequence_validate_fixture_cases(
@@ -115,9 +155,59 @@ def scripted_sequence_validate_fixture_cases(
             for fixture_field, _ in scripted_record_initializer_fixture_paths(entry["initializer"]):
                 if not is_uint32_value(payload.get(fixture_field)):
                     raise ValueError("scripted sequence replay fixture record field must be u32")
+        if isinstance(contract.get("body_callee"), dict):
+            scripted_sequence_validate_body_expected_output_types(expected, contract)
         recomputed = scripted_sequence_expected_outputs(payload, contract, entry_by_name)
         if expected != recomputed:
             raise ValueError("scripted sequence replay expected outputs drifted")
+
+
+def scripted_sequence_validate_body_expected_output_types(
+    expected: dict[str, Any],
+    contract: dict[str, Any],
+) -> None:
+    external = contract["external_callee"]
+    body = contract["body_callee"]
+    result = contract["return"]
+    state = contract["state_output"]
+    if type(expected.get(str(result["fixture_field"]))) is not bool:
+        raise ValueError("scripted sequence replay fixture return output must be bool")
+    if not is_uint32_value(expected.get(str(state["fixture_field"]))):
+        raise ValueError("scripted sequence replay fixture state output must be u32")
+    external_count = expected.get(str(external["call_count_output"]))
+    body_count = expected.get(str(body["call_count_output"]))
+    if (
+        type(external_count) is not int
+        or type(body_count) is not int
+        or external_count < 1
+        or body_count != external_count
+    ):
+        raise ValueError("scripted sequence replay fixture call counts are invalid")
+    for label, output_field, width in (
+        ("external", external["call_args_output"], len(external["arguments"])),
+        ("body", body["call_args_output"], len(body["arguments"])),
+    ):
+        rows = expected.get(str(output_field))
+        if (
+            not isinstance(rows, list)
+            or len(rows) != external_count
+            or any(
+                not isinstance(row, list)
+                or len(row) != width
+                or any(not is_uint32_value(value) for value in row)
+                for row in rows
+            )
+        ):
+            raise ValueError(
+                f"scripted sequence replay fixture {label} call args are invalid"
+            )
+    order = expected.get(str(body["call_order_output"]))
+    if (
+        not isinstance(order, list)
+        or len(order) != external_count * 2
+        or any(not is_uint32_value(value) for value in order)
+    ):
+        raise ValueError("scripted sequence replay fixture call order is invalid")
 
 
 def scripted_sequence_expected_outputs(
@@ -144,7 +234,26 @@ def scripted_sequence_expected_outputs(
     state_key = (str(state["parameter"]), tuple(str(item) for item in state["field_path"]))
     current_state = scripted_sequence_initial_field_value(payload, state_key, entry_by_name)
     rows: list[list[int]] = []
+    body = contract.get("body_callee")
+    body_rows: list[list[int]] = []
+    call_order: list[int] = []
     for scripted_value in sequence[:call_count]:
+        if isinstance(body, dict):
+            body_row = []
+            for observation in body["arguments"]:
+                key = (
+                    str(observation["entry_parameter"]),
+                    scripted_sequence_observation_owner_path(observation),
+                )
+                body_row.append(
+                    current_state
+                    if key == state_key
+                    else scripted_sequence_initial_field_value(
+                        payload, key, entry_by_name
+                    )
+                )
+            body_rows.append(body_row)
+            call_order.append(int(body["event_id"]))
         row = []
         for observation in external["arguments"]:
             key = (
@@ -157,14 +266,24 @@ def scripted_sequence_expected_outputs(
                 else scripted_sequence_initial_field_value(payload, key, entry_by_name)
             )
         rows.append(row)
+        if isinstance(body, dict):
+            call_order.append(int(body["tail_event_id"]))
         current_state = int(scripted_value)
-    fields = scripted_sequence_behavior_fields(contract)
-    return {
-        fields[0]: bool(contract["return"]["value"]),
-        fields[1]: current_state,
-        fields[2]: call_count,
-        fields[3]: rows,
+    expected_outputs = {
+        str(contract["return"]["fixture_field"]): bool(contract["return"]["value"]),
+        str(state["fixture_field"]): current_state,
+        str(external["call_count_output"]): call_count,
+        str(external["call_args_output"]): rows,
     }
+    if isinstance(body, dict):
+        expected_outputs.update(
+            {
+                str(body["call_count_output"]): call_count,
+                str(body["call_args_output"]): body_rows,
+                str(body["call_order_output"]): call_order,
+            }
+        )
+    return expected_outputs
 
 
 def scripted_sequence_initial_field_value(

@@ -37,14 +37,23 @@
     )
     if scripted_sequence_fixture_contract is not None:
         unsupported_reasons = []
-        return_rust_type = "u32"
+        scripted_sequence_callee = scripted_sequence_fixture_contract["external_callee"]
+        scripted_sequence_body = scripted_sequence_fixture_contract.get("body_callee")
+        if (
+            isinstance(scripted_sequence_body, dict)
+            and name == scripted_sequence_body["name"]
+        ):
+            scripted_sequence_callee = scripted_sequence_body
+            return_rust_type = "i32"
+        else:
+            return_rust_type = "u32"
         entry_by_name = {
             str(entry["parameter"]): entry
             for entry in scripted_sequence_fixture_contract["entry_arguments"]
         }
         for param, observation in zip(
             parameters,
-            scripted_sequence_fixture_contract["external_callee"]["arguments"],
+            scripted_sequence_callee["arguments"],
             strict=True,
         ):
             param["rust_type"] = scripted_sequence_external_rust_type(
@@ -127,6 +136,13 @@
         stub_boundary = "scripted_fixture_only_no_real_callee_semantics"
         stub_generation = "generated_fixture_only_scripted_external"
         model_contract = SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND
+    if (
+        scripted_sequence_fixture_contract is not None
+        and isinstance(scripted_sequence_fixture_contract.get("body_callee"), dict)
+    ):
+        stub_boundary = "scripted_fixture_only_no_real_callee_semantics"
+        stub_generation = "generated_fixture_only_scripted_external"
+        model_contract = SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND
     if accepted_named_slice:
         stub_kind = "accepted_named_slice_evidence"
         stub_boundary = "accepted_named_slice_context_only"
@@ -376,6 +392,7 @@ def external_stub_boundaries(context: dict[str, Any]) -> list[dict[str, Any]]:
                 in {
                     "scripted_external_u32_call_bool_out",
                     SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND,
+                    SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND,
                 }
                 else "standalone_rust_check_only"
             ),
@@ -383,6 +400,7 @@ def external_stub_boundaries(context: dict[str, Any]) -> list[dict[str, Any]]:
             in {
                 "scripted_external_u32_call_bool_out",
                 SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND,
+                SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND,
             },
             "semantics_verified": False,
         }
@@ -767,6 +785,7 @@ def inject_external_callee_stubs(
     if not callees:
         return False
     text = draft_path.read_text(encoding="utf-8")
+    original_text = text
     stubs = []
     for callee in callees:
         call_continue_stub = rust_check_call_continue_stub(callee, text, spec)
@@ -786,6 +805,7 @@ def inject_external_callee_stubs(
         )
         if scripted_sequence_stub is not None:
             stubs.append(scripted_sequence_stub)
+            text = scripted_sequence_stub + "\n\n" + text
             continue
         scripted_sequence_binding = callee.get("rust_check_binding")
         if (
@@ -848,7 +868,7 @@ def inject_external_callee_stubs(
         )
     if not stubs:
         return False
-    draft_path.write_text("\n".join(stubs) + "\n\n" + text, encoding="utf-8")
+    draft_path.write_text("\n".join(stubs) + "\n\n" + original_text, encoding="utf-8")
     return True
 
 

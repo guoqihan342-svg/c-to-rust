@@ -284,6 +284,7 @@ def write_context_pack_and_agent_index(
         "proof_class": proof_class,
         **({"proof_class_resolution": proof_class_resolution} if proof_class_resolution is not None else {}),
         "mode": mode,
+        "semantic_gate": False,
         "status": run_result.get("status"),
         "budget": {
             "depth": 1,
@@ -337,6 +338,12 @@ def write_context_pack_and_agent_index(
             "candidate_sources": ["c2rust-baseline", "deterministic-worker", "opencode-worker"],
         },
     }
+    execution_route = run_result.get("execution_route")
+    if isinstance(execution_route, dict):
+        context_pack["requested_mode"] = execution_route.get("requested_mode")
+        context_pack["effective_mode"] = execution_route.get("effective_mode")
+        context_pack["route_reason"] = execution_route.get("reason")
+        context_pack["execution_route"] = execution_route
     if acceptance_boundary is not None:
         context_pack["acceptance_boundary"]["profile"] = acceptance_boundary
     if attempt_evidence_policy is not None:

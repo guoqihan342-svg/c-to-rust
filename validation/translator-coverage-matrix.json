@@ -5900,6 +5900,11 @@
               "name": "real-fdb-kv-iterate-kv-tail generated Rust draft",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-rust-draft.rs",
               "assertion": "generated draft safely reborrows the owner interior Kv record and executes the exact line-1885 do-while assignment-call tail"
+            },
+            {
+              "name": "real-fdb-kv-iterate-read-kv-body-call generated Rust draft",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-rust-draft.rs",
+              "assertion": "generated draft executes the exact line-1876 discarded direct call before each fixture-only synthetic tail call while preserving the owner interior reborrow"
             }
           ]
         },
@@ -5980,9 +5985,34 @@
               "name": "real-fdb-kv-iterate-kv-tail final verification",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-final-verification.json",
               "assertion": "generated_draft_semantic_pass=true for the exact line-1885 owner-interior-alias do-while tail fragment"
+            },
+            {
+              "name": "real-fdb-kv-iterate-read-kv-body-call C oracle",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-c-oracle.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-read-kv-body-call Rust sequence replay",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-rust-report.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-read-kv-body-call schema diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-read-kv-body-call negative diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-read-kv-body-call-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-read-kv-body-call unsafe ledger",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-unsafe-ledger.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-read-kv-body-call final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-final-verification.json",
+              "assertion": "generated_draft_semantic_pass=true for the exact line-1876 discarded direct-call statement with fixture-only body/tail callees and shared order observation"
             }
           ],
-          "scope_note": "covers the named while-countdown-positive slice plus the exact real-fdb-kv-iterate sector-tail line-1893 and owner-interior-alias KV-tail line-1885 fragments only; the surrounding iterator body, real external callees, and goto/switch/relooper support remain outside the semantic claim"
+          "scope_note": "covers the named while-countdown-positive slice plus the exact real-fdb-kv-iterate sector-tail line-1893, owner-interior-alias KV-tail line-1885, and discarded direct-call line-1876 fragments only; line 1885 remains synthetic scaffold in the line-1876 slice, and the surrounding iterator body, real read_kv/get_next_kv_addr semantics, and goto/switch/relooper support remain outside the semantic claim"
         },
         "legacy_fallback": {
           "status": "covered",
@@ -6031,6 +6061,18 @@
             {
               "name": "real-fdb-kv-iterate-kv-tail capability delta",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-capability-delta.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-read-kv-body-call route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-route-decision.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-read-kv-body-call validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-validation-profile.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-read-kv-body-call capability delta",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-capability-delta.json"
             },
             {
               "name": "auto-migration L4 route refusal evidence for switch/goto",
@@ -6131,6 +6173,10 @@
         {
           "name": "real-fdb-kv-iterate-kv-tail strict semantic validator",
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-final-verification.json"
+        },
+        {
+          "name": "real-fdb-kv-iterate-read-kv-body-call strict semantic validator",
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-read-kv-body-call/l3-real-fdb-kv-iterate-read-kv-body-call-final-verification.json"
         },
         {
           "name": "typed_ir_for_nested_while_continue_does_not_emit_outer_step",
