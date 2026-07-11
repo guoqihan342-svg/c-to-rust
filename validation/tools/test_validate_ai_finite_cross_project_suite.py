@@ -210,7 +210,7 @@ class AiFiniteCrossProjectSuiteTests(unittest.TestCase):
         spec_path.write_text(json.dumps(spec), encoding="utf-8")
         item["slice_spec"]["sha256"] = _sha256(spec_path)
 
-    def test_repository_contract_is_bounded_and_retains_blocked_items(self) -> None:
+    def test_repository_contract_is_bounded_and_records_real_provenance(self) -> None:
         repository_suite = json.loads((self.repo_root / DEFAULT_SUITE).read_text(encoding="utf-8"))
         if "project_sources" not in repository_suite:
             with self.assertRaisesRegex(SuiteContractError, "project_sources"):
@@ -223,8 +223,11 @@ class AiFiniteCrossProjectSuiteTests(unittest.TestCase):
         self.assertGreaterEqual(report["summary"]["real_projects"], 3)
         self.assertEqual(12, report["summary"]["ready"] + report["summary"]["blocked"])
         self.assertEqual(0, report["summary"]["model_invocations"])
-        self.assertEqual(4, report["summary"]["provenance_counts"]["real_project_synthetic_carrier"])
-        self.assertEqual(1, report["summary"]["provenance_counts"]["real_project_unbound_slice"])
+        counts = report["summary"]["provenance_counts"]
+        self.assertEqual(0, counts["real_project_synthetic_carrier"])
+        self.assertEqual(0, counts["real_project_unbound_slice"])
+        self.assertEqual(4, counts["real_upstream_source_fragment"])
+        self.assertEqual(8, counts["real_upstream_source_slice"])
 
     def test_ready_item_reopens_source_span_and_fixture(self) -> None:
         temp, root, item = self._minimal_repo()

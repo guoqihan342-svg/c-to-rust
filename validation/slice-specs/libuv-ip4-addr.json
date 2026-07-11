@@ -5,7 +5,7 @@
   "level": "L3",
   "status": "ready",
   "function_name": "uv_ip4_addr",
-  "c_source": "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) { addr->sin_family = AF_INET; return 0; }",
+  "c_source": "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) {\n  memset(addr, 0, sizeof(*addr));\n  addr->sin_family = AF_INET;\n  addr->sin_port = htons(port);\n#ifdef SIN6_LEN\n  addr->sin_len = sizeof(*addr);\n#endif\n  return uv_inet_pton(AF_INET, ip, &(addr->sin_addr.s_addr));\n}",
   "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
   "fixture_hash": "libuv-ip4-addr-fixture",
   "l1_evidence": {
@@ -14,15 +14,17 @@
     "accepted": true
   },
   "source": {
-    "source_root": "<pinned-libuv-root>",
+    "source_root": "sources/libuv",
     "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
     "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
-    "source_file_hashes": {}
+    "source_file_hashes": {
+      "src/uv-common.c": "8be5802be4ab39842e549974431be18daddf102fb2f192236344cf8008ca8aea"
+    }
   },
   "c_boundary": {
     "files": [
       {"path": "include/uv.h", "role": "header"},
-      {"path": "src/uv-common.c", "role": "source"},
+      {"path": "src/uv-common.c", "role": "source", "sha256": "8be5802be4ab39842e549974431be18daddf102fb2f192236344cf8008ca8aea"},
       {"path": "src/inet.c", "role": "source"},
       {"path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json", "role": "fixture"}
     ],
@@ -36,7 +38,15 @@
           {"name": "port", "c_type": "int", "direction": "input"},
           {"name": "addr", "c_type": "struct sockaddr_in*", "direction": "output"}
         ],
-        "c_source": "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) { addr->sin_family = AF_INET; return 0; }"
+        "c_source": "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) {\n  memset(addr, 0, sizeof(*addr));\n  addr->sin_family = AF_INET;\n  addr->sin_port = htons(port);\n#ifdef SIN6_LEN\n  addr->sin_len = sizeof(*addr);\n#endif\n  return uv_inet_pton(AF_INET, ip, &(addr->sin_addr.s_addr));\n}",
+        "source_span": {
+          "file": "src/uv-common.c",
+          "line_start": 255,
+          "line_end": 263,
+          "byte_start": 6126,
+          "byte_end": 6411,
+          "sha256": "8baccd064756d7910d9b0c69df6a4a6753b9818db8acdb30971e2f50f9660873"
+        }
       }
     ],
     "direct_dependencies": [
@@ -48,11 +58,11 @@
   "build_profile": {
     "profile_id": "libuv-ip4-addr-linux-gnu",
     "compiler_command_source": "validation/evidence/libuv/l1-native-build.json",
-    "include_paths": ["<pinned-libuv-root>/include"],
+    "include_paths": ["sources/libuv/include"],
     "defines": ["_GNU_SOURCE", "AF_INET=2"],
     "target": {
       "triple_or_abi": "x86_64-unknown-linux-gnu",
-      "endianness": "big",
+      "endianness": "little",
       "int_width": 32,
       "long_width": 64,
       "pointer_width": 64
