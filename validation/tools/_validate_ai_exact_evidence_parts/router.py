@@ -11,6 +11,7 @@ from validation.tools._ai_candidate_harness_parts.router import (
 
 from .exact import validate_exact_summary
 from .io import EvidenceStore, fail, reject_accepted_proof, require_sha
+from .repair import validate_c2rust_repair_audit
 
 
 SOURCE_REF_KEYS = {
@@ -98,6 +99,8 @@ def validate_router(store: EvidenceStore, router: dict[str, Any]) -> dict[str, A
     if set(evidence) != expected_ref_keys:
         fail("candidate_evidence_drift", "router candidate_evidence keys drift from candidate_set", path="router")
 
+    repair_rounds = validate_c2rust_repair_audit(store, router)
+
     for duplicate in duplicates:
         if not isinstance(duplicate, dict):
             fail("duplicate_invalid", "router duplicate candidate must be an object", path="router")
@@ -145,4 +148,5 @@ def validate_router(store: EvidenceStore, router: dict[str, Any]) -> dict[str, A
         "semantic_pass": semantic_pass,
         "candidate_count": len(candidate_set) + len(duplicates),
         "metrics": expected["metrics"],
+        "repair_rounds": repair_rounds,
     }

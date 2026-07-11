@@ -12,6 +12,8 @@ from validation.tools._ai_candidate_harness_parts.router import (
     recompute_router_metrics,
     selection_policy_sha256,
 )
+from validation.tools._validate_ai_exact_evidence_parts.io import EvidenceError, EvidenceStore
+from validation.tools._validate_ai_exact_evidence_parts.repair import validate_c2rust_repair_audit
 
 
 HashFile = Callable[[Path], str]
@@ -35,6 +37,7 @@ def empty_router_unit() -> dict[str, Any]:
         "selected_by_source": {source: 0 for source in SOURCE_KEYS},
         "deterministic_fallbacks": 0,
         "no_selection": 0,
+        "repair_rounds": 0,
         "selected_source": None,
         "selected_candidate_sha256": None,
     }
@@ -76,7 +79,13 @@ def recompute_fresh_router_unit(
     if router is None:
         return result, sorted(set(reasons))
 
-    _validate_router_contract(router, router_path=router_path, repo_root=repo_root, hash_file=hash_file, reasons=reasons)
+    repair_rounds = _validate_router_contract(
+        router,
+        router_path=router_path,
+        repo_root=repo_root,
+        hash_file=hash_file,
+        reasons=reasons,
+    )
     semantic_pass = router.get("semantic_pass") is True
     if not isinstance(binding, dict) or binding.get("status") != ("passed" if semantic_pass else "failed"):
         reasons.append("ai_exact_validation_status_drift")
@@ -105,6 +114,7 @@ def recompute_fresh_router_unit(
                 selected_source in {"typed-ir", "c2rust-repair", "c2rust-baseline"}
             ),
             "no_selection": int(selected_source is None),
+            "repair_rounds": repair_rounds,
             "selected_source": selected_source,
             "selected_candidate_sha256": (
                 selected.get("artifact_sha256") if isinstance(selected, dict) else None
@@ -126,6 +136,7 @@ def router_totals(units: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "deterministic_fallbacks": sum(item["deterministic_fallbacks"] for item in router_units),
         "no_selection": sum(item["no_selection"] for item in router_units),
+        "repair_rounds": sum(item["repair_rounds"] for item in router_units),
     }
 
 
@@ -136,7 +147,7 @@ def _validate_router_contract(
     repo_root: Path,
     hash_file: HashFile,
     reasons: list[str],
-) -> None:
+) -> int:
     if router.get("schema_version") != 1:
         reasons.append("ai_router_schema_version_invalid")
     policy = router.get("selection_policy")
@@ -164,7 +175,7 @@ def _validate_router_contract(
     duplicates = router.get("deduplicated_candidates")
     if not isinstance(candidates, list) or not isinstance(duplicates, list):
         reasons.append("ai_router_candidate_sets_invalid")
-        return
+        return 0
     if len(candidates) + len(duplicates) > MAX_CANDIDATES:
         reasons.append("ai_router_candidate_limit_exceeded")
     try:
@@ -178,7 +189,7 @@ def _validate_router_contract(
     ids = [item.get("candidate_id") for item in candidates if isinstance(item, dict)]
     if len(ids) != len(candidates) or not all(isinstance(value, str) and value for value in ids) or len(set(ids)) != len(ids):
         reasons.append("ai_router_candidate_ids_invalid")
-        return
+        return 0
     sources = [item.get("source") for item in candidates]
     if len(set(sources)) != len(sources):
         reasons.append("ai_router_unique_candidate_sources_duplicated")
@@ -218,7 +229,14 @@ def _validate_router_contract(
     evidence = router.get("candidate_evidence")
     if not isinstance(evidence, dict):
         reasons.append("ai_router_candidate_evidence_missing")
-        return
+        return 0
+    expected_evidence_keys = {
+        SOURCE_EVIDENCE_KEYS[item.get("source")]
+        for item in candidates
+        if isinstance(item, dict) and item.get("source") in SOURCE_EVIDENCE_KEYS
+    }
+    if set(evidence) != expected_evidence_keys:
+        reasons.append("ai_router_candidate_evidence_key_drift")
     for candidate in candidates:
         source = candidate.get("source")
         artifact_sha = candidate.get("artifact_sha256")
@@ -260,6 +278,11 @@ def _validate_router_contract(
         selected_sha = selected[0].get("artifact_sha256")
         if router.get("canonical_draft_sha256") != selected_sha:
             reasons.append("ai_router_canonical_draft_sha256_drift")
+    try:
+        return validate_c2rust_repair_audit(EvidenceStore(router_path.parent), router)
+    except EvidenceError as error:
+        reasons.append(f"ai_router_c2rust_repair_{error.code}")
+        return 0
 
 
 def _auto_manifest_path(ai_manifest_path: Path) -> Path | None:

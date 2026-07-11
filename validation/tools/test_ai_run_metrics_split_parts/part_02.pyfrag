@@ -29,6 +29,37 @@ class AiRouterRunMetricsTests(unittest.TestCase):
             self.assertEqual(metrics["router_totals"]["deterministic_fallbacks"], 1)
             self.assertEqual(metrics["refused"], 1)
 
+    def test_c2rust_repair_rounds_are_recomputed_without_inflating_ai_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_root = Path(tmp)
+            summary, _descriptor, summary_path = self.build(
+                out_root,
+                router_source="c2rust-repair",
+            )
+            metrics = summary["ai_translation_metrics"]
+            self.assertEqual(metrics["invocations"], 2)
+            self.assertEqual(metrics["repair_rounds"], 1)
+            self.assertEqual(metrics["semantic_acceptance"], 0)
+            self.assertEqual(metrics["router_totals"]["repair_rounds"], 1)
+            self.assertEqual(
+                metrics["router_totals"]["selected_by_source"]["c2rust-repair"],
+                1,
+            )
+            self.assertEqual(metrics["refused"], 1)
+
+            prompt = next(
+                out_root.glob(
+                    "evidence/*/auto-translation/*/l3-*-c2rust-repair-01-prompt.txt"
+                )
+            )
+            prompt.write_text("drifted prompt\n", encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                validator.validate_ai_translation_metrics(
+                    summary,
+                    summary_path=summary_path,
+                    repo_root=REPO_ROOT,
+                )
+
     def test_router_deduplication_and_no_selection_are_recomputed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             summary, _descriptor, _summary_path = self.build(Path(tmp), duplicate_source="typed-ir")

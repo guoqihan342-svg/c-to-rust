@@ -46,7 +46,7 @@ class RecordingRunner:
 
 def write_text(path: Path, text: str) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    path.write_bytes(text.encode("utf-8"))
     return runner.sha256(path)
 
 
@@ -116,6 +116,8 @@ def write_generated_ai_chain(
         }
 
     router_inputs = [router_candidate("opencode-glm51-1", "opencode-ai", candidate_sha, selected_source == "opencode-ai")]
+    deterministic_path = None
+    deterministic_sha = None
     if selected_source in {"typed-ir", "c2rust-repair", "c2rust-baseline"}:
         deterministic_path = base / f"l3-{slice_id}-{selected_source}-candidate.rs"
         deterministic_sha = write_text(
@@ -148,6 +150,71 @@ def write_generated_ai_chain(
             },
         )
         candidate_evidence[evidence_keys[source]] = nested_ref(exact_path)
+    candidate_source_audit = None
+    if selected_source == "c2rust-repair":
+        baseline_path = base / f"l3-{slice_id}-c2rust-baseline.rs"
+        failure_path = base / f"l3-{slice_id}-c2rust-repair-01-failure-facts.json"
+        prompt_path = base / f"l3-{slice_id}-c2rust-repair-01-prompt.txt"
+        response_path = base / f"l3-{slice_id}-c2rust-repair-01-response.jsonl"
+        repair_path = base / f"l3-{slice_id}-c2rust-repair-01.patch"
+        validation_path = base / f"l3-{slice_id}-c2rust-repair-01-validation-result.json"
+        write_text(baseline_path, "pub fn sum_values(a: i32, b: i32) -> i32 { a + b }\n")
+        write_json(failure_path, {"status": "failed", "failures": [{"kind": "rustc"}]})
+        write_text(prompt_path, "repair the c2rust baseline\n")
+        write_text(response_path, '{"type":"text","text":"repair"}\n')
+        write_text(repair_path, "candidate-only repair\n")
+        write_json(validation_path, {"status": "passed", "failures": []})
+        report_path = base / f"l3-{slice_id}-c2rust-repair-report.json"
+        report_status = "candidate_ready_for_common_validation"
+        write_json(
+            report_path,
+            {
+                "schema_version": 1,
+                "artifact_label": "c2rust-repair",
+                "input_source": "c2rust-baseline",
+                "status": report_status,
+                "initial_candidate": {
+                    "name": baseline_path.name,
+                    "sha256": runner.sha256(baseline_path),
+                },
+                "claim_boundary": {
+                    "semantic_gate": False,
+                    "semantic_pass": False,
+                    "translation_coverage_numerator": 0,
+                },
+                "rounds": [
+                    {
+                        "round": 1,
+                        "semantic_pass": False,
+                        "bindings": {
+                            "failure_facts": nested_ref(failure_path),
+                            "prompt": nested_ref(prompt_path),
+                            "raw_response": nested_ref(response_path),
+                            "repair_artifact": nested_ref(repair_path),
+                            "candidate": nested_ref(deterministic_path),
+                            "validation_result": nested_ref(validation_path),
+                        },
+                    }
+                ],
+                "final_candidate": nested_ref(deterministic_path),
+            },
+        )
+        candidate_source_audit = {
+            "c2rust_repair": {
+                "source": "c2rust-repair",
+                "status": "exact_gates_completed",
+                "reason": "fresh_exact_gates_passed",
+                "base_candidate_sha256": runner.sha256(baseline_path),
+                "repair_report": {
+                    "path": report_path.name,
+                    "sha256": runner.sha256(report_path),
+                    "status": report_status,
+                    "semantic_pass": False,
+                },
+                "repair_rounds": 1,
+                "final_candidate_sha256": deterministic_sha,
+            }
+        }
     router_payload.update(
         {
             "candidate_evidence": candidate_evidence,
@@ -155,6 +222,8 @@ def write_generated_ai_chain(
             "semantic_pass": router_payload["selected_candidate_id"] is not None,
         }
     )
+    if candidate_source_audit is not None:
+        router_payload["candidate_source_audit"] = candidate_source_audit
     router_path = base / f"l3-{slice_id}-ai-router.json"
     write_json(router_path, router_payload)
 

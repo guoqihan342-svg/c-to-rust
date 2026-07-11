@@ -629,7 +629,8 @@
         "deduplicated",
         "selected_by_source",
         "deterministic_fallbacks",
-        "no_selection"
+        "no_selection",
+        "repair_rounds"
       ],
       "properties": {
         "candidate_inputs": {"type": "integer", "minimum": 0},
@@ -637,7 +638,8 @@
         "deduplicated": {"type": "integer", "minimum": 0},
         "selected_by_source": {"$ref": "#/definitions/aiRouterSourceCounts"},
         "deterministic_fallbacks": {"type": "integer", "minimum": 0},
-        "no_selection": {"type": "integer", "minimum": 0}
+        "no_selection": {"type": "integer", "minimum": 0},
+        "repair_rounds": {"type": "integer", "minimum": 0}
       }
     },
     "aiRouterUnit": {
@@ -653,6 +655,7 @@
         "selected_by_source",
         "deterministic_fallbacks",
         "no_selection",
+        "repair_rounds",
         "selected_source",
         "selected_candidate_sha256"
       ],
@@ -670,6 +673,7 @@
         "selected_by_source": {"$ref": "#/definitions/aiRouterSourceCounts"},
         "deterministic_fallbacks": {"type": "integer", "minimum": 0, "maximum": 1},
         "no_selection": {"type": "integer", "minimum": 0, "maximum": 1},
+        "repair_rounds": {"type": "integer", "minimum": 0, "maximum": 5},
         "selected_source": {
           "anyOf": [
             {"type": "null"},

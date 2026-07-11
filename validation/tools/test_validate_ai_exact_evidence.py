@@ -13,7 +13,8 @@ from validation.tools._ai_candidate_harness_parts.router import (
     selection_policy_sha256,
 )
 from validation.tools._validate_ai_exact_evidence_parts import validate_evidence
-from validation.tools._validate_ai_exact_evidence_parts.io import EvidenceError
+from validation.tools._validate_ai_exact_evidence_parts.io import EvidenceError, EvidenceStore
+from validation.tools._validate_ai_exact_evidence_parts.repair import validate_c2rust_repair_audit
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -65,14 +66,21 @@ def router_gates(gates: dict, candidate_sha: str) -> dict:
 
 
 class Fixture:
-    def __init__(self, root: Path, *, fallback: bool = False, no_selection: bool = False) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        fallback: bool = False,
+        repair: bool = False,
+        no_selection: bool = False,
+    ) -> None:
         self.root = root
         self.evidence_root = root / "evidence"
         self.directory = self.evidence_root / "demo" / "auto-translation" / "add-one"
         self.directory.mkdir(parents=True)
         ai = self.add_candidate(
             "ai", b"pub fn add_one(v: i32) -> i32 { v + 1 }\n",
-            not fallback and not no_selection,
+            not fallback and not repair and not no_selection,
         )
         candidates = [{
             "candidate_id": "opencode-glm51-1",
@@ -92,6 +100,22 @@ class Fixture:
             })
             evidence["typed_ir"] = typed["ref"]
             selected_bytes = typed["bytes"]
+        candidate_source_audit = None
+        if repair:
+            repaired = self.add_candidate(
+                "c2rust-repair",
+                b"pub fn add_one(v: i32) -> i32 { v.wrapping_add(1) }\n",
+                True,
+            )
+            candidates.append({
+                "candidate_id": "c2rust-repair:round-1",
+                "source": "c2rust-repair",
+                "artifact_sha256": repaired["sha"],
+                "gate_results": repaired["router_gates"],
+            })
+            evidence["c2rust_repair"] = repaired["ref"]
+            selected_bytes = repaired["bytes"]
+            candidate_source_audit = self.add_repair_audit(repaired)
         self.canonical = self.directory / "l3-add-one-rust-draft.rs"
         self.canonical.write_bytes(selected_bytes)
         router = route_candidates(candidates, provider_invocations=1)
@@ -100,6 +124,8 @@ class Fixture:
             "canonical_draft_sha256": digest(self.canonical),
             "semantic_pass": router["selected_candidate_id"] is not None,
         })
+        if candidate_source_audit is not None:
+            router["candidate_source_audit"] = {"c2rust_repair": candidate_source_audit}
         self.router = self.directory / "l3-add-one-ai-router.json"
         write_json(self.router, router)
         self.manifest = self.directory / "l3-add-one-auto-translation-manifest.json"
@@ -173,6 +199,76 @@ class Fixture:
         router = read_json(self.router)
         summary = self.directory / router["candidate_evidence"][key]["path"]
         router["candidate_evidence"][key]["sha256"] = digest(summary)
+        write_json(self.router, router)
+        self.rebind_router()
+
+    def add_repair_audit(self, repaired: dict) -> dict:
+        baseline = self.directory / "l3-add-one-c2rust-baseline.rs"
+        baseline.write_bytes(b"pub fn add_one(v: i32) -> i32 { v + 1 }\n")
+        failure = self.directory / "l3-add-one-c2rust-repair-01-failure-facts.json"
+        prompt = self.directory / "l3-add-one-c2rust-repair-01-prompt.txt"
+        response = self.directory / "l3-add-one-c2rust-repair-01-response.jsonl"
+        patch = self.directory / "l3-add-one-c2rust-repair-01.patch"
+        candidate = self.directory / "l3-add-one-c2rust-repair-01-candidate.rs"
+        validation = self.directory / "l3-add-one-c2rust-repair-01-validation-result.json"
+        write_json(failure, {"status": "failed", "failures": [{"kind": "rustc"}]})
+        prompt.write_text("repair the c2rust baseline\n", encoding="utf-8")
+        response.write_text('{"type":"text","text":"repair"}\n', encoding="utf-8")
+        patch.write_text("candidate-only repair\n", encoding="utf-8")
+        candidate.write_bytes(repaired["bytes"])
+        write_json(validation, {"status": "passed", "failures": []})
+
+        def ref(path: Path) -> dict:
+            return {"path": path.name, "sha256": digest(path)}
+
+        self.repair_prompt = prompt
+        self.repair_report = self.directory / "l3-add-one-c2rust-repair-report.json"
+        status = "candidate_ready_for_common_validation"
+        write_json(self.repair_report, {
+            "schema_version": 1,
+            "artifact_label": "c2rust-repair",
+            "input_source": "c2rust-baseline",
+            "status": status,
+            "initial_candidate": {"name": baseline.name, "sha256": digest(baseline)},
+            "claim_boundary": {
+                "semantic_gate": False,
+                "semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "rounds": [{
+                "round": 1,
+                "semantic_pass": False,
+                "bindings": {
+                    "failure_facts": ref(failure),
+                    "prompt": ref(prompt),
+                    "raw_response": ref(response),
+                    "repair_artifact": ref(patch),
+                    "candidate": ref(candidate),
+                    "validation_result": ref(validation),
+                },
+            }],
+            "final_candidate": ref(candidate),
+        })
+        return {
+            "source": "c2rust-repair",
+            "status": "exact_gates_completed",
+            "reason": "fresh_exact_gates_passed",
+            "base_candidate_sha256": digest(baseline),
+            "repair_report": {
+                "path": self.repair_report.name,
+                "sha256": digest(self.repair_report),
+                "status": status,
+                "semantic_pass": False,
+            },
+            "repair_rounds": 1,
+            "final_candidate_sha256": repaired["sha"],
+        }
+
+    def rebind_repair_report(self) -> None:
+        router = read_json(self.router)
+        router["candidate_source_audit"]["c2rust_repair"]["repair_report"]["sha256"] = digest(
+            self.repair_report
+        )
         write_json(self.router, router)
         self.rebind_router()
 
@@ -294,6 +390,107 @@ class ValidateAiExactEvidenceTests(unittest.TestCase):
                     fixture.rebind_summary()
                 with self.assertRaises(EvidenceError):
                     self.validate(fixture)
+
+    def test_c2rust_repair_audit_is_reopened_and_fails_closed_on_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Fixture(Path(tmp), repair=True)
+            report = self.validate(fixture)
+            self.assertEqual(report["selected_candidate_id"], "c2rust-repair:round-1")
+            self.assertTrue(report["semantic_pass"])
+
+        for case in ("missing_audit", "report_sha", "round_binding", "path_escape", "semantic_pass"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                fixture = Fixture(Path(tmp), repair=True)
+                if case == "missing_audit":
+                    router = read_json(fixture.router)
+                    del router["candidate_source_audit"]
+                    write_json(fixture.router, router)
+                    fixture.rebind_router()
+                elif case == "report_sha":
+                    fixture.repair_report.write_text(
+                        fixture.repair_report.read_text(encoding="utf-8") + "\n",
+                        encoding="utf-8",
+                    )
+                elif case == "round_binding":
+                    fixture.repair_prompt.write_text("drifted prompt\n", encoding="utf-8")
+                else:
+                    repair_report = read_json(fixture.repair_report)
+                    if case == "path_escape":
+                        repair_report["rounds"][0]["bindings"]["prompt"]["path"] = "../prompt.txt"
+                    else:
+                        repair_report["claim_boundary"]["semantic_pass"] = True
+                    write_json(fixture.repair_report, repair_report)
+                    fixture.rebind_repair_report()
+                with self.assertRaises(EvidenceError):
+                    self.validate(fixture)
+
+    def test_c2rust_repair_duplicate_audit_is_reopened(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Fixture(Path(tmp), repair=True)
+            router = read_json(fixture.router)
+            repaired = next(
+                item for item in router["candidate_set"] if item["source"] == "c2rust-repair"
+            )
+            router["candidate_set"].remove(repaired)
+            duplicate = {
+                **repaired,
+                "decision": "duplicate",
+                "duplicate_of": "opencode-glm51-1",
+            }
+            router["deduplicated_candidates"].append(duplicate)
+            del router["candidate_evidence"]["c2rust_repair"]
+            audit = router["candidate_source_audit"]["c2rust_repair"]
+            audit.update(
+                status="duplicate",
+                reason="duplicate_exact_artifact_sha256",
+                duplicate_of="opencode-glm51-1",
+            )
+
+            self.assertEqual(
+                validate_c2rust_repair_audit(EvidenceStore(fixture.directory), router),
+                1,
+            )
+            audit["duplicate_of"] = "typed-ir"
+            with self.assertRaises(EvidenceError):
+                validate_c2rust_repair_audit(EvidenceStore(fixture.directory), router)
+
+    def test_c2rust_repair_without_candidate_audit_is_reopened(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Fixture(Path(tmp), repair=True)
+            router = read_json(fixture.router)
+            router["candidate_set"] = [
+                item for item in router["candidate_set"] if item["source"] != "c2rust-repair"
+            ]
+            del router["candidate_evidence"]["c2rust_repair"]
+            audit = router["candidate_source_audit"]["c2rust_repair"]
+            audit.update(
+                status="repair_completed_without_candidate",
+                reason="repair_report_has_no_reopenable_candidate",
+            )
+            audit.pop("final_candidate_sha256")
+
+            report = read_json(fixture.repair_report)
+            report["status"] = "round_limit_reached"
+            report.pop("final_candidate")
+            del report["rounds"][0]["bindings"]["candidate"]
+            write_json(fixture.repair_report, report)
+            audit["repair_report"].update(
+                sha256=digest(fixture.repair_report),
+                status=report["status"],
+            )
+
+            self.assertEqual(
+                validate_c2rust_repair_audit(EvidenceStore(fixture.directory), router),
+                1,
+            )
+            report["rounds"][0]["bindings"]["candidate"] = {
+                "path": "l3-add-one-c2rust-repair-01-candidate.rs",
+                "sha256": digest(fixture.directory / "l3-add-one-c2rust-repair-01-candidate.rs"),
+            }
+            write_json(fixture.repair_report, report)
+            audit["repair_report"]["sha256"] = digest(fixture.repair_report)
+            with self.assertRaises(EvidenceError):
+                validate_c2rust_repair_audit(EvidenceStore(fixture.directory), router)
 
     @staticmethod
     def _rebind_index(fixture: Fixture) -> None:

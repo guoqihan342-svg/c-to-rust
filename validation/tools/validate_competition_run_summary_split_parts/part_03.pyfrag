@@ -336,6 +336,8 @@ def evaluate_ai_metric_unit(
     if router_reasons:
         outcome["abnormal_reasons"] = router_reasons
         return outcome
+    outcome["invocations"] += router_unit["repair_rounds"]
+    outcome["repair_rounds"] += router_unit["repair_rounds"]
     candidate_artifact = candidate.get("artifact") if isinstance(candidate, dict) else None
     candidate_sha = candidate_artifact.get("sha256") if isinstance(candidate_artifact, dict) else None
     selected_ai = (
