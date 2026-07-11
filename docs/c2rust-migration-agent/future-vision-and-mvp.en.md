@@ -262,6 +262,17 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
 ### P0-A: AI-first Harness Track
 
+Close work in executable dependency order so external model or checkout blockers do not stall local development:
+
+| Order | Work | Current stop condition |
+| ---: | --- | --- |
+| 1 | P0-A8 fresh-exact repair/strict closure | Complete; only regression fixes remain |
+| 2 | P0-A9 generic raw C2Rust/C2Rust+repair exact materialization | Raw baseline is integrated; a project-agnostic repair artifact remains |
+| 3 | P0-A10 fixed-suite input closure | All three pinned checkouts plus source span/hash/fixture bindings are ready |
+| 4 | P0-A6 real GLM-5.1 and competition-host replay | A valid resource package and competition-exact host are available; simulation cannot substitute |
+
+Each stage runs the finite construct set once, then expands translator/ContextPack support from observed failure frequency. Do not resume FlashDB line-number rule accumulation, and do not pause independent harness work while waiting for external resources.
+
 - [ ] **P0-A6: real GLM-5.1 candidate generation lane**
 
   OpenCode `zai/glm-5.1` consumes a hash-bound ContextPack and emits one structured Rust candidate. Record provider, logical/resolved model, variant, prompt, input, raw response, parse result, and candidate SHA-256. Model output, chat text, and file writes remain `semantic_gate=false`. Missing credentials, timeout, malformed response, or missing candidate must become structured blocked results; a silent fallback must not claim that AI ran.
@@ -284,13 +295,13 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   The competition translation path generates a GLM-5.1 candidate first. typed IR, raw C2Rust, and C2Rust+repair act as deterministic candidates, prompt context, or alternatives after AI failure. The router may rank only by recomputable gate results, never by project/function/slice names or model self-assessment. Every candidate traverses the same compile/oracle/replay/diff/negative/unsafe/final gates.
 
-  Current progress: the competition runner passes `--ai-first-candidate` for fresh translations, and competition-exact forbids OpenCode/GLM/agent/variant substitution. The pure router core caps the set at four candidates, deduplicates by artifact SHA, schedules `opencode-ai -> typed-ir -> c2rust-repair -> c2rust-baseline`, and selects only a candidate that passes all eight candidate-bound gate groups. `auto_migrate` now validates AI first, can select a typed-IR exact fallback, and invokes AI repair only after every zero-token candidate fails. A fallback emits no repair report and consumes no additional provider invocation. The competition summary recomputes candidate inputs, deduplication, source selections, deterministic fallbacks, and no-selection counts from SHA-bound router evidence, and the independent strict validator is integrated. Only raw C2Rust/C2Rust+repair materialization through the same gates remains open.
+  Current progress: the competition runner passes `--ai-first-candidate` for fresh translations, and competition-exact forbids OpenCode/GLM/agent/variant substitution. The pure router core caps the set at four candidates, deduplicates by artifact SHA, schedules `opencode-ai -> typed-ir -> c2rust-repair -> c2rust-baseline`, and selects only a candidate that passes all eight candidate-bound gate groups. `auto_migrate` now validates AI first, can select a typed-IR exact fallback, and invokes AI repair only after every zero-token candidate fails. A fallback emits no repair report and consumes no additional provider invocation. Raw C2Rust is now reopened only from the current-run manifest/output, checked for evidence-directory containment and SHA binding, and then routed as `source=c2rust-baseline` through the same fresh exact gates. Skipped, drifting, escaping, or duplicate artifacts are audit-rejected; baseline compile/status and historical accepted evidence cannot advance them. The competition summary recomputes candidate metrics from SHA-bound router evidence, and the independent strict validator is integrated. Only generic `c2rust-repair` artifact materialization through the same gates remains open.
 
 - [ ] **P0-A10: finite cross-project stability acceptance**
 
   Maintain at most 20 fixed cases covering at least three real C projects and ten distinct construct families. Run the finite set once per stage, with no 1,000/10,000-round or loop stress tests. Publish AI invocation, candidate generation, rustc compilation, semantic acceptance, refused/blocked, repair-round, and route-selection metrics. Repeated similar slices must not inflate success rates.
 
-  Current progress: `validation/ai-finite-cross-project-suite.json` fixes 12 cases across three real projects and 12 unique construct families. Its validator enforces `max_items=20`, at least three projects and ten construct families, excludes project names from routing, and rejects duplicate families as coverage inflation. Current preflight is `ready=0/blocked=12`: the FlashDB checkout is absent from this worktree; zlib-ng/libuv pinned source roots are missing; four FlashDB synthetic carriers lack real source spans; libuv also lacks a source hash/span. This is input-readiness evidence only: `model_invocations=0`, `translations_executed=0`, and `translation_coverage_numerator=0`, so no cross-project success rate is publishable. The next step is to obtain all three pinned checkouts, complete real bindings, and run the finite suite once.
+  Current progress: `validation/ai-finite-cross-project-suite.json` fixes 12 cases across three real projects and 12 unique construct families. Its validator enforces `max_items=20`, at least three projects and ten construct families, excludes project names from routing, and rejects duplicate families as coverage inflation. The 2026-07-12 clean integration-worktree preflight snapshot is `ready=0/blocked=12`: that worktree does not carry the ignored FlashDB checkout; zlib-ng/libuv pinned source roots are missing; four FlashDB synthetic carriers lack real source spans; libuv also lacks a source hash/span. Preflight dynamically recomputes against the actual checkout/hash state, and this snapshot is input-readiness evidence only: `model_invocations=0`, `translations_executed=0`, and `translation_coverage_numerator=0`, so no cross-project success rate is publishable. The next step is to obtain all three pinned checkouts, complete real bindings, and run the finite suite once.
 
 - [x] **P0-A1: OpenCode no-progress retry suppression**
 

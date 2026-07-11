@@ -264,6 +264,17 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 ### P0-A：AI-first Harness 主线
 
+收口顺序按可执行依赖排列，不因外部模型或 checkout 阻塞本地开发：
+
+| 顺序 | 工作 | 当前停止条件 |
+| ---: | --- | --- |
+| 1 | P0-A8 fresh exact repair/strict 闭环 | 已完成；后续只修回归 |
+| 2 | P0-A9 通用 raw C2Rust/C2Rust+repair 同门禁物化 | raw baseline 已接入；剩余不含项目特判的 repair artifact |
+| 3 | P0-A10 固定套件输入闭包 | 三个 pinned checkout、source span/hash/fixture 全部 ready |
+| 4 | P0-A6 真实 GLM-5.1 与比赛主机复验 | 有效资源包和 competition-exact host 可用；不得用模拟结果代替 |
+
+任何阶段都先运行一次有限构造集合，再按失败频率扩展 translator/ContextPack；禁止继续按 FlashDB 行号堆规则，也禁止为了等待外部资源停止可独立完成的 harness 工作。
+
 - [ ] **P0-A6：真实 GLM-5.1 候选生成通道**
 
   OpenCode `zai/glm-5.1` 读取 hash-bound ContextPack，输出单一结构化 Rust candidate；记录 provider、logical/resolved model、variant、prompt、输入、原始响应、解析结果和候选 SHA-256。模型输出、聊天文本和文件写入本身都保持 `semantic_gate=false`。无凭据、超时、响应格式错误或候选缺失必须结构化 blocked，不得静默回退后冒充 AI 已运行。
@@ -286,13 +297,13 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   比赛翻译路径优先生成 GLM-5.1 candidate；typed IR、raw C2Rust、C2Rust+repair 作为确定性候选、提示上下文或 AI 失败后的替代候选。router 只能依据可重算 gate 结果排序，不能依据项目名、函数名、slice id 或模型自评。任何候选都必须经过相同 compile/oracle/replay/diff/negative/unsafe/final gates。
 
-  当前进度：新翻译的 competition runner 已默认传递 `--ai-first-candidate`，competition-exact 禁止替换 OpenCode/GLM/agent/variant。纯 router 核心限制最多 4 个候选，按 artifact SHA 去重，固定调度 `opencode-ai -> typed-ir -> c2rust-repair -> c2rust-baseline`，且只有八类 candidate-bound gates 全部通过才允许选择。实际 `auto_migrate` 已完成 AI 首验、typed-IR exact fallback 和“所有零 token 候选失败后再 repair AI”的流程；fallback 不产生 repair report，也不增加 provider invocation。competition summary 已从 SHA 绑定的 router evidence 重算 candidate input、去重、来源选择、deterministic fallback 和 no-selection 指标，独立 strict validator 也已接入。当前只剩 raw C2Rust/C2Rust+repair artifact 的同门禁物化，因此本项保持未完成。
+  当前进度：新翻译的 competition runner 已默认传递 `--ai-first-candidate`，competition-exact 禁止替换 OpenCode/GLM/agent/variant。纯 router 核心限制最多 4 个候选，按 artifact SHA 去重，固定调度 `opencode-ai -> typed-ir -> c2rust-repair -> c2rust-baseline`，且只有八类 candidate-bound gates 全部通过才允许选择。实际 `auto_migrate` 已完成 AI 首验、typed-IR exact fallback 和“所有零 token 候选失败后再 repair AI”的流程；fallback 不产生 repair report，也不增加 provider invocation。raw C2Rust baseline 现在只从本轮 manifest/output 中重开，校验 evidence 目录边界与 SHA 后才以 `source=c2rust-baseline` 进入同一 fresh exact gates；skipped、漂移、越界和重复 artifact 都会记录审计拒绝，baseline compile/status 或历史 accepted evidence 不能使其晋级。competition summary 已从 SHA 绑定的 router evidence 重算候选指标，独立 strict validator 也已接入。当前只剩通用 `c2rust-repair` artifact 的同门禁物化，因此本项保持未完成。
 
 - [ ] **P0-A10：有限跨项目稳定性验收**
 
   建立不超过 20 个 case 的固定集合：至少覆盖 3 个真实 C 项目和 10 个不同 construct family。阶段验收只运行一次有限集合，不执行 1,000/10,000 轮或循环压力测试。发布 AI invocation、candidate generation、rustc compile、semantic acceptance、refused/blocked、repair rounds 和 route selection 指标；成功率不得用重复同类切片放大。
 
-  当前进度：`validation/ai-finite-cross-project-suite.json` 已固定 12 个 case、3 个真实项目和 12 个唯一 construct family，validator 强制 `max_items=20`、至少 3 个项目/10 类构造、项目名不得参与路由，且重复 family 不能放大覆盖率。当前 preflight 为 `ready=0/blocked=12`：FlashDB checkout 不在当前 worktree；zlib-ng/libuv 的 pinned source root 不存在；4 个 FlashDB synthetic carrier 缺真实 source span，libuv 还缺 source hash/span。该结果只表示输入完备性，`model_invocations=0`、`translations_executed=0`、`translation_coverage_numerator=0`，不得发布跨项目成功率。下一步是取得三个 pinned checkout、补齐真实绑定后仅运行一次有限集合。
+  当前进度：`validation/ai-finite-cross-project-suite.json` 已固定 12 个 case、3 个真实项目和 12 个唯一 construct family，validator 强制 `max_items=20`、至少 3 个项目/10 类构造、项目名不得参与路由，且重复 family 不能放大覆盖率。2026-07-12 干净集成 worktree 的 preflight 快照为 `ready=0/blocked=12`：该 worktree 不携带忽略的 FlashDB checkout；zlib-ng/libuv 的 pinned source root 不存在；4 个 FlashDB synthetic carrier 缺真实 source span，libuv 还缺 source hash/span。preflight 会按实际 checkout/hash 状态动态重算，该快照只表示输入完备性；`model_invocations=0`、`translations_executed=0`、`translation_coverage_numerator=0`，不得发布跨项目成功率。下一步是取得三个 pinned checkout、补齐真实绑定后仅运行一次有限集合。
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 
