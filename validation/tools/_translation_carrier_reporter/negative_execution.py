@@ -21,6 +21,7 @@ from .source_binding import StaticContext
 from .state_replay_kinds import is_state_replay_kind
 from .call_continue_contract import KIND as CALL_CONTINUE_KIND
 from .owner_interior_usize_add_contract import KIND as OWNER_INTERIOR_USIZE_ADD_KIND
+from .stats_sequence_contract import KIND as STATS_SEQUENCE_KIND
 from .call_continue_negative_execution import run_call_continue_negative_execution
 from .state_replay_negative import (
     mutation_spec as state_replay_mutation_spec,
@@ -169,7 +170,10 @@ def run_negative_execution(
                 aliases=command_aliases,
             )
             mutation_equivalent = (
-                context.contract.get("kind") == OWNER_INTERIOR_USIZE_ADD_KIND
+                context.contract.get("kind") in {
+                    OWNER_INTERIOR_USIZE_ADD_KIND,
+                    STATS_SEQUENCE_KIND,
+                }
                 and result["returncode"] == 0
             )
             if result["returncode"] == 0 and not mutation_equivalent:

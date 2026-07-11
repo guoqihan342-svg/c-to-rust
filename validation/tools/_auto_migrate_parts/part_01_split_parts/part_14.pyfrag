@@ -49,3 +49,74 @@ def c_oracle_record_owner_interior_u32_to_usize_wrapping_add_state_execution_sou
         "statements": "".join(statements),
         "fixture_state_model": record_owner_interior_usize_add_fixture_state_model(),
     }
+
+
+def c_oracle_record_owner_interior_stats_sequence_state_execution_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> dict[str, Any]:
+    contract = record_owner_interior_stats_sequence_state_replay_contract(
+        spec, fixture_binding
+    )
+    if contract is None:
+        return {"declarations": "", "statements": ""}
+    owner = contract["owner"]
+    result = contract["return"]
+    statements: list[str] = []
+    for case_binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding["expected_outputs"]
+        case_id = str(case_binding.get("id") or "case")
+        ident = c_safe_ident(case_id)
+        local = f"actual_{ident}_{owner['parameter']}"
+        computed_names: list[str] = []
+        block = [
+            f"  struct {owner['rust_type']} {local} = "
+            f"{record_owner_interior_c_initializer(owner['initializer'], payload)};\n"
+        ]
+        for index, update in enumerate(contract["updates"]):
+            target = update["target"]
+            target_expression = f"{local}." + ".".join(str(item) for item in target["owner_field_path"])
+            computed = f"expected_{ident}_state_{index}"
+            computed_names.append(computed)
+            c_type = "uint32_t" if index == 0 else "size_t"
+            if index == 0:
+                expression = f"{target_expression} + UINT32_C(1)"
+            else:
+                source = update["source"]
+                source_expression = f"{local}." + ".".join(
+                    str(item) for item in source["owner_field_path"]
+                )
+                expression = f"{target_expression} + (size_t){source_expression}"
+            expected_value = int(expected[str(target["fixture_field"])])
+            block.extend([
+                f"  {c_type} {computed} = {expression};\n",
+                f"  if ({computed} != {c_integer_literal(c_type, expected_value)}) {{\n",
+                f"    fprintf(stderr, {c_string_literal(case_id + ' declared state ' + str(index) + ' mismatch\\n')});\n",
+                "    return 1;\n",
+                "  }\n",
+            ])
+        expected_return = "true" if expected[str(result["fixture_field"])] else "false"
+        block.extend([
+            f"  bool actual_{ident}_return = {required_str(spec, 'function_name')}(&{local});\n",
+            f"  if (actual_{ident}_return != {expected_return}) {{\n",
+            f"    fprintf(stderr, {c_string_literal(case_id + ' return mismatch\\n')});\n",
+            "    return 1;\n",
+            "  }\n",
+        ])
+        for index, update in enumerate(contract["updates"]):
+            target = update["target"]
+            target_expression = f"{local}." + ".".join(str(item) for item in target["owner_field_path"])
+            block.extend([
+                f"  if ({target_expression} != {computed_names[index]}) {{\n",
+                f"    fprintf(stderr, {c_string_literal(case_id + ' state ' + str(index) + ' mismatch\\n')});\n",
+                "    return 1;\n",
+                "  }\n",
+                f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(target['fixture_field']) + ' matched')});\n",
+            ])
+        statements.append("".join(block))
+    return {
+        "declarations": "",
+        "definitions_after_target": "",
+        "statements": "".join(statements),
+        "fixture_state_model": record_owner_interior_stats_sequence_fixture_state_model(),
+    }

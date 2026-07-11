@@ -17,6 +17,8 @@ from .owner_interior_usize_add_contract import KIND as OWNER_INTERIOR_USIZE_ADD_
 from .owner_interior_usize_add_model import (
     negative_partition_probe_source as owner_interior_usize_add_probe,
 )
+from .stats_sequence_contract import KIND as STATS_SEQUENCE_KIND
+from .stats_sequence_model import negative_partition_probe_source as stats_sequence_probe
 from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
 from .interior_projection_model import negative_partition_probe_source as projection_probe
 from .reset_add_while_continue_contract import KIND as RESET_ADD_CONTINUE_KIND
@@ -51,6 +53,25 @@ def mutation_spec(contract: dict[str, Any]) -> tuple[re.Pattern[bytes], bytes, b
         OWNER_INTERIOR_USIZE_ADD_KIND,
     }:
         return re.compile(rb"\bwrapping_add\b"), b"wrapping_add", b"wrapping_sub"
+    if kind == STATS_SEQUENCE_KIND:
+        owner = str(contract["owner"]["parameter"]).encode("ascii")
+        path = [
+            str(item).encode("ascii")
+            for item in contract["updates"][2]["target"]["owner_field_path"]
+        ]
+        access = rb"\b" + re.escape(owner) + b"".join(
+            rb"\s*\.\s*" + re.escape(item) for item in path
+        )
+        return (
+            re.compile(
+                access
+                + rb"\s*=\s*"
+                + access
+                + rb"\s*\.\s*(?P<value>wrapping_add)\b"
+            ),
+            b"wrapping_add",
+            b"wrapping_sub",
+        )
     return None
 
 
@@ -70,4 +91,6 @@ def negative_partition_probe_source(context: Any) -> str | None:
         return field_postfix_increment_probe(context)
     if kind == OWNER_INTERIOR_USIZE_ADD_KIND:
         return owner_interior_usize_add_probe(context)
+    if kind == STATS_SEQUENCE_KIND:
+        return stats_sequence_probe(context)
     return None

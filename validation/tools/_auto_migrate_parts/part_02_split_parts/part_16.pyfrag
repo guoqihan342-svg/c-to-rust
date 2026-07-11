@@ -33,3 +33,64 @@ def rust_replay_record_owner_interior_u32_to_usize_wrapping_add_state_cases_sour
             "    }\n",
         ])
     return "".join(blocks)
+
+
+def rust_replay_record_owner_interior_stats_sequence_state_cases_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> str:
+    contract = record_owner_interior_stats_sequence_state_replay_contract(
+        spec, fixture_binding
+    )
+    if contract is None:
+        return "    // TODO: bind owner interior stats sequence fixture cases.\n"
+    owner = contract["owner"]
+    result = contract["return"]
+    function_name = safe_ident(required_str(spec, "function_name"))
+    blocks = ["    // Exact ordered owner-interior stats sequence fixture replay.\n"]
+    for case_binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding["expected_outputs"]
+        case_id = str(case_binding.get("id") or "case")
+        local = f"actual_{safe_ident(case_id)}_{safe_ident(str(owner['parameter']))}"
+        blocks.extend([
+            "    {\n",
+            f"        let case_id = {rust_string_literal(case_id)};\n",
+            f"        let mut {local} = {record_owner_interior_rust_initializer(owner['initializer'], payload)};\n",
+        ])
+        expected_names: list[str] = []
+        for index, update in enumerate(contract["updates"]):
+            target = update["target"]
+            target_expression = f"{local}." + ".".join(str(item) for item in target["owner_field_path"])
+            expected_name = f"expected_state_{index}"
+            expected_names.append(expected_name)
+            if index == 0:
+                expression = f"{target_expression}.wrapping_add(1u32)"
+                suffix = "u32"
+            else:
+                source_expression = f"{local}." + ".".join(
+                    str(item) for item in update["source"]["owner_field_path"]
+                )
+                expression = (
+                    f"{target_expression}.wrapping_add(usize::try_from({source_expression})"
+                    ".expect(\"LP64 u32_to_usize contract\"))"
+                )
+                suffix = "usize"
+            expected_value = int(expected[str(target["fixture_field"])])
+            blocks.extend([
+                f"        let {expected_name} = {expression};\n",
+                f"        assert_eq!({expected_name}, {expected_value}{suffix}, \"{{}} declared state {index} drifted\", case_id);\n",
+            ])
+        expected_return = str(bool(expected[str(result["fixture_field"])])).lower()
+        blocks.append(f"        let actual_return = {function_name}(&mut {local});\n")
+        for index, update in enumerate(contract["updates"]):
+            target_expression = f"{local}." + ".".join(
+                str(item) for item in update["target"]["owner_field_path"]
+            )
+            blocks.append(
+                f"        assert_eq!({target_expression}, {expected_names[index]}, \"{{}} state {index} drifted\", case_id);\n"
+            )
+        blocks.extend([
+            f"        assert_eq!(actual_return, {expected_return}, \"{{}} return drifted\", case_id);\n",
+            "    }\n",
+        ])
+    return "".join(blocks)

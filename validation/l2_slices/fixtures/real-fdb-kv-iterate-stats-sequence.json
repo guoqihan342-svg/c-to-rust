@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-stats-sequence",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:ordered-statistics-sequence@1880-1883"
+    ]
+  },
+  "compared_fields": [
+    "return_value",
+    "itr_iterated_count",
+    "itr_iterated_obj_bytes",
+    "itr_iterated_value_bytes"
+  ],
+  "case_count": 4,
+  "cases": [
+    {
+      "id": "ordinary",
+      "input_ref": "cases[0].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-stats-sequence.json",
+      "inputs": {
+        "itr_initial_iterated_count": 4,
+        "itr_curr_kv_len": 3,
+        "itr_curr_kv_value_len": 7,
+        "itr_initial_iterated_obj_bytes": 10,
+        "itr_initial_iterated_value_bytes": 20
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "itr_iterated_count": 5,
+        "itr_iterated_obj_bytes": 13,
+        "itr_iterated_value_bytes": 27
+      }
+    },
+    {
+      "id": "zero-rhs",
+      "input_ref": "cases[1].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-stats-sequence.json",
+      "inputs": {
+        "itr_initial_iterated_count": 8,
+        "itr_curr_kv_len": 0,
+        "itr_curr_kv_value_len": 0,
+        "itr_initial_iterated_obj_bytes": 42,
+        "itr_initial_iterated_value_bytes": 99
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "itr_iterated_count": 9,
+        "itr_iterated_obj_bytes": 42,
+        "itr_iterated_value_bytes": 99
+      }
+    },
+    {
+      "id": "all-wrap",
+      "input_ref": "cases[2].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-stats-sequence.json",
+      "inputs": {
+        "itr_initial_iterated_count": 4294967295,
+        "itr_curr_kv_len": 3,
+        "itr_curr_kv_value_len": 5,
+        "itr_initial_iterated_obj_bytes": 18446744073709551614,
+        "itr_initial_iterated_value_bytes": 18446744073709551613
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "itr_iterated_count": 0,
+        "itr_iterated_obj_bytes": 1,
+        "itr_iterated_value_bytes": 2
+      }
+    },
+    {
+      "id": "source-discriminator",
+      "input_ref": "cases[3].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-stats-sequence.json",
+      "inputs": {
+        "itr_initial_iterated_count": 17,
+        "itr_curr_kv_len": 1,
+        "itr_curr_kv_value_len": 9,
+        "itr_initial_iterated_obj_bytes": 100,
+        "itr_initial_iterated_value_bytes": 200
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "itr_iterated_count": 18,
+        "itr_iterated_obj_bytes": 101,
+        "itr_iterated_value_bytes": 209
+      }
+    }
+  ]
+}
