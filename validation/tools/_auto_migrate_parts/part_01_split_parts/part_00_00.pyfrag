@@ -1,0 +1,240 @@
+def mark_route_refused_candidate_artifacts(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    route_decision: dict[str, Any],
+) -> None:
+    if not route_refuses_candidate_generation(route_decision):
+        return
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
+    if plan_path.exists():
+        plan = read_json(plan_path)
+        for artifact in plan.get("generated_artifacts", []):
+            artifact["status"] = "blocked"
+        write_json(plan_path, plan)
+
+    events_path = evidence_dir / f"{prefix}-auto-translation-events.jsonl"
+    if not events_path.exists():
+        return
+    events = [
+        json.loads(line)
+        for line in events_path.read_text(encoding="utf-8-sig").splitlines()
+        if line.strip()
+    ]
+    for event in events:
+        if event.get("event_kind") not in {"rust_draft_generated", "run_completed"}:
+            continue
+        event["status"] = "blocked"
+        if event.get("event_kind") == "rust_draft_generated":
+            event["message"] = "Route refused candidate generation; Rust draft is blocked diagnostic output."
+        else:
+            event["message"] = "Route refused candidate generation; semantic acceptance gates remain blocked."
+        for ref in event.get("artifact_refs", []):
+            ref["status"] = "blocked"
+    write_text(events_path, "".join(json.dumps(event, sort_keys=True) + "\n" for event in events))
+
+
+def pointer_node_kind(node: dict[str, Any]) -> str:
+    boundary_decisions = node.get("boundary_decisions", [])
+    c_type = str(node.get("c_type", "")).replace(" ", "")
+    if "byte_cursor_post_increment_read" in boundary_decisions:
+        return "buffer"
+    if "bounded_pointer_arithmetic_output_write" in node.get("boundary_decisions", []):
+        return "buffer"
+    if "bounded_pointer_index" in boundary_decisions:
+        return "buffer"
+    if node.get("role") == "out_param":
+        return "struct_pointer"
+    if c_type == "constint*":
+        return "buffer"
+    if c_type in {"constvoid*", "constuint8_t*"}:
+        return "buffer"
+    return "raw_pointer"
+
+
+def pointer_contract_rust_type_overrides(spec: dict[str, Any]) -> dict[str, str]:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    if not isinstance(pointer_contract, dict):
+        return {}
+    overrides: dict[str, str] = {}
+    for item in pointer_contract.get("input_buffers", []):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        rust_type = rust_slice_type_from_c_pointer(str(item.get("c_type") or ""), mutable=False)
+        if name and rust_type:
+            overrides[name] = rust_type
+    for item in pointer_contract.get("output_pointers", []):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        rust_type = rust_slice_type_from_c_pointer(str(item.get("c_type") or ""), mutable=True)
+        if name and rust_type:
+            overrides[name] = rust_type
+    return overrides
+
+
+def rust_slice_type_from_c_pointer(c_type: str, *, mutable: bool) -> str | None:
+    normalized = "".join(str(c_type).split())
+    type_map = {
+        "constint*": "i32",
+        "int*": "i32",
+        "constuint8_t*": "u8",
+        "uint8_t*": "u8",
+        "constunsignedchar*": "u8",
+        "unsignedchar*": "u8",
+    }
+    inner = type_map.get(normalized)
+    if inner is None:
+        return None
+    return f"&mut [{inner}]" if mutable else f"&[{inner}]"
+
+
+def pointer_contract_lvalue_kinds(spec: dict[str, Any]) -> list[str]:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    if not isinstance(pointer_contract, dict):
+        return []
+    kinds: list[str] = []
+    for item in pointer_contract.get("input_buffers", []):
+        if isinstance(item, dict) and list_of_strings(item.get("read_effects")):
+            kinds.append("bounded_input_buffer")
+    for item in pointer_contract.get("output_pointers", []):
+        if isinstance(item, dict) and list_of_strings(item.get("write_effects")):
+            kinds.append("bounded_pointer_index")
+    return stable_unique_strings(kinds)
+
+
+def pointer_contract_statement_kinds(spec: dict[str, Any]) -> list[str]:
+    return [
+        {
+            "bounded_input_buffer": "bounded_input_buffer_read",
+            "bounded_pointer_index": "bounded_pointer_index_write",
+        }.get(kind, kind)
+        for kind in pointer_contract_lvalue_kinds(spec)
+    ]
+
+
+def normalized_pointer_mutability(value: Any, default: str) -> str:
+    normalized = str(value or default).strip().lower().replace("-", "_")
+    aliases = {
+        "const": "read_only",
+        "readonly": "read_only",
+        "writeonly": "write_only",
+        "mutable": "read_write",
+        "readwrite": "read_write",
+        "inout": "read_write",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in {"read_only", "write_only", "read_write"}:
+        raise ValueError(f"unsupported pointer mutability: {value!r}")
+    return normalized
+
+
+def merged_pointer_mutability(left: str, right: str) -> str:
+    if left == right:
+        return left
+    if "read_write" in {left, right} or {left, right} == {"read_only", "write_only"}:
+        return "read_write"
+    raise ValueError(f"incompatible pointer mutability values: {left!r}, {right!r}")
+
+
+def pointer_contract_nodes_by_name(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    if not isinstance(pointer_contract, dict):
+        return {}
+    noalias_names = {name for pair in pointer_noalias_pairs(spec) for name in pair}
+    nodes: dict[str, dict[str, Any]] = {}
+    for section, role, default_decision, default_mutability in [
+        ("input_buffers", "borrowed_input", "bounded_input_buffer", "read_only"),
+        ("output_pointers", "out_param", "bounded_pointer_index", "write_only"),
+        ("inout_pointers", "inout_param", "", "read_write"),
+    ]:
+        for item in pointer_contract.get(section, []):
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            mutability = normalized_pointer_mutability(item.get("mutability"), default_mutability)
+            node = nodes.setdefault(
+                name,
+                {
+                    "id": name,
+                    "role": role,
+                    "read_effects": [],
+                    "write_effects": [],
+                    "boundary_decisions": [],
+                    "mutability": mutability,
+                },
+            )
+            node["mutability"] = merged_pointer_mutability(node["mutability"], mutability)
+            if item.get("c_type") and not node.get("c_type"):
+                node["c_type"] = item["c_type"]
+            if item.get("length_companion") and not node.get("length_companion"):
+                node["length_companion"] = item["length_companion"]
+            node["read_effects"] = stable_unique_strings(
+                node.get("read_effects", []) + list_of_strings(item.get("read_effects"))
+            )
+            node["write_effects"] = stable_unique_strings(
+                node.get("write_effects", []) + list_of_strings(item.get("write_effects"))
+            )
+            decisions = list(node.get("boundary_decisions", []))
+            if default_decision:
+                decisions.append(default_decision)
+            translation_rule_id = str(item.get("translation_rule_id") or "").strip()
+            if translation_rule_id:
+                decisions.append(translation_rule_id.replace("-", "_"))
+            node["boundary_decisions"] = stable_unique_strings(decisions)
+    for name, node in nodes.items():
+        mutability = node["mutability"]
+        if (
+            name in noalias_names
+            and not node["read_effects"]
+            and mutability in {"read_only", "read_write"}
+        ):
+            node["read_effects"] = [f"*{name}"]
+        if (
+            name in noalias_names
+            and not node["write_effects"]
+            and mutability in {"write_only", "read_write"}
+        ):
+            node["write_effects"] = [f"*{name}"]
+    return nodes
+
+
+def merge_pointer_node_contract(
+    node: dict[str, Any], contract_node: dict[str, Any]
+) -> dict[str, Any]:
+    if not contract_node:
+        return node
+    merged = dict(node)
+    for key in ["c_type", "role", "length_companion", "mutability"]:
+        if not merged.get(key) and contract_node.get(key):
+            merged[key] = contract_node[key]
+    for key in ["read_effects", "write_effects", "boundary_decisions"]:
+        merged[key] = stable_unique_strings(
+            list_of_strings(merged.get(key)) + list_of_strings(contract_node.get(key))
+        )
+    return merged
+
+
+def pointer_noalias_pairs(spec: dict[str, Any]) -> list[tuple[str, str]]:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    raw_pairs = pointer_contract.get("noalias_required", []) if isinstance(pointer_contract, dict) else []
+    if not isinstance(raw_pairs, list):
+        raise ValueError("c_boundary.pointer_contract.noalias_required must be a list")
+    pairs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for index, raw_pair in enumerate(raw_pairs):
+        if not isinstance(raw_pair, list) or len(raw_pair) != 2:
+            raise ValueError(f"noalias_required[{index}] must contain two pointer names")
+        pair = tuple(str(item).strip() for item in raw_pair)
+        if not all(pair) or pair[0] == pair[1]:
+            raise ValueError(f"noalias_required[{index}] must contain distinct pointer names")
+        canonical = tuple(sorted(pair))
+        if canonical in seen:
+            raise ValueError("noalias_required contains duplicate pointer pairs")
+        seen.add(canonical)
+        pairs.append(pair)
+    return pairs

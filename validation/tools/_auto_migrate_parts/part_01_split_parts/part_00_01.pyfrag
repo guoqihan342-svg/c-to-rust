@@ -1,0 +1,283 @@
+
+
+def stable_unique_strings(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        text = str(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
+def pointer_buffer_role(node: dict[str, Any]) -> str:
+    if node.get("role") == "out_param":
+        return "output"
+    return "input"
+
+
+def pointer_ownership_role(node: dict[str, Any]) -> str:
+    role = str(node.get("role") or "borrowed")
+    return {
+        "borrowed_input": "borrowed",
+        "out_param": "out_param",
+        "inout_param": "inout_param",
+        "global": "global",
+        "owner": "owner",
+        "observer": "observer",
+    }.get(role, "borrowed")
+
+
+def input_buffer_length_companion(spec: dict[str, Any], pointer_id: str) -> str:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    for item in pointer_contract.get("input_buffers", []):
+        if item.get("name") == pointer_id and item.get("length_companion"):
+            return str(item["length_companion"])
+    for signature in spec.get("c_boundary", {}).get("signatures", []):
+        parameters = signature.get("parameters", [])
+        for param in parameters:
+            if param.get("name") == pointer_id and param.get("buffer_length_parameter"):
+                return str(param["buffer_length_parameter"])
+            c_type = str(param.get("c_type", "")).replace(" ", "")
+            if param.get("name") == pointer_id and c_type in {"constvoid*", "constuint8_t*"}:
+                for companion in parameters:
+                    if companion.get("name") == "size" and str(companion.get("c_type", "")).strip() == "size_t":
+                        return "size"
+    return "len"
+
+
+def alias_gate_evidence(spec: dict[str, Any], pointer_nodes: list[dict[str, Any]]) -> dict[str, Any]:
+    read_nodes = [node for node in pointer_nodes if node.get("read_effects")]
+    write_nodes = [node for node in pointer_nodes if node.get("write_effects")]
+    derived_pairs = [
+        (read_node, write_node, [str(read_node.get("id")), str(write_node.get("id"))])
+        for read_node in read_nodes
+        for write_node in write_nodes
+        if read_node.get("id") != write_node.get("id")
+    ]
+    unique_derived_pairs: dict[tuple[str, str], tuple[dict[str, Any], dict[str, Any], list[str]]] = {}
+    for pair in derived_pairs:
+        canonical = tuple(sorted(pair[2]))
+        unique_derived_pairs.setdefault(canonical, pair)
+
+    declared_pairs = pointer_noalias_pairs(spec)
+    nodes_by_id: dict[str, dict[str, Any]] = {}
+    for node in pointer_nodes:
+        node_id = str(node.get("id") or "").strip()
+        if not node_id:
+            continue
+        if node_id in nodes_by_id:
+            raise ValueError(f"duplicate pointer node id: {node_id}")
+        nodes_by_id[node_id] = node
+    if declared_pairs:
+        declared_keys = {tuple(sorted(pair)) for pair in declared_pairs}
+        missing_nodes = sorted({name for pair in declared_pairs for name in pair} - set(nodes_by_id))
+        if missing_nodes:
+            raise ValueError(
+                "noalias_required references unknown pointer nodes: " + ", ".join(missing_nodes)
+            )
+        uncovered_pairs = sorted(set(unique_derived_pairs) - declared_keys)
+        if uncovered_pairs:
+            rendered = ", ".join("/".join(pair) for pair in uncovered_pairs)
+            raise ValueError("noalias_required does not cover effect-derived alias pairs: " + rendered)
+        alias_pairs = [
+            (nodes_by_id[left], nodes_by_id[right], [left, right])
+            for left, right in declared_pairs
+        ]
+    else:
+        alias_pairs = list(unique_derived_pairs.values())
+    if not alias_pairs:
+        summary = {
+            "decision": "not_applicable",
+            "risk_level": "none",
+            "requires_noalias": False,
+            "complete_alias_safety": False,
+            "reason": "slice has no input/output pointer alias surface",
+        }
+        return {
+            "is_alias_sensitive": False,
+            "alias_sets": [],
+            "alias_risks": [],
+            "alias_contract": {
+                "decision": "not_applicable",
+                "proven": False,
+                "requires_noalias": False,
+                "source": "no read/write pointer pair",
+                "evidence_refs": [],
+                "complete_alias_safety": False,
+            },
+            "safe_boundary_preconditions": [],
+            "blocked_reasons": [],
+            "summary": summary,
+            "cache_invalidation_keys": ["alias_gate=not_applicable"],
+        }
+
+    aliasing_proven = bool(
+        spec.get("c_boundary", {}).get("pointer_contract", {}).get("aliasing_proven", False)
+    )
+    requires_noalias = bool(declared_pairs) or not aliasing_proven
+    complete_alias_safety = bool(declared_pairs)
+    decision = "allow" if aliasing_proven else "requires_noalias_contract"
+    risk_level = "proven_noalias" if aliasing_proven else "unknown_alias"
+    evidence_source = (
+        "c_boundary.pointer_contract.aliasing_proven=true"
+        if aliasing_proven
+        else "c_boundary.pointer_contract.aliasing_proven=false"
+    )
+    alias_sets = []
+    alias_risks = []
+    safe_boundary_preconditions = []
+    for index, (read_node, write_node, members) in enumerate(alias_pairs, start=1):
+        alias_sets.append(
+            {
+                "id": f"alias-set-{index}",
+                "members": members,
+                "relationship": "known_distinct" if aliasing_proven else "unknown_overlap",
+                "risk": risk_level,
+                "evidence": evidence_source,
+            }
+        )
+        alias_risks.append(
+            {
+                "id": f"alias-risk-{index}",
+                "pointer_nodes": members,
+                "read_effects": stable_unique_strings(
+                    list_of_strings(read_node.get("read_effects"))
+                    + list_of_strings(write_node.get("read_effects"))
+                ),
+                "write_effects": stable_unique_strings(
+                    list_of_strings(read_node.get("write_effects"))
+                    + list_of_strings(write_node.get("write_effects"))
+                ),
+                "risk_level": risk_level,
+                "evidence_source": evidence_source,
+                "gate_decision": decision,
+                "requires_noalias": requires_noalias,
+            }
+        )
+        safe_boundary_preconditions.append(
+            {
+                "id": f"alias-precondition-{index}",
+                "kind": "noalias",
+                "applies_to": members,
+                "required": requires_noalias,
+                "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+            }
+        )
+    summary = {
+        "decision": decision,
+        "risk_level": risk_level,
+        "requires_noalias": requires_noalias,
+        "complete_alias_safety": complete_alias_safety,
+        "risk_count": len(alias_risks),
+        "evidence_source": evidence_source,
+    }
+    return {
+        "is_alias_sensitive": True,
+        "alias_sets": alias_sets,
+        "alias_risks": alias_risks,
+        "alias_contract": {
+            "decision": decision,
+            "proven": aliasing_proven,
+            "requires_noalias": requires_noalias,
+            "source": evidence_source,
+            "evidence_refs": [],
+            "complete_alias_safety": complete_alias_safety,
+        },
+        "safe_boundary_preconditions": safe_boundary_preconditions,
+        "blocked_reasons": [] if aliasing_proven else ["input/output alias requires explicit noalias contract"],
+        "summary": summary,
+        "cache_invalidation_keys": [
+            f"alias_gate={decision}",
+            f"alias_risk_count={len(alias_risks)}",
+            f"aliasing_proven={str(aliasing_proven).lower()}",
+        ],
+    }
+
+
+def scalar_ub_contract(spec: dict[str, Any]) -> dict[str, Any]:
+    c_contract = spec.get("c_boundary", {}).get("scalar_arithmetic_contract", {})
+    if not isinstance(c_contract, dict):
+        c_contract = {}
+    fixture_domain = spec.get("fixture_contract", {}).get("scalar_input_domain", {})
+    if not isinstance(fixture_domain, dict):
+        fixture_domain = {}
+    must_not_claim = spec.get("claim_boundary", {}).get("must_not_claim", [])
+    if not isinstance(must_not_claim, list):
+        must_not_claim = []
+    status = "recorded" if c_contract or fixture_domain or must_not_claim else "not_declared"
+    parameters = fixture_domain.get("parameters", [])
+    if not isinstance(parameters, list):
+        parameters = []
+    return {
+        "status": status,
+        "c_boundary": {
+            "wrapping_profile": str(c_contract.get("wrapping_profile", "not_declared")),
+            "signed_overflow": str(c_contract.get("signed_overflow", "not_declared")),
+            "division_by_zero": str(c_contract.get("division_by_zero", "not_declared")),
+            "signed_division_overflow": str(
+                c_contract.get("signed_division_overflow", "not_declared")
+            ),
+            "shift_count": str(c_contract.get("shift_count", "not_declared")),
+            "signed_right_shift": str(c_contract.get("signed_right_shift", "not_declared")),
+            "signed_left_shift": str(c_contract.get("signed_left_shift", "not_declared")),
+            "signed_negation": str(c_contract.get("signed_negation", "not_declared")),
+        },
+        "fixture_contract": {
+            "case_source": str(fixture_domain.get("case_source", "not_declared")),
+            "parameters": parameters,
+            "covers_overflow_boundaries": bool(
+                fixture_domain.get("covers_overflow_boundaries", False)
+            ),
+        },
+        "claim_boundary": {
+            "must_not_claim": [str(item) for item in must_not_claim],
+        },
+    }
+
+
+def scalar_ub_contract_identity(spec: dict[str, Any]) -> dict[str, Any]:
+    contract = scalar_ub_contract(spec)
+    return {
+        "status": contract["status"],
+        "sha256": sha256_json(contract),
+    }
+
+
+def scalar_admission_from_runtime_preconditions(
+    spec: dict[str, Any],
+    runtime_preconditions: Any,
+) -> dict[str, Any]:
+    preconditions = runtime_preconditions if isinstance(runtime_preconditions, list) else []
+    contract = scalar_ub_contract(spec)
+    if not preconditions:
+        return {
+            "status": "not_applicable",
+            "precondition_count": 0,
+            "covered": [],
+            "unresolved": [],
+            "contract_status": contract["status"],
+        }
+    covered = []
+    unresolved = []
+    for item in preconditions:
+        code = str(item.get("code", "unknown")) if isinstance(item, dict) else "unknown"
+        admission = scalar_precondition_admission(code, contract)
+        if admission["status"] == "covered":
+            covered.append(admission)
+        else:
+            unresolved.append(admission)
+    return {
+        "status": "covered" if not unresolved else "unresolved",
+        "precondition_count": len(preconditions),
+        "covered": covered,
+        "unresolved": unresolved,
+        "contract_status": contract["status"],
+        "source_fields": [
+            "c_boundary.scalar_arithmetic_contract",
+            "fixture_contract.scalar_input_domain",
+            "claim_boundary.must_not_claim",
+        ],
+    }
