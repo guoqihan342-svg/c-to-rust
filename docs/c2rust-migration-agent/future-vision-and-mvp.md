@@ -4,17 +4,18 @@
 
 本文是项目的中文 canonical backlog，也是当前状态、执行顺序和能力边界的唯一入口。详细实现过程由 Git 历史、coverage matrix 和机器可读 evidence 保存，不再把逐日流水账复制到本文。
 
-最后更新：2026-07-11。
+最后更新：2026-07-12。
 
 ## 1. 当前状态
 
 目标是构建可审计的端到端流水线：
 
 ```text
-input.c
-  -> clang / C2Rust / LLM candidate
-  -> typed IR or verified unsafe baseline
-  -> Rust candidate
+input.c + compile context
+  -> ContextPack（source / headers / flags / ABI / diagnostics）
+  -> GLM-5.1 primary candidate
+  -> typed IR / C2Rust alternate candidates
+  -> bounded verify-and-repair loop
   -> C oracle + Rust replay + diff + negative diff
   -> unsafe ledger + final verification
   -> accepted / refused / blocked
@@ -24,7 +25,8 @@ input.c
 | --- | ---: | --- |
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
-| 当前翻译主线 | P0-T32 | 审计 `fdb_kvdb.c:1877` 条件与已验收 `:1880-1883` body 的通用短路/分支组合，不重复计算既有构造 |
+| 当前 AI 候选状态 | `0 generated` | 已审计的 40 份 AI manifest 均为 `not_used`；现有 OpenCode worker 只转发确定性命令，尚未生成 Rust candidate |
+| 当前翻译主线 | P0-A6..A10 | 建立 AI-first candidate、ContextPack、多候选路由和有限跨项目验收；不再以单个 FlashDB 行号扩展作为主线 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
 | 最近开发阶段 | P0-T31 | `:1880-1883` ordered stats sequence 已完成 source-backed 严格验收，计数更新为 38 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
@@ -173,7 +175,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 ## 3. 当前执行队列
 
-### P0-A：翻译层主线
+### P0-T：确定性翻译辅助通道
 
 - [x] **P0-T21：组合 `:1868-:1874` zero-start 与 next-address 二分支**
 
@@ -258,9 +260,29 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 - [ ] **P0-T32：组合 `fdb_kvdb.c:1877` 条件与 `:1880-1883` body**
 
-  审计条件表达式的短路、比较和分支组合是否能复用现有 typed IR，并选择最小通用边界。只在新增通用构造且 source-backed 严格证据闭环时增加 numerator；已有 stats body 不重复计数。
+  暂停作为当前主线。该切片保留为 AI-first harness 的真实 golden case，用于比较 GLM-5.1、typed IR 和 C2Rust 候选；只有共同门禁通过时才增加 numerator，已有 stats body 不重复计数。
 
-### P0-A：AI/Harness 效率
+### P0-A：AI-first Harness 主线
+
+- [ ] **P0-A6：真实 GLM-5.1 候选生成通道**
+
+  OpenCode `zai/glm-5.1` 读取 hash-bound ContextPack，输出单一结构化 Rust candidate；记录 provider、logical/resolved model、variant、prompt、输入、原始响应、解析结果和候选 SHA-256。模型输出、聊天文本和文件写入本身都保持 `semantic_gate=false`。无凭据、超时、响应格式错误或候选缺失必须结构化 blocked，不得静默回退后冒充 AI 已运行。
+
+- [ ] **P0-A7：项目级 ContextPack 与编译上下文闭环**
+
+  从真实 source root、source span、有效 `#include`、`compile_commands.json`/手工 flags、宏、target ABI、依赖声明、Clang AST/诊断、typed-IR/C2Rust 基线和验证失败中生成最小上下文。相对/绝对路径、生成头文件和构建目录必须可解析；禁止密钥、宿主绝对路径和无关大文件进入可发布 artifact。
+
+- [ ] **P0-A8：验证驱动的有界 AI repair loop**
+
+  每轮只把结构化失败事实反馈给模型：rustc diagnostics、C/Rust schema diff、negative mutation、unsafe/ABI/alias gate。默认最多 3 轮，比赛合同硬上限 5 轮；输入与失败 hash 均未变化时立即停止。每轮保留 candidate、patch、诊断和 hash，不允许模型修改 oracle、expected output、validator 或门禁配置。
+
+- [ ] **P0-A9：AI-primary 多候选路由**
+
+  比赛翻译路径优先生成 GLM-5.1 candidate；typed IR、raw C2Rust、C2Rust+repair 作为确定性候选、提示上下文或 AI 失败后的替代候选。router 只能依据可重算 gate 结果排序，不能依据项目名、函数名、slice id 或模型自评。任何候选都必须经过相同 compile/oracle/replay/diff/negative/unsafe/final gates。
+
+- [ ] **P0-A10：有限跨项目稳定性验收**
+
+  建立不超过 20 个 case 的固定集合：至少覆盖 3 个真实 C 项目和 10 个不同 construct family。阶段验收只运行一次有限集合，不执行 1,000/10,000 轮或循环压力测试。发布 AI invocation、candidate generation、rustc compile、semantic acceptance、refused/blocked、repair rounds 和 route selection 指标；成功率不得用重复同类切片放大。
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 
@@ -276,6 +298,8 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   `mode=auto` 只在全部 worker 绑定 accepted evidence、现存 evidence root、source hash、slice spec 且没有 repair policy 时，于 OpenCode preflight 前选择 deterministic。mixed/unbound 输入在 fanout 前以 `auto_route_unbound` 拒绝；`competition-exact`、hostless rehearsal 和显式 OpenCode attestation 不允许自动降级。该路由只减少无增益模型调用，`semantic_gate=false`。
 
+  该项是历史行为。P0-A9 完成后，`mode=auto` 对新翻译任务改为 AI-primary；只有纯 accepted-evidence 复验继续走 deterministic shortcut。
+
 - [x] **P0-A4：精简 OpenCode worker 上下文且保持精确合同**
 
   `.opencode/agents/c2rust-migrator.md` 从 5408 bytes 精简到 1439 bytes，同时保留 `opencode + GLM-5.1 + c2rust-migrator + max`、Required Preflight、Superpowers 非门禁边界、首个且唯一精确 Command line tool call、禁止探索/编辑/子代理/替代命令、hash-bound handoff/session/contract 校验和 chat 非语义事实边界。bundle manifest 与 profile contract tests 同步更新；该优化只减少模型上下文和歧义，`semantic_gate=false`。
@@ -288,7 +312,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 - [ ] **P0-H9：真实 OpenCode + GLM-5.1 比赛合同复验**
 
-  当前 WSL 已能解析 provider-qualified `zai/glm-5.1`，但完整 preflight/worker marker 尚未在真实比赛主机闭合。OpenCode 只在能缩短独立任务或执行比赛合同复验时启用，不作为默认开发通道。
+  当前 WSL 已能解析 provider-qualified `zai/glm-5.1`，但完整 preflight/worker marker 尚未在真实比赛主机闭合。OpenCode + GLM-5.1 是新的比赛翻译默认通道；本地无法调用时必须明确标为 blocked/unavailable，不能用确定性结果冒充 AI 比赛路径。
 
   完成条件：真实主机设置 `COMPETITION_EXACT_HOST=1`，`opencode models` 精确列出 GLM-5.1，preflight 使用 `opencode` + `GLM-5.1` + `c2rust-migrator` + `max`，hash-bound probe/session/worker artifacts 完整，judge bundle 和 public packet 重新验证通过。
 
@@ -307,7 +331,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 ### P1：扩大通用翻译能力
 
-1. 建立完整 alias/noalias、pointer provenance 和 escape 模型，覆盖 readonly、mutable out、inout、nullable、跨调用和多 pointer 场景。
+1. 根据 P0-A10 的跨项目失败频率扩展 typed IR，不再按单项目源码顺序堆规则；优先建立完整 alias/noalias、pointer provenance 和 escape 模型。
 2. 把 integer promotion、usual arithmetic conversion、narrowing、array/function decay 和 ABI 相关转换显式保留在 IR。
 3. 将组合式 side effect 建模为可组合规则，覆盖 sequence point、求值顺序、`++`/`--`、deref、index、member 和 call。
 4. 扩展 CFG：先提供 `switch`/`goto` 的证据和 fail-closed 分类，再引入 relooper 或结构化 lowering。
@@ -317,9 +341,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 ### P2：Agent、路由和发布
 
-1. 把 raw C2Rust、C2Rust+repair、typed IR、LLM candidate 和 refusal 汇入可审计的多候选 router；共同 semantic gates 不得被路由绕过。
-2. 维护小型 golden slice 集，记录模型、prompt、输入和候选输出 hash，评估模型升级影响。
-3. 发布生成率、编译率、accepted/refused/blocked 比例、unsafe delta、repair rounds、人工介入点、耗时和证据成本。
+1. 维护模型/prompt 版本升级策略、回滚策略和离线 replay；golden 集的事实源由 P0-A10 建立。
+2. 评估第二模型只用于独立候选或审计，不允许多数投票替代 semantic gates。
+3. 发布人工介入点、耗时、token/证据成本和模型升级前后差异。
 4. 完成正式 tag/release、外部复核、CONTRIBUTING、ownership 和 release checklist。
 5. CFG/SSA/MIR/LLVM/self-hosting 继续作为长期研究项，不抢占 P0/P1。
 
@@ -371,10 +395,10 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 | 层级 | 作用 | 能否单独声明语义通过 |
 | --- | --- | --- |
-| L0 deterministic | 极小且已证明的机械规则 | 否 |
-| L1 generic typed IR | 通用 AST/type/alias 驱动候选 | 否 |
-| L2 C2Rust baseline/repair | 提供广覆盖 unsafe baseline 和安全化 before/after | 否 |
-| L3 LLM/OpenCode | 生成或修复候选 | 否 |
+| L0 ContextPack | 绑定真实源码、编译上下文、诊断和候选基线 | 否 |
+| L1 AI primary | OpenCode + GLM-5.1 生成或修复候选 | 否 |
+| L2 deterministic alternates | typed IR、raw C2Rust、C2Rust+repair 候选 | 否 |
+| L3 common verification | 编译、oracle/replay、diff/negative、unsafe/ABI gates | 只有全部通过后 |
 | L4 refuse | 不确定时 fail-closed 并给出下一步 | 不适用 |
 
 任何候选只有通过第 7 节的共同门禁后，才能成为 declared slice boundary 内的 semantic pass。
@@ -411,12 +435,13 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 ## 8. 开发原则
 
 1. FlashDB 是真实测试用例，不是 translator 特判来源；禁止读取项目名、函数名、路径或固定 fixture 值决定翻译。
-2. 先做最小 source-backed slice，再扩相邻结构；每次放宽规则都要有正例和最近邻 fail-closed 负例。
-3. C oracle 是声明边界内的 ground truth，但也受 fixture、compiler、flags、ABI 和 observable contract 限制。
-4. fail-closed 必须给出 source span、拒绝原因和下一最小实现步骤，不能把拒绝数量当成功率。
-5. unsafe 数量是治理指标，不是 FFI、并发、volatile、ABI 或硬件语义的完整安全证明。
-6. evidence 使用 repo-relative path、稳定 hash 和明确保留策略；禁止把密钥和宿主绝对路径写入可发布 artifact。
-7. 大文件按模块职责拆分；测试、schema、证据和文档改动只在确有行为或验收收益时加入。
+2. 比赛新翻译任务默认 AI-first；typed IR 和 C2Rust 服务于上下文、替代候选和可验证兜底，不再要求先为每个陌生构造手写 lowering 才能调用 AI。
+3. 先做最小 source-backed slice，再扩相邻结构；每次放宽规则都要有正例和最近邻 fail-closed 负例。
+4. C oracle 是声明边界内的 ground truth，但也受 fixture、compiler、flags、ABI 和 observable contract 限制。
+5. fail-closed 必须给出 source span、拒绝原因和下一最小实现步骤，不能把拒绝数量当成功率。
+6. unsafe 数量是治理指标，不是 FFI、并发、volatile、ABI 或硬件语义的完整安全证明。
+7. evidence 使用 repo-relative path、稳定 hash 和明确保留策略；禁止把密钥和宿主绝对路径写入可发布 artifact。
+8. 大文件按模块职责拆分；测试、schema、证据和文档改动只在确有行为或验收收益时加入。
 
 ## 9. 常用验证命令
 

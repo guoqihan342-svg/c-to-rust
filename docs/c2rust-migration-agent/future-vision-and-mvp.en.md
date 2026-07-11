@@ -2,17 +2,18 @@
 
 This document is the English mirror of `future-vision-and-mvp.md`. The Chinese document is the canonical backlog and the only entrypoint for current status, execution order, and capability boundaries. Detailed implementation history remains in Git, the coverage matrix, and machine-readable evidence instead of being duplicated here.
 
-Last updated: 2026-07-11.
+Last updated: 2026-07-12.
 
 ## 1. Current Status
 
 The goal is an auditable end-to-end pipeline:
 
 ```text
-input.c
-  -> clang / C2Rust / LLM candidate
-  -> typed IR or verified unsafe baseline
-  -> Rust candidate
+input.c + compile context
+  -> ContextPack (source / headers / flags / ABI / diagnostics)
+  -> GLM-5.1 primary candidate
+  -> typed IR / C2Rust alternate candidates
+  -> bounded verify-and-repair loop
   -> C oracle + Rust replay + diff + negative diff
   -> unsafe ledger + final verification
   -> accepted / refused / blocked
@@ -22,7 +23,8 @@ input.c
 | --- | ---: | --- |
 | `translator_generated_semantic_pass_count` | 38 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
 | `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
-| Active translator track | P0-T32 | Audit the generic short-circuit and branch composition of `fdb_kvdb.c:1877` with the accepted `:1880-1883` body without recounting existing constructs |
+| Current AI candidate state | `0 generated` | All 40 audited AI manifests are `not_used`; the current OpenCode worker only forwards a deterministic command and has not generated a Rust candidate |
+| Active translator track | P0-A6..A10 | Build AI-first candidate generation, ContextPack, multi-candidate routing, and finite cross-project acceptance instead of extending one FlashDB line sequence |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |
 | Latest development stage | P0-T31 | Source-backed strict acceptance for the `:1880-1883` ordered stats sequence is complete; the count is now 38 |
 | Current strict regression | `25/33` | Run `20260711T-finite-p0-t31`; `stress_loops=0`, and eight historical evidence drifts remain |
@@ -171,7 +173,7 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
 ## 3. Active Execution Queue
 
-### P0-A: Translator Track
+### P0-T: Deterministic Translation Support Lane
 
 - [x] **P0-T21: compose the `:1868-:1874` zero-start and next-address branches**
 
@@ -256,9 +258,29 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
 - [ ] **P0-T32: compose the `fdb_kvdb.c:1877` condition with the `:1880-1883` body**
 
-  Audit whether short-circuit, comparison, and branch composition can reuse existing typed IR, then select the smallest generic boundary. Increase the numerator only for a new generic construct with source-backed strict evidence; do not recount the accepted stats body.
+  Pause this as the active track. Keep it as a real golden case for comparing GLM-5.1, typed IR, and C2Rust candidates. Increase the numerator only after the common gates pass, and do not recount the accepted stats body.
 
-### P0-A: AI/Harness Efficiency
+### P0-A: AI-first Harness Track
+
+- [ ] **P0-A6: real GLM-5.1 candidate generation lane**
+
+  OpenCode `zai/glm-5.1` consumes a hash-bound ContextPack and emits one structured Rust candidate. Record provider, logical/resolved model, variant, prompt, input, raw response, parse result, and candidate SHA-256. Model output, chat text, and file writes remain `semantic_gate=false`. Missing credentials, timeout, malformed response, or missing candidate must become structured blocked results; a silent fallback must not claim that AI ran.
+
+- [ ] **P0-A7: project-level ContextPack and compile-context closure**
+
+  Build minimal context from the real source root/span, effective includes, `compile_commands.json` or manual flags, macros, target ABI, dependency declarations, Clang AST/diagnostics, typed-IR/C2Rust baselines, and validation failures. Relative/absolute paths, generated headers, and build directories must resolve. Secrets, host absolute paths, and unrelated large files must not enter publishable artifacts.
+
+- [ ] **P0-A8: validation-driven bounded AI repair loop**
+
+  Feed only structured failure facts back to the model: rustc diagnostics, C/Rust schema diff, negative mutation, and unsafe/ABI/alias gates. Default to at most three rounds, with five as the competition hard cap; stop immediately when both input and failure hashes are unchanged. Preserve each candidate, patch, diagnostic, and hash. The model must not modify the oracle, expected output, validator, or gate configuration.
+
+- [ ] **P0-A9: AI-primary multi-candidate router**
+
+  The competition translation path generates a GLM-5.1 candidate first. typed IR, raw C2Rust, and C2Rust+repair act as deterministic candidates, prompt context, or alternatives after AI failure. The router may rank only by recomputable gate results, never by project/function/slice names or model self-assessment. Every candidate traverses the same compile/oracle/replay/diff/negative/unsafe/final gates.
+
+- [ ] **P0-A10: finite cross-project stability acceptance**
+
+  Maintain at most 20 fixed cases covering at least three real C projects and ten distinct construct families. Run the finite set once per stage, with no 1,000/10,000-round or loop stress tests. Publish AI invocation, candidate generation, rustc compilation, semantic acceptance, refused/blocked, repair-round, and route-selection metrics. Repeated similar slices must not inflate success rates.
 
 - [x] **P0-A1: OpenCode no-progress retry suppression**
 
@@ -274,6 +296,8 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   `mode=auto` selects deterministic execution before OpenCode preflight only when every worker binds accepted evidence, an existing evidence root, a source hash, and a slice spec with no repair policy. Mixed or unbound input is refused before fanout as `auto_route_unbound`; `competition-exact`, hostless rehearsal, and explicit OpenCode attestation cannot auto-downgrade. This route only avoids model calls with no expected information gain and remains `semantic_gate=false`.
 
+  This is historical behavior. After P0-A9, `mode=auto` becomes AI-primary for new translation work; only pure accepted-evidence revalidation retains the deterministic shortcut.
+
 - [x] **P0-A4: compact the OpenCode worker context while preserving the exact contract**
 
   `.opencode/agents/c2rust-migrator.md` was reduced from 5408 bytes to 1439 bytes while preserving `opencode + GLM-5.1 + c2rust-migrator + max`, Required Preflight, the non-gating Superpowers boundary, the first-and-only exact Command line tool call, prohibitions on exploration/editing/subagents/substitute commands, hash-bound handoff/session/contract verification, and the non-semantic chat boundary. The bundle manifest and profile contract tests were updated. This only reduces model context and ambiguity; it remains `semantic_gate=false`.
@@ -286,7 +310,7 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
 - [ ] **P0-H9: exact OpenCode + GLM-5.1 competition contract revalidation**
 
-  WSL currently resolves provider-qualified `zai/glm-5.1`, but the complete preflight/worker marker chain is not closed on the real competition host. Use OpenCode only when it shortens an independent task or performs competition-contract revalidation; it is not the default development path.
+  WSL currently resolves provider-qualified `zai/glm-5.1`, but the complete preflight/worker marker chain is not closed on the real competition host. OpenCode + GLM-5.1 is now the default competition translation path. When it is unavailable locally, record blocked/unavailable explicitly; deterministic results must not impersonate the AI competition lane.
 
   Completion requires `COMPETITION_EXACT_HOST=1`, an exact GLM-5.1 token from `opencode models`, preflight with `opencode` + `GLM-5.1` + `c2rust-migrator` + `max`, complete hash-bound probe/session/worker artifacts, and successful judge-bundle/public-packet revalidation.
 
@@ -305,7 +329,7 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
 ### P1: Expand Generic Translation
 
-1. Build a complete alias/noalias, pointer-provenance, and escape model for readonly, mutable-out, inout, nullable, cross-call, and multi-pointer cases.
+1. Expand typed IR according to P0-A10 cross-project failure frequency instead of one-project source order; start with a complete alias/noalias, pointer-provenance, and escape model.
 2. Preserve integer promotion, usual arithmetic conversion, narrowing, array/function decay, and ABI-related conversions explicitly in IR.
 3. Model compound side effects as composable rules for sequence points, evaluation order, increment/decrement, dereference, index, member, and call.
 4. Expand CFG support: classify and evidence `switch`/`goto` fail-closed behavior before adding a relooper or structured lowering.
@@ -315,9 +339,9 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
 ### P2: Agents, Routing, and Release
 
-1. Combine raw C2Rust, C2Rust+repair, typed IR, LLM candidates, and refusal in an auditable multi-candidate router without bypassing shared semantic gates.
-2. Maintain a small golden-slice set with model, prompt, input, and output hashes to measure model-upgrade effects.
-3. Publish generation, compilation, accepted/refused/blocked, unsafe delta, repair rounds, human intervention, duration, and evidence-cost metrics.
+1. Maintain model/prompt upgrade and rollback policies plus offline replay; P0-A10 establishes the golden-set fact source.
+2. Use a second model only for independent candidates or audit; majority voting must not replace semantic gates.
+3. Publish human intervention, duration, token/evidence cost, and model-upgrade before/after differences.
 4. Complete a formal tag/release, external review, CONTRIBUTING guidance, ownership, and release checklist.
 5. Keep CFG/SSA/MIR/LLVM/self-hosting as long-term research until P0/P1 are stable.
 
@@ -369,10 +393,10 @@ Validation run bindings:
 
 | Level | Purpose | Can it claim semantic success alone? |
 | --- | --- | --- |
-| L0 deterministic | Tiny, proven mechanical rules | No |
-| L1 generic typed IR | Generic AST/type/alias-driven candidates | No |
-| L2 C2Rust baseline/repair | Broad unsafe baselines and safety before/after | No |
-| L3 LLM/OpenCode | Candidate generation or repair | No |
+| L0 ContextPack | Bind real source, compile context, diagnostics, and candidate baselines | No |
+| L1 AI primary | OpenCode + GLM-5.1 candidate generation or repair | No |
+| L2 deterministic alternates | typed IR, raw C2Rust, and C2Rust+repair candidates | No |
+| L3 common verification | Compile, oracle/replay, diff/negative, and unsafe/ABI gates | Only after all pass |
 | L4 refuse | Fail closed with an actionable next step | Not applicable |
 
 A candidate becomes a semantic pass only after the shared gates in section 7 prove the declared slice boundary.
@@ -409,12 +433,13 @@ Proof classes are fixed:
 ## 8. Development Principles
 
 1. FlashDB is a real test case, not a translator-specialization source. Project names, function names, paths, and fixed fixture values must not select translation behavior.
-2. Start with the smallest source-backed slice and expand adjacent structure. Every relaxed rule needs a positive and nearest fail-closed negative.
-3. The C oracle is ground truth only within its declared fixture, compiler, flags, ABI, and observable contract.
-4. Fail-closed results must provide the source span, refusal reason, and next smallest implementation step; refusal volume is not success.
-5. Unsafe counts are governance metrics, not complete proof for FFI, concurrency, volatile, ABI, or hardware semantics.
-6. Evidence uses repo-relative paths, stable hashes, and explicit retention rules. Never publish secrets or host absolute paths.
-7. Split large files by module responsibility. Add tests, schemas, evidence, and docs only when they produce a behavioral or acceptance benefit.
+2. New competition translation work defaults to AI-first. typed IR and C2Rust provide context, alternate candidates, and verifiable fallback; a hand-written lowering rule is not a prerequisite for invoking AI on an unfamiliar construct.
+3. Start with the smallest source-backed slice and expand adjacent structure. Every relaxed rule needs a positive and nearest fail-closed negative.
+4. The C oracle is ground truth only within its declared fixture, compiler, flags, ABI, and observable contract.
+5. Fail-closed results must provide the source span, refusal reason, and next smallest implementation step; refusal volume is not success.
+6. Unsafe counts are governance metrics, not complete proof for FFI, concurrency, volatile, ABI, or hardware semantics.
+7. Evidence uses repo-relative paths, stable hashes, and explicit retention rules. Never publish secrets or host absolute paths.
+8. Split large files by module responsibility. Add tests, schemas, evidence, and docs only when they produce a behavioral or acceptance benefit.
 
 ## 9. Common Validation Commands
 
