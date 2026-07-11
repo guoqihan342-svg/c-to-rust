@@ -1143,7 +1143,6 @@ pub(crate) fn emit_policy_from_spec(spec: &SliceSpec) -> typed_ir::EmitPolicy {
     typed_ir::EmitPolicy {
         signed_right_shift,
         noalias_param_pairs: noalias_param_pairs_from_spec(spec),
-        ..Default::default()
     }
 }
 

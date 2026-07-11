@@ -255,14 +255,13 @@ fn collect_direct_readonly_pointer_read_param(
     uses: &mut ReadonlyPointerParamUses,
 ) -> Result<(), String> {
     match expr {
-        IrExpr::Var { name, ty, .. } => {
+        IrExpr::Var { name, ty, .. }
             if readonly_pointer_params
                 .get(name.as_str())
-                .is_some_and(|param_ty| *param_ty == ty)
-            {
-                uses.read_params.insert(name.to_string());
-                uses.mentioned_params.insert(name.to_string());
-            }
+                .is_some_and(|param_ty| *param_ty == ty) =>
+        {
+            uses.read_params.insert(name.to_string());
+            uses.mentioned_params.insert(name.to_string());
         }
         IrExpr::IncDec { target, .. } => {
             collect_direct_readonly_pointer_read_param(target, readonly_pointer_params, uses)?

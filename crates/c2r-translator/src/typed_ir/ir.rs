@@ -284,16 +284,11 @@ pub struct IrEmitError {
     pub route: crate::translation_route::CandidateRouteDecision,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SignedRightShiftPolicy {
+    #[default]
     FailClosed,
     ImplementationDefinedArithmetic,
-}
-
-impl Default for SignedRightShiftPolicy {
-    fn default() -> Self {
-        Self::FailClosed
-    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

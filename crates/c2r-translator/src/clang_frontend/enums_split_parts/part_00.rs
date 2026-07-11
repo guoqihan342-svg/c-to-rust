@@ -170,7 +170,7 @@ fn nested_enum_type_decl_id(node: &Value) -> Option<String> {
     }
     inner(node)
         .iter()
-        .find_map(|child| nested_enum_type_decl_id(child))
+        .find_map(nested_enum_type_decl_id)
 }
 
 #[cfg(feature = "typed-ir")]

@@ -249,7 +249,7 @@ fn validate_direct_record_scalar_member_signature_candidate(
             )
         })?;
     let params = split_direct_call_signature_params(params_text);
-    if params.iter().any(|param| *param == "...") {
+    if params.contains(&"...") {
         return Err((
             true,
             "direct record scalar member call cannot target a variadic signature".to_string(),

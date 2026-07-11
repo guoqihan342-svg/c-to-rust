@@ -14,10 +14,10 @@ fn collect_param_symbols(params: &[IrParam]) -> Result<HashSet<String>, String> 
 fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<String>) {
     for stmt in body {
         match stmt {
-            IrStmt::Decl { init, .. } => {
-                if let Some(init) = init {
-                    collect_assigned_vars_from_expr(init, assigned_vars);
-                }
+            IrStmt::Decl {
+                init: Some(init), ..
+            } => {
+                collect_assigned_vars_from_expr(init, assigned_vars);
             }
             IrStmt::Assign { target, value, .. } => {
                 if let Some(name) = assigned_var_name_from_target(target) {
@@ -87,10 +87,10 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
                 }
                 collect_assigned_vars_from_body(body, assigned_vars);
             }
-            IrStmt::Return { value, .. } => {
-                if let Some(value) = value {
-                    collect_assigned_vars_from_expr(value, assigned_vars);
-                }
+            IrStmt::Return {
+                value: Some(value), ..
+            } => {
+                collect_assigned_vars_from_expr(value, assigned_vars);
             }
             IrStmt::Expr { expr, .. } => {
                 if let Some(name) =

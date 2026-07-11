@@ -378,9 +378,7 @@ fn null_return_guard_proves_nonnull<'a>(
     else {
         return None;
     };
-    let Some((name, _)) = null_pointer_comparison_var(lhs, rhs) else {
-        return None;
-    };
+    let (name, _) = null_pointer_comparison_var(lhs, rhs)?;
     nullable_params.contains(name).then_some(name)
 }
 
@@ -441,9 +439,7 @@ fn null_comparison_nonnull_branch<'a>(
     let IrExpr::Binary { op, lhs, rhs, .. } = condition else {
         return None;
     };
-    let Some((name, _)) = null_pointer_comparison_var(lhs, rhs) else {
-        return None;
-    };
+    let (name, _) = null_pointer_comparison_var(lhs, rhs)?;
     if !nullable_params.contains(name) {
         return None;
     }
