@@ -108,11 +108,12 @@ fn collect_enum_constant_definitions(source: &str) -> BTreeSet<String> {
             index += 1;
             continue;
         }
-        index += "enum".len();
-        let Some(open_offset) = source[index..].find('{') else {
-            break;
+        let enum_end = index + "enum".len();
+        let Some(open_brace) = enum_definition_body_open(source, enum_end) else {
+            index = enum_end;
+            continue;
         };
-        index += open_offset + 1;
+        index = open_brace + 1;
         let mut brace_depth = 1usize;
         let mut paren_depth = 0usize;
         let mut expects_name = true;
@@ -152,6 +153,23 @@ fn collect_enum_constant_definitions(source: &str) -> BTreeSet<String> {
         }
     }
     definitions
+}
+
+fn enum_definition_body_open(source: &str, mut index: usize) -> Option<usize> {
+    let bytes = source.as_bytes();
+    while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+        index += 1;
+    }
+    if index < bytes.len() && is_c_ident_start(bytes[index]) {
+        index += 1;
+        while index < bytes.len() && is_c_ident_continue(bytes[index]) {
+            index += 1;
+        }
+        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+    }
+    (index < bytes.len() && bytes[index] == b'{').then_some(index)
 }
 
 fn is_identifier_at(source: &str, index: usize, expected: &str) -> bool {

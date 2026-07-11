@@ -87,6 +87,68 @@
     }
 
     #[test]
+    fn slice_source_constant_scan_handles_source_definition_boundaries_fail_closed() {
+        let mut spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "constant-definition-boundaries".to_string(),
+            function_name: "probe".to_string(),
+            c_source: r#"
+#define SOURCE_OBJECT 7
+#define SOURCE_FUNCTION(value) ((value) + 1)
+enum state { ENUM_EXPLICIT = 11, ENUM_IMPLICIT };
+/* COMMENT_ONLY */
+int probe(void) {
+    const char *message = "STRING_ONLY";
+    return SOURCE_OBJECT + SOURCE_FUNCTION(ENUM_EXPLICIT) + ENUM_IMPLICIT;
+}
+"#
+            .to_string(),
+            build_profile: test_profile(),
+            ..SliceSpec::default()
+        };
+        for (name, value) in [
+            ("SOURCE_OBJECT", 7),
+            ("SOURCE_FUNCTION", 3),
+            ("ENUM_EXPLICIT", 11),
+            ("ENUM_IMPLICIT", 12),
+            ("COMMENT_ONLY", 13),
+            ("STRING_ONLY", 14),
+        ] {
+            spec.c_boundary.direct_dependencies.push(CDirectDependency {
+                kind: "constant".to_string(),
+                name: name.to_string(),
+                value: Some(serde_json::json!(value)),
+                ..CDirectDependency::default()
+            });
+        }
+
+        let source = slice_source_translation_unit(&spec);
+
+        for name in ["SOURCE_OBJECT", "ENUM_EXPLICIT", "ENUM_IMPLICIT"] {
+            assert!(!source.contains(&format!("enum {{ {name} =")), "{source}");
+        }
+        for (name, value) in [
+            ("SOURCE_FUNCTION", 3),
+            ("COMMENT_ONLY", 13),
+            ("STRING_ONLY", 14),
+        ] {
+            assert!(
+                source.contains(&format!("enum {{ {name} = {value} }};")),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn enum_constant_scan_does_not_treat_a_forward_declaration_as_a_definition() {
+        let definitions = collect_enum_constant_definitions(
+            "enum forward; int probe(void) { BODY_LABEL: return 0; }",
+        );
+
+        assert!(definitions.is_empty(), "{definitions:?}");
+    }
+
+    #[test]
     fn clang_lowered_ir_records_direct_call_expression_evidence() {
         let i32_ty = signed_ty("int", "int", 32);
         let function = IrFunction {
