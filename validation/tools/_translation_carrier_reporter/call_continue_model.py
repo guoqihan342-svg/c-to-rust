@@ -31,6 +31,7 @@ def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]
         "ordinary_miss": 0,
     }
     u32_wraps = {"zero_start": 0, "hit": 0}
+    zero_start_non_wraps = 0
     for index, raw in enumerate(cases):
         case = require_dict(raw, f"cases[{index}]")
         case_id = require_nonempty_string(case.get("id"), f"cases[{index}].id")
@@ -51,13 +52,17 @@ def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]
         )
         partitions[partition] += 1
         if partition in u32_wraps:
-            u32_wraps[partition] += int(case_wraps_u32(inputs, contract, partition))
+            wraps = case_wraps_u32(inputs, contract, partition)
+            u32_wraps[partition] += int(wraps)
+            if partition == "zero_start":
+                zero_start_non_wraps += int(not wraps)
         expected = require_dict(case.get("expected_outputs"), f"{case_id}.expected_outputs")
         if list(expected) != behavior_fields(contract) or expected != reference_outputs(case, contract):
             raise ReporterError(f"{case_id} expected outputs disagree with call-continue model")
         require_usize(expected[contract["external_callee"]["call_count_output"]], f"{case_id}.call_count")
+    required_hits = 1 if schema_version == 2 else 2
     if (
-        partitions["hit"] < 2
+        partitions["hit"] < required_hits
         or partitions["zero_return_miss"] < 1
         or partitions["ordinary_miss"] < 1
     ):
@@ -67,10 +72,16 @@ def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]
             else "fixture must cover two hits, zero miss, and nonzero miss"
         )
         raise ReporterError(message)
-    if schema_version == 2 and partitions["zero_start"] < 1:
-        raise ReporterError("schema v2 fixture must cover zero-start")
-    if schema_version == 2 and (u32_wraps["zero_start"] < 1 or u32_wraps["hit"] < 1):
-        raise ReporterError("schema v2 fixture must cover zero-start and hit u32 wrap")
+    if schema_version == 2 and partitions["zero_start"] < 2:
+        raise ReporterError("schema v2 fixture must cover two zero-start cases")
+    if schema_version == 2 and (
+        u32_wraps["zero_start"] < 1
+        or zero_start_non_wraps < 1
+        or u32_wraps["hit"] < 1
+    ):
+        raise ReporterError(
+            "schema v2 fixture must cover zero-start wrap/non-wrap and hit u32 wrap"
+        )
     return cases
 
 

@@ -4,6 +4,7 @@ struct InteriorReborrowPlan {
     owner: String,
     owner_path: Vec<String>,
     call_root: Option<String>,
+    entry_initialized_field_path: Option<Vec<String>>,
 }
 
 fn analyze_interior_reborrow(
@@ -36,6 +37,7 @@ fn analyze_interior_reborrow(
         owner: owner.to_string(),
         owner_path: vec![owner_field.to_string()],
         call_root: None,
+        entry_initialized_field_path: None,
     };
     match function.body.as_slice() {
         [_, write, observation] => {
@@ -55,7 +57,8 @@ fn analyze_interior_reborrow(
             observation,
         )?,
         [_, setup, sentinel, loop_stmt, observation] => {
-            plan.call_root = Some(validate_assignment_call_interior_reborrow_carrier(
+            let (call_root, entry_initialized_field_path) =
+                validate_assignment_call_interior_reborrow_carrier(
                 function,
                 policy,
                 &plan,
@@ -63,7 +66,9 @@ fn analyze_interior_reborrow(
                 sentinel,
                 loop_stmt,
                 observation,
-            )?);
+            )?;
+            plan.call_root = Some(call_root);
+            plan.entry_initialized_field_path = entry_initialized_field_path;
         }
         _ => {
             return Err(

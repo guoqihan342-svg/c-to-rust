@@ -226,23 +226,33 @@ class CallContinueHarnessTests(unittest.TestCase):
 
         missing_zero_start = copy.deepcopy(cases)
         missing_zero_start[0]["inputs"]["alias_start_initial"] = 7
+        missing_zero_start[1]["inputs"]["alias_start_initial"] = 8
         for case in missing_zero_start:
             case["expected_outputs"] = reference_outputs(case, parse_contract(spec))
-        with self.assertRaisesRegex(ReporterError, "zero-start"):
+        with self.assertRaisesRegex(ReporterError, "two zero-start"):
             validate_cases(missing_zero_start, contract)
 
         missing_zero_start_wrap = copy.deepcopy(cases)
         missing_zero_start_wrap[0]["inputs"].update(window_base=10, header_span=2)
         for case in missing_zero_start_wrap:
             case["expected_outputs"] = reference_outputs(case, contract)
-        with self.assertRaisesRegex(ReporterError, "zero-start and hit u32 wrap"):
+        with self.assertRaisesRegex(ReporterError, "zero-start wrap/non-wrap"):
             validate_cases(missing_zero_start_wrap, contract)
+
+        missing_zero_start_non_wrap = copy.deepcopy(cases)
+        missing_zero_start_non_wrap[1]["inputs"].update(
+            window_base=0xFFFFFFF8, header_span=16
+        )
+        for case in missing_zero_start_non_wrap:
+            case["expected_outputs"] = reference_outputs(case, contract)
+        with self.assertRaisesRegex(ReporterError, "zero-start wrap/non-wrap"):
+            validate_cases(missing_zero_start_non_wrap, contract)
 
         missing_hit_wrap = copy.deepcopy(cases)
         missing_hit_wrap[2]["inputs"]["owner_traversed_initial"] = 100
         for case in missing_hit_wrap:
             case["expected_outputs"] = reference_outputs(case, contract)
-        with self.assertRaisesRegex(ReporterError, "zero-start and hit u32 wrap"):
+        with self.assertRaisesRegex(ReporterError, "zero-start wrap/non-wrap and hit u32 wrap"):
             validate_cases(missing_hit_wrap, contract)
 
         rust_drifts = (

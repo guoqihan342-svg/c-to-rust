@@ -6,7 +6,7 @@ fn validate_assignment_call_interior_reborrow_carrier(
     sentinel: &IrStmt,
     loop_stmt: &IrStmt,
     observation: &IrStmt,
-) -> Result<String, String> {
+) -> Result<(String, Option<Vec<String>>), String> {
     if !is_c_bool_type(&function.return_type) {
         return Err("assignment-call interior reborrow carrier must return bool".to_string());
     }
@@ -34,16 +34,31 @@ fn validate_assignment_call_interior_reborrow_carrier(
     };
     mutable_complete_record_root(owner, "owner")?;
     mutable_complete_record_root(db, "db")?;
-    if function.params.len() != 3 {
-        return Err(
-            "assignment-call interior reborrow requires owner/db/seed parameters".to_string(),
-        );
-    }
-    let seed = function
+    let value_params = function
         .params
         .iter()
-        .find(|param| !matches!(param.ty.kind, IrTypeKind::Pointer { .. }))
-        .ok_or_else(|| "assignment-call interior reborrow seed is missing".to_string())?;
+        .filter(|param| !matches!(param.ty.kind, IrTypeKind::Pointer { .. }))
+        .collect::<Vec<_>>();
+    let seed_params = value_params
+        .iter()
+        .copied()
+        .filter(|param| matches!(param.ty.kind, IrTypeKind::Record { .. }))
+        .collect::<Vec<_>>();
+    let offset_params = value_params
+        .iter()
+        .copied()
+        .filter(|param| is_exact_u32_ir_type(&param.ty))
+        .collect::<Vec<_>>();
+    let (seed, offset) = match (seed_params.as_slice(), offset_params.as_slice()) {
+        ([seed], []) if value_params.len() == 1 => (*seed, None),
+        ([seed], [offset]) if value_params.len() == 2 => (*seed, Some(*offset)),
+        _ => {
+            return Err(
+                "assignment-call interior reborrow requires one complete record seed and at most one exact-u32 offset"
+                    .to_string(),
+            )
+        }
+    };
     complete_named_record_fields(&seed.ty, "call seed")?;
     reject_qualified_reborrow_type(&seed.ty, "call seed")?;
     let (seed_local, seed_local_ty) = validate_reborrow_seed_setup(setup, seed)?;
@@ -80,32 +95,58 @@ fn validate_assignment_call_interior_reborrow_carrier(
     if !is_direct_bool_var_read(condition, sentinel_name, sentinel_ty) {
         return Err("assignment-call interior reborrow while sentinel drifted".to_string());
     }
-    let [clear, call_assignment, branch, miss_return] = body.as_slice() else {
-        return Err(
-            "assignment-call interior reborrow while body must be clear/assign/if/return"
-                .to_string(),
-        );
+    let entry_initialized_field_path = match body.as_slice() {
+        [clear, call_assignment, branch, miss_return] if offset.is_none() => {
+            validate_bool_sentinel_clear(clear, sentinel_name, sentinel_ty)?;
+            let call_path = validate_reborrow_call_assignment(
+                call_assignment,
+                plan,
+                db,
+                seed_local,
+                seed_local_ty,
+            )?;
+            validate_reborrow_result_branch(branch, plan, db, &call_path)?;
+            validate_fixed_bool_return(
+                miss_return,
+                false,
+                "assignment-call interior reborrow miss path",
+            )?;
+            None
+        }
+        [clear, outer_branch, miss_return] => {
+            validate_bool_sentinel_clear(clear, sentinel_name, sentinel_ty)?;
+            let offset = offset.ok_or_else(|| {
+                "assignment-call interior reborrow zero-start branch requires one exact-u32 offset"
+                    .to_string()
+            })?;
+            let entry_initialized_field_path = validate_reborrow_zero_start_branch(
+                outer_branch,
+                plan,
+                db,
+                seed_local,
+                seed_local_ty,
+                offset,
+            )?;
+            validate_fixed_bool_return(
+                miss_return,
+                false,
+                "assignment-call interior reborrow zero-start miss path",
+            )?;
+            Some(entry_initialized_field_path)
+        }
+        _ => {
+            return Err(
+                "assignment-call interior reborrow while body must preserve the exact P0-T20 or zero-start carrier order"
+                    .to_string(),
+            )
+        }
     };
-    validate_bool_sentinel_clear(clear, sentinel_name, sentinel_ty)?;
-    let call_path = validate_reborrow_call_assignment(
-        call_assignment,
-        plan,
-        db,
-        seed_local,
-        seed_local_ty,
-    )?;
-    validate_reborrow_result_branch(branch, plan, db, &call_path)?;
-    validate_fixed_bool_return(
-        miss_return,
-        false,
-        "assignment-call interior reborrow miss path",
-    )?;
     validate_fixed_bool_return(
         observation,
         true,
         "assignment-call interior reborrow final path",
     )?;
-    Ok(db.name.clone())
+    Ok((db.name.clone(), entry_initialized_field_path))
 }
 
 fn validate_reborrow_seed_setup<'a>(

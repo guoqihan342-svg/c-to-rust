@@ -187,7 +187,7 @@ def renamed_zero_start_cases() -> list[dict[str, Any]]:
     sentinel = 0xA5A5A5A5
     values = (
         ("zero-start-wrap", 11, 12, 13, 0xFFFFFFF8, 16, 0, 14, sentinel),
-        ("hit-plain", 21, 22, 23, 24, 25, 26, 27, sentinel),
+        ("zero-start-plain", 21, 22, 23, 24, 25, 0, 27, sentinel),
         ("hit-wrap", 31, 9, 32, 33, 34, 35, 0xFFFFFFFC, sentinel),
         ("miss-zero-return", 41, 42, 43, 44, 45, 46, 47, 0),
         ("miss-ordinary", 51, 52, 53, 54, 55, 56, 57, 6),

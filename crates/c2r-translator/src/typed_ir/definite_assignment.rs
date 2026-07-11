@@ -114,7 +114,19 @@ impl DefiniteAssignmentState {
             .interior_reborrows
             .values()
             .any(|plan| plan.call_root.as_deref() == Some(key.base.as_str()));
-        if !self.mutable_record_pointer_fields.contains(key) && !initialized_call_root {
+        let entry_initialized_reborrow_path = self.interior_reborrows.values().any(|plan| {
+            plan.entry_initialized_field_path
+                .as_ref()
+                .is_some_and(|field_path| {
+                    key.base == plan.owner
+                        && key.field
+                            == format!("{}.{}", plan.owner_path.join("."), field_path.join("."))
+                })
+        });
+        if !self.mutable_record_pointer_fields.contains(key)
+            && !initialized_call_root
+            && !entry_initialized_reborrow_path
+        {
             return Err(format!(
                 "mutable record pointer field {}.{} is read before definite assignment",
                 key.base, key.field
