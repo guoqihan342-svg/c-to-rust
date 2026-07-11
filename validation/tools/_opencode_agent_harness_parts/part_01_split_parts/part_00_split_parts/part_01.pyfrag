@@ -1,0 +1,179 @@
+
+
+def write_blocked_batch_preflight_report(
+    *,
+    profile: dict[str, Any],
+    profile_path: Path,
+    run_id: str,
+    out_root: Path,
+    profile_proof_class: str,
+    proof_class: str,
+    proof_class_resolution: dict[str, Any],
+    mode: str,
+    execution_route: dict[str, Any],
+    preflight_result: dict[str, Any],
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    report_path = out_root / "harness" / "batch-profile-report.json"
+    raw_preflight_path = preflight_result.get("report_path", out_root / "harness" / "opencode-preflight-report.json")
+    preflight_report_path = repo_path(Path(str(raw_preflight_path)), repo_root=repo_root)
+    stale_artifact_cleanup = cleanup_blocked_batch_preflight_stale_artifacts(
+        out_root=out_root,
+        repo_root=repo_root,
+    )
+    preflight_binding: dict[str, Any] = {
+        "path": repo_relative(preflight_report_path, repo_root=repo_root),
+        "sha256": sha256_file(preflight_report_path) if preflight_report_path.is_file() else "",
+        "status": str(preflight_result.get("status", "failed")),
+        "root_cause_key": str(preflight_result.get("root_cause_key", "")),
+    }
+    if isinstance(preflight_result.get("contract_verification"), dict):
+        preflight_binding["contract_status"] = str(preflight_result["contract_verification"].get("status", ""))
+    if isinstance(preflight_result.get("opencode_model_availability"), dict):
+        preflight_binding["opencode_model_availability"] = preflight_result["opencode_model_availability"]
+    launch_policy = preflight_result.get("launch_policy")
+    credential_source = (
+        launch_policy.get("opencode_credential_source")
+        if isinstance(launch_policy, dict)
+        else None
+    )
+    if isinstance(credential_source, dict):
+        preflight_binding["opencode_credential_source"] = credential_source
+    if isinstance(preflight_result.get("redaction_count"), int):
+        preflight_binding["redaction_count"] = preflight_result["redaction_count"]
+
+    h9_blocker = preflight_result.get("h9_blocker") if isinstance(preflight_result.get("h9_blocker"), dict) else None
+    result: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "batch-profile-report",
+        "status": "blocked",
+        "exit_code": 1,
+        "blocked_phase": "opencode-preflight",
+        "root_cause_key": str(preflight_result.get("root_cause_key", "opencode_preflight_failed")),
+        "profile_id": profile_required_string(profile, "profile_id"),
+        "profile_path": repo_relative(profile_path, repo_root=repo_root),
+        "profile_sha256": sha256_file(profile_path),
+        "run_id": run_id,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "profile_proof_class": profile_proof_class,
+        "proof_class": proof_class,
+        "proof_class_resolution": proof_class_resolution,
+        "mode": mode,
+        "requested_mode": execution_route["requested_mode"],
+        "effective_mode": execution_route["effective_mode"],
+        "route_reason": execution_route["reason"],
+        "execution_route": execution_route,
+        "worker_count": 0,
+        "opencode_preflight_report": preflight_binding,
+        "stale_artifact_cleanup": stale_artifact_cleanup,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "local_simulation_closes_p0_h9": False,
+        "evidence_boundary": (
+            "Batch profile stopped before planning because OpenCode preflight did not pass. "
+            "No SQLite ledger, worker plan, OpenCode worker, semantic gate, or translation coverage claim was produced."
+        ),
+        "next_required_action": "rerun_on_real_opencode_glm51_max_host",
+        "report_path": repo_relative(report_path, repo_root=repo_root),
+    }
+    if h9_blocker is not None:
+        result["h9_blocker"] = h9_blocker
+    if isinstance(credential_source, dict):
+        result["opencode_credential_source"] = credential_source
+    if isinstance(preflight_result.get("redaction_count"), int):
+        result["redaction_count"] = preflight_result["redaction_count"]
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_path, result)
+    return result
+
+
+def cleanup_blocked_batch_preflight_stale_artifacts(
+    *,
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    out_root = repo_path(out_root, repo_root=repo_root)
+    out_root_resolved = out_root.resolve()
+    removed_artifacts: list[str] = []
+    errors: list[dict[str, str]] = []
+
+    def remove_artifact(relative_path: Path) -> None:
+        path = out_root / relative_path
+        if not path.exists():
+            return
+        resolved = path.resolve()
+        try:
+            resolved.relative_to(out_root_resolved)
+        except ValueError:
+            errors.append(
+                {
+                    "path": str(relative_path.as_posix()),
+                    "error": "refusing_to_remove_outside_out_root",
+                }
+            )
+            return
+        try:
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+        except OSError as exc:
+            errors.append(
+                {
+                    "path": repo_relative(path, repo_root=repo_root),
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
+            return
+        removed_artifacts.append(repo_relative(path, repo_root=repo_root))
+
+    for relative_path in BLOCKED_PREFLIGHT_STALE_ARTIFACT_PATHS:
+        remove_artifact(relative_path)
+    for relative_path in BLOCKED_PREFLIGHT_STALE_ARTIFACT_DIRS:
+        remove_artifact(relative_path)
+
+    return {
+        "status": "passed" if not errors else "failed",
+        "scope": "blocked-opencode-preflight-stale-artifacts",
+        "removed_artifacts": removed_artifacts,
+        "error_count": len(errors),
+        "errors": errors,
+    }
+
+
+def resolve_batch_profile_proof_class(
+    profile: dict[str, Any],
+    *,
+    proof_class_override: str | None,
+) -> tuple[str, str, dict[str, Any]]:
+    profile_proof_class = profile_required_string(profile, "proof_class")
+    if profile_proof_class not in ALLOWED_PROOF_CLASSES:
+        raise SystemExit(f"unsupported proof_class in batch profile: {profile_proof_class}")
+    if proof_class_override is not None and proof_class_override not in ALLOWED_PROOF_CLASSES:
+        raise SystemExit(f"unsupported proof_class override: {proof_class_override}")
+    effective_proof_class = proof_class_override or profile_proof_class
+    resolution: dict[str, Any] = {
+        "source": "cli-override" if proof_class_override is not None else "profile",
+        "profile_proof_class": profile_proof_class,
+        "effective_proof_class": effective_proof_class,
+        "override_requested": proof_class_override is not None,
+        "changed": proof_class_override is not None and proof_class_override != profile_proof_class,
+    }
+    if proof_class_override is not None:
+        resolution["override_proof_class"] = proof_class_override
+    return profile_proof_class, effective_proof_class, resolution
+
+
+def proof_class_override_cli_suffix(
+    *,
+    proof_class_resolution: dict[str, Any] | None,
+    fallback_proof_class: str | None,
+) -> str:
+    if not isinstance(proof_class_resolution, dict) or proof_class_resolution.get("source") != "cli-override":
+        return ""
+    proof_class = proof_class_resolution.get("effective_proof_class") or proof_class_resolution.get("override_proof_class")
+    if proof_class is None:
+        proof_class = fallback_proof_class
+    if proof_class not in ALLOWED_PROOF_CLASSES:
+        raise SystemExit(f"invalid proof_class override resolution: {proof_class}")
+    return f" --proof-class {proof_class}"
