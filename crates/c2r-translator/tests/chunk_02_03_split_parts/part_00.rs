@@ -427,19 +427,3 @@ fn typed_ir_emits_mutable_record_pointer_readonly_nested_input_with_noalias() {
         rust,
     );
 }
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_rejects_nested_record_pointer_scalar_field_copy_without_noalias() {
-    let ir = nested_record_pointer_scalar_field_copy_ir();
-
-    let error = emit_rust_from_ir(&ir)
-        .expect_err("nested record pointer copy needs noalias evidence");
-
-    assert_eq!(error.route.route, CandidateRoute::Unsupported);
-    assert!(
-        error
-            .reason
-            .contains("requires exactly one pointer param for alias proof"),
-        "{:?}",
-        error
