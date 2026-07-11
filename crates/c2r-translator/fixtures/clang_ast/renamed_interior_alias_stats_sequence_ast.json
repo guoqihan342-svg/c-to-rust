@@ -1,0 +1,354 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "TypedefDecl",
+      "name": "size_t",
+      "type": {
+        "qualType": "unsigned long"
+      }
+    },
+    {
+      "kind": "RecordDecl",
+      "tagUsed": "struct",
+      "name": "ReadingPair",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "kind": "FieldDecl",
+          "name": "accepted_units",
+          "type": {
+            "qualType": "unsigned int"
+          }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "rejected_units",
+          "type": {
+            "qualType": "unsigned int"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "RecordDecl",
+      "tagUsed": "struct",
+      "name": "SurveyLedger",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "kind": "FieldDecl",
+          "name": "current_reading",
+          "type": {
+            "qualType": "struct ReadingPair"
+          }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "revision_count",
+          "type": {
+            "qualType": "unsigned int"
+          }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "accepted_total",
+          "type": {
+            "desugaredQualType": "unsigned long",
+            "qualType": "size_t"
+          }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "rejected_total",
+          "type": {
+            "desugaredQualType": "unsigned long",
+            "qualType": "size_t"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "TypedefDecl",
+      "name": "ReadingHandle",
+      "type": {
+        "qualType": "struct ReadingPair *"
+      }
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "record_survey",
+      "type": {
+        "qualType": "_Bool (struct SurveyLedger *)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "ledger",
+          "type": {
+            "qualType": "struct SurveyLedger *"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "reading",
+                  "init": "c",
+                  "type": {
+                    "desugaredQualType": "struct ReadingPair *",
+                    "qualType": "ReadingHandle"
+                  },
+                  "inner": [
+                    {
+                      "kind": "UnaryOperator",
+                      "opcode": "&",
+                      "type": {
+                        "qualType": "struct ReadingPair *"
+                      },
+                      "inner": [
+                        {
+                          "kind": "MemberExpr",
+                          "name": "current_reading",
+                          "isArrow": true,
+                          "type": {
+                            "qualType": "struct ReadingPair"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "qualType": "struct SurveyLedger *"
+                              },
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "ledger"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "UnaryOperator",
+              "opcode": "++",
+              "isPostfix": true,
+              "type": {
+                "qualType": "unsigned int"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "revision_count",
+                  "isArrow": true,
+                  "type": {
+                    "qualType": "unsigned int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "struct SurveyLedger *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "ledger"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "CompoundAssignOperator",
+              "opcode": "+=",
+              "type": {
+                "desugaredQualType": "unsigned long",
+                "qualType": "size_t"
+              },
+              "computeLHSType": {
+                "desugaredQualType": "unsigned long",
+                "qualType": "size_t"
+              },
+              "computeResultType": {
+                "desugaredQualType": "unsigned long",
+                "qualType": "size_t"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "accepted_total",
+                  "isArrow": true,
+                  "type": {
+                    "desugaredQualType": "unsigned long",
+                    "qualType": "size_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "struct SurveyLedger *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "ledger"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "IntegralCast",
+                  "type": {
+                    "desugaredQualType": "unsigned long",
+                    "qualType": "size_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "unsigned int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "MemberExpr",
+                          "name": "accepted_units",
+                          "isArrow": true,
+                          "type": {
+                            "qualType": "unsigned int"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "desugaredQualType": "struct ReadingPair *",
+                                "qualType": "ReadingHandle"
+                              },
+                              "referencedDecl": {
+                                "kind": "VarDecl",
+                                "name": "reading"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "CompoundAssignOperator",
+              "opcode": "+=",
+              "type": {
+                "desugaredQualType": "unsigned long",
+                "qualType": "size_t"
+              },
+              "computeLHSType": {
+                "desugaredQualType": "unsigned long",
+                "qualType": "size_t"
+              },
+              "computeResultType": {
+                "desugaredQualType": "unsigned long",
+                "qualType": "size_t"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "rejected_total",
+                  "isArrow": true,
+                  "type": {
+                    "desugaredQualType": "unsigned long",
+                    "qualType": "size_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "struct SurveyLedger *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "ledger"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "IntegralCast",
+                  "type": {
+                    "desugaredQualType": "unsigned long",
+                    "qualType": "size_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "unsigned int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "MemberExpr",
+                          "name": "rejected_units",
+                          "isArrow": true,
+                          "type": {
+                            "qualType": "unsigned int"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "desugaredQualType": "struct ReadingPair *",
+                                "qualType": "ReadingHandle"
+                              },
+                              "referencedDecl": {
+                                "kind": "VarDecl",
+                                "name": "reading"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "IntegralToBoolean",
+                  "type": {
+                    "qualType": "_Bool"
+                  },
+                  "inner": [
+                    {
+                      "kind": "IntegerLiteral",
+                      "value": "1",
+                      "type": {
+                        "qualType": "int"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

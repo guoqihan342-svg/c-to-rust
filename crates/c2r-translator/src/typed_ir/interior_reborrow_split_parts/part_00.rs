@@ -70,19 +70,20 @@ fn analyze_interior_reborrow(
             loop_stmt,
             observation,
         )?,
-        [_, setup, sentinel, loop_stmt, observation] => {
-            let (call_root, entry_initialized_field_path) =
-                validate_assignment_call_interior_reborrow_carrier(
-                function,
-                policy,
-                &plan,
-                setup,
-                sentinel,
-                loop_stmt,
-                observation,
-            )?;
-            plan.call_root = Some(call_root);
-            plan.entry_initialized_field_path = entry_initialized_field_path;
+        [_, first, second, third, fourth] => {
+            if is_direct_owner_u32_increment_stmt(first, &plan)? {
+                validate_owner_stats_sequence_carrier(
+                    function, policy, &plan, first, second, third, fourth,
+                )?;
+                plan.allows_owner_sibling_size_add_read = true;
+            } else {
+                let (call_root, entry_initialized_field_path) =
+                    validate_assignment_call_interior_reborrow_carrier(
+                        function, policy, &plan, first, second, third, fourth,
+                    )?;
+                plan.call_root = Some(call_root);
+                plan.entry_initialized_field_path = entry_initialized_field_path;
+            }
         }
         _ => {
             return Err(
@@ -104,6 +105,156 @@ fn is_owner_sibling_size_add_stmt(
     };
     Ok(record_pointer_member_path_from_expr(target)?
         .is_some_and(|path| path.root_name == plan.owner && path.fields.len() == 1))
+}
+
+fn is_direct_owner_u32_increment_stmt(
+    stmt: &IrStmt,
+    plan: &InteriorReborrowPlan,
+) -> Result<bool, String> {
+    let IrStmt::Assign { target, .. } = stmt else {
+        return Ok(false);
+    };
+    Ok(
+        record_pointer_member_path_from_expr(target)?.is_some_and(|path| {
+            path.root_name == plan.owner && path.fields.len() == 1 && is_exact_u32_ir_type(path.ty)
+        }),
+    )
+}
+
+fn validate_owner_stats_sequence_carrier(
+    function: &IrFunction,
+    policy: &EmitPolicy,
+    plan: &InteriorReborrowPlan,
+    increment: &IrStmt,
+    first_add: &IrStmt,
+    second_add: &IrStmt,
+    terminal: &IrStmt,
+) -> Result<(), String> {
+    if function.params.len() != 1 || function.params[0].name != plan.owner {
+        return Err(
+            "interior reborrow stats sequence requires exactly one mutable owner pointer root"
+                .to_string(),
+        );
+    }
+    if !is_c_bool_type(&function.return_type) {
+        return Err("interior reborrow stats sequence requires bool return".to_string());
+    }
+    validate_fixed_bool_return(terminal, true, "interior reborrow stats sequence terminal")?;
+
+    let counter = validate_direct_owner_u32_increment(function, plan, increment)?;
+    let (first_target, first_source) =
+        validate_owner_sibling_size_add_from_alias(function, policy, plan, first_add)?;
+    let (second_target, second_source) =
+        validate_owner_sibling_size_add_from_alias(function, policy, plan, second_add)?;
+    let projection = plan
+        .owner_path
+        .first()
+        .ok_or_else(|| "interior reborrow stats sequence projection is missing".to_string())?;
+
+    let owner_paths = [
+        counter.as_str(),
+        first_target.as_str(),
+        second_target.as_str(),
+        projection.as_str(),
+    ];
+    if owner_paths
+        .iter()
+        .enumerate()
+        .any(|(index, path)| owner_paths[index + 1..].contains(path))
+    {
+        return Err(
+            "interior reborrow stats sequence counter, targets, and projection must not overlap"
+                .to_string(),
+        );
+    }
+    if first_source == second_source {
+        return Err("interior reborrow stats sequence alias sources must be distinct".to_string());
+    }
+    Ok(())
+}
+
+fn validate_direct_owner_u32_increment(
+    function: &IrFunction,
+    plan: &InteriorReborrowPlan,
+    stmt: &IrStmt,
+) -> Result<String, String> {
+    let IrStmt::Assign { target, value, .. } = stmt else {
+        return Err(
+            "interior reborrow stats sequence requires one normalized owner increment assignment"
+                .to_string(),
+        );
+    };
+    let target_path = record_pointer_member_path_from_expr(target)?.ok_or_else(|| {
+        "interior reborrow stats sequence increment target must be a record member".to_string()
+    })?;
+    if target_path.root_name != plan.owner
+        || target_path.fields.len() != 1
+        || !is_exact_u32_ir_type(target_path.ty)
+    {
+        return Err(
+            "interior reborrow stats sequence increment must target one direct owner u32 field"
+                .to_string(),
+        );
+    }
+
+    let owner_param = function
+        .params
+        .iter()
+        .find(|param| param.name == plan.owner)
+        .ok_or_else(|| "interior reborrow stats sequence owner parameter is missing".to_string())?;
+    if !record_pointer_types_match_ignoring_spelling(target_path.root_ty, &owner_param.ty) {
+        return Err("interior reborrow stats sequence owner type drifted".to_string());
+    }
+    let owner_record = mutable_record_pointer_pointee_type(&owner_param.ty)
+        .ok_or_else(|| "interior reborrow stats sequence owner must remain mutable".to_string())?;
+    let owner_fields = complete_named_record_fields(owner_record, "stats sequence owner")?;
+    let declared_target = unique_record_field(
+        owner_fields,
+        &target_path.fields[0],
+        "stats sequence increment",
+    )?;
+    if !types_match_ignoring_spelling(&declared_target.ty, target_path.ty) {
+        return Err(
+            "interior reborrow stats sequence increment inventory type drifted".to_string(),
+        );
+    }
+    reject_qualified_reborrow_type(target_path.ty, "stats sequence increment")?;
+
+    let IrExpr::Binary {
+        op: IrBinOp::Add,
+        lhs,
+        rhs,
+        ty: compute_ty,
+        ..
+    } = value
+    else {
+        return Err(
+            "interior reborrow stats sequence increment must preserve normalized addition"
+                .to_string(),
+        );
+    };
+    if !is_exact_u32_ir_type(compute_ty)
+        || !types_match_ignoring_spelling(compute_ty, target_path.ty)
+    {
+        return Err("interior reborrow stats sequence increment type drifted".to_string());
+    }
+    let lhs_path = record_pointer_member_path_from_expr(lhs)?.ok_or_else(|| {
+        "interior reborrow stats sequence increment lhs must reread its target".to_string()
+    })?;
+    if lhs_path.root_name != target_path.root_name
+        || lhs_path.fields != target_path.fields
+        || !types_match_ignoring_spelling(lhs_path.ty, target_path.ty)
+    {
+        return Err("interior reborrow stats sequence increment lhs/target drifted".to_string());
+    }
+    if !matches!(rhs.as_ref(), IrExpr::LitInt { value: 1, ty, .. }
+        if is_exact_u32_ir_type(ty) && types_match_ignoring_spelling(ty, target_path.ty))
+    {
+        return Err(
+            "interior reborrow stats sequence increment requires exact u32 literal 1".to_string(),
+        );
+    }
+    Ok(target_path.fields[0].to_string())
 }
 
 fn validate_owner_sibling_size_add_carrier(
@@ -131,7 +282,7 @@ fn validate_owner_sibling_size_add_from_alias(
     policy: &EmitPolicy,
     plan: &InteriorReborrowPlan,
     stmt: &IrStmt,
-) -> Result<(), String> {
+) -> Result<(String, String), String> {
     if policy.noalias_param_pairs.iter().any(|pair| {
         (pair.readonly_param == plan.alias && pair.mutable_param == plan.owner)
             || (pair.readonly_param == plan.owner && pair.mutable_param == plan.alias)
@@ -266,7 +417,10 @@ fn validate_owner_sibling_size_add_from_alias(
         return Err("interior reborrow size update RHS inventory type drifted".to_string());
     }
     reject_qualified_reborrow_type(source_path.ty, "size update RHS")?;
-    Ok(())
+    Ok((
+        target_path.fields[0].to_string(),
+        source_path.fields[0].to_string(),
+    ))
 }
 
 fn validate_exact_abi_size_t(ty: &IrType, label: &str) -> Result<(), String> {
