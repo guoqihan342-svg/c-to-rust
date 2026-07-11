@@ -222,6 +222,7 @@ def run_competition(
         threshold=2,
         shared_failure_kinds={
             "provider_timeout",
+            "provider_invocation_failed",
             "provider_insufficient_balance",
             "provider_authentication_failed",
         },

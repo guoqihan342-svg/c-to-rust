@@ -14,6 +14,13 @@ DEFAULT_SHARED_FAILURE_KINDS = frozenset(
         "provider_unavailable",
     }
 )
+IMMEDIATE_OPEN_FAILURE_KINDS = frozenset(
+    {
+        "provider_invocation_failed",
+        "provider_insufficient_balance",
+        "provider_authentication_failed",
+    }
+)
 
 
 class ProviderCircuit:
@@ -73,7 +80,7 @@ class ProviderCircuit:
                 "failure_kind": failure_kind,
             }
         )
-        if len(self._observations) >= self._threshold:
+        if len(self._observations) >= self._effective_threshold(failure_kind):
             self._status = "open"
             self._failure_kind = failure_kind
 
@@ -81,7 +88,7 @@ class ProviderCircuit:
         """Return a stable, JSON-serializable circuit summary."""
         return {
             "status": self._status,
-            "threshold": self._threshold,
+            "threshold": self._current_threshold(),
             "consecutive_failures": len(self._observations),
             "failure_kind": self._failure_kind if self.is_open else None,
             "requested_slice_specs": self._requested_slice_specs,
@@ -89,6 +96,16 @@ class ProviderCircuit:
             "skipped_slice_specs": self._skipped_slice_specs,
             "observations": [dict(item) for item in self._observations],
         }
+
+    def _current_threshold(self) -> int:
+        if not self._observations:
+            return self._threshold
+        return self._effective_threshold(self._observations[-1]["failure_kind"])
+
+    def _effective_threshold(self, failure_kind: str) -> int:
+        if failure_kind in IMMEDIATE_OPEN_FAILURE_KINDS:
+            return 1
+        return self._threshold
 
     def _reset_consecutive_failures(self) -> None:
         self._observations.clear()

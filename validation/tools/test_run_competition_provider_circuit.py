@@ -5,10 +5,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import jsonschema
+
 from validation.tools._run_competition_provider_circuit import (
     DEFAULT_SHARED_FAILURE_KINDS,
+    IMMEDIATE_OPEN_FAILURE_KINDS,
     ProviderCircuit,
 )
+from validation.tools.validate_competition_run_summary import validate_provider_circuit_breaker
 
 
 class ProviderCircuitTests(unittest.TestCase):
@@ -75,22 +79,27 @@ class ProviderCircuitTests(unittest.TestCase):
             },
         )
 
-    def test_two_balance_failures_open_circuit_with_balance_kind(self) -> None:
-        circuit = ProviderCircuit()
-        balance = self.write_manifest(
-            "balance.json", status="blocked", failure_kind="provider_insufficient_balance"
-        )
+    def test_terminal_provider_failures_open_circuit_on_first_observation(self) -> None:
+        for failure_kind in sorted(IMMEDIATE_OPEN_FAILURE_KINDS):
+            with self.subTest(failure_kind=failure_kind):
+                circuit = ProviderCircuit()
+                failed = self.write_manifest(
+                    f"{failure_kind}.json",
+                    status="blocked",
+                    failure_kind=failure_kind,
+                )
 
-        self.attempt(circuit, "unit-a", balance)
-        self.attempt(circuit, "unit-b", balance)
+                self.attempt(circuit, "unit-a", failed)
 
-        summary = circuit.summary()
-        self.assertTrue(circuit.is_open)
-        self.assertEqual("provider_insufficient_balance", summary["failure_kind"])
-        self.assertEqual(
-            ["provider_insufficient_balance", "provider_insufficient_balance"],
-            [item["failure_kind"] for item in summary["observations"]],
-        )
+                summary = circuit.summary()
+                self.assertTrue(circuit.is_open)
+                self.assertEqual(1, summary["threshold"])
+                self.assertEqual(1, summary["consecutive_failures"])
+                self.assertEqual(failure_kind, summary["failure_kind"])
+                self.assertEqual(
+                    [{"unit_id": "unit-a", "failure_kind": failure_kind}],
+                    summary["observations"],
+                )
 
     def test_success_resets_consecutive_failures(self) -> None:
         circuit = ProviderCircuit()
@@ -133,17 +142,18 @@ class ProviderCircuitTests(unittest.TestCase):
         timeout = self.write_manifest(
             "timeout.json", status="blocked", failure_kind="provider_timeout"
         )
-        balance = self.write_manifest(
-            "balance.json", status="blocked", failure_kind="provider_insufficient_balance"
+        invocation = self.write_manifest(
+            "invocation.json", status="blocked", failure_kind="provider_invocation_failed"
         )
 
         self.attempt(circuit, "unit-a", timeout)
-        self.attempt(circuit, "unit-b", balance)
+        self.attempt(circuit, "unit-b", invocation)
 
-        self.assertFalse(circuit.is_open)
+        self.assertTrue(circuit.is_open)
+        self.assertEqual(1, circuit.summary()["threshold"])
         self.assertEqual(1, circuit.summary()["consecutive_failures"])
         self.assertEqual(
-            [{"unit_id": "unit-b", "failure_kind": "provider_insufficient_balance"}],
+            [{"unit_id": "unit-b", "failure_kind": "provider_invocation_failed"}],
             circuit.summary()["observations"],
         )
 
@@ -179,14 +189,44 @@ class ProviderCircuitTests(unittest.TestCase):
         )
 
         self.attempt(circuit, "unit-a", failed)
-        self.attempt(circuit, "unit-b", failed)
+        self.assertFalse(circuit.request("unit-b"))
         self.assertFalse(circuit.request("unit-c"))
-        self.assertFalse(circuit.request("unit-d"))
 
         summary = circuit.summary()
-        self.assertEqual(summary["requested_slice_specs"], 4)
-        self.assertEqual(summary["attempted_slice_specs"], 2)
+        self.assertEqual(summary["requested_slice_specs"], 3)
+        self.assertEqual(summary["attempted_slice_specs"], 1)
         self.assertEqual(summary["skipped_slice_specs"], 2)
+
+    def test_summary_validator_enforces_failure_kind_thresholds(self) -> None:
+        summary = {
+            "schema_version": 2,
+            "final_gate": {"status": "failed"},
+            "provider_circuit_breaker": {
+                "status": "open",
+                "threshold": 1,
+                "consecutive_failures": 1,
+                "failure_kind": "provider_invocation_failed",
+                "requested_slice_specs": 2,
+                "attempted_slice_specs": 1,
+                "skipped_slice_specs": 1,
+                "observations": [
+                    {
+                        "unit_id": "demo/unit-a",
+                        "failure_kind": "provider_invocation_failed",
+                    }
+                ],
+            },
+        }
+        schema_path = Path(__file__).parents[1] / "competition-run-summary.schema.json"
+        circuit_schema = json.loads(schema_path.read_text(encoding="utf-8"))["properties"][
+            "provider_circuit_breaker"
+        ]
+        jsonschema.validate(summary["provider_circuit_breaker"], circuit_schema)
+        validate_provider_circuit_breaker(summary)
+
+        summary["provider_circuit_breaker"]["threshold"] = 2
+        with self.assertRaisesRegex(SystemExit, "threshold must match"):
+            validate_provider_circuit_breaker(summary)
 
     def test_summary_is_json_serializable_and_returns_detached_observations(self) -> None:
         circuit = ProviderCircuit()

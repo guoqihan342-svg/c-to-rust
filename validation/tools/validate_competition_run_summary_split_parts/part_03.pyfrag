@@ -265,6 +265,7 @@ def evaluate_ai_metric_unit(
         and manifest_failure.get("kind")
         in {
             "provider_timeout",
+            "provider_invocation_failed",
             "provider_insufficient_balance",
             "provider_authentication_failed",
         }

@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from validation.tools import _ai_finite_cross_project_contract as suite_contract
 from validation.tools.validate_ai_finite_cross_project_suite import (
     DEFAULT_SUITE,
     SuiteContractError,
@@ -37,6 +38,11 @@ def _git(checkout: Path, *args: str) -> str:
 
 class AiFiniteCrossProjectSuiteTests(unittest.TestCase):
     TEST_REPOSITORY = "https://example.invalid/upstream"
+
+    def test_public_imports_remain_compatible(self) -> None:
+        self.assertEqual(suite_contract.DEFAULT_SUITE, DEFAULT_SUITE)
+        self.assertIs(suite_contract.SuiteContractError, SuiteContractError)
+        self.assertTrue(callable(validate_suite))
 
     def setUp(self) -> None:
         self.repo_root = Path(__file__).resolve().parents[2]

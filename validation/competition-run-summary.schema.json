@@ -137,7 +137,7 @@
         },
         "threshold": {
           "type": "integer",
-          "const": 2
+          "enum": [1, 2]
         },
         "consecutive_failures": {
           "type": "integer",
@@ -148,6 +148,7 @@
           "enum": [
             null,
             "provider_timeout",
+            "provider_invocation_failed",
             "provider_insufficient_balance",
             "provider_authentication_failed"
           ]
@@ -176,6 +177,7 @@
               "failure_kind": {
                 "enum": [
                   "provider_timeout",
+                  "provider_invocation_failed",
                   "provider_insufficient_balance",
                   "provider_authentication_failed"
                 ]

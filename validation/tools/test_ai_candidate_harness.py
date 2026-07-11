@@ -349,6 +349,101 @@ class AiCandidateHarnessTests(unittest.TestCase):
                 provider.classify_provider_failure(execution)["kind"],
             )
 
+    def test_subprocess_runner_recovers_provider_diagnostic_after_nonzero_exit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-provider-exit-log-") as tmp:
+            log_path = Path(tmp) / "opencode.log"
+            log_path.write_text("existing log\n", encoding="utf-8")
+            secret_marker = "must-not-enter-nonzero-execution"
+
+            def fake_run(argv: list[str], **_kwargs: object) -> object:
+                with log_path.open("a", encoding="utf-8") as handle:
+                    handle.write(
+                        "level=ERROR providerID=zai modelID=glm-5.1 agent=c2rust-migrator "
+                        "error='Insufficient balance or no resource package' "
+                        f"api_key={secret_marker}\n"
+                    )
+                return subprocess.CompletedProcess(argv, 1, stdout="", stderr="wrapper failed")
+
+            argv = [
+                "opencode",
+                "run",
+                "--model",
+                "zai/glm-5.1",
+                "--agent",
+                "c2rust-migrator",
+                "prompt",
+            ]
+            with mock.patch.dict(os.environ, {provider.OPENCODE_LOG_PATH_ENV: str(log_path)}):
+                with mock.patch.object(provider.subprocess, "run", side_effect=fake_run):
+                    execution = provider.subprocess_runner(argv, 30)
+
+            self.assertFalse(execution.timed_out)
+            self.assertEqual(
+                f"wrapper failed\n{provider.PROVIDER_BALANCE_SENTINEL}",
+                execution.stderr,
+            )
+            self.assertNotIn(secret_marker, execution.stderr)
+            self.assertEqual(
+                "provider_insufficient_balance",
+                provider.classify_provider_failure(execution)["kind"],
+            )
+
+    def test_subprocess_runner_does_not_apply_log_diagnostic_after_success(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-provider-success-log-") as tmp:
+            log_path = Path(tmp) / "opencode.log"
+            log_path.write_text("existing log\n", encoding="utf-8")
+
+            def fake_run(argv: list[str], **_kwargs: object) -> object:
+                with log_path.open("a", encoding="utf-8") as handle:
+                    handle.write(
+                        "level=ERROR providerID=zai modelID=glm-5.1 agent=c2rust-migrator "
+                        "error='Insufficient balance or no resource package'\n"
+                    )
+                return subprocess.CompletedProcess(argv, 0, stdout="candidate", stderr="")
+
+            argv = [
+                "opencode",
+                "run",
+                "--model",
+                "zai/glm-5.1",
+                "--agent",
+                "c2rust-migrator",
+                "prompt",
+            ]
+            with mock.patch.dict(os.environ, {provider.OPENCODE_LOG_PATH_ENV: str(log_path)}):
+                with mock.patch.object(provider.subprocess, "run", side_effect=fake_run):
+                    execution = provider.subprocess_runner(argv, 30)
+
+            self.assertEqual(0, execution.returncode)
+            self.assertEqual("", execution.stderr)
+            self.assertIsNone(provider.classify_provider_failure(execution))
+
+    def test_subprocess_runner_sanitizes_provider_launch_failure(self) -> None:
+        argv = [
+            "opencode",
+            "run",
+            "--model",
+            "zai/glm-5.1",
+            "--agent",
+            "c2rust-migrator",
+            "prompt",
+        ]
+        sensitive_detail = "C:/private/provider/opencode.exe"
+        with mock.patch.object(
+            provider.subprocess,
+            "run",
+            side_effect=FileNotFoundError(sensitive_detail),
+        ):
+            execution = provider.subprocess_runner(argv, 30)
+
+        self.assertEqual(127, execution.returncode)
+        self.assertEqual(provider.PROVIDER_INVOCATION_SENTINEL, execution.stderr)
+        self.assertNotIn(sensitive_detail, execution.stderr)
+        self.assertEqual(
+            "provider_invocation_failed",
+            provider.classify_provider_failure(execution)["kind"],
+        )
+
     def test_applied_ai_candidate_becomes_agent_route_primary_without_semantic_claim(self) -> None:
         ai_candidate = {
             "candidate_id": "opencode-glm51-1",

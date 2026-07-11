@@ -23,6 +23,7 @@ MAX_ASSUMPTION_BYTES = 1_024
 OPENCODE_LOG_PATH_ENV = "OPENCODE_LOG_PATH"
 PROVIDER_BALANCE_SENTINEL = "provider_error=insufficient_balance"
 PROVIDER_AUTH_SENTINEL = "provider_error=authentication_failed"
+PROVIDER_INVOCATION_SENTINEL = "provider_error=invocation_failed"
 
 
 @dataclass(frozen=True)
@@ -321,6 +322,11 @@ def classify_provider_failure(execution: ProviderExecution) -> dict[str, str] | 
         or "authentication" in combined
     ):
         return {"kind": "provider_authentication_failed", "message": "OpenCode provider authentication failed"}
+    if PROVIDER_INVOCATION_SENTINEL in combined:
+        return {
+            "kind": "provider_invocation_failed",
+            "message": "OpenCode provider process could not be started",
+        }
     if execution.timed_out:
         return {"kind": "provider_timeout", "message": "OpenCode candidate generation timed out"}
     if execution.returncode != 0:
@@ -381,18 +387,27 @@ def subprocess_runner(argv: list[str], timeout_seconds: int) -> ProviderExecutio
             errors="replace",
             timeout=timeout_seconds,
         )
+    except OSError:
+        return ProviderExecution(
+            returncode=127,
+            stdout="",
+            stderr=PROVIDER_INVOCATION_SENTINEL,
+        )
     except subprocess.TimeoutExpired as error:
-        stderr = decode_timeout_output(error.stderr)
-        log_diagnostic = appended_provider_log_diagnostic(log_snapshot)
-        if log_diagnostic:
-            stderr = "\n".join(part for part in [stderr, log_diagnostic] if part)
+        stderr = append_provider_log_diagnostic(
+            decode_timeout_output(error.stderr),
+            log_snapshot,
+        )
         return ProviderExecution(
             returncode=124,
             stdout=decode_timeout_output(error.stdout),
             stderr=stderr,
             timed_out=True,
         )
-    return ProviderExecution(completed.returncode, completed.stdout, completed.stderr)
+    stderr = completed.stderr
+    if completed.returncode != 0:
+        stderr = append_provider_log_diagnostic(stderr, log_snapshot)
+    return ProviderExecution(completed.returncode, completed.stdout, stderr)
 
 
 def snapshot_opencode_log(argv: list[str]) -> tuple[Path, int, str, str, str] | None:
@@ -457,6 +472,16 @@ def appended_provider_log_diagnostic(snapshot: tuple[Path, int, str, str, str] |
     if "unauthorized" in matching or "invalid api key" in matching or "authentication" in matching:
         return PROVIDER_AUTH_SENTINEL
     return ""
+
+
+def append_provider_log_diagnostic(
+    stderr: str,
+    snapshot: tuple[Path, int, str, str, str] | None,
+) -> str:
+    diagnostic = appended_provider_log_diagnostic(snapshot)
+    if not diagnostic or diagnostic in stderr:
+        return stderr
+    return "\n".join(part for part in (stderr, diagnostic) if part)
 
 
 def decode_timeout_output(value: str | bytes | None) -> str:
