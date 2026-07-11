@@ -1,0 +1,85 @@
+
+
+class AiRouterRunMetricsTests(unittest.TestCase):
+    def build(self, out_root: Path, **kwargs) -> tuple[dict, dict, Path]:
+        summary, descriptor = write_generated_ai_chain(out_root, **kwargs)
+        summary_path = out_root / "summary/competition-run-summary.json"
+        summary["ai_translation_metrics"] = runner.build_ai_translation_metrics(
+            summary=summary,
+            descriptors=[descriptor],
+            ai_runtime=runtime(),
+            reuse_accepted_evidence=False,
+            summary_path=summary_path,
+            repo_root=REPO_ROOT,
+            out_root=out_root,
+        )
+        return summary, descriptor, summary_path
+
+    def test_deterministic_fallback_is_counted_but_not_ai_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary, _descriptor, _summary_path = self.build(Path(tmp), router_source="typed-ir")
+            metrics = summary["ai_translation_metrics"]
+            self.assertEqual(
+                [metrics[key] for key in ["invocations", "generated", "applied", "selected", "rustc_pass", "semantic_acceptance"]],
+                [1, 1, 0, 0, 0, 0],
+            )
+            self.assertEqual(metrics["router_totals"]["candidate_inputs"], 2)
+            self.assertEqual(metrics["router_totals"]["unique"], 2)
+            self.assertEqual(metrics["router_totals"]["selected_by_source"]["typed-ir"], 1)
+            self.assertEqual(metrics["router_totals"]["deterministic_fallbacks"], 1)
+            self.assertEqual(metrics["refused"], 1)
+
+    def test_router_deduplication_and_no_selection_are_recomputed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary, _descriptor, _summary_path = self.build(Path(tmp), duplicate_source="typed-ir")
+            totals = summary["ai_translation_metrics"]["router_totals"]
+            self.assertEqual(totals["candidate_inputs"], 2)
+            self.assertEqual(totals["unique"], 1)
+            self.assertEqual(totals["deduplicated"], 1)
+            self.assertEqual(totals["no_selection"], 1)
+            self.assertEqual(sum(totals["selected_by_source"].values()), 0)
+
+    def test_router_and_auto_manifest_hashes_are_bound_into_each_unit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_root = Path(tmp)
+            summary, _descriptor, summary_path = self.build(out_root, common_acceptance=True)
+            unit_router = summary["ai_translation_metrics"]["units"][0]["router"]
+            self.assertEqual(unit_router["status"], "verified")
+            self.assertRegex(unit_router["auto_manifest_sha256"], r"^[0-9a-f]{64}$")
+            self.assertRegex(unit_router["router_sha256"], r"^[0-9a-f]{64}$")
+
+            router_path = next(out_root.glob("evidence/*/auto-translation/*/l3-*-ai-router.json"))
+            router_payload = json.loads(router_path.read_text(encoding="utf-8"))
+            router_payload["metrics"]["candidate_inputs"] += 1
+            write_json(router_path, router_payload)
+            auto_path = router_path.with_name(router_path.name.replace("-ai-router.json", "-auto-translation-manifest.json"))
+            auto_payload = json.loads(auto_path.read_text(encoding="utf-8"))
+            auto_payload["ai_exact_validation"]["sha256"] = runner.sha256(router_path)
+            write_json(auto_path, auto_payload)
+            with self.assertRaises(SystemExit):
+                validator.validate_ai_translation_metrics(summary, summary_path=summary_path, repo_root=REPO_ROOT)
+
+    def test_claimed_router_totals_are_never_trusted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary, _descriptor, summary_path = self.build(Path(tmp), common_acceptance=True)
+            summary["ai_translation_metrics"]["router_totals"]["selected_by_source"]["opencode-ai"] = 0
+            with self.assertRaises(SystemExit):
+                validator.validate_ai_translation_metrics(summary, summary_path=summary_path, repo_root=REPO_ROOT)
+
+    def test_schema_v2_rejects_missing_router_rollups(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary, _descriptor, _summary_path = self.build(Path(tmp), common_acceptance=True)
+            schema = json.loads((REPO_ROOT / "validation/competition-run-summary.schema.json").read_text(encoding="utf-8"))
+            metric_schema = {
+                "$schema": schema.get("$schema"),
+                "definitions": schema["definitions"],
+                "$ref": "#/definitions/aiTranslationMetrics",
+            }
+            jsonschema.validate(summary["ai_translation_metrics"], metric_schema)
+            del summary["ai_translation_metrics"]["router_totals"]
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.validate(summary["ai_translation_metrics"], metric_schema)
+
+
+if __name__ == "__main__":
+    unittest.main()

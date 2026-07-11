@@ -58,7 +58,7 @@ class AiRunMetricsTests(unittest.TestCase):
                 [0, 0, 0, 0, 0, 0],
             )
 
-    def test_generated_ai_funnel_is_recomputed_and_not_semantically_overclaimed(self) -> None:
+    def test_unselected_ai_candidate_does_not_advance_the_ai_funnel(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out_root = Path(tmp)
             summary, descriptor = write_generated_ai_chain(out_root)
@@ -73,10 +73,11 @@ class AiRunMetricsTests(unittest.TestCase):
             )
             self.assertEqual(
                 [metrics[key] for key in ["invocations", "generated", "applied", "selected", "rustc_pass"]],
-                [1, 1, 1, 1, 1],
+                [1, 1, 1, 0, 0],
             )
             self.assertEqual(metrics["semantic_acceptance"], 0)
-            self.assertEqual(metrics["blocked"], 1)
+            self.assertEqual(metrics["refused"], 1)
+            self.assertEqual(metrics["router_totals"]["no_selection"], 1)
 
     def test_accepted_oracle_binding_cannot_be_counted_as_ai_semantic_acceptance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -92,7 +93,7 @@ class AiRunMetricsTests(unittest.TestCase):
                 out_root=out_root,
             )
             self.assertEqual(metrics["semantic_acceptance"], 0)
-            self.assertEqual(metrics["blocked"], 1)
+            self.assertEqual(metrics["refused"], 1)
 
     def test_current_common_validation_can_count_exact_ai_candidate_semantics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -110,6 +111,7 @@ class AiRunMetricsTests(unittest.TestCase):
             self.assertEqual(metrics["semantic_acceptance"], 1)
             self.assertEqual(metrics["terminal_classifications"]["semantic_acceptance"], 1)
             self.assertEqual(metrics["blocked"], 0)
+            self.assertEqual(metrics["router_totals"]["selected_by_source"]["opencode-ai"], 1)
 
     def test_metric_tampering_and_artifact_drift_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -293,7 +295,3 @@ class AiRunMetricsTests(unittest.TestCase):
             )
             self.assertEqual(rounds, 1)
             self.assertEqual(reasons, [])
-
-
-if __name__ == "__main__":
-    unittest.main()

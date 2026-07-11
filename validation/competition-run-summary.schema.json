@@ -609,6 +609,78 @@
         "abnormal": {"type": "integer", "minimum": 0}
       }
     },
+    "aiRouterSourceCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["opencode-ai", "typed-ir", "c2rust-repair", "c2rust-baseline"],
+      "properties": {
+        "opencode-ai": {"type": "integer", "minimum": 0},
+        "typed-ir": {"type": "integer", "minimum": 0},
+        "c2rust-repair": {"type": "integer", "minimum": 0},
+        "c2rust-baseline": {"type": "integer", "minimum": 0}
+      }
+    },
+    "aiRouterTotals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_inputs",
+        "unique",
+        "deduplicated",
+        "selected_by_source",
+        "deterministic_fallbacks",
+        "no_selection"
+      ],
+      "properties": {
+        "candidate_inputs": {"type": "integer", "minimum": 0},
+        "unique": {"type": "integer", "minimum": 0},
+        "deduplicated": {"type": "integer", "minimum": 0},
+        "selected_by_source": {"$ref": "#/definitions/aiRouterSourceCounts"},
+        "deterministic_fallbacks": {"type": "integer", "minimum": 0},
+        "no_selection": {"type": "integer", "minimum": 0}
+      }
+    },
+    "aiRouterUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "auto_manifest_sha256",
+        "router_sha256",
+        "candidate_inputs",
+        "unique",
+        "deduplicated",
+        "selected_by_source",
+        "deterministic_fallbacks",
+        "no_selection",
+        "selected_source",
+        "selected_candidate_sha256"
+      ],
+      "properties": {
+        "status": {"enum": ["not_applicable", "verified"]},
+        "auto_manifest_sha256": {
+          "anyOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9a-f]{64}$"}]
+        },
+        "router_sha256": {
+          "anyOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9a-f]{64}$"}]
+        },
+        "candidate_inputs": {"type": "integer", "minimum": 0},
+        "unique": {"type": "integer", "minimum": 0},
+        "deduplicated": {"type": "integer", "minimum": 0},
+        "selected_by_source": {"$ref": "#/definitions/aiRouterSourceCounts"},
+        "deterministic_fallbacks": {"type": "integer", "minimum": 0, "maximum": 1},
+        "no_selection": {"type": "integer", "minimum": 0, "maximum": 1},
+        "selected_source": {
+          "anyOf": [
+            {"type": "null"},
+            {"enum": ["opencode-ai", "typed-ir", "c2rust-repair", "c2rust-baseline"]}
+          ]
+        },
+        "selected_candidate_sha256": {
+          "anyOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9a-f]{64}$"}]
+        }
+      }
+    },
     "aiMetricUnit": {
       "type": "object",
       "additionalProperties": false,
@@ -630,6 +702,7 @@
         "blocked",
         "refused",
         "repair_rounds",
+        "router",
         "classification",
         "abnormal_reasons"
       ],
@@ -675,6 +748,7 @@
         "blocked": {"type": "boolean"},
         "refused": {"type": "boolean"},
         "repair_rounds": {"type": "integer", "minimum": 0},
+        "router": {"$ref": "#/definitions/aiRouterUnit"},
         "classification": {
           "enum": ["semantic_acceptance", "blocked", "refused", "not_invoked", "historical_evidence", "abnormal"]
         },
@@ -706,6 +780,7 @@
         "historical_evidence",
         "abnormal",
         "terminal_classifications",
+        "router_totals",
         "units"
       ],
       "properties": {
@@ -726,6 +801,7 @@
         "historical_evidence": {"type": "integer", "minimum": 0},
         "abnormal": {"type": "integer", "minimum": 0},
         "terminal_classifications": {"$ref": "#/definitions/aiTerminalCounts"},
+        "router_totals": {"$ref": "#/definitions/aiRouterTotals"},
         "units": {
           "type": "array",
           "items": {"$ref": "#/definitions/aiMetricUnit"}

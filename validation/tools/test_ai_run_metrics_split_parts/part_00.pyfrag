@@ -10,6 +10,7 @@ import jsonschema
 
 from validation.tools import run_competition as runner
 from validation.tools import validate_competition_run_summary as validator
+from validation.tools._ai_candidate_harness_parts.router import REQUIRED_GATES, route_candidates
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -80,6 +81,8 @@ def write_generated_ai_chain(
     *,
     accepted_binding: bool = False,
     common_acceptance: bool = False,
+    router_source: str | None = None,
+    duplicate_source: str | None = None,
 ) -> tuple[dict, dict]:
     target_id = "portable-project"
     slice_id = "sum-values"
@@ -96,6 +99,64 @@ def write_generated_ai_chain(
     write_text(response, '{"type":"text","text":"candidate"}\n')
     candidate_sha = write_text(candidate_path, "pub fn sum_values(a: i32, b: i32) -> i32 { a + b }\n")
     write_text(draft, candidate_path.read_text(encoding="utf-8"))
+    selected_source = router_source if router_source is not None else ("opencode-ai" if common_acceptance else None)
+
+    def router_candidate(candidate_id: str, source: str, artifact_sha: str, passed: bool) -> dict:
+        return {
+            "candidate_id": candidate_id,
+            "source": source,
+            "artifact_sha256": artifact_sha,
+            "gate_results": {
+                gate: {
+                    "status": "passed" if passed else "failed",
+                    "candidate_sha256": artifact_sha,
+                }
+                for gate in REQUIRED_GATES
+            },
+        }
+
+    router_inputs = [router_candidate("opencode-glm51-1", "opencode-ai", candidate_sha, selected_source == "opencode-ai")]
+    if selected_source in {"typed-ir", "c2rust-repair", "c2rust-baseline"}:
+        deterministic_path = base / f"l3-{slice_id}-{selected_source}-candidate.rs"
+        deterministic_sha = write_text(
+            deterministic_path,
+            "pub fn sum_values(a: i32, b: i32) -> i32 { a.wrapping_add(b) }\n",
+        )
+        router_inputs.append(router_candidate(f"{selected_source}:candidate", selected_source, deterministic_sha, True))
+        write_text(draft, deterministic_path.read_text(encoding="utf-8"))
+    if duplicate_source is not None:
+        router_inputs.append(router_candidate(f"{duplicate_source}:duplicate", duplicate_source, candidate_sha, False))
+    router_payload = route_candidates(router_inputs, provider_invocations=1)
+    evidence_keys = {
+        "opencode-ai": "ai",
+        "typed-ir": "typed_ir",
+        "c2rust-repair": "c2rust_repair",
+        "c2rust-baseline": "c2rust_baseline",
+    }
+    candidate_evidence = {}
+    for routed in router_payload["candidate_set"]:
+        source = routed["source"]
+        exact_path = base / f"l3-{slice_id}-{source}-exact-validation.json"
+        passed = routed["decision"] in {"selected", "eligible_not_selected"}
+        write_json(
+            exact_path,
+            {
+                "schema_version": 1,
+                "status": "passed" if passed else "failed",
+                "candidate_sha256": routed["artifact_sha256"],
+                "semantic_pass": passed,
+            },
+        )
+        candidate_evidence[evidence_keys[source]] = nested_ref(exact_path)
+    router_payload.update(
+        {
+            "candidate_evidence": candidate_evidence,
+            "canonical_draft_sha256": runner.sha256(draft),
+            "semantic_pass": router_payload["selected_candidate_id"] is not None,
+        }
+    )
+    router_path = base / f"l3-{slice_id}-ai-router.json"
+    write_json(router_path, router_payload)
 
     manifest_path = base / f"l3-{slice_id}-ai-candidate-manifest.json"
     candidate_id = "opencode-glm51-1"
@@ -118,7 +179,6 @@ def write_generated_ai_chain(
             "prompt": nested_ref(prompt),
             "raw_response": nested_ref(response),
         },
-        "selected_candidate_id": candidate_id,
         "candidates": [
             {
                 "candidate_id": candidate_id,
@@ -126,14 +186,32 @@ def write_generated_ai_chain(
                 "kind": "opencode-ai",
                 "artifact": nested_ref(candidate_path),
                 "output_hash": candidate_sha,
-                "applied": True,
-                "applied_artifact": nested_ref(draft),
-                "rust_draft_sha256": candidate_sha,
+                "applied": selected_source not in {"typed-ir", "c2rust-repair", "c2rust-baseline"},
                 "semantic_pass": False,
             }
         ],
     }
+    if selected_source not in {"typed-ir", "c2rust-repair", "c2rust-baseline"}:
+        manifest["selected_candidate_id"] = candidate_id
+        manifest["candidates"][0]["applied_artifact"] = nested_ref(draft)
+        manifest["candidates"][0]["rust_draft_sha256"] = candidate_sha
     write_json(manifest_path, manifest)
+
+    auto_manifest_path = base / f"l3-{slice_id}-auto-translation-manifest.json"
+    write_json(
+        auto_manifest_path,
+        {
+            "schema_version": 1,
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "ai_exact_validation": {
+                "path": router_path.name,
+                "sha256": runner.sha256(router_path),
+                "status": "passed" if router_payload["semantic_pass"] else "failed",
+                "semantic_pass": router_payload["semantic_pass"],
+            },
+        },
+    )
     ai_entry = {
         "candidate_id": candidate_id,
         "kind": "opencode-ai",

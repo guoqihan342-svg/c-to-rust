@@ -137,6 +137,12 @@ AI_EVIDENCE_KEYS = ("manifest", "route", "profile", "final")
 AI_FRESH_MODE = "fresh_ai_translation"
 AI_ACCEPTED_MODE = "accepted_evidence_revalidation"
 
+from validation.tools._competition_ai_router_metrics import (
+    empty_router_unit,
+    recompute_fresh_router_unit,
+    router_totals as recompute_router_totals,
+)
+
 
 def validate_ai_translation_metrics(
     summary: dict[str, Any],
@@ -220,6 +226,7 @@ def recompute_ai_translation_metrics(
         "historical_evidence": terminal["historical_evidence"],
         "abnormal": terminal["abnormal"],
         "terminal_classifications": terminal,
+        "router_totals": recompute_router_totals(evaluated),
         "units": evaluated,
     }
     validate_ai_funnel_invariants(result)
@@ -277,6 +284,7 @@ def evaluate_ai_metric_unit(
         "repair_rounds": 0,
         "classification": "abnormal",
         "abnormal_reasons": sorted(set(reasons)),
+        "router": empty_router_unit(),
     }
     if reasons:
         return outcome
@@ -317,16 +325,32 @@ def evaluate_ai_metric_unit(
     candidate = generation["candidate"]
     outcome["generated"] = candidate is not None
     outcome["applied"] = ai_candidate_is_applied(candidate, manifest_path=paths["manifest"])
-    outcome["selected"] = outcome["applied"] and ai_candidate_is_selected(candidate, manifest, route, profile)
-    outcome["rustc_pass"] = outcome["selected"] and ai_candidate_rustc_passes(candidate, profile, final)
-    outcome["semantic_acceptance"] = outcome["rustc_pass"] and ai_candidate_semantically_accepted(
-        candidate,
-        profile,
-        final,
+    router_unit, router_reasons = recompute_fresh_router_unit(
+        ai_manifest_path=paths["manifest"],
+        target_id=unit["target_id"],
+        slice_id=unit["slice_id"],
+        repo_root=repo_root,
+        hash_file=sha256,
     )
+    outcome["router"] = router_unit
+    if router_reasons:
+        outcome["abnormal_reasons"] = router_reasons
+        return outcome
+    candidate_artifact = candidate.get("artifact") if isinstance(candidate, dict) else None
+    candidate_sha = candidate_artifact.get("sha256") if isinstance(candidate_artifact, dict) else None
+    selected_ai = (
+        router_unit["selected_source"] == "opencode-ai"
+        and router_unit["selected_candidate_sha256"] == candidate_sha
+    )
+    outcome["selected"] = outcome["applied"] and selected_ai
+    outcome["rustc_pass"] = outcome["selected"]
+    outcome["semantic_acceptance"] = outcome["selected"]
 
     if outcome["semantic_acceptance"]:
         outcome["classification"] = "semantic_acceptance"
+    elif router_unit["deterministic_fallbacks"] or router_unit["no_selection"]:
+        outcome["refused"] = True
+        outcome["classification"] = "refused"
     elif route.get("status") == "refused" or final.get("status") == "refused":
         outcome["refused"] = True
         outcome["classification"] = "refused"
