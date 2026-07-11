@@ -219,7 +219,7 @@ sequenceDiagram
 
 AI exact 路径禁止同时传入 `--accept-existing-evidence`。历史 accepted reports 可以复验历史切片，但不能给新 AI candidate 补写 SHA 或 semantic status。
 
-跨项目稳定性使用 `validation/ai-finite-cross-project-suite.json` 的固定集合。preflight 阶段不调用模型、不执行翻译；缺 checkout、source span/hash 或 fresh runner 时必须保留为 `blocked`，不能过滤难例或用 synthetic carrier 冒充真实项目成功。
+跨项目稳定性使用 `validation/ai-finite-cross-project-suite.json` 的固定集合。`validate_ai_finite_cross_project_suite --require-all-ready` 会离线核验三条 pinned checkout 的 Git identity、真实 source/span、spec 和 fixture；preflight 不调用模型、不执行翻译。缺输入或 fresh runner 时必须保留为 `blocked`，不能过滤难例或用 synthetic carrier 冒充真实项目成功。输入 ready 也不能代替后续一次性 AI-primary/fresh-exact suite 结果。
 
 Named slice 增加 semantic numerator 必须同时满足：
 

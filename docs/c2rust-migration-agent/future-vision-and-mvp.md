@@ -270,7 +270,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | ---: | --- | --- |
 | 1 | P0-A8 fresh exact repair/strict 闭环 | 已完成；后续只修回归 |
 | 2 | P0-A9 通用 raw C2Rust/C2Rust+repair 同门禁物化 | 已完成；后续只修回归和基于跨项目失败数据调优 |
-| 3 | P0-A10 固定套件输入闭包 | 三个 pinned checkout、source span/hash/fixture 全部 ready |
+| 3 | P0-A10 固定套件输入闭包 | 已完成；剩余一次性有限执行器、strict evidence 和指标 |
 | 4 | P0-A6 真实 GLM-5.1 与比赛主机复验 | 有效资源包和 competition-exact host 可用；不得用模拟结果代替 |
 
 任何阶段都先运行一次有限构造集合，再按失败频率扩展 translator/ContextPack；禁止继续按 FlashDB 行号堆规则，也禁止为了等待外部资源停止可独立完成的 harness 工作。
@@ -303,7 +303,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   建立不超过 20 个 case 的固定集合：至少覆盖 3 个真实 C 项目和 10 个不同 construct family。阶段验收只运行一次有限集合，不执行 1,000/10,000 轮或循环压力测试。发布 AI invocation、candidate generation、rustc compile、semantic acceptance、refused/blocked、repair rounds 和 route selection 指标；成功率不得用重复同类切片放大。
 
-  当前进度：`validation/ai-finite-cross-project-suite.json` 已固定 12 个 case、3 个真实项目和 12 个唯一 construct family，validator 强制 `max_items=20`、至少 3 个项目/10 类构造、项目名不得参与路由，且重复 family 不能放大覆盖率。2026-07-12 干净集成 worktree 的 preflight 快照为 `ready=0/blocked=12`：该 worktree 不携带忽略的 FlashDB checkout；zlib-ng/libuv 的 pinned source root 不存在；4 个 FlashDB synthetic carrier 缺真实 source span，libuv 还缺 source hash/span。preflight 会按实际 checkout/hash 状态动态重算，该快照只表示输入完备性；`model_invocations=0`、`translations_executed=0`、`translation_coverage_numerator=0`，不得发布跨项目成功率。下一步是取得三个 pinned checkout、补齐真实绑定后仅运行一次有限集合。
+  当前进度：输入闭包已完成。`validation/ai-finite-cross-project-suite.json` 固定 12 个 case、3 个真实项目和 12 个唯一 construct family，其中 8 个为真实 upstream function slice，4 个为绑定真实 upstream fragment 的通用可执行 carrier；synthetic/unbound provenance 均为 0。`project_sources` 固定 repository、repo-relative checkout root 和 commit，validator 离线核验 Git HEAD、origin、tracked-clean 状态、spec/fixture SHA、source file/span SHA 以及 line/byte 对齐；只允许 LF/CRLF 换行等价，不允许内容漂移或项目标签伪造。2026-07-12 的 Windows 与 WSL `--require-all-ready` 均为 `ready=12/blocked=0`，21 个合同测试通过。该结果仍仅表示输入完备：`model_invocations=0`、`translations_executed=0`、`translation_coverage_numerator=0`，不得发布跨项目成功率。下一步是实现并仅运行一次有界 suite executor，逐项进入 AI-primary router、fresh exact gates 和独立 strict validator，再发布 invocation、generation、compile、semantic、blocked/refused、repair 与 route 指标。
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 
