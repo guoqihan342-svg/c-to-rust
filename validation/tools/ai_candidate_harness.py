@@ -5,6 +5,7 @@ from validation.tools._ai_candidate_harness_parts.cli import main
 from validation.tools._ai_candidate_harness_parts.context import build_context_pack, canonical_json_bytes
 from validation.tools._ai_candidate_harness_parts.gate_feedback import extract_gate_failure_facts
 from validation.tools._ai_candidate_harness_parts.fresh_oracle import prove_fresh_oracle
+from validation.tools._ai_candidate_harness_parts.exact_validation import validate_exact_candidate
 from validation.tools._ai_candidate_harness_parts.provider import (
     MAX_PROVIDER_STDOUT_BYTES,
     ProviderExecution,
@@ -50,6 +51,7 @@ __all__ = [
     "coordinate_repairs",
     "canonical_json_bytes",
     "extract_gate_failure_facts",
+    "validate_exact_candidate",
     "generate_candidate",
     "main",
     "parse_candidate_response",
