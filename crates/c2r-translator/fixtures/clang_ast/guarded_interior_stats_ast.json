@@ -1,0 +1,420 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "TypedefDecl",
+      "name": "size_t",
+      "type": { "qualType": "unsigned long" }
+    },
+    {
+      "kind": "RecordDecl",
+      "tagUsed": "struct",
+      "name": "Sample",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "kind": "FieldDecl",
+          "name": "mode",
+          "type": { "qualType": "int" }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "ready",
+          "type": { "qualType": "_Bool" }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "first_units",
+          "type": { "qualType": "unsigned int" }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "second_units",
+          "type": { "qualType": "unsigned int" }
+        }
+      ]
+    },
+    {
+      "kind": "RecordDecl",
+      "tagUsed": "struct",
+      "name": "Totals",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "kind": "FieldDecl",
+          "name": "active",
+          "type": { "qualType": "struct Sample" }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "visits",
+          "type": { "qualType": "unsigned int" }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "first_total",
+          "type": {
+            "desugaredQualType": "unsigned long",
+            "qualType": "size_t"
+          }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "second_total",
+          "type": {
+            "desugaredQualType": "unsigned long",
+            "qualType": "size_t"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "TypedefDecl",
+      "name": "SampleRef",
+      "type": { "qualType": "struct Sample *" }
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "update_totals",
+      "type": { "qualType": "_Bool (struct Totals *)" },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "totals",
+          "type": { "qualType": "struct Totals *" }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "sample",
+                  "init": "c",
+                  "type": {
+                    "desugaredQualType": "struct Sample *",
+                    "qualType": "SampleRef"
+                  },
+                  "inner": [
+                    {
+                      "kind": "UnaryOperator",
+                      "opcode": "&",
+                      "type": { "qualType": "struct Sample *" },
+                      "inner": [
+                        {
+                          "kind": "MemberExpr",
+                          "name": "active",
+                          "isArrow": true,
+                          "type": { "qualType": "struct Sample" },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": { "qualType": "struct Totals *" },
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "totals"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "IfStmt",
+              "inner": [
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "&&",
+                  "type": { "qualType": "int" },
+                  "inner": [
+                    {
+                      "kind": "BinaryOperator",
+                      "opcode": "==",
+                      "type": { "qualType": "int" },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "LValueToRValue",
+                          "type": { "qualType": "int" },
+                          "inner": [
+                            {
+                              "kind": "MemberExpr",
+                              "name": "mode",
+                              "isArrow": true,
+                              "type": { "qualType": "int" },
+                              "inner": [
+                                {
+                                  "kind": "DeclRefExpr",
+                                  "type": {
+                                    "desugaredQualType": "struct Sample *",
+                                    "qualType": "SampleRef"
+                                  },
+                                  "referencedDecl": {
+                                    "kind": "VarDecl",
+                                    "name": "sample"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "value": "7",
+                          "type": { "qualType": "int" }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "BinaryOperator",
+                      "opcode": "==",
+                      "type": { "qualType": "int" },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "IntegralCast",
+                          "type": { "qualType": "int" },
+                          "inner": [
+                            {
+                              "kind": "ImplicitCastExpr",
+                              "castKind": "LValueToRValue",
+                              "type": { "qualType": "_Bool" },
+                              "inner": [
+                                {
+                                  "kind": "MemberExpr",
+                                  "name": "ready",
+                                  "isArrow": true,
+                                  "type": { "qualType": "_Bool" },
+                                  "inner": [
+                                    {
+                                      "kind": "DeclRefExpr",
+                                      "type": {
+                                        "desugaredQualType": "struct Sample *",
+                                        "qualType": "SampleRef"
+                                      },
+                                      "referencedDecl": {
+                                        "kind": "VarDecl",
+                                        "name": "sample"
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "value": "1",
+                          "type": { "qualType": "int" }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "CompoundStmt",
+                  "inner": [
+                    {
+                      "kind": "UnaryOperator",
+                      "opcode": "++",
+                      "isPostfix": true,
+                      "type": { "qualType": "unsigned int" },
+                      "inner": [
+                        {
+                          "kind": "MemberExpr",
+                          "name": "visits",
+                          "isArrow": true,
+                          "type": { "qualType": "unsigned int" },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": { "qualType": "struct Totals *" },
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "totals"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "CompoundAssignOperator",
+                      "opcode": "+=",
+                      "type": {
+                        "desugaredQualType": "unsigned long",
+                        "qualType": "size_t"
+                      },
+                      "computeLHSType": {
+                        "desugaredQualType": "unsigned long",
+                        "qualType": "size_t"
+                      },
+                      "computeResultType": {
+                        "desugaredQualType": "unsigned long",
+                        "qualType": "size_t"
+                      },
+                      "inner": [
+                        {
+                          "kind": "MemberExpr",
+                          "name": "first_total",
+                          "isArrow": true,
+                          "type": {
+                            "desugaredQualType": "unsigned long",
+                            "qualType": "size_t"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": { "qualType": "struct Totals *" },
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "totals"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "IntegralCast",
+                          "type": {
+                            "desugaredQualType": "unsigned long",
+                            "qualType": "size_t"
+                          },
+                          "inner": [
+                            {
+                              "kind": "ImplicitCastExpr",
+                              "castKind": "LValueToRValue",
+                              "type": { "qualType": "unsigned int" },
+                              "inner": [
+                                {
+                                  "kind": "MemberExpr",
+                                  "name": "first_units",
+                                  "isArrow": true,
+                                  "type": { "qualType": "unsigned int" },
+                                  "inner": [
+                                    {
+                                      "kind": "DeclRefExpr",
+                                      "type": {
+                                        "desugaredQualType": "struct Sample *",
+                                        "qualType": "SampleRef"
+                                      },
+                                      "referencedDecl": {
+                                        "kind": "VarDecl",
+                                        "name": "sample"
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "CompoundAssignOperator",
+                      "opcode": "+=",
+                      "type": {
+                        "desugaredQualType": "unsigned long",
+                        "qualType": "size_t"
+                      },
+                      "computeLHSType": {
+                        "desugaredQualType": "unsigned long",
+                        "qualType": "size_t"
+                      },
+                      "computeResultType": {
+                        "desugaredQualType": "unsigned long",
+                        "qualType": "size_t"
+                      },
+                      "inner": [
+                        {
+                          "kind": "MemberExpr",
+                          "name": "second_total",
+                          "isArrow": true,
+                          "type": {
+                            "desugaredQualType": "unsigned long",
+                            "qualType": "size_t"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": { "qualType": "struct Totals *" },
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "totals"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "IntegralCast",
+                          "type": {
+                            "desugaredQualType": "unsigned long",
+                            "qualType": "size_t"
+                          },
+                          "inner": [
+                            {
+                              "kind": "ImplicitCastExpr",
+                              "castKind": "LValueToRValue",
+                              "type": { "qualType": "unsigned int" },
+                              "inner": [
+                                {
+                                  "kind": "MemberExpr",
+                                  "name": "second_units",
+                                  "isArrow": true,
+                                  "type": { "qualType": "unsigned int" },
+                                  "inner": [
+                                    {
+                                      "kind": "DeclRefExpr",
+                                      "type": {
+                                        "desugaredQualType": "struct Sample *",
+                                        "qualType": "SampleRef"
+                                      },
+                                      "referencedDecl": {
+                                        "kind": "VarDecl",
+                                        "name": "sample"
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "IntegralToBoolean",
+                  "type": { "qualType": "_Bool" },
+                  "inner": [
+                    {
+                      "kind": "IntegerLiteral",
+                      "value": "1",
+                      "type": { "qualType": "int" }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
