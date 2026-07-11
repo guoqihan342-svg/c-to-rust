@@ -162,7 +162,7 @@
   "validation_profile_status": "passed",
   "verified_unsafe_baseline": {
     "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-verified-unsafe-baseline.json",
-    "sha256": "3e6c84096a00eeeafeccfee338c7d054734b3013aa86fe7e3795f1c887a67680",
+    "sha256": "d746611d0e4a3c26665d1410f4edea41019966698305980779521deb231364b1",
     "status": "blocked"
   },
   "version_config_status": "recorded"

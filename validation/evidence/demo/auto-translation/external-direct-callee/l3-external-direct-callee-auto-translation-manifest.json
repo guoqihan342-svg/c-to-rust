@@ -85,7 +85,7 @@
       "route_decision": {
         "level": "L0",
         "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-        "sha256": "855dafcc4768a35dae1c120e489d9fd54fb6ea41b54cb1b3097b319ded9532f0",
+        "sha256": "75183246bb1b5e0498bd479ba49322f4a31169122ce3497ca8b84c2be1a9d85d",
         "status": "recorded"
       },
       "validation_profile": {
@@ -183,7 +183,7 @@
   "l3_evidence_manifest": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-evidence-manifest.json",
     "semantic_pass": true,
-    "sha256": "f0a37602a5be3406c478c23c75fb10a90b8228a127a229c4a44748ccc8b9f2d6",
+    "sha256": "1f482174545c136dd0f74fa4d37b51aba270f165e56238a8583572993ead58c7",
     "status": "passed"
   },
   "level": "L3",
@@ -389,7 +389,7 @@
   "route_decision": {
     "level": "L0",
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-    "sha256": "855dafcc4768a35dae1c120e489d9fd54fb6ea41b54cb1b3097b319ded9532f0",
+    "sha256": "75183246bb1b5e0498bd479ba49322f4a31169122ce3497ca8b84c2be1a9d85d",
     "status": "recorded"
   },
   "rust_check": {

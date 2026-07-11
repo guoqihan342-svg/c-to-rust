@@ -1,7 +1,7 @@
 {
   "accepted_performance_smoke": {
     "path": "validation/evidence/demo/l3-external-direct-callee-performance-smoke.json",
-    "sha256": "86e73951ca1d24c63bf426c2abbfa49ec85209b464fd3ff172a21a42215596ef",
+    "sha256": "503ccf8f675d18e1ded9a94fb391ed066263add47b22b05ab52e757aa2c9ca93",
     "status": "recorded"
   },
   "schema_version": 1,

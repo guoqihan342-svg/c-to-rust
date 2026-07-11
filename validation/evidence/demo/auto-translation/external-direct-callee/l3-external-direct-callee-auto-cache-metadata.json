@@ -47,7 +47,7 @@
     "route_decision": {
       "level": "L0",
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-      "sha256": "855dafcc4768a35dae1c120e489d9fd54fb6ea41b54cb1b3097b319ded9532f0",
+      "sha256": "75183246bb1b5e0498bd479ba49322f4a31169122ce3497ca8b84c2be1a9d85d",
       "status": "recorded"
     },
     "validation_profile": {

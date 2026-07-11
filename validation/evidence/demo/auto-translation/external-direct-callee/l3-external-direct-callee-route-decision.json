@@ -32,7 +32,7 @@
     },
     "translation_plan": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-auto-translation-plan.json",
-      "sha256": "2f102e6818e2e4aa9a7d94b8865361c817bd08d8d3ed18cc805de9ca164022dc",
+      "sha256": "a300ed4f6cad3a56df84a1efaeafa7ea290ce02b615dc17a533dd593962ae1dc",
       "status": "draft_generated"
     },
     "type_map": {
