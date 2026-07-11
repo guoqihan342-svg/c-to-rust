@@ -271,6 +271,12 @@ def run_plan_auto_retry_suppression(result: dict[str, Any], *, hint_id: str | No
 def run_plan_worker_final_decision(worker_result: dict[str, Any]) -> dict[str, str]:
     if int(worker_result.get("exit_code", 1)) == 0 and worker_result.get("summary_status") == "passed":
         return {"status": "accepted", "reason": "worker_summary_passed"}
+    auto_retry_suppressed = worker_result.get("auto_retry_suppressed")
+    if (
+        isinstance(auto_retry_suppressed, dict)
+        and auto_retry_suppressed.get("status") == "retry_suppressed_no_progress"
+    ):
+        return {"status": "refused", "reason": "retry_input_unchanged"}
     auto_retry = worker_result.get("auto_retry")
     if isinstance(auto_retry, dict) and auto_retry.get("final_hint_status") == "retry_limit_exceeded":
         return {"status": "refused", "reason": "retry_limit_exceeded"}
@@ -405,6 +411,18 @@ def run_plan(
                         repo_root=repo_root,
                         keep_open_on_failure=True,
                     )
+                    if retry_result.get("status") == "retry_suppressed_no_progress":
+                        retry_suppression = retry_result.get("retry_suppression")
+                        worker_result["auto_retry_suppressed"] = (
+                            retry_suppression
+                            if isinstance(retry_suppression, dict)
+                            else {
+                                "status": "retry_suppressed_no_progress",
+                                "reason": "retry_input_unchanged",
+                                "semantic_gate": False,
+                            }
+                        )
+                        break
                     retry_entry = {
                         "exit_code": int(retry_result.get("exit_code", 1)),
                         "summary_status": retry_result.get("summary_status"),
@@ -420,7 +438,10 @@ def run_plan(
                         if field in retry_result:
                             retry_entry[field] = retry_result[field]
                     retry_results.append(retry_entry)
-                    if retry_result.get("status") != "retry_limit_exceeded":
+                    if retry_result.get("status") not in {
+                        "retry_limit_exceeded",
+                        "retry_suppressed_no_progress",
+                    }:
                         attempt_timeline.append(run_plan_attempt_from_worker_result(retry_result))
                     if retry_result.get("hint_id"):
                         hint_id = str(retry_result["hint_id"])
@@ -436,7 +457,10 @@ def run_plan(
                         )
                         copy_opencode_worker_evidence(retry_result, worker_result)
                         break
-                    if retry_result.get("status") == "retry_limit_exceeded":
+                    if retry_result.get("status") in {
+                        "retry_limit_exceeded",
+                        "retry_suppressed_no_progress",
+                    }:
                         break
                 else:
                     if retry_results:

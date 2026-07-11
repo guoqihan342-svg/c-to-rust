@@ -186,6 +186,20 @@ def run_worker(
     else:
         raise SystemExit(f"unsupported worker mode: {mode}")
 
+    effective_input_sha256 = worker_effective_input_sha256(
+        request=request,
+        mode=mode,
+        repair_trace=repair_trace,
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+        opencode_credential_source=opencode_credential_source,
+        opencode_preflight_report=opencode_preflight_report,
+        repo_root=repo_root,
+    )
     if stale_summary_cleanup_error is None:
         completed, opencode_process_retries, session_redaction_count = run_worker_process(
             argv=argv,
@@ -386,6 +400,8 @@ def run_worker(
     status = "recorded" if recorded is not None else "failed"
     report_path = report_dir / "run-worker-report.json"
     repair_hint = None
+    root_cause_key = None
+    diagnostics: dict[str, Any] = {}
     if effective_exit_code != 0:
         root_cause_key = (
             synthetic_failure_root_cause
@@ -419,6 +435,13 @@ def run_worker(
             exit_code=effective_exit_code,
             attempt_number=attempt_number,
             diagnostics=diagnostics,
+            effective_input_sha256=effective_input_sha256,
+            failure_sha256=worker_failure_sha256(
+                root_cause_key=root_cause_key,
+                summary_status=summary_status,
+                process_returncode=int(completed.returncode),
+                diagnostics=diagnostics,
+            ),
             retry_of=retry_of,
             rollback_evidence=rollback_evidence,
             rejected_summary_evidence=rejected_summary_evidence,
@@ -426,6 +449,12 @@ def run_worker(
             opencode_session_evidence=opencode_session_evidence,
             opencode_contract_verification=opencode_contract_verification,
         )
+    failure_sha256 = worker_failure_sha256(
+        root_cause_key=root_cause_key,
+        summary_status=summary_status,
+        process_returncode=int(completed.returncode),
+        diagnostics=diagnostics,
+    )
     process_redaction_count = (
         int(opencode_process_retries.get("redaction_count", session_redaction_count))
         if isinstance(opencode_process_retries, dict)
@@ -446,6 +475,8 @@ def run_worker(
         "recorded": recorded is not None,
         "exit_code": effective_exit_code,
         "process_returncode": int(completed.returncode),
+        "effective_input_sha256": effective_input_sha256,
+        "failure_sha256": failure_sha256,
         "redaction_count": process_redaction_count + int(artifact_redaction["redaction_count"]),
         "artifact_redaction_count": int(artifact_redaction["redaction_count"]),
         "argv": report_argv,
@@ -486,6 +517,8 @@ def run_worker(
             "root_cause_key": repair_hint["root_cause_key"],
             "status": "open",
             "diagnostics": repair_hint["diagnostics"],
+            "effective_input_sha256": repair_hint["effective_input_sha256"],
+            "failure_sha256": repair_hint["failure_sha256"],
         }
     atomic_write_json(report_path, report)
 
@@ -503,6 +536,8 @@ def run_worker(
             "runner_kind": runner_kind,
             "exit_code": effective_exit_code,
             "process_returncode": int(completed.returncode),
+            "effective_input_sha256": effective_input_sha256,
+            "failure_sha256": failure_sha256,
             "summary_path": repo_relative(summary_path, repo_root=repo_root),
             "summary_status": summary_status,
             "recorded": recorded is not None,

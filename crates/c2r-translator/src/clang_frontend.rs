@@ -165,7 +165,8 @@ pub struct ClangDryRun {
 /// Resolve the clang binary path for AST dump JSON lowering.
 ///
 /// Resolution order:
-/// 1. `CLANG_PATH` environment variable (if set and the file exists)
+/// 1. `CLANG_PATH` environment variable (an existing path or a bare command
+///    name resolved by the process `PATH`)
 /// 2. Vendored local paths under the workspace / project root
 ///    - `tools/llvm/bin/clang` (or `.exe` on Windows)
 ///    - `tools/llvm/bin/clang-18` (or `.exe` on Windows)
@@ -184,9 +185,10 @@ pub fn resolve_clang_path(environment: &BTreeMap<String, String>) -> Option<(Pat
         .filter(|value| !value.is_empty())
     {
         let path = PathBuf::from(clang_path);
-        if path.exists() {
+        if path.exists() || path.components().count() == 1 {
             return Some((path, "CLANG_PATH".to_string()));
         }
+        return None;
     }
 
     // 2. Fall back to vendored local paths (relative to cwd / repo root)

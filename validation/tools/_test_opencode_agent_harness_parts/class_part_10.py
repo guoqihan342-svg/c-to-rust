@@ -496,6 +496,11 @@ class _OpenCodeAgentHarnessTestPart10:
             self.assertEqual(repair_history["rollback_ids"], [retry["rollback_evidence"]["path"]])
             payload = json.loads(fetch_rows(db_path, "select payload_json from repair_hints where hint_id=?", (hint_id,))[0][0])
             self.assertEqual(payload["status"], "revalidated_passed")
+            self.assertEqual(call_count, 2)
+            self.assertEqual(len(payload["attempts"]), 2)
+            for attempt in payload["attempts"]:
+                self.assertRegex(attempt["effective_input_sha256"], r"^[0-9a-f]{64}$")
+                self.assertRegex(attempt["failure_sha256"], r"^[0-9a-f]{64}$")
 
     def test_retry_worker_cli_dispatches_and_returns_retry_exit_code(self) -> None:
         argv = [
@@ -628,6 +633,294 @@ class _OpenCodeAgentHarnessTestPart10:
                     summary_path=Path("C:/temp/summary.json"),
                     repo_root=REPO_ROOT,
                 )
+
+    def test_retry_worker_suppresses_third_identical_non_transient_launch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "source"
+            source_root.mkdir(parents=True)
+            (source_root / "demo.c").write_text("int add_one(int x) { return x + 1; }\n", encoding="utf-8")
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-no-progress",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-no-progress",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path(repo_rel(source_root)),
+                source_file="demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            call_count = 0
+
+            def failing_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                nonlocal call_count
+                call_count += 1
+                request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                request = json.loads(request_path.read_text(encoding="utf-8"))
+                summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                write_worker_summary(
+                    summary_path,
+                    request["run_id"],
+                    status="failed",
+                    failed=1,
+                    semantic_pass=0,
+                    workflow_metrics={"root_cause_counts": {"rust_type_mismatch": 1}},
+                )
+                return subprocess.CompletedProcess(
+                    argv,
+                    0,
+                    stdout=f"worker attempt {call_count}\n",
+                    stderr="error[E0308]: mismatched types\n",
+                )
+
+            first = harness.run_worker(
+                db_path=db_path,
+                run_id="run-no-progress",
+                worker_id="worker-a",
+                command_runner=failing_runner,
+                repo_root=REPO_ROOT,
+            )
+            hint_id = first["repair_hint"]["hint_id"]
+            second = harness.retry_worker(
+                db_path=db_path,
+                run_id="run-no-progress",
+                worker_id="worker-a",
+                hint_id=hint_id,
+                command_runner=failing_runner,
+                repo_root=REPO_ROOT,
+                keep_open_on_failure=True,
+            )
+            suppressed = harness.retry_worker(
+                db_path=db_path,
+                run_id="run-no-progress",
+                worker_id="worker-a",
+                hint_id=hint_id,
+                command_runner=failing_runner,
+                repo_root=REPO_ROOT,
+                keep_open_on_failure=True,
+            )
+
+            self.assertEqual(first["exit_code"], 1)
+            self.assertEqual(second["exit_code"], 1)
+            self.assertEqual(call_count, 2)
+            self.assertEqual(suppressed["status"], "retry_suppressed_no_progress")
+            self.assertEqual(suppressed["final_decision"], {"status": "refused", "reason": "retry_input_unchanged"})
+            self.assertEqual(suppressed["retry_suppression"]["compared_attempts"], [1, 2])
+            payload = json.loads(
+                fetch_rows(
+                    db_path,
+                    "select payload_json from repair_hints where hint_id=?",
+                    (hint_id,),
+                )[0][0]
+            )
+            self.assertEqual(payload["status"], "retry_suppressed_no_progress")
+            self.assertIsNone(payload["retry_command"])
+            self.assertEqual(len(payload["attempts"]), 2)
+            events = fetch_rows(
+                db_path,
+                "select event_type, payload_json from events where event_type='repair_retry_suppressed'",
+            )
+            self.assertEqual(len(events), 1)
+            self.assertEqual(json.loads(events[0][1])["reason"], "retry_input_unchanged")
+            connection = sqlite3.connect(db_path)
+            try:
+                resume_hints = harness.repair_hint_resume_summary(connection, run_id="run-no-progress")
+            finally:
+                connection.close()
+            self.assertEqual(resume_hints["open_count"], 0)
+            self.assertEqual(
+                harness.open_repair_hints_by_worker_id(resume_hints, run_id="run-no-progress"),
+                {},
+            )
+            self.assertEqual(
+                harness.run_plan_worker_final_decision(
+                    {"exit_code": 1, "recorded": True, "auto_retry_suppressed": suppressed["retry_suppression"]}
+                ),
+                {"status": "refused", "reason": "retry_input_unchanged"},
+            )
+
+    def test_no_progress_hashes_allow_effective_input_and_failure_changes(self) -> None:
+        with temp_repo_dir() as tmp:
+            source_root = Path(tmp) / "source"
+            source_root.mkdir(parents=True)
+            source_path = source_root / "demo.c"
+            spec_path = source_root / "slice.json"
+            source_path.write_text("int add_one(int x) { return x + 1; }\n", encoding="utf-8")
+            spec_path.write_text('{"function_name":"add_one"}\n', encoding="utf-8")
+            request = {
+                "source_repo_root": repo_rel(source_root),
+                "source_file": "demo.c",
+                "slice_specs": [repo_rel(spec_path)],
+                "function": "add_one",
+                "target_id": "demo",
+                "slice_id": "demo-add-one",
+                "source_commit": "abc123",
+                "proof_class": "local-simulation",
+                "out_root": repo_rel(Path(tmp) / "worker"),
+                "run_id": "run-input-worker-a",
+            }
+
+            def effective_hash(trace: dict[str, object] | None) -> str:
+                return harness.worker_effective_input_sha256(
+                    request=request,
+                    mode="deterministic",
+                    repair_trace=trace,
+                    opencode_command="opencode",
+                    opencode_model=None,
+                    opencode_agent=None,
+                    opencode_variant="max",
+                    opencode_skip_permissions=False,
+                    opencode_allow_non_competition_model=False,
+                    opencode_credential_source="none",
+                    opencode_preflight_report=None,
+                    repo_root=REPO_ROOT,
+                )
+
+            initial_input = effective_hash({"action": "adjust type", "attempt": 1, "hint_id": "hint-a"})
+            transient_only_change = effective_hash(
+                {"action": "adjust type", "attempt": 99, "hint_id": "hint-b", "retry_of": "hint-a"}
+            )
+            changed_trace = effective_hash({"action": "add cast"})
+            self.assertEqual(initial_input, transient_only_change)
+            self.assertNotEqual(initial_input, changed_trace)
+
+            source_path.write_text("int add_one(int x) { return (int)(x + 1); }\n", encoding="utf-8")
+            changed_source = effective_hash({"action": "adjust type"})
+            self.assertNotEqual(initial_input, changed_source)
+            source_path.write_text("int add_one(int x) { return x + 1; }\n", encoding="utf-8")
+            spec_path.write_text('{"function_name":"add_one","mode":"strict"}\n', encoding="utf-8")
+            changed_spec = effective_hash({"action": "adjust type"})
+            self.assertNotEqual(initial_input, changed_spec)
+
+            diagnostics_a = {
+                "root_cause_key": "rust_type_mismatch",
+                "process_returncode": 1,
+                "stdout_tail": "worker attempt 1",
+                "stderr_tail": "error[E0308]: mismatched types",
+                "primary_error": {"kind": "rustc", "code": "E0308", "message": "mismatched types"},
+            }
+            diagnostics_attempt_noise = {**diagnostics_a, "stdout_tail": "worker attempt 2"}
+            diagnostics_changed = {
+                **diagnostics_a,
+                "stderr_tail": "error[E0382]: borrow of moved value",
+                "primary_error": {"kind": "rustc", "code": "E0382", "message": "borrow of moved value"},
+            }
+            failure_a = harness.worker_failure_sha256(
+                root_cause_key="rust_type_mismatch",
+                summary_status="failed",
+                process_returncode=1,
+                diagnostics=diagnostics_a,
+            )
+            failure_attempt_noise = harness.worker_failure_sha256(
+                root_cause_key="rust_type_mismatch",
+                summary_status="failed",
+                process_returncode=1,
+                diagnostics=diagnostics_attempt_noise,
+            )
+            failure_changed = harness.worker_failure_sha256(
+                root_cause_key="rust_borrow_error",
+                summary_status="failed",
+                process_returncode=1,
+                diagnostics=diagnostics_changed,
+            )
+            self.assertEqual(failure_a, failure_attempt_noise)
+            self.assertNotEqual(failure_a, failure_changed)
+
+            attempt_a = {
+                "attempt": 1,
+                "root_cause_key": "rust_type_mismatch",
+                "diagnostics": diagnostics_a,
+                "effective_input_sha256": initial_input,
+                "failure_sha256": failure_a,
+            }
+            attempt_b = {**attempt_a, "attempt": 2}
+            hint = {"attempts": [attempt_a, attempt_b]}
+            self.assertIsNotNone(
+                harness.no_progress_retry_suppression(
+                    hint,
+                    current_effective_input_sha256=initial_input,
+                )
+            )
+            self.assertIsNone(
+                harness.no_progress_retry_suppression(
+                    hint,
+                    current_effective_input_sha256=changed_trace,
+                )
+            )
+            failure_drift_hint = {
+                "attempts": [attempt_a, {**attempt_b, "failure_sha256": failure_changed}]
+            }
+            self.assertIsNone(
+                harness.no_progress_retry_suppression(
+                    failure_drift_hint,
+                    current_effective_input_sha256=initial_input,
+                )
+            )
+
+    def test_no_progress_suppression_preserves_transient_and_incomplete_hash_retries(self) -> None:
+        effective_input_sha256 = "a" * 64
+        failure_sha256 = "b" * 64
+        diagnostics = {
+            "primary_error": {"kind": "process", "message": "retryable infrastructure failure"}
+        }
+        transient_roots = [
+            "process_timeout",
+            "sqlite_database_locked",
+            "opencode_database_locked",
+            "opencode_preflight_failed",
+            "credential_unavailable",
+            "opencode_contract_not_executed",
+            "environment_missing_dependency",
+        ]
+        for root_cause_key in transient_roots:
+            with self.subTest(root_cause_key=root_cause_key):
+                attempts = [
+                    {
+                        "attempt": attempt,
+                        "root_cause_key": root_cause_key,
+                        "diagnostics": diagnostics,
+                        "effective_input_sha256": effective_input_sha256,
+                        "failure_sha256": failure_sha256,
+                    }
+                    for attempt in (1, 2)
+                ]
+                self.assertIsNone(
+                    harness.no_progress_retry_suppression(
+                        {"attempts": attempts},
+                        current_effective_input_sha256=effective_input_sha256,
+                    )
+                )
+
+        incomplete_attempts = [
+            {
+                "attempt": 1,
+                "root_cause_key": "rust_type_mismatch",
+                "diagnostics": diagnostics,
+                "effective_input_sha256": effective_input_sha256,
+            },
+            {
+                "attempt": 2,
+                "root_cause_key": "rust_type_mismatch",
+                "diagnostics": diagnostics,
+                "effective_input_sha256": effective_input_sha256,
+                "failure_sha256": failure_sha256,
+            },
+        ]
+        self.assertIsNone(
+            harness.no_progress_retry_suppression(
+                {"attempts": incomplete_attempts},
+                current_effective_input_sha256=effective_input_sha256,
+            )
+        )
 
     def test_finalize_run_updates_run_record_with_summary(self) -> None:
         with temp_repo_dir() as tmp:

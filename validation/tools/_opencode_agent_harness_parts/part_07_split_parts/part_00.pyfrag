@@ -11,6 +11,8 @@ def repair_attempt_payload(
     retry_of: str | None = None,
     rollback_evidence: dict[str, Any] | None = None,
     diagnostics: dict[str, Any] | None = None,
+    effective_input_sha256: str | None = None,
+    failure_sha256: str | None = None,
 ) -> dict[str, Any]:
     attempt = {
         "attempt": attempt_number,
@@ -29,6 +31,10 @@ def repair_attempt_payload(
         attempt["rollback_evidence"] = rollback_evidence
     if diagnostics is not None:
         attempt["diagnostics"] = diagnostics
+    if effective_input_sha256 is not None:
+        attempt["effective_input_sha256"] = effective_input_sha256
+    if failure_sha256 is not None:
+        attempt["failure_sha256"] = failure_sha256
     return attempt
 
 
@@ -49,6 +55,16 @@ def repair_attempt_from_result(result: dict[str, Any]) -> dict[str, Any]:
         diagnostics=(
             repair_hint.get("diagnostics")
             if isinstance(repair_hint, dict) and isinstance(repair_hint.get("diagnostics"), dict)
+            else None
+        ),
+        effective_input_sha256=(
+            str(result["effective_input_sha256"])
+            if sha256_fingerprint(result.get("effective_input_sha256")) is not None
+            else None
+        ),
+        failure_sha256=(
+            str(result["failure_sha256"])
+            if sha256_fingerprint(result.get("failure_sha256")) is not None
             else None
         ),
     )
@@ -167,6 +183,8 @@ def record_repair_hint(connection: sqlite3.Connection, *, hint: dict[str, Any]) 
             "root_cause_key": hint["root_cause_key"],
             "attempt": hint["attempts"][-1]["attempt"] if isinstance(hint.get("attempts"), list) else None,
             "attempt_count": len(hint["attempts"]) if isinstance(hint.get("attempts"), list) else 0,
+            "effective_input_sha256": hint.get("effective_input_sha256"),
+            "failure_sha256": hint.get("failure_sha256"),
         },
     )
 

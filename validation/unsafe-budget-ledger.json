@@ -63,8 +63,8 @@
   "registered_findings": [
     {
       "category": "raw_pointer",
-      "file": "validation/l2_slices/src/bin/emit_reports/part_00_split_parts/part_01.rs",
-      "path": "validation/l2_slices/src/bin/emit_reports/part_00_split_parts/part_01.rs",
+      "file": "validation/l2_slices/src/bin/emit_reports/part_00_split_parts/part_01_split_parts/part_01.rs",
+      "path": "validation/l2_slices/src/bin/emit_reports/part_00_split_parts/part_01_split_parts/part_01.rs",
       "reason": "The real-fdb-blob-make Rust replay report compares the returned FdbBlob pointer identity with the input blob address, matching the C observable output return_same_blob for an accepted evidence slice.",
       "replacement_or_alternative": "Keep the raw pointer cast inside the bounded L2 replay reporter until the fixture-report ABI observer is replaced by a narrower safe identity wrapper.",
       "review_status": "accepted_with_evidence",
@@ -78,12 +78,64 @@
         "source_slice": "validation/slice-specs/flashdb-real-fdb-blob-make.json"
       },
       "span": {
-        "end_line": 310,
-        "start_line": 308
+        "end_line": 88,
+        "start_line": 86
       },
       "validation_evidence": {
         "gate": "validate_auto_translation_evidence.py --require-semantic-pass",
         "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-unsafe-scan.json"
+      }
+    },
+    {
+      "category": "raw_pointer",
+      "file": "validation/l2_slices/src/bin/emit_reports/part_00_split_parts/part_01_split_parts/part_02.rs",
+      "path": "validation/l2_slices/src/bin/emit_reports/part_00_split_parts/part_01_split_parts/part_02.rs",
+      "reason": "The real-fdb-kv-to-blob Rust replay report compares the returned FdbBlob pointer identity with the input blob address, matching the C observable output return_same_blob for the accepted named slice.",
+      "replacement_or_alternative": "Keep the raw pointer casts inside the bounded replay reporter until the pointer-identity observable is represented by a narrower safe identity helper.",
+      "review_status": "accepted_with_evidence",
+      "source_evidence": {
+        "accepted_evidence": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-final-verification.json",
+        "observable_outputs": [
+          "return_same_blob",
+          "blob.saved.meta_addr",
+          "blob.saved.addr",
+          "blob.saved.len"
+        ],
+        "source_slice": "validation/slice-specs/flashdb-real-fdb-kv-to-blob.json"
+      },
+      "span": {
+        "end_line": 92,
+        "start_line": 90
+      },
+      "validation_evidence": {
+        "gate": "validate_auto_translation_evidence.py --require-semantic-pass",
+        "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-unsafe-scan.json"
+      }
+    },
+    {
+      "category": "raw_pointer",
+      "file": "validation/l2_slices/src/bin/emit_reports/part_00_split_parts/part_03.rs",
+      "path": "validation/l2_slices/src/bin/emit_reports/part_00_split_parts/part_03.rs",
+      "reason": "The real-fdb-tsl-to-blob Rust replay report compares the returned FdbBlob pointer identity with the input blob address, matching the C observable output return_same_blob for the accepted named slice.",
+      "replacement_or_alternative": "Keep the raw pointer casts inside the bounded replay reporter until the pointer-identity observable is represented by a narrower safe identity helper.",
+      "review_status": "accepted_with_evidence",
+      "source_evidence": {
+        "accepted_evidence": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-final-verification.json",
+        "observable_outputs": [
+          "return_same_blob",
+          "blob.saved.meta_addr",
+          "blob.saved.addr",
+          "blob.saved.len"
+        ],
+        "source_slice": "validation/slice-specs/flashdb-real-fdb-tsl-to-blob.json"
+      },
+      "span": {
+        "end_line": 77,
+        "start_line": 75
+      },
+      "validation_evidence": {
+        "gate": "validate_auto_translation_evidence.py --require-semantic-pass",
+        "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-scan.json"
       }
     },
     {
@@ -105,6 +157,27 @@
       "validation_evidence": {
         "gate": "validate_auto_translation_evidence.py --require-semantic-pass",
         "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-unsafe-scan.json"
+      }
+    },
+    {
+      "category": "raw_pointer",
+      "file": "validation/l2_slices/src/fdb_tsl_to_blob.rs",
+      "path": "validation/l2_slices/src/fdb_tsl_to_blob.rs",
+      "reason": "The L2 real-fdb-tsl-to-blob model retains the C fdb_blob buf field so the bounded record shape and default state remain explicit while accepted evidence verifies the translated saved fields and returned blob identity.",
+      "replacement_or_alternative": "Replace the unused raw buffer field with a proven safe layout model only when the full record layout and ABI boundary are modeled; until then keep it confined to this validation slice.",
+      "review_status": "accepted_with_evidence",
+      "source_evidence": {
+        "accepted_evidence": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-final-verification.json",
+        "c_header_dependency": "inc/fdb_def.h",
+        "source_slice": "validation/slice-specs/flashdb-real-fdb-tsl-to-blob.json"
+      },
+      "span": {
+        "end_line": 22,
+        "start_line": 22
+      },
+      "validation_evidence": {
+        "gate": "validate_auto_translation_evidence.py --require-semantic-pass",
+        "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-tsl-to-blob/l3-real-fdb-tsl-to-blob-unsafe-scan.json"
       }
     }
   ]

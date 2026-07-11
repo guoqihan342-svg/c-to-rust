@@ -184,12 +184,56 @@ fn real_clang_ast_test_setup() -> PathBuf {
             "real clang AST smoke tests require CLANG_PATH or a vendored clang under tools/llvm/bin or tools/clang/bin"
         )
     });
-    assert!(
-        clang_path.exists(),
-        "resolved clang path from {source} does not exist: {}",
-        clang_path.display()
-    );
+    if clang_path.components().count() == 1 {
+        let output = std::process::Command::new(&clang_path)
+            .arg("--version")
+            .output()
+            .unwrap_or_else(|error| {
+                panic!(
+                    "resolved clang command from {source} is not executable via PATH: {}: {error}",
+                    clang_path.display()
+                )
+            });
+        assert!(
+            output.status.success(),
+            "resolved clang command from {source} failed --version: {}",
+            clang_path.display()
+        );
+    } else {
+        assert!(
+            clang_path.exists(),
+            "resolved clang path from {source} does not exist: {}",
+            clang_path.display()
+        );
+    }
     clang_path
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_path_resolution_accepts_bare_command_name_for_path_lookup() {
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        "clang".to_string(),
+    )]);
+
+    let resolved = resolve_clang_path(&environment);
+
+    assert_eq!(
+        resolved,
+        Some((PathBuf::from("clang"), "CLANG_PATH".to_string()))
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_path_resolution_rejects_missing_explicit_path_without_fallback() {
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        "missing/toolchain/clang".to_string(),
+    )]);
+
+    assert_eq!(resolve_clang_path(&environment), None);
 }
 
 #[cfg(feature = "clang-lowering-report")]

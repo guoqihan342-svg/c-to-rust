@@ -355,6 +355,288 @@ def write_opencode_preflight_marker(
     }
 
 
+_EFFECTIVE_INPUT_TRANSIENT_FIELDS = frozenset(
+    {
+        "attempt",
+        "attempt_number",
+        "created_at",
+        "duration_seconds",
+        "elapsed_seconds",
+        "expires_at",
+        "harness_attempt",
+        "harness_attempt_number",
+        "harness_repair_hint_id",
+        "harness_retry_of",
+        "heartbeat_at",
+        "hint_id",
+        "repair_round",
+        "repair_round_cap",
+        "report_path",
+        "retry_command",
+        "retry_of",
+        "timestamp",
+        "timestamps",
+        "updated_at",
+        "worker_report_path",
+    }
+)
+_FAILURE_TRANSIENT_FIELDS = frozenset(
+    {
+        "attempt",
+        "attempt_number",
+        "created_at",
+        "duration_seconds",
+        "elapsed_seconds",
+        "expires_at",
+        "heartbeat_at",
+        "hint_id",
+        "repair_round",
+        "repair_round_cap",
+        "retry_count",
+        "retry_of",
+        "timestamp",
+        "timestamps",
+        "updated_at",
+    }
+)
+_NO_PROGRESS_UNCERTAIN_ROOT_CAUSES = frozenset(
+    {
+        "final_gate_failed",
+        "missing-summary",
+        "missing_summary",
+        "unknown",
+        "worker_failed",
+        "worker_process_failed",
+    }
+)
+_NO_PROGRESS_TRANSIENT_ROOT_CAUSE_TOKENS = (
+    "contract",
+    "credential",
+    "database",
+    "environment",
+    "lock",
+    "missing",
+    "network",
+    "not_found",
+    "permission",
+    "preflight",
+    "rate_limit",
+    "resource_busy",
+    "sqlite",
+    "temporar",
+    "timeout",
+    "timed_out",
+    "toolchain",
+    "unavailable",
+)
+
+
+def canonical_fingerprint_sha256(value: Any) -> str:
+    return sha256_text(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+
+
+def normalize_effective_input_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): normalize_effective_input_value(item)
+            for key, item in sorted(value.items(), key=lambda entry: str(entry[0]))
+            if str(key) not in _EFFECTIVE_INPUT_TRANSIENT_FIELDS
+        }
+    if isinstance(value, (list, tuple)):
+        return [normalize_effective_input_value(item) for item in value]
+    if isinstance(value, str):
+        return value.replace("\r\n", "\n").replace("\r", "\n")
+    return value
+
+
+def effective_input_artifact(path: Path, *, repo_root: Path) -> dict[str, Any]:
+    checked_path = repo_path(path, repo_root=repo_root)
+    binding: dict[str, Any] = {"path": repo_relative(checked_path, repo_root=repo_root)}
+    if checked_path.is_file():
+        binding.update({"status": "present", "sha256": sha256_file(checked_path)})
+    else:
+        binding["status"] = "missing"
+    return binding
+
+
+def worker_effective_input_payload(
+    *,
+    request: dict[str, Any],
+    mode: str,
+    repair_trace: dict[str, Any] | None,
+    opencode_command: str,
+    opencode_model: str | None,
+    opencode_agent: str | None,
+    opencode_variant: str,
+    opencode_skip_permissions: bool,
+    opencode_allow_non_competition_model: bool,
+    opencode_credential_source: str,
+    opencode_preflight_report: Path | None,
+    repo_root: Path,
+) -> dict[str, Any]:
+    artifact_inputs: dict[str, Any] = {}
+    source_repo_root = request.get("source_repo_root")
+    source_file = request.get("source_file")
+    if isinstance(source_repo_root, str) and source_repo_root and isinstance(source_file, str) and source_file:
+        artifact_inputs["source"] = effective_input_artifact(
+            Path(source_repo_root) / source_file,
+            repo_root=repo_root,
+        )
+    slice_specs = request.get("slice_specs")
+    if isinstance(slice_specs, list):
+        artifact_inputs["slice_specs"] = [
+            effective_input_artifact(Path(value), repo_root=repo_root)
+            for value in slice_specs
+            if isinstance(value, str) and value
+        ]
+    compiler_command_source = request.get("compiler_command_source")
+    if isinstance(compiler_command_source, str) and compiler_command_source:
+        artifact_inputs["compiler_command_source"] = effective_input_artifact(
+            Path(compiler_command_source),
+            repo_root=repo_root,
+        )
+    if opencode_preflight_report is not None:
+        artifact_inputs["opencode_preflight_report"] = effective_input_artifact(
+            opencode_preflight_report,
+            repo_root=repo_root,
+        )
+
+    payload: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "mode": mode,
+        "request": normalize_effective_input_value(request),
+        "worker_command": portable_python_script_argv(
+            "scripts/c2rust-migrator.py",
+            "--phase",
+            "migrate",
+            "--input",
+            "<attempt-request>",
+        ),
+        "artifact_inputs": artifact_inputs,
+    }
+    if repair_trace is not None:
+        payload["repair_trace"] = normalize_effective_input_value(repair_trace)
+    if mode == "opencode":
+        payload["opencode_launch_policy"] = opencode_launch_policy(
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
+            opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+            opencode_credential_source=opencode_credential_source,
+        )
+    return normalize_effective_input_value(payload)
+
+
+def worker_effective_input_sha256(**kwargs: Any) -> str:
+    return canonical_fingerprint_sha256(worker_effective_input_payload(**kwargs))
+
+
+def normalize_failure_text(value: str) -> str:
+    text = value.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"repair:[^\s\"']+", "<repair-hint>", text)
+    text = re.sub(r"(?i)\b(attempt|retry|repair[ _-]?round)\s*(?:#|=|:)?\s*\d+\b", r"\1 <n>", text)
+    text = re.sub(r"(?i)(request-attempt-|attempt-)(\d+)", r"\1<n>", text)
+    text = re.sub(r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\b", "<timestamp>", text)
+    return "\n".join(line.rstrip() for line in text.split("\n")).strip()
+
+
+def normalize_failure_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): normalize_failure_value(item)
+            for key, item in sorted(value.items(), key=lambda entry: str(entry[0]))
+            if str(key) not in _FAILURE_TRANSIENT_FIELDS
+        }
+    if isinstance(value, (list, tuple)):
+        return [normalize_failure_value(item) for item in value]
+    if isinstance(value, str):
+        return normalize_failure_text(value)
+    return value
+
+
+def worker_failure_sha256(
+    *,
+    root_cause_key: str | None,
+    summary_status: str,
+    process_returncode: int,
+    diagnostics: dict[str, Any] | None,
+) -> str:
+    diagnostic_payload = diagnostics if isinstance(diagnostics, dict) else {}
+    payload = {
+        "root_cause_key": normalize_failure_text(root_cause_key or ""),
+        "status": normalize_failure_text(summary_status),
+        "returncode": int(process_returncode),
+        "primary_error": normalize_failure_value(diagnostic_payload.get("primary_error")),
+        "diagnostics": normalize_failure_value(diagnostic_payload),
+    }
+    return canonical_fingerprint_sha256(payload)
+
+
+def sha256_fingerprint(value: Any) -> str | None:
+    if isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value):
+        return value
+    return None
+
+
+def no_progress_failure_is_determined(attempt: dict[str, Any]) -> bool:
+    root_cause_key = attempt.get("root_cause_key")
+    if not isinstance(root_cause_key, str) or not root_cause_key.strip():
+        return False
+    normalized_root_cause = root_cause_key.strip().lower()
+    if normalized_root_cause in _NO_PROGRESS_UNCERTAIN_ROOT_CAUSES:
+        return False
+    if any(token in normalized_root_cause for token in _NO_PROGRESS_TRANSIENT_ROOT_CAUSE_TOKENS):
+        return False
+    diagnostics = attempt.get("diagnostics")
+    primary_error = diagnostics.get("primary_error") if isinstance(diagnostics, dict) else None
+    return (
+        isinstance(primary_error, dict)
+        and isinstance(primary_error.get("message"), str)
+        and bool(primary_error["message"].strip())
+    )
+
+
+def no_progress_retry_suppression(
+    hint: dict[str, Any],
+    *,
+    current_effective_input_sha256: str,
+) -> dict[str, Any] | None:
+    attempts = hint.get("attempts")
+    if not isinstance(attempts, list):
+        return None
+    ordered_attempts = sorted(
+        (attempt for attempt in attempts if isinstance(attempt, dict)),
+        key=lambda attempt: int(attempt.get("attempt", 0)),
+    )
+    if len(ordered_attempts) < 2:
+        return None
+    previous, latest = ordered_attempts[-2:]
+    previous_input = sha256_fingerprint(previous.get("effective_input_sha256"))
+    latest_input = sha256_fingerprint(latest.get("effective_input_sha256"))
+    current_input = sha256_fingerprint(current_effective_input_sha256)
+    previous_failure = sha256_fingerprint(previous.get("failure_sha256"))
+    latest_failure = sha256_fingerprint(latest.get("failure_sha256"))
+    if None in {previous_input, latest_input, current_input, previous_failure, latest_failure}:
+        return None
+    if previous_input != latest_input or latest_input != current_input:
+        return None
+    if previous_failure != latest_failure:
+        return None
+    if not no_progress_failure_is_determined(previous) or not no_progress_failure_is_determined(latest):
+        return None
+    return {
+        "status": "retry_suppressed_no_progress",
+        "reason": "retry_input_unchanged",
+        "effective_input_sha256": latest_input,
+        "failure_sha256": latest_failure,
+        "compared_attempts": [previous.get("attempt"), latest.get("attempt")],
+        "input_increment": False,
+        "semantic_gate": False,
+    }
+
+
 def worker_failure_root_cause(
     *,
     process_returncode: int,
@@ -486,6 +768,8 @@ def worker_repair_hint_payload(
     exit_code: int,
     attempt_number: int,
     diagnostics: dict[str, Any],
+    effective_input_sha256: str,
+    failure_sha256: str,
     retry_of: str | None = None,
     rollback_evidence: dict[str, Any] | None = None,
     rejected_summary_evidence: dict[str, Any] | None = None,

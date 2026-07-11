@@ -22,9 +22,9 @@ input.c
 | --- | ---: | --- |
 | `translator_generated_semantic_pass_count` | 34 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
 | `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
-| Active translator track | P0-T24 | Select the next smallest generic source-backed translation gap |
+| Active translator track | P0-T25 | Build source-backed semantic evidence for the `fdb_kvdb.c:1876` discarded direct-call body candidate |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |
-| Latest completed stage | P0-T23 | The `:1885` owner-interior-alias do-while tail passed strict semantic closure in the WSL competition lane |
+| Latest development stage | P0-T24 | The generic `:1876` single discarded direct-call body inside an interior-reborrow do-while is implemented but not counted as semantic acceptance |
 | Current strict regression | `26/34` | Run `20260711T061416Z`; eight historical evidence drifts remain |
 | Current proof class | `wsl-local-simulation` | Valid for development and approximation, but not `competition-exact` |
 
@@ -206,9 +206,32 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   The source-bound spec, fixture, C oracle, Rust replay, schema diff, negative diff, unsafe ledger, route/profile, and final verification are complete. All 12 strict semantic-binding checks pass under the WSL `--competition-clang-lane`, with `semantic_pass=true` and `generated_draft_semantic_pass=true`. The claim remains fixed to line 1885 and excludes the real `get_next_kv_addr` and whole function. The matrix-derived count moved from 33 to 34.
 
-- [ ] **P0-T24: next-slice decision gate**
+- [x] **P0-T24: next-slice decision gate**
 
-  Select the next smallest source-backed gap from pinned FlashDB or another real C project and a different construct family. Record the source span, generic construct gap, nearest fail-closed negative, and stop boundary before implementation. Project names, function names, slice ids, and fixture constants must not drive translation behavior.
+  - Slice id: `real-fdb-kv-iterate-read-kv-body-call`.
+  - Real source span: `src/fdb_kvdb.c:1876` at the pinned FlashDB commit; normalized-line SHA-256 is `10948836c8ce66dea9de8d52dd04882b110c70acdabd785634c9e6d2660f2940`.
+  - Construct gap: exactly one ordered direct-call statement with a discarded return value in the do-while body of an owner interior alias, followed by the existing assignment-call tail.
+  - Generic implementation: accept only `[Expr(direct Call), normalized tail assignment-call]`; the body-call arguments must be the proven-noalias independent call root and the same interior alias. The legacy empty-body shape remains accepted.
+  - Fail closed: a second body statement, non-call expression, nested call, extra or repeated mutable root, owner sibling read, and comparison drift remain rejected.
+  - Stop boundary: lines 1877-1884, real `read_kv` semantics, callee side effects, the whole loop, and FlashDB ABI remain excluded. Project names, function names, slice ids, and fixture constants must not drive behavior.
+
+  Project-independent no-clang AST lowering, emitted-Rust runtime order checks, and adjacent negatives are complete. Status is `candidate_context_only`; the semantic count remains 34.
+
+- [ ] **P0-T25: source-backed semantic closure for `fdb_kvdb.c:1876`**
+
+  Build the source-bound spec, bounded fixture, fixture-only external-call contract, C oracle, Rust replay, schema/negative diff, unsafe ledger, route/profile, and final verification for P0-T24. Increment the count only after the WSL competition lane strict validator passes every gate.
+
+### P0-A: AI/Harness Efficiency
+
+- [x] **P0-A1: OpenCode no-progress retry suppression**
+
+  Hash effective request/source/spec/repair-trace/launch-policy inputs as `effective_input_sha256`, and hash structured root cause/status/returncode/diagnostics as `failure_sha256`. After two identical deterministic failures with no current input change, close the repair hint before a third launch, clear its retry command, record `repair_retry_suppressed`, and fail closed as `refused/retry_input_unchanged`. Do not invoke the runner, append a synthetic attempt, or raise semantic status. Preserve retries for timeout, SQLite/OpenCode locks, preflight, credentials, contracts, missing environment, unknown causes, and missing or drifting hashes.
+
+  This gate reduces OpenCode calls and token use that have no information gain. It does not treat AI output as semantic fact or replace the C oracle, Rust replay, or strict validator.
+
+- [x] **P0-A2: align bare `CLANG_PATH` command names with the competition PATH contract**
+
+  The Rust clang frontend now accepts both an existing explicit path and a bare command name resolved by the process `PATH`, such as `CLANG_PATH=clang`; an explicit path containing separators still fails closed when it does not exist. The WSL clang 18 minimum-TU smoke and three real-clang auto-migrate positive/negative tests pass. This restores candidate generation only and does not increase the semantic count.
 
 ### P0-B: Competition Host and OpenCode
 
@@ -263,11 +286,13 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 | P0-T21 | Compose the `:1868-:1874` zero-start and assignment-call branches | 32 -> 33 |
 | P0-T22 | Select and implement the `:1885` interior-reborrow do-while tail candidate | 33 -> 33 (candidate only) |
 | P0-T23 | Strict source-backed acceptance for the `:1885` owner-interior-alias do-while tail | 33 -> 34 |
+| P0-T24 | Select and implement the `:1876` discarded direct-call body candidate | 34 -> 34 (candidate only) |
 
 Validation run bindings:
 
 | Validation | Binding | Result |
 | --- | --- | --- |
+| P0-T24 / P0-A1 / P0-A2 stage validation | WSL local simulation, 2026-07-11 | translator library `228`, bounded `665`, and integer conversion `4` passed, with `133` real-clang opt-in tests ignored by default; three real-clang focused tests, Python auto-migrate `155`, and OpenCode harness `192` passed; no loop stress was run |
 | P0-T23 strict validator | WSL competition clang lane, 2026-07-11 | `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; three bounded fixtures cover 1/2/3 calls |
 | P0-T22 translator candidate | current worktree, 2026-07-11 | library `228` passed; bounded `659` passed with `133` real-clang opt-in ignores; integer conversion `4` passed; coverage matrix passed |
 | P0-T21 translator candidate | commit `02067028`, 2026-07-11 | library `228` passed; bounded `657` passed with `133` real-clang opt-in ignores; integer conversion `4` passed |

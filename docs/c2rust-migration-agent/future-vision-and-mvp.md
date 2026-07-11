@@ -24,9 +24,9 @@ input.c
 | --- | ---: | --- |
 | `translator_generated_semantic_pass_count` | 34 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
-| 当前翻译主线 | P0-T24 | 选择下一个最小、通用、source-backed 翻译缺口 |
+| 当前翻译主线 | P0-T25 | 为 `fdb_kvdb.c:1876` discarded direct-call body candidate 建立 source-backed 语义证据 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近完成阶段 | P0-T23 | `:1885` owner-interior-alias do-while tail 已通过 WSL competition lane 严格语义闭环 |
+| 最近开发阶段 | P0-T24 | 已实现 `:1876` interior-reborrow do-while 单一 discarded direct-call body 通用 candidate；尚未计入语义通过 |
 | 当前严格回归 | `26/34` | run `20260711T061416Z`；8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -208,9 +208,32 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   已生成 source-bound spec、fixture、C oracle、Rust replay、schema diff、negative diff、unsafe ledger、route/profile 和 final verification。WSL `--competition-clang-lane` 下 strict validator 的 12 类语义绑定检查全部通过，`semantic_pass=true`、`generated_draft_semantic_pass=true`；停止边界固定在 line 1885，真实 `get_next_kv_addr` 和完整函数仍不在声明范围内。matrix 派生计数由 33 更新为 34。
 
-- [ ] **P0-T24：下一切片决策门**
+- [x] **P0-T24：下一切片决策门**
 
-  从 pinned FlashDB 或其他真实 C 项目选择下一个最小、不同 construct family 的 source-backed 缺口。先记录 source span、通用 construct gap、最近邻 fail-closed 负例和停止边界，再决定是否进入实现；禁止按项目名、函数名、slice id 或 fixture 常量硬编码。
+  - slice id：`real-fdb-kv-iterate-read-kv-body-call`。
+  - 真实 source span：固定 FlashDB commit 的 `src/fdb_kvdb.c:1876`，normalized-line SHA-256 为 `10948836c8ce66dea9de8d52dd04882b110c70acdabd785634c9e6d2660f2940`。
+  - construct gap：owner interior alias 的 do-while body 中恰好一个有序、返回值被丢弃的 direct-call statement，随后继续执行既有 assignment-call tail。
+  - 通用实现：只接受 `[Expr(direct Call), normalized tail assignment-call]`，body call 参数必须是已证明 noalias 的独立 call root 与同一 interior alias；空 body 旧形状继续兼容。
+  - fail-closed：第二条 body 语句、非 call、嵌套 call、额外或重复可变根、owner sibling read 和比较漂移继续拒绝。
+  - 停止边界：不覆盖 lines 1877-1884、真实 `read_kv` 语义、callee side effects、完整循环或 FlashDB ABI；禁止按项目名、函数名、slice id 或 fixture 常量硬编码。
+
+  当前已完成 project-independent no-clang AST lowering、Rust emission/runtime 顺序验证和相邻负例；状态为 `candidate_context_only`，语义计数保持 34。
+
+- [ ] **P0-T25：`fdb_kvdb.c:1876` source-backed 语义闭环**
+
+  为 P0-T24 candidate 建立 source-bound spec、有限 fixture、fixture-only external call contract、C oracle、Rust replay、schema/negative diff、unsafe ledger、route/profile 和 final verification。只有 WSL competition lane strict validator 全部通过后才能增加语义计数。
+
+### P0-A：AI/Harness 效率
+
+- [x] **P0-A1：OpenCode no-progress retry suppression**
+
+  对 effective request/source/spec/repair-trace/launch-policy 计算 `effective_input_sha256`，对结构化 root cause/status/returncode/diagnostics 计算 `failure_sha256`。连续两次确定性失败且当前输入仍无变化时，第三次启动前关闭 repair hint、清空 retry command、记录 `repair_retry_suppressed`，并以 `refused/retry_input_unchanged` fail closed；不调用 runner、不追加伪 attempt、不提升 semantic 状态。timeout、SQLite/OpenCode lock、preflight、credential、contract、环境缺失、未知根因或 hash 缺失/漂移均保留重试。
+
+  该门减少无信息增量的 OpenCode 调用和 token 消耗，但不把 AI 输出当作语义事实，也不替代 C oracle、Rust replay 或 strict validator。
+
+- [x] **P0-A2：`CLANG_PATH` 裸命令名与比赛 PATH 合同一致**
+
+  Rust clang frontend 现在同时接受现有显式路径和由进程 `PATH` 解析的裸命令名，例如 `CLANG_PATH=clang`；带目录分隔符但不存在的显式路径仍保持 fail closed。WSL 上的 clang 18 最小 TU smoke 与 3 个真实 clang auto-migrate 正/负例均通过。该修复只恢复候选生成通道，不提升任何语义计数。
 
 ### P0-B：比赛主机与 OpenCode
 
@@ -265,11 +288,13 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | P0-T21 | `:1868-:1874` zero-start 与 assignment-call 二分支组合 | 32 -> 33 |
 | P0-T22 | 选择并实现 `:1885` interior-reborrow do-while tail candidate | 33 -> 33（candidate only） |
 | P0-T23 | `:1885` owner-interior-alias do-while tail source-backed 严格验收 | 33 -> 34 |
+| P0-T24 | 选择并实现 `:1876` discarded direct-call body candidate | 34 -> 34（candidate only） |
 
 验证运行绑定：
 
 | 验证项 | 绑定 | 结果 |
 | --- | --- | --- |
+| P0-T24 / P0-A1 / P0-A2 阶段验收 | WSL local simulation，2026-07-11 | translator library `228`、bounded `665`、integer conversion `4` 全通过，`133` 个 real-clang opt-in 默认忽略；3 个真实 clang focused tests、Python auto-migrate `155`、OpenCode harness `192` 全通过；未执行循环压力测试 |
 | P0-T23 严格 validator | WSL competition clang lane，2026-07-11 | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过；3 个有限 fixture 案例覆盖 1/2/3 次调用 |
 | P0-T22 translator candidate | 当前工作树，2026-07-11 | library `228` 通过；bounded `659` 通过、`133` 个 real-clang opt-in 忽略；integer conversion `4` 通过；coverage matrix passed |
 | P0-T21 translator candidate | commit `02067028`，2026-07-11 | library `228` 通过；bounded `657` 通过、`133` 个 real-clang opt-in 忽略；integer conversion `4` 通过 |

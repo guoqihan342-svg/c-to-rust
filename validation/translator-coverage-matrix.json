@@ -2042,7 +2042,7 @@
             },
             {
               "name": "test_sum_i32_buffer_generated_replay_accepts_exact_input_buffer_out0_draft",
-              "path": "validation/tools/_test_auto_migrate_parts/class_part_07_split_parts/part_00.pyfrag"
+              "path": "validation/tools/_test_auto_migrate_parts/class_part_07_split_parts/part_00_tail.pyfrag"
             },
             {
               "name": "typed_ir_emits_readonly_pointer_truthiness_condition_with_strlen_in_nonnull_branch",
@@ -2276,7 +2276,7 @@
         },
         {
           "name": "test_sum_i32_buffer_generated_replay_accepts_exact_input_buffer_out0_draft",
-          "path": "validation/tools/_test_auto_migrate_parts/class_part_07_split_parts/part_00.pyfrag"
+          "path": "validation/tools/_test_auto_migrate_parts/class_part_07_split_parts/part_00_tail.pyfrag"
         },
         {
           "name": "typed_ir_emits_readonly_pointer_truthiness_condition_with_strlen_in_nonnull_branch",

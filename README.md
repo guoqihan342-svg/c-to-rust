@@ -16,8 +16,8 @@
 | --- | --- |
 | Translator-generated semantic pass | `34` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
-| 最近完成阶段 | P0-T23：`fdb_kvdb.c:1885` owner-interior-alias do-while tail 已通过严格语义验收 |
-| 当前翻译任务 | P0-T24：选择下一个最小、通用、source-backed 翻译缺口 |
+| 最近开发阶段 | P0-T24：实现 `fdb_kvdb.c:1876` interior-reborrow do-while discarded-call body 通用 candidate |
+| 当前翻译任务 | P0-T25：为 line 1876 candidate 建立 source-backed 严格语义证据 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
@@ -37,6 +37,8 @@
 5. **自动修复**：每轮只处理一个具体 compile/semantic/unsafe blocker；失败回滚 last-good。
 6. **状态恢复**：SQLite 保存 assignment、lease、event 和 artifact index，磁盘 summary 保存语义事实。
 7. **评委输出**：生成 workflow metrics、before/after、judge bundle、release notes 和 public packet。
+
+OpenCode retry 额外受 no-progress 门控制：相同有效输入和相同确定性失败连续两次后，第三次启动会在 runner 前被拒绝并留下 hash-bound 事件；暂态环境、凭据、锁和合同问题继续重试。该机制只节省无效调用，不改变语义验收门禁。
 
 SQLite 不是语义事实源，Agent 对话也不是 evidence。语义结论只来自落盘 artifact 和 validator。
 
