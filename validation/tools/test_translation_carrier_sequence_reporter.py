@@ -14,7 +14,9 @@ from validation.tools._translation_carrier_reporter.contract import (
 )
 from validation.tools.sequence_replay_test_support import (
     FIELDS,
+    build_interior_sequence_spec,
     build_sequence_spec,
+    renamed_interior_rust_draft,
     renamed_rust_draft,
     sha256_file,
     sha256_text,
@@ -98,9 +100,15 @@ class TranslationCarrierSequenceReporterTests(unittest.TestCase):
             validate_cases(count_drift, contract)
 
 
-def build_reporter_layout(workspace: Path) -> dict[str, object]:
+def build_reporter_layout(
+    workspace: Path, *, interior_alias: bool = False
+) -> dict[str, object]:
     relative_prefix = workspace.relative_to(REPO_ROOT).as_posix() + "/"
-    spec, fixture = build_sequence_spec(path_prefix=relative_prefix)
+    spec, fixture = (
+        build_interior_sequence_spec(path_prefix=relative_prefix)
+        if interior_alias
+        else build_sequence_spec(path_prefix=relative_prefix)
+    )
     fixture_path = workspace / "fixtures" / "window-tail-cases.json"
     source_root = workspace / "upstream"
     source_path = source_root / "tail.c"
@@ -125,7 +133,10 @@ def build_reporter_layout(workspace: Path) -> dict[str, object]:
     if oracle["compile_execution"]["status"] != "compile_succeeded_not_oracle":
         raise AssertionError(oracle["compile_execution"])
     draft_path = auto_dir / "l3-advance-window-tail-rust-draft.rs"
-    draft_path.write_text(renamed_rust_draft(), encoding="utf-8")
+    draft_path.write_text(
+        renamed_interior_rust_draft() if interior_alias else renamed_rust_draft(),
+        encoding="utf-8",
+    )
     plan = {
         "schema_version": 1,
         "target_id": spec["target_id"],

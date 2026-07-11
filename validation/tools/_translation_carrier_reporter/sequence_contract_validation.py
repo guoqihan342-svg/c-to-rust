@@ -3,7 +3,30 @@ from __future__ import annotations
 from typing import Any
 
 from .errors import ReporterError
-from .record_contract import noalias_pairs, normalize_c_type, require_dict
+from .record_contract import (
+    noalias_pairs,
+    normalize_c_type,
+    require_dict,
+    require_identifier,
+)
+
+
+def initializer_record_type(
+    initializer: dict[str, Any],
+    projection_path: tuple[str, ...],
+    label: str,
+) -> str:
+    if not projection_path:
+        return require_identifier(initializer.get("record_type"), f"{label}.record_type")
+    segment = projection_path[0]
+    projected_field = next(
+        (field for field in initializer["fields"] if str(field.get("name")) == segment),
+        None,
+    )
+    if not isinstance(projected_field, dict) or "record" not in projected_field:
+        raise ReporterError(f"{label} does not resolve to a record")
+    projected_initializer = require_dict(projected_field["record"], f"{label}.{segment}")
+    return initializer_record_type(projected_initializer, projection_path[1:], label)
 
 
 def validate_noalias(
@@ -22,7 +45,7 @@ def validate_noalias(
     roots = {
         str(item["entry_parameter"])
         for item in contract["external_callee"]["arguments"]
-        if item["mode"] == "record_ref"
+        if item["mode"] in {"record_ref", "owner_interior_alias"}
         and entry_by_name[str(item["entry_parameter"])]["pass_mode"] == "mutable_ref"
     }
     roots.add(str(contract["state_output"]["parameter"]))
@@ -80,14 +103,21 @@ def validate_signatures(
         raise ReporterError("sequence replay external signature drifted")
     observations = external["arguments"]
     actual_external = [item for item in external_matches[0].get("parameters", []) if isinstance(item, dict)]
-    expected_types = [
-        (
-            f"struct {entry_by_name[str(item['entry_parameter'])]['rust_type']} *"
-            if item["mode"] == "record_ref"
-            else "uint32_t"
-        )
-        for item in observations
-    ]
+    expected_types = []
+    for index, item in enumerate(observations):
+        entry = entry_by_name[str(item["entry_parameter"])]
+        if item["mode"] == "record_ref":
+            expected_types.append(f"struct {entry['rust_type']} *")
+        elif item["mode"] == "owner_interior_alias":
+            projection_path = tuple(str(segment) for segment in item["projection_path"])
+            record_type = initializer_record_type(
+                entry["initializer"],
+                projection_path,
+                f"external_callee.arguments[{index}].projection_path",
+            )
+            expected_types.append(f"struct {record_type} *")
+        else:
+            expected_types.append("uint32_t")
     if [item.get("name") for item in actual_external] != [item["parameter"] for item in observations]:
         raise ReporterError("sequence replay external parameters drifted")
     if [normalize_c_type(item.get("c_type")) for item in actual_external] != [

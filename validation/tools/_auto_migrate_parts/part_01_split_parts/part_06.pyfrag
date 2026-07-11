@@ -12,14 +12,19 @@ def c_oracle_scripted_external_record_u32_sequence_do_while_state_execution_sour
     entries = {str(item["parameter"]): item for item in contract["entry_arguments"]}
     max_calls = int(contract["loop"]["max_calls"])
     arg_count = len(observations)
-    parameters = ",\n".join(
-        (
-            f"    struct {entries[str(item['entry_parameter'])]['rust_type']} *{item['parameter']}"
-            if item["mode"] == "record_ref"
-            else f"    uint32_t {item['parameter']}"
-        )
-        for item in observations
-    )
+    parameter_lines = []
+    for item in observations:
+        if item["mode"] == "scalar_field_value":
+            parameter_lines.append(f"    uint32_t {item['parameter']}")
+        elif item["mode"] == "owner_interior_alias":
+            parameter_lines.append(
+                f"    struct {scripted_sequence_alias_record_type(item, entries)} *{item['parameter']}"
+            )
+        else:
+            parameter_lines.append(
+                f"    struct {entries[str(item['entry_parameter'])]['rust_type']} *{item['parameter']}"
+            )
+    parameters = ",\n".join(parameter_lines)
     captures = "\n".join(
         (
             f"    c2r_scripted_external_call_args[c2r_scripted_external_call_count][{index}] = {item['parameter']};"

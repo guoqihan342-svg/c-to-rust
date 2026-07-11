@@ -1,0 +1,307 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-kv-tail",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "itr_kv_addr_start",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Fixture-created records cross the declared entry boundary; a finite u32 sequence drives a do-while tail through a declared owner interior mutable alias, call arguments are traced per iteration, and the aliased u32 state stops at the explicit sentinel within the call bound.",
+    "external_callee": "get_next_kv_addr",
+    "excluded_semantics": [
+      "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1885 do-while tail",
+      "real FlashDB database, sector, iterator, KV, address, storage, and pointer layouts",
+      "real get_next_kv_addr implementation behavior and side effects"
+    ],
+    "sequence_replay": {
+      "schema_version": 2,
+      "argument_modes": [
+        "record_ref",
+        "record_ref",
+        "owner_interior_alias"
+      ],
+      "interior_alias_bindings": [
+        {
+          "entry_parameter": "itr",
+          "projection_path": [
+            "current"
+          ],
+          "alias_local": "kv",
+          "field_path": [
+            "addr",
+            "start"
+          ]
+        }
+      ],
+      "noalias_required": [
+        [
+          "db",
+          "itr"
+        ]
+      ]
+    }
+  },
+  "status": "expected_failed",
+  "expected_failure": true,
+  "mutation_detected": true,
+  "mutation": "loop comparison operator != changed to ==",
+  "detected_case_ids": [
+    "failed-address-first",
+    "one-kv-then-failed",
+    "two-kvs-then-failed"
+  ],
+  "partition_detection": {
+    "sequence_exhaustion_case_ids": [
+      "failed-address-first"
+    ],
+    "observable_mismatch_case_ids": [
+      "one-kv-then-failed",
+      "two-kvs-then-failed"
+    ]
+  },
+  "actual_mutation_execution": {
+    "mutation": {
+      "operator_from": "!=",
+      "operator_to": "==",
+      "mutation_count": 1,
+      "byte_offset": 2814,
+      "original_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-rust-draft.rs",
+        "sha256": "6a4d31038ba45cdcf3ca15894e63ac81cf500e1ab0d452388a933ad3dc0d1b12"
+      },
+      "mutated_draft": {
+        "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/mutated-rust-draft.rs",
+        "sha256": "4ba85acec772d9592aa7e5f32bc82f78bd492693b8e153eebb8fdbed79052703"
+      }
+    },
+    "same_generated_replay_harness": {
+      "compile": {
+        "argv": [
+          "rustc",
+          "--edition=2021",
+          "--test",
+          "--error-format=json",
+          "<translation-carrier-negative>/mutated_same_replay.rs",
+          "-o",
+          "<translation-carrier-negative>/mutated_same_replay.exe"
+        ],
+        "returncode": 0,
+        "stdout": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/same-replay-compile.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/same-replay-compile.stderr.log",
+          "sha256": "a4f7b82ff4ed20f261a1dddcda5fd9edd83704868cec0b165f634c58e393b06c"
+        }
+      },
+      "run": {
+        "argv": [
+          "<translation-carrier-negative>/mutated_same_replay.exe",
+          "--nocapture"
+        ],
+        "returncode": 101,
+        "stdout": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/same-replay-run.stdout.log",
+          "sha256": "0b808bbfb8079b808c041bb676415f035ff70fe7201378684bb26ffbc7509046"
+        },
+        "stderr": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/same-replay-run.stderr.log",
+          "sha256": "4d98f893dbc56362f092ed8a2a0bb273015f1b2251e771f008e2ec39a40de5ad"
+        }
+      },
+      "expected_run_failure": true
+    },
+    "partition_replay": {
+      "compile": {
+        "argv": [
+          "rustc",
+          "--edition=2021",
+          "--test",
+          "--error-format=json",
+          "<translation-carrier-negative>/mutated_partition_replay.rs",
+          "-o",
+          "<translation-carrier-negative>/mutated_partition_replay.exe"
+        ],
+        "returncode": 0,
+        "stdout": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/partition-replay-compile.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/partition-replay-compile.stderr.log",
+          "sha256": "40504b04ab33c2a74cbf7174f3b1c961a9b007b609b709c16efe5bb5566c2a83"
+        }
+      },
+      "case_runs": [
+        {
+          "case_id": "failed-address-first",
+          "comparison_partition": "sequence_exhaustion",
+          "test_name": "__c2r_negative_partition_case_0",
+          "argv": [
+            "<translation-carrier-negative>/mutated_partition_replay.exe",
+            "--exact",
+            "__c2r_negative_partition_case_0",
+            "--nocapture"
+          ],
+          "returncode": 101,
+          "stdout": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/partition-case-0-run.stdout.log",
+            "sha256": "c075a06cffaafdbe291b8aed0f1ce11cc68b91505519021e87a62bd3441e28e7"
+          },
+          "stderr": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/partition-case-0-run.stderr.log",
+            "sha256": "b7ed9db7125b413df0826ef1e920ec135d246e26bf6024c76ee876cb0e76b342"
+          }
+        },
+        {
+          "case_id": "one-kv-then-failed",
+          "comparison_partition": "observable_mismatch",
+          "test_name": "__c2r_negative_partition_case_1",
+          "argv": [
+            "<translation-carrier-negative>/mutated_partition_replay.exe",
+            "--exact",
+            "__c2r_negative_partition_case_1",
+            "--nocapture"
+          ],
+          "returncode": 101,
+          "stdout": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/partition-case-1-run.stdout.log",
+            "sha256": "bb10f513217107ccbd5374f70988817c02b97cbcb19b87292ddc3b1fc0045686"
+          },
+          "stderr": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/partition-case-1-run.stderr.log",
+            "sha256": "2ff657fbca7ced1018b426369ccd6f6a1b01be4d402194beb6b3be596ea80176"
+          }
+        },
+        {
+          "case_id": "two-kvs-then-failed",
+          "comparison_partition": "observable_mismatch",
+          "test_name": "__c2r_negative_partition_case_2",
+          "argv": [
+            "<translation-carrier-negative>/mutated_partition_replay.exe",
+            "--exact",
+            "__c2r_negative_partition_case_2",
+            "--nocapture"
+          ],
+          "returncode": 101,
+          "stdout": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/partition-case-2-run.stdout.log",
+            "sha256": "7f1c6349fd984855881bd6d957108b77577d26a3d860fe5994627a82829ddb4b"
+          },
+          "stderr": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-kv-tail/partition-case-2-run.stderr.log",
+            "sha256": "4187d27cf15b995dd419ff1cf09a7e3956674c1886afd88583ac360c8e86a6d1"
+          }
+        }
+      ],
+      "comparison_true_case_ids": [],
+      "comparison_false_case_ids": [],
+      "sequence_exhaustion_case_ids": [
+        "failed-address-first"
+      ],
+      "observable_mismatch_case_ids": [
+        "one-kv-then-failed",
+        "two-kvs-then-failed"
+      ]
+    }
+  },
+  "first_mismatch": {
+    "case_id": "one-kv-then-failed",
+    "field": "itr_kv_addr_start",
+    "accepted_value": 4294967295,
+    "mutated_value": 4096
+  },
+  "mismatches": [
+    {
+      "case_id": "failed-address-first",
+      "field": "scripted_return_sequence",
+      "accepted_value": "sentinel_reached",
+      "mutated_value": "sequence_exhausted"
+    },
+    {
+      "case_id": "one-kv-then-failed",
+      "field": "itr_kv_addr_start",
+      "accepted_value": 4294967295,
+      "mutated_value": 4096
+    },
+    {
+      "case_id": "one-kv-then-failed",
+      "field": "external_call_count",
+      "accepted_value": 2,
+      "mutated_value": 1
+    },
+    {
+      "case_id": "one-kv-then-failed",
+      "field": "external_call_args",
+      "accepted_value": [
+        [
+          3,
+          5,
+          99
+        ],
+        [
+          3,
+          5,
+          4096
+        ]
+      ],
+      "mutated_value": [
+        [
+          3,
+          5,
+          99
+        ]
+      ]
+    },
+    {
+      "case_id": "two-kvs-then-failed",
+      "field": "itr_kv_addr_start",
+      "accepted_value": 4294967295,
+      "mutated_value": 12288
+    },
+    {
+      "case_id": "two-kvs-then-failed",
+      "field": "external_call_count",
+      "accepted_value": 3,
+      "mutated_value": 1
+    },
+    {
+      "case_id": "two-kvs-then-failed",
+      "field": "external_call_args",
+      "accepted_value": [
+        [
+          305419896,
+          2271560481,
+          17
+        ],
+        [
+          305419896,
+          2271560481,
+          12288
+        ],
+        [
+          305419896,
+          2271560481,
+          16384
+        ]
+      ],
+      "mutated_value": [
+        [
+          305419896,
+          2271560481,
+          17
+        ]
+      ]
+    }
+  ]
+}

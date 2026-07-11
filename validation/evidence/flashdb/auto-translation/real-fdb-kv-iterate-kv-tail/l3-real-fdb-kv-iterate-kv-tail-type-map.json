@@ -1,0 +1,102 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-translator-input.json",
+    "sha256": "331c1ed5ff9d606d5f5619c1818759ad69a4dabb571c9b934f524ecbdd89a28e",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=2235ff95a7ca29767e5fd583e7837b069f2d0dae4c7b001c04e13fed91dce684",
+    "fixture_hash=ef23efc26f1728cb531086c950931405f5f9c2ac625094704df7d59844110f24",
+    "build_profile_hash=acf77abeb152e3a9090583c204390813f3da9084dc2cbf0f45bb3fe13da6d9ae",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "bool",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "unsupported",
+      "rust_type": "u8",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "db",
+      "c_type": "struct Database *",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "pointer",
+      "rust_type": "&mut Database",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "sector_seed",
+      "c_type": "struct Sector",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "struct",
+      "rust_type": "Sector",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "itr",
+      "c_type": "struct Owner *",
+      "confidence": "proven",
+      "id": "type-4",
+      "kind": "pointer",
+      "rust_type": "&mut Owner",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "kv",
+      "c_type": "struct Kv *",
+      "confidence": "proven",
+      "id": "type-5",
+      "kind": "pointer",
+      "rust_type": "&mut Kv",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "sector",
+      "c_type": "struct Sector",
+      "confidence": "proven",
+      "id": "type-6",
+      "kind": "struct",
+      "rust_type": "Sector",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "run_once",
+      "c_type": "bool",
+      "confidence": "proven",
+      "id": "type-7",
+      "kind": "unsupported",
+      "rust_type": "u8",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "7ddac7b97b27a266b77630f3280498c5c7e23eef",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-kv-tail",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-kv-tail.json",
+    "sha256": "2235ff95a7ca29767e5fd583e7837b069f2d0dae4c7b001c04e13fed91dce684",
+    "status": "ready"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

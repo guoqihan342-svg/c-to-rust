@@ -57,7 +57,24 @@ def run_negative_execution(
     if state_mutation is not None:
         pattern, operator_from, operator_to = state_mutation
     elif context.contract.get("kind") == SEQUENCE_KIND:
-        pattern = re.compile(rb"!=")
+        if context.contract.get("schema_version") == 2:
+            aliases = [
+                item
+                for item in context.contract["external_callee"]["arguments"]
+                if item["mode"] == "owner_interior_alias"
+            ]
+            if len(aliases) != 1:
+                raise ReporterError(
+                    "sequence schema v2 requires one declared owner interior alias mutation target"
+                )
+            alias = aliases[0]
+            target = rb"\b" + re.escape(str(alias["alias_local"]).encode("utf-8"))
+            target += rb"\." + rb"\.".join(
+                re.escape(str(field).encode("utf-8")) for field in alias["field_path"]
+            )
+            pattern = re.compile(target + rb"\s*(?P<value>!=)")
+        else:
+            pattern = re.compile(rb"!=")
         operator_from = b"!="
         operator_to = b"=="
     else:

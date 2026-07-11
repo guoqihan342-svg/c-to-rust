@@ -5895,6 +5895,11 @@
               "name": "do-while record-pointer assignment-call emitted Rust runtime tests",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_24.rs",
               "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "real-fdb-kv-iterate-kv-tail generated Rust draft",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-rust-draft.rs",
+              "assertion": "generated draft safely reborrows the owner interior Kv record and executes the exact line-1885 do-while assignment-call tail"
             }
           ]
         },
@@ -5950,9 +5955,34 @@
               "name": "real-fdb-kv-iterate-sector-tail final verification",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-final-verification.json",
               "assertion": "generated_draft_semantic_pass=true for the exact line-1893 do-while tail fragment"
+            },
+            {
+              "name": "real-fdb-kv-iterate-kv-tail C oracle",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-tail-c-oracle.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-kv-tail Rust sequence replay",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-tail-rust-report.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-kv-tail schema diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-tail-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-kv-tail negative diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-tail-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-kv-tail unsafe ledger",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-unsafe-ledger.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-kv-tail final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-final-verification.json",
+              "assertion": "generated_draft_semantic_pass=true for the exact line-1885 owner-interior-alias do-while tail fragment"
             }
           ],
-          "scope_note": "covers the named while-countdown-positive slice and the exact real-fdb-kv-iterate-sector-tail line-1893 fragment only; the surrounding iterator body, real external callee, and goto/switch/relooper support remain outside the semantic claim"
+          "scope_note": "covers the named while-countdown-positive slice plus the exact real-fdb-kv-iterate sector-tail line-1893 and owner-interior-alias KV-tail line-1885 fragments only; the surrounding iterator body, real external callees, and goto/switch/relooper support remain outside the semantic claim"
         },
         "legacy_fallback": {
           "status": "covered",
@@ -5989,6 +6019,18 @@
             {
               "name": "real-fdb-kv-iterate-sector-tail capability delta",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-capability-delta.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-kv-tail route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-route-decision.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-kv-tail validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-validation-profile.json"
+            },
+            {
+              "name": "real-fdb-kv-iterate-kv-tail capability delta",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-capability-delta.json"
             },
             {
               "name": "auto-migration L4 route refusal evidence for switch/goto",
@@ -6081,6 +6123,14 @@
         {
           "name": "real-fdb-kv-iterate-sector-tail strict semantic validator",
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-tail/l3-real-fdb-kv-iterate-sector-tail-final-verification.json"
+        },
+        {
+          "name": "clang_ast_interior_reborrow_do_while_tail_assignment_call_emits_and_runs",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_32_split_parts/part_01.rs"
+        },
+        {
+          "name": "real-fdb-kv-iterate-kv-tail strict semantic validator",
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-final-verification.json"
         },
         {
           "name": "typed_ir_for_nested_while_continue_does_not_emit_outer_step",

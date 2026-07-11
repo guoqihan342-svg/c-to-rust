@@ -173,6 +173,59 @@ def build_sequence_spec(*, path_prefix: str = "") -> tuple[dict[str, Any], dict[
     return spec, fixture
 
 
+def build_interior_sequence_spec(
+    *, path_prefix: str = ""
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    spec, fixture = build_sequence_spec(path_prefix=path_prefix)
+    fields = spec["replay_contract"]["entry_arguments"][2]["initializer"]["fields"]
+    fields[1] = {
+        "name": "current",
+        "record": {
+            "record_type": "Cursor",
+            "fields": [
+                {
+                    "name": "selected",
+                    "fixture_field": "selected_initial",
+                    "rust_type": "u32",
+                },
+                {"name": "tag", "fixture_field": "cursor_tag", "rust_type": "u32"},
+            ],
+        },
+    }
+    spec["replay_contract"]["external_callee"]["arguments"][2] = {
+        "parameter": "cursor_ref",
+        "mode": "owner_interior_alias",
+        "entry_parameter": "progress",
+        "projection_path": ["current"],
+        "alias_local": "cursor",
+        "field_path": ["selected"],
+    }
+    spec["replay_contract"]["schema_version"] = 2
+    spec["replay_contract"]["state_output"]["field_path"] = ["current", "selected"]
+    spec["replay_contract"]["return"]["value"] = False
+    spec["c_boundary"]["signatures"][1]["parameters"][2] = {
+        "name": "cursor_ref",
+        "c_type": "struct Cursor *",
+        "direction": "inout",
+    }
+    spec["c_source"] = renamed_interior_c_source()
+    for case in spec["fixture_contract"]["cases"]:
+        inputs = case["inputs"]
+        inputs["cursor_tag"] = 101 + len(case["id"])
+        expected = case["expected_outputs"]
+        expected["completed"] = False
+        current = inputs["selected_initial"]
+        rows = []
+        for scripted in inputs["probe_sequence"]:
+            rows.append([inputs["ledger_stamp"], inputs["window_page"], current])
+            current = scripted
+            if scripted == SENTINEL:
+                break
+        expected["probe_args"] = rows
+    fixture["cases"] = spec["fixture_contract"]["cases"]
+    return spec, fixture
+
+
 def sequence_case(
     case_id: str,
     ledger_stamp: int,
@@ -238,6 +291,53 @@ pub fn advance_window_tail(ledger: &mut Ledger, window_seed: Window, progress: &
         break;
     }
     true
+}
+"""
+
+
+def renamed_interior_c_source() -> str:
+    return """#define WINDOW_END 91u
+struct Ledger { uint32_t stamp; };
+struct Window { uint32_t page; };
+struct Cursor { uint32_t selected; uint32_t tag; };
+struct Progress { uint32_t walked; struct Cursor current; };
+uint32_t probe_following_window(struct Ledger *ledger_ref, struct Window *window_ref, struct Cursor *cursor_ref);
+static bool advance_window_tail(struct Ledger *ledger, struct Window window_seed, struct Progress *progress)
+{
+    struct Cursor *cursor = &progress->current;
+    struct Window window = window_seed;
+    bool run_once = true;
+    while (run_once) {
+        run_once = false;
+        do {
+        } while ((cursor->selected = probe_following_window(ledger, &window, cursor)) != WINDOW_END);
+        return false;
+    }
+    return true;
+}
+"""
+
+
+def renamed_interior_rust_draft() -> str:
+    return """#[derive(Clone, Copy)]
+pub struct Ledger { pub stamp: u32 }
+#[derive(Clone, Copy)]
+pub struct Window { pub page: u32 }
+#[derive(Clone, Copy)]
+pub struct Cursor { pub selected: u32, pub tag: u32 }
+#[derive(Clone, Copy)]
+pub struct Progress { pub walked: u32, pub current: Cursor }
+
+pub fn advance_window_tail(ledger: &mut Ledger, window_seed: Window, progress: &mut Progress) -> bool {
+    let cursor = &mut progress.current;
+    let mut window = window_seed;
+    loop {
+        cursor.selected = probe_following_window(ledger, &mut window, cursor);
+        if !(cursor.selected != 91u32) {
+            break;
+        }
+    }
+    false
 }
 """
 

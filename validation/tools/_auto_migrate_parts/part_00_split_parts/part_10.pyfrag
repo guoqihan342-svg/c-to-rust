@@ -15,14 +15,18 @@ def scripted_external_record_u32_sequence_do_while_state_external_binding(
         str(item["parameter"]) for item in observations
     ]:
         raise ValueError("scripted sequence replay descriptor parameter names drifted")
-    expected_types = [
-        (
-            f"struct {entry_by_name[str(item['entry_parameter'])]['rust_type']} *"
-            if item["mode"] == "record_ref"
-            else "uint32_t"
-        )
-        for item in observations
-    ]
+    expected_types = []
+    for item in observations:
+        if item["mode"] == "scalar_field_value":
+            expected_types.append("uint32_t")
+        elif item["mode"] == "owner_interior_alias":
+            expected_types.append(
+                f"struct {scripted_sequence_alias_record_type(item, entry_by_name)} *"
+            )
+        else:
+            expected_types.append(
+                f"struct {entry_by_name[str(item['entry_parameter'])]['rust_type']} *"
+            )
     if [normalize_c_type(str(item.get("c_type") or "")) for item in parameters] != [
         normalize_c_type(item) for item in expected_types
     ]:
@@ -36,6 +40,8 @@ def scripted_sequence_external_rust_type(
 ) -> str:
     if observation["mode"] == "scalar_field_value":
         return "u32"
+    if observation["mode"] == "owner_interior_alias":
+        return f"&mut {scripted_sequence_alias_record_type(observation, entry_by_name)}"
     return f"&mut {entry_by_name[str(observation['entry_parameter'])]['rust_type']}"
 
 

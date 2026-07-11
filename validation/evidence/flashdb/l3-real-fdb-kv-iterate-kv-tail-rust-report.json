@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-kv-tail",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "itr_kv_addr_start",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Fixture-created records cross the declared entry boundary; a finite u32 sequence drives a do-while tail through a declared owner interior mutable alias, call arguments are traced per iteration, and the aliased u32 state stops at the explicit sentinel within the call bound.",
+    "external_callee": "get_next_kv_addr",
+    "excluded_semantics": [
+      "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1885 do-while tail",
+      "real FlashDB database, sector, iterator, KV, address, storage, and pointer layouts",
+      "real get_next_kv_addr implementation behavior and side effects"
+    ],
+    "sequence_replay": {
+      "schema_version": 2,
+      "argument_modes": [
+        "record_ref",
+        "record_ref",
+        "owner_interior_alias"
+      ],
+      "interior_alias_bindings": [
+        {
+          "entry_parameter": "itr",
+          "projection_path": [
+            "current"
+          ],
+          "alias_local": "kv",
+          "field_path": [
+            "addr",
+            "start"
+          ]
+        }
+      ],
+      "noalias_required": [
+        [
+          "db",
+          "itr"
+        ]
+      ]
+    }
+  },
+  "status": "passed",
+  "replay_contract_kind": "scripted_external_record_u32_sequence_do_while_state",
+  "replay_engine": "exact_generated_rust_replay_plus_declarative_field_check",
+  "generated_draft_replay_pass": true,
+  "generated_draft_semantic_pass": false,
+  "provenance": {
+    "status": "passed",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": false,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "<generated-replay-executable> --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/generated-rust-replay.stdout.log"
+    },
+    "refs": {
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-rust-draft.rs",
+        "sha256": "6a4d31038ba45cdcf3ca15894e63ac81cf500e1ab0d452388a933ad3dc0d1b12"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/rust-check.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-rust-replay-test-draft.rs",
+        "sha256": "bd405bd8d5a23c0f6fbc5efa8b3fa1c8de3b68581012a1199cc2f18d7473787a",
+        "declared_sha256": "bd405bd8d5a23c0f6fbc5efa8b3fa1c8de3b68581012a1199cc2f18d7473787a"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/generated-rust-replay.stdout.log",
+        "sha256": "b713a6705f1811b16a4f0f1958da4df548c6a73aa169299b7e1ee22203bb3791"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-rust-report.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      }
+    },
+    "fixture_external_stub": {
+      "kind": "scripted_external_record_u32_sequence_do_while_state",
+      "scope": "fixture_only",
+      "semantics_verified": false
+    }
+  },
+  "cases": [
+    {
+      "id": "failed-address-first",
+      "return_value": false,
+      "itr_kv_addr_start": 4294967295,
+      "external_call_count": 1,
+      "external_call_args": [
+        [
+          17,
+          29,
+          0
+        ]
+      ],
+      "status": "passed"
+    },
+    {
+      "id": "one-kv-then-failed",
+      "return_value": false,
+      "itr_kv_addr_start": 4294967295,
+      "external_call_count": 2,
+      "external_call_args": [
+        [
+          3,
+          5,
+          99
+        ],
+        [
+          3,
+          5,
+          4096
+        ]
+      ],
+      "status": "passed"
+    },
+    {
+      "id": "two-kvs-then-failed",
+      "return_value": false,
+      "itr_kv_addr_start": 4294967295,
+      "external_call_count": 3,
+      "external_call_args": [
+        [
+          305419896,
+          2271560481,
+          17
+        ],
+        [
+          305419896,
+          2271560481,
+          12288
+        ],
+        [
+          305419896,
+          2271560481,
+          16384
+        ]
+      ],
+      "status": "passed"
+    }
+  ]
+}

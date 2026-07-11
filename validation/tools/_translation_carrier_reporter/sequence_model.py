@@ -75,10 +75,7 @@ def reference_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[st
     for scripted_value in sequence[:call_count]:
         row: list[int] = []
         for observation in external["arguments"]:
-            key = (
-                str(observation["entry_parameter"]),
-                tuple(str(item) for item in observation["field_path"]),
-            )
+            key = observation_key(observation)
             row.append(current_state if key == state_key else initial_value(inputs, key, entries))
         rows.append(row)
         current_state = scripted_value
@@ -163,6 +160,16 @@ fn __c2r_negative_partition_case_{index}() {{
 def case_inputs(case: dict[str, Any]) -> dict[str, Any]:
     value = case.get("inputs", case)
     return require_dict(value, f"{case.get('id', 'case')}.inputs")
+
+
+def observation_key(observation: dict[str, Any]) -> tuple[str, tuple[str, ...]]:
+    projection_path = (
+        tuple(str(item) for item in observation["projection_path"])
+        if observation["mode"] == "owner_interior_alias"
+        else ()
+    )
+    field_path = tuple(str(item) for item in observation["field_path"])
+    return str(observation["entry_parameter"]), (*projection_path, *field_path)
 
 
 def initial_value(

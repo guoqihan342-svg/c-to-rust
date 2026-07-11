@@ -1,0 +1,224 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics bind independent oracle/replay/diff evidence and stable generated-draft unsafe gates; final accepted reports are downstream and cannot hash-bind themselves.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-kv-tail.json",
+    "fixture_sha256": "ef23efc26f1728cb531086c950931405f5f9c2ac625094704df7d59844110f24",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "e92d320d4b56dff1c63c5d5d1d1e18bd142479031c3ed7f7318221237caa9a94",
+      "diff": "91b5ad7fde5d9dfb67a0a29a538c57c1c99b778d16d5fe14215205df7aa85169",
+      "negative_diff": "33903066db1d2681f6508adcf3217a172d1718de57ac66cbe8c5f8da81f2d8d1",
+      "rust_report": "cf72dfe6021a3c249606d5884afbfdb65c6d3659859e6457109e15cecd12dec6",
+      "unsafe_ledger": "1119dbeca87346b3fef77bbc7c996f468ac49c058d98a67ae1a66a66a12793ed",
+      "unsafe_scan": "c67d7f303a3d6c999ccbac9c1650cc4c0aa79ea9e4d6ca87e363aef92ebaa91c"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-tail-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-tail-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-tail-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-tail-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-generated-draft-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-generated-draft-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-kv-iterate-kv-tail",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED",
+    "unsafe_gate_source": "generated_draft_unsafe_gates"
+  },
+  "cache": {
+    "alias_gate_identity": {
+      "alias_set_count": 1,
+      "aliasing_proven": true,
+      "decision": "allow",
+      "precondition_count": 1,
+      "requires_noalias": true,
+      "risk_count": 1,
+      "risk_level": "proven_noalias"
+    },
+    "build_profile_hash": "acf77abeb152e3a9090583c204390813f3da9084dc2cbf0f45bb3fe13da6d9ae",
+    "c2rust_baseline_identity": {
+      "sha256": "2e5b2ea9d56bda6dafe76fe9d6348aa8b2d3eec3b6cda9867b4b0979a6f9379d",
+      "status": "skipped"
+    },
+    "c_oracle_harness_identity": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-c-oracle-harness-draft.c",
+      "sha256": "0d60f816d9828742756d514ff52d403afe6340576269efb72be7dcee374b322a",
+      "status": "draft"
+    },
+    "cache_input_fields": [
+      "source_commit",
+      "source_file_hashes",
+      "slice_spec_sha256",
+      "fixture_hash",
+      "build_profile_hash",
+      "competition_environment_identity",
+      "cargo_lock_hash",
+      "tool_versions",
+      "schema_versions",
+      "translator_version",
+      "translator_manifest_sha256",
+      "command_arguments",
+      "alias_gate_identity",
+      "effect_graph_identity",
+      "scalar_ub_contract_identity",
+      "oracle_boundary_contract_identity",
+      "c2rust_baseline_identity",
+      "route_decision_identity",
+      "validation_profile_identity",
+      "global_dependency_identity",
+      "c_oracle_harness_identity",
+      "translator_feature_set",
+      "clang_lowering_identity"
+    ],
+    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "clang_lowering_identity": {
+      "clang_path": "/usr/bin/clang",
+      "clang_path_status": "configured",
+      "clang_version": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+      "enabled": true,
+      "features": [
+        "clang-lowering-report"
+      ],
+      "frontend": "clang_ast_dump_json",
+      "ignored_env_for_ast_dump": {
+        "LIBCLANG_PATH": {
+          "reason": "ignored_for_ast_dump",
+          "status": "not_configured",
+          "value": ""
+        }
+      },
+      "lane": "competition-clang-lane",
+      "required": true,
+      "requires_env": [
+        "CLANG_PATH"
+      ]
+    },
+    "command_arguments": [
+      "auto_migrate.py",
+      "--slice-spec",
+      "validation/slice-specs/flashdb-real-fdb-kv-iterate-kv-tail.json",
+      "--accept-existing-evidence",
+      "--emit-clang-lowering-report",
+      "--competition-clang-lane"
+    ],
+    "competition_environment_identity": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "dependent_artifacts": {
+      "c2rust_baseline": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-c2rust-baseline-manifest.json",
+        "sha256": "d7b8a3c5e8042afdc3fc422e6863e2899b4d76d3e5a49f692a5e67aa518e6c7c",
+        "status": "skipped"
+      },
+      "route_decision": {
+        "level": "L1",
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-route-decision.json",
+        "sha256": "b386a702d9e3903bb9b6c0bbd645b50ab33579d87360f174e3ad3a2d3f8ef70c",
+        "status": "recorded"
+      },
+      "validation_profile": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-validation-profile.json",
+        "profile": "L1-dev",
+        "sha256": "ba25930fa55b8683f49d01a3aa3eed915c16b94380def21a597819f8a44e91fc",
+        "status": "passed"
+      }
+    },
+    "effect_graph_identity": {
+      "alias_gate_decision": "allow",
+      "alias_sensitive": true,
+      "read_effect_count": 2,
+      "read_nodes": [
+        "db",
+        "itr"
+      ],
+      "schema_version": 2,
+      "sha256": "08256a76c41dc84c848c1ca43c845c301b649bcf902e5b740c1eabc5336dda55",
+      "write_effect_count": 1,
+      "write_nodes": [
+        "itr"
+      ]
+    },
+    "fixture_hash": "ef23efc26f1728cb531086c950931405f5f9c2ac625094704df7d59844110f24",
+    "global_dependency_identity": {
+      "count": 0,
+      "names": [],
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "invalidates": [
+      "context_pack",
+      "type_map",
+      "cfg",
+      "pointer_graph",
+      "c2rust_baseline",
+      "route_decision",
+      "validation_profile",
+      "rust_draft",
+      "patch_plan",
+      "ai_candidate",
+      "c_oracle",
+      "rust_replay",
+      "diff",
+      "negative_diff",
+      "unsafe_ledger",
+      "final_verification",
+      "auto_translation_manifest",
+      "summary"
+    ],
+    "oracle_boundary_contract_identity": {
+      "sha256": "bb70a58fd1f93e68ea9c46856bb758ac1673350f2eb962c7484424042d8d8e50",
+      "status": "sufficient_for_semantic_pass"
+    },
+    "route_decision_identity": {
+      "sha256": "4b3e28e5060f7b110614f3afbf0d8c87070bc050c6248a60c917b9c4ea857c7d",
+      "status": "recorded"
+    },
+    "scalar_ub_contract_identity": {
+      "sha256": "305ee260ea252851c5aeca2c9c82afed125ae6348053ca73b4a5ac79047fcf7f",
+      "status": "recorded"
+    },
+    "schema_version": 1,
+    "schema_versions": {
+      "auto_cache_metadata": 1,
+      "auto_translation_plan": 1,
+      "cfg": 1,
+      "evidence_manifest": 1,
+      "pointer_graph": 2,
+      "type_map": 1
+    },
+    "slice_id": "real-fdb-kv-iterate-kv-tail",
+    "slice_spec_sha256": "2235ff95a7ca29767e5fd583e7837b069f2d0dae4c7b001c04e13fed91dce684",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b"
+    },
+    "target_id": "flashdb",
+    "tool_versions": {
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "python": "Python 3.12.3",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+    },
+    "translator_feature_set": [
+      "clang-lowering-report"
+    ],
+    "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
+    "translator_version": "0.1.0",
+    "validation_profile_identity": {
+      "sha256": "198146f583a74007c0dd949e19f4316deab5fabdd321f00b943a40b3f10c7af5",
+      "status": "passed"
+    }
+  },
+  "repo_commit": "7ddac7b97b27a266b77630f3280498c5c7e23eef",
+  "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-kv-iterate-kv-tail",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "translator_version": "0.1.0"
+}

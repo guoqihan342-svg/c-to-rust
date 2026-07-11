@@ -17,7 +17,7 @@ def scripted_sequence_validate_noalias(
     roots = {
         str(item["entry_parameter"])
         for item in contract["external_callee"]["arguments"]
-        if item["mode"] == "record_ref"
+        if item["mode"] in {"record_ref", "owner_interior_alias"}
         and entry_by_name[str(item["entry_parameter"])]["pass_mode"] == "mutable_ref"
     }
     roots.add(str(contract["state_output"]["parameter"]))
@@ -76,14 +76,18 @@ def scripted_sequence_validate_c_signatures(
     observations = external["arguments"]
     if [str(item.get("name") or "") for item in actual] != [str(item["parameter"]) for item in observations]:
         raise ValueError("scripted sequence replay external parameters drifted")
-    expected_types = [
-        (
-            f"struct {entry_by_name[str(item['entry_parameter'])]['rust_type']} *"
-            if item["mode"] == "record_ref"
-            else "uint32_t"
-        )
-        for item in observations
-    ]
+    expected_types = []
+    for item in observations:
+        if item["mode"] == "scalar_field_value":
+            expected_types.append("uint32_t")
+        elif item["mode"] == "owner_interior_alias":
+            expected_types.append(
+                f"struct {scripted_sequence_alias_record_type(item, entry_by_name)} *"
+            )
+        else:
+            expected_types.append(
+                f"struct {entry_by_name[str(item['entry_parameter'])]['rust_type']} *"
+            )
     if [normalize_c_type(str(item.get("c_type") or "")) for item in actual] != [
         normalize_c_type(item) for item in expected_types
     ]:
@@ -145,7 +149,7 @@ def scripted_sequence_expected_outputs(
         for observation in external["arguments"]:
             key = (
                 str(observation["entry_parameter"]),
-                tuple(str(item) for item in observation["field_path"]),
+                scripted_sequence_observation_owner_path(observation),
             )
             row.append(
                 current_state

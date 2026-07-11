@@ -20,11 +20,11 @@ input.c
 
 | Item | Current value | Exact meaning |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 33 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
+| `translator_generated_semantic_pass_count` | 34 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
 | `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
-| Active translator track | P0-T23 | Build source-backed semantic evidence for the selected `fdb_kvdb.c:1885` do-while tail candidate |
+| Active translator track | P0-T24 | Select the next smallest generic source-backed translation gap |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |
-| Latest completed stage | P0-T22 | The generic `:1885` interior-reborrow do-while tail candidate is selected and implemented but not counted as semantic acceptance |
+| Latest completed stage | P0-T23 | The `:1885` owner-interior-alias do-while tail passed strict semantic closure in the WSL competition lane |
 | Current strict regression | `26/34` | Run `20260711T061416Z`; eight historical evidence drifts remain |
 | Current proof class | `wsl-local-simulation` | Valid for development and approximation, but not `competition-exact` |
 
@@ -190,7 +190,7 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
   | generic tests | Complete | Positive, adjacent fail-closed, and all-feature translator tests pass |
   | source-backed inputs | Complete | Spec, fixture, and source-fragment hash are reproducible |
   | semantic evidence | Complete | C oracle, Rust replay, diff, negative, and unsafe ledger are generated and cross-bound |
-  | strict acceptance | Complete | Every section 7 gate passes and the matrix-derived count is 33 |
+  | strict acceptance | Complete | Every section 7 gate passes and the matrix-derived count is 34 |
 
 - [x] **P0-T22: next-slice decision gate**
 
@@ -202,9 +202,13 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   Project-independent no-clang AST lowering, Rust emission/runtime, and non-empty-body/comparison-drift negatives are complete. Status remains `candidate_context_only`, and the semantic count remains 33.
 
-- [ ] **P0-T23: source-backed semantic closure for `fdb_kvdb.c:1885`**
+- [x] **P0-T23: source-backed semantic closure for `fdb_kvdb.c:1885`**
 
-  Generate the source-bound spec, fixture, C oracle, Rust replay, schema diff, negative diff, unsafe ledger, route/profile, and final verification for the P0-T22 candidate. Increment the semantic count only after every strict validator passes; keep the stop boundary fixed at line 1885.
+  The source-bound spec, fixture, C oracle, Rust replay, schema diff, negative diff, unsafe ledger, route/profile, and final verification are complete. All 12 strict semantic-binding checks pass under the WSL `--competition-clang-lane`, with `semantic_pass=true` and `generated_draft_semantic_pass=true`. The claim remains fixed to line 1885 and excludes the real `get_next_kv_addr` and whole function. The matrix-derived count moved from 33 to 34.
+
+- [ ] **P0-T24: next-slice decision gate**
+
+  Select the next smallest source-backed gap from pinned FlashDB or another real C project and a different construct family. Record the source span, generic construct gap, nearest fail-closed negative, and stop boundary before implementation. Project names, function names, slice ids, and fixture constants must not drive translation behavior.
 
 ### P0-B: Competition Host and OpenCode
 
@@ -258,11 +262,13 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 | P0-T20 | Compose the `:1870-:1873` assignment-call condition and branch body | 31 -> 32 |
 | P0-T21 | Compose the `:1868-:1874` zero-start and assignment-call branches | 32 -> 33 |
 | P0-T22 | Select and implement the `:1885` interior-reborrow do-while tail candidate | 33 -> 33 (candidate only) |
+| P0-T23 | Strict source-backed acceptance for the `:1885` owner-interior-alias do-while tail | 33 -> 34 |
 
 Validation run bindings:
 
 | Validation | Binding | Result |
 | --- | --- | --- |
+| P0-T23 strict validator | WSL competition clang lane, 2026-07-11 | `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; three bounded fixtures cover 1/2/3 calls |
 | P0-T22 translator candidate | current worktree, 2026-07-11 | library `228` passed; bounded `659` passed with `133` real-clang opt-in ignores; integer conversion `4` passed; coverage matrix passed |
 | P0-T21 translator candidate | commit `02067028`, 2026-07-11 | library `228` passed; bounded `657` passed with `133` real-clang opt-in ignores; integer conversion `4` passed |
 | P0-T20 Python core historical snapshot | 2026-07-11 stage snapshot | `293 passed, 6 skipped`, plus `90` subtests; proves only that revision |

@@ -1,0 +1,34 @@
+{
+  "ai_required_for_default_pipeline": false,
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-c2rust-baseline-manifest.json",
+    "sha256": "d7b8a3c5e8042afdc3fc422e6863e2899b4d76d3e5a49f692a5e67aa518e6c7c",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=2235ff95a7ca29767e5fd583e7837b069f2d0dae4c7b001c04e13fed91dce684",
+    "fixture_hash=ef23efc26f1728cb531086c950931405f5f9c2ac625094704df7d59844110f24",
+    "build_profile_hash=acf77abeb152e3a9090583c204390813f3da9084dc2cbf0f45bb3fe13da6d9ae",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "candidates": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-route-decision.json",
+    "sha256": "b386a702d9e3903bb9b6c0bbd645b50ab33579d87360f174e3ad3a2d3f8ef70c",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "slice_id": "real-fdb-kv-iterate-kv-tail",
+  "status": "not_used",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "ba25930fa55b8683f49d01a3aa3eed915c16b94380def21a597819f8a44e91fc",
+    "status": "passed"
+  }
+}

@@ -1,0 +1,4 @@
+
+thread 'replay_real_fdb_kv_iterate_kv_tail_fixture_contract' (30742) panicked at <translation-carrier-negative>/mutated_same_replay.rs:36:35:
+scripted external return sequence exhausted
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

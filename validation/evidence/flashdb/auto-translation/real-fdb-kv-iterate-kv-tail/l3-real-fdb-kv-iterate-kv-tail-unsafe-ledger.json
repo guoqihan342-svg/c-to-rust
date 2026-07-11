@@ -1,0 +1,31 @@
+{
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-generated-draft-unsafe-ledger.json",
+    "sha256": "1119dbeca87346b3fef77bbc7c996f468ac49c058d98a67ae1a66a66a12793ed",
+    "status": "passed"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-c2rust-baseline-manifest.json",
+    "sha256": "d7b8a3c5e8042afdc3fc422e6863e2899b4d76d3e5a49f692a5e67aa518e6c7c",
+    "status": "skipped"
+  },
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-route-decision.json",
+    "sha256": "b386a702d9e3903bb9b6c0bbd645b50ab33579d87360f174e3ad3a2d3f8ef70c",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-kv-tail",
+  "status": "passed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "ba25930fa55b8683f49d01a3aa3eed915c16b94380def21a597819f8a44e91fc",
+    "status": "passed"
+  }
+}

@@ -1,0 +1,6 @@
+
+thread '__c2r_negative_partition_case_1' (30765) panicked at <translation-carrier-negative>/mutated_partition_replay.rs:103:5:
+assertion `left == right` failed: one-kv-then-failed state drifted
+  left: 4096
+ right: 4294967295
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -11,7 +11,11 @@ from .record_contract import (
     require_identifier,
     validate_initializer,
 )
-from .sequence_contract_validation import validate_noalias, validate_signatures
+from .sequence_contract_validation import (
+    initializer_record_type,
+    validate_noalias,
+    validate_signatures,
+)
 
 
 KIND = "scripted_external_record_u32_sequence_do_while_state"
@@ -22,8 +26,9 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
     contract = require_dict(spec.get("replay_contract"), "replay_contract")
     if contract.get("kind") != KIND:
         raise ReporterError(f"replay_contract.kind must be {KIND}")
-    if contract.get("schema_version") != 1:
-        raise ReporterError("sequence replay contract schema_version must be 1")
+    schema_version = contract.get("schema_version")
+    if schema_version not in {1, 2}:
+        raise ReporterError("sequence replay contract schema_version must be 1 or 2")
     if set(contract) != {
         "schema_version",
         "kind",
@@ -91,9 +96,19 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(observations, list) or not observations:
         raise ReporterError("external_callee.arguments are missing")
     external_names: set[str] = set()
+    owner_alias_state_keys: list[tuple[str, tuple[str, ...]]] = []
     for index, raw_observation in enumerate(observations):
         observation = require_dict(raw_observation, f"external_callee.arguments[{index}]")
-        if set(observation) != {"parameter", "mode", "entry_parameter", "field_path"}:
+        mode = observation.get("mode")
+        supported_modes = {"record_ref", "scalar_field_value"}
+        if schema_version == 2:
+            supported_modes.add("owner_interior_alias")
+        if mode not in supported_modes:
+            raise ReporterError(f"external_callee.arguments[{index}].mode is unsupported")
+        expected_shape = {"parameter", "mode", "entry_parameter", "field_path"}
+        if mode == "owner_interior_alias":
+            expected_shape.update({"projection_path", "alias_local"})
+        if set(observation) != expected_shape:
             raise ReporterError(f"external_callee.arguments[{index}] shape drifted")
         name = require_identifier(
             observation.get("parameter"), f"external_callee.arguments[{index}].parameter"
@@ -102,16 +117,47 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
             observation.get("entry_parameter"),
             f"external_callee.arguments[{index}].entry_parameter",
         )
-        if observation.get("mode") not in {"record_ref", "scalar_field_value"}:
-            raise ReporterError(f"external_callee.arguments[{index}].mode is unsupported")
         if name in external_names or entry_name not in entry_by_name:
             raise ReporterError(f"external_callee.arguments[{index}] binding drifted")
         external_names.add(name)
         path = field_path(
             observation.get("field_path"), f"external_callee.arguments[{index}].field_path"
         )
-        if path not in dict(initializer_fixture_paths(entry_by_name[entry_name]["initializer"])).values():
+        combined_path = path
+        if mode == "owner_interior_alias":
+            require_identifier(
+                observation.get("alias_local"),
+                f"external_callee.arguments[{index}].alias_local",
+            )
+            owner_entry = entry_by_name[entry_name]
+            if owner_entry["pass_mode"] != "mutable_ref":
+                raise ReporterError(
+                    f"external_callee.arguments[{index}] owner entry must use mutable_ref"
+                )
+            projection_path = field_path(
+                observation.get("projection_path"),
+                f"external_callee.arguments[{index}].projection_path",
+            )
+            initializer_record_type(
+                owner_entry["initializer"],
+                projection_path,
+                f"external_callee.arguments[{index}].projection_path",
+            )
+            combined_path = (*projection_path, *path)
+            owner_alias_state_keys.append((entry_name, combined_path))
+        initialized_paths = {
+            initialized_path
+            for _, initialized_path in initializer_fixture_paths(
+                entry_by_name[entry_name]["initializer"]
+            )
+        }
+        if combined_path not in initialized_paths:
             raise ReporterError(f"external_callee.arguments[{index}] field path is not initialized")
+
+    if schema_version == 2 and len(owner_alias_state_keys) != 1:
+        raise ReporterError(
+            "sequence replay schema_version 2 requires exactly one owner interior alias"
+        )
 
     state = require_dict(contract.get("state_output"), "state_output")
     if set(state) != {"parameter", "field_path", "fixture_field", "rust_type"}:
@@ -124,6 +170,11 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
         raise ReporterError("state_output must bind a mutable u32 entry field")
     if state_path not in dict(initializer_fixture_paths(state_entry["initializer"])).values():
         raise ReporterError("state_output.field_path is not initialized")
+    if any(
+        (state_parameter, state_path) != owner_alias_state_key
+        for owner_alias_state_key in owner_alias_state_keys
+    ):
+        raise ReporterError("state_output does not match owner interior alias")
 
     loop = require_dict(contract.get("loop"), "loop")
     if set(loop) != {"sentinel", "comparison", "max_calls"}:

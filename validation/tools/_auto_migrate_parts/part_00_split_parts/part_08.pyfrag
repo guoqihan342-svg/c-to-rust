@@ -43,8 +43,9 @@ def scripted_external_record_u32_sequence_do_while_state_replay_contract(
         "noalias_required",
     }:
         raise ValueError("scripted sequence replay contract shape drifted")
-    if contract.get("schema_version") != 1:
-        raise ValueError("scripted sequence replay contract schema_version must be 1")
+    schema_version = contract.get("schema_version")
+    if schema_version not in {1, 2}:
+        raise ValueError("scripted sequence replay contract schema_version must be 1 or 2")
 
     entries = contract.get("entry_arguments")
     if not isinstance(entries, list) or not entries:
@@ -108,13 +109,20 @@ def scripted_external_record_u32_sequence_do_while_state_replay_contract(
     if not isinstance(observations, list) or not observations:
         raise ValueError("scripted sequence replay external arguments are missing")
     external_names: set[str] = set()
+    owner_alias_state_keys: list[tuple[str, tuple[str, ...]]] = []
     for index, observation in enumerate(observations):
-        if not isinstance(observation, dict) or set(observation) != {
+        if not isinstance(observation, dict):
+            raise ValueError(f"scripted sequence replay external argument {index} shape drifted")
+        mode = observation.get("mode")
+        expected_shape = {
             "parameter",
             "mode",
             "entry_parameter",
             "field_path",
-        }:
+        }
+        if mode == "owner_interior_alias":
+            expected_shape.update({"projection_path", "alias_local"})
+        if set(observation) != expected_shape:
             raise ValueError(f"scripted sequence replay external argument {index} shape drifted")
         name = scripted_external_replay_identifier(
             observation.get("parameter"), f"sequence external argument {index} parameter"
@@ -122,7 +130,10 @@ def scripted_external_record_u32_sequence_do_while_state_replay_contract(
         entry_name = scripted_external_replay_identifier(
             observation.get("entry_parameter"), f"sequence external argument {index} entry parameter"
         )
-        if observation.get("mode") not in {"record_ref", "scalar_field_value"}:
+        supported_modes = {"record_ref", "scalar_field_value"}
+        if schema_version == 2:
+            supported_modes.add("owner_interior_alias")
+        if mode not in supported_modes:
             raise ValueError(f"scripted sequence replay external argument {index} mode is unsupported")
         if name in external_names or entry_name not in entry_by_name:
             raise ValueError("scripted sequence replay external argument binding drifted")
@@ -130,11 +141,32 @@ def scripted_external_record_u32_sequence_do_while_state_replay_contract(
         path = scripted_record_field_path(
             observation.get("field_path"), f"sequence external argument {index} field_path"
         )
+        if mode == "owner_interior_alias":
+            scripted_external_replay_identifier(
+                observation.get("alias_local"),
+                f"sequence external argument {index} alias_local",
+            )
+            if entry_by_name[entry_name].get("pass_mode") != "mutable_ref":
+                raise ValueError(
+                    f"scripted sequence replay external argument {index} interior alias requires a mutable owner"
+                )
+            projection = scripted_record_field_path(
+                observation.get("projection_path"),
+                f"sequence external argument {index} projection_path",
+            )
+            scripted_sequence_alias_record_type(observation, entry_by_name)
+            path = (*projection, *path)
+            owner_alias_state_keys.append((entry_name, path))
         initialized = dict(
             scripted_record_initializer_fixture_paths(entry_by_name[entry_name]["initializer"])
         ).values()
         if path not in initialized:
             raise ValueError(f"scripted sequence replay external argument {index} field_path is not initialized")
+
+    if schema_version == 2 and len(owner_alias_state_keys) != 1:
+        raise ValueError(
+            "scripted sequence replay schema_version 2 requires exactly one owner interior alias"
+        )
 
     state = contract.get("state_output")
     if not isinstance(state, dict) or set(state) != {
@@ -158,6 +190,11 @@ def scripted_external_record_u32_sequence_do_while_state_replay_contract(
         scripted_record_initializer_fixture_paths(state_entry["initializer"])
     ).values():
         raise ValueError("scripted sequence replay state output field_path is not initialized")
+    if any(
+        (state_parameter, state_path) != owner_alias_state_key
+        for owner_alias_state_key in owner_alias_state_keys
+    ):
+        raise ValueError("scripted sequence replay state output does not match owner interior alias")
 
     loop = contract.get("loop")
     if not isinstance(loop, dict) or set(loop) != {"sentinel", "comparison", "max_calls"}:
@@ -194,6 +231,39 @@ def scripted_external_record_u32_sequence_do_while_state_replay_contract(
     if fixture_binding is not None:
         scripted_sequence_validate_fixture_cases(spec, fixture_binding, contract, entry_by_name)
     return contract
+
+
+def scripted_sequence_observation_owner_path(
+    observation: dict[str, Any],
+) -> tuple[str, ...]:
+    field_path = tuple(str(item) for item in observation["field_path"])
+    if observation["mode"] != "owner_interior_alias":
+        return field_path
+    return (
+        *(str(item) for item in observation["projection_path"]),
+        *field_path,
+    )
+
+
+def scripted_sequence_alias_record_type(
+    observation: dict[str, Any],
+    entry_by_name: dict[str, dict[str, Any]],
+) -> str:
+    initializer = entry_by_name[str(observation["entry_parameter"])]["initializer"]
+    for segment in observation["projection_path"]:
+        matches = [
+            field
+            for field in initializer["fields"]
+            if field.get("name") == segment and isinstance(field.get("record"), dict)
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                "scripted sequence replay interior alias projection must resolve to a nested record"
+            )
+        initializer = matches[0]["record"]
+    return scripted_external_replay_identifier(
+        initializer.get("record_type"), "sequence interior alias record type"
+    )
 
 
 def scripted_sequence_behavior_fields(contract: dict[str, Any]) -> list[str]:

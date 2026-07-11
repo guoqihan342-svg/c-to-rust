@@ -22,11 +22,11 @@ input.c
 
 | 项目 | 当前值 | 准确含义 |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 33 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
+| `translator_generated_semantic_pass_count` | 34 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
-| 当前翻译主线 | P0-T23 | 为已选定的 `fdb_kvdb.c:1885` do-while tail candidate 建立 source-backed 语义证据 |
+| 当前翻译主线 | P0-T24 | 选择下一个最小、通用、source-backed 翻译缺口 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近提交阶段 | P0-T22 | 已选择并实现 `:1885` interior-reborrow do-while tail 的通用 candidate；尚未计入语义通过 |
+| 最近完成阶段 | P0-T23 | `:1885` owner-interior-alias do-while tail 已通过 WSL competition lane 严格语义闭环 |
 | 当前严格回归 | `26/34` | run `20260711T061416Z`；8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -192,7 +192,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   | generic tests | 已完成 | 正例、相邻 fail-closed 负例和 translator 全功能测试通过 |
   | source-backed inputs | 已完成 | spec、fixture 与源片段 hash 可重生成 |
   | semantic evidence | 已完成 | C oracle、Rust replay、diff、negative、unsafe ledger 已生成并交叉绑定 |
-  | strict acceptance | 已完成 | 第 7 节全部门禁通过，matrix 派生计数更新为 33 |
+  | strict acceptance | 已完成 | 第 7 节全部门禁通过，matrix 派生计数更新为 34 |
 
 - [x] **P0-T22：下一切片决策门**
 
@@ -204,9 +204,13 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   当前已完成 project-independent no-clang AST lowering、Rust emission/runtime 和非空 body/比较漂移负例；状态仍为 `candidate_context_only`，语义计数保持 33。
 
-- [ ] **P0-T23：`fdb_kvdb.c:1885` source-backed 语义闭环**
+- [x] **P0-T23：`fdb_kvdb.c:1885` source-backed 语义闭环**
 
-  为 P0-T22 candidate 生成 source-bound spec、fixture、C oracle、Rust replay、schema diff、negative diff、unsafe ledger、route/profile 和 final verification。只有 strict validator 全部通过后才能增加语义计数；停止边界继续固定在 line 1885。
+  已生成 source-bound spec、fixture、C oracle、Rust replay、schema diff、negative diff、unsafe ledger、route/profile 和 final verification。WSL `--competition-clang-lane` 下 strict validator 的 12 类语义绑定检查全部通过，`semantic_pass=true`、`generated_draft_semantic_pass=true`；停止边界固定在 line 1885，真实 `get_next_kv_addr` 和完整函数仍不在声明范围内。matrix 派生计数由 33 更新为 34。
+
+- [ ] **P0-T24：下一切片决策门**
+
+  从 pinned FlashDB 或其他真实 C 项目选择下一个最小、不同 construct family 的 source-backed 缺口。先记录 source span、通用 construct gap、最近邻 fail-closed 负例和停止边界，再决定是否进入实现；禁止按项目名、函数名、slice id 或 fixture 常量硬编码。
 
 ### P0-B：比赛主机与 OpenCode
 
@@ -260,11 +264,13 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | P0-T20 | `:1870-:1873` assignment-call condition 与分支体组合 | 31 -> 32 |
 | P0-T21 | `:1868-:1874` zero-start 与 assignment-call 二分支组合 | 32 -> 33 |
 | P0-T22 | 选择并实现 `:1885` interior-reborrow do-while tail candidate | 33 -> 33（candidate only） |
+| P0-T23 | `:1885` owner-interior-alias do-while tail source-backed 严格验收 | 33 -> 34 |
 
 验证运行绑定：
 
 | 验证项 | 绑定 | 结果 |
 | --- | --- | --- |
+| P0-T23 严格 validator | WSL competition clang lane，2026-07-11 | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过；3 个有限 fixture 案例覆盖 1/2/3 次调用 |
 | P0-T22 translator candidate | 当前工作树，2026-07-11 | library `228` 通过；bounded `659` 通过、`133` 个 real-clang opt-in 忽略；integer conversion `4` 通过；coverage matrix passed |
 | P0-T21 translator candidate | commit `02067028`，2026-07-11 | library `228` 通过；bounded `657` 通过、`133` 个 real-clang opt-in 忽略；integer conversion `4` 通过 |
 | P0-T20 Python core 历史快照 | 2026-07-11 阶段快照 | `293 passed, 6 skipped`，另有 `90` 个 subtests；只证明当时提交 |

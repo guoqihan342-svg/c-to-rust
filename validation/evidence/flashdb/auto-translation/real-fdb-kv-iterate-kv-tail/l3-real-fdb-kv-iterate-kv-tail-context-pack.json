@@ -1,0 +1,189 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=2235ff95a7ca29767e5fd583e7837b069f2d0dae4c7b001c04e13fed91dce684",
+    "fixture_hash=ef23efc26f1728cb531086c950931405f5f9c2ac625094704df7d59844110f24",
+    "build_profile_hash=acf77abeb152e3a9090583c204390813f3da9084dc2cbf0f45bb3fe13da6d9ae",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edge_to_callee_binding": [
+    {
+      "callee": "get_next_kv_addr",
+      "semantics_verified": false,
+      "signature_ref": "sig-scripted-get-next-kv-addr",
+      "source_expression": "get_next_kv_addr(db, &sector, kv)",
+      "statement_context": "assignment",
+      "stub_kind": "compile_only"
+    }
+  ],
+  "call_edges": [
+    {
+      "definition_status": "carrier_equivalent_uint32_sentinel",
+      "kind": "macro",
+      "name": "FAILED_ADDR",
+      "source": "src/fdb_kvdb.c"
+    },
+    {
+      "definition_status": "deterministic_fixture_stimulus_only",
+      "kind": "callee",
+      "name": "get_next_kv_addr",
+      "source": "src/fdb_kvdb.c#get_next_kv_addr"
+    }
+  ],
+  "callee_sources": [
+    {
+      "callee": "get_next_kv_addr",
+      "path": "src/fdb_kvdb.c",
+      "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+    }
+  ],
+  "direct_c_files": [
+    "src/fdb_kvdb.c"
+  ],
+  "direct_call_edges": [
+    {
+      "arguments": [
+        "db",
+        "&sector",
+        "kv"
+      ],
+      "callee": "get_next_kv_addr",
+      "callee_scope": "external_direct_callee",
+      "callee_signature_id": "sig-scripted-get-next-kv-addr",
+      "callee_source_ref": "translation-carrier:scripted-get-next-kv-addr",
+      "definition_status": "deterministic_fixture_stimulus",
+      "source_expression": "get_next_kv_addr(db, &sector, kv)",
+      "statement_context": "assignment",
+      "stub_status": "compile_only"
+    }
+  ],
+  "direct_rust_files": [
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-tail/l3-real-fdb-kv-iterate-kv-tail-rust-draft.rs"
+  ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [
+    {
+      "definition_status": "deterministic_fixture_stimulus",
+      "header_files": [],
+      "model_contract": "",
+      "name": "get_next_kv_addr",
+      "parameters": [
+        {
+          "c_type": "struct Database *",
+          "name": "db",
+          "rust_type": "&mut Database"
+        },
+        {
+          "c_type": "struct Sector *",
+          "name": "sector",
+          "rust_type": "&mut Sector"
+        },
+        {
+          "c_type": "struct Kv *",
+          "name": "kv",
+          "rust_type": "&mut Kv"
+        }
+      ],
+      "return_rust_type": "u32",
+      "return_type": "uint32_t",
+      "semantics_verified": false,
+      "signature_ref": "sig-scripted-get-next-kv-addr",
+      "source_files": [
+        {
+          "path": "src/fdb_kvdb.c",
+          "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+        }
+      ],
+      "source_ref": "translation-carrier:scripted-get-next-kv-addr",
+      "stub_boundary": "scripted_fixture_only_no_real_callee_semantics",
+      "stub_generation": "generated_compile_only",
+      "stub_kind": "compile_only",
+      "supported": true,
+      "unsupported_reasons": []
+    }
+  ],
+  "external_direct_callees": [
+    {
+      "definition_status": "deterministic_fixture_stimulus",
+      "header_files": [],
+      "model_contract": "",
+      "name": "get_next_kv_addr",
+      "parameters": [
+        {
+          "c_type": "struct Database *",
+          "name": "db",
+          "rust_type": "&mut Database"
+        },
+        {
+          "c_type": "struct Sector *",
+          "name": "sector",
+          "rust_type": "&mut Sector"
+        },
+        {
+          "c_type": "struct Kv *",
+          "name": "kv",
+          "rust_type": "&mut Kv"
+        }
+      ],
+      "return_rust_type": "u32",
+      "return_type": "uint32_t",
+      "semantics_verified": false,
+      "signature_ref": "sig-scripted-get-next-kv-addr",
+      "source_files": [
+        {
+          "path": "src/fdb_kvdb.c",
+          "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+        }
+      ],
+      "source_ref": "translation-carrier:scripted-get-next-kv-addr",
+      "stub_boundary": "scripted_fixture_only_no_real_callee_semantics",
+      "stub_generation": "generated_compile_only",
+      "stub_kind": "compile_only",
+      "supported": true,
+      "unsupported_reasons": []
+    }
+  ],
+  "fixture": "validation/l2_slices/fixtures/real-fdb-kv-iterate-kv-tail.json",
+  "global_dependencies": [],
+  "level": "L3",
+  "repo_commit": "7ddac7b97b27a266b77630f3280498c5c7e23eef",
+  "schema_version": 1,
+  "signature_bindings": [
+    {
+      "callee": "get_next_kv_addr",
+      "definition_status": "deterministic_fixture_stimulus",
+      "semantics_verified": false,
+      "signature_ref": "sig-scripted-get-next-kv-addr",
+      "stub_kind": "compile_only"
+    }
+  ],
+  "slice_id": "real-fdb-kv-iterate-kv-tail",
+  "slice_spec": {
+    "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-kv-tail.json",
+    "sha256": "2235ff95a7ca29767e5fd583e7837b069f2d0dae4c7b001c04e13fed91dce684"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate_kv_tail_probe"
+    ],
+    "globals": [],
+    "structs": []
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "stub_boundaries": [
+    {
+      "allowed_use": "standalone_rust_check_only",
+      "callee": "get_next_kv_addr",
+      "fixture_only": false,
+      "semantics_verified": false,
+      "stub_kind": "compile_only"
+    }
+  ],
+  "target_id": "flashdb"
+}

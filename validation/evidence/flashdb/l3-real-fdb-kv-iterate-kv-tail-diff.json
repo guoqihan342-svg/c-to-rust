@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-kv-tail",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "itr_kv_addr_start",
+    "external_call_count",
+    "external_call_args"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Fixture-created records cross the declared entry boundary; a finite u32 sequence drives a do-while tail through a declared owner interior mutable alias, call arguments are traced per iteration, and the aliased u32 state stops at the explicit sentinel within the call bound.",
+    "external_callee": "get_next_kv_addr",
+    "excluded_semantics": [
+      "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1885 do-while tail",
+      "real FlashDB database, sector, iterator, KV, address, storage, and pointer layouts",
+      "real get_next_kv_addr implementation behavior and side effects"
+    ],
+    "sequence_replay": {
+      "schema_version": 2,
+      "argument_modes": [
+        "record_ref",
+        "record_ref",
+        "owner_interior_alias"
+      ],
+      "interior_alias_bindings": [
+        {
+          "entry_parameter": "itr",
+          "projection_path": [
+            "current"
+          ],
+          "alias_local": "kv",
+          "field_path": [
+            "addr",
+            "start"
+          ]
+        }
+      ],
+      "noalias_required": [
+        [
+          "db",
+          "itr"
+        ]
+      ]
+    }
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "first_mismatch": null
+}

@@ -290,11 +290,18 @@ def report_claim(context: StaticContext) -> dict[str, Any]:
         return build_field_scalar_add_report_claim(context)
     external_name = context.contract["external_callee"]["name"]
     if context.contract.get("kind") == SEQUENCE_KIND:
-        verified_behavior = (
-            "Fixture-created records cross the declared entry boundary; a finite u32 sequence drives "
-            "a do-while tail, mixed record-reference and scalar-field arguments are traced per call, "
-            "and the declared mutable state stops at the explicit sentinel within the call bound."
-        )
+        if context.contract.get("schema_version") == 2:
+            verified_behavior = (
+                "Fixture-created records cross the declared entry boundary; a finite u32 sequence drives "
+                "a do-while tail through a declared owner interior mutable alias, call arguments are traced "
+                "per iteration, and the aliased u32 state stops at the explicit sentinel within the call bound."
+            )
+        else:
+            verified_behavior = (
+                "Fixture-created records cross the declared entry boundary; a finite u32 sequence drives "
+                "a do-while tail, mixed record-reference and scalar-field arguments are traced per call, "
+                "and the declared mutable state stops at the explicit sentinel within the call bound."
+            )
     elif context.contract.get("kind") == RECORD_KIND:
         verified_behavior = (
             "Fixture-created records are passed through the declared entry boundary; selected "
@@ -306,7 +313,7 @@ def report_claim(context: StaticContext) -> dict[str, Any]:
             "A fixture-scripted u32 external return is assigned to the declared output and compared "
             "with UINT32_MAX; one call and its declared arguments are observed."
         )
-    return {
+    claim = {
         "scope": "source_fragment_only",
         "whole_function_semantics_verified": False,
         "external_callee_semantics_verified": False,
@@ -314,3 +321,27 @@ def report_claim(context: StaticContext) -> dict[str, Any]:
         "external_callee": external_name,
         "excluded_semantics": list(context.claim_boundary["excluded_semantics"]),
     }
+    if (
+        context.contract.get("kind") == SEQUENCE_KIND
+        and context.contract.get("schema_version") == 2
+    ):
+        claim["sequence_replay"] = {
+            "schema_version": 2,
+            "argument_modes": [
+                item["mode"] for item in context.contract["external_callee"]["arguments"]
+            ],
+            "interior_alias_bindings": [
+                {
+                    "entry_parameter": item["entry_parameter"],
+                    "projection_path": list(item["projection_path"]),
+                    "alias_local": item["alias_local"],
+                    "field_path": list(item["field_path"]),
+                }
+                for item in context.contract["external_callee"]["arguments"]
+                if item["mode"] == "owner_interior_alias"
+            ],
+            "noalias_required": [
+                list(pair) for pair in context.contract["noalias_required"]
+            ],
+        }
+    return claim
