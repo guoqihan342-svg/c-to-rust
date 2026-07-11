@@ -31,7 +31,146 @@ input.c
 
 `validation/translator-coverage-matrix.json` 是能力计数的机器可读事实源。native C build、typed-IR 单测、rustc 编译、C2Rust output 或 LLM 输出单独通过都只是 candidate evidence。
 
-## 2. 当前执行队列
+## 2. 比赛环境
+
+### 2.1 官方目标机基线
+
+比赛环境的机器可读事实源是 `config/competition-env/environment.json`，profile id 为 `huawei-competition-ubuntu-24.04`，当前 raw-bytes SHA-256 为 `8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160`。开发、CI 和 WSL 可以模拟该配置，但只有真实主机满足 attestation 后才能写成 `competition-exact`。
+
+| 项目 | 比赛目标值 |
+| --- | --- |
+| OS | Ubuntu `24.04.4 LTS`，codename `noble` |
+| Kernel | `5.10.0-182.0.0.95.r194_123.hce2.x86_64` |
+| Architecture | `x86_64` |
+| Python / pip | `3.12.3` / `24.0` |
+| Rust / Cargo | `1.96.0` / `1.96.0` |
+| gcc / g++ / Make | `13.3.0` / `13.3.0` / `4.3` |
+| Node.js / npm | `v24.13.0` / `11.6.2` |
+| Java / Maven | Bisheng OpenJDK `21.0.10` / Maven `3.9.11` |
+| `MAVEN_HOME` | `/usr/local/maven3` |
+| Go / CMake | 不可用：`go` 未安装，`cmake` 未找到 |
+| clang | 默认门禁不要求；typed-IR competition clang lane 显式要求 |
+
+比赛配置固定使用以下镜像：
+
+| 生态 | 镜像 |
+| --- | --- |
+| APT | `http://mirrors.tools.huawei.com/ubuntu` |
+| PyPI | `https://mirrors.tools.huawei.com/pypi/simple` |
+| npm | `https://mirrors.tools.huawei.com/npm/` |
+| Cargo | `sparse+http://rust.inhuawei.com/crates.io-index/` |
+
+`source config/competition-env/env.sh` 会设置 profile id、镜像、`MAVEN_HOME` 和 repo-local `CARGO_HOME=config/competition-env/cargo`，避免依赖用户全局 Cargo 配置。
+
+### 2.2 比赛源码、clang 和 OpenCode 合同
+
+FlashDB 比赛输入固定为：
+
+| 字段 | 固定值 |
+| --- | --- |
+| repository | `https://gitcode.com/xwxf/FlashDB.git` |
+| branch | `competition` |
+| commit | `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
+| checkout | `git checkout -B competition f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
+
+新的 competition-targeted slice extraction 必须同时传入 repository、branch 和 `--require-source-commit`，在生成 slice spec 前核对实际 checkout。历史 evidence 可以绑定旧 commit，但不能冒充新的比赛输入。
+
+competition clang lane 不是默认依赖。启用 `auto_migrate.py --competition-clang-lane` 时，clang 必须来自 `CLANG_PATH` 或以下 repo-local 路径之一：
+
+```text
+tools/llvm/bin/clang-18
+tools/llvm/bin/clang
+tools/clang/bin/clang
+```
+
+可用性证明必须同时通过 `clang -print-resource-dir` 和包含 `stdint.h`、`stddef.h` 的最小 TU JSON AST dump。只有 `clang --version` 成功不够；`LIBCLANG_PATH` 不作为该 lane 的输入。缺失时应记录 `missing_clang_path`，不能回退后假装 typed-IR clang lane 已运行。
+
+比赛侧 agent 合同固定为：
+
+| 字段 | 要求 |
+| --- | --- |
+| command | `opencode` |
+| logical model | `GLM-5.1` |
+| repo-owned agent | `c2rust-migrator` |
+| variant | `max` |
+| retry cap | 最多 5 轮，每轮一个最小 patch |
+| preflight | 同一 run/runtime env 下 `opencode models` 精确列出 GLM-5.1，并生成 hash-bound passed report/marker |
+
+provider-qualified id 可以作为 resolved model id，但逻辑型号、probe 输出、preflight、worker argv、resume、judge bundle 和 public packet 必须一致。当前 WSL 的 `opencode models` 输出为小写 `zai/glm-5.1`；仓库当前 strict probe 要求最终 token 精确为区分大小写的 `GLM-5.1`，所以 `toolchain-check.sh` 仍报告“GLM-5.1 not listed”。这可以说明 provider 中存在对应模型，不能说明比赛 OpenCode 合同已通过。OpenCode 对话文本也不是 semantic evidence。
+
+### 2.3 当前 WSL 与比赛目标对照
+
+2026-07-11 在当前 WSL 实际探测到：
+
+| 项目 | 当前 WSL | 比赛目标 | 结论 |
+| --- | --- | --- | --- |
+| OS | Ubuntu `24.04.3 LTS` | `24.04.4 LTS` | 小版本不同 |
+| Kernel | `6.6.87.2-microsoft-standard-WSL2` | Huawei HCE `5.10.0-...` | 不同，不能等价 |
+| Architecture | `x86_64` | `x86_64` | 一致 |
+| Python | `3.12.3` | `3.12.3` | 一致 |
+| Rust / Cargo | `1.95.0` / `1.95.0` | `1.96.0` / `1.96.0` | 不同 |
+| gcc / g++ / Make | `13.3.0` / `13.3.0` / `4.3` | 同左 | 一致 |
+| Node.js / npm | `v22.22.0` / `10.9.4` | `v24.13.0` / `11.6.2` | 不同 |
+| Java / Maven | Ubuntu OpenJDK `17.0.19` / Maven `3.8.7` | Bisheng OpenJDK `21.0.10` / Maven `3.9.11` | 不同 |
+| Go / CMake | Go 缺失 / CMake `3.28.3` | 两者都不可用 | CMake 不符合 |
+| OpenCode | `1.17.18`，models 输出 `zai/glm-5.1` | 未固定二进制版本，strict GLM-5.1 启动合同 | strict model probe 未通过 |
+| clang | 系统 `/usr/bin/clang` `18.1.3` | 可选，需显式来源和完整 smoke | 存在但未被 `env.sh` 自动选择 |
+
+当前 WSL 实跑 `source config/competition-env/env.sh && bash config/competition-env/toolchain-check.sh` 返回 exit code 1 和 10 个不匹配项。系统 clang 虽然存在，但 `env.sh` 只自动选择 `CLANG_PATH` 或 repo-local vendored clang；在 WSL 模拟 competition clang lane 时必须先显式 `export CLANG_PATH=/usr/bin/clang`。实测显式设置后 resource-dir 为 `/usr/lib/llvm-18/lib/clang/18`，minimum-TU JSON AST smoke 通过，但其它 10 个环境差异仍使整体自检失败。
+
+因此当前阶段的 WSL 结果只能标为 `wsl-local-simulation`。它能验证 Linux 路径、gcc/显式 clang、Python harness、Rust replay、FlashDB build/stress 和大部分证据链，但不能证明目标 kernel、Rust 1.96、Node 24、Java/Maven、无 CMake 基线、strict OpenCode/GLM host 或比赛资源约束完全一致。
+
+### 2.4 自检、模拟和正式运行入口
+
+比赛机或 Linux/WSL 会话先执行：
+
+```bash
+source config/competition-env/env.sh
+bash config/competition-env/toolchain-check.sh
+```
+
+`toolchain-check.sh` 会核对工具版本、镜像、Go/CMake 缺失约束、OpenCode model 状态；找到 clang 时还会执行 resource-dir 和最小 TU AST smoke。缺 OpenCode/GLM 默认只报告状态；要求比赛 agent 硬门禁时使用：
+
+```bash
+REQUIRE_OPENCODE_GLM=1 bash config/competition-env/toolchain-check.sh
+```
+
+当前 WSL 模拟 smoke：
+
+```bash
+bash config/competition-env/smoke.sh \
+  wsl-local-simulation \
+  target/competition-smoke-wsl
+```
+
+该 smoke 只验证环境和轻量 evidence gates，不翻译新 slice，也不产生 semantic pass。
+
+真实比赛主机全入口运行：
+
+```bash
+export COMPETITION_EXACT_HOST=1
+python3 -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --proof-class competition-exact
+```
+
+运行完成后必须深校验本地产物：
+
+```bash
+python3 -B -m validation.tools.validate_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --require-local-artifacts
+```
+
+仅做计划检查可加 `--dry-run`，仅调试单入口可加 `--entrypoint-id`；这两种 focused 结果都不能代替全入口 competition-exact 发布包。
+
+### 2.5 当前已验证与未验证边界
+
+当前已在 WSL competition-like lane 验证：P0-T20 的 C oracle、generated Rust replay、diff、negative mutation、unsafe gate 和严格 validator；Python 核心套件 `293 passed, 6 skipped`，另有 `90` 个 subtests；FlashDB file backend 10,000 轮压力测试通过。
+
+当前尚未验证：目标 kernel、Rust/Cargo 1.96、Node/npm 目标版本、真实 Huawei host package/runtime 差异、比赛资源上限、真实主机 `COMPETITION_EXACT_HOST=1` attestation、完整 OpenCode preflight marker、GLM-5.1 worker/session artifacts、全入口 competition-exact judge bundle 和 public packet。因此 P0-H9 仍未关闭。
+
+## 3. 当前执行队列
 
 ### P0-A：翻译层主线
 
@@ -67,7 +206,7 @@ input.c
 - [ ] 清理 `cargo clippy --all-features --all-targets -- -D warnings` 的 17 个历史 feature-gated 告警；默认 Clippy 已通过，新切片不得增加告警。
 - [ ] 在真实比赛主机复跑已闭合的 CRC32 C2Rust+repair before/after，并发布 competition-exact workflow metrics。
 
-## 3. 后续 Backlog
+## 4. 后续 Backlog
 
 ### P1：扩大通用翻译能力
 
@@ -87,7 +226,7 @@ input.c
 4. 完成正式 tag/release、外部复核、CONTRIBUTING、ownership 和 release checklist。
 5. CFG/SSA/MIR/LLVM/self-hosting 继续作为长期研究项，不抢占 P0/P1。
 
-## 4. 已完成里程碑
+## 5. 已完成里程碑
 
 | 范围 | 结果 | 语义计数变化 |
 | --- | --- | ---: |
@@ -107,9 +246,9 @@ input.c
 - P0-T20 严格 validator：`semantic_pass=true`、`generated_draft_semantic_pass=true`。
 - 全功能 Clippy 仍有 17 个历史告警；这些告警不位于 P0-T20 新增代码行。
 
-## 5. 架构边界
+## 6. 架构边界
 
-### 5.1 Candidate 路由
+### 6.1 Candidate 路由
 
 | 层级 | 作用 | 能否单独声明语义通过 |
 | --- | --- | --- |
@@ -119,16 +258,16 @@ input.c
 | L3 LLM/OpenCode | 生成或修复候选 | 否 |
 | L4 refuse | 不确定时 fail-closed 并给出下一步 | 不适用 |
 
-任何候选只有通过第 6 节的共同门禁后，才能成为 declared slice boundary 内的 semantic pass。
+任何候选只有通过第 7 节的共同门禁后，才能成为 declared slice boundary 内的 semantic pass。
 
-### 5.2 IR 分层
+### 6.2 IR 分层
 
 1. **Semantic IR**：显式表达 C integer width/signedness、cast、lvalue/rvalue、pointer provenance、volatile/atomic 和 UB/implementation-defined 边界。
 2. **Control IR**：表达 block、branch、loop、break/continue/return 和未来 CFG/relooper 信息。
 3. **Typed Value IR**：表达 scalar、record、array、pointer、function type、qualifier 和 ABI/layout provenance。
 4. **Lowering**：选择 Rust ownership、borrow、slice、wrapping/checked arithmetic、raw pointer 或 refusal；IR 不应提前伪造 Rust 安全性。
 
-## 6. 验收门禁
+## 7. 验收门禁
 
 一个 named slice 只有同时满足以下条件，才能增加 translator semantic numerator：
 
@@ -150,7 +289,7 @@ input.c
 | `ci-approximation` | Linux CI | 否 |
 | `competition-exact` | 有显式 host attestation 的真实比赛主机 | 是 |
 
-## 7. 开发原则
+## 8. 开发原则
 
 1. FlashDB 是真实测试用例，不是 translator 特判来源；禁止读取项目名、函数名、路径或固定 fixture 值决定翻译。
 2. 先做最小 source-backed slice，再扩相邻结构；每次放宽规则都要有正例和最近邻 fail-closed 负例。
@@ -160,7 +299,7 @@ input.c
 6. evidence 使用 repo-relative path、稳定 hash 和明确保留策略；禁止把密钥和宿主绝对路径写入可发布 artifact。
 7. 大文件按模块职责拆分；测试、schema、证据和文档改动只在确有行为或验收收益时加入。
 
-## 8. 常用验证命令
+## 9. 常用验证命令
 
 ```bash
 cargo fmt --all --check
@@ -178,7 +317,7 @@ python3 -B -m validation.tools.resync_sha_bindings --scan-root config/competitio
 python3 -B -m validation.tools.resync_sha_bindings --scope judge-chain --dry-run --check
 ```
 
-## 9. 文档维护规则
+## 10. 文档维护规则
 
 - 本文只保留当前状态、唯一活动队列、分级 backlog、里程碑摘要和稳定规则。
 - 完成一项时更新状态表、活动队列、里程碑表和验证摘要，不追加逐日长日志。

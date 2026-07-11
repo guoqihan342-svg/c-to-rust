@@ -29,7 +29,146 @@ input.c
 
 `validation/translator-coverage-matrix.json` is the machine-readable source of truth for capability counts. A native C build, typed-IR unit test, rustc compile, C2Rust output, or LLM output alone is candidate evidence only.
 
-## 2. Active Execution Queue
+## 2. Competition Environment
+
+### 2.1 Official Target Baseline
+
+The machine-readable source of truth is `config/competition-env/environment.json`, with profile id `huawei-competition-ubuntu-24.04` and current raw-bytes SHA-256 `8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160`. Development, CI, and WSL may simulate this profile, but only an attested real host may claim `competition-exact`.
+
+| Item | Competition target |
+| --- | --- |
+| OS | Ubuntu `24.04.4 LTS`, codename `noble` |
+| Kernel | `5.10.0-182.0.0.95.r194_123.hce2.x86_64` |
+| Architecture | `x86_64` |
+| Python / pip | `3.12.3` / `24.0` |
+| Rust / Cargo | `1.96.0` / `1.96.0` |
+| gcc / g++ / Make | `13.3.0` / `13.3.0` / `4.3` |
+| Node.js / npm | `v24.13.0` / `11.6.2` |
+| Java / Maven | Bisheng OpenJDK `21.0.10` / Maven `3.9.11` |
+| `MAVEN_HOME` | `/usr/local/maven3` |
+| Go / CMake | Unavailable: Go is not installed and CMake is not found |
+| clang | Not required by default; explicitly required by the typed-IR competition clang lane |
+
+The profile fixes these mirrors:
+
+| Ecosystem | Mirror |
+| --- | --- |
+| APT | `http://mirrors.tools.huawei.com/ubuntu` |
+| PyPI | `https://mirrors.tools.huawei.com/pypi/simple` |
+| npm | `https://mirrors.tools.huawei.com/npm/` |
+| Cargo | `sparse+http://rust.inhuawei.com/crates.io-index/` |
+
+`source config/competition-env/env.sh` sets the profile id, mirrors, `MAVEN_HOME`, and repo-local `CARGO_HOME=config/competition-env/cargo`, avoiding dependence on a user's global Cargo configuration.
+
+### 2.2 Competition Source, clang, and OpenCode Contracts
+
+The FlashDB competition input is fixed to:
+
+| Field | Fixed value |
+| --- | --- |
+| repository | `https://gitcode.com/xwxf/FlashDB.git` |
+| branch | `competition` |
+| commit | `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
+| checkout | `git checkout -B competition f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
+
+Every new competition-targeted extraction must provide repository, branch, and `--require-source-commit`, and verify the checkout before generating a slice spec. Historical evidence may bind older commits, but it cannot represent new competition input.
+
+The competition clang lane is not a default dependency. With `auto_migrate.py --competition-clang-lane`, clang must come from `CLANG_PATH` or one of these repo-local paths:
+
+```text
+tools/llvm/bin/clang-18
+tools/llvm/bin/clang
+tools/clang/bin/clang
+```
+
+Availability requires both `clang -print-resource-dir` and a minimum JSON AST dump including `stdint.h` and `stddef.h`. A successful `clang --version` is insufficient. `LIBCLANG_PATH` is not an input to this lane. Missing clang must produce `missing_clang_path`, not a fallback presented as typed-IR clang execution.
+
+The competition agent contract is fixed:
+
+| Field | Requirement |
+| --- | --- |
+| command | `opencode` |
+| logical model | `GLM-5.1` |
+| repo-owned agent | `c2rust-migrator` |
+| variant | `max` |
+| retry cap | At most five rounds, one minimal patch per round |
+| preflight | `opencode models` in the same run/runtime environment must list exact GLM-5.1 and produce a hash-bound passed report/marker |
+
+A provider-qualified id may be the resolved model id, but the logical model, probe output, preflight, worker argv, resume data, judge bundle, and public packet must agree. Current WSL `opencode models` prints lowercase `zai/glm-5.1`; the repository's strict probe requires a case-sensitive final token exactly equal to `GLM-5.1`, so `toolchain-check.sh` still reports "GLM-5.1 not listed." This shows that the provider exposes the corresponding model, but it does not pass the current competition OpenCode contract. OpenCode conversation text is not semantic evidence either.
+
+### 2.3 Current WSL Versus the Competition Target
+
+The current WSL probe on 2026-07-11 reports:
+
+| Item | Current WSL | Competition target | Result |
+| --- | --- | --- | --- |
+| OS | Ubuntu `24.04.3 LTS` | `24.04.4 LTS` | Minor version differs |
+| Kernel | `6.6.87.2-microsoft-standard-WSL2` | Huawei HCE `5.10.0-...` | Different; not equivalent |
+| Architecture | `x86_64` | `x86_64` | Match |
+| Python | `3.12.3` | `3.12.3` | Match |
+| Rust / Cargo | `1.95.0` / `1.95.0` | `1.96.0` / `1.96.0` | Differ |
+| gcc / g++ / Make | `13.3.0` / `13.3.0` / `4.3` | Same | Match |
+| Node.js / npm | `v22.22.0` / `10.9.4` | `v24.13.0` / `11.6.2` | Differ |
+| Java / Maven | Ubuntu OpenJDK `17.0.19` / Maven `3.8.7` | Bisheng OpenJDK `21.0.10` / Maven `3.9.11` | Differ |
+| Go / CMake | Go absent / CMake `3.28.3` | Both unavailable | CMake does not match |
+| OpenCode | `1.17.18`, models prints `zai/glm-5.1` | Binary version not pinned; strict GLM-5.1 launch contract | Strict model probe fails |
+| clang | System `/usr/bin/clang` `18.1.3` | Optional, with explicit source and complete smoke | Present but not auto-selected by `env.sh` |
+
+Running `source config/competition-env/env.sh && bash config/competition-env/toolchain-check.sh` in current WSL returns exit code 1 with ten mismatches. System clang exists, but `env.sh` auto-selects only `CLANG_PATH` or a repo-local vendored clang. With explicit `export CLANG_PATH=/usr/bin/clang`, the observed resource dir is `/usr/lib/llvm-18/lib/clang/18` and the minimum-TU JSON AST smoke passes, but the other ten environment differences still fail the overall check.
+
+Current WSL results therefore remain `wsl-local-simulation`. They can verify Linux paths, gcc/explicit clang, the Python harness, Rust replay, FlashDB build/stress, and most of the evidence chain. They cannot prove equivalence for the target kernel, Rust 1.96, Node 24, Java/Maven, the no-CMake baseline, the strict OpenCode/GLM host, or competition resource limits.
+
+### 2.4 Self-Check, Simulation, and Exact Run Entrypoints
+
+Start a competition-host or Linux/WSL session with:
+
+```bash
+source config/competition-env/env.sh
+bash config/competition-env/toolchain-check.sh
+```
+
+`toolchain-check.sh` checks tool versions, mirrors, Go/CMake absence, and OpenCode model status. When clang is found, it also runs resource-dir and minimum-TU AST smoke. Missing OpenCode/GLM is informational by default; enable the competition-agent hard gate with:
+
+```bash
+REQUIRE_OPENCODE_GLM=1 bash config/competition-env/toolchain-check.sh
+```
+
+Run the current WSL simulation smoke with:
+
+```bash
+bash config/competition-env/smoke.sh \
+  wsl-local-simulation \
+  target/competition-smoke-wsl
+```
+
+This smoke verifies environment and lightweight evidence gates only. It does not translate a new slice or create semantic acceptance.
+
+Run every judge entrypoint on the real competition host with:
+
+```bash
+export COMPETITION_EXACT_HOST=1
+python3 -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --proof-class competition-exact
+```
+
+After execution, deeply validate local artifacts:
+
+```bash
+python3 -B -m validation.tools.validate_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --require-local-artifacts
+```
+
+Use `--dry-run` for plan inspection and `--entrypoint-id` for focused debugging. Neither focused mode replaces the full competition-exact release packet.
+
+### 2.5 Currently Proven and Unproven Boundaries
+
+The WSL competition-like lane currently proves the P0-T20 C oracle, generated Rust replay, diff, negative mutation, unsafe gates, and strict validator. The Python core suite reports `293 passed, 6 skipped`, plus `90` passing subtests. The FlashDB file-backend 10,000-loop stress run passes.
+
+Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Huawei host package/runtime differences, competition resource limits, real-host `COMPETITION_EXACT_HOST=1` attestation, a complete OpenCode preflight marker, GLM-5.1 worker/session artifacts, and the full competition-exact judge bundle/public packet. P0-H9 therefore remains open.
+
+## 3. Active Execution Queue
 
 ### P0-A: Translator Track
 
@@ -65,7 +204,7 @@ input.c
 - [ ] Clear the 17 historical feature-gated warnings from `cargo clippy --all-features --all-targets -- -D warnings`; default Clippy passes and new slices must add no warnings.
 - [ ] Replay the completed CRC32 C2Rust+repair before/after on the real competition host and publish competition-exact workflow metrics.
 
-## 3. Later Backlog
+## 4. Later Backlog
 
 ### P1: Expand Generic Translation
 
@@ -85,7 +224,7 @@ input.c
 4. Complete a formal tag/release, external review, CONTRIBUTING guidance, ownership, and release checklist.
 5. Keep CFG/SSA/MIR/LLVM/self-hosting as long-term research until P0/P1 are stable.
 
-## 4. Completed Milestones
+## 5. Completed Milestones
 
 | Range | Result | Semantic count change |
 | --- | --- | ---: |
@@ -105,9 +244,9 @@ Latest stage validation:
 - P0-T20 strict validator reports `semantic_pass=true` and `generated_draft_semantic_pass=true`.
 - All-feature Clippy still reports 17 historical warnings; none is on a P0-T20-added line.
 
-## 5. Architecture Boundaries
+## 6. Architecture Boundaries
 
-### 5.1 Candidate Routes
+### 6.1 Candidate Routes
 
 | Level | Purpose | Can it claim semantic success alone? |
 | --- | --- | --- |
@@ -117,16 +256,16 @@ Latest stage validation:
 | L3 LLM/OpenCode | Candidate generation or repair | No |
 | L4 refuse | Fail closed with an actionable next step | Not applicable |
 
-A candidate becomes a semantic pass only after the shared gates in section 6 prove the declared slice boundary.
+A candidate becomes a semantic pass only after the shared gates in section 7 prove the declared slice boundary.
 
-### 5.2 IR Layers
+### 6.2 IR Layers
 
 1. **Semantic IR**: C integer width/signedness, casts, lvalue/rvalue, pointer provenance, volatile/atomic, and undefined/implementation-defined boundaries.
 2. **Control IR**: blocks, branches, loops, break/continue/return, and future CFG/relooper data.
 3. **Typed Value IR**: scalar, record, array, pointer, function type, qualifiers, and ABI/layout provenance.
 4. **Lowering**: Rust ownership, borrows, slices, wrapping/checked arithmetic, raw pointers, or refusal. IR must not invent Rust safety.
 
-## 6. Acceptance Gates
+## 7. Acceptance Gates
 
 A named slice may increase the translator semantic numerator only when all of these hold:
 
@@ -148,7 +287,7 @@ Proof classes are fixed:
 | `ci-approximation` | Linux CI | No |
 | `competition-exact` | Real competition host with explicit attestation | Yes |
 
-## 7. Development Principles
+## 8. Development Principles
 
 1. FlashDB is a real test case, not a translator-specialization source. Project names, function names, paths, and fixed fixture values must not select translation behavior.
 2. Start with the smallest source-backed slice and expand adjacent structure. Every relaxed rule needs a positive and nearest fail-closed negative.
@@ -158,7 +297,7 @@ Proof classes are fixed:
 6. Evidence uses repo-relative paths, stable hashes, and explicit retention rules. Never publish secrets or host absolute paths.
 7. Split large files by module responsibility. Add tests, schemas, evidence, and docs only when they produce a behavioral or acceptance benefit.
 
-## 8. Common Validation Commands
+## 9. Common Validation Commands
 
 ```bash
 cargo fmt --all --check
@@ -176,7 +315,7 @@ python3 -B -m validation.tools.resync_sha_bindings --scan-root config/competitio
 python3 -B -m validation.tools.resync_sha_bindings --scope judge-chain --dry-run --check
 ```
 
-## 9. Document Maintenance Rules
+## 10. Document Maintenance Rules
 
 - Keep only current status, the unique active queue, tiered backlog, milestone summary, and stable rules here.
 - When an item closes, update the status table, active queue, milestone table, and validation summary instead of appending a daily log.
