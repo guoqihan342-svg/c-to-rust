@@ -218,7 +218,14 @@ def run_competition(
     semantic_pass = 0
     refused = 0
     blocked = 0
-    provider_circuit = ProviderCircuit(threshold=2, shared_failure_kinds={"provider_timeout"})
+    provider_circuit = ProviderCircuit(
+        threshold=2,
+        shared_failure_kinds={
+            "provider_timeout",
+            "provider_insufficient_balance",
+            "provider_authentication_failed",
+        },
+    )
     worker_statuses = load_worker_summary_statuses(
         worker_summaries,
         proof_class=proof_class,

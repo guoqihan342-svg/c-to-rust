@@ -145,7 +145,12 @@
           "maximum": 2
         },
         "failure_kind": {
-          "enum": [null, "provider_timeout"]
+          "enum": [
+            null,
+            "provider_timeout",
+            "provider_insufficient_balance",
+            "provider_authentication_failed"
+          ]
         },
         "requested_slice_specs": {
           "type": "integer",
@@ -168,7 +173,13 @@
             "required": ["unit_id", "failure_kind"],
             "properties": {
               "unit_id": {"type": "string", "minLength": 1},
-              "failure_kind": {"const": "provider_timeout"}
+              "failure_kind": {
+                "enum": [
+                  "provider_timeout",
+                  "provider_insufficient_balance",
+                  "provider_authentication_failed"
+                ]
+              }
             }
           }
         }

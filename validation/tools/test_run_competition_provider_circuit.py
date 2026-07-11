@@ -43,6 +43,8 @@ class ProviderCircuitTests(unittest.TestCase):
                 "provider_timeout",
                 "provider_unavailable",
                 "provider_invocation_failed",
+                "provider_insufficient_balance",
+                "provider_authentication_failed",
             }.issubset(DEFAULT_SHARED_FAILURE_KINDS)
         )
 
@@ -51,13 +53,9 @@ class ProviderCircuitTests(unittest.TestCase):
         timeout = self.write_manifest(
             "timeout.json", status="blocked", failure_kind="provider_timeout"
         )
-        unavailable = self.write_manifest(
-            "unavailable.json", status="blocked", failure_kind="provider_unavailable"
-        )
-
         self.attempt(circuit, "unit-a", timeout)
         self.assertFalse(circuit.is_open)
-        self.attempt(circuit, "unit-b", unavailable)
+        self.attempt(circuit, "unit-b", timeout)
 
         self.assertTrue(circuit.is_open)
         self.assertEqual(
@@ -66,15 +64,32 @@ class ProviderCircuitTests(unittest.TestCase):
                 "status": "open",
                 "threshold": 2,
                 "consecutive_failures": 2,
-                "failure_kind": "provider_unavailable",
+                "failure_kind": "provider_timeout",
                 "requested_slice_specs": 2,
                 "attempted_slice_specs": 2,
                 "skipped_slice_specs": 0,
                 "observations": [
                     {"unit_id": "unit-a", "failure_kind": "provider_timeout"},
-                    {"unit_id": "unit-b", "failure_kind": "provider_unavailable"},
+                    {"unit_id": "unit-b", "failure_kind": "provider_timeout"},
                 ],
             },
+        )
+
+    def test_two_balance_failures_open_circuit_with_balance_kind(self) -> None:
+        circuit = ProviderCircuit()
+        balance = self.write_manifest(
+            "balance.json", status="blocked", failure_kind="provider_insufficient_balance"
+        )
+
+        self.attempt(circuit, "unit-a", balance)
+        self.attempt(circuit, "unit-b", balance)
+
+        summary = circuit.summary()
+        self.assertTrue(circuit.is_open)
+        self.assertEqual("provider_insufficient_balance", summary["failure_kind"])
+        self.assertEqual(
+            ["provider_insufficient_balance", "provider_insufficient_balance"],
+            [item["failure_kind"] for item in summary["observations"]],
         )
 
     def test_success_resets_consecutive_failures(self) -> None:
@@ -112,6 +127,25 @@ class ProviderCircuitTests(unittest.TestCase):
 
         self.assertEqual(circuit.summary()["status"], "closed")
         self.assertEqual(circuit.summary()["consecutive_failures"], 1)
+
+    def test_different_shared_failure_kind_resets_consecutive_failures(self) -> None:
+        circuit = ProviderCircuit()
+        timeout = self.write_manifest(
+            "timeout.json", status="blocked", failure_kind="provider_timeout"
+        )
+        balance = self.write_manifest(
+            "balance.json", status="blocked", failure_kind="provider_insufficient_balance"
+        )
+
+        self.attempt(circuit, "unit-a", timeout)
+        self.attempt(circuit, "unit-b", balance)
+
+        self.assertFalse(circuit.is_open)
+        self.assertEqual(1, circuit.summary()["consecutive_failures"])
+        self.assertEqual(
+            [{"unit_id": "unit-b", "failure_kind": "provider_insufficient_balance"}],
+            circuit.summary()["observations"],
+        )
 
     def test_missing_and_malformed_manifests_do_not_open_circuit(self) -> None:
         malformed_paths = {
