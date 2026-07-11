@@ -139,13 +139,13 @@
       "size_t_width": 64
     },
     "scalar_arithmetic_contract": {
-      "wrapping_profile": "u32_and_lp64_usize_fixture_model",
-      "signed_overflow": "not_applicable",
-      "division_by_zero": "not_applicable",
-      "signed_division_overflow": "not_applicable",
-      "shift_count": "not_applicable",
-      "signed_right_shift": "not_applicable",
-      "comparison": "two_ordered_equalities_under_short_circuit_and"
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "not_declared",
+      "division_by_zero": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "shift_count": "not_declared",
+      "signed_right_shift": "not_declared",
+      "comparison": "not_declared"
     },
     "external_direct_callees": []
   },
@@ -569,29 +569,40 @@
       ],
       "edges": [
         {
-          "from": "compare-status",
-          "to": "compare-crc-ok",
-          "kind": "short_circuit_true_only"
+          "from_effect": "compare-status",
+          "to_effect": "short-circuit-and",
+          "relationship": "data_influences",
+          "evidence": "the first equality is the left operand of the short-circuit conjunction"
         },
         {
-          "from": "compare-crc-ok",
-          "to": "increment-count",
-          "kind": "guard_true_only"
+          "from_effect": "compare-crc-ok",
+          "to_effect": "short-circuit-and",
+          "relationship": "data_influences",
+          "evidence": "the second equality is evaluated only after the first succeeds"
         },
         {
-          "from": "increment-count",
-          "to": "add-object-bytes",
-          "kind": "ordered_before"
+          "from_effect": "short-circuit-and",
+          "to_effect": "increment-count",
+          "relationship": "control_depends",
+          "evidence": "the counter update executes only on the true guard path"
         },
         {
-          "from": "add-object-bytes",
-          "to": "add-value-bytes",
-          "kind": "ordered_before"
+          "from_effect": "short-circuit-and",
+          "to_effect": "add-object-bytes",
+          "relationship": "control_depends",
+          "evidence": "the object-byte update executes only on the true guard path"
         },
         {
-          "from": "add-value-bytes",
-          "to": "true-return",
-          "kind": "ordered_before"
+          "from_effect": "short-circuit-and",
+          "to_effect": "add-value-bytes",
+          "relationship": "control_depends",
+          "evidence": "the value-byte update executes only on the true guard path"
+        },
+        {
+          "from_effect": "short-circuit-and",
+          "to_effect": "true-return",
+          "relationship": "control_depends",
+          "evidence": "the true return executes only on the true guard path"
         }
       ]
     }
