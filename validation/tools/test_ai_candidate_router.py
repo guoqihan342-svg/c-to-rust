@@ -171,6 +171,11 @@ class AiCandidateRouterTests(unittest.TestCase):
     def test_provider_invocation_budget_defaults_to_one_and_caps_at_two(self) -> None:
         default = router.route_candidates([], provider_invocations=1)
         self.assertEqual(default["metrics"]["provider_invocations_remaining"], 0)
+        self.assertEqual(
+            default["selection_policy"]["provider_invocation_budget"]["scope"],
+            "initial_candidate_generation_only",
+        )
+        self.assertEqual(default["provider_invocations"], 1)
 
         expanded = router.route_candidates(
             [], provider_invocation_budget=2, provider_invocations=2
@@ -180,6 +185,18 @@ class AiCandidateRouterTests(unittest.TestCase):
             router.route_candidates([], provider_invocations=2)
         with self.assertRaisesRegex(ValueError, "hard maximum of 2"):
             router.route_candidates([], provider_invocation_budget=3)
+
+    def test_provider_invocation_scope_policy_drift_is_rejected(self) -> None:
+        result = router.route_candidates([], provider_invocations=1)
+        result["selection_policy"]["provider_invocation_budget"]["scope"] = (
+            "initial_generation_and_repair"
+        )
+        result["selection_policy_sha256"] = router.selection_policy_sha256(
+            result["selection_policy"]
+        )
+
+        with self.assertRaisesRegex(ValueError, "selection policy drift"):
+            router.recompute_router_metrics(result)
 
     def test_metrics_and_policy_hash_are_recomputable(self) -> None:
         result = router.route_candidates(

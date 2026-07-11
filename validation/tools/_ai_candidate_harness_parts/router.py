@@ -10,6 +10,7 @@ MAX_CANDIDATES = 4
 MAX_CANDIDATE_ID_BYTES = 128
 DEFAULT_PROVIDER_INVOCATION_BUDGET = 1
 HARD_MAX_PROVIDER_INVOCATIONS = 2
+PROVIDER_INVOCATION_SCOPE = "initial_candidate_generation_only"
 SOURCE_ORDER = (
     "opencode-ai",
     "typed-ir",
@@ -62,6 +63,7 @@ def build_selection_policy(*, provider_invocation_budget: int = DEFAULT_PROVIDER
             "default": DEFAULT_PROVIDER_INVOCATION_BUDGET,
             "hard_max": HARD_MAX_PROVIDER_INVOCATIONS,
             "effective": budget,
+            "scope": PROVIDER_INVOCATION_SCOPE,
         },
     }
 
@@ -160,6 +162,9 @@ def recompute_router_metrics(result: dict[str, Any]) -> dict[str, int | str | No
     if not isinstance(budget_record, dict):
         raise ValueError("selection policy requires provider_invocation_budget")
     budget = _bounded_invocation_count(budget_record.get("effective"), field="effective budget")
+    expected_policy = build_selection_policy(provider_invocation_budget=budget)
+    if policy != expected_policy:
+        raise ValueError("selection policy drift from canonical policy")
     if observed > budget:
         raise ValueError("provider_invocations exceeds the effective invocation budget")
 

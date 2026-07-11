@@ -66,11 +66,9 @@ class EvidenceStore:
         self.checked_artifacts = 0
 
     def resolve(self, value: Any, label: str, *, parent: Path | None = None) -> Path:
-        if not isinstance(value, str) or not value or "\x00" in value:
-            fail("invalid_path", f"{label}.path must be a non-empty string", path=label)
-        raw = Path(value)
+        parts = _strict_posix_relative_parts(value, label)
         base = parent or self.root
-        candidate = raw if raw.is_absolute() else base / raw
+        candidate = base.joinpath(*parts)
         try:
             resolved = candidate.resolve(strict=True)
         except OSError as error:
@@ -119,3 +117,18 @@ class EvidenceStore:
         if actual != expected:
             fail("hash_drift", f"{label} SHA-256 drift", path=label)
         return path, self.read_json(path, label)
+
+
+def _strict_posix_relative_parts(value: Any, label: str) -> tuple[str, ...]:
+    if not isinstance(value, str) or not value or "\x00" in value:
+        fail("invalid_path", f"{label}.path must be a non-empty POSIX relative path", path=label)
+    if "\\" in value:
+        fail("invalid_path", f"{label}.path must use POSIX separators", path=label)
+    if value.startswith("/") or re.match(r"^[A-Za-z]:", value):
+        fail("invalid_path", f"{label}.path must be relative and must not use a drive prefix", path=label)
+    parts = value.split("/")
+    if ".." in parts:
+        fail("path_escape", f"{label}.path must not contain a parent component", path=label)
+    if any(part in {"", "."} for part in parts):
+        fail("invalid_path", f"{label}.path contains an empty or dot component", path=label)
+    return tuple(parts)
