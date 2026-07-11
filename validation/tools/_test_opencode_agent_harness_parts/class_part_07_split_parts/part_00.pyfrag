@@ -256,9 +256,10 @@ class _OpenCodeAgentHarnessTestPart07:
             self.assertEqual(evidence["stderr_sha256"], harness.sha256_file(stderr_path))
             self.assertEqual([event["type"] for event in evidence["session_events"]], ["step_start", "text"])
 
-    def test_opencode_worker_prompt_forces_exact_command_and_fresh_summary(self) -> None:
+    def test_opencode_worker_prompt_is_canonical_and_reduces_exact_bytes(self) -> None:
         worker_command = [
-            sys.executable,
+            "python3",
+            "-B",
             "scripts/c2rust-migrator.py",
             "--phase",
             "migrate",
@@ -275,33 +276,40 @@ class _OpenCodeAgentHarnessTestPart07:
             request_path=REPO_ROOT / "target/out/harness/assignments/worker-a-request.json",
             summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
             repo_root=REPO_ROOT,
+            handoff_contract_path=(
+                REPO_ROOT / "target/out/workers/worker-a/harness/opencode-handoff-contract.json"
+            ),
         )
 
         prompt = argv[-1]
-        command_line_field = f"Command line: {harness.shell_command_line(worker_command)}"
-        deleted_field = f"Command: {json.dumps(worker_command)}"
-        legacy_prompt = prompt.replace(command_line_field, f"{deleted_field} {command_line_field}", 1)
+        canonical_instruction = (
+            "The first and only shell/bash/powershell/cmd tool call must execute exactly the Command line "
+            "string below from the repository root."
+        )
+        expected_prompt = " ".join(
+            [
+                canonical_instruction,
+                f"Command line: {harness.shell_command_line(worker_command)}",
+                "Request: target/out/harness/assignments/worker-a-request.json",
+                "Expected summary: target/out/workers/worker-a/summary/competition-run-summary.json",
+                "Handoff contract: target/out/workers/worker-a/harness/opencode-handoff-contract.json",
+            ]
+        )
+        legacy_prompt_bytes = 1287
+        prompt_bytes = len(prompt.encode("utf-8"))
+
+        self.assertEqual(prompt, expected_prompt)
         self.assertNotIn("\n", prompt)
+        self.assertEqual(prompt.count(canonical_instruction), 1)
         self.assertEqual(prompt.count("Command line:"), 1)
         self.assertNotIn("Command:", prompt)
-        self.assertEqual(
-            len(legacy_prompt.encode("utf-8")) - len(prompt.encode("utf-8")),
-            len(f"{deleted_field} ".encode("utf-8")),
-        )
-        self.assertIn("Use the shell/bash tool to run exactly the Command line string below.", prompt)
-        self.assertIn("The first shell/bash/powershell/cmd tool call must be exactly the Command line string.", prompt)
-        self.assertIn("Do not run init-run, assign-slice, retry-worker, or any other substitute harness command.", prompt)
-        self.assertIn("Do not inspect an existing summary before running the command.", prompt)
-        self.assertNotIn("Delete the expected summary file if it already exists", prompt)
-        self.assertIn("The harness has already removed any stale expected summary before launching OpenCode.", prompt)
-        self.assertIn("Do not call glob/read/grep/list/edit or any non-shell tool before the exact Command line.", prompt)
-        self.assertIn("Do not explore files, spawn subagents, or infer a different slice before executing the command.", prompt)
-        self.assertIn("Do not run substitute diagnostics instead of the command.", prompt)
-        self.assertIn("scripts/c2rust-migrator.py", prompt)
+        self.assertEqual(prompt_bytes, 490)
+        self.assertEqual(legacy_prompt_bytes - prompt_bytes, 797)
 
-    def test_opencode_preflight_prompt_is_single_cli_argument_without_newlines(self) -> None:
+    def test_opencode_preflight_prompt_is_canonical_and_reduces_exact_bytes(self) -> None:
         marker_command = [
-            sys.executable,
+            "python3",
+            "-B",
             "validation/tools/opencode_agent_harness.py",
             "write-preflight-marker",
             "--marker",
@@ -323,18 +331,28 @@ class _OpenCodeAgentHarnessTestPart07:
         )
 
         prompt = argv[-1]
-        command_line_field = f"Command line: {harness.shell_command_line(marker_command)}"
-        deleted_field = f"Command: {json.dumps(marker_command)}"
-        legacy_prompt = prompt.replace(command_line_field, f"{deleted_field} {command_line_field}", 1)
+        canonical_instruction = (
+            "The first and only shell/bash/powershell/cmd tool call must execute exactly the Command line "
+            "string below from the repository root."
+        )
+        expected_prompt = " ".join(
+            [
+                canonical_instruction,
+                f"Command line: {harness.shell_command_line(marker_command)}",
+                "Expected marker: target/out/harness/opencode-preflight-marker.json",
+                "Handoff contract: target/out/harness/opencode-preflight-contract.json",
+            ]
+        )
+        legacy_prompt_bytes = 1031
+        prompt_bytes = len(prompt.encode("utf-8"))
+
+        self.assertEqual(prompt, expected_prompt)
         self.assertNotIn("\n", prompt)
-        self.assertIn("Execute this OpenCode preflight command exactly once.", prompt)
+        self.assertEqual(prompt.count(canonical_instruction), 1)
         self.assertEqual(prompt.count("Command line:"), 1)
         self.assertNotIn("Command:", prompt)
-        self.assertEqual(
-            len(legacy_prompt.encode("utf-8")) - len(prompt.encode("utf-8")),
-            len(f"{deleted_field} ".encode("utf-8")),
-        )
-        self.assertIn("write-preflight-marker", prompt)
+        self.assertEqual(prompt_bytes, 441)
+        self.assertEqual(legacy_prompt_bytes - prompt_bytes, 590)
 
     def test_opencode_contract_requires_first_shell_command_to_match_worker_command(self) -> None:
         worker_command = [

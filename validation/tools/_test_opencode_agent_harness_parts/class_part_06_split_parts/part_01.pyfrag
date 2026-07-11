@@ -31,9 +31,12 @@
             )
             self.assertEqual(contract["worker_command"][: len(expected_worker_prefix)], expected_worker_prefix)
             self.assertEqual(contract["opencode_argv"], result["argv"])
-            self.assertNotIn("Read the handoff contract before running the command.", contract["prompt"])
-            self.assertIn("Handoff contract is audit metadata; do not inspect it before the first command.", contract["prompt"])
-            self.assertIn("Do not call glob/read/grep/list/edit or any non-shell tool before the exact Command line.", contract["prompt"])
+            self.assertIn(
+                "The first and only shell/bash/powershell/cmd tool call must execute exactly the Command line "
+                "string below from the repository root.",
+                contract["prompt"],
+            )
+            self.assertEqual(contract["prompt"].count("Command line:"), 1)
             self.assertIn(contract_binding["path"], contract["prompt"])
             session_binding = report["opencode_session_evidence"]
             session_path = REPO_ROOT / session_binding["path"]
