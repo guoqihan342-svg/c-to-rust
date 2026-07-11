@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "source": {
+    "source_root": "sources/FlashDB",
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_branch": "competition",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "file": "src/fdb_kvdb.c",
+    "file_sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+    "containing_function": {
+      "name": "fdb_kv_iterate",
+      "line_start": 1860,
+      "line_end": 1896,
+      "sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d",
+      "hash_mode": "trimmed_normalized_span",
+      "declaration_text": "bool fdb_kv_iterate("
+    },
+    "fragment": {
+      "kind": "conditional_block_prefix",
+      "line_start": 1868,
+      "line_end": 1874,
+      "sha256": "5ecb3553be0af447e9cba4bc822c8e1da5ea7d9efd1fc9f7876d802b81224cf7",
+      "hash_mode": "normalized_line_span_with_newline",
+      "text": "                if (kv->addr.start == 0) {\n                    kv->addr.start = sector.addr + SECTOR_HDR_DATA_SIZE;\n                } else if ((kv->addr.start = get_next_kv_addr(db, &sector, kv)) == FAILED_ADDR) {\n                    kv->addr.start = 0;\n                    itr->traversed_len += db_sec_size(db);\n                    continue;\n                }\n"
+    }
+  },
+  "cases": [
+    {
+      "id": "zero-start-ordinary",
+      "inputs": {
+        "db_observed_initial": 11,
+        "db_add_rhs": 7,
+        "sector_seed": 13,
+        "sector_addr": 100,
+        "sector_header_data_size": 24,
+        "alias_start_initial": 0,
+        "owner_traversed_initial": 19,
+        "scripted_return": 4294967295
+      }
+    },
+    {
+      "id": "zero-start-u32-wrap",
+      "inputs": {
+        "db_observed_initial": 21,
+        "db_add_rhs": 9,
+        "sector_seed": 23,
+        "sector_addr": 4294967288,
+        "sector_header_data_size": 16,
+        "alias_start_initial": 0,
+        "owner_traversed_initial": 29,
+        "scripted_return": 0
+      }
+    },
+    {
+      "id": "sentinel-hit",
+      "inputs": {
+        "db_observed_initial": 31,
+        "db_add_rhs": 9,
+        "sector_seed": 33,
+        "sector_addr": 34,
+        "sector_header_data_size": 35,
+        "alias_start_initial": 36,
+        "owner_traversed_initial": 4294967292,
+        "scripted_return": 4294967295
+      }
+    },
+    {
+      "id": "zero-miss",
+      "inputs": {
+        "db_observed_initial": 41,
+        "db_add_rhs": 42,
+        "sector_seed": 43,
+        "sector_addr": 44,
+        "sector_header_data_size": 45,
+        "alias_start_initial": 46,
+        "owner_traversed_initial": 47,
+        "scripted_return": 0
+      }
+    },
+    {
+      "id": "ordinary-miss",
+      "inputs": {
+        "db_observed_initial": 51,
+        "db_add_rhs": 52,
+        "sector_seed": 53,
+        "sector_addr": 54,
+        "sector_header_data_size": 55,
+        "alias_start_initial": 56,
+        "owner_traversed_initial": 57,
+        "scripted_return": 7
+      }
+    }
+  ]
+}

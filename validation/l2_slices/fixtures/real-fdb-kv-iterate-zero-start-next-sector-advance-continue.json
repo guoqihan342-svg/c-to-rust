@@ -1,0 +1,137 @@
+{
+  "schema_version": 2,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:zero-start-next-sector-advance-continue@1868-1874"
+    ]
+  },
+  "compared_fields": [
+    "return_value",
+    "call_count",
+    "call_db_observed",
+    "call_sector_seed",
+    "call_alias_start",
+    "alias_start_after",
+    "owner_traversed_after"
+  ],
+  "case_count": 5,
+  "cases": [
+    {
+      "id": "zero-start-ordinary",
+      "inputs": {
+        "db_observed_initial": 11,
+        "db_add_rhs": 7,
+        "sector_seed": 13,
+        "sector_addr": 100,
+        "sector_header_data_size": 24,
+        "alias_start_initial": 0,
+        "owner_traversed_initial": 19,
+        "scripted_return": 4294967295
+      },
+      "expected_outputs": {
+        "return_value": false,
+        "call_count": 0,
+        "call_db_observed": 0,
+        "call_sector_seed": 0,
+        "call_alias_start": 0,
+        "alias_start_after": 124,
+        "owner_traversed_after": 19
+      }
+    },
+    {
+      "id": "zero-start-u32-wrap",
+      "inputs": {
+        "db_observed_initial": 21,
+        "db_add_rhs": 9,
+        "sector_seed": 23,
+        "sector_addr": 4294967288,
+        "sector_header_data_size": 16,
+        "alias_start_initial": 0,
+        "owner_traversed_initial": 29,
+        "scripted_return": 0
+      },
+      "expected_outputs": {
+        "return_value": false,
+        "call_count": 0,
+        "call_db_observed": 0,
+        "call_sector_seed": 0,
+        "call_alias_start": 0,
+        "alias_start_after": 8,
+        "owner_traversed_after": 29
+      }
+    },
+    {
+      "id": "sentinel-hit",
+      "inputs": {
+        "db_observed_initial": 31,
+        "db_add_rhs": 9,
+        "sector_seed": 33,
+        "sector_addr": 34,
+        "sector_header_data_size": 35,
+        "alias_start_initial": 36,
+        "owner_traversed_initial": 4294967292,
+        "scripted_return": 4294967295
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "call_count": 1,
+        "call_db_observed": 31,
+        "call_sector_seed": 33,
+        "call_alias_start": 36,
+        "alias_start_after": 0,
+        "owner_traversed_after": 5
+      }
+    },
+    {
+      "id": "zero-miss",
+      "inputs": {
+        "db_observed_initial": 41,
+        "db_add_rhs": 42,
+        "sector_seed": 43,
+        "sector_addr": 44,
+        "sector_header_data_size": 45,
+        "alias_start_initial": 46,
+        "owner_traversed_initial": 47,
+        "scripted_return": 0
+      },
+      "expected_outputs": {
+        "return_value": false,
+        "call_count": 1,
+        "call_db_observed": 41,
+        "call_sector_seed": 43,
+        "call_alias_start": 46,
+        "alias_start_after": 0,
+        "owner_traversed_after": 47
+      }
+    },
+    {
+      "id": "ordinary-miss",
+      "inputs": {
+        "db_observed_initial": 51,
+        "db_add_rhs": 52,
+        "sector_seed": 53,
+        "sector_addr": 54,
+        "sector_header_data_size": 55,
+        "alias_start_initial": 56,
+        "owner_traversed_initial": 57,
+        "scripted_return": 7
+      },
+      "expected_outputs": {
+        "return_value": false,
+        "call_count": 1,
+        "call_db_observed": 51,
+        "call_sector_seed": 53,
+        "call_alias_start": 56,
+        "alias_start_after": 7,
+        "owner_traversed_after": 57
+      }
+    }
+  ]
+}
