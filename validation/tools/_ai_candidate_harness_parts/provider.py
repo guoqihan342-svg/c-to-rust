@@ -382,17 +382,20 @@ def subprocess_runner(argv: list[str], timeout_seconds: int) -> ProviderExecutio
             timeout=timeout_seconds,
         )
     except subprocess.TimeoutExpired as error:
-        stderr = decode_timeout_output(error.stderr)
-        log_diagnostic = appended_provider_log_diagnostic(log_snapshot)
-        if log_diagnostic:
-            stderr = "\n".join(part for part in [stderr, log_diagnostic] if part)
+        stderr = append_provider_log_diagnostic(
+            decode_timeout_output(error.stderr),
+            log_snapshot,
+        )
         return ProviderExecution(
             returncode=124,
             stdout=decode_timeout_output(error.stdout),
             stderr=stderr,
             timed_out=True,
         )
-    return ProviderExecution(completed.returncode, completed.stdout, completed.stderr)
+    stderr = completed.stderr
+    if completed.returncode != 0:
+        stderr = append_provider_log_diagnostic(stderr, log_snapshot)
+    return ProviderExecution(completed.returncode, completed.stdout, stderr)
 
 
 def snapshot_opencode_log(argv: list[str]) -> tuple[Path, int, str, str, str] | None:
@@ -457,6 +460,16 @@ def appended_provider_log_diagnostic(snapshot: tuple[Path, int, str, str, str] |
     if "unauthorized" in matching or "invalid api key" in matching or "authentication" in matching:
         return PROVIDER_AUTH_SENTINEL
     return ""
+
+
+def append_provider_log_diagnostic(
+    stderr: str,
+    snapshot: tuple[Path, int, str, str, str] | None,
+) -> str:
+    diagnostic = appended_provider_log_diagnostic(snapshot)
+    if not diagnostic or diagnostic in stderr:
+        return stderr
+    return "\n".join(part for part in (stderr, diagnostic) if part)
 
 
 def decode_timeout_output(value: str | bytes | None) -> str:
