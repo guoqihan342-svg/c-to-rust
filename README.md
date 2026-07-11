@@ -190,7 +190,7 @@ sequenceDiagram
     end
 ```
 
-默认 repair cap 是 3 轮，比赛合同硬上限是 5 轮。生产路径先验证零 token 的 deterministic fallback，全部失败后才调用 repair 模型。进程返回码、LLM 文本和 repair history 只能说明执行过程；只有重新通过同一组 fresh exact gates 的 candidate 才能被 router 选择。
+默认 repair cap 是 3 轮，比赛合同硬上限是 5 轮。生产路径先验证 AI、typed IR 和当前运行 raw C2Rust；任一零 token 候选通过即停止 repair。全部失败后只修一个 base：raw C2Rust 的通过 gate 数严格高于 AI 时生成 `c2rust-repair`，否则修 AI，平局仍保持 AI-primary。进程返回码、LLM 文本和 repair history 只能说明执行过程；只有重新通过同一组 fresh exact gates 的 candidate 才能被 router 选择。
 
 ## 关键组件
 

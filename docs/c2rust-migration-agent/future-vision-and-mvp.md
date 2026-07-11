@@ -269,7 +269,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 顺序 | 工作 | 当前停止条件 |
 | ---: | --- | --- |
 | 1 | P0-A8 fresh exact repair/strict 闭环 | 已完成；后续只修回归 |
-| 2 | P0-A9 通用 raw C2Rust/C2Rust+repair 同门禁物化 | raw baseline 已接入；剩余不含项目特判的 repair artifact |
+| 2 | P0-A9 通用 raw C2Rust/C2Rust+repair 同门禁物化 | 已完成；后续只修回归和基于跨项目失败数据调优 |
 | 3 | P0-A10 固定套件输入闭包 | 三个 pinned checkout、source span/hash/fixture 全部 ready |
 | 4 | P0-A6 真实 GLM-5.1 与比赛主机复验 | 有效资源包和 competition-exact host 可用；不得用模拟结果代替 |
 
@@ -293,11 +293,11 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   完成证据：有界 repair coordinator、单候选/单文件 patch 合同、每轮 SHA 证据、LF 规范化、输入+失败不变停止和 provider/validator fail-closed 已完成。fresh C oracle proof 会重新核验 harness、fixture、source span、flags 和 ABI；exact validator 对当前 candidate SHA 依次执行 rustc、replay、schema diff、negative mutation、unsafe/ledger、alias、ABI 和 final gate，并把十类有界失败事实反馈给同一 repair 状态机。`--ai-first-candidate` 已与 `--accept-existing-evidence` 互斥，旧 accepted reports 不能为新 AI candidate 背书。独立 `validate_ai_exact_evidence.py --require-semantic-pass` 会重开 auto manifest、router、candidate evidence、gate index 和 canonical draft 的 SHA 绑定；competition runner 只在该严格验证与 router 状态同时通过时计入 compile/semantic pass。2026-07-12 的全新 demo/add-one 证据检查 16 个工件并返回 `semantic_pass=true`。
 
-- [ ] **P0-A9：AI-primary 多候选路由**
+- [x] **P0-A9：AI-primary 多候选路由**
 
-  比赛翻译路径优先生成 GLM-5.1 candidate；typed IR、raw C2Rust、C2Rust+repair 作为确定性候选、提示上下文或 AI 失败后的替代候选。router 只能依据可重算 gate 结果排序，不能依据项目名、函数名、slice id 或模型自评。任何候选都必须经过相同 compile/oracle/replay/diff/negative/unsafe/final gates。
+  比赛翻译路径优先生成 GLM-5.1 candidate；typed IR、raw C2Rust 作为零 token 候选，C2Rust+repair 作为 AI 辅助的替代候选。router 只能依据可重算 gate 结果排序，不能依据项目名、函数名、slice id 或模型自评。任何候选都必须经过相同 compile/oracle/replay/diff/negative/unsafe/final gates。
 
-  当前进度：新翻译的 competition runner 已默认传递 `--ai-first-candidate`，competition-exact 禁止替换 OpenCode/GLM/agent/variant。纯 router 核心限制最多 4 个候选，按 artifact SHA 去重，固定调度 `opencode-ai -> typed-ir -> c2rust-repair -> c2rust-baseline`，且只有八类 candidate-bound gates 全部通过才允许选择。实际 `auto_migrate` 已完成 AI 首验、typed-IR exact fallback 和“所有零 token 候选失败后再 repair AI”的流程；fallback 不产生 repair report，也不增加 provider invocation。raw C2Rust baseline 现在只从本轮 manifest/output 中重开，校验 evidence 目录边界与 SHA 后才以 `source=c2rust-baseline` 进入同一 fresh exact gates；skipped、漂移、越界和重复 artifact 都会记录审计拒绝，baseline compile/status 或历史 accepted evidence 不能使其晋级。competition summary 已从 SHA 绑定的 router evidence 重算候选指标，独立 strict validator 也已接入。当前只剩通用 `c2rust-repair` artifact 的同门禁物化，因此本项保持未完成。
+  完成证据：competition runner 对新翻译默认传递 `--ai-first-candidate`，competition-exact 禁止替换 OpenCode/GLM/agent/variant。纯 router 最多接收 4 个候选，按 artifact SHA 去重，固定调度 `opencode-ai -> typed-ir -> c2rust-repair -> c2rust-baseline`，只有八类 candidate-bound gates 全部通过才允许选择。`auto_migrate` 会先验证 AI、typed IR 和当前运行的 raw C2Rust；任一零 token 候选通过即停止 repair。全部失败时只选择一个 repair base：raw C2Rust 通过的 gate 数严格多于 AI 才修 C2Rust，平局修 AI；整个运行共享默认 3/硬上限 5 轮预算。C2Rust repair 状态机不含项目/函数特判，只允许单 Rust candidate/patch，独立保存 report/round/prompt/response/candidate SHA，再以 `source=c2rust-repair` 重跑 fresh exact gates。unique、duplicate 和无候选三类 audit 均由 strict validator 和 competition metrics 从磁盘重开，repair rounds 计入总模型调用但不膨胀“初始 AI candidate 成功率”。baseline compile/status、repair report 或历史 accepted evidence 本身都不能使候选晋级。
 
 - [ ] **P0-A10：有限跨项目稳定性验收**
 
