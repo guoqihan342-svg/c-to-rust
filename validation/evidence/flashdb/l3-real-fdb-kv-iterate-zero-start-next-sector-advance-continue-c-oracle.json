@@ -1,0 +1,380 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 5,
+  "compared_fields": [
+    "return_value",
+    "call_count",
+    "call_db_observed",
+    "call_sector_seed",
+    "call_alias_start",
+    "alias_start_after",
+    "owner_traversed_after"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Four renamed entry arguments preserve mutable db, by-value local, exact-u32 offset, and mutable owner; zero-start performs one wrapping add without invoking the fixture-only external call; the mutually exclusive else path preserves sentinel reset, owner wrapping add, and current-level continue, while non-hit paths return false.",
+    "external_callee": "get_next_kv_addr",
+    "argument_modes": [
+      "entry_root",
+      "entry_local_copy",
+      "owner_interior_alias"
+    ],
+    "noalias_required": [
+      [
+        "db",
+        "itr"
+      ]
+    ],
+    "excluded_semantics": [
+      "the real get_next_kv_addr implementation and side effects",
+      "the enclosing fdb_kv_iterate loops and statements outside lines 1868-1874",
+      "real FlashDB record layout, ABI, storage, and sector lifecycle"
+    ]
+  },
+  "evidence_identity": {
+    "schema_version": 2,
+    "target_id": "flashdb",
+    "slice_id": "real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "replay_contract_kind": "scripted_external_u32_call_interior_reset_add_while_continue_state",
+    "bindings": {
+      "slice_spec_sha256": "044551aeb677f49d89c10a1df4ec8c5e52e3d85d8aa2c419950e0d9aa7c1288d",
+      "fixture_sha256": "c2f96dbd88669f5ef4cb6d24748eb4b003cbaf1d70cc764096e3e5b37e41df1d",
+      "real_source_sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+      "source_fragment_sha256": "5ecb3553be0af447e9cba4bc822c8e1da5ea7d9efd1fc9f7876d802b81224cf7",
+      "source_fragment_line_start": 1868,
+      "source_fragment_line_end": 1874,
+      "carrier_source_sha256": "962efd277135c1faa7a31510023477d4768a612c4baf375662ac02252d94cd5c",
+      "c_oracle_harness_sha256": "0d4dba96be2b928765b4abb3fa41821bb618ee495c5044ee78921ebac871421c",
+      "generated_rust_draft_sha256": "1c74bbc0f18079e75e23619d40fdb5b208cc65e8418425bb44c35f7bfb7e3c98",
+      "generated_replay_test_sha256": "97e57affcf7c920200313c1fd4010721d44e9afb33527533ad3b874f2bd01199",
+      "negative_mutation_manifest_sha256": "95e0f83ab4c45b824b2e0d73658bce89ba3bd1324fd6743a2b49589087ef103f"
+    },
+    "identity_sha256": "431b6690db21990ef94051186457a384da924999db072a32f29450fdc91ca3ac",
+    "recomputed": true
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:zero-start-next-sector-advance-continue@1868-1874"
+    ]
+  },
+  "provenance": {
+    "binding_mode": "executed_harness",
+    "evidence_refs": {
+      "slice_spec": {
+        "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-zero-start-next-sector-advance-continue.json",
+        "sha256": "044551aeb677f49d89c10a1df4ec8c5e52e3d85d8aa2c419950e0d9aa7c1288d"
+      },
+      "fixture": {
+        "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-zero-start-next-sector-advance-continue.json",
+        "sha256": "c2f96dbd88669f5ef4cb6d24748eb4b003cbaf1d70cc764096e3e5b37e41df1d"
+      },
+      "real_source": {
+        "path": "sources/FlashDB/src/fdb_kvdb.c",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+        "artifact_lf_stable_sha256": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b",
+        "containing_function_sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d",
+        "source_fragment_sha256": "5ecb3553be0af447e9cba4bc822c8e1da5ea7d9efd1fc9f7876d802b81224cf7"
+      },
+      "translation_carrier": {
+        "kind": "exact_source_fragment_wrapper",
+        "carrier_function": "fdb_kv_iterate_zero_start_next_sector_advance_continue_probe",
+        "carrier_source_sha256": "962efd277135c1faa7a31510023477d4768a612c4baf375662ac02252d94cd5c"
+      },
+      "translator_input": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-translator-input.json",
+        "sha256": "a5270ed29bb087e2caf8a6a651bdbc04e35db66f91bfffa116dfeeac905daf1a"
+      },
+      "translation_plan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-auto-translation-plan.json",
+        "binding_mode": "field_bound",
+        "status": "draft_generated",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "clang_lowering_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-clang-lowering-report.json",
+        "binding_mode": "field_bound",
+        "status": "lowered",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "c_oracle_status": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-c-oracle-status.json",
+        "binding_mode": "field_bound",
+        "status": "DRAFT_GENERATED",
+        "semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "c_oracle_harness": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-c-oracle-harness-draft.c",
+        "sha256": "0d4dba96be2b928765b4abb3fa41821bb618ee495c5044ee78921ebac871421c"
+      },
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-rust-draft.rs",
+        "sha256": "1c74bbc0f18079e75e23619d40fdb5b208cc65e8418425bb44c35f7bfb7e3c98"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/rust-check.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-rust-replay-test-draft.rs",
+        "sha256": "97e57affcf7c920200313c1fd4010721d44e9afb33527533ad3b874f2bd01199",
+        "declared_sha256": "97e57affcf7c920200313c1fd4010721d44e9afb33527533ad3b874f2bd01199"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/generated-rust-replay.stdout.log",
+        "sha256": "3937c26422a91225f84bc26e4ac7dac919f6787c5d433e96233e03075a1b8d64"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-rust-report.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      }
+    },
+    "compile_execution": {
+      "argv": [
+        "cc",
+        "-std=c99",
+        "l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-c-oracle-harness-draft.c",
+        "-o",
+        "l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-c-oracle-harness-draft.exe"
+      ],
+      "attempted": true,
+      "compiler_candidates": [
+        "cc",
+        "gcc",
+        "clang"
+      ],
+      "compiler_name": "cc",
+      "compiler_path": "cc",
+      "diagnostics": [
+        "C oracle compile command succeeded, but execution/diff gates are still required."
+      ],
+      "execution_argv": [
+        "cc",
+        "-std=c99",
+        "l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-c-oracle-harness-draft.c",
+        "-o",
+        "l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-c-oracle-harness-draft.exe"
+      ],
+      "harness_execution": {
+        "argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-c-oracle-harness-draft.exe"
+        ],
+        "attempted": true,
+        "diagnostics": [
+          "C oracle harness executed, but execution output has not passed oracle diff gates."
+        ],
+        "output_gate": {
+          "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+          "compared_fields": [
+            "return_value",
+            "call_count",
+            "call_db_observed",
+            "call_sector_seed",
+            "call_alias_start",
+            "alias_start_after",
+            "owner_traversed_after"
+          ],
+          "diagnostics": [
+            "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+          ],
+          "expected_stdout_fragments": [
+            "fixture case zero-start-ordinary return_value matched",
+            "fixture case zero-start-ordinary call_count matched",
+            "fixture case zero-start-ordinary call_db_observed matched",
+            "fixture case zero-start-ordinary call_sector_seed matched",
+            "fixture case zero-start-ordinary call_alias_start matched",
+            "fixture case zero-start-ordinary alias_start_after matched",
+            "fixture case zero-start-ordinary owner_traversed_after matched",
+            "fixture case zero-start-u32-wrap return_value matched",
+            "fixture case zero-start-u32-wrap call_count matched",
+            "fixture case zero-start-u32-wrap call_db_observed matched",
+            "fixture case zero-start-u32-wrap call_sector_seed matched",
+            "fixture case zero-start-u32-wrap call_alias_start matched",
+            "fixture case zero-start-u32-wrap alias_start_after matched",
+            "fixture case zero-start-u32-wrap owner_traversed_after matched",
+            "fixture case sentinel-hit return_value matched",
+            "fixture case sentinel-hit call_count matched",
+            "fixture case sentinel-hit call_db_observed matched",
+            "fixture case sentinel-hit call_sector_seed matched",
+            "fixture case sentinel-hit call_alias_start matched",
+            "fixture case sentinel-hit alias_start_after matched",
+            "fixture case sentinel-hit owner_traversed_after matched",
+            "fixture case zero-miss return_value matched",
+            "fixture case zero-miss call_count matched",
+            "fixture case zero-miss call_db_observed matched",
+            "fixture case zero-miss call_sector_seed matched",
+            "fixture case zero-miss call_alias_start matched",
+            "fixture case zero-miss alias_start_after matched",
+            "fixture case zero-miss owner_traversed_after matched",
+            "fixture case ordinary-miss return_value matched",
+            "fixture case ordinary-miss call_count matched",
+            "fixture case ordinary-miss call_db_observed matched",
+            "fixture case ordinary-miss call_sector_seed matched",
+            "fixture case ordinary-miss call_alias_start matched",
+            "fixture case ordinary-miss alias_start_after matched",
+            "fixture case ordinary-miss owner_traversed_after matched"
+          ],
+          "fixture_expected_output_status": "declared_not_executed",
+          "gate": "c_oracle_harness_output",
+          "matched_stdout_fragments": [
+            "fixture case zero-start-ordinary return_value matched",
+            "fixture case zero-start-ordinary call_count matched",
+            "fixture case zero-start-ordinary call_db_observed matched",
+            "fixture case zero-start-ordinary call_sector_seed matched",
+            "fixture case zero-start-ordinary call_alias_start matched",
+            "fixture case zero-start-ordinary alias_start_after matched",
+            "fixture case zero-start-ordinary owner_traversed_after matched",
+            "fixture case zero-start-u32-wrap return_value matched",
+            "fixture case zero-start-u32-wrap call_count matched",
+            "fixture case zero-start-u32-wrap call_db_observed matched",
+            "fixture case zero-start-u32-wrap call_sector_seed matched",
+            "fixture case zero-start-u32-wrap call_alias_start matched",
+            "fixture case zero-start-u32-wrap alias_start_after matched",
+            "fixture case zero-start-u32-wrap owner_traversed_after matched",
+            "fixture case sentinel-hit return_value matched",
+            "fixture case sentinel-hit call_count matched",
+            "fixture case sentinel-hit call_db_observed matched",
+            "fixture case sentinel-hit call_sector_seed matched",
+            "fixture case sentinel-hit call_alias_start matched",
+            "fixture case sentinel-hit alias_start_after matched",
+            "fixture case sentinel-hit owner_traversed_after matched",
+            "fixture case zero-miss return_value matched",
+            "fixture case zero-miss call_count matched",
+            "fixture case zero-miss call_db_observed matched",
+            "fixture case zero-miss call_sector_seed matched",
+            "fixture case zero-miss call_alias_start matched",
+            "fixture case zero-miss alias_start_after matched",
+            "fixture case zero-miss owner_traversed_after matched",
+            "fixture case ordinary-miss return_value matched",
+            "fixture case ordinary-miss call_count matched",
+            "fixture case ordinary-miss call_db_observed matched",
+            "fixture case ordinary-miss call_sector_seed matched",
+            "fixture case ordinary-miss call_alias_start matched",
+            "fixture case ordinary-miss alias_start_after matched",
+            "fixture case ordinary-miss owner_traversed_after matched"
+          ],
+          "missing_stdout_fragments": [],
+          "schema_version": 1,
+          "semantic_pass": false,
+          "status": "matched_not_oracle"
+        },
+        "returncode": 0,
+        "semantic_pass": false,
+        "status": "exited_zero_not_oracle",
+        "stderr": "",
+        "stdout": "oracle harness draft for fdb_kv_iterate_zero_start_next_sector_advance_continue_probe\nfixture input: validation/l2_slices/fixtures/real-fdb-kv-iterate-zero-start-next-sector-advance-continue.json\nfixture case zero-start-ordinary return_value matched\nfixture case zero-start-ordinary call_count matched\nfixture case zero-start-ordinary call_db_observed matched\nfixture case zero-start-ordinary call_sector_seed matched\nfixture case zero-start-ordinary call_alias_start matched\nfixture case zero-start-ordinary alias_start_after matched\nfixture case zero-start-ordinary owner_traversed_after matched\nfixture case zero-start-u32-wrap return_value matched\nfixture case zero-start-u32-wrap call_count matched\nfixture case zero-start-u32-wrap call_db_observed matched\nfixture case zero-start-u32-wrap call_sector_seed matched\nfixture case zero-start-u32-wrap call_alias_start matched\nfixture case zero-start-u32-wrap alias_start_after matched\nfixture case zero-start-u32-wrap owner_traversed_after matched\nfixture case sentinel-hit return_value matched\nfixture case sentinel-hit call_count matched\nfixture case sentinel-hit call_db_observed matched\nfixture case sentinel-hit call_sector_seed matched\nfixture case sentinel-hit call_alias_start matched\nfixture case sentinel-hit alias_start_after matched\nfixture case sentinel-hit owner_traversed_after matched\nfixture case zero-miss return_value matched\nfixture case zero-miss call_count matched\nfixture case zero-miss call_db_observed matched\nfixture case zero-miss call_sector_seed matched\nfixture case zero-miss call_alias_start matched\nfixture case zero-miss alias_start_after matched\nfixture case zero-miss owner_traversed_after matched\nfixture case ordinary-miss return_value matched\nfixture case ordinary-miss call_count matched\nfixture case ordinary-miss call_db_observed matched\nfixture case ordinary-miss call_sector_seed matched\nfixture case ordinary-miss call_alias_start matched\nfixture case ordinary-miss alias_start_after matched\nfixture case ordinary-miss owner_traversed_after matched\n",
+        "timeout_seconds": 30,
+        "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
+        "execution_argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-c-oracle-harness-draft.exe"
+        ]
+      },
+      "requested_compiler": "cc",
+      "returncode": 0,
+      "semantic_pass": false,
+      "status": "compile_succeeded_not_oracle",
+      "stderr": "",
+      "stdout": "",
+      "toolchain_adapter": "local",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
+      "command_recording": "portable_logical_argv"
+    }
+  },
+  "cases": [
+    {
+      "id": "zero-start-ordinary",
+      "return_value": false,
+      "call_count": 0,
+      "call_db_observed": 0,
+      "call_sector_seed": 0,
+      "call_alias_start": 0,
+      "alias_start_after": 124,
+      "owner_traversed_after": 19,
+      "status": "passed"
+    },
+    {
+      "id": "zero-start-u32-wrap",
+      "return_value": false,
+      "call_count": 0,
+      "call_db_observed": 0,
+      "call_sector_seed": 0,
+      "call_alias_start": 0,
+      "alias_start_after": 8,
+      "owner_traversed_after": 29,
+      "status": "passed"
+    },
+    {
+      "id": "sentinel-hit",
+      "return_value": true,
+      "call_count": 1,
+      "call_db_observed": 31,
+      "call_sector_seed": 33,
+      "call_alias_start": 36,
+      "alias_start_after": 0,
+      "owner_traversed_after": 5,
+      "status": "passed"
+    },
+    {
+      "id": "zero-miss",
+      "return_value": false,
+      "call_count": 1,
+      "call_db_observed": 41,
+      "call_sector_seed": 43,
+      "call_alias_start": 46,
+      "alias_start_after": 0,
+      "owner_traversed_after": 47,
+      "status": "passed"
+    },
+    {
+      "id": "ordinary-miss",
+      "return_value": false,
+      "call_count": 1,
+      "call_db_observed": 51,
+      "call_sector_seed": 53,
+      "call_alias_start": 56,
+      "alias_start_after": 7,
+      "owner_traversed_after": 57,
+      "status": "passed"
+    }
+  ]
+}

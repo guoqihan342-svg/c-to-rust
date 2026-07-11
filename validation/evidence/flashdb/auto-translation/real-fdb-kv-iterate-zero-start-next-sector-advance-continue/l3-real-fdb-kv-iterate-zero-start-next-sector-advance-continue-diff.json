@@ -1,0 +1,51 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-diff.json",
+    "sha256": "acea684e71a3b8b9907236e959caa7ff255571997628d81a62453259cd168122",
+    "status": "passed"
+  },
+  "accepted_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-c2rust-baseline-manifest.json",
+    "sha256": "fd161ebcb7734cfc5f8cae0db24fb65a1a8ec37867a7c24e91a306b836366ffe",
+    "status": "skipped"
+  },
+  "compared_fields": [
+    "return_value",
+    "call_count",
+    "call_db_observed",
+    "call_sector_seed",
+    "call_alias_start",
+    "alias_start_after",
+    "owner_traversed_after"
+  ],
+  "diff_gate": "schema_aware_c_rust_diff",
+  "first_mismatch": null,
+  "required_inputs": {
+    "c_oracle_actual_status": "C_ORACLE_GENERATED",
+    "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_actual_status": "passed",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-route-decision.json",
+    "sha256": "05e35431fd2c586007fa818f27a0df13800f6ce3e0d2c382f66b652283184ea2",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
+  "status": "passed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "cf3a6fc30706e5f88dea64621b09a39d15712b00b6558c268d3710436630d48b",
+    "status": "passed"
+  }
+}

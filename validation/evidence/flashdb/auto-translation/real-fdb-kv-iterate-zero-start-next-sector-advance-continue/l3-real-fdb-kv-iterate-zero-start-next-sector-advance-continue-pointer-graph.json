@@ -1,0 +1,257 @@
+{
+  "alias_contract": {
+    "complete_alias_safety": true,
+    "decision": "allow",
+    "evidence_refs": [],
+    "proven": true,
+    "requires_noalias": true,
+    "source": "c_boundary.pointer_contract.aliasing_proven=true"
+  },
+  "alias_risks": [
+    {
+      "evidence_source": "c_boundary.pointer_contract.aliasing_proven=true",
+      "gate_decision": "allow",
+      "id": "alias-risk-1",
+      "pointer_nodes": [
+        "db",
+        "itr"
+      ],
+      "read_effects": [
+        "*db",
+        "*itr"
+      ],
+      "requires_noalias": true,
+      "risk_level": "proven_noalias",
+      "write_effects": [
+        "*db",
+        "*itr"
+      ]
+    }
+  ],
+  "alias_sets": [
+    {
+      "evidence": "c_boundary.pointer_contract.aliasing_proven=true",
+      "id": "alias-set-1",
+      "members": [
+        "db",
+        "itr"
+      ],
+      "relationship": "known_distinct",
+      "risk": "proven_noalias"
+    }
+  ],
+  "applicability": {
+    "has_pointer_surface": true,
+    "triggers": [
+      "pointer_parameter",
+      "alias_sensitive_state"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=044551aeb677f49d89c10a1df4ec8c5e52e3d85d8aa2c419950e0d9aa7c1288d",
+    "fixture_hash=c2f96dbd88669f5ef4cb6d24748eb4b003cbaf1d70cc764096e3e5b37e41df1d",
+    "build_profile_hash=393f25deea2e07b19c481216bfb440797aa0c75e199d818d28921b44e19eb8da",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=allow",
+    "alias_risk_count=1",
+    "aliasing_proven=true",
+    "effect_graph",
+    "effect_graph_sha256=b15c8c2094e02c8d43ae3137f9764578c3d7dad877cf4908b54cc4ea59ae26c5"
+  ],
+  "context_pack_ref": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-context-pack.json",
+  "dependency_edges": [],
+  "effect_graph": {
+    "edges": [
+      {
+        "evidence": "alias-risk-1 covers db/itr",
+        "from_effect": "effect-1",
+        "relationship": "requires_noalias",
+        "to_effect": "effect-4"
+      },
+      {
+        "evidence": "alias-risk-1 covers itr/db",
+        "from_effect": "effect-3",
+        "relationship": "requires_noalias",
+        "to_effect": "effect-2"
+      }
+    ],
+    "effects": [
+      {
+        "expression": "*db",
+        "id": "effect-1",
+        "kind": "read",
+        "pointer_node": "db",
+        "source": "pointer_nodes.read_effects"
+      },
+      {
+        "expression": "*db",
+        "id": "effect-2",
+        "kind": "write",
+        "pointer_node": "db",
+        "source": "pointer_nodes.write_effects"
+      },
+      {
+        "expression": "*itr",
+        "id": "effect-3",
+        "kind": "read",
+        "pointer_node": "itr",
+        "source": "pointer_nodes.read_effects"
+      },
+      {
+        "expression": "*itr",
+        "id": "effect-4",
+        "kind": "write",
+        "pointer_node": "itr",
+        "source": "pointer_nodes.write_effects"
+      }
+    ],
+    "summary": {
+      "alias_gate_decision": "allow",
+      "alias_sensitive": true,
+      "external_state": [],
+      "read_count": 2,
+      "reads": [
+        "db",
+        "itr"
+      ],
+      "write_count": 2,
+      "writes": [
+        "db",
+        "itr"
+      ]
+    }
+  },
+  "level": "L3",
+  "pointer_decisions": [
+    {
+      "decision": "bounded_pointer_index",
+      "id": "pointer-decision-1",
+      "lvalue_kind": "bounded_pointer_index",
+      "pointer_node": "db",
+      "reason": "bounded translator pointer/lvalue decision",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "source_statement": "*db",
+      "translation_rule_id": "bounded-pointer-index-write",
+      "unsafe_expected": false
+    },
+    {
+      "decision": "bounded_pointer_index",
+      "id": "pointer-decision-2",
+      "lvalue_kind": "bounded_pointer_index",
+      "pointer_node": "itr",
+      "reason": "bounded translator pointer/lvalue decision",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "source_statement": "*itr",
+      "translation_rule_id": "bounded-pointer-index-write",
+      "unsafe_expected": false
+    }
+  ],
+  "pointer_nodes": [
+    {
+      "boundary_decisions": [
+        "bounded_pointer_index"
+      ],
+      "buffer_role": "output",
+      "c_type": "struct Database *",
+      "id": "db",
+      "kind": "buffer",
+      "length_companion": "len",
+      "mutability": "write_only",
+      "nullability": "unknown",
+      "ownership_role": "out_param",
+      "read_effects": [
+        "*db"
+      ],
+      "symbol": "db",
+      "write_effects": [
+        "*db"
+      ]
+    },
+    {
+      "boundary_decisions": [
+        "bounded_pointer_index"
+      ],
+      "buffer_role": "output",
+      "c_type": "struct Owner *",
+      "id": "itr",
+      "kind": "buffer",
+      "length_companion": "len",
+      "mutability": "write_only",
+      "nullability": "unknown",
+      "ownership_role": "out_param",
+      "read_effects": [
+        "*itr"
+      ],
+      "symbol": "itr",
+      "write_effects": [
+        "*itr"
+      ]
+    }
+  ],
+  "repo_commit": "8a26178737211a13d3257ae3cdd5f2c20dffc452",
+  "risk_summary": {
+    "alias_gate": {
+      "complete_alias_safety": true,
+      "decision": "allow",
+      "evidence_source": "c_boundary.pointer_contract.aliasing_proven=true",
+      "requires_noalias": true,
+      "risk_count": 1,
+      "risk_level": "proven_noalias"
+    },
+    "blocked_reasons": [],
+    "known_gaps": [],
+    "unsafe_expected": false
+  },
+  "rust_mapping": [
+    {
+      "boundary_kind": "safe_wrapper",
+      "pointer_node": "db",
+      "strategy": "safe public API boundary generated by bounded translator",
+      "unsafe_expected": false
+    },
+    {
+      "boundary_kind": "safe_wrapper",
+      "pointer_node": "itr",
+      "strategy": "safe public API boundary generated by bounded translator",
+      "unsafe_expected": false
+    }
+  ],
+  "safe_boundary_preconditions": [
+    {
+      "applies_to": [
+        "db",
+        "itr"
+      ],
+      "id": "alias-precondition-1",
+      "kind": "noalias",
+      "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+      "required": true
+    }
+  ],
+  "schema_version": 2,
+  "slice_id": "real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate_zero_start_next_sector_advance_continue_probe"
+    ],
+    "globals": [],
+    "structs": []
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb"
+}

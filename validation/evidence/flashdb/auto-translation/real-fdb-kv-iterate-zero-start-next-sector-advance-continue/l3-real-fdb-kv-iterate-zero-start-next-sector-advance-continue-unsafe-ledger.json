@@ -1,0 +1,31 @@
+{
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-generated-draft-unsafe-ledger.json",
+    "sha256": "b51e68109cc82f6b7c2715728fa8c31a64db276487d8fc0b6bac28eb1f346f0c",
+    "status": "passed"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-c2rust-baseline-manifest.json",
+    "sha256": "fd161ebcb7734cfc5f8cae0db24fb65a1a8ec37867a7c24e91a306b836366ffe",
+    "status": "skipped"
+  },
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-route-decision.json",
+    "sha256": "05e35431fd2c586007fa818f27a0df13800f6ce3e0d2c382f66b652283184ea2",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
+  "status": "passed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "cf3a6fc30706e5f88dea64621b09a39d15712b00b6558c268d3710436630d48b",
+    "status": "passed"
+  }
+}

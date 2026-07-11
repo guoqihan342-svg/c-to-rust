@@ -1,0 +1,50 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-negative-diff.json",
+    "sha256": "c14258df4d293b7274aa3d3b18d30d1448358d8b1172c4890ab32f9140940c6f",
+    "status": "passed"
+  },
+  "accepted_negative_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-c2rust-baseline-manifest.json",
+    "sha256": "fd161ebcb7734cfc5f8cae0db24fb65a1a8ec37867a7c24e91a306b836366ffe",
+    "status": "skipped"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "accepted_value": true,
+    "case_id": "sentinel-hit",
+    "field": "return_value",
+    "mutated_value": false,
+    "scenario_id": "comparison-equality-flip"
+  },
+  "mutation_detected": true,
+  "negative_diff_gate": "schema_aware_negative_diff",
+  "required_inputs": {
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "negative_diff_actual_status": "expected_failed",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed",
+    "schema_diff_required_first_mismatch": null,
+    "schema_diff_required_status": "passed"
+  },
+  "root_blocked_by": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-route-decision.json",
+    "sha256": "05e35431fd2c586007fa818f27a0df13800f6ce3e0d2c382f66b652283184ea2",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
+  "status": "expected_failed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "cf3a6fc30706e5f88dea64621b09a39d15712b00b6558c268d3710436630d48b",
+    "status": "passed"
+  }
+}

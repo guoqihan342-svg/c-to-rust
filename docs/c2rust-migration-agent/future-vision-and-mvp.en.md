@@ -20,12 +20,12 @@ input.c
 
 | Item | Current value | Exact meaning |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 32 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
+| `translator_generated_semantic_pass_count` | 33 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
 | `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
-| Active translator track | P0-T21 | Compose the zero-start and next-address branches at `fdb_kvdb.c:1868-1874` |
+| Active translator track | P0-T22 | Select the next smallest real source-backed gap after strict P0-T21 closure |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |
-| Latest completed stage | P0-T20 | The `:1870-:1873` assignment-call, reset/add, and current-level `continue` slice is semantically accepted |
-| Current strict regression | `26/34` | Run `20260711T053811Z`; eight historical evidence drifts remain |
+| Latest completed stage | P0-T21 | The `:1868-:1874` zero-start and assignment-call branches are strictly semantically accepted |
+| Current strict regression | `26/34` | Run `20260711T061416Z`; eight historical evidence drifts remain |
 | Current proof class | `wsl-local-simulation` | Valid for development and approximation, but not `competition-exact` |
 
 `validation/translator-coverage-matrix.json` is the machine-readable source of truth for capability counts. A native C build, typed-IR unit test, rustc compile, C2Rust output, or LLM output alone is candidate evidence only.
@@ -165,7 +165,7 @@ Use `--dry-run` for plan inspection and `--entrypoint-id` for focused debugging.
 
 ### 2.5 Currently Proven and Unproven Boundaries
 
-The WSL competition-like lane currently proves the P0-T20 C oracle, generated Rust replay, diff, negative mutation, unsafe gates, strict validator, and the FlashDB file-backend 10,000-loop stress run. Volatile test counts are recorded only in section 5 with a run or commit binding.
+The WSL competition-like lane currently proves the P0-T20 C oracle, generated Rust replay, diff, negative mutation, unsafe gates, and strict validator. Historical run `20260711T061416Z` passed a 10,000-iteration FlashDB file-backend stress test, but routine full regression now defaults to 1,000 iterations and does not require repeating 10,000. Volatile test counts are recorded only in section 5 with a run or commit binding.
 
 Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Huawei host package/runtime differences, competition resource limits, real-host `COMPETITION_EXACT_HOST=1` attestation, a complete OpenCode preflight marker, GLM-5.1 worker/session artifacts, and the full competition-exact judge bundle/public packet. P0-H9 therefore remains open.
 
@@ -173,7 +173,7 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
 ### P0-A: Translator Track
 
-- [ ] **P0-T21: compose the `:1868-:1874` zero-start and next-address branches**
+- [x] **P0-T21: compose the `:1868-:1874` zero-start and next-address branches**
 
   Put the `sector.addr + SECTOR_HDR_DATA_SIZE` write for `kv->addr.start == 0` in the same generic carrier as the P0-T20 assignment-call else-if, reset, traversed-length add, and `continue` path.
 
@@ -188,9 +188,9 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
   | source boundary | Complete | Bind exactly `fdb_kvdb.c:1868-1874` without extending into line 1875 |
   | generic implementation | Complete | Commit the project-independent typed-IR carrier and schema-v2 reporter |
   | generic tests | Complete | Positive, adjacent fail-closed, and all-feature translator tests pass |
-  | source-backed inputs | In progress | Spec, fixture, and source-fragment hash are reproducible |
-  | semantic evidence | Not started | Generate and cross-bind C oracle, Rust replay, diff, negative, and unsafe ledger |
-  | strict acceptance | Not started | Update the matrix, count, and bilingual completion state only after every section 7 gate passes |
+  | source-backed inputs | Complete | Spec, fixture, and source-fragment hash are reproducible |
+  | semantic evidence | Complete | C oracle, Rust replay, diff, negative, and unsafe ledger are generated and cross-bound |
+  | strict acceptance | Complete | Every section 7 gate passes and the matrix-derived count is 33 |
 
 - [ ] **P0-T22: next-slice decision gate**
 
@@ -212,7 +212,7 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
 ### P0-C: Stage Closure
 
-- [ ] **P0-C1: historical evidence drift**. Fix the eight failures in run `20260711T053811Z` in artifact-ownership batches, separate from translator behavior changes.
+- [ ] **P0-C1: historical evidence drift**. Fix the eight failures in run `20260711T061416Z` in artifact-ownership batches, separate from translator behavior changes.
 - [ ] **P0-C2: all-feature Clippy**. Clear the 17 historical feature-gated warnings from `cargo clippy --all-features --all-targets -- -D warnings`; new slices must add no warnings.
 
 ## 4. Later Backlog
@@ -246,6 +246,7 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 | P0-T18 | Safe interior reborrow projection for `kv = &itr->curr_kv` | 29 -> 30 |
 | P0-T19 | `:1871-:1873` reset/add/current-level continue | 30 -> 31 |
 | P0-T20 | Compose the `:1870-:1873` assignment-call condition and branch body | 31 -> 32 |
+| P0-T21 | Compose the `:1868-:1874` zero-start and assignment-call branches | 32 -> 33 |
 
 Validation run bindings:
 
@@ -253,7 +254,8 @@ Validation run bindings:
 | --- | --- | --- |
 | P0-T21 translator candidate | commit `02067028`, 2026-07-11 | library `228` passed; bounded `657` passed with `133` real-clang opt-in ignores; integer conversion `4` passed |
 | P0-T20 Python core historical snapshot | 2026-07-11 stage snapshot | `293 passed, 6 skipped`, plus `90` subtests; proves only that revision |
-| Full regression | run `20260711T053811Z` | 26 of 34 passed; FlashDB code gates and the 10,000-loop stress test passed; eight historical evidence drifts failed |
+| Full regression | run `20260711T061416Z` | 26 of 34 passed; P0-T21 added no failure, FlashDB code gates and the 10,000-loop stress test passed, and the same eight historical evidence drifts failed |
+| P0-T21 strict validator | evidence generated from commit `8a261787` | `semantic_pass=true`, `generated_draft_semantic_pass=true`, and all 12 semantic binding classes passed |
 | P0-T20 strict validator | P0-T20 evidence | `semantic_pass=true` and `generated_draft_semantic_pass=true` |
 | Accepted-evidence strict status | `libuv/ip4-addr` | verified-unsafe-baseline SHA drift; the ledger count is not a current strict pass |
 | All-feature Clippy | current historical baseline | 17 feature-gated warnings remain for P0-C2 |

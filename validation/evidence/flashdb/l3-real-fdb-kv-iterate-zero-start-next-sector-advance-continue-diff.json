@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 5,
+  "compared_fields": [
+    "return_value",
+    "call_count",
+    "call_db_observed",
+    "call_sector_seed",
+    "call_alias_start",
+    "alias_start_after",
+    "owner_traversed_after"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Four renamed entry arguments preserve mutable db, by-value local, exact-u32 offset, and mutable owner; zero-start performs one wrapping add without invoking the fixture-only external call; the mutually exclusive else path preserves sentinel reset, owner wrapping add, and current-level continue, while non-hit paths return false.",
+    "external_callee": "get_next_kv_addr",
+    "argument_modes": [
+      "entry_root",
+      "entry_local_copy",
+      "owner_interior_alias"
+    ],
+    "noalias_required": [
+      [
+        "db",
+        "itr"
+      ]
+    ],
+    "excluded_semantics": [
+      "the real get_next_kv_addr implementation and side effects",
+      "the enclosing fdb_kv_iterate loops and statements outside lines 1868-1874",
+      "real FlashDB record layout, ABI, storage, and sector lifecycle"
+    ]
+  },
+  "evidence_identity": {
+    "schema_version": 2,
+    "target_id": "flashdb",
+    "slice_id": "real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "replay_contract_kind": "scripted_external_u32_call_interior_reset_add_while_continue_state",
+    "bindings": {
+      "slice_spec_sha256": "044551aeb677f49d89c10a1df4ec8c5e52e3d85d8aa2c419950e0d9aa7c1288d",
+      "fixture_sha256": "c2f96dbd88669f5ef4cb6d24748eb4b003cbaf1d70cc764096e3e5b37e41df1d",
+      "real_source_sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+      "source_fragment_sha256": "5ecb3553be0af447e9cba4bc822c8e1da5ea7d9efd1fc9f7876d802b81224cf7",
+      "source_fragment_line_start": 1868,
+      "source_fragment_line_end": 1874,
+      "carrier_source_sha256": "962efd277135c1faa7a31510023477d4768a612c4baf375662ac02252d94cd5c",
+      "c_oracle_harness_sha256": "0d4dba96be2b928765b4abb3fa41821bb618ee495c5044ee78921ebac871421c",
+      "generated_rust_draft_sha256": "1c74bbc0f18079e75e23619d40fdb5b208cc65e8418425bb44c35f7bfb7e3c98",
+      "generated_replay_test_sha256": "97e57affcf7c920200313c1fd4010721d44e9afb33527533ad3b874f2bd01199",
+      "negative_mutation_manifest_sha256": "95e0f83ab4c45b824b2e0d73658bce89ba3bd1324fd6743a2b49589087ef103f"
+    },
+    "identity_sha256": "431b6690db21990ef94051186457a384da924999db072a32f29450fdc91ca3ac",
+    "recomputed": true
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "first_mismatch": null
+}

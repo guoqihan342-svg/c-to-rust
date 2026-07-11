@@ -1,0 +1,6 @@
+
+thread 'replay_real_fdb_kv_iterate_zero_start_next_sector_advance_continue_fixture_contract' (27930) panicked at <translation-carrier-negative>/same.rs:134:9:
+assertion `left == right` failed: sentinel-hit return drifted
+  left: false
+ right: true
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

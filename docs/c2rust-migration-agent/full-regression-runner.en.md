@@ -14,7 +14,7 @@ The Chinese source currently contains these major headings:
 
 - `# Full Regression Runner`
 - `## Recommended Local Gate`
-- `## 10000 Full Rounds`
+- `## Repeated Full Rounds`
 - `## Evidence Files`
 - `## Claim Boundaries`
 
@@ -22,4 +22,5 @@ The Chinese source currently contains these major headings:
 
 - Keep filenames paired as `full-regression-runner.md` and `full-regression-runner.en.md` in the same directory.
 - Keep the first line of the Chinese source pointing to `full-regression-runner.en.md` with the repository-standard mirror notice.
+- Routine full regression uses 1,000 FlashDB stress iterations; 10,000 is not a normal acceptance requirement.
 - For project-wide priorities, follow `docs/c2rust-migration-agent/future-vision-and-mvp.md`; local plans, Superpowers tasks, and validation checklists are scoped artifacts only.

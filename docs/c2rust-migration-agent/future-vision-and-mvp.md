@@ -22,12 +22,12 @@ input.c
 
 | 项目 | 当前值 | 准确含义 |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 32 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
+| `translator_generated_semantic_pass_count` | 33 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
-| 当前翻译主线 | P0-T21 | 组合 `fdb_kvdb.c:1868-1874` 的 zero-start 与 next-address 二分支 |
+| 当前翻译主线 | P0-T22 | 在 P0-T21 严格收口后选择下一最小真实 source-backed gap |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近提交阶段 | P0-T20 | `:1870-:1873` assignment-call、reset/add 和 current-level `continue` 已语义接受 |
-| 当前严格回归 | `26/34` | run `20260711T053811Z`；8 项历史 evidence 漂移仍未修复 |
+| 最近提交阶段 | P0-T21 | `:1868-:1874` zero-start 与 assignment-call 二分支已严格语义接受 |
+| 当前严格回归 | `26/34` | run `20260711T061416Z`；8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
 `validation/translator-coverage-matrix.json` 是能力计数的机器可读事实源。native C build、typed-IR 单测、rustc 编译、C2Rust output 或 LLM 输出单独通过都只是 candidate evidence。
@@ -167,7 +167,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 ### 2.5 当前已验证与未验证边界
 
-当前已在 WSL competition-like lane 验证：P0-T20 的 C oracle、generated Rust replay、diff、negative mutation、unsafe gate 和严格 validator，以及 FlashDB file backend 10,000 轮压力测试。易变的测试数量只在第 5 节按运行或提交绑定记录。
+当前已在 WSL competition-like lane 验证：P0-T20 的 C oracle、generated Rust replay、diff、negative mutation、unsafe gate 和严格 validator。历史 run `20260711T061416Z` 的 FlashDB file backend 10,000 次压力测试通过，但日常全量回归默认已降为 1,000 次，不再要求重复运行 10,000 次。易变的测试数量只在第 5 节按运行或提交绑定记录。
 
 当前尚未验证：目标 kernel、Rust/Cargo 1.96、Node/npm 目标版本、真实 Huawei host package/runtime 差异、比赛资源上限、真实主机 `COMPETITION_EXACT_HOST=1` attestation、完整 OpenCode preflight marker、GLM-5.1 worker/session artifacts、全入口 competition-exact judge bundle 和 public packet。因此 P0-H9 仍未关闭。
 
@@ -175,7 +175,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 ### P0-A：翻译层主线
 
-- [ ] **P0-T21：组合 `:1868-:1874` zero-start 与 next-address 二分支**
+- [x] **P0-T21：组合 `:1868-:1874` zero-start 与 next-address 二分支**
 
   把 `kv->addr.start == 0` 时的 `sector.addr + SECTOR_HDR_DATA_SIZE` 写入，与 P0-T20 的 assignment-call else-if、reset、traversed-length add 和 `continue` 放入同一个通用 carrier。
 
@@ -190,9 +190,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   | source boundary | 已完成 | 精确绑定 `fdb_kvdb.c:1868-1874`，不扩大到 line 1875 |
   | generic implementation | 已完成 | 项目无关的 typed-IR carrier 与 schema-v2 reporter 已提交 |
   | generic tests | 已完成 | 正例、相邻 fail-closed 负例和 translator 全功能测试通过 |
-  | source-backed inputs | 进行中 | spec、fixture 与源片段 hash 可重生成 |
-  | semantic evidence | 未开始 | C oracle、Rust replay、diff、negative、unsafe ledger 全部生成并交叉绑定 |
-  | strict acceptance | 未开始 | 满足第 7 节全部门禁后才更新 matrix、计数和中英文完成状态 |
+  | source-backed inputs | 已完成 | spec、fixture 与源片段 hash 可重生成 |
+  | semantic evidence | 已完成 | C oracle、Rust replay、diff、negative、unsafe ledger 已生成并交叉绑定 |
+  | strict acceptance | 已完成 | 第 7 节全部门禁通过，matrix 派生计数更新为 33 |
 
 - [ ] **P0-T22：下一切片决策门**
 
@@ -214,7 +214,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 ### P0-C：阶段收口
 
-- [ ] **P0-C1：历史 evidence 漂移**。修复 run `20260711T053811Z` 的 8 个失败项，按 artifact 所有权分批处理，不与翻译层功能改动混交。
+- [ ] **P0-C1：历史 evidence 漂移**。修复 run `20260711T061416Z` 的 8 个失败项，按 artifact 所有权分批处理，不与翻译层功能改动混交。
 - [ ] **P0-C2：全功能 Clippy**。清理 `cargo clippy --all-features --all-targets -- -D warnings` 的 17 个历史 feature-gated 告警；新切片不得增加告警。
 
 ## 4. 后续 Backlog
@@ -248,6 +248,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | P0-T18 | `kv = &itr->curr_kv` interior reborrow 安全投影 | 29 -> 30 |
 | P0-T19 | `:1871-:1873` reset/add/current-level continue | 30 -> 31 |
 | P0-T20 | `:1870-:1873` assignment-call condition 与分支体组合 | 31 -> 32 |
+| P0-T21 | `:1868-:1874` zero-start 与 assignment-call 二分支组合 | 32 -> 33 |
 
 验证运行绑定：
 
@@ -255,7 +256,8 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | --- | --- | --- |
 | P0-T21 translator candidate | commit `02067028`，2026-07-11 | library `228` 通过；bounded `657` 通过、`133` 个 real-clang opt-in 忽略；integer conversion `4` 通过 |
 | P0-T20 Python core 历史快照 | 2026-07-11 阶段快照 | `293 passed, 6 skipped`，另有 `90` 个 subtests；只证明当时提交 |
-| 全量回归 | run `20260711T053811Z` | 34 项中 26 项通过；FlashDB 代码门禁和 10,000 轮压力测试通过；8 项历史 evidence 漂移失败 |
+| 全量回归 | run `20260711T061416Z` | 34 项中 26 项通过；P0-T21 未新增失败，FlashDB 代码门禁和 10,000 轮压力测试通过；8 项仍为历史 evidence 漂移 |
+| P0-T21 严格 validator | commit `8a261787` 生成的 evidence | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过 |
 | P0-T20 严格 validator | P0-T20 evidence | `semantic_pass=true`、`generated_draft_semantic_pass=true` |
 | accepted-evidence 严格状态 | `libuv/ip4-addr` | verified-unsafe-baseline SHA 漂移，ledger 计数不等于当前严格通过 |
 | 全功能 Clippy | 当前历史基线 | 17 个 feature-gated 告警待 P0-C2 清理 |

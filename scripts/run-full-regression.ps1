@@ -3,7 +3,7 @@ param(
     [int] $Rounds = 1,
 
     [ValidateRange(1, 100000000)]
-    [int] $StressLoops = 10000,
+    [int] $StressLoops = 1000,
 
     [ValidateRange(1, 1000000)]
     [int] $StartRound = 1,

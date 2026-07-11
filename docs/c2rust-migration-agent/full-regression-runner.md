@@ -8,10 +8,10 @@ English summary: `scripts/run-full-regression.ps1` is the repository-level regre
 
 ## Recommended Local Gate
 
-Run one full round with a 10000-loop FlashDB release stress pass:
+日常门禁运行一轮全量回归，并使用 1,000 次 FlashDB release stress。1,000 是默认值；不再把 10,000 次作为常规验收要求：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1 -StressLoops 10000
+powershell -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1 -StressLoops 1000
 ```
 
 On Ubuntu, run the same script with the current PowerShell executable, usually `pwsh`, and bind the competition environment profile:
@@ -19,7 +19,7 @@ On Ubuntu, run the same script with the current PowerShell executable, usually `
 ```bash
 pwsh -File ./scripts/run-full-regression.ps1 \
   -Rounds 1 \
-  -StressLoops 10000 \
+  -StressLoops 1000 \
   -EnvironmentProfile config/competition-env/environment.json
 ```
 
@@ -34,15 +34,15 @@ This runs:
 - evidence search for traceability.
 - `git diff --check`.
 
-## 10000 Full Rounds
+## Repeated Full Rounds
 
-To run 10000 complete validation rounds, use:
+需要检查重复执行稳定性时，应先使用小批量轮次；例如运行 10 轮，每轮 1,000 次 stress：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 10000 -StressLoops 10000
+powershell -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 10 -StressLoops 1000
 ```
 
-This is intentionally expensive. Each round writes logs and JSONL events under:
+每轮都会在以下目录写入日志和 JSONL 事件：
 
 ```text
 target/full-regression/<run-id>/
@@ -51,7 +51,7 @@ target/full-regression/<run-id>/
 If a run is interrupted, resume with the same run id and a later start round:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -RunId <run-id> -StartRound 231 -Rounds 10000 -StressLoops 10000
+powershell -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -RunId <run-id> -StartRound 4 -Rounds 10 -StressLoops 1000
 ```
 
 By default the runner stops at the first failed step. Use `-ContinueOnFailure` only when collecting a failure matrix.
