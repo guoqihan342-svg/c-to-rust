@@ -20,6 +20,9 @@ MAX_PROVIDER_STDERR_BYTES = 256_000
 MAX_CANDIDATE_BYTES = 256_000
 MAX_ASSUMPTIONS = 32
 MAX_ASSUMPTION_BYTES = 1_024
+OPENCODE_LOG_PATH_ENV = "OPENCODE_LOG_PATH"
+PROVIDER_BALANCE_SENTINEL = "provider_error=insufficient_balance"
+PROVIDER_AUTH_SENTINEL = "provider_error=authentication_failed"
 
 
 @dataclass(frozen=True)
@@ -305,12 +308,21 @@ def classify_provider_failure(execution: ProviderExecution) -> dict[str, str] | 
             "kind": "provider_output_too_large",
             "message": "OpenCode output exceeded the bounded harness capture limit",
         }
+    if (
+        PROVIDER_BALANCE_SENTINEL in combined
+        or "insufficient balance" in combined
+        or "no resource package" in combined
+    ):
+        return {"kind": "provider_insufficient_balance", "message": "GLM provider balance or resource package is unavailable"}
+    if (
+        PROVIDER_AUTH_SENTINEL in combined
+        or "unauthorized" in combined
+        or "invalid api key" in combined
+        or "authentication" in combined
+    ):
+        return {"kind": "provider_authentication_failed", "message": "OpenCode provider authentication failed"}
     if execution.timed_out:
         return {"kind": "provider_timeout", "message": "OpenCode candidate generation timed out"}
-    if "insufficient balance" in combined or "no resource package" in combined:
-        return {"kind": "provider_insufficient_balance", "message": "GLM provider balance or resource package is unavailable"}
-    if "unauthorized" in combined or "invalid api key" in combined or "authentication" in combined:
-        return {"kind": "provider_authentication_failed", "message": "OpenCode provider authentication failed"}
     if execution.returncode != 0:
         return {"kind": "opencode_failed", "message": f"OpenCode exited with code {execution.returncode}"}
     return None
@@ -358,6 +370,7 @@ def manifest_base(
 
 
 def subprocess_runner(argv: list[str], timeout_seconds: int) -> ProviderExecution:
+    log_snapshot = snapshot_opencode_log(argv)
     try:
         completed = subprocess.run(
             argv,
@@ -369,13 +382,76 @@ def subprocess_runner(argv: list[str], timeout_seconds: int) -> ProviderExecutio
             timeout=timeout_seconds,
         )
     except subprocess.TimeoutExpired as error:
+        stderr = decode_timeout_output(error.stderr)
+        log_diagnostic = appended_provider_log_diagnostic(log_snapshot)
+        if log_diagnostic:
+            stderr = "\n".join(part for part in [stderr, log_diagnostic] if part)
         return ProviderExecution(
             returncode=124,
             stdout=decode_timeout_output(error.stdout),
-            stderr=decode_timeout_output(error.stderr),
+            stderr=stderr,
             timed_out=True,
         )
     return ProviderExecution(completed.returncode, completed.stdout, completed.stderr)
+
+
+def snapshot_opencode_log(argv: list[str]) -> tuple[Path, int, str, str, str] | None:
+    try:
+        model = argv[argv.index("--model") + 1]
+        agent = argv[argv.index("--agent") + 1]
+    except (ValueError, IndexError):
+        return None
+    if "/" not in model:
+        return None
+    provider_id, model_id = model.rsplit("/", 1)
+    for path in opencode_log_candidates():
+        try:
+            return path, path.stat().st_size, provider_id, model_id, agent
+        except OSError:
+            continue
+    return None
+
+
+def opencode_log_candidates() -> list[Path]:
+    candidates: list[Path] = []
+    override = os.environ.get(OPENCODE_LOG_PATH_ENV)
+    if override:
+        candidates.append(Path(override))
+    xdg_data_home = os.environ.get("XDG_DATA_HOME")
+    if xdg_data_home:
+        candidates.append(Path(xdg_data_home) / "opencode" / "log" / "opencode.log")
+    candidates.append(Path.home() / ".local" / "share" / "opencode" / "log" / "opencode.log")
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        candidates.append(Path(local_app_data) / "opencode" / "log" / "opencode.log")
+    return candidates
+
+
+def appended_provider_log_diagnostic(snapshot: tuple[Path, int, str, str, str] | None) -> str:
+    if snapshot is None:
+        return ""
+    path, offset, provider_id, model_id, agent = snapshot
+    try:
+        with path.open("rb") as handle:
+            if handle.seek(0, os.SEEK_END) < offset:
+                return ""
+            handle.seek(offset)
+            appended = handle.read(MAX_PROVIDER_STDERR_BYTES)
+    except OSError:
+        return ""
+    text = appended.decode("utf-8", errors="replace")
+    matching = "\n".join(
+        line
+        for line in text.splitlines()
+        if f"providerID={provider_id}" in line
+        and f"modelID={model_id}" in line
+        and f"agent={agent}" in line
+    ).lower()
+    if "insufficient balance" in matching or "no resource package" in matching:
+        return PROVIDER_BALANCE_SENTINEL
+    if "unauthorized" in matching or "invalid api key" in matching or "authentication" in matching:
+        return PROVIDER_AUTH_SENTINEL
+    return ""
 
 
 def decode_timeout_output(value: str | bytes | None) -> str:
