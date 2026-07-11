@@ -270,7 +270,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | ---: | --- | --- |
 | 1 | P0-A8 fresh exact repair/strict 闭环 | 已完成；后续只修回归 |
 | 2 | P0-A9 通用 raw C2Rust/C2Rust+repair 同门禁物化 | 已完成；后续只修回归和基于跨项目失败数据调优 |
-| 3 | P0-A10 固定套件输入闭包 | 已完成；剩余一次性有限执行器、strict evidence 和指标 |
+| 3 | P0-A10 固定套件 harness 闭包 | 输入、一次性执行器、strict summary 和 provider 熔断已完成；剩余真实 GLM candidate 后的一次完整套件验收与成功率 |
 | 4 | P0-A6 真实 GLM-5.1 与比赛主机复验 | 有效资源包和 competition-exact host 可用；不得用模拟结果代替 |
 
 任何阶段都先运行一次有限构造集合，再按失败频率扩展 translator/ContextPack；禁止继续按 FlashDB 行号堆规则，也禁止为了等待外部资源停止可独立完成的 harness 工作。
@@ -279,7 +279,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   OpenCode `zai/glm-5.1` 读取 hash-bound ContextPack，输出单一结构化 Rust candidate；记录 provider、logical/resolved model、variant、prompt、输入、原始响应、解析结果和候选 SHA-256。模型输出、聊天文本和文件写入本身都保持 `semantic_gate=false`。无凭据、超时、响应格式错误或候选缺失必须结构化 blocked，不得静默回退后冒充 AI 已运行。
 
-  当前进度：候选生成器、schema-v2 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、余额/鉴权/超时分类和 `auto_migrate --ai-first-candidate` 已实现。WSL 实际调用已到达 `zai/glm-5.1`，但 provider 返回余额/资源包不足，因此尚无真实 GLM candidate，本项保持未完成。
+  当前进度：候选生成器、schema-v2 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、余额/鉴权/超时分类和 `auto_migrate --ai-first-candidate` 已实现。WSL 能列出并实际启动 `zai/glm-5.1`；历史调用出现过余额/资源包不足，2026-07-12 的当前凭据连续两次在 30 秒和 180 秒窗口内均返回 `provider_timeout` 与空响应，因此尚无真实 GLM candidate，本项保持未完成。模型可见、进程已启动和确定性 fallback 通过都不能替代候选证据。
 
 - [x] **P0-A7：项目级 ContextPack 与编译上下文闭环**
 
@@ -303,7 +303,11 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   建立不超过 20 个 case 的固定集合：至少覆盖 3 个真实 C 项目和 10 个不同 construct family。阶段验收只运行一次有限集合，不执行 1,000/10,000 轮或循环压力测试。发布 AI invocation、candidate generation、rustc compile、semantic acceptance、refused/blocked、repair rounds 和 route selection 指标；成功率不得用重复同类切片放大。
 
-  当前进度：输入闭包已完成。`validation/ai-finite-cross-project-suite.json` 固定 12 个 case、3 个真实项目和 12 个唯一 construct family，其中 8 个为真实 upstream function slice，4 个为绑定真实 upstream fragment 的通用可执行 carrier；synthetic/unbound provenance 均为 0。`project_sources` 固定 repository、repo-relative checkout root 和 commit，validator 离线核验 Git HEAD、origin、tracked-clean 状态、spec/fixture SHA、source file/span SHA 以及 line/byte 对齐；只允许 LF/CRLF 换行等价，不允许内容漂移或项目标签伪造。2026-07-12 的 Windows 与 WSL `--require-all-ready` 均为 `ready=12/blocked=0`，21 个合同测试通过。该结果仍仅表示输入完备：`model_invocations=0`、`translations_executed=0`、`translation_coverage_numerator=0`，不得发布跨项目成功率。下一步是实现并仅运行一次有界 suite executor，逐项进入 AI-primary router、fresh exact gates 和独立 strict validator，再发布 invocation、generation、compile、semantic、blocked/refused、repair 与 route 指标。
+  当前进度：输入和 harness 闭包已完成。`validation/ai-finite-cross-project-suite.json` 固定 12 个 case、3 个真实项目和 12 个唯一 construct family，其中 8 个为真实 upstream function slice，4 个为绑定真实 upstream fragment 的通用可执行 carrier；synthetic/unbound provenance 均为 0。`project_sources` 固定 repository、repo-relative checkout root 和 commit，validator 离线核验 Git HEAD、origin、tracked-clean 状态、spec/fixture SHA、source file/span SHA 以及 line/byte 对齐；只允许 LF/CRLF 换行等价，不允许内容漂移或项目标签伪造。Windows 与 WSL `--require-all-ready` 均为 `ready=12/blocked=0`。
+
+  `run_ai_finite_cross_project_suite.py` 现在把 12 个 spec 一次传给同一个 competition runner，禁止 accepted-evidence shortcut 和外层重试；suite/summary 均做 SHA 绑定，底层 summary validator 未通过时上层不复制任何指标。WSL local simulation 可显式使用离线 Cargo cache，但 summary 必须记录 `bypassed_for_local_cache`，`competition-exact` 会拒绝该旁路。连续两次 `provider_timeout` 会打开固定阈值熔断，只把实际调用项计入 slices/workflow/AI units，剩余项记录为 skipped，不制造 `not_invoked` 单元。
+
+  2026-07-12 的有限熔断演练在约 65 秒内完成：请求 12 项，实际调用 2 项，跳过 10 项；`slices.attempted=2`、`workflow_metrics.units_total=2`、`ai_translation_metrics.units_total=2`、`invocations=2`、`blocked=2`、`abnormal=0`，独立 summary validator 返回 0。两项均为 `provider_timeout`，没有 candidate、compile 或 semantic acceptance，所以本项仍未完成，也不得发布跨项目成功率。下一步只在 GLM provider/资源恢复后对同一固定套件再运行一次完整阶段验收，再发布 generation、compile、semantic、refused/blocked、repair 和 route 指标；不得为绕过 timeout 更换测试项或硬编码项目。
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 
