@@ -390,6 +390,23 @@
                           ]
                         }
                       ]
+                    },
+                    {
+                      "kind": "ReturnStmt",
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "IntegralToBoolean",
+                          "type": { "qualType": "_Bool" },
+                          "inner": [
+                            {
+                              "kind": "IntegerLiteral",
+                              "value": "1",
+                              "type": { "qualType": "int" }
+                            }
+                          ]
+                        }
+                      ]
                     }
                   ]
                 }
@@ -405,7 +422,7 @@
                   "inner": [
                     {
                       "kind": "IntegerLiteral",
-                      "value": "1",
+                      "value": "0",
                       "type": { "qualType": "int" }
                     }
                   ]

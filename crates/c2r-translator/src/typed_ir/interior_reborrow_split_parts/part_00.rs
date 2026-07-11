@@ -201,15 +201,26 @@ fn validate_guarded_owner_stats_sequence_carrier(
     if !else_body.is_empty() {
         return Err("guarded interior stats sequence must not have an else branch".to_string());
     }
-    let [increment, first_add, second_add] = then_body.as_slice() else {
+    let [increment, first_add, second_add, success_return] = then_body.as_slice() else {
         return Err(
-            "guarded interior stats sequence body must contain exactly increment/add/add"
+            "guarded interior stats sequence body must contain exactly increment/add/add/true return"
                 .to_string(),
         );
     };
     validate_ordered_interior_stats_guard(function, plan, condition)?;
     validate_owner_stats_sequence_carrier(
-        function, policy, plan, increment, first_add, second_add, terminal,
+        function,
+        policy,
+        plan,
+        increment,
+        first_add,
+        second_add,
+        success_return,
+    )?;
+    validate_fixed_bool_return(
+        terminal,
+        false,
+        "guarded interior stats sequence false-path terminal",
     )
 }
 

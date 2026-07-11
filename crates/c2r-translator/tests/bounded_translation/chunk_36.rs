@@ -106,6 +106,7 @@ fn guarded_interior_stats_sequence_emits_candidate_and_runs() {
         "{rust}"
     );
     assert!(rust.contains("return true;"), "{rust}");
+    assert!(rust.contains("return false;"), "{rust}");
     assert!(!rust.contains("unsafe"), "{rust}");
     assert_rust_snippet_runs(
         "typed-ir-guarded-interior-stats",
@@ -114,10 +115,10 @@ fn guarded_interior_stats_sequence_emits_candidate_and_runs() {
 assert!(update_totals(&mut hit));\n\
 assert_eq!((hit.visits, hit.first_total, hit.second_total), (9u32, 14usize, 18usize));\n\
 let mut first_miss = Totals { active: Sample { mode: 6i32, ready: true, first_units: 3u32, second_units: 5u32 }, visits: 8u32, first_total: 11usize, second_total: 13usize };\n\
-assert!(update_totals(&mut first_miss));\n\
+assert!(!update_totals(&mut first_miss));\n\
 assert_eq!((first_miss.visits, first_miss.first_total, first_miss.second_total), (8u32, 11usize, 13usize));\n\
 let mut second_miss = Totals { active: Sample { mode: 7i32, ready: false, first_units: 3u32, second_units: 5u32 }, visits: 8u32, first_total: 11usize, second_total: 13usize };\n\
-assert!(update_totals(&mut second_miss));\n\
+assert!(!update_totals(&mut second_miss));\n\
 assert_eq!((second_miss.visits, second_miss.first_total, second_miss.second_total), (8u32, 11usize, 13usize));\n\
 let mut wrapped = Totals { active: Sample { mode: 7i32, ready: true, first_units: 3u32, second_units: 1u32 }, visits: u32::MAX, first_total: usize::MAX - 1usize, second_total: usize::MAX };\n\
 assert!(update_totals(&mut wrapped));\n\
@@ -211,4 +212,16 @@ fn guarded_stats_sequence_rejects_else_and_body_shape_drift() {
         reason.contains("increment") || reason.contains("direct owner u32"),
         "{reason}"
     );
+
+    let mut false_success = guarded_stats_fixture();
+    guarded_stats_then_body_mut(&mut false_success)[3]["inner"][0]["inner"][0]["value"] =
+        Value::String("0".to_string());
+    let reason = guarded_stats_failure(&false_success);
+    assert!(reason.contains("fixed bool true"), "{reason}");
+
+    let mut true_miss = guarded_stats_fixture();
+    guarded_stats_body_mut(&mut true_miss)[2]["inner"][0]["inner"][0]["value"] =
+        Value::String("1".to_string());
+    let reason = guarded_stats_failure(&true_miss);
+    assert!(reason.contains("fixed bool false"), "{reason}");
 }
