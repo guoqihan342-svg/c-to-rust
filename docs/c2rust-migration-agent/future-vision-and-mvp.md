@@ -270,19 +270,23 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   当前进度：候选生成器、schema-v2 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、余额/鉴权/超时分类和 `auto_migrate --ai-first-candidate` 已实现。WSL 实际调用已到达 `zai/glm-5.1`，但 provider 返回余额/资源包不足，因此尚无真实 GLM candidate，本项保持未完成。
 
-- [ ] **P0-A7：项目级 ContextPack 与编译上下文闭环**
+- [x] **P0-A7：项目级 ContextPack 与编译上下文闭环**
 
   从真实 source root、source span、有效 `#include`、`compile_commands.json`/手工 flags、宏、target ABI、依赖声明、Clang AST/诊断、typed-IR/C2Rust 基线和验证失败中生成最小上下文。相对/绝对路径、生成头文件和构建目录必须可解析；禁止密钥、宿主绝对路径和无关大文件进入可发布 artifact。
+
+  完成证据：ContextPack v2 已按职责拆为 source、compile database、compile args、security 和 deterministic artifact 模块；支持显式外部 source root、仓库内相对 source root、真实 span/source SHA、compile command 选择、include/define/ABI 摘要、128 KB 总上限和 32 KB 单 artifact 上限。路径/符号链接逃逸、hash 漂移、密钥及宿主路径均 fail-closed。
 
 - [ ] **P0-A8：验证驱动的有界 AI repair loop**
 
   每轮只把结构化失败事实反馈给模型：rustc diagnostics、C/Rust schema diff、negative mutation、unsafe/ABI/alias gate。默认最多 3 轮，比赛合同硬上限 5 轮；输入与失败 hash 均未变化时立即停止。每轮保留 candidate、patch、诊断和 hash，不允许模型修改 oracle、expected output、validator 或门禁配置。
 
+  当前进度：有界 repair coordinator、单候选/单文件 patch 合同、每轮 SHA 证据、LF 规范化、输入+失败不变停止、provider/validator fail-closed 和 `auto_migrate` rustc 失败触发已完成。repair 成功后会重新绑定最终 candidate SHA，再进入共同语义门禁；C oracle/schema diff/negative/unsafe/ABI/alias 的结构化失败自动反馈仍待接入，因此本项保持未完成。
+
 - [ ] **P0-A9：AI-primary 多候选路由**
 
   比赛翻译路径优先生成 GLM-5.1 candidate；typed IR、raw C2Rust、C2Rust+repair 作为确定性候选、提示上下文或 AI 失败后的替代候选。router 只能依据可重算 gate 结果排序，不能依据项目名、函数名、slice id 或模型自评。任何候选都必须经过相同 compile/oracle/replay/diff/negative/unsafe/final gates。
 
-  当前进度：已生成且 SHA 匹配的 `opencode-ai` candidate 可物化为 canonical Rust draft，并进入 `L3/agent` route；`selected_candidate_id`、AI manifest、原始 candidate、canonical draft 和 rustc 结果已有独立 validator 绑定。C oracle/replay/diff/negative/unsafe/final 的 AI 自身语义闭环和 run-level AI 指标仍未完成。
+  当前进度：新翻译的 competition runner 已默认传递 `--ai-first-candidate`，competition-exact 禁止替换 OpenCode/GLM/agent/variant；精确 AI draft 可通过 compile、generated replay、accepted C oracle、schema diff、negative mutation、unsafe 和 final gate 晋级，且 deterministic draft 保留为独立 hash-bound 备用候选。`ai_translation_metrics` 已从 manifest/route/profile/final 和 repair report 重算 invocation/generated/applied/selected/rustc/semantic/blocked/refused/repair 指标。基于 gate 排序并在 AI 失败后自动选择 typed IR/C2Rust 的完整 router 仍未完成。
 
 - [ ] **P0-A10：有限跨项目稳定性验收**
 

@@ -101,7 +101,8 @@ def emit_validation_profile(
     goal = route_decision.get("policy", {}).get("goal", "dev")
     level = str(route_decision.get("level", "L4"))
     profile = route_decision.get("verification_profile") or validation_profile_name(level, goal)
-    required = required_gates_for_profile(level, goal)
+    ai_primary = ai_primary_candidate_selected(route_decision)
+    required = required_gates_for_profile(level, goal, ai_primary=ai_primary)
     skipped = []
     accepted_authoritative = accepted_evidence_authoritative_route(route_decision)
     if route_decision.get("translator", {}).get("kind") == "refuse" and not accepted_authoritative:
@@ -124,6 +125,13 @@ def emit_validation_profile(
             generated_ledger = unsafe_ledger.exists() and read_json(unsafe_ledger).get("status") == "passed"
             if not accepted_ledger and not generated_ledger:
                 skipped.append({"gate": gate, "reason": "unsafe_ledger_not_passed"})
+            continue
+        if gate == "negative_diff":
+            accepted_negative = accepted.get("reports", {}).get("negative_diff", {}) if accepted else {}
+            generated_negative_path = evidence_dir / f"{prefix}-negative-diff.json"
+            generated_negative = read_json(generated_negative_path) if generated_negative_path.exists() else {}
+            if not mutation_detected(accepted_negative) and not mutation_detected(generated_negative):
+                skipped.append({"gate": gate, "reason": "negative_diff_mutation_not_detected"})
             continue
         skipped.append({"gate": gate, "reason": "required_gate_not_available_in_dev_evidence"})
     compile_passed = rust_check.get("status") == "passed"
@@ -159,7 +167,7 @@ def emit_validation_profile(
         "goal": goal,
         "competition_environment": competition_environment_identity(),
         "required_gates": required,
-        "optional_gates": optional_gates_for_profile(level, goal),
+        "optional_gates": optional_gates_for_profile(level, goal, ai_primary=ai_primary),
         "skipped_gates": skipped,
         "required_gate_status": {
             "compile": rust_check.get("status"),
@@ -189,23 +197,41 @@ def validation_profile_name(level: str, goal: str) -> str:
     return f"{level}-{goal}"
 
 
-def required_gates_for_profile(level: str, goal: str) -> list[str]:
+def required_gates_for_profile(level: str, goal: str, *, ai_primary: bool = False) -> list[str]:
     gates = ["compile", "c_oracle_diff"]
     if level in {"L1", "L2", "L3"}:
         gates.extend(["unsafe_ledger", "rust_tests"])
-    if level in {"L2", "L3"}:
+    if ai_primary:
+        gates.append("negative_diff")
+    elif level in {"L2", "L3"}:
         gates.extend(["fuzz_property", "miri"])
     if level == "L3" and goal in {"ci-merge", "release"}:
         gates.append("kani")
     if goal == "release":
         gates.extend(["negative_diff", "evidence_cleanliness"])
-    return gates
+    return list(dict.fromkeys(gates))
 
 
-def optional_gates_for_profile(level: str, goal: str) -> list[str]:
+def optional_gates_for_profile(level: str, goal: str, *, ai_primary: bool = False) -> list[str]:
     optional = ["negative_diff", "evidence_cleanliness"]
-    if level in {"L0", "L1"}:
+    if ai_primary:
+        optional = [gate for gate in optional if gate != "negative_diff"]
+        optional.extend(["fuzz_property", "miri"])
+    elif level in {"L0", "L1"}:
         optional.extend(["fuzz_property", "miri"])
     if goal != "release":
         optional.append("kani")
-    return optional
+    return list(dict.fromkeys(optional))
+
+
+def ai_primary_candidate_selected(route_decision: dict[str, Any]) -> bool:
+    generation = route_decision.get("candidate_generation")
+    if not isinstance(generation, dict):
+        return False
+    selected_id = generation.get("selected_candidate_id")
+    return any(
+        isinstance(candidate, dict)
+        and candidate.get("candidate_id") == selected_id
+        and candidate.get("kind") == "opencode-ai"
+        for candidate in generation.get("candidate_set", [])
+    )

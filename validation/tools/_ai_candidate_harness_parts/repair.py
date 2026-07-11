@@ -13,6 +13,7 @@ from .provider import (
     ProviderExecution,
     Runner,
     classify_provider_failure,
+    provider_command_prefix,
     subprocess_runner,
 )
 from .repair_contract import (
@@ -231,13 +232,13 @@ def materialize_repair(
     prefix: str,
 ) -> tuple[str, dict[str, str]]:
     if repair["kind"] == "candidate":
-        source = repair["source"]
+        source = normalize_source_text(repair["source"])
         if len(source.encode("utf-8")) > MAX_CANDIDATE_BYTES:
             raise ValueError(f"repair candidate exceeds {MAX_CANDIDATE_BYTES} bytes")
         artifact_path = out_dir / f"{prefix}-replacement.rs"
         atomic_write_bytes(artifact_path, source.encode("utf-8"))
         return source, artifact_binding(artifact_path)
-    source = apply_candidate_patch(current_source, repair["content"])
+    source = apply_candidate_patch(current_source, normalize_source_text(repair["content"]))
     if len(source.encode("utf-8")) > MAX_CANDIDATE_BYTES:
         raise ValueError(f"repaired candidate exceeds {MAX_CANDIDATE_BYTES} bytes")
     patch_path = out_dir / f"{prefix}-patch.diff"
@@ -247,7 +248,7 @@ def materialize_repair(
 
 def repair_argv(command: str, model: str, agent: str, variant: str, prompt: str) -> list[str]:
     return [
-        command,
+        *provider_command_prefix(command),
         "run",
         "--pure",
         "--format",
@@ -269,10 +270,17 @@ def read_candidate(path: Path) -> str:
     data = path.read_bytes()
     if len(data) > MAX_CANDIDATE_BYTES:
         raise ValueError(f"initial candidate exceeds {MAX_CANDIDATE_BYTES} bytes")
-    source = data.decode("utf-8")
+    source = normalize_source_text(data.decode("utf-8"))
     if not source.strip():
         raise ValueError("initial candidate must be non-empty UTF-8 Rust source")
+    normalized = source.encode("utf-8")
+    if normalized != data:
+        atomic_write_bytes(path, normalized)
     return source
+
+
+def normalize_source_text(value: str) -> str:
+    return value.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def required_context_string(context_pack: dict[str, Any], field: str) -> str:

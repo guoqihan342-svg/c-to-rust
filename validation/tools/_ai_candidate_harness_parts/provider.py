@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
+import shlex
 import subprocess
 from typing import Any, Callable
 
@@ -56,7 +58,7 @@ def generate_candidate(
     prompt = render_prompt(context_pack)
     atomic_write_bytes(prompt_path, prompt.encode("utf-8"))
     argv = [
-        opencode_command,
+        *provider_command_prefix(opencode_command),
         "run",
         "--pure",
         "--format",
@@ -141,6 +143,25 @@ def generate_candidate(
     manifest = {**base, "status": "generated", "candidates": [candidate]}
     atomic_write_json(manifest_path, manifest)
     return manifest
+
+
+def provider_command_prefix(command: str) -> list[str]:
+    if not isinstance(command, str) or not command.strip():
+        raise ValueError("OpenCode command must be non-empty")
+    direct = Path(command)
+    if direct.is_file():
+        return [command]
+    tokens = shlex.split(command, posix=os.name != "nt")
+    normalized = [strip_matching_quotes(token) for token in tokens]
+    if not normalized or any(not token for token in normalized):
+        raise ValueError("OpenCode command could not be parsed")
+    return normalized
+
+
+def strip_matching_quotes(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1]
+    return value
 
 
 def apply_generated_candidate(

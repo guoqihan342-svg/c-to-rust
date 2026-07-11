@@ -268,19 +268,23 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   Current progress: the candidate generator, schema-v2 manifest, sensitive/host-path cleanup, strict JSON parsing, candidate materialization SHA check, balance/auth/timeout classification, and `auto_migrate --ai-first-candidate` are implemented. A real WSL call reached `zai/glm-5.1`, but the provider reported insufficient balance/resource package, so no real GLM candidate exists yet and this item remains open.
 
-- [ ] **P0-A7: project-level ContextPack and compile-context closure**
+- [x] **P0-A7: project-level ContextPack and compile-context closure**
 
   Build minimal context from the real source root/span, effective includes, `compile_commands.json` or manual flags, macros, target ABI, dependency declarations, Clang AST/diagnostics, typed-IR/C2Rust baselines, and validation failures. Relative/absolute paths, generated headers, and build directories must resolve. Secrets, host absolute paths, and unrelated large files must not enter publishable artifacts.
+
+  Completion evidence: ContextPack v2 is split by responsibility into source, compile database, compile arguments, security, and deterministic-artifact modules. It supports an explicit external source root, a repository-relative source root, real span/source SHA bindings, compile-command selection, include/define/ABI summaries, a 128 KB total cap, and a 32 KB per-artifact cap. Path or symlink escape, hash drift, secrets, and host paths fail closed.
 
 - [ ] **P0-A8: validation-driven bounded AI repair loop**
 
   Feed only structured failure facts back to the model: rustc diagnostics, C/Rust schema diff, negative mutation, and unsafe/ABI/alias gates. Default to at most three rounds, with five as the competition hard cap; stop immediately when both input and failure hashes are unchanged. Preserve each candidate, patch, diagnostic, and hash. The model must not modify the oracle, expected output, validator, or gate configuration.
 
+  Current progress: the bounded repair coordinator, one-candidate/one-file-patch contract, per-round SHA evidence, LF normalization, unchanged-input-plus-failure stop, provider/validator fail-closed handling, and `auto_migrate` rustc-failure trigger are implemented. A successful repair rebinds the final candidate SHA before the common semantic gates. Automatic structured feedback from C oracle/schema diff/negative/unsafe/ABI/alias failures is still pending, so this item remains open.
+
 - [ ] **P0-A9: AI-primary multi-candidate router**
 
   The competition translation path generates a GLM-5.1 candidate first. typed IR, raw C2Rust, and C2Rust+repair act as deterministic candidates, prompt context, or alternatives after AI failure. The router may rank only by recomputable gate results, never by project/function/slice names or model self-assessment. Every candidate traverses the same compile/oracle/replay/diff/negative/unsafe/final gates.
 
-  Current progress: a generated `opencode-ai` candidate with matching SHA can be materialized as the canonical Rust draft and routed through `L3/agent`. Independent validation now binds `selected_candidate_id`, the AI manifest, original candidate, canonical draft, and rustc result. The AI candidate's own C oracle/replay/diff/negative/unsafe/final semantic closure and run-level AI metrics remain incomplete.
+  Current progress: the competition runner now passes `--ai-first-candidate` for fresh translations, and competition-exact forbids OpenCode/GLM/agent/variant substitution. An exact AI draft can advance through compile, generated replay, accepted C oracle, schema diff, negative mutation, unsafe, and final gates, while the deterministic draft remains an independent hash-bound alternate. `ai_translation_metrics` recomputes invocation/generated/applied/selected/rustc/semantic/blocked/refused/repair counts from manifest/route/profile/final and repair-report artifacts. A full gate-ranked router that automatically selects typed IR or C2Rust after AI failure remains incomplete.
 
 - [ ] **P0-A10: finite cross-project stability acceptance**
 

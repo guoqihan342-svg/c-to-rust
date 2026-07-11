@@ -51,6 +51,11 @@ def repair_ai_candidate_after_compile(
     )
     if report.get("status") != "candidate_ready_for_common_validation":
         manifest["repair"] = repair_report_binding(report, out_dir)
+        apply_generated_candidate(
+            manifest,
+            out_dir=out_dir,
+            canonical_draft_path=canonical_draft_path,
+        )
         return manifest, report
 
     candidates = manifest.get("candidates")

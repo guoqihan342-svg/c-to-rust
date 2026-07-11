@@ -62,7 +62,26 @@ def refresh_generated_rust_draft_binding(
     draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
     if not draft_path.exists():
         return route_decision
-    draft_sha = sha256(draft_path)
+    candidate_generation = route_decision.get("candidate_generation")
+    selected_id = candidate_generation.get("selected_candidate_id") if isinstance(candidate_generation, dict) else None
+    candidate_set = candidate_generation.get("candidate_set", []) if isinstance(candidate_generation, dict) else []
+    selected = next(
+        (
+            item
+            for item in candidate_set
+            if isinstance(item, dict) and item.get("candidate_id") == selected_id
+        ),
+        None,
+    )
+    ai_selected = isinstance(selected, dict) and selected.get("kind") == "opencode-ai"
+    binding_path = (
+        evidence_dir / f"{prefix}-pre-ai-rust-candidate.rs"
+        if ai_selected
+        else draft_path
+    )
+    if not binding_path.is_file():
+        raise SystemExit("selected AI route is missing the displaced deterministic Rust candidate")
+    draft_sha = sha256(binding_path)
     report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
     report_ref: dict[str, Any] | None = None
     if report_path.exists():
@@ -77,7 +96,6 @@ def refresh_generated_rust_draft_binding(
         report_status = str(read_json(report_path).get("status", "recorded"))
         report_ref = evidence_ref(report_path, report_status)
 
-    candidate_generation = route_decision.get("candidate_generation")
     typed_ir = candidate_generation.get("typed_ir") if isinstance(candidate_generation, dict) else None
     if isinstance(typed_ir, dict) and typed_ir.get("rust_draft_generated") is True:
         typed_ir["rust_draft_sha256"] = draft_sha

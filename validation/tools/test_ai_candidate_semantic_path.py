@@ -18,24 +18,20 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="ai-semantic-path-") as tmp:
             root = Path(tmp)
             provider = root / "fake_opencode.py"
-            launcher = root / "fake-opencode.cmd"
             provider.write_text(
                 "import json\n"
                 "candidate = {\n"
                 "    'schema_version': 1,\n"
                 "    'candidate': {\n"
                 "        'language': 'rust',\n"
-                "        'source': 'pub fn add_one(value: i32) -> i32 {\\n    value.wrapping_add(1)\\n}\\n',\n"
+                "        'source': '// AI candidate\\npub fn add_one(value: i32) -> i32 {\\n    value.wrapping_add(1)\\n}\\n',\n"
                 "    },\n"
                 "    'assumptions': [],\n"
                 "}\n"
                 "print(json.dumps({'type': 'message.part.updated', 'part': {'type': 'text', 'text': json.dumps(candidate)}}))\n",
                 encoding="utf-8",
             )
-            launcher.write_text(
-                f'@"{sys.executable}" "{provider}" %*\n',
-                encoding="utf-8",
-            )
+            provider_command = f'"{sys.executable}" "{provider}"'
             out_root = root / "evidence"
             result = subprocess.run(
                 [
@@ -49,7 +45,7 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
                     "--accept-existing-evidence",
                     "--ai-first-candidate",
                     "--ai-opencode-command",
-                    str(launcher),
+                    provider_command,
                 ],
                 cwd=REPO_ROOT,
                 text=True,
@@ -103,14 +99,13 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
             self.assertEqual(
                 validation.returncode,
                 0,
-                f"stdout:\n{validation.stdout}\nstderr:\n{validation.stderr}",
+                f"stdout:\n{validation.stdout}\nstderr:\n{validation.stderr}\nprofile:\n{json.dumps(profile, indent=2, sort_keys=True)}",
             )
 
     def test_compile_failure_uses_one_bounded_repair_before_common_gates(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ai-semantic-repair-") as tmp:
             root = Path(tmp)
             provider = root / "fake_opencode.py"
-            launcher = root / "fake-opencode.cmd"
             provider.write_text(
                 "import json, sys\n"
                 "prompt = sys.argv[-1]\n"
@@ -136,7 +131,7 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
                 "print(json.dumps({'type': 'message.part.updated', 'part': {'type': 'text', 'text': json.dumps(payload)}}))\n",
                 encoding="utf-8",
             )
-            launcher.write_text(f'@"{sys.executable}" "{provider}" %*\n', encoding="utf-8")
+            provider_command = f'"{sys.executable}" "{provider}"'
             out_root = root / "evidence"
             result = subprocess.run(
                 [
@@ -150,7 +145,7 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
                     "--accept-existing-evidence",
                     "--ai-first-candidate",
                     "--ai-opencode-command",
-                    str(launcher),
+                    provider_command,
                     "--ai-repair-rounds",
                     "1",
                 ],
@@ -172,7 +167,11 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
             )
             candidate = manifest["candidates"][0]
 
-            self.assertEqual(repair["status"], "candidate_ready_for_common_validation")
+            self.assertEqual(
+                repair["status"],
+                "candidate_ready_for_common_validation",
+                json.dumps(repair, indent=2, sort_keys=True),
+            )
             self.assertEqual(candidate["repair_rounds"], 1)
             self.assertNotEqual(candidate["initial_output_hash"], candidate["output_hash"])
             self.assertFalse(candidate["semantic_pass"])
@@ -199,7 +198,7 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
             self.assertEqual(
                 validation.returncode,
                 0,
-                f"stdout:\n{validation.stdout}\nstderr:\n{validation.stderr}",
+                f"stdout:\n{validation.stdout}\nstderr:\n{validation.stderr}\nprofile:\n{json.dumps(profile, indent=2, sort_keys=True)}",
             )
 
 

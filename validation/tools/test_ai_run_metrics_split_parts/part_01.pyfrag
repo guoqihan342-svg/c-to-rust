@@ -230,6 +230,70 @@ class AiRunMetricsTests(unittest.TestCase):
         base["schema_version"] = 1
         jsonschema.validate(base, schema)
 
+    def test_repair_report_rounds_are_hash_recomputed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            evidence = root / "evidence"
+            evidence.mkdir()
+            manifest_path = evidence / "l3-slice-ai-candidate-manifest.json"
+            summary_path = root / "summary/competition-run-summary.json"
+            summary_path.parent.mkdir()
+            write_json(manifest_path, {"status": "generated"})
+            artifacts = {}
+            for name, content in {
+                "failure.json": "{}\n",
+                "prompt.txt": "repair\n",
+                "response.jsonl": "{}\n",
+                "candidate.rs": "pub fn value() {}\n",
+                "validation.json": "{}\n",
+            }.items():
+                path = evidence / name
+                write_text(path, content)
+                artifacts[name] = nested_ref(path)
+            report_path = evidence / "l3-slice-ai-repair-report.json"
+            candidate_sha = artifacts["candidate.rs"]["sha256"]
+            report = {
+                "status": "candidate_ready_for_common_validation",
+                "claim_boundary": {
+                    "semantic_gate": False,
+                    "semantic_pass": False,
+                    "translation_coverage_numerator": 0,
+                },
+                "rounds": [
+                    {
+                        "bindings": {
+                            "failure_facts": artifacts["failure.json"],
+                            "prompt": artifacts["prompt.txt"],
+                            "raw_response": artifacts["response.jsonl"],
+                            "candidate": artifacts["candidate.rs"],
+                            "validation_result": artifacts["validation.json"],
+                        }
+                    }
+                ],
+                "final_candidate": artifacts["candidate.rs"],
+            }
+            write_json(report_path, report)
+            ref = {
+                "path": report_path.name,
+                "sha256": runner.sha256(report_path),
+                "status": report["status"],
+                "semantic_pass": False,
+            }
+            candidate = {
+                "artifact": {"path": "candidate.rs", "sha256": candidate_sha},
+                "repair_rounds": 1,
+            }
+
+            rounds, reasons = validator.validate_bound_ai_repair_report(
+                ref,
+                manifest_path=manifest_path,
+                summary_path=summary_path,
+                repo_root=REPO_ROOT,
+                candidate=candidate,
+            )
+            self.assertEqual(rounds, 1)
+            self.assertEqual(reasons, [])
+
 
 if __name__ == "__main__":
     unittest.main()

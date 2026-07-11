@@ -423,6 +423,22 @@ def load_final_verification(evidence_root: Path, target_id: str, slice_id: str) 
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def typed_ir_candidate_was_generated(evidence_root: Path, target_id: str, slice_id: str) -> bool:
+    path = evidence_root / target_id / "auto-translation" / slice_id / f"l3-{slice_id}-route-decision.json"
+    if not path.is_file():
+        return False
+    try:
+        route = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    typed_ir = route.get("candidate_generation", {}).get("typed_ir", {})
+    return (
+        isinstance(typed_ir, dict)
+        and typed_ir.get("status") == "generated"
+        and typed_ir.get("rust_draft_generated") is True
+    )
+
+
 def load_translation_before_after(evidence_root: Path, target_id: str, slice_id: str) -> dict[str, Any] | None:
     path = evidence_root / target_id / "auto-translation" / slice_id / f"l3-{slice_id}-translation-before-after.json"
     if not path.exists():

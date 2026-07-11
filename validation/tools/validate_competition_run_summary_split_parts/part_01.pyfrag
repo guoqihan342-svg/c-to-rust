@@ -647,7 +647,9 @@ def validate_slice_counts(summary: dict[str, Any]) -> None:
     terminal = int(slices["semantic_pass"]) + int(slices["refused"]) + int(slices["blocked"]) + int(slices["failed"])
     if terminal > attempted:
         raise SystemExit("competition run summary terminal slice counts exceed slices.attempted")
-    if int(slices["compiled"]) > int(slices["typed_ir_generated"]):
+    if int(slices["compiled"]) > attempted:
+        raise SystemExit("competition run summary slices.compiled exceeds slices.attempted")
+    if summary.get("schema_version", 1) == 1 and int(slices["compiled"]) > int(slices["typed_ir_generated"]):
         raise SystemExit("competition run summary slices.compiled exceeds slices.typed_ir_generated")
     if int(slices["typed_ir_generated"]) > attempted:
         raise SystemExit("competition run summary slices.typed_ir_generated exceeds slices.attempted")

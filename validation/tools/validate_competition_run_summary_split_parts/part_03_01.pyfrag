@@ -129,12 +129,101 @@ def validate_fresh_ai_manifest(
         seen_rounds.add(round_value)
         validate_ai_candidate_artifacts(repair, manifest_path, summary_path, repo_root, reasons)
         valid_repairs += 1
+    bound_repair = candidate.get("repair") if isinstance(candidate, dict) else None
+    top_level_repair = manifest.get("repair")
+    if bound_repair is not None and top_level_repair is not None:
+        reasons.append("ai_repair_binding_is_ambiguous")
+    elif bound_repair is not None or top_level_repair is not None:
+        repair_rounds, repair_reasons = validate_bound_ai_repair_report(
+            bound_repair if bound_repair is not None else top_level_repair,
+            manifest_path=manifest_path,
+            summary_path=summary_path,
+            repo_root=repo_root,
+            candidate=candidate if bound_repair is not None else None,
+        )
+        valid_repairs += repair_rounds
+        reasons.extend(repair_reasons)
     return {
         "candidate": candidate,
         "repair_rounds": valid_repairs,
         "invocations": 1 + valid_repairs if status in {"generated", "blocked"} else 0,
         "reasons": sorted(set(reasons)),
     }
+
+
+def validate_bound_ai_repair_report(
+    ref: Any,
+    *,
+    manifest_path: Path | None,
+    summary_path: Path,
+    repo_root: Path,
+    candidate: dict[str, Any] | None,
+) -> tuple[int, list[str]]:
+    reasons: list[str] = []
+    if manifest_path is None or not nested_ai_ref_is_hash_bound(
+        ref,
+        owner_path=manifest_path,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    ):
+        return 0, ["ai_repair_report_binding_invalid"]
+    report_path = resolve_nested_ai_artifact(
+        ref["path"],
+        owner_path=manifest_path,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    if report_path is None:
+        return 0, ["ai_repair_report_missing"]
+    report = load_json(report_path)
+    if ref.get("status") != report.get("status") or ref.get("semantic_pass") is not False:
+        reasons.append("ai_repair_report_status_or_claim_drift")
+    boundary = report.get("claim_boundary")
+    if not isinstance(boundary, dict) or (
+        boundary.get("semantic_gate") is not False
+        or boundary.get("semantic_pass") is not False
+        or boundary.get("translation_coverage_numerator") != 0
+    ):
+        reasons.append("ai_repair_report_claim_boundary_invalid")
+    rounds = report.get("rounds")
+    if not isinstance(rounds, list) or not 1 <= len(rounds) <= 5:
+        return 0, sorted(set([*reasons, "ai_repair_report_round_count_invalid"]))
+    for round_record in rounds:
+        bindings = round_record.get("bindings") if isinstance(round_record, dict) else None
+        if not isinstance(bindings, dict):
+            reasons.append("ai_repair_round_bindings_missing")
+            continue
+        for key in ("failure_facts", "prompt"):
+            if not nested_ai_ref_is_hash_bound(
+                bindings.get(key),
+                owner_path=report_path,
+                summary_path=summary_path,
+                repo_root=repo_root,
+            ):
+                reasons.append(f"ai_repair_round_{key}_binding_invalid")
+        for key in ("raw_response", "repair_artifact", "candidate", "validation_result"):
+            value = bindings.get(key)
+            if value is not None and not nested_ai_ref_is_hash_bound(
+                value,
+                owner_path=report_path,
+                summary_path=summary_path,
+                repo_root=repo_root,
+            ):
+                reasons.append(f"ai_repair_round_{key}_binding_invalid")
+    if candidate is not None:
+        if report.get("status") != "candidate_ready_for_common_validation":
+            reasons.append("selected_ai_repair_report_not_ready")
+        final_candidate = report.get("final_candidate")
+        artifact = candidate.get("artifact")
+        if not isinstance(final_candidate, dict) or not isinstance(artifact, dict) or (
+            final_candidate.get("sha256") != artifact.get("sha256")
+        ):
+            reasons.append("selected_ai_repair_final_candidate_drift")
+        if candidate.get("repair_rounds") != len(rounds):
+            reasons.append("selected_ai_repair_round_count_drift")
+    elif report.get("status") == "candidate_ready_for_common_validation":
+        reasons.append("ready_ai_repair_report_not_bound_to_candidate")
+    return len(rounds), sorted(set(reasons))
 
 
 def validate_ai_candidate_artifacts(

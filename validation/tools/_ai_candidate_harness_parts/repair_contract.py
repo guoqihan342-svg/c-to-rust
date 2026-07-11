@@ -4,7 +4,8 @@ import json
 import math
 from typing import Any
 
-from .context import HOST_PATH_PATTERN, canonical_json_bytes, sha256_bytes
+from .context import canonical_json_bytes, sha256_bytes
+from .context_security import HOST_PATH_PATTERN
 from .provider import assistant_text_from_jsonl
 
 

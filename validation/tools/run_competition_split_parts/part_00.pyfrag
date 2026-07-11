@@ -344,7 +344,8 @@ def run_competition(
                 blocked += 1
             else:
                 slice_failures += 1
-        typed_ir_generated += 1
+        if typed_ir_candidate_was_generated(slice_evidence_root, target_id, slice_id):
+            typed_ir_generated += 1
         repair_metrics = self_healing_repair_metrics(
             slice_evidence_root,
             target_id,
