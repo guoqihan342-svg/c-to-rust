@@ -18,6 +18,10 @@ from .contract import (
 from .field_add_contract import KIND as FIELD_ADD_KIND
 from .field_scalar_add_contract import KIND as FIELD_SCALAR_ADD_KIND
 from .field_scalar_add_source import validate_carrier_source as validate_field_scalar_add_source
+from .field_postfix_increment_contract import KIND as FIELD_POSTFIX_INCREMENT_KIND
+from .field_postfix_increment_source import (
+    validate_carrier_source as validate_field_postfix_increment_source,
+)
 from .constant_state_contract import KIND as CONSTANT_STATE_KIND
 from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
 from .reset_add_while_continue_contract import KIND as RESET_ADD_CONTINUE_KIND
@@ -169,6 +173,8 @@ def validate_carrier(
         validate_field_add_carrier_source(c_source, contract)
     elif contract.get("kind") == FIELD_SCALAR_ADD_KIND:
         validate_field_scalar_add_source(c_source, contract)
+    elif contract.get("kind") == FIELD_POSTFIX_INCREMENT_KIND:
+        validate_field_postfix_increment_source(c_source, contract)
     else:
         external_name = str(contract["external_callee"]["name"])
         if f"{external_name}(" not in c_source:

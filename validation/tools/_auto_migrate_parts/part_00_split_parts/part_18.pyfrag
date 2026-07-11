@@ -1,0 +1,184 @@
+RECORD_U32_FIELD_POSTFIX_INCREMENT_STATE_KIND = (
+    "record_u32_field_postfix_increment_state"
+)
+
+
+def record_u32_field_postfix_increment_state_replay_supported(
+    spec: dict[str, Any], fixture_binding: dict[str, Any] | None = None
+) -> bool:
+    return record_u32_field_postfix_increment_state_replay_contract(
+        spec, fixture_binding
+    ) is not None
+
+
+def record_u32_field_postfix_increment_state_replay_contract(
+    spec: dict[str, Any], fixture_binding: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    contract = spec.get("replay_contract")
+    if not isinstance(contract, dict) or contract.get("kind") != RECORD_U32_FIELD_POSTFIX_INCREMENT_STATE_KIND:
+        return None
+    if contract.get("schema_version") != 1:
+        raise ValueError("record field postfix-increment replay schema_version must be 1")
+    if set(contract) != {
+        "schema_version", "kind", "entry_arguments", "state_output", "state_update", "return",
+        "noalias_required",
+    }:
+        raise ValueError("record field postfix-increment replay contract shape drifted")
+
+    entries = contract.get("entry_arguments")
+    if not isinstance(entries, list) or len(entries) != 1:
+        raise ValueError("record field postfix-increment replay requires one entry argument")
+    entry = entries[0]
+    if not isinstance(entry, dict) or set(entry) != {
+        "parameter", "c_type", "rust_type", "pass_mode", "direction", "initializer",
+    }:
+        raise ValueError("record field postfix-increment entry argument shape drifted")
+    parameter = scripted_external_replay_identifier(
+        entry.get("parameter"), "record field postfix-increment entry parameter"
+    )
+    rust_type = scripted_external_replay_identifier(
+        entry.get("rust_type"), "record field postfix-increment entry rust_type"
+    )
+    if entry.get("pass_mode") != "mutable_ref" or entry.get("direction") != "inout":
+        raise ValueError("record field postfix-increment entry must be mutable inout")
+    if normalize_c_type(str(entry.get("c_type") or "")) != normalize_c_type(f"struct {rust_type} *"):
+        raise ValueError("record field postfix-increment entry C type drifted")
+    initializer = scripted_record_validate_initializer(
+        entry.get("initializer"), "record field postfix-increment initializer"
+    )
+    if initializer["record_type"] != rust_type:
+        raise ValueError("record field postfix-increment initializer type drifted")
+    initialized = scripted_record_initializer_fixture_paths(initializer)
+    if len(initialized) != 1 or len(initialized[0][1]) != 1:
+        raise ValueError("record field postfix-increment initializer must contain one direct u32 field")
+
+    state = contract.get("state_output")
+    if not isinstance(state, dict) or set(state) != {
+        "parameter", "field_path", "fixture_field", "rust_type",
+    }:
+        raise ValueError("record field postfix-increment state_output shape drifted")
+    state_parameter = scripted_external_replay_identifier(
+        state.get("parameter"), "record field postfix-increment state parameter"
+    )
+    state_fixture = scripted_external_replay_identifier(
+        state.get("fixture_field"), "record field postfix-increment state fixture_field"
+    )
+    state_path = scripted_record_field_path(
+        state.get("field_path"), "record field postfix-increment state field_path"
+    )
+    if (
+        state_parameter != parameter
+        or state.get("rust_type") != "u32"
+        or len(state_path) != 1
+        or state_path != initialized[0][1]
+    ):
+        raise ValueError("record field postfix-increment state must bind the sole direct u32 field")
+
+    update = contract.get("state_update")
+    if (
+        not isinstance(update, dict)
+        or set(update) != {"operation", "increment"}
+        or update.get("operation") != "wrapping_add"
+        or update.get("increment") != 1
+    ):
+        raise ValueError("record field postfix-increment update must be fixed wrapping_add increment 1")
+
+    result = contract.get("return")
+    if not isinstance(result, dict) or set(result) != {"fixture_field", "rust_type", "value"}:
+        raise ValueError("record field postfix-increment return shape drifted")
+    return_fixture = scripted_external_replay_identifier(
+        result.get("fixture_field"), "record field postfix-increment return fixture_field"
+    )
+    if result.get("rust_type") != "bool" or type(result.get("value")) is not bool:
+        raise ValueError("record field postfix-increment return must declare a fixed bool")
+
+    declared = scripted_record_noalias_pairs(
+        contract.get("noalias_required"), "record field postfix-increment noalias_required"
+    )
+    pointer = spec.get("c_boundary", {}).get("pointer_contract")
+    if not isinstance(pointer, dict) or pointer.get("aliasing_proven") is not True:
+        raise ValueError("record field postfix-increment requires proven pointer metadata")
+    boundary = scripted_record_noalias_pairs(
+        pointer.get("noalias_required"), "record field postfix-increment pointer noalias_required"
+    )
+    if declared or boundary or declared != boundary:
+        raise ValueError("record field postfix-increment single root requires empty noalias pairs")
+
+    input_fixture = initialized[0][0]
+    outputs = [return_fixture, state_fixture]
+    if len({input_fixture, *outputs}) != 3:
+        raise ValueError("record field postfix-increment fixture and output fields must be unique")
+    if behavior_fields(spec) != outputs:
+        raise ValueError("record field postfix-increment observable output mapping drifted")
+    validate_record_field_postfix_increment_signature(spec, entry)
+    if fixture_binding is not None:
+        validate_record_field_postfix_increment_cases(spec, fixture_binding, contract)
+    return contract
+
+
+def validate_record_field_postfix_increment_signature(
+    spec: dict[str, Any], entry: dict[str, Any]
+) -> None:
+    signature = c_function_signature(spec)
+    if not signature or signature.get("function") != spec.get("function_name"):
+        raise ValueError("record field postfix-increment entry signature is missing")
+    if normalize_c_type(str(signature.get("return_type") or "")) not in {"bool", "_Bool"}:
+        raise ValueError("record field postfix-increment entry return type must be bool")
+    actual = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(actual) != 1:
+        raise ValueError("record field postfix-increment entry signature must have one parameter")
+    if (
+        actual[0].get("name") != entry["parameter"]
+        or normalize_c_type(str(actual[0].get("c_type") or ""))
+        != normalize_c_type(str(entry["c_type"]))
+        or actual[0].get("direction") != entry["direction"]
+    ):
+        raise ValueError("record field postfix-increment entry parameter drifted")
+
+
+def validate_record_field_postfix_increment_cases(
+    spec: dict[str, Any], fixture_binding: dict[str, Any], contract: dict[str, Any]
+) -> None:
+    cases = fixture_binding.get("case_bindings")
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("record field postfix-increment fixture cases are missing")
+    input_fixture = scripted_record_initializer_fixture_paths(
+        contract["entry_arguments"][0]["initializer"]
+    )[0][0]
+    fields = [contract["return"]["fixture_field"], contract["state_output"]["fixture_field"]]
+    for case in cases:
+        payload = oracle_fixture_input_payload(spec, case)
+        expected = case.get("expected_outputs")
+        if not isinstance(payload, dict) or set(payload) != {input_fixture}:
+            raise ValueError("record field postfix-increment input must contain only the record initial field")
+        if not is_uint32_value(payload.get(input_fixture)):
+            raise ValueError("record field postfix-increment initial field must be u32")
+        if not isinstance(expected, dict) or set(expected) != set(fields):
+            raise ValueError("record field postfix-increment fixture case is incomplete")
+        modeled = record_field_postfix_increment_expected_outputs(payload, contract)
+        if expected != modeled:
+            raise ValueError("record field postfix-increment expected outputs drifted")
+        if record_field_postfix_decrement_state(payload, contract) == modeled[fields[1]]:
+            raise ValueError("record field postfix-increment fixture does not observe mutation")
+
+
+def record_field_postfix_increment_expected_outputs(
+    payload: dict[str, Any], contract: dict[str, Any]
+) -> dict[str, Any]:
+    input_fixture = scripted_record_initializer_fixture_paths(
+        contract["entry_arguments"][0]["initializer"]
+    )[0][0]
+    return {
+        str(contract["return"]["fixture_field"]): bool(contract["return"]["value"]),
+        str(contract["state_output"]["fixture_field"]):
+            (int(payload[input_fixture]) + 1) & 0xFFFFFFFF,
+    }
+
+
+def record_field_postfix_decrement_state(
+    payload: dict[str, Any], contract: dict[str, Any]
+) -> int:
+    input_fixture = scripted_record_initializer_fixture_paths(
+        contract["entry_arguments"][0]["initializer"]
+    )[0][0]
+    return (int(payload[input_fixture]) - 1) & 0xFFFFFFFF

@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-iterated-count",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "itr_iterated_count"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "The direct u32 field on one mutable record pointer is updated by a fixed wrapping increment of one; the declared constant bool result is observed.",
+    "external_callee": null,
+    "field_update": {
+      "operation": "wrapping_add",
+      "increment": 1,
+      "target_parameter": "itr",
+      "target_field_path": [
+        "iterated_cnt"
+      ]
+    },
+    "excluded_semantics": [
+      "real source lines 1876-1879 and 1881-1885, including read_kv, the condition, byte statistics, early return, and loop tail",
+      "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1880 postfix increment",
+      "real FlashDB iterator layout, record ABI, storage behavior, and cross-iteration effects",
+      "complete fdb_kv_iterate function semantics"
+    ]
+  },
+  "status": "passed",
+  "replay_contract_kind": "record_u32_field_postfix_increment_state",
+  "replay_engine": "exact_generated_rust_replay_plus_declarative_field_check",
+  "generated_draft_replay_pass": true,
+  "generated_draft_semantic_pass": false,
+  "provenance": {
+    "status": "passed",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": false,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "<generated-replay-executable> --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/generated-rust-replay.stdout.log"
+    },
+    "refs": {
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-rust-draft.rs",
+        "sha256": "c519d5576d6d73c44f5cbdd0b85e8f1c5a8125f255ca074b9120024eaec010bd"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/rust-check.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-rust-replay-test-draft.rs",
+        "sha256": "107061f876e2b0460292455e8951d955797b3c2663c586b0e17c42b1a7126bb8",
+        "declared_sha256": "107061f876e2b0460292455e8951d955797b3c2663c586b0e17c42b1a7126bb8"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/generated-rust-replay.stdout.log",
+        "sha256": "078d8848f4c1db12c52a89ff121bf657256c289fe83761559420c405360860f0"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-rust-report.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      }
+    },
+    "fixture_state_model": {
+      "increment": 1,
+      "kind": "record_u32_field_postfix_increment_state",
+      "operation": "wrapping_add",
+      "scope": "fixture_only"
+    }
+  },
+  "cases": [
+    {
+      "id": "zero",
+      "return_value": true,
+      "itr_iterated_count": 1,
+      "status": "passed"
+    },
+    {
+      "id": "ordinary",
+      "return_value": true,
+      "itr_iterated_count": 42,
+      "status": "passed"
+    },
+    {
+      "id": "u32-wrap",
+      "return_value": true,
+      "itr_iterated_count": 0,
+      "status": "passed"
+    }
+  ]
+}

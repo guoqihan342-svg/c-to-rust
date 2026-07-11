@@ -1,0 +1,38 @@
+def rust_replay_record_u32_field_postfix_increment_state_cases_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> str:
+    contract = record_u32_field_postfix_increment_state_replay_contract(
+        spec, fixture_binding
+    )
+    if contract is None:
+        return "    // TODO: bind record field postfix-increment fixture cases.\n"
+    entry = contract["entry_arguments"][0]
+    state = contract["state_output"]
+    result = contract["return"]
+    function_name = safe_ident(required_str(spec, "function_name"))
+    blocks = ["    // Exact direct record-field postfix-increment fixture replay.\n"]
+    for case_binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding["expected_outputs"]
+        case_id = str(case_binding.get("id") or "case")
+        local_name = f"actual_{safe_ident(case_id)}_{safe_ident(str(entry['parameter']))}"
+        state_expression = f"{local_name}." + ".".join(
+            str(field) for field in state["field_path"]
+        )
+        expected_state = int(expected[str(state["fixture_field"])])
+        expected_return = str(bool(expected[str(result["fixture_field"])] )).lower()
+        blocks.extend(
+            [
+                "    {\n",
+                f"        let case_id = {rust_string_literal(case_id)};\n",
+                f"        let mut {local_name} = "
+                f"{scripted_record_rust_initializer(entry['initializer'], payload)};\n",
+                f"        let expected_state = {state_expression}.wrapping_add(1u32);\n",
+                f"        assert_eq!(expected_state, {expected_state}u32, \"{{}} declared postfix state drifted\", case_id);\n",
+                f"        let actual_return = {function_name}(&mut {local_name});\n",
+                f"        assert_eq!({state_expression}, expected_state, \"{{}} postfix state drifted\", case_id);\n",
+                f"        assert_eq!(actual_return, {expected_return}, \"{{}} return drifted\", case_id);\n",
+                "    }\n",
+            ]
+        )
+    return "".join(blocks)

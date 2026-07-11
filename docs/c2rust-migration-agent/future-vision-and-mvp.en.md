@@ -20,11 +20,11 @@ input.c
 
 | Item | Current value | Exact meaning |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 35 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
+| `translator_generated_semantic_pass_count` | 36 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
 | `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
-| Active translator track | P0-T27 | Build strict source-backed acceptance for the generic u32 record-pointer postfix increment at `fdb_kvdb.c:1880` |
+| Active translator track | P0-T28 | Audit `fdb_kvdb.c:1881-1883` and select the next smallest generic construct that can be strictly accepted |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |
-| Latest development stage | P0-T26 | The project-independent `:1880` u32 mutable record-pointer postfix increment candidate is complete; the count remains 35 |
+| Latest development stage | P0-T27 | Source-backed strict acceptance for the `:1880` u32 mutable record-pointer postfix increment is complete; the count is now 36 |
 | Current strict regression | `26/34` | Run `20260711T061416Z`; eight historical evidence drifts remain |
 | Current proof class | `wsl-local-simulation` | Valid for development and approximation, but not `competition-exact` |
 
@@ -230,9 +230,13 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   This stage is project-independent candidate generation only. Status remains `candidate_context_only`, and the semantic count remains 35.
 
-- [ ] **P0-T27: source-backed semantic closure for `fdb_kvdb.c:1880`**
+- [x] **P0-T27: source-backed semantic closure for `fdb_kvdb.c:1880`**
 
-  Pin the line-1880 source span and normalized hash, then build three bounded fixtures, a C oracle, generated Rust replay, schema/negative diff, unsafe evidence, route/profile, and final verification. The coverage numerator must not increase before the strict gates pass.
+  The line-1880 source span and normalized hash, three bounded fixtures, C oracle, generated Rust replay, schema diff, `wrapping_add` to `wrapping_sub` negative mutation, unsafe ledger, route/profile, and final verification are complete. All 12 strict binding checks pass in the WSL competition clang lane with `semantic_pass=true` and `generated_draft_semantic_pass=true`, moving the matrix-derived count from 35 to 36. The claim covers only a direct u32 field postfix increment through one mutable record root over zero, ordinary, and wrap cases; the enclosing branch/loop, whole function, layout, ABI, and FlashDB project remain excluded.
+
+- [ ] **P0-T28: next-slice decision gate for `fdb_kvdb.c:1881-1883`**
+
+  Audit the remaining condition, early return, and control-flow composition line by line, then select the smallest project-independent construct. Establish candidate and fail-closed boundaries before deciding whether to enter source-backed semantic closure; production translation must not depend on function names, field names, slice IDs, or fixture values.
 
 ### P0-A: AI/Harness Efficiency
 
@@ -306,11 +310,13 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 | P0-T24 | Select and implement the `:1876` discarded direct-call body candidate | 34 -> 34 (candidate only) |
 | P0-T25 | Strict source-backed acceptance for the `:1876` discarded direct-call body | 34 -> 35 |
 | P0-T26 | Select and validate the `:1880` u32 mutable record-pointer postfix increment candidate | 35 -> 35 (candidate only) |
+| P0-T27 | Strict source-backed acceptance for the `:1880` u32 mutable record-pointer postfix increment | 35 -> 36 |
 
 Validation run bindings:
 
 | Validation | Binding | Result |
 | --- | --- | --- |
+| P0-T27 strict validator | WSL competition clang lane, 2026-07-11 | `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; only three bounded fixtures ran and no loop stress was run |
 | P0-T25 strict validator | WSL competition clang lane, 2026-07-11 | `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; three bounded fixtures cover 1/2/3 ordered body/tail calls; no loop stress was run |
 | P0-T24 / P0-A1 / P0-A2 stage validation | WSL local simulation, 2026-07-11 | translator library `228`, bounded `665`, and integer conversion `4` passed, with `133` real-clang opt-in tests ignored by default; three real-clang focused tests, Python auto-migrate `155`, and OpenCode harness `192` passed; no loop stress was run |
 | P0-T23 strict validator | WSL competition clang lane, 2026-07-11 | `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; three bounded fixtures cover 1/2/3 calls |

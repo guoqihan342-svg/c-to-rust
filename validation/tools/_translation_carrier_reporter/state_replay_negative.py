@@ -9,6 +9,10 @@ from .field_add_contract import KIND as FIELD_ADD_KIND
 from .field_add_model import negative_partition_probe_source as field_add_probe
 from .field_scalar_add_contract import KIND as FIELD_SCALAR_ADD_KIND
 from .field_scalar_add_model import negative_partition_probe_source as field_scalar_probe
+from .field_postfix_increment_contract import KIND as FIELD_POSTFIX_INCREMENT_KIND
+from .field_postfix_increment_model import (
+    negative_partition_probe_source as field_postfix_increment_probe,
+)
 from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
 from .interior_projection_model import negative_partition_probe_source as projection_probe
 from .reset_add_while_continue_contract import KIND as RESET_ADD_CONTINUE_KIND
@@ -36,7 +40,7 @@ def mutation_spec(contract: dict[str, Any]) -> tuple[re.Pattern[bytes], bytes, b
             b"0",
             b"1",
         )
-    if kind in {FIELD_ADD_KIND, FIELD_SCALAR_ADD_KIND}:
+    if kind in {FIELD_ADD_KIND, FIELD_SCALAR_ADD_KIND, FIELD_POSTFIX_INCREMENT_KIND}:
         return re.compile(rb"\bwrapping_add\b"), b"wrapping_add", b"wrapping_sub"
     return None
 
@@ -53,4 +57,6 @@ def negative_partition_probe_source(context: Any) -> str | None:
         return field_add_probe(context)
     if kind == FIELD_SCALAR_ADD_KIND:
         return field_scalar_probe(context)
+    if kind == FIELD_POSTFIX_INCREMENT_KIND:
+        return field_postfix_increment_probe(context)
     return None

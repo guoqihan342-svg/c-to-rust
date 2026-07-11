@@ -1,0 +1,18 @@
+{
+  "boundary": "Stable unsafe ledger for the exact generated Rust draft; it is written before accepted reports and never references those reports.",
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "gate_source": "generated_draft_unsafe_gates",
+  "generated_rust_draft": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-rust-draft.rs",
+    "sha256": "c519d5576d6d73c44f5cbdd0b85e8f1c5a8125f255ca074b9120024eaec010bd",
+    "status": "candidate"
+  },
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "real-fdb-kv-iterate-iterated-count",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb"
+}

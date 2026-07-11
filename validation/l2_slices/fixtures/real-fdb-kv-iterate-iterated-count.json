@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-iterated-count",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:postfix-increment@1880"
+    ]
+  },
+  "compared_fields": [
+    "return_value",
+    "itr_iterated_count"
+  ],
+  "case_count": 3,
+  "cases": [
+    {
+      "id": "zero",
+      "input_ref": "cases[0].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-iterated-count.json",
+      "inputs": {
+        "itr_initial_iterated_count": 0
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "itr_iterated_count": 1
+      }
+    },
+    {
+      "id": "ordinary",
+      "input_ref": "cases[1].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-iterated-count.json",
+      "inputs": {
+        "itr_initial_iterated_count": 41
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "itr_iterated_count": 42
+      }
+    },
+    {
+      "id": "u32-wrap",
+      "input_ref": "cases[2].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-iterated-count.json",
+      "inputs": {
+        "itr_initial_iterated_count": 4294967295
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "itr_iterated_count": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-iterated-count",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "itr_iterated_count"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "The direct u32 field on one mutable record pointer is updated by a fixed wrapping increment of one; the declared constant bool result is observed.",
+    "external_callee": null,
+    "field_update": {
+      "operation": "wrapping_add",
+      "increment": 1,
+      "target_parameter": "itr",
+      "target_field_path": [
+        "iterated_cnt"
+      ]
+    },
+    "excluded_semantics": [
+      "real source lines 1876-1879 and 1881-1885, including read_kv, the condition, byte statistics, early return, and loop tail",
+      "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1880 postfix increment",
+      "real FlashDB iterator layout, record ABI, storage behavior, and cross-iteration effects",
+      "complete fdb_kv_iterate function semantics"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "first_mismatch": null
+}

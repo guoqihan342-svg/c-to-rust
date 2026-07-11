@@ -37,6 +37,17 @@ from .field_scalar_add_model import (
     replay_outputs as field_scalar_add_replay_outputs,
     validate_cases as validate_field_scalar_add_cases,
 )
+from .field_postfix_increment_contract import (
+    KIND as FIELD_POSTFIX_INCREMENT_KIND,
+    behavior_fields as field_postfix_increment_behavior_fields,
+    parse_contract as parse_field_postfix_increment_contract,
+)
+from .field_postfix_increment_model import (
+    mutated_outputs as field_postfix_increment_mutated_outputs,
+    reference_outputs as field_postfix_increment_reference_outputs,
+    replay_outputs as field_postfix_increment_replay_outputs,
+    validate_cases as validate_field_postfix_increment_cases,
+)
 from . import interior_projection_contract as interior_projection
 from . import interior_projection_model as interior_projection_model
 from . import reset_add_while_continue_contract as reset_add_continue
@@ -81,6 +92,8 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
         return parse_field_add_contract(spec)
     if contract.get("kind") == FIELD_SCALAR_ADD_KIND:
         return parse_field_scalar_add_contract(spec)
+    if contract.get("kind") == FIELD_POSTFIX_INCREMENT_KIND:
+        return parse_field_postfix_increment_contract(spec)
     if contract.get("kind") == SEQUENCE_KIND:
         return parse_sequence_contract(spec)
     if contract.get("kind") == RECORD_KIND:
@@ -147,6 +160,8 @@ def behavior_fields(contract: dict[str, Any]) -> list[str]:
         return field_add_behavior_fields(contract)
     if contract.get("kind") == FIELD_SCALAR_ADD_KIND:
         return field_scalar_add_behavior_fields(contract)
+    if contract.get("kind") == FIELD_POSTFIX_INCREMENT_KIND:
+        return field_postfix_increment_behavior_fields(contract)
     if contract.get("kind") == SEQUENCE_KIND:
         return sequence_behavior_fields(contract)
     if contract.get("kind") == RECORD_KIND:
@@ -173,6 +188,8 @@ def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]
         return validate_field_add_cases(cases, contract)
     if contract.get("kind") == FIELD_SCALAR_ADD_KIND:
         return validate_field_scalar_add_cases(cases, contract)
+    if contract.get("kind") == FIELD_POSTFIX_INCREMENT_KIND:
+        return validate_field_postfix_increment_cases(cases, contract)
     if contract.get("kind") == SEQUENCE_KIND:
         return validate_sequence_cases(cases, contract)
     if contract.get("kind") == RECORD_KIND:
@@ -224,6 +241,8 @@ def reference_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[st
         return field_add_reference_outputs(case, contract)
     if contract.get("kind") == FIELD_SCALAR_ADD_KIND:
         return field_scalar_add_reference_outputs(case, contract)
+    if contract.get("kind") == FIELD_POSTFIX_INCREMENT_KIND:
+        return field_postfix_increment_reference_outputs(case, contract)
     if contract.get("kind") == SEQUENCE_KIND:
         return sequence_reference_outputs(case, contract)
     if contract.get("kind") == RECORD_KIND:
@@ -254,6 +273,8 @@ def replay_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, 
         return field_add_replay_outputs(case, contract)
     if contract.get("kind") == FIELD_SCALAR_ADD_KIND:
         return field_scalar_add_replay_outputs(case, contract)
+    if contract.get("kind") == FIELD_POSTFIX_INCREMENT_KIND:
+        return field_postfix_increment_replay_outputs(case, contract)
     if contract.get("kind") == SEQUENCE_KIND:
         return sequence_replay_outputs(case, contract)
     if contract.get("kind") == RECORD_KIND:
@@ -283,6 +304,8 @@ def mutated_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str,
         return field_add_mutated_outputs(case, contract)
     if contract.get("kind") == FIELD_SCALAR_ADD_KIND:
         return field_scalar_add_mutated_outputs(case, contract)
+    if contract.get("kind") == FIELD_POSTFIX_INCREMENT_KIND:
+        return field_postfix_increment_mutated_outputs(case, contract)
     output = replay_outputs(case, contract)
     return_field = behavior_fields(contract)[0]
     output[return_field] = not output[return_field]

@@ -161,6 +161,12 @@ def oracle_fixture_execution_source(
         return c_oracle_record_u32_field_scalar_wrapping_add_state_execution_source(
             spec, fixture_binding
         )
+    if record_u32_field_postfix_increment_state_replay_contract(
+        spec, fixture_binding
+    ) is not None:
+        return c_oracle_record_u32_field_postfix_increment_state_execution_source(
+            spec, fixture_binding
+        )
     if record_u32_field_constant_state_replay_contract(spec, fixture_binding) is not None:
         return c_oracle_record_u32_field_constant_state_execution_source(
             spec, fixture_binding

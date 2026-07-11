@@ -22,11 +22,11 @@ input.c
 
 | 项目 | 当前值 | 准确含义 |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 35 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
+| `translator_generated_semantic_pass_count` | 36 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
-| 当前翻译主线 | P0-T27 | 为 `fdb_kvdb.c:1880` 的通用 u32 record-pointer postfix increment 建立 source-backed 严格验收 |
+| 当前翻译主线 | P0-T28 | 审计 `fdb_kvdb.c:1881-1883`，选择下一个最小、通用、可严格验收的 construct |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-T26 | 已完成 `:1880` u32 mutable record-pointer postfix increment 的 project-independent candidate，计数保持 35 |
+| 最近开发阶段 | P0-T27 | `:1880` u32 mutable record-pointer postfix increment 已完成 source-backed 严格验收，计数更新为 36 |
 | 当前严格回归 | `26/34` | run `20260711T061416Z`；8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -232,9 +232,13 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   当前仅完成 project-independent candidate generation，状态保持 `candidate_context_only`，语义计数保持 35。
 
-- [ ] **P0-T27：`fdb_kvdb.c:1880` source-backed 语义闭环**
+- [x] **P0-T27：`fdb_kvdb.c:1880` source-backed 语义闭环**
 
-  固定 line 1880 source span 和 normalized hash，建立 3 个有限 fixture、C oracle、generated Rust replay、schema/negative diff、unsafe、route/profile 和 final-verification 证据。严格门通过前不得增加 coverage numerator。
+  已固定 line 1880 source span 和 normalized hash，建立 3 个有限 fixture、C oracle、generated Rust replay、schema diff、`wrapping_add` 到 `wrapping_sub` 的 negative mutation、unsafe ledger、route/profile 和 final verification。WSL competition clang lane 的 12 类严格绑定检查全部通过，`semantic_pass=true`、`generated_draft_semantic_pass=true`，matrix 派生计数由 35 更新为 36。声明仅覆盖一个 mutable record root 上的直接 u32 字段后缀自增及零值、普通值、回绕值；不覆盖外层分支/循环、完整函数、布局、ABI 或 FlashDB 项目。
+
+- [ ] **P0-T28：`fdb_kvdb.c:1881-1883` 下一切片决策门**
+
+  逐行审计剩余条件、early return 和控制流组合，选择最小的 project-independent construct。先建立候选与 fail-closed 边界，再决定是否进入 source-backed 语义闭环；不得用函数名、字段名、slice id 或 fixture 值驱动生产翻译。
 
 ### P0-A：AI/Harness 效率
 
@@ -308,11 +312,13 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | P0-T24 | 选择并实现 `:1876` discarded direct-call body candidate | 34 -> 34（candidate only） |
 | P0-T25 | `:1876` discarded direct-call body source-backed 严格验收 | 34 -> 35 |
 | P0-T26 | 选择并验证 `:1880` u32 mutable record-pointer postfix increment candidate | 35 -> 35（candidate only） |
+| P0-T27 | `:1880` u32 mutable record-pointer postfix increment source-backed 严格验收 | 35 -> 36 |
 
 验证运行绑定：
 
 | 验证项 | 绑定 | 结果 |
 | --- | --- | --- |
+| P0-T27 严格 validator | WSL competition clang lane，2026-07-11 | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过；仅运行 3 个有限 fixture，未执行循环压力测试 |
 | P0-T25 严格 validator | WSL competition clang lane，2026-07-11 | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过；3 个有限 fixture 案例覆盖 1/2/3 次 body/tail 有序调用；未执行循环压力测试 |
 | P0-T24 / P0-A1 / P0-A2 阶段验收 | WSL local simulation，2026-07-11 | translator library `228`、bounded `665`、integer conversion `4` 全通过，`133` 个 real-clang opt-in 默认忽略；3 个真实 clang focused tests、Python auto-migrate `155`、OpenCode harness `192` 全通过；未执行循环压力测试 |
 | P0-T23 严格 validator | WSL competition clang lane，2026-07-11 | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过；3 个有限 fixture 案例覆盖 1/2/3 次调用 |

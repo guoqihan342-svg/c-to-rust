@@ -1,0 +1,409 @@
+{
+  "artifact_kind": "clang-lowering-report",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "diagnostics": [
+    "clang lowering used slice-spec c_source with declared external callee prototypes; project macros were not expanded"
+  ],
+  "durable_evidence": {
+    "clang_path": "/usr/bin/clang",
+    "clang_version": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+    "competition_environment": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "frontend": "clang_ast_dump_json",
+    "hash_algorithm": "sha256",
+    "rust_draft_sha256": "c519d5576d6d73c44f5cbdd0b85e8f1c5a8125f255ca074b9120024eaec010bd",
+    "typed_ir_sha256": "ab2995ceafb0e4340e066206dae6da81e328e13d24d513f606da2caedbe4e4b0"
+  },
+  "errors": [],
+  "fixture_hash": "36b3f59a6a974f32e74ee82bd551e4e63ae3214b3fed680597bc6ec2d464e331",
+  "frontend": "clang",
+  "function_name": "fdb_kv_iterate_iterated_count_probe",
+  "lowering_report": {
+    "arguments": [
+      "--slice-source-from-spec",
+      "<host>/c2r-slice-source-flashdb-real-fdb-kv-iterate-iterated-count-68875.c",
+      "src/fdb_kvdb.c"
+    ],
+    "clang_path": "<host>/clang",
+    "diagnostics": [
+      "clang lowering used slice-spec c_source with declared external callee prototypes; project macros were not expanded"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "errors": [],
+    "frontend": "clang_slice_source",
+    "function_ir": {
+      "body": [
+        {
+          "Assign": {
+            "source_span": null,
+            "target": {
+              "Member": {
+                "base": {
+                  "Var": {
+                    "name": "itr",
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "struct FdbKvIterator *",
+                      "is_const": false,
+                      "kind": {
+                        "Pointer": {
+                          "pointee": {
+                            "canonical": "struct FdbKvIterator",
+                            "is_const": false,
+                            "kind": {
+                              "Record": {
+                                "fields": [
+                                  {
+                                    "name": "iterated_cnt",
+                                    "ty": {
+                                      "canonical": "uint32_t",
+                                      "is_const": false,
+                                      "kind": {
+                                        "Integer": {
+                                          "signed": false,
+                                          "width": 32
+                                        }
+                                      },
+                                      "source_span": null,
+                                      "spelled": "uint32_t",
+                                      "width_bits": 32
+                                    }
+                                  }
+                                ],
+                                "name": "FdbKvIterator"
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "struct FdbKvIterator",
+                            "width_bits": null
+                          }
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "struct FdbKvIterator *",
+                      "width_bits": null
+                    }
+                  }
+                },
+                "field": "iterated_cnt",
+                "is_arrow": true,
+                "source_span": null,
+                "ty": {
+                  "canonical": "uint32_t",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": false,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "uint32_t",
+                  "width_bits": 32
+                }
+              }
+            },
+            "value": {
+              "Binary": {
+                "lhs": {
+                  "Member": {
+                    "base": {
+                      "Var": {
+                        "name": "itr",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "struct FdbKvIterator *",
+                          "is_const": false,
+                          "kind": {
+                            "Pointer": {
+                              "pointee": {
+                                "canonical": "struct FdbKvIterator",
+                                "is_const": false,
+                                "kind": {
+                                  "Record": {
+                                    "fields": [
+                                      {
+                                        "name": "iterated_cnt",
+                                        "ty": {
+                                          "canonical": "uint32_t",
+                                          "is_const": false,
+                                          "kind": {
+                                            "Integer": {
+                                              "signed": false,
+                                              "width": 32
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "uint32_t",
+                                          "width_bits": 32
+                                        }
+                                      }
+                                    ],
+                                    "name": "FdbKvIterator"
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "struct FdbKvIterator",
+                                "width_bits": null
+                              }
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "struct FdbKvIterator *",
+                          "width_bits": null
+                        }
+                      }
+                    },
+                    "field": "iterated_cnt",
+                    "is_arrow": true,
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "uint32_t",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": false,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "uint32_t",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "op": "Add",
+                "rhs": {
+                  "LitInt": {
+                    "source_span": null,
+                    "spelling": "1",
+                    "ty": {
+                      "canonical": "uint32_t",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": false,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "uint32_t",
+                      "width_bits": 32
+                    },
+                    "value": 1
+                  }
+                },
+                "source_span": null,
+                "ty": {
+                  "canonical": "uint32_t",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": false,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "uint32_t",
+                  "width_bits": 32
+                }
+              }
+            }
+          }
+        },
+        {
+          "Return": {
+            "source_span": null,
+            "value": {
+              "LitInt": {
+                "source_span": null,
+                "spelling": "1",
+                "ty": {
+                  "canonical": "_Bool",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": false,
+                      "width": 8
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "bool",
+                  "width_bits": 8
+                },
+                "value": 1
+              }
+            }
+          }
+        }
+      ],
+      "name": "fdb_kv_iterate_iterated_count_probe",
+      "params": [
+        {
+          "name": "itr",
+          "source_span": null,
+          "ty": {
+            "canonical": "struct FdbKvIterator *",
+            "is_const": false,
+            "kind": {
+              "Pointer": {
+                "pointee": {
+                  "canonical": "struct FdbKvIterator",
+                  "is_const": false,
+                  "kind": {
+                    "Record": {
+                      "fields": [
+                        {
+                          "name": "iterated_cnt",
+                          "ty": {
+                            "canonical": "uint32_t",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": false,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "uint32_t",
+                            "width_bits": 32
+                          }
+                        }
+                      ],
+                      "name": "FdbKvIterator"
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "struct FdbKvIterator",
+                  "width_bits": null
+                }
+              }
+            },
+            "source_span": null,
+            "spelled": "struct FdbKvIterator *",
+            "width_bits": null
+          }
+        }
+      ],
+      "return_type": {
+        "canonical": "_Bool",
+        "is_const": false,
+        "kind": {
+          "Integer": {
+            "signed": false,
+            "width": 8
+          }
+        },
+        "source_span": null,
+        "spelled": "bool",
+        "width_bits": 8
+      },
+      "source_span": null
+    },
+    "function_name": "fdb_kv_iterate_iterated_count_probe",
+    "globals": [],
+    "source_file": "sources/FlashDB/src/fdb_kvdb.c",
+    "status": "lowered"
+  },
+  "metadata": {
+    "clang_ast_fixture": null,
+    "compile_commands": null,
+    "function_source_span": null,
+    "logical_source_file": "src/fdb_kvdb.c",
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b"
+    },
+    "source_root": "sources/FlashDB"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-iterated-count",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_file": "sources/FlashDB/src/fdb_kvdb.c",
+  "status": "lowered",
+  "target_id": "flashdb",
+  "translation_carrier": {
+    "artifact_source_hash_mode": "lf_stable_text",
+    "carrier_function": "fdb_kv_iterate_iterated_count_probe",
+    "carrier_source_sha256": "089ec884ef459d42e320c9bd4ca7110ff195ca8b481c09c652db7f3f6f05097f",
+    "claim_boundary": {
+      "excluded_semantics": [
+        "real source lines 1876-1879 and 1881-1885, including read_kv, the condition, byte statistics, early return, and loop tail",
+        "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1880 postfix increment",
+        "real FlashDB iterator layout, record ABI, storage behavior, and cross-iteration effects",
+        "complete fdb_kv_iterate function semantics"
+      ],
+      "external_callee_semantics_verified": false,
+      "scope": "source_fragment_only",
+      "whole_function_semantics_verified": false
+    },
+    "embedding_mode": "verbatim_once",
+    "frontend_contract": "live_clang_slice_source",
+    "kind": "exact_source_fragment_wrapper",
+    "real_source": {
+      "containing_function": {
+        "declaration_text": "bool fdb_kv_iterate(",
+        "hash_mode": "trimmed_normalized_span",
+        "line_end": 1896,
+        "line_start": 1860,
+        "name": "fdb_kv_iterate",
+        "sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d"
+      },
+      "file": "src/fdb_kvdb.c",
+      "fragment": {
+        "hash_mode": "normalized_line_span_with_newline",
+        "kind": "expression_statement",
+        "line_end": 1880,
+        "line_start": 1880,
+        "sha256": "7cc58075af177a58a514c4b9b5a606126b087db7b10fdc089ade953ca8f0295c",
+        "text": "                        itr->iterated_cnt++;\n"
+      }
+    },
+    "source_file_hash_mode": "raw_bytes",
+    "source_text_normalization": "utf8_universal_newlines"
+  },
+  "typed_ir_candidate": {
+    "candidate_route": {
+      "candidate_generator": "GenericTypedIrEmitter",
+      "delete_when": [],
+      "deprecated": false,
+      "fallback": null,
+      "reasons": [
+        {
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
+        }
+      ],
+      "replacement": null,
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
+      "suggested_required_gates": [
+        "rustc_smoke",
+        "typed_ir_contract_tests"
+      ],
+      "token_cost": 0
+    },
+    "readonly_globals": [],
+    "runtime_preconditions": [],
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "c519d5576d6d73c44f5cbdd0b85e8f1c5a8125f255ca074b9120024eaec010bd",
+    "semantic_pass": false,
+    "status": "generated",
+    "typed_ir_sha256": "ab2995ceafb0e4340e066206dae6da81e328e13d24d513f606da2caedbe4e4b0"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "accepted_unsafe_scan": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-generated-draft-unsafe-scan.json",
+    "sha256": "26d066aea642a37e83aac9df0833c135a8115dc6f63a895c78cca917ed74f79c",
+    "status": "passed"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-c2rust-baseline-manifest.json",
+    "sha256": "6c5ce07acabbf81b44ccda1d5144e382e680090e4915f4aef25db794c1c17c11",
+    "status": "skipped"
+  },
+  "first_party_non_test_unsafe_count": 0,
+  "first_party_non_test_unsafe_ratio": 0.0,
+  "generated_draft_unsafe_count": 0,
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-route-decision.json",
+    "sha256": "352043e47bff5b7293cb6459a40d57d5cde78a2a6d786e3978c95e2a2d69845b",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-kv-iterate-iterated-count",
+  "status": "passed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "094fe82e7ff924312c8f9f2d6add8c736570f4dfbe90116ff6f3bcdbc5c603d8",
+    "status": "passed"
+  }
+}

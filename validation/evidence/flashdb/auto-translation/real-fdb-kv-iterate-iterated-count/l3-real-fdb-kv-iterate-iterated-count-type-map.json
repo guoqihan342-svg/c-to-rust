@@ -1,0 +1,52 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-iterated-count/l3-real-fdb-kv-iterate-iterated-count-translator-input.json",
+    "sha256": "c7b49400aaab004886fb70db1a803e1078d6c019930e27d031fc0ee0f84724ea",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=ef6516874921d465a13db7422521989f3201c568294b2525895bcf14aef9727d",
+    "fixture_hash=36b3f59a6a974f32e74ee82bd551e4e63ae3214b3fed680597bc6ec2d464e331",
+    "build_profile_hash=c27ae3393f6ba8ed6c8bcd971b6178fbddb67441884b22ce24e65dc6caf758ea",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "bool",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "unsupported",
+      "rust_type": "u8",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "itr",
+      "c_type": "struct FdbKvIterator *",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "pointer",
+      "rust_type": "&mut FdbKvIterator",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "7ee7d7ae1dfc52286c37003dab1eb9303f68f666",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-iterated-count",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-iterated-count.json",
+    "sha256": "ef6516874921d465a13db7422521989f3201c568294b2525895bcf14aef9727d",
+    "status": "ready"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

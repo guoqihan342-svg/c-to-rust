@@ -77,6 +77,13 @@ def run_generated_rust_replay(
             "record_field": contract["state_update"]["record_field"],
             "scalar": contract["state_update"]["scalar"],
         }
+    elif record_u32_field_postfix_increment_state_replay_contract(spec) is not None:
+        replay["fixture_state_model"] = {
+            "kind": RECORD_U32_FIELD_POSTFIX_INCREMENT_STATE_KIND,
+            "scope": "fixture_only",
+            "operation": "wrapping_add",
+            "increment": 1,
+        }
     elif record_u32_field_constant_state_replay_contract(spec) is not None:
         replay["fixture_state_model"] = {
             "kind": RECORD_U32_FIELD_CONSTANT_STATE_KIND,
@@ -149,6 +156,7 @@ def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) ->
         and not record_interior_projection_u32_reset_add_while_continue_state_replay_supported(spec)
         and not record_interior_projection_u32_constant_state_replay_supported(spec)
         and not record_u32_field_scalar_wrapping_add_state_replay_supported(spec)
+        and not record_u32_field_postfix_increment_state_replay_supported(spec)
         and not record_u32_field_constant_state_replay_supported(spec)
         and not record_u32_field_wrapping_add_state_replay_supported(spec)
         and not scripted_external_record_u32_sequence_do_while_state_replay_supported(spec)
