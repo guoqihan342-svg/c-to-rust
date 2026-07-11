@@ -1,0 +1,527 @@
+
+def validate_ai_execution_policy_shape(policy: dict[str, Any], *, summary: dict[str, Any]) -> None:
+    required_strings = ["direct_mode", "opencode_command", "model", "agent", "variant"]
+    if any(not isinstance(policy.get(key), str) or not policy[key] for key in required_strings):
+        raise SystemExit("ai_translation_metrics.execution_policy string fields are incomplete")
+    if policy["direct_mode"] not in {"none", AI_FRESH_MODE, AI_ACCEPTED_MODE}:
+        raise SystemExit("ai_translation_metrics.execution_policy.direct_mode is invalid")
+    timeout = policy.get("timeout_seconds")
+    if not isinstance(timeout, int) or isinstance(timeout, bool) or not 1 <= timeout <= 600:
+        raise SystemExit("ai_translation_metrics.execution_policy.timeout_seconds must be in 1..600")
+    if policy.get("fresh_translation_requires_ai_first_candidate") is not True:
+        raise SystemExit("fresh competition translations must require --ai-first-candidate")
+    if policy.get("accepted_evidence_revalidation_shortcut") is not True:
+        raise SystemExit("accepted evidence revalidation shortcut must be explicit")
+    resolution = policy.get("resolution")
+    resolution_keys = {"opencode_command", "model", "agent", "variant", "timeout_seconds"}
+    if not isinstance(resolution, dict) or set(resolution) != resolution_keys:
+        raise SystemExit("ai_translation_metrics.execution_policy.resolution is incomplete")
+    if any(value not in {"cli", "profile", "default"} for value in resolution.values()):
+        raise SystemExit("AI runtime resolution sources must be cli, profile, or default")
+    exact = summary.get("proof_class") == "competition-exact"
+    if policy.get("competition_exact_contract") is not exact:
+        raise SystemExit("AI execution policy competition_exact_contract does not match proof_class")
+    if exact:
+        expected = {
+            "opencode_command": COMPETITION_OPENCODE_COMMAND,
+            "model": COMPETITION_OPENCODE_MODEL,
+            "agent": COMPETITION_OPENCODE_AGENT,
+            "variant": COMPETITION_OPENCODE_VARIANT,
+        }
+        if any(policy.get(key) != value for key, value in expected.items()):
+            raise SystemExit("competition-exact AI execution policy violates the OpenCode/GLM contract")
+
+
+def validate_ai_execution_mode_rollup(units: list[dict[str, Any]], policy: dict[str, Any]) -> None:
+    modes = {
+        unit["execution_mode"]
+        for unit in units
+        if unit["source"] == "direct" and unit["execution_mode"] != "pre_translation_failure"
+    }
+    expected = "none" if not modes else next(iter(modes)) if len(modes) == 1 else "mixed"
+    if policy["direct_mode"] != expected:
+        raise SystemExit("AI execution policy direct_mode does not match direct units")
+
+
+def load_ai_command_entries(
+    summary: dict[str, Any],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+) -> list[dict[str, Any]]:
+    binding = summary.get("command_log")
+    if not isinstance(binding, dict):
+        raise SystemExit("AI metrics require the hash-bound competition command log")
+    path = binding.get("path")
+    if not isinstance(path, str):
+        raise SystemExit("AI metrics require command_log.path")
+    resolved = resolve_summary_artifact(path, summary_path=summary_path, repo_root=repo_root)
+    if resolved is None or sha256(resolved) != binding.get("sha256"):
+        raise SystemExit("AI metrics command log binding drifted")
+    entries = []
+    for line_number, line in enumerate(resolved.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise SystemExit(f"AI metrics command log line {line_number} is invalid JSON") from error
+        if isinstance(entry, dict):
+            entries.append(entry)
+    return entries
+
+
+def validate_ai_unit_execution_binding(
+    unit: dict[str, Any],
+    *,
+    policy: dict[str, Any],
+    command_entries: list[dict[str, Any]],
+    summary_path: Path,
+    repo_root: Path,
+    reasons: list[str],
+) -> str:
+    mode = unit.get("execution_mode")
+    source = unit.get("source")
+    if source == "direct":
+        if mode == AI_FRESH_MODE:
+            if policy.get("direct_mode") != AI_FRESH_MODE:
+                reasons.append("fresh_unit_policy_mode_mismatch")
+            validate_direct_ai_command(unit, policy=policy, command_entries=command_entries, reasons=reasons)
+        elif mode == AI_ACCEPTED_MODE:
+            if policy.get("direct_mode") != AI_ACCEPTED_MODE:
+                reasons.append("accepted_unit_policy_mode_mismatch")
+            if unit.get("auto_migrate_step") is not None:
+                reasons.append("accepted_evidence_revalidation_must_not_run_auto_migrate")
+            if any(str(entry.get("step", "")).startswith("auto-migrate-") for entry in command_entries):
+                reasons.append("accepted_evidence_revalidation_command_log_contains_auto_migrate")
+        elif mode != "pre_translation_failure":
+            reasons.append("direct_unit_execution_mode_invalid")
+        return str(mode)
+    if source != "worker":
+        reasons.append("ai_metric_unit_source_invalid")
+        return str(mode)
+    return validate_worker_ai_binding(unit, summary_path=summary_path, repo_root=repo_root, reasons=reasons)
+
+
+def validate_direct_ai_command(
+    unit: dict[str, Any],
+    *,
+    policy: dict[str, Any],
+    command_entries: list[dict[str, Any]],
+    reasons: list[str],
+) -> None:
+    step = unit.get("auto_migrate_step")
+    if not isinstance(step, str) or not step:
+        reasons.append("fresh_ai_unit_missing_auto_migrate_step")
+        return
+    matches = [entry for entry in command_entries if entry.get("step") == step]
+    if len(matches) != 1:
+        reasons.append("fresh_ai_unit_auto_migrate_command_count_mismatch")
+        return
+    command = matches[0].get("command")
+    if not isinstance(command, list) or not all(isinstance(item, str) for item in command):
+        reasons.append("fresh_ai_unit_auto_migrate_command_invalid")
+        return
+    if not any(item.replace("\\", "/").endswith("validation/tools/auto_migrate.py") for item in command):
+        reasons.append("fresh_ai_unit_command_is_not_auto_migrate")
+    if command.count("--ai-first-candidate") != 1:
+        reasons.append("fresh_ai_unit_missing_ai_first_candidate")
+    expected_flags = {
+        "--ai-model": policy["model"],
+        "--ai-agent": policy["agent"],
+        "--ai-variant": policy["variant"],
+        "--ai-timeout-seconds": str(policy["timeout_seconds"]),
+        "--ai-opencode-command": policy["opencode_command"],
+    }
+    for flag, expected in expected_flags.items():
+        if command.count(flag) != 1:
+            reasons.append(f"fresh_ai_unit_{flag[2:].replace('-', '_')}_count_mismatch")
+            continue
+        index = command.index(flag)
+        if index + 1 >= len(command) or command[index + 1] != expected:
+            reasons.append(f"fresh_ai_unit_{flag[2:].replace('-', '_')}_value_mismatch")
+    if "--accept-existing-evidence" in command:
+        reasons.append("fresh_ai_unit_cannot_accept_existing_evidence")
+
+
+def validate_worker_ai_binding(
+    unit: dict[str, Any],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+    reasons: list[str],
+) -> str:
+    binding = unit.get("worker_summary")
+    payload, worker_path, binding_reasons = load_bound_ai_metric_artifact(
+        binding,
+        key="worker_summary",
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    reasons.extend(binding_reasons)
+    if payload is None or worker_path is None:
+        return "worker_unbound"
+    child_metrics = payload.get("ai_translation_metrics")
+    child_units = child_metrics.get("units") if isinstance(child_metrics, dict) else None
+    if payload.get("schema_version") != 2 or not isinstance(child_units, list):
+        reasons.append("worker_summary_missing_v2_ai_metrics")
+        return "worker_unbound"
+    matches = [child for child in child_units if isinstance(child, dict) and child.get("unit_id") == unit.get("unit_id")]
+    if len(matches) != 1:
+        reasons.append("worker_summary_ai_unit_binding_count_mismatch")
+        return "worker_unbound"
+    child = matches[0]
+    child_mode = child.get("execution_mode")
+    if child_mode != unit.get("execution_mode"):
+        reasons.append("worker_summary_ai_execution_mode_mismatch")
+    child_artifacts = child.get("artifacts")
+    if not isinstance(child_artifacts, dict):
+        reasons.append("worker_summary_ai_artifacts_missing")
+    else:
+        for key in AI_EVIDENCE_KEYS:
+            parent_ref = unit["artifacts"].get(key)
+            child_ref = child_artifacts.get(key)
+            if not ai_artifact_bindings_have_same_content(parent_ref, child_ref):
+                reasons.append(f"worker_summary_{key}_binding_mismatch")
+    if child_mode == AI_FRESH_MODE:
+        child_policy = child_metrics.get("execution_policy")
+        if not isinstance(child_policy, dict):
+            reasons.append("worker_summary_ai_execution_policy_missing")
+        else:
+            try:
+                child_entries = load_ai_command_entries(payload, summary_path=worker_path, repo_root=repo_root)
+            except SystemExit:
+                reasons.append("worker_summary_ai_command_log_invalid")
+            else:
+                validate_direct_ai_command(child, policy=child_policy, command_entries=child_entries, reasons=reasons)
+    return child_mode if isinstance(child_mode, str) else "worker_unbound"
+
+
+def ai_artifact_bindings_have_same_content(left: Any, right: Any) -> bool:
+    return (
+        isinstance(left, dict)
+        and isinstance(right, dict)
+        and left.get("status") == right.get("status")
+        and left.get("sha256") == right.get("sha256")
+    )
+
+
+def load_bound_ai_metric_artifact(
+    binding: Any,
+    *,
+    key: str,
+    summary_path: Path,
+    repo_root: Path,
+) -> tuple[dict[str, Any] | None, Path | None, list[str]]:
+    if not isinstance(binding, dict):
+        return None, None, [f"{key}_binding_missing"]
+    status = binding.get("status")
+    path_ref = binding.get("path")
+    expected_sha = binding.get("sha256")
+    resolved = (
+        resolve_summary_artifact(path_ref, summary_path=summary_path, repo_root=repo_root)
+        if isinstance(path_ref, str) and is_repo_relative_posix_path(path_ref)
+        else None
+    )
+    if status == "missing":
+        if expected_sha is not None:
+            raise SystemExit(f"ai_translation_metrics {key} missing binding must have sha256=null")
+        if resolved is not None:
+            raise SystemExit(f"ai_translation_metrics {key} was declared missing but now exists")
+        return None, None, [f"{key}_artifact_missing"]
+    if status != "present" or not isinstance(path_ref, str) or not is_repo_relative_posix_path(path_ref):
+        raise SystemExit(f"ai_translation_metrics {key} artifact binding is invalid")
+    if not isinstance(expected_sha, str) or not is_sha256(expected_sha):
+        raise SystemExit(f"ai_translation_metrics {key} sha256 is invalid")
+    if resolved is None:
+        raise SystemExit(f"ai_translation_metrics {key} artifact no longer exists")
+    if sha256(resolved) != expected_sha:
+        raise SystemExit(f"ai_translation_metrics {key} artifact sha256 drifted")
+    try:
+        payload = json.loads(resolved.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None, resolved, [f"{key}_artifact_invalid_json"]
+    if not isinstance(payload, dict):
+        return None, resolved, [f"{key}_artifact_not_object"]
+    return payload, resolved, []
+
+
+def validate_ai_artifact_identities(
+    unit: dict[str, Any],
+    payloads: dict[str, dict[str, Any] | None],
+    reasons: list[str],
+) -> None:
+    target_id = unit.get("target_id")
+    slice_id = unit.get("slice_id")
+    if not isinstance(target_id, str) or not target_id or not isinstance(slice_id, str) or not slice_id:
+        reasons.append("unit_target_or_slice_id_unresolved")
+        return
+    for key, payload in payloads.items():
+        if payload is None:
+            continue
+        if payload.get("target_id") != target_id or payload.get("slice_id") != slice_id:
+            reasons.append(f"{key}_identity_mismatch")
+
+
+def validate_ai_cross_bindings(
+    payloads: dict[str, dict[str, Any] | None],
+    paths: dict[str, Path | None],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+    reasons: list[str],
+) -> None:
+    manifest = payloads.get("manifest")
+    route = payloads.get("route")
+    profile = payloads.get("profile")
+    final = payloads.get("final")
+    if not all(isinstance(payload, dict) for payload in [manifest, route, profile, final]):
+        return
+    validate_nested_ai_ref(final.get("route_decision"), paths["route"], paths["final"], "final_route", summary_path, repo_root, reasons)
+    validate_nested_ai_ref(final.get("validation_profile"), paths["profile"], paths["final"], "final_profile", summary_path, repo_root, reasons)
+    if manifest.get("status") == "generated":
+        route_ref = route.get("source_artifacts", {}).get("ai_candidate_manifest")
+        profile_ref = profile.get("candidate_generation", {}).get("ai", {}).get("source_artifact")
+        validate_nested_ai_ref(route_ref, paths["manifest"], paths["route"], "route_manifest", summary_path, repo_root, reasons)
+        validate_nested_ai_ref(profile_ref, paths["manifest"], paths["profile"], "profile_manifest", summary_path, repo_root, reasons)
+    else:
+        validate_nested_ai_ref(manifest.get("route_decision"), paths["route"], paths["manifest"], "manifest_route", summary_path, repo_root, reasons)
+        validate_nested_ai_ref(manifest.get("validation_profile"), paths["profile"], paths["manifest"], "manifest_profile", summary_path, repo_root, reasons)
+
+
+def validate_nested_ai_ref(
+    ref: Any,
+    expected_path: Path | None,
+    owner_path: Path | None,
+    label: str,
+    summary_path: Path,
+    repo_root: Path,
+    reasons: list[str],
+) -> None:
+    if expected_path is None or owner_path is None or not isinstance(ref, dict):
+        reasons.append(f"{label}_binding_missing")
+        return
+    path_ref = ref.get("path")
+    expected_sha = ref.get("sha256")
+    if not isinstance(path_ref, str) or not is_repo_relative_posix_path(path_ref) or not is_sha256(str(expected_sha)):
+        reasons.append(f"{label}_binding_invalid")
+        return
+    resolved = resolve_nested_ai_artifact(path_ref, owner_path=owner_path, summary_path=summary_path, repo_root=repo_root)
+    if resolved is None or resolved.resolve() != expected_path.resolve() or expected_sha != sha256(expected_path):
+        reasons.append(f"{label}_binding_drift")
+
+
+def resolve_nested_ai_artifact(
+    value: str,
+    *,
+    owner_path: Path,
+    summary_path: Path,
+    repo_root: Path,
+) -> Path | None:
+    candidates = [repo_root / value, owner_path.parent / value]
+    summary_candidate = resolve_summary_artifact(value, summary_path=summary_path, repo_root=repo_root)
+    if summary_candidate is not None:
+        candidates.append(summary_candidate)
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
+
+
+def validate_fresh_ai_manifest(
+    manifest: dict[str, Any],
+    *,
+    manifest_path: Path | None,
+    policy: dict[str, Any],
+    summary_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    reasons: list[str] = []
+    generator = manifest.get("generator")
+    expected_generator = {
+        "tool": "opencode",
+        "logical_model": COMPETITION_OPENCODE_MODEL,
+        "resolved_model": policy["model"],
+        "agent": policy["agent"],
+        "variant": policy["variant"],
+    }
+    if not isinstance(generator, dict) or any(generator.get(key) != value for key, value in expected_generator.items()):
+        reasons.append("ai_manifest_generator_does_not_match_execution_policy")
+    if manifest.get("ai_required_for_default_pipeline") is not True:
+        reasons.append("ai_manifest_does_not_require_default_ai_pipeline")
+    status = manifest.get("status")
+    if status not in {"generated", "blocked"}:
+        reasons.append("ai_first_manifest_not_invoked")
+    if manifest_path is None:
+        reasons.append("ai_manifest_path_missing")
+    else:
+        bindings = manifest.get("bindings")
+        for key in ["context_pack", "prompt", "raw_response"]:
+            ref = bindings.get(key) if isinstance(bindings, dict) else None
+            if not nested_ai_ref_is_hash_bound(ref, owner_path=manifest_path, summary_path=summary_path, repo_root=repo_root):
+                reasons.append(f"ai_manifest_{key}_binding_invalid")
+    candidates = manifest.get("candidates")
+    if not isinstance(candidates, list):
+        reasons.append("ai_manifest_candidates_invalid")
+        candidates = []
+    rust_candidates = [candidate for candidate in candidates if isinstance(candidate, dict) and candidate.get("purpose") == "rust_draft"]
+    repair_candidates = [candidate for candidate in candidates if isinstance(candidate, dict) and candidate.get("purpose") == "repair_candidate"]
+    if status == "blocked" and candidates:
+        reasons.append("blocked_ai_manifest_must_not_contain_candidates")
+    if status == "generated" and len(rust_candidates) != 1:
+        reasons.append("generated_ai_manifest_requires_one_rust_draft")
+    candidate = rust_candidates[0] if len(rust_candidates) == 1 else None
+    if candidate is not None and manifest_path is not None:
+        validate_ai_candidate_artifacts(candidate, manifest_path, summary_path, repo_root, reasons)
+    valid_repairs = 0
+    seen_rounds: set[int] = set()
+    for repair in repair_candidates:
+        round_value = repair.get("round")
+        bindings = repair.get("bindings")
+        raw_response = bindings.get("raw_response") if isinstance(bindings, dict) else None
+        if (
+            not isinstance(round_value, int)
+            or isinstance(round_value, bool)
+            or round_value < 1
+            or round_value in seen_rounds
+            or manifest_path is None
+            or not nested_ai_ref_is_hash_bound(raw_response, owner_path=manifest_path, summary_path=summary_path, repo_root=repo_root)
+        ):
+            reasons.append("ai_repair_round_is_not_hash_bound")
+            continue
+        seen_rounds.add(round_value)
+        validate_ai_candidate_artifacts(repair, manifest_path, summary_path, repo_root, reasons)
+        valid_repairs += 1
+    return {
+        "candidate": candidate,
+        "repair_rounds": valid_repairs,
+        "invocations": 1 + valid_repairs if status in {"generated", "blocked"} else 0,
+        "reasons": sorted(set(reasons)),
+    }
+
+
+def validate_ai_candidate_artifacts(
+    candidate: dict[str, Any],
+    manifest_path: Path,
+    summary_path: Path,
+    repo_root: Path,
+    reasons: list[str],
+) -> None:
+    if candidate.get("kind") != "opencode-ai" or candidate.get("semantic_pass") is not False:
+        reasons.append("ai_candidate_claim_boundary_invalid")
+    artifact = candidate.get("artifact")
+    if not nested_ai_ref_is_hash_bound(artifact, owner_path=manifest_path, summary_path=summary_path, repo_root=repo_root):
+        reasons.append("ai_candidate_artifact_binding_invalid")
+    elif candidate.get("output_hash") != artifact.get("sha256"):
+        reasons.append("ai_candidate_output_hash_mismatch")
+    if candidate.get("applied") is True:
+        applied = candidate.get("applied_artifact")
+        if not nested_ai_ref_is_hash_bound(applied, owner_path=manifest_path, summary_path=summary_path, repo_root=repo_root):
+            reasons.append("ai_candidate_applied_artifact_binding_invalid")
+        elif applied.get("sha256") != artifact.get("sha256") or candidate.get("rust_draft_sha256") != applied.get("sha256"):
+            reasons.append("ai_candidate_applied_hash_mismatch")
+
+
+def nested_ai_ref_is_hash_bound(
+    ref: Any,
+    *,
+    owner_path: Path,
+    summary_path: Path,
+    repo_root: Path,
+) -> bool:
+    if not isinstance(ref, dict):
+        return False
+    path_ref = ref.get("path")
+    expected_sha = ref.get("sha256")
+    if not isinstance(path_ref, str) or not is_repo_relative_posix_path(path_ref) or not is_sha256(str(expected_sha)):
+        return False
+    resolved = resolve_nested_ai_artifact(path_ref, owner_path=owner_path, summary_path=summary_path, repo_root=repo_root)
+    return resolved is not None and sha256(resolved) == expected_sha
+
+
+def ai_candidate_is_applied(candidate: Any, *, manifest_path: Path | None) -> bool:
+    if not isinstance(candidate, dict) or manifest_path is None or candidate.get("applied") is not True:
+        return False
+    artifact = candidate.get("artifact")
+    applied = candidate.get("applied_artifact")
+    return (
+        isinstance(artifact, dict)
+        and isinstance(applied, dict)
+        and artifact.get("sha256") == applied.get("sha256")
+        and candidate.get("output_hash") == applied.get("sha256")
+        and candidate.get("rust_draft_sha256") == applied.get("sha256")
+    )
+
+
+def ai_candidate_is_selected(
+    candidate: Any,
+    manifest: dict[str, Any],
+    route: dict[str, Any],
+    profile: dict[str, Any],
+) -> bool:
+    if not isinstance(candidate, dict):
+        return False
+    candidate_id = candidate.get("candidate_id")
+    route_generation = route.get("candidate_generation")
+    profile_generation = profile.get("candidate_generation")
+    if not isinstance(route_generation, dict) or not isinstance(profile_generation, dict):
+        return False
+    route_ai = route_generation.get("ai")
+    profile_ai = profile_generation.get("ai")
+    route_primary = route_generation.get("primary_candidate")
+    return (
+        isinstance(candidate_id, str)
+        and manifest.get("selected_candidate_id") == candidate_id
+        and route_generation.get("selected_candidate_id") == candidate_id
+        and profile_generation.get("selected_candidate_id") == candidate_id
+        and isinstance(route_ai, dict)
+        and isinstance(profile_ai, dict)
+        and route_ai.get("candidate_id") == candidate_id
+        and profile_ai.get("candidate_id") == candidate_id
+        and route_ai.get("kind") == "opencode-ai"
+        and profile_ai.get("kind") == "opencode-ai"
+        and route_ai.get("applied") is True
+        and profile_ai.get("applied") is True
+        and isinstance(route_primary, dict)
+        and route_primary.get("selected") == "opencode-ai"
+    )
+
+
+def ai_candidate_rustc_passes(candidate: Any, profile: dict[str, Any], final: dict[str, Any]) -> bool:
+    if not isinstance(candidate, dict) or final.get("rust_check_status") != "passed":
+        return False
+    acceptance = profile.get("generated_draft_acceptance")
+    rust_check = acceptance.get("rust_check") if isinstance(acceptance, dict) else None
+    rust_draft = acceptance.get("rust_draft") if isinstance(acceptance, dict) else None
+    return (
+        isinstance(rust_check, dict)
+        and rust_check.get("status") == "passed"
+        and isinstance(rust_draft, dict)
+        and rust_draft.get("sha256") == candidate.get("rust_draft_sha256")
+    )
+
+
+def ai_candidate_semantically_accepted(candidate: Any, profile: dict[str, Any], final: dict[str, Any]) -> bool:
+    if not isinstance(candidate, dict) or profile.get("accepted_evidence_authoritative") is not False:
+        return False
+    acceptance = profile.get("generated_draft_acceptance")
+    if not isinstance(acceptance, dict):
+        return False
+    claim_source = acceptance.get("claim_source")
+    return (
+        profile.get("status") == "passed"
+        and profile.get("generated_draft_semantic_pass") is True
+        and acceptance.get("status") == "passed"
+        and acceptance.get("generated_draft_semantic_pass") is True
+        and acceptance.get("selected_candidate_id") == candidate.get("candidate_id")
+        and acceptance.get("accepted_evidence_binding") is None
+        and isinstance(claim_source, str)
+        and "accepted" not in claim_source.lower()
+        and final.get("status") == "passed"
+        and final.get("validation_profile_status") == "passed"
+        and final.get("semantic_pass") is True
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

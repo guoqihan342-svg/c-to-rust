@@ -1,0 +1,276 @@
+
+AI_METRIC_COUNT_FIELDS = (
+    "invocations",
+    "generated",
+    "applied",
+    "selected",
+    "rustc_pass",
+    "semantic_acceptance",
+    "blocked",
+    "refused",
+    "repair_rounds",
+    "not_invoked",
+    "historical_evidence",
+    "abnormal",
+)
+AI_TERMINAL_CLASSIFICATIONS = (
+    "semantic_acceptance",
+    "blocked",
+    "refused",
+    "not_invoked",
+    "historical_evidence",
+    "abnormal",
+)
+AI_EVIDENCE_KEYS = ("manifest", "route", "profile", "final")
+AI_FRESH_MODE = "fresh_ai_translation"
+AI_ACCEPTED_MODE = "accepted_evidence_revalidation"
+
+
+def validate_ai_translation_metrics(
+    summary: dict[str, Any],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+) -> None:
+    if summary.get("schema_version") != 2:
+        return
+    metrics = summary.get("ai_translation_metrics")
+    if not isinstance(metrics, dict):
+        raise SystemExit("competition run summary schema_version=2 requires ai_translation_metrics")
+    expected = recompute_ai_translation_metrics(
+        metrics,
+        summary=summary,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    if metrics != expected:
+        raise SystemExit("competition run summary ai_translation_metrics does not match artifact recomputation")
+
+
+def recompute_ai_translation_metrics(
+    metrics: dict[str, Any],
+    *,
+    summary: dict[str, Any],
+    summary_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    policy = metrics.get("execution_policy")
+    if not isinstance(policy, dict):
+        raise SystemExit("ai_translation_metrics.execution_policy must be an object")
+    validate_ai_counting_boundary(metrics.get("counting_boundary"))
+    validate_ai_execution_policy_shape(policy, summary=summary)
+    raw_units = metrics.get("units")
+    if not isinstance(raw_units, list):
+        raise SystemExit("ai_translation_metrics.units must be an array")
+    command_entries = load_ai_command_entries(summary, summary_path=summary_path, repo_root=repo_root)
+    evaluated = [
+        evaluate_ai_metric_unit(
+            unit,
+            policy=policy,
+            command_entries=command_entries,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        for unit in raw_units
+    ]
+    units_total = len(evaluated)
+    attempted = summary.get("slices", {}).get("attempted")
+    if attempted != units_total:
+        raise SystemExit("ai_translation_metrics.units_total must equal slices.attempted")
+    validate_ai_unit_keys(evaluated)
+    validate_ai_execution_mode_rollup(evaluated, policy)
+
+    terminal = {
+        classification: sum(unit["classification"] == classification for unit in evaluated)
+        for classification in AI_TERMINAL_CLASSIFICATIONS
+    }
+    result = {
+        "schema_version": 1,
+        "counting_boundary": {
+            "unit": "slice",
+            "funnel": "cumulative_verified_stages",
+            "terminal": "mutually_exclusive",
+            "semantic_acceptance": "fresh_ai_candidate_common_validation_only",
+            "historical_evidence": "excluded_from_ai_success",
+        },
+        "execution_policy": policy,
+        "units_total": units_total,
+        "invocations": sum(unit["invocations"] for unit in evaluated),
+        "generated": sum(unit["generated"] for unit in evaluated),
+        "applied": sum(unit["applied"] for unit in evaluated),
+        "selected": sum(unit["selected"] for unit in evaluated),
+        "rustc_pass": sum(unit["rustc_pass"] for unit in evaluated),
+        "semantic_acceptance": terminal["semantic_acceptance"],
+        "blocked": terminal["blocked"],
+        "refused": terminal["refused"],
+        "repair_rounds": sum(unit["repair_rounds"] for unit in evaluated),
+        "not_invoked": terminal["not_invoked"],
+        "historical_evidence": terminal["historical_evidence"],
+        "abnormal": terminal["abnormal"],
+        "terminal_classifications": terminal,
+        "units": evaluated,
+    }
+    validate_ai_funnel_invariants(result)
+    return result
+
+
+def evaluate_ai_metric_unit(
+    raw_unit: Any,
+    *,
+    policy: dict[str, Any],
+    command_entries: list[dict[str, Any]],
+    summary_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    if not isinstance(raw_unit, dict):
+        raise SystemExit("ai_translation_metrics.units entries must be objects")
+    unit = ai_metric_unit_projection(raw_unit)
+    reasons: list[str] = []
+    payloads: dict[str, dict[str, Any] | None] = {}
+    paths: dict[str, Path | None] = {}
+    for key in AI_EVIDENCE_KEYS:
+        payloads[key], paths[key], artifact_reasons = load_bound_ai_metric_artifact(
+            unit["artifacts"].get(key),
+            key=key,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        reasons.extend(artifact_reasons)
+
+    validate_ai_artifact_identities(unit, payloads, reasons)
+    validate_ai_cross_bindings(payloads, paths, summary_path=summary_path, repo_root=repo_root, reasons=reasons)
+    execution_mode = validate_ai_unit_execution_binding(
+        unit,
+        policy=policy,
+        command_entries=command_entries,
+        summary_path=summary_path,
+        repo_root=repo_root,
+        reasons=reasons,
+    )
+    if execution_mode == "pre_translation_failure":
+        reasons.append("pre_translation_failure_has_no_ai_evidence")
+    if execution_mode == "worker_unbound":
+        reasons.append("worker_execution_mode_unbound")
+
+    outcome = {
+        **unit,
+        "invocations": 0,
+        "generated": False,
+        "applied": False,
+        "selected": False,
+        "rustc_pass": False,
+        "semantic_acceptance": False,
+        "blocked": False,
+        "refused": False,
+        "repair_rounds": 0,
+        "classification": "abnormal",
+        "abnormal_reasons": sorted(set(reasons)),
+    }
+    if reasons:
+        return outcome
+
+    manifest = payloads["manifest"] or {}
+    route = payloads["route"] or {}
+    profile = payloads["profile"] or {}
+    final = payloads["final"] or {}
+    if execution_mode == AI_ACCEPTED_MODE:
+        if manifest.get("status") not in {"not_used", "recorded"}:
+            outcome["abnormal_reasons"] = ["accepted_evidence_revalidation_contains_ai_invocation"]
+            return outcome
+        outcome["classification"] = "historical_evidence"
+        outcome["abnormal_reasons"] = []
+        return outcome
+    if execution_mode != AI_FRESH_MODE:
+        outcome["abnormal_reasons"] = ["unsupported_ai_execution_mode"]
+        return outcome
+
+    generation = validate_fresh_ai_manifest(
+        manifest,
+        manifest_path=paths["manifest"],
+        policy=policy,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    if generation["reasons"]:
+        outcome["abnormal_reasons"] = generation["reasons"]
+        return outcome
+    outcome["invocations"] = generation["invocations"]
+    outcome["repair_rounds"] = generation["repair_rounds"]
+    if manifest.get("status") == "blocked":
+        outcome["blocked"] = True
+        outcome["classification"] = "blocked"
+        outcome["abnormal_reasons"] = []
+        return outcome
+
+    candidate = generation["candidate"]
+    outcome["generated"] = candidate is not None
+    outcome["applied"] = ai_candidate_is_applied(candidate, manifest_path=paths["manifest"])
+    outcome["selected"] = outcome["applied"] and ai_candidate_is_selected(candidate, manifest, route, profile)
+    outcome["rustc_pass"] = outcome["selected"] and ai_candidate_rustc_passes(candidate, profile, final)
+    outcome["semantic_acceptance"] = outcome["rustc_pass"] and ai_candidate_semantically_accepted(
+        candidate,
+        profile,
+        final,
+    )
+
+    if outcome["semantic_acceptance"]:
+        outcome["classification"] = "semantic_acceptance"
+    elif route.get("status") == "refused" or final.get("status") == "refused":
+        outcome["refused"] = True
+        outcome["classification"] = "refused"
+    elif outcome["invocations"] > 0:
+        outcome["blocked"] = True
+        outcome["classification"] = "blocked"
+    else:
+        outcome["classification"] = "not_invoked"
+    outcome["abnormal_reasons"] = []
+    return outcome
+
+
+def ai_metric_unit_projection(unit: dict[str, Any]) -> dict[str, Any]:
+    required = ["unit_key", "unit_id", "source", "execution_mode", "artifacts"]
+    missing = [key for key in required if key not in unit]
+    if missing:
+        raise SystemExit("ai_translation_metrics unit missing fields: " + ", ".join(missing))
+    projected = {key: unit.get(key) for key in required}
+    projected["target_id"] = unit.get("target_id")
+    projected["slice_id"] = unit.get("slice_id")
+    projected["auto_migrate_step"] = unit.get("auto_migrate_step")
+    if "worker_summary" in unit:
+        projected["worker_summary"] = unit.get("worker_summary")
+    return projected
+
+
+def validate_ai_funnel_invariants(metrics: dict[str, Any]) -> None:
+    ordered = [
+        metrics["semantic_acceptance"],
+        metrics["rustc_pass"],
+        metrics["selected"],
+        metrics["applied"],
+        metrics["generated"],
+        metrics["invocations"],
+    ]
+    if ordered != sorted(ordered):
+        raise SystemExit("ai_translation_metrics cumulative funnel is inconsistent")
+    if metrics["repair_rounds"] > metrics["invocations"]:
+        raise SystemExit("ai_translation_metrics repair_rounds cannot exceed invocations")
+    if sum(metrics["terminal_classifications"].values()) != metrics["units_total"]:
+        raise SystemExit("ai_translation_metrics terminal classifications must be mutually exclusive and exhaustive")
+
+
+def validate_ai_unit_keys(units: list[dict[str, Any]]) -> None:
+    keys = [unit.get("unit_key") for unit in units]
+    if not all(isinstance(key, str) and key for key in keys) or len(set(keys)) != len(keys):
+        raise SystemExit("ai_translation_metrics unit_key values must be unique non-empty strings")
+
+
+def validate_ai_counting_boundary(value: Any) -> None:
+    expected = {
+        "unit": "slice",
+        "funnel": "cumulative_verified_stages",
+        "terminal": "mutually_exclusive",
+        "semantic_acceptance": "fresh_ai_candidate_common_validation_only",
+        "historical_evidence": "excluded_from_ai_success",
+    }
+    if value != expected:
+        raise SystemExit("ai_translation_metrics.counting_boundary does not match the fail-closed contract")

@@ -1,0 +1,332 @@
+
+AI_METRIC_ARTIFACT_NAMES = {
+    "manifest": "l3-{slice_id}-ai-candidate-manifest.json",
+    "route": "l3-{slice_id}-route-decision.json",
+    "profile": "l3-{slice_id}-validation-profile.json",
+    "final": "l3-{slice_id}-final-verification.json",
+}
+
+
+def resolve_ai_runtime(
+    *,
+    repo_root: Path,
+    proof_class: str,
+    model: str | None,
+    agent: str | None,
+    variant: str | None,
+    timeout_seconds: int | None,
+    opencode_command: str | None,
+) -> dict[str, Any]:
+    profile = json.loads((repo_root / "config/competition-env/environment.json").read_text(encoding="utf-8"))
+    runtime = profile.get("opencode_runtime")
+    runtime = runtime if isinstance(runtime, dict) else {}
+
+    profile_model = first_nonempty(runtime, "candidate_model", "resolved_model")
+    if profile_model is None and proof_class == "competition-exact":
+        profile_model = first_nonempty(runtime, "required_model")
+    values = {
+        "opencode_command": resolved_runtime_value(
+            opencode_command,
+            first_nonempty(runtime, "candidate_command", "command"),
+            COMPETITION_OPENCODE_COMMAND,
+        ),
+        "model": resolved_runtime_value(
+            model,
+            profile_model,
+            COMPETITION_OPENCODE_MODEL if proof_class == "competition-exact" else "zai/glm-5.1",
+        ),
+        "agent": resolved_runtime_value(
+            agent,
+            first_nonempty(runtime, "candidate_agent", "required_agent"),
+            COMPETITION_OPENCODE_AGENT,
+        ),
+        "variant": resolved_runtime_value(
+            variant,
+            first_nonempty(runtime, "candidate_variant", "required_variant"),
+            COMPETITION_OPENCODE_VARIANT,
+        ),
+    }
+    profile_timeout = runtime.get("candidate_timeout_seconds", runtime.get("timeout_seconds"))
+    timeout_source = "cli" if timeout_seconds is not None else "profile" if isinstance(profile_timeout, int) else "default"
+    effective_timeout = timeout_seconds if timeout_seconds is not None else profile_timeout
+    if not isinstance(effective_timeout, int):
+        effective_timeout = 180
+    if effective_timeout < 1 or effective_timeout > 600:
+        raise SystemExit("AI timeout must be between 1 and 600 seconds")
+    for key, value in values.items():
+        if not isinstance(value["value"], str) or not value["value"].strip():
+            raise SystemExit(f"AI runtime {key} must be a non-empty string")
+
+    effective = {key: value["value"] for key, value in values.items()}
+    effective["timeout_seconds"] = effective_timeout
+    effective["resolution"] = {key: value["source"] for key, value in values.items()}
+    effective["resolution"]["timeout_seconds"] = timeout_source
+    if proof_class == "competition-exact":
+        required = {
+            "opencode_command": COMPETITION_OPENCODE_COMMAND,
+            "model": COMPETITION_OPENCODE_MODEL,
+            "agent": COMPETITION_OPENCODE_AGENT,
+            "variant": COMPETITION_OPENCODE_VARIANT,
+        }
+        mismatches = [key for key, value in required.items() if effective[key] != value]
+        if mismatches:
+            raise SystemExit(
+                "proof_class=competition-exact forbids AI runtime downgrade or substitution: "
+                + ", ".join(mismatches)
+            )
+    effective["competition_exact_contract"] = proof_class == "competition-exact"
+    return effective
+
+
+def first_nonempty(data: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+def resolved_runtime_value(cli_value: str | None, profile_value: str | None, default: str) -> dict[str, str]:
+    if cli_value is not None:
+        return {"value": cli_value, "source": "cli"}
+    if profile_value is not None:
+        return {"value": profile_value, "source": "profile"}
+    return {"value": default, "source": "default"}
+
+
+def ai_metric_descriptor(
+    *,
+    target_id: str,
+    slice_id: str,
+    source: str,
+    execution_mode: str,
+    evidence_root: Path,
+    repo_root: Path,
+    out_root: Path,
+    worker_summary: Path | None = None,
+) -> dict[str, Any]:
+    evidence_dir = evidence_root / target_id / "auto-translation" / slice_id
+    paths = {
+        key: evidence_dir / template.format(slice_id=slice_id)
+        for key, template in AI_METRIC_ARTIFACT_NAMES.items()
+    }
+    return {
+        "unit_id": f"{target_id}/{slice_id}",
+        "target_id": target_id,
+        "slice_id": slice_id,
+        "source": source,
+        "execution_mode": execution_mode,
+        "auto_migrate_step": f"auto-migrate-{slice_id}" if execution_mode == "fresh_ai_translation" else None,
+        "paths": paths,
+        "worker_summary": worker_summary,
+        "repo_root": repo_root,
+        "out_root": out_root,
+    }
+
+
+def ai_metric_descriptors_from_pretranslation_failures(
+    statuses: list[dict[str, Any]],
+    *,
+    evidence_root: Path,
+    repo_root: Path,
+    out_root: Path,
+) -> list[dict[str, Any]]:
+    descriptors = []
+    for status in statuses:
+        identity = parse_ai_unit_id(status.get("unit_id"))
+        if identity is None:
+            descriptors.append(ai_unresolved_metric_descriptor(status, source="direct", execution_mode="pre_translation_failure"))
+            continue
+        descriptors.append(
+            ai_metric_descriptor(
+                target_id=identity[0],
+                slice_id=identity[1],
+                source="direct",
+                execution_mode="pre_translation_failure",
+                evidence_root=evidence_root,
+                repo_root=repo_root,
+                out_root=out_root,
+            )
+        )
+    return descriptors
+
+
+def ai_metric_descriptors_from_workers(
+    workers: list[dict[str, Any]],
+    *,
+    repo_root: Path,
+    out_root: Path,
+) -> list[dict[str, Any]]:
+    descriptors = []
+    for worker in workers:
+        summary_path = worker.get("_summary_path")
+        if not isinstance(summary_path, Path):
+            continue
+        evidence_root = summary_path.parent.parent / "evidence"
+        for status in workflow_unit_statuses_from_worker(worker):
+            identity = parse_ai_unit_id(status.get("unit_id"))
+            mode = worker_ai_execution_mode(worker.get("_summary"), status.get("unit_id"))
+            if identity is None:
+                descriptor = ai_unresolved_metric_descriptor(status, source="worker", execution_mode="worker_unbound")
+                descriptor["worker_summary"] = summary_path
+                descriptors.append(descriptor)
+                continue
+            descriptors.append(
+                ai_metric_descriptor(
+                    target_id=identity[0],
+                    slice_id=identity[1],
+                    source="worker",
+                    execution_mode=mode,
+                    evidence_root=evidence_root,
+                    repo_root=repo_root,
+                    out_root=out_root,
+                    worker_summary=summary_path,
+                )
+            )
+    return descriptors
+
+
+def worker_ai_execution_mode(summary: Any, unit_id: Any) -> str:
+    if not isinstance(summary, dict) or not isinstance(unit_id, str):
+        return "worker_unbound"
+    metrics = summary.get("ai_translation_metrics")
+    units = metrics.get("units") if isinstance(metrics, dict) else None
+    if not isinstance(units, list):
+        return "worker_unbound"
+    matches = [unit for unit in units if isinstance(unit, dict) and unit.get("unit_id") == unit_id]
+    if len(matches) != 1:
+        return "worker_unbound"
+    mode = matches[0].get("execution_mode")
+    return mode if mode in {"fresh_ai_translation", "accepted_evidence_revalidation", "pre_translation_failure"} else "worker_unbound"
+
+
+def parse_ai_unit_id(value: Any) -> tuple[str, str] | None:
+    if not isinstance(value, str):
+        return None
+    parts = value.split("/")
+    if len(parts) != 2 or not all(parts):
+        return None
+    return parts[0], parts[1]
+
+
+def ai_unresolved_metric_descriptor(status: Any, *, source: str, execution_mode: str) -> dict[str, Any]:
+    unit_id = status.get("unit_id") if isinstance(status, dict) else None
+    return {
+        "unit_id": unit_id if isinstance(unit_id, str) and unit_id else "unresolved",
+        "target_id": None,
+        "slice_id": None,
+        "source": source,
+        "execution_mode": execution_mode,
+        "auto_migrate_step": None,
+        "paths": {key: None for key in AI_METRIC_ARTIFACT_NAMES},
+        "worker_summary": None,
+    }
+
+
+def build_ai_translation_metrics(
+    *,
+    summary: dict[str, Any],
+    descriptors: list[dict[str, Any]],
+    ai_runtime: dict[str, Any],
+    reuse_accepted_evidence: bool,
+    summary_path: Path,
+    repo_root: Path,
+    out_root: Path,
+) -> dict[str, Any]:
+    attempted = int(summary["slices"]["attempted"])
+    if len(descriptors) != attempted:
+        raise SystemExit(
+            f"AI metric descriptor count {len(descriptors)} does not match attempted slices {attempted}"
+        )
+    units = []
+    for index, descriptor in enumerate(descriptors):
+        unit = {
+            "unit_key": f"{descriptor['source']}:{index}:{descriptor['unit_id']}",
+            "unit_id": descriptor["unit_id"],
+            "target_id": descriptor.get("target_id"),
+            "slice_id": descriptor.get("slice_id"),
+            "source": descriptor["source"],
+            "execution_mode": descriptor["execution_mode"],
+            "auto_migrate_step": descriptor.get("auto_migrate_step"),
+            "artifacts": {
+                key: ai_metric_artifact_binding(
+                    descriptor["paths"].get(key),
+                    repo_root=repo_root,
+                    out_root=out_root,
+                )
+                for key in AI_METRIC_ARTIFACT_NAMES
+            },
+        }
+        worker_summary = descriptor.get("worker_summary")
+        if isinstance(worker_summary, Path):
+            unit["worker_summary"] = ai_metric_artifact_binding(
+                worker_summary,
+                repo_root=repo_root,
+                out_root=out_root,
+            )
+        units.append(unit)
+
+    direct_modes = {
+        unit["execution_mode"]
+        for unit in units
+        if unit["source"] == "direct" and unit["execution_mode"] != "pre_translation_failure"
+    }
+    if not direct_modes:
+        direct_mode = "none"
+    elif len(direct_modes) == 1:
+        direct_mode = next(iter(direct_modes))
+    else:
+        raise SystemExit("direct AI metric units must use one execution mode")
+    expected_mode = "accepted_evidence_revalidation" if reuse_accepted_evidence else "fresh_ai_translation"
+    if direct_mode != "none" and direct_mode != expected_mode:
+        raise SystemExit("direct AI metric execution mode does not match runner mode")
+
+    skeleton = {
+        "schema_version": 1,
+        "counting_boundary": {
+            "unit": "slice",
+            "funnel": "cumulative_verified_stages",
+            "terminal": "mutually_exclusive",
+            "semantic_acceptance": "fresh_ai_candidate_common_validation_only",
+            "historical_evidence": "excluded_from_ai_success",
+        },
+        "execution_policy": {
+            "direct_mode": direct_mode,
+            "fresh_translation_requires_ai_first_candidate": True,
+            "accepted_evidence_revalidation_shortcut": True,
+            "opencode_command": ai_runtime["opencode_command"],
+            "model": ai_runtime["model"],
+            "agent": ai_runtime["agent"],
+            "variant": ai_runtime["variant"],
+            "timeout_seconds": ai_runtime["timeout_seconds"],
+            "resolution": ai_runtime["resolution"],
+            "competition_exact_contract": ai_runtime["competition_exact_contract"],
+        },
+        "units": units,
+    }
+    from validation.tools.validate_competition_run_summary import recompute_ai_translation_metrics
+
+    return recompute_ai_translation_metrics(
+        skeleton,
+        summary=summary,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+
+
+def ai_metric_artifact_binding(
+    path: Path | None,
+    *,
+    repo_root: Path,
+    out_root: Path,
+) -> dict[str, Any]:
+    if not isinstance(path, Path):
+        return {"path": None, "sha256": None, "status": "missing"}
+    path_ref = summary_reference_path(path, repo_root=repo_root, out_root=out_root)
+    if not is_safe_posix_relative(path_ref):
+        return {"path": None, "sha256": None, "status": "missing"}
+    return {
+        "path": path_ref,
+        "sha256": sha256(path) if path.is_file() else None,
+        "status": "present" if path.is_file() else "missing",
+    }

@@ -3,6 +3,18 @@
   "title": "Competition run summary",
   "type": "object",
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {"const": 2}
+        }
+      },
+      "then": {
+        "required": ["ai_translation_metrics"]
+      }
+    }
+  ],
   "required": [
     "schema_version",
     "run_id",
@@ -24,7 +36,8 @@
     "schema_version": {
       "type": "integer",
       "enum": [
-        1
+        1,
+        2
       ]
     },
     "run_id": {
@@ -201,6 +214,9 @@
         }
       }
     },
+    "ai_translation_metrics": {
+      "$ref": "#/definitions/aiTranslationMetrics"
+    },
     "artifact_roots": {
       "type": "array",
       "minItems": 1,
@@ -354,6 +370,10 @@
                 "type": "string",
                 "minLength": 1
               },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
               "worker_id": {
                 "type": "string",
                 "minLength": 1
@@ -500,6 +520,215 @@
         "validator": {
           "type": "string",
           "minLength": 1
+        }
+      }
+    }
+  },
+  "definitions": {
+    "aiArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "status"],
+      "properties": {
+        "path": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1}
+          ]
+        },
+        "sha256": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          ]
+        },
+        "status": {"enum": ["present", "missing"]}
+      }
+    },
+    "aiCountingBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "funnel", "terminal", "semantic_acceptance", "historical_evidence"],
+      "properties": {
+        "unit": {"const": "slice"},
+        "funnel": {"const": "cumulative_verified_stages"},
+        "terminal": {"const": "mutually_exclusive"},
+        "semantic_acceptance": {"const": "fresh_ai_candidate_common_validation_only"},
+        "historical_evidence": {"const": "excluded_from_ai_success"}
+      }
+    },
+    "aiExecutionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "direct_mode",
+        "fresh_translation_requires_ai_first_candidate",
+        "accepted_evidence_revalidation_shortcut",
+        "opencode_command",
+        "model",
+        "agent",
+        "variant",
+        "timeout_seconds",
+        "resolution",
+        "competition_exact_contract"
+      ],
+      "properties": {
+        "direct_mode": {"enum": ["none", "fresh_ai_translation", "accepted_evidence_revalidation"]},
+        "fresh_translation_requires_ai_first_candidate": {"const": true},
+        "accepted_evidence_revalidation_shortcut": {"const": true},
+        "opencode_command": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "agent": {"type": "string", "minLength": 1},
+        "variant": {"type": "string", "minLength": 1},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 600},
+        "resolution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["opencode_command", "model", "agent", "variant", "timeout_seconds"],
+          "properties": {
+            "opencode_command": {"enum": ["cli", "profile", "default"]},
+            "model": {"enum": ["cli", "profile", "default"]},
+            "agent": {"enum": ["cli", "profile", "default"]},
+            "variant": {"enum": ["cli", "profile", "default"]},
+            "timeout_seconds": {"enum": ["cli", "profile", "default"]}
+          }
+        },
+        "competition_exact_contract": {"type": "boolean"}
+      }
+    },
+    "aiTerminalCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic_acceptance", "blocked", "refused", "not_invoked", "historical_evidence", "abnormal"],
+      "properties": {
+        "semantic_acceptance": {"type": "integer", "minimum": 0},
+        "blocked": {"type": "integer", "minimum": 0},
+        "refused": {"type": "integer", "minimum": 0},
+        "not_invoked": {"type": "integer", "minimum": 0},
+        "historical_evidence": {"type": "integer", "minimum": 0},
+        "abnormal": {"type": "integer", "minimum": 0}
+      }
+    },
+    "aiMetricUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit_key",
+        "unit_id",
+        "target_id",
+        "slice_id",
+        "source",
+        "execution_mode",
+        "auto_migrate_step",
+        "artifacts",
+        "invocations",
+        "generated",
+        "applied",
+        "selected",
+        "rustc_pass",
+        "semantic_acceptance",
+        "blocked",
+        "refused",
+        "repair_rounds",
+        "classification",
+        "abnormal_reasons"
+      ],
+      "properties": {
+        "unit_key": {"type": "string", "minLength": 1},
+        "unit_id": {"type": "string", "minLength": 1},
+        "target_id": {
+          "anyOf": [{"type": "null"}, {"type": "string", "minLength": 1}]
+        },
+        "slice_id": {
+          "anyOf": [{"type": "null"}, {"type": "string", "minLength": 1}]
+        },
+        "source": {"enum": ["direct", "worker"]},
+        "execution_mode": {
+          "enum": [
+            "fresh_ai_translation",
+            "accepted_evidence_revalidation",
+            "pre_translation_failure",
+            "worker_unbound"
+          ]
+        },
+        "auto_migrate_step": {
+          "anyOf": [{"type": "null"}, {"type": "string", "minLength": 1}]
+        },
+        "artifacts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["manifest", "route", "profile", "final"],
+          "properties": {
+            "manifest": {"$ref": "#/definitions/aiArtifactRef"},
+            "route": {"$ref": "#/definitions/aiArtifactRef"},
+            "profile": {"$ref": "#/definitions/aiArtifactRef"},
+            "final": {"$ref": "#/definitions/aiArtifactRef"}
+          }
+        },
+        "worker_summary": {"$ref": "#/definitions/aiArtifactRef"},
+        "invocations": {"type": "integer", "minimum": 0},
+        "generated": {"type": "boolean"},
+        "applied": {"type": "boolean"},
+        "selected": {"type": "boolean"},
+        "rustc_pass": {"type": "boolean"},
+        "semantic_acceptance": {"type": "boolean"},
+        "blocked": {"type": "boolean"},
+        "refused": {"type": "boolean"},
+        "repair_rounds": {"type": "integer", "minimum": 0},
+        "classification": {
+          "enum": ["semantic_acceptance", "blocked", "refused", "not_invoked", "historical_evidence", "abnormal"]
+        },
+        "abnormal_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    },
+    "aiTranslationMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "counting_boundary",
+        "execution_policy",
+        "units_total",
+        "invocations",
+        "generated",
+        "applied",
+        "selected",
+        "rustc_pass",
+        "semantic_acceptance",
+        "blocked",
+        "refused",
+        "repair_rounds",
+        "not_invoked",
+        "historical_evidence",
+        "abnormal",
+        "terminal_classifications",
+        "units"
+      ],
+      "properties": {
+        "schema_version": {"const": 1},
+        "counting_boundary": {"$ref": "#/definitions/aiCountingBoundary"},
+        "execution_policy": {"$ref": "#/definitions/aiExecutionPolicy"},
+        "units_total": {"type": "integer", "minimum": 0},
+        "invocations": {"type": "integer", "minimum": 0},
+        "generated": {"type": "integer", "minimum": 0},
+        "applied": {"type": "integer", "minimum": 0},
+        "selected": {"type": "integer", "minimum": 0},
+        "rustc_pass": {"type": "integer", "minimum": 0},
+        "semantic_acceptance": {"type": "integer", "minimum": 0},
+        "blocked": {"type": "integer", "minimum": 0},
+        "refused": {"type": "integer", "minimum": 0},
+        "repair_rounds": {"type": "integer", "minimum": 0},
+        "not_invoked": {"type": "integer", "minimum": 0},
+        "historical_evidence": {"type": "integer", "minimum": 0},
+        "abnormal": {"type": "integer", "minimum": 0},
+        "terminal_classifications": {"$ref": "#/definitions/aiTerminalCounts"},
+        "units": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/aiMetricUnit"}
         }
       }
     }

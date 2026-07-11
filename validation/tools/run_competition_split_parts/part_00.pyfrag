@@ -96,6 +96,11 @@ def main() -> int:
         default="local-simulation",
         choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
     )
+    parser.add_argument("--ai-model")
+    parser.add_argument("--ai-agent")
+    parser.add_argument("--ai-variant")
+    parser.add_argument("--ai-timeout-seconds", type=int)
+    parser.add_argument("--ai-opencode-command")
     parser.add_argument("--run-id")
     args = parser.parse_args()
     extraction_specs: list[ExtractionSpecInput] = list(args.extraction_specs)
@@ -118,6 +123,11 @@ def main() -> int:
         repo_root=REPO_ROOT,
         reuse_accepted_evidence=args.reuse_accepted_evidence,
         accepted_evidence_root=args.accepted_evidence_root,
+        ai_model=args.ai_model,
+        ai_agent=args.ai_agent,
+        ai_variant=args.ai_variant,
+        ai_timeout_seconds=args.ai_timeout_seconds,
+        ai_opencode_command=args.ai_opencode_command,
     )
     print(json.dumps(result.summary, indent=2, sort_keys=True))
     return result.exit_code
@@ -135,6 +145,11 @@ def run_competition(
     run_id: str | None = None,
     reuse_accepted_evidence: bool = False,
     accepted_evidence_root: Path | None = None,
+    ai_model: str | None = None,
+    ai_agent: str | None = None,
+    ai_variant: str | None = None,
+    ai_timeout_seconds: int | None = None,
+    ai_opencode_command: str | None = None,
 ) -> CompetitionRunResult:
     extraction_specs = extraction_specs or []
     worker_summaries = worker_summaries or []
@@ -147,6 +162,15 @@ def run_competition(
     repo_root = repo_root.resolve()
     out_root = out_root if out_root.is_absolute() else repo_root / out_root
     require_competition_exact_host(proof_class)
+    ai_runtime = resolve_ai_runtime(
+        repo_root=repo_root,
+        proof_class=proof_class,
+        model=ai_model,
+        agent=ai_agent,
+        variant=ai_variant,
+        timeout_seconds=ai_timeout_seconds,
+        opencode_command=ai_opencode_command,
+    )
     out_root.mkdir(parents=True, exist_ok=True)
     (out_root / "summary").mkdir(parents=True, exist_ok=True)
     logs_dir = out_root / "logs"
@@ -183,6 +207,11 @@ def run_competition(
         out_root=out_root,
     )
     unit_statuses = []
+    ai_metric_descriptors = ai_metric_descriptors_from_workers(
+        worker_statuses,
+        repo_root=repo_root,
+        out_root=out_root,
+    )
     for worker in worker_statuses:
         unit_statuses.extend(workflow_unit_statuses_from_worker(worker))
     worker_workflow_metrics = [
@@ -221,6 +250,14 @@ def run_competition(
         run_id=run_id,
     )
     unit_statuses.extend(extraction_unit_statuses)
+    ai_metric_descriptors.extend(
+        ai_metric_descriptors_from_pretranslation_failures(
+            extraction_unit_statuses,
+            evidence_root=evidence_root,
+            repo_root=repo_root,
+            out_root=out_root,
+        )
+    )
     slice_failures += extraction_failures
 
     all_slice_specs = list(slice_specs) + generated_slice_specs
@@ -231,6 +268,21 @@ def run_competition(
         slice_id = required_str(spec, "slice_id")
         unit_source = "extract-spec" if spec_path.resolve() in generated_slice_spec_paths else "slice-spec"
         slice_evidence_root = accepted_evidence_root if reuse_accepted_evidence else evidence_root
+        ai_metric_descriptors.append(
+            ai_metric_descriptor(
+                target_id=target_id,
+                slice_id=slice_id,
+                source="direct",
+                execution_mode=(
+                    "accepted_evidence_revalidation"
+                    if reuse_accepted_evidence
+                    else "fresh_ai_translation"
+                ),
+                evidence_root=slice_evidence_root,
+                repo_root=repo_root,
+                out_root=out_root,
+            )
+        )
         if not reuse_accepted_evidence:
             auto_result = run_logged_step(
                 f"auto-migrate-{slice_id}",
@@ -242,6 +294,17 @@ def run_competition(
                     "--out-root",
                     rel_path(evidence_root, repo_root),
                     "--competition-clang-lane",
+                    "--ai-first-candidate",
+                    "--ai-model",
+                    ai_runtime["model"],
+                    "--ai-agent",
+                    ai_runtime["agent"],
+                    "--ai-variant",
+                    ai_runtime["variant"],
+                    "--ai-timeout-seconds",
+                    str(ai_runtime["timeout_seconds"]),
+                    "--ai-opencode-command",
+                    ai_runtime["opencode_command"],
                 ],
                 command_runner=command_runner,
                 repo_root=repo_root,
@@ -349,7 +412,7 @@ def run_competition(
 
     status = "passed" if slice_failures == 0 and gate_failures == 0 and semantic_pass > 0 else "failed"
     summary = {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": run_id,
         "proof_class": proof_class,
         "profile_id": profile_id(repo_root),
@@ -395,6 +458,9 @@ def run_competition(
         summary,
         unit_statuses=unit_statuses,
         worker_workflow_metrics=worker_workflow_metrics,
+        ai_metric_descriptors=ai_metric_descriptors,
+        ai_runtime=ai_runtime,
+        reuse_accepted_evidence=reuse_accepted_evidence,
         out_root=out_root,
         repo_root=repo_root,
     )
@@ -415,6 +481,9 @@ def run_competition(
         summary,
         unit_statuses=unit_statuses,
         worker_workflow_metrics=worker_workflow_metrics,
+        ai_metric_descriptors=ai_metric_descriptors,
+        ai_runtime=ai_runtime,
+        reuse_accepted_evidence=reuse_accepted_evidence,
         out_root=out_root,
         repo_root=repo_root,
     )

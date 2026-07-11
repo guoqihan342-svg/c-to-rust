@@ -75,12 +75,13 @@ def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict
     validate_artifact_roots(summary.get("artifact_roots", []), repo_root=repo_root)
     validate_workflow_metrics(summary, summary_path=summary_path, repo_root=repo_root)
     validate_command_log(summary, summary_path=summary_path, repo_root=repo_root)
+    validate_ai_translation_metrics(summary, summary_path=summary_path, repo_root=repo_root)
     validate_final_gate(summary)
     validate_slice_counts(summary)
     validate_workers(summary)
     validate_competition_exact_host_attestation(summary, summary_path=summary_path, repo_root=repo_root)
 
-    return {
+    result = {
         "status": "passed",
         "summary": repo_relative(summary_path, repo_root),
         "proof_class": summary["proof_class"],
@@ -88,6 +89,13 @@ def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict
         "semantic_pass": summary["slices"]["semantic_pass"],
         "final_gate": summary["final_gate"]["status"],
     }
+    if summary.get("schema_version") == 2:
+        metrics = summary["ai_translation_metrics"]
+        result["ai_translation_metrics"] = {
+            key: metrics[key]
+            for key in AI_METRIC_COUNT_FIELDS
+        }
+    return result
 
 
 def validate_command_log(summary: dict[str, Any], *, summary_path: Path, repo_root: Path) -> None:

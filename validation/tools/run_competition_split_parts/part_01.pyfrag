@@ -90,6 +90,7 @@ def load_worker_summary_statuses(
         )
         status_entry = {
             "path": summary_reference_path(resolved, repo_root=repo_root, out_root=out_root),
+            "sha256": sha256(resolved),
             "worker_id": worker_id,
             "status": status,
             "proof_class": worker_proof_class,
@@ -98,6 +99,8 @@ def load_worker_summary_statuses(
             "failed": worker_slices["failed"],
             "slices": worker_slices,
             "workflow_metrics": workflow_metrics,
+            "_summary_path": resolved,
+            "_summary": summary,
         }
         status_entry.update(assignment_metadata)
         statuses.append(
@@ -191,7 +194,11 @@ def load_bound_workflow_metrics(
 
 
 def public_worker_summary_status(worker: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in worker.items() if key != "workflow_metrics"}
+    return {
+        key: value
+        for key, value in worker.items()
+        if key != "workflow_metrics" and not key.startswith("_")
+    }
 
 
 def resolve_bound_artifact(
@@ -443,6 +450,9 @@ def write_summary_with_workflow_metrics(
     worker_workflow_metrics: list[dict[str, Any]],
     out_root: Path,
     repo_root: Path,
+    ai_metric_descriptors: list[dict[str, Any]] | None = None,
+    ai_runtime: dict[str, Any] | None = None,
+    reuse_accepted_evidence: bool = False,
 ) -> Path:
     summary_dir = out_root / "summary"
     workflow_metrics_path = summary_dir / "workflow-metrics.json"
@@ -463,6 +473,18 @@ def write_summary_with_workflow_metrics(
             "sha256": sha256(command_log_path),
         }
     summary_path = summary_dir / "competition-run-summary.json"
+    if summary.get("schema_version") == 2:
+        if ai_metric_descriptors is None or ai_runtime is None:
+            raise SystemExit("schema_version=2 competition summary requires AI metric inputs")
+        summary["ai_translation_metrics"] = build_ai_translation_metrics(
+            summary=summary,
+            descriptors=ai_metric_descriptors,
+            ai_runtime=ai_runtime,
+            reuse_accepted_evidence=reuse_accepted_evidence,
+            summary_path=summary_path,
+            repo_root=repo_root,
+            out_root=out_root,
+        )
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return summary_path
 
