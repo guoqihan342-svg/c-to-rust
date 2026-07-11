@@ -8,6 +8,8 @@ from typing import Any, Iterable
 DEFAULT_SHARED_FAILURE_KINDS = frozenset(
     {
         "provider_invocation_failed",
+        "provider_insufficient_balance",
+        "provider_authentication_failed",
         "provider_timeout",
         "provider_unavailable",
     }
@@ -62,6 +64,8 @@ class ProviderCircuit:
         if failure_kind not in self._shared_failure_kinds:
             self._reset_consecutive_failures()
             return
+        if self._observations and self._observations[-1]["failure_kind"] != failure_kind:
+            self._reset_consecutive_failures()
 
         self._observations.append(
             {

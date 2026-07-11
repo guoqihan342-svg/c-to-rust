@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 import jsonschema
 
 from validation.tools import ai_candidate_harness
 from validation.tools import auto_migrate
 from validation.tools import validate_auto_translation_evidence as evidence_validator
+from validation.tools._ai_candidate_harness_parts import provider
 
 
 def minimal_spec(source_root: str) -> dict[str, object]:
@@ -261,6 +265,54 @@ class AiCandidateHarnessTests(unittest.TestCase):
 
             self.assertEqual(calls, 1)
             self.assertEqual(manifest["failure"]["kind"], "provider_timeout")
+
+    def test_timeout_with_provider_balance_diagnostic_uses_actionable_classification(self) -> None:
+        execution = provider.ProviderExecution(
+            124,
+            "",
+            provider.PROVIDER_BALANCE_SENTINEL,
+            timed_out=True,
+        )
+
+        failure = provider.classify_provider_failure(execution)
+
+        self.assertEqual("provider_insufficient_balance", failure["kind"])
+
+    def test_subprocess_runner_reads_only_sanitized_appended_provider_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-provider-log-") as tmp:
+            log_path = Path(tmp) / "opencode.log"
+            log_path.write_text("existing log\n", encoding="utf-8")
+            secret_marker = "must-not-enter-provider-execution"
+
+            def fake_run(argv: list[str], **kwargs: object) -> object:
+                with log_path.open("a", encoding="utf-8") as handle:
+                    handle.write(
+                        "level=ERROR providerID=zai modelID=glm-5.1 agent=c2rust-migrator "
+                        "error='Insufficient balance or no resource package' "
+                        f"api_key={secret_marker}\n"
+                    )
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"], output=b"", stderr=b"")
+
+            argv = [
+                "opencode",
+                "run",
+                "--model",
+                "zai/glm-5.1",
+                "--agent",
+                "c2rust-migrator",
+                "prompt",
+            ]
+            with mock.patch.dict(os.environ, {provider.OPENCODE_LOG_PATH_ENV: str(log_path)}):
+                with mock.patch.object(provider.subprocess, "run", side_effect=fake_run):
+                    execution = provider.subprocess_runner(argv, 30)
+
+            self.assertTrue(execution.timed_out)
+            self.assertEqual(provider.PROVIDER_BALANCE_SENTINEL, execution.stderr)
+            self.assertNotIn(secret_marker, execution.stderr)
+            self.assertEqual(
+                "provider_insufficient_balance",
+                provider.classify_provider_failure(execution)["kind"],
+            )
 
     def test_applied_ai_candidate_becomes_agent_route_primary_without_semantic_claim(self) -> None:
         ai_candidate = {

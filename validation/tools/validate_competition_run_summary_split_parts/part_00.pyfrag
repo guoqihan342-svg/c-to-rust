@@ -43,6 +43,11 @@ COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
 COMPETITION_OPENCODE_VARIANT = "max"
 REPAIR_ROUND_CAP = 5
+PROVIDER_CIRCUIT_FAILURE_KINDS = {
+    "provider_timeout",
+    "provider_insufficient_balance",
+    "provider_authentication_failed",
+}
 
 
 def main() -> int:
@@ -133,11 +138,16 @@ def validate_provider_circuit_breaker(
     observation_ids = [item["unit_id"] for item in observations]
     if len(set(observation_ids)) != len(observation_ids):
         raise SystemExit("provider_circuit_breaker observation unit_id values must be unique")
+    observation_kinds = {item["failure_kind"] for item in observations}
+    if not observation_kinds.issubset(PROVIDER_CIRCUIT_FAILURE_KINDS):
+        raise SystemExit("provider_circuit_breaker observation failure_kind is not shared")
     if circuit["status"] == "open":
         if circuit["consecutive_failures"] < circuit["threshold"]:
             raise SystemExit("open provider_circuit_breaker requires the failure threshold")
         if not isinstance(circuit["failure_kind"], str) or not circuit["failure_kind"]:
             raise SystemExit("open provider_circuit_breaker requires failure_kind")
+        if observation_kinds != {circuit["failure_kind"]}:
+            raise SystemExit("open provider_circuit_breaker observations must share failure_kind")
         if summary["final_gate"]["status"] != "failed":
             raise SystemExit("open provider_circuit_breaker requires a failed final gate")
     else:

@@ -259,12 +259,17 @@ def evaluate_ai_metric_unit(
     validate_ai_artifact_identities(unit, payloads, reasons)
     validate_ai_cross_bindings(payloads, paths, summary_path=summary_path, repo_root=repo_root, reasons=reasons)
     manifest_failure = (payloads.get("manifest") or {}).get("failure")
-    provider_timeout = (
+    blocked_provider_failure = (
         (payloads.get("manifest") or {}).get("status") == "blocked"
         and isinstance(manifest_failure, dict)
-        and manifest_failure.get("kind") == "provider_timeout"
+        and manifest_failure.get("kind")
+        in {
+            "provider_timeout",
+            "provider_insufficient_balance",
+            "provider_authentication_failed",
+        }
     )
-    if provider_timeout:
+    if blocked_provider_failure:
         reasons = [
             reason
             for reason in reasons
