@@ -43,14 +43,138 @@ def call_continue_state_replay_contract(
                         },
                     }
                 )
-            validate_cases(cases, contract)
+            if contract["schema_version"] == 2:
+                call_continue_validate_schema_v2_cases(cases, contract)
+            else:
+                validate_cases(cases, contract)
     except (ReporterError, ValueError) as exc:
         raise ValueError(str(exc)) from exc
     return contract
 
 
-def call_continue_fixture_state_model(contract: dict[str, Any]) -> dict[str, Any]:
+def call_continue_validate_schema_v2_cases(
+    cases: Any, contract: dict[str, Any]
+) -> list[dict[str, Any]]:
+    from validation.tools._translation_carrier_reporter.call_continue_contract import (
+        behavior_fields as call_continue_behavior_fields,
+        entry_fixture_fields,
+    )
+    from validation.tools._translation_carrier_reporter.call_continue_model import (
+        case_inputs,
+        case_wraps_u32,
+        is_zero_start_case,
+        reference_outputs,
+    )
+    from validation.tools._translation_carrier_reporter.errors import ReporterError
+    from validation.tools._translation_carrier_reporter.record_contract import (
+        require_dict,
+        require_nonempty_string,
+        require_u32,
+        require_usize,
+    )
+
+    if not isinstance(cases, list) or len(cases) < 5:
+        raise ReporterError("call-continue schema v2 fixture requires at least five cases")
+    partition_model = call_continue_schema_v2_partitions()
+    categories = {name: 0 for name in partition_model}
+    ids: set[str] = set()
+    fields = call_continue_behavior_fields(contract)
+    external = contract["external_callee"]
+    sentinel = int(contract["comparison"]["sentinel"])
+    for index, raw in enumerate(cases):
+        case = require_dict(raw, f"cases[{index}]")
+        case_id = require_nonempty_string(case.get("id"), f"cases[{index}].id")
+        if case_id in ids:
+            raise ReporterError(f"duplicate fixture case id: {case_id}")
+        ids.add(case_id)
+        inputs = case_inputs(case)
+        for entry in contract["entry_arguments"]:
+            for fixture_field in entry_fixture_fields(entry):
+                require_u32(inputs.get(fixture_field), f"{case_id}.{fixture_field}")
+        scripted = require_u32(
+            inputs.get(external["return_fixture_field"]),
+            f"{case_id}.{external['return_fixture_field']}",
+        )
+        if is_zero_start_case(inputs, contract):
+            category = (
+                "wrapping_zero_start"
+                if case_wraps_u32(inputs, contract, "zero_start")
+                else "ordinary_zero_start"
+            )
+        elif scripted == sentinel:
+            category = "sentinel_hit"
+        elif scripted == 0:
+            category = "zero_miss"
+        else:
+            category = "ordinary_miss"
+        categories[category] += 1
+        expected = require_dict(
+            case.get("expected_outputs"), f"{case_id}.expected_outputs"
+        )
+        if list(expected) != fields or expected != reference_outputs(case, contract):
+            raise ReporterError(
+                f"{case_id} expected outputs disagree with call-continue model"
+            )
+        call_count = require_usize(
+            expected[external["call_count_output"]], f"{case_id}.call_count"
+        )
+        wanted_count = partition_model[category][
+            "external_call_count"
+        ]
+        if call_count != wanted_count:
+            raise ReporterError(f"{case_id} external call count disagrees with partition")
+    if any(categories[name] < 1 for name in categories if name != "sentinel_hit"):
+        raise ReporterError(
+            "schema v2 fixture must cover ordinary and wrapping zero-start, "
+            "zero miss, and ordinary miss"
+        )
+    if categories["sentinel_hit"] != 1:
+        raise ReporterError("schema v2 fixture must contain exactly one sentinel hit")
+    hit = next(
+        case for case in cases
+        if not is_zero_start_case(case_inputs(case), contract)
+        and int(case_inputs(case)[external["return_fixture_field"]]) == sentinel
+    )
+    if not case_wraps_u32(case_inputs(hit), contract, "hit"):
+        raise ReporterError("schema v2 sentinel hit must cover traversed u32 wrap")
+    return cases
+
+
+def call_continue_schema_v2_partitions() -> dict[str, dict[str, Any]]:
     return {
+        "ordinary_zero_start": {
+            "external_call": "skipped",
+            "external_call_count": 0,
+            "case_requirement": "at_least_one",
+            "u32_wrapping": False,
+        },
+        "wrapping_zero_start": {
+            "external_call": "skipped",
+            "external_call_count": 0,
+            "case_requirement": "at_least_one",
+            "u32_wrapping": True,
+        },
+        "sentinel_hit": {
+            "external_call": "invoked",
+            "external_call_count": 1,
+            "case_requirement": "exactly_one",
+            "traversed_u32_wrapping": True,
+        },
+        "zero_miss": {
+            "external_call": "invoked",
+            "external_call_count": 1,
+            "case_requirement": "at_least_one",
+        },
+        "ordinary_miss": {
+            "external_call": "invoked",
+            "external_call_count": 1,
+            "case_requirement": "at_least_one",
+        },
+    }
+
+
+def call_continue_fixture_state_model(contract: dict[str, Any]) -> dict[str, Any]:
+    model = {
         "kind": CALL_CONTINUE_STATE_KIND,
         "scope": "fixture_only",
         "external_callee_semantics_verified": False,
@@ -68,6 +192,24 @@ def call_continue_fixture_state_model(contract: dict[str, Any]) -> dict[str, Any
         "pointer_root_count": 2,
         "noalias_required": [list(pair) for pair in contract["noalias_required"]],
     }
+    if contract["schema_version"] == 2:
+        model.update(
+            {
+                "schema_version": 2,
+                "entry_argument_kinds": [
+                    "record" if "initializer" in entry else str(entry["rust_type"])
+                    for entry in contract["entry_arguments"]
+                ],
+                "fixture_partitions": call_continue_schema_v2_partitions(),
+                "external_call_count_values": [0, 1],
+                "zero_start_external_call_skipped": True,
+            }
+        )
+        model["operations"] = [
+            "zero_start_wrapping_add_skip_external_call",
+            *model["operations"],
+        ]
+    return model
 
 
 def call_continue_generated_rust_safety(
@@ -78,6 +220,16 @@ def call_continue_generated_rust_safety(
         return None
     from validation.tools.call_continue_syntax import validate_rust_call_continue_draft
 
-    return validate_rust_call_continue_draft(
+    safety = validate_rust_call_continue_draft(
         draft_path.read_text(encoding="utf-8-sig"), contract
     )
+    if contract["schema_version"] == 2:
+        safety.update(
+            {
+                "schema_version": 2,
+                "fixture_partitions": call_continue_schema_v2_partitions(),
+                "external_call_count_values": [0, 1],
+                "zero_start_external_call_skipped": True,
+            }
+        )
+    return safety

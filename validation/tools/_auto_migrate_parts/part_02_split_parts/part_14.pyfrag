@@ -22,9 +22,13 @@ def rust_replay_call_continue_state_cases_source(
             local = f"actual_{safe_ident(case_id)}_{parameter}"
             locals_[entry["parameter"]] = local
             mutable = "mut " if entry["pass_mode"] == "mutable_ref" else ""
+            initializer = (
+                scripted_record_rust_initializer(entry["initializer"], payload)
+                if "initializer" in entry
+                else f"{int(payload[str(entry['fixture_field'])])}u32"
+            )
             declarations.append(
-                f"        let {mutable}{local} = "
-                f"{scripted_record_rust_initializer(entry['initializer'], payload)};\n"
+                f"        let {mutable}{local} = {initializer};\n"
             )
             arguments.append(f"&mut {local}" if entry["pass_mode"] == "mutable_ref" else local)
         owner = locals_[contract["owner_parameter"]]

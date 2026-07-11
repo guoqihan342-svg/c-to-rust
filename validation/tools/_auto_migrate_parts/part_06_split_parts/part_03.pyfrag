@@ -164,6 +164,11 @@ def _verify_call_continue_partitions(
     cases = read_json(fixture_path).get("cases")
     if not isinstance(cases, list) or len(cases) < 4 or not isinstance(scripted_field, str) or not isinstance(return_field, str):
         raise SystemExit("--accept-existing-evidence negative mutation fixture partition mismatch")
+    if contract.get("schema_version") == 2:
+        _verify_call_continue_schema_v2_partitions(
+            spec, cases, negative, execution
+        )
+        return
     ids = [str(case.get("id")) for case in cases]
     scripted_values = [case.get("inputs", case).get(scripted_field) for case in cases]
     hit_ids = [case_id for case_id, value in zip(ids, scripted_values, strict=True) if value == sentinel]
@@ -183,3 +188,124 @@ def _verify_call_continue_partitions(
     declared = negative.get("partition_detection", {})
     if declared.get("comparison-equality-flip") != {"detected_case_ids": ids, "passed_case_ids": []} or declared.get("continue-noop") != {"detected_case_ids": hit_ids, "passed_case_ids": expected[1][1]}:
         raise SystemExit("--accept-existing-evidence negative mutation report partition mismatch")
+
+
+def _verify_call_continue_schema_v2_partitions(
+    spec: dict[str, Any], cases: list[dict[str, Any]], negative: dict[str, Any],
+    execution: dict[str, Any],
+) -> None:
+    from validation.tools._translation_carrier_reporter.call_continue_contract import (
+        parse_contract,
+    )
+    from validation.tools._translation_carrier_reporter.call_continue_model import (
+        case_inputs,
+        case_wraps_u32,
+        is_zero_start_case,
+    )
+    from validation.tools._translation_carrier_reporter.errors import ReporterError
+
+    try:
+        contract = parse_contract(spec)
+    except ReporterError as exc:
+        raise SystemExit(
+            f"--accept-existing-evidence negative mutation fixture partition mismatch: {exc}"
+        ) from exc
+    external = contract["external_callee"]
+    scripted_field = external["return_fixture_field"]
+    call_count_field = external["call_count_output"]
+    return_field = contract["return"]["fixture_field"]
+    sentinel = int(contract["comparison"]["sentinel"])
+    snapshot_fields = [item["snapshot_output"] for item in external["arguments"]]
+    partition_model = call_continue_schema_v2_partitions()
+    partitions = {name: [] for name in partition_model}
+    ids: list[str] = []
+    for case in cases:
+        case_id = str(case.get("id"))
+        inputs = case_inputs(case)
+        expected = case.get("expected_outputs", {})
+        if is_zero_start_case(inputs, contract):
+            partition = (
+                "wrapping_zero_start"
+                if case_wraps_u32(inputs, contract, "zero_start")
+                else "ordinary_zero_start"
+            )
+        elif inputs.get(scripted_field) == sentinel:
+            partition = "sentinel_hit"
+        elif inputs.get(scripted_field) == 0:
+            partition = "zero_miss"
+        else:
+            partition = "ordinary_miss"
+        ids.append(case_id)
+        partitions[partition].append(case_id)
+        wanted_count = partition_model[partition][
+            "external_call_count"
+        ]
+        if expected.get(call_count_field) != wanted_count:
+            raise SystemExit(
+                "--accept-existing-evidence negative mutation fixture call count mismatch"
+            )
+        expected_return = partition == "sentinel_hit"
+        if expected.get(return_field) is not expected_return:
+            raise SystemExit(
+                "--accept-existing-evidence negative mutation fixture return mismatch"
+            )
+        if wanted_count == 0 and any(expected.get(field) != 0 for field in snapshot_fields):
+            raise SystemExit(
+                "--accept-existing-evidence zero-start external snapshot mismatch"
+            )
+    if any(
+        not values for name, values in partitions.items() if name != "sentinel_hit"
+    ) or len(partitions["sentinel_hit"]) != 1:
+        raise SystemExit(
+            "--accept-existing-evidence negative mutation fixture partition mismatch"
+        )
+    hit_case = next(case for case in cases if str(case.get("id")) in partitions["sentinel_hit"])
+    if not case_wraps_u32(case_inputs(hit_case), contract, "hit"):
+        raise SystemExit(
+            "--accept-existing-evidence negative mutation fixture partition mismatch"
+        )
+    zero_start_ids = [
+        case_id for case_id in ids
+        if case_id in {
+            *partitions["ordinary_zero_start"],
+            *partitions["wrapping_zero_start"],
+        }
+    ]
+    hit_ids = partitions["sentinel_hit"]
+    comparison_detected = [case_id for case_id in ids if case_id not in zero_start_ids]
+    comparison_passed = zero_start_ids
+    continue_passed = [case_id for case_id in ids if case_id not in hit_ids]
+    expected = (
+        (comparison_detected, comparison_passed),
+        (hit_ids, continue_passed),
+    )
+    scenarios = execution.get("scenarios")
+    if not isinstance(scenarios, list) or len(scenarios) != 2:
+        raise SystemExit(
+            "--accept-existing-evidence negative mutation partition mismatch"
+        )
+    for scenario, (detected, passed) in zip(scenarios, expected, strict=True):
+        partition = scenario.get("partition_replay", {})
+        if (
+            scenario.get("expected_detected_case_ids") != detected
+            or partition.get("detected_case_ids") != detected
+            or partition.get("passed_case_ids") != passed
+        ):
+            raise SystemExit(
+                "--accept-existing-evidence negative mutation partition mismatch"
+            )
+    declared = negative.get("partition_detection", {})
+    expected_declared = {
+        "comparison-equality-flip": {
+            "detected_case_ids": comparison_detected,
+            "passed_case_ids": comparison_passed,
+        },
+        "continue-noop": {
+            "detected_case_ids": hit_ids,
+            "passed_case_ids": continue_passed,
+        },
+    }
+    if declared != expected_declared:
+        raise SystemExit(
+            "--accept-existing-evidence negative mutation report partition mismatch"
+        )

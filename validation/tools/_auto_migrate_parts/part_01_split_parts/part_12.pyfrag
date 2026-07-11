@@ -50,10 +50,18 @@ uint32_t {external['name']}(
         for entry in contract["entry_arguments"]:
             local = f"actual_{ident}_{entry['parameter']}"
             locals_[entry["parameter"]] = local
-            declarations.append(
-                f"  struct {entry['rust_type']} {local} = "
-                f"{scripted_record_c_initializer(entry['initializer'], payload)};\n"
-            )
+            if "initializer" in entry:
+                initializer = scripted_record_c_initializer(
+                    entry["initializer"], payload
+                )
+                declarations.append(
+                    f"  struct {entry['rust_type']} {local} = {initializer};\n"
+                )
+            else:
+                value = c_integer_literal(
+                    str(entry["c_type"]), int(payload[str(entry["fixture_field"])])
+                )
+                declarations.append(f"  {entry['c_type']} {local} = {value};\n")
             arguments.append(f"&{local}" if entry["pass_mode"] == "mutable_ref" else local)
         owner = locals_[contract["owner_parameter"]]
         assigned = owner + "." + ".".join(contract["assigned_state"]["owner_field_path"])
