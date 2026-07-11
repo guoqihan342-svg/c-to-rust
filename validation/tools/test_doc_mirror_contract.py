@@ -1,5 +1,6 @@
-import unittest
+import re
 import subprocess
+import unittest
 from pathlib import Path
 
 
@@ -33,6 +34,9 @@ CANONICAL_BACKLOG_DOCS = {
     Path("docs/c2rust-migration-agent/future-vision-and-mvp.md"),
     Path("docs/c2rust-migration-agent/future-vision-and-mvp.en.md"),
 }
+
+CANONICAL_BACKLOG_CN = REPO_ROOT / "docs/c2rust-migration-agent/future-vision-and-mvp.md"
+CANONICAL_BACKLOG_EN = REPO_ROOT / "docs/c2rust-migration-agent/future-vision-and-mvp.en.md"
 
 MOJIBAKE_SENSITIVE_DOCS = (
     Path("docs/c2rust-migration-agent/future-vision-and-mvp.md"),
@@ -127,6 +131,22 @@ def _has_backlog_entrypoint_wording(text: str) -> bool:
     return False
 
 
+def _task_states(text: str) -> dict[str, str]:
+    return {
+        task_id: state
+        for state, task_id in re.findall(
+            r"^- \[([ xX])\] \*\*(P[0-2]-[A-Z]+\d+)", text, re.MULTILINE
+        )
+    }
+
+
+def _bash_blocks(text: str) -> list[str]:
+    return [
+        "\n".join(line.rstrip() for line in block.strip().splitlines())
+        for block in re.findall(r"```bash\s*\n(.*?)```", text, re.DOTALL)
+    ]
+
+
 class DocMirrorContractTest(unittest.TestCase):
     def test_canonical_chinese_docs_reject_mojibake_markers(self):
         offenders = []
@@ -192,6 +212,23 @@ class DocMirrorContractTest(unittest.TestCase):
                 "or non-canonical scope and point to future-vision-and-mvp.md:\n"
                 + "\n".join(offenders)
             )
+
+    def test_canonical_backlog_mirror_preserves_structural_contract(self):
+        chinese = CANONICAL_BACKLOG_CN.read_text(encoding="utf-8")
+        english = CANONICAL_BACKLOG_EN.read_text(encoding="utf-8")
+
+        chinese_date = re.search(r"最后更新：(?P<date>\d{4}-\d{2}-\d{2})", chinese)
+        english_date = re.search(r"Last updated: (?P<date>\d{4}-\d{2}-\d{2})", english)
+        self.assertIsNotNone(chinese_date)
+        self.assertIsNotNone(english_date)
+        self.assertEqual(chinese_date.group("date"), english_date.group("date"))
+
+        self.assertEqual(_task_states(chinese), _task_states(english))
+        self.assertEqual(_bash_blocks(chinese), _bash_blocks(english))
+
+        chinese_sections = re.findall(r"^## (?P<number>\d+)\.", chinese, re.MULTILINE)
+        english_sections = re.findall(r"^## (?P<number>\d+)\.", english, re.MULTILINE)
+        self.assertEqual(chinese_sections, english_sections)
 
 
 if __name__ == "__main__":

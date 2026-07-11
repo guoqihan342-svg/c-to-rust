@@ -20,11 +20,12 @@ input.c
 
 | Item | Current value | Exact meaning |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 32 | 32 translator-generated named slices pass the complete semantic gates; this is not whole-project translation |
-| `accepted_evidence_semantic_pass_count` | 1 | Independent authoritative accepted-evidence slices; excluded from the translator-generated numerator |
+| `translator_generated_semantic_pass_count` | 32 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
+| `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
 | Active translator track | P0-T21 | Compose the zero-start and next-address branches at `fdb_kvdb.c:1868-1874` |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |
 | Latest completed stage | P0-T20 | The `:1870-:1873` assignment-call, reset/add, and current-level `continue` slice is semantically accepted |
+| Current strict regression | `26/34` | Run `20260711T053811Z`; eight historical evidence drifts remain |
 | Current proof class | `wsl-local-simulation` | Valid for development and approximation, but not `competition-exact` |
 
 `validation/translator-coverage-matrix.json` is the machine-readable source of truth for capability counts. A native C build, typed-IR unit test, rustc compile, C2Rust output, or LLM output alone is candidate evidence only.
@@ -164,7 +165,7 @@ Use `--dry-run` for plan inspection and `--entrypoint-id` for focused debugging.
 
 ### 2.5 Currently Proven and Unproven Boundaries
 
-The WSL competition-like lane currently proves the P0-T20 C oracle, generated Rust replay, diff, negative mutation, unsafe gates, and strict validator. The Python core suite reports `293 passed, 6 skipped`, plus `90` passing subtests. The FlashDB file-backend 10,000-loop stress run passes.
+The WSL competition-like lane currently proves the P0-T20 C oracle, generated Rust replay, diff, negative mutation, unsafe gates, strict validator, and the FlashDB file-backend 10,000-loop stress run. Volatile test counts are recorded only in section 5 with a run or commit binding.
 
 Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Huawei host package/runtime differences, competition resource limits, real-host `COMPETITION_EXACT_HOST=1` attestation, a complete OpenCode preflight marker, GLM-5.1 worker/session artifacts, and the full competition-exact judge bundle/public packet. P0-H9 therefore remains open.
 
@@ -176,17 +177,24 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   Put the `sector.addr + SECTOR_HDR_DATA_SIZE` write for `kv->addr.start == 0` in the same generic carrier as the P0-T20 assignment-call else-if, reset, traversed-length add, and `continue` path.
 
-  Minimum accepted states: zero-start, sentinel hit, zero miss, and ordinary miss.
+  The discriminating set is fixed at five cases: zero-start non-wrap, zero-start wrap, sentinel hit, zero-return miss, and ordinary miss. Zero-start must skip the external call and must not produce the P0-T20 `continue` observation.
 
   Preserve the owner interior alias, local sector copy, exact `db -> itr` noalias relation, mutually exclusive branches, exact-u32/wrapping behavior, and current-level `continue`.
 
   Explicitly out of scope: real `SECTOR_HDR_DATA_SIZE` expansion, real `get_next_kv_addr` semantics, the `read_kv` loop from line 1875, complete `fdb_kv_iterate`, whole FlashDB, and record layout/ABI.
 
-  Completion requires a project-independent implementation, positive and adjacent negative tests, C oracle, generated Rust replay, schema diff, executed negative mutation, unsafe/raw-pointer ledger, route/profile/final verification, strict validator, coverage matrix, and synchronized bilingual docs.
+  | Stage | Status | Completion criterion |
+  | --- | --- | --- |
+  | source boundary | Complete | Bind exactly `fdb_kvdb.c:1868-1874` without extending into line 1875 |
+  | generic implementation | Complete | Commit the project-independent typed-IR carrier and schema-v2 reporter |
+  | generic tests | Complete | Positive, adjacent fail-closed, and all-feature translator tests pass |
+  | source-backed inputs | In progress | Spec, fixture, and source-fragment hash are reproducible |
+  | semantic evidence | Not started | Generate and cross-bind C oracle, Rust replay, diff, negative, and unsafe ledger |
+  | strict acceptance | Not started | Update the matrix, count, and bilingual completion state only after every section 7 gate passes |
 
-- [ ] **P0-T22: select the next smallest real source-backed gap**
+- [ ] **P0-T22: next-slice decision gate**
 
-  Select it only after P0-T21 closes. Prefer adjacent `fdb_kv_iterate` control flow or a generic construct family from another real project. Do not pre-claim whole-function or whole-project translation.
+  Run it only after P0-T21 closes. The output must include a slice id, real source span, construct gap, nearest negative, and stop condition. Prefer adjacent control flow or a generic construct family from another real project. Do not pre-claim whole-function or whole-project translation.
 
 ### P0-B: Competition Host and OpenCode
 
@@ -198,11 +206,14 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   WSL, local, and CI results remain `wsl-local-simulation`, `local-simulation`, and `ci-approximation`; none closes H9.
 
+- [ ] **P0-H10: publish the CRC32 competition-exact before/after**
+
+  Depends on P0-H9. Close only after replaying the completed CRC32 C2Rust+repair before/after on the real competition host and publishing hash-bound workflow metrics.
+
 ### P0-C: Stage Closure
 
-- [ ] Fix the eight historical evidence-drift failures in the full regression in ownership-scoped batches, separate from translator behavior changes.
-- [ ] Clear the 17 historical feature-gated warnings from `cargo clippy --all-features --all-targets -- -D warnings`; default Clippy passes and new slices must add no warnings.
-- [ ] Replay the completed CRC32 C2Rust+repair before/after on the real competition host and publish competition-exact workflow metrics.
+- [ ] **P0-C1: historical evidence drift**. Fix the eight failures in run `20260711T053811Z` in artifact-ownership batches, separate from translator behavior changes.
+- [ ] **P0-C2: all-feature Clippy**. Clear the 17 historical feature-gated warnings from `cargo clippy --all-features --all-targets -- -D warnings`; new slices must add no warnings.
 
 ## 4. Later Backlog
 
@@ -236,13 +247,16 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 | P0-T19 | `:1871-:1873` reset/add/current-level continue | 30 -> 31 |
 | P0-T20 | Compose the `:1870-:1873` assignment-call condition and branch body | 31 -> 32 |
 
-Latest stage validation:
+Validation run bindings:
 
-- Translator `cargo test --all-features` passed.
-- WSL competition-like Python core suite: `293 passed, 6 skipped`, plus `90` passing subtests.
-- The stage full regression ran 35 checks and passed 27. All FlashDB code gates and the file-backend 10,000-loop stress test passed; eight failures are historical evidence drift.
-- P0-T20 strict validator reports `semantic_pass=true` and `generated_draft_semantic_pass=true`.
-- All-feature Clippy still reports 17 historical warnings; none is on a P0-T20-added line.
+| Validation | Binding | Result |
+| --- | --- | --- |
+| P0-T21 translator candidate | commit `02067028`, 2026-07-11 | library `228` passed; bounded `657` passed with `133` real-clang opt-in ignores; integer conversion `4` passed |
+| P0-T20 Python core historical snapshot | 2026-07-11 stage snapshot | `293 passed, 6 skipped`, plus `90` subtests; proves only that revision |
+| Full regression | run `20260711T053811Z` | 26 of 34 passed; FlashDB code gates and the 10,000-loop stress test passed; eight historical evidence drifts failed |
+| P0-T20 strict validator | P0-T20 evidence | `semantic_pass=true` and `generated_draft_semantic_pass=true` |
+| Accepted-evidence strict status | `libuv/ip4-addr` | verified-unsafe-baseline SHA drift; the ledger count is not a current strict pass |
+| All-feature Clippy | current historical baseline | 17 feature-gated warnings remain for P0-C2 |
 
 ## 6. Architecture Boundaries
 
