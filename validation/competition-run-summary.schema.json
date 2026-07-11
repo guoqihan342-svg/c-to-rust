@@ -117,6 +117,63 @@
         }
       }
     },
+    "provider_circuit_breaker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "threshold",
+        "consecutive_failures",
+        "failure_kind",
+        "requested_slice_specs",
+        "attempted_slice_specs",
+        "skipped_slice_specs",
+        "observations"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["closed", "open"]
+        },
+        "threshold": {
+          "type": "integer",
+          "const": 2
+        },
+        "consecutive_failures": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "failure_kind": {
+          "enum": [null, "provider_timeout"]
+        },
+        "requested_slice_specs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "attempted_slice_specs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped_slice_specs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "observations": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["unit_id", "failure_kind"],
+            "properties": {
+              "unit_id": {"type": "string", "minLength": 1},
+              "failure_kind": {"const": "provider_timeout"}
+            }
+          }
+        }
+      }
+    },
     "elapsed_seconds": {
       "type": "integer",
       "minimum": 0

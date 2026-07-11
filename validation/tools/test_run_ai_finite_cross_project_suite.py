@@ -70,28 +70,47 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
         returned_path: Path | None = None,
         returned_summary: dict[str, object] | None = None,
         attempted: int | None = None,
+        circuit_skipped: int | None = None,
     ) -> SimpleNamespace:
         out_root = Path(kwargs["out_root"])
         summary_path = out_root / "summary" / "competition-run-summary.json"
         summary_path.parent.mkdir(parents=True, exist_ok=True)
         slice_count = len(kwargs["slice_specs"])
+        attempted_count = slice_count if attempted is None else attempted
         summary = {
             "schema_version": 2,
             "slices": {
-                "attempted": slice_count if attempted is None else attempted,
-                "typed_ir_generated": slice_count,
-                "compiled": slice_count if final_status == "passed" else 0,
-                "semantic_pass": slice_count if final_status == "passed" else 0,
+                "attempted": attempted_count,
+                "typed_ir_generated": attempted_count,
+                "compiled": attempted_count if final_status == "passed" else 0,
+                "semantic_pass": attempted_count if final_status == "passed" else 0,
                 "refused": 0,
                 "blocked": 0,
-                "failed": 0 if final_status == "passed" else slice_count,
+                "failed": 0 if final_status == "passed" else attempted_count,
             },
             "ai_translation_metrics": {
                 "schema_version": 1,
-                "totals": {"model_invocations": slice_count, "translations_executed": slice_count},
+                "units_total": attempted_count,
+                "units": [{"unit_id": f"unit-{index}"} for index in range(attempted_count)],
+                "totals": {"model_invocations": attempted_count, "translations_executed": attempted_count},
             },
             "final_gate": {"status": final_status},
         }
+        if circuit_skipped is not None:
+            attempted_count = slice_count - circuit_skipped
+            summary["provider_circuit_breaker"] = {
+                "status": "open",
+                "threshold": 2,
+                "consecutive_failures": 2,
+                "failure_kind": "provider_timeout",
+                "requested_slice_specs": slice_count,
+                "attempted_slice_specs": attempted_count,
+                "skipped_slice_specs": circuit_skipped,
+                "observations": [
+                    {"unit_id": "project-0/slice-0", "failure_kind": "provider_timeout"},
+                    {"unit_id": "project-1/slice-1", "failure_kind": "provider_timeout"},
+                ],
+            }
         summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return SimpleNamespace(
             exit_code=exit_code,
@@ -304,6 +323,33 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
         self.assertEqual("competition_summary_attempted_count_mismatch", report["runs"][0]["error"])
         self.assertEqual([], report["slices"])
         self.assertEqual([], report["ai_translation_metrics"])
+
+    def test_provider_circuit_breaker_returns_bound_blocked_partial_report(self) -> None:
+        def fake_runner(**kwargs: object) -> SimpleNamespace:
+            return self._fake_result(
+                kwargs,
+                exit_code=1,
+                final_status="failed",
+                attempted=2,
+                circuit_skipped=1,
+            )
+
+        exit_code, report, report_path = module.run_suite(
+            suite=self.suite_path,
+            out_root=self.root / "out",
+            repo_root=self.root,
+            preflight_validator=self._ready_preflight,
+            competition_runner=fake_runner,
+        )
+
+        self.assertEqual(2, exit_code)
+        self.assertEqual("blocked", report["status"])
+        self.assertEqual("blocked", report["runs"][0]["status"])
+        self.assertEqual("provider_circuit_breaker_open", report["runs"][0]["error"])
+        self.assertEqual(1, report["runs"][0]["provider_circuit_breaker"]["skipped_slice_specs"])
+        self.assertEqual(1, len(report["slices"]))
+        self.assertEqual(1, len(report["ai_translation_metrics"]))
+        self.assertEqual(report, json.loads(report_path.read_text(encoding="utf-8")))
 
     def test_main_forwards_cli_ai_options(self) -> None:
         calls: list[dict[str, object]] = []

@@ -80,6 +80,7 @@ def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict
     validate_slice_counts(summary)
     validate_workers(summary)
     validate_cargo_runtime(summary)
+    validate_provider_circuit_breaker(summary, summary_path=summary_path, repo_root=repo_root)
     validate_competition_exact_host_attestation(summary, summary_path=summary_path, repo_root=repo_root)
 
     result = {
@@ -110,6 +111,78 @@ def validate_cargo_runtime(summary: dict[str, Any]) -> None:
     if summary["proof_class"] == "competition-exact" and all(supplied):
         if status != "active" or source != "competition_profile":
             raise SystemExit("competition-exact requires the competition Cargo mirror runtime")
+
+
+def validate_provider_circuit_breaker(
+    summary: dict[str, Any],
+    *,
+    summary_path: Path | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> None:
+    circuit = summary.get("provider_circuit_breaker")
+    if circuit is None:
+        return
+    requested = circuit["requested_slice_specs"]
+    attempted = circuit["attempted_slice_specs"]
+    skipped = circuit["skipped_slice_specs"]
+    if attempted + skipped != requested:
+        raise SystemExit("provider_circuit_breaker attempted plus skipped must equal requested")
+    observations = circuit["observations"]
+    if len(observations) != circuit["consecutive_failures"]:
+        raise SystemExit("provider_circuit_breaker observations must match consecutive_failures")
+    observation_ids = [item["unit_id"] for item in observations]
+    if len(set(observation_ids)) != len(observation_ids):
+        raise SystemExit("provider_circuit_breaker observation unit_id values must be unique")
+    if circuit["status"] == "open":
+        if circuit["consecutive_failures"] < circuit["threshold"]:
+            raise SystemExit("open provider_circuit_breaker requires the failure threshold")
+        if not isinstance(circuit["failure_kind"], str) or not circuit["failure_kind"]:
+            raise SystemExit("open provider_circuit_breaker requires failure_kind")
+        if summary["final_gate"]["status"] != "failed":
+            raise SystemExit("open provider_circuit_breaker requires a failed final gate")
+    else:
+        if skipped != 0 or circuit["failure_kind"] is not None:
+            raise SystemExit("closed provider_circuit_breaker cannot report skipped slices or failure_kind")
+
+    if summary.get("schema_version") != 2 or summary_path is None:
+        return
+    metrics = summary["ai_translation_metrics"]
+    direct_units = [
+        unit
+        for unit in metrics["units"]
+        if unit.get("source") == "direct" and unit.get("execution_mode") == "fresh_ai_translation"
+    ]
+    if attempted != len(direct_units):
+        raise SystemExit("provider_circuit_breaker attempted count must match fresh direct AI units")
+    direct_ids = [unit["unit_id"] for unit in direct_units]
+    expected_observation_ids = direct_ids[-len(observation_ids) :] if observation_ids else []
+    if observation_ids != expected_observation_ids:
+        raise SystemExit("provider_circuit_breaker observations must be the trailing fresh direct AI units")
+    units_by_id = {unit["unit_id"]: unit for unit in direct_units}
+    for observation in observations:
+        unit = units_by_id[observation["unit_id"]]
+        if unit.get("classification") != "blocked" or unit.get("invocations") != 1:
+            raise SystemExit("provider_circuit_breaker observations must reference one-invocation blocked AI units")
+        manifest_ref = unit.get("artifacts", {}).get("manifest", {})
+        manifest_value = manifest_ref.get("path")
+        manifest_sha = manifest_ref.get("sha256")
+        if not isinstance(manifest_value, str) or not isinstance(manifest_sha, str):
+            raise SystemExit("provider_circuit_breaker observation manifest binding is incomplete")
+        manifest_path = resolve_summary_artifact(
+            manifest_value,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        if manifest_path is None or sha256(manifest_path) != manifest_sha:
+            raise SystemExit("provider_circuit_breaker observation manifest binding is invalid")
+        manifest = load_json(manifest_path)
+        failure = manifest.get("failure") if isinstance(manifest, dict) else None
+        if (
+            manifest.get("status") != "blocked"
+            or not isinstance(failure, dict)
+            or failure.get("kind") != observation["failure_kind"]
+        ):
+            raise SystemExit("provider_circuit_breaker observation does not match its bound manifest")
 
 
 def validate_command_log(summary: dict[str, Any], *, summary_path: Path, repo_root: Path) -> None:

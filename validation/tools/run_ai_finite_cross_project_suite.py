@@ -382,7 +382,18 @@ def run_suite(
         else:
             slices = summary["slices"]
             ai_metrics = summary["ai_translation_metrics"]
-            if slices.get("attempted") != len(items):
+            attempted = slices.get("attempted")
+            circuit = summary.get("provider_circuit_breaker")
+            circuit_blocked = (
+                isinstance(attempted, int)
+                and isinstance(circuit, dict)
+                and circuit.get("status") == "open"
+                and circuit.get("requested_slice_specs") == len(items)
+                and circuit.get("attempted_slice_specs") == attempted
+                and circuit.get("skipped_slice_specs") == len(items) - attempted
+                and 0 <= attempted < len(items)
+            )
+            if attempted != len(items) and not circuit_blocked:
                 run_record.update(
                     status="failed",
                     exit_code=runner_exit,
@@ -396,21 +407,27 @@ def run_suite(
                     "sha256": summary_sha,
                 }
                 run_record.update(
-                    status="passed" if passed else "failed",
+                    status="blocked" if circuit_blocked else "passed" if passed else "failed",
                     exit_code=runner_exit,
                     competition_summary=summary_ref,
                     slices=slices,
                     ai_translation_metrics=ai_metrics,
                 )
+                if circuit_blocked:
+                    run_record.update(
+                        error="provider_circuit_breaker_open",
+                        provider_circuit_breaker=circuit,
+                    )
                 copied_slices.append({"competition_summary": summary_ref, "value": slices})
                 copied_ai_metrics.append({"competition_summary": summary_ref, "value": ai_metrics})
 
     runs = [run_record]
     passed = run_record.get("status") == "passed"
+    blocked = run_record.get("status") == "blocked"
     report = {
         **base,
-        "status": "passed" if passed else "failed",
-        "exit_code": 0 if passed else 1,
+        "status": "passed" if passed else "blocked" if blocked else "failed",
+        "exit_code": 0 if passed else 2 if blocked else 1,
         "runs": runs,
         "slices": copied_slices,
         "ai_translation_metrics": copied_ai_metrics,

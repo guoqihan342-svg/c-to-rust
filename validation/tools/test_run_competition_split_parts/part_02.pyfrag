@@ -202,6 +202,76 @@
             self.assertEqual(summary["slices"]["failed"], 1)
             self.assertEqual(summary["final_gate"]["status"], "failed")
 
+    def test_runner_opens_provider_circuit_after_two_timeouts_and_skips_remaining_specs(self) -> None:
+        module = load_runner_module()
+
+        class ProviderTimeoutRunner(FakeCommandRunner):
+            def __call__(self, command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                result = super().__call__(command, **kwargs)
+                if any("auto_migrate.py" in item for item in command):
+                    cwd = Path(kwargs.get("cwd", REPO_ROOT))
+                    spec_path = Path(command[command.index("--slice-spec") + 1])
+                    if not spec_path.is_absolute():
+                        spec_path = cwd / spec_path
+                    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+                    evidence_root = Path(command[command.index("--out-root") + 1])
+                    if not evidence_root.is_absolute():
+                        evidence_root = cwd / evidence_root
+                    evidence_dir = evidence_root / spec["target_id"] / "auto-translation" / spec["slice_id"]
+                    evidence_dir.mkdir(parents=True, exist_ok=True)
+                    (evidence_dir / f"l3-{spec['slice_id']}-ai-candidate-manifest.json").write_text(
+                        json.dumps(
+                            {
+                                "status": "blocked",
+                                "failure": {"kind": "provider_timeout", "message": "timed out"},
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                return result
+
+        with tempfile.TemporaryDirectory(prefix="run-competition-circuit-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            specs = [write_slice_spec(tmp_path, "demo", f"slice-{index}") for index in range(4)]
+            for index in range(4):
+                write_final_verification(out_root / "evidence", "demo", f"slice-{index}", semantic_pass=True)
+            fake_runner = ProviderTimeoutRunner()
+
+            result = module.run_competition(
+                slice_specs=specs,
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-circuit-test",
+            )
+
+            auto_commands = [
+                command for command in fake_runner.commands if any("auto_migrate.py" in item for item in command)
+            ]
+            self.assertEqual(2, len(auto_commands))
+            self.assertEqual(1, result.exit_code)
+            self.assertEqual(2, result.summary["slices"]["attempted"])
+            self.assertEqual("failed", result.summary["final_gate"]["status"])
+            self.assertEqual(
+                {
+                    "status": "open",
+                    "requested_slice_specs": 4,
+                    "attempted_slice_specs": 2,
+                    "skipped_slice_specs": 2,
+                },
+                {
+                    key: result.summary["provider_circuit_breaker"][key]
+                    for key in [
+                        "status",
+                        "requested_slice_specs",
+                        "attempted_slice_specs",
+                        "skipped_slice_specs",
+                    ]
+                },
+            )
+
     def test_runner_merges_worker_summaries_without_reprocessing_slices(self) -> None:
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:

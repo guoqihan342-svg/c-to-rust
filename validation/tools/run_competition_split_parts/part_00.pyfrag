@@ -25,6 +25,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from validation.tools._run_competition_ai_exact import load_ai_exact_router_status
+from validation.tools._run_competition_provider_circuit import ProviderCircuit
 
 
 PROFILE_PATH = REPO_ROOT / "config" / "competition-env" / "environment.json"
@@ -209,6 +210,7 @@ def run_competition(
     semantic_pass = 0
     refused = 0
     blocked = 0
+    provider_circuit = ProviderCircuit(threshold=2, shared_failure_kinds={"provider_timeout"})
     worker_statuses = load_worker_summary_statuses(
         worker_summaries,
         proof_class=proof_class,
@@ -275,6 +277,9 @@ def run_competition(
     for spec_path, spec in specs:
         target_id = required_str(spec, "target_id")
         slice_id = required_str(spec, "slice_id")
+        unit_id = f"{target_id}/{slice_id}"
+        if not reuse_accepted_evidence and not provider_circuit.request(unit_id):
+            continue
         unit_source = "extract-spec" if spec_path.resolve() in generated_slice_spec_paths else "slice-spec"
         slice_evidence_root = accepted_evidence_root if reuse_accepted_evidence else evidence_root
         ai_metric_descriptors.append(
@@ -320,6 +325,14 @@ def run_competition(
                 logs_dir=logs_dir,
                 out_root=out_root,
                 run_id=run_id,
+            )
+            provider_circuit.observe_manifest(
+                unit_id,
+                evidence_root
+                / target_id
+                / "auto-translation"
+                / slice_id
+                / f"l3-{slice_id}-ai-candidate-manifest.json",
             )
             if auto_result.returncode != 0:
                 slice_failures += 1
@@ -457,6 +470,10 @@ def run_competition(
     if unsafe_summary["status"] != "passed":
         gate_failures += 1
 
+    provider_circuit_summary = provider_circuit.summary()
+    if not reuse_accepted_evidence and provider_circuit_summary["status"] == "open":
+        gate_failures += 1
+
     status = "passed" if slice_failures == 0 and gate_failures == 0 and semantic_pass > 0 else "failed"
     summary = {
         "schema_version": 2,
@@ -469,8 +486,12 @@ def run_competition(
         "elapsed_seconds": int(time.monotonic() - started),
         "translator_version": "0.1.0",
         "slices": {
-            "attempted": len(slice_specs)
-            + len(extraction_specs)
+            "attempted": extraction_failures
+            + (
+                len(all_slice_specs)
+                if reuse_accepted_evidence
+                else provider_circuit_summary["attempted_slice_specs"]
+            )
             + sum(worker["slices"]["attempted"] for worker in worker_statuses),
             "typed_ir_generated": typed_ir_generated,
             "compiled": compiled,
@@ -493,6 +514,8 @@ def run_competition(
             ),
         },
     }
+    if not reuse_accepted_evidence:
+        summary["provider_circuit_breaker"] = provider_circuit_summary
     if exact_host_attestation is not None:
         summary["competition_exact_host_attestation"] = exact_host_attestation
     if worker_statuses:
@@ -586,8 +609,6 @@ def cargo_runtime_summary(repo_root: Path) -> dict[str, Any]:
         "runtime_source": "competition_profile" if profile_active else LOCAL_CARGO_HOME_ENV,
         "offline": env.get("CARGO_NET_OFFLINE") == "true",
     }
-
-
 def run_step(command: list[str], *, command_runner: CommandRunner, repo_root: Path) -> subprocess.CompletedProcess[str]:
     return command_runner(
         command,
