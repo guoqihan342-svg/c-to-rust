@@ -314,6 +314,41 @@ class AiCandidateHarnessTests(unittest.TestCase):
                 provider.classify_provider_failure(execution)["kind"],
             )
 
+    def test_subprocess_runner_reads_provider_diagnostic_from_new_log(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-provider-new-log-") as tmp:
+            log_path = Path(tmp) / "opencode.log"
+            secret_marker = "must-not-enter-first-log-execution"
+
+            def fake_run(argv: list[str], **kwargs: object) -> object:
+                log_path.write_text(
+                    "level=ERROR providerID=zai modelID=glm-5.1 agent=c2rust-migrator "
+                    "error='Insufficient balance or no resource package' "
+                    f"api_key={secret_marker}\n",
+                    encoding="utf-8",
+                )
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"], output=b"", stderr=b"")
+
+            argv = [
+                "opencode",
+                "run",
+                "--model",
+                "zai/glm-5.1",
+                "--agent",
+                "c2rust-migrator",
+                "prompt",
+            ]
+            with mock.patch.dict(os.environ, {provider.OPENCODE_LOG_PATH_ENV: str(log_path)}):
+                with mock.patch.object(provider.subprocess, "run", side_effect=fake_run):
+                    execution = provider.subprocess_runner(argv, 30)
+
+            self.assertTrue(execution.timed_out)
+            self.assertEqual(provider.PROVIDER_BALANCE_SENTINEL, execution.stderr)
+            self.assertNotIn(secret_marker, execution.stderr)
+            self.assertEqual(
+                "provider_insufficient_balance",
+                provider.classify_provider_failure(execution)["kind"],
+            )
+
     def test_applied_ai_candidate_becomes_agent_route_primary_without_semantic_claim(self) -> None:
         ai_candidate = {
             "candidate_id": "opencode-glm51-1",

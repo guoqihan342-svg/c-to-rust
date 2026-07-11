@@ -404,12 +404,17 @@ def snapshot_opencode_log(argv: list[str]) -> tuple[Path, int, str, str, str] | 
     if "/" not in model:
         return None
     provider_id, model_id = model.rsplit("/", 1)
-    for path in opencode_log_candidates():
-        try:
-            return path, path.stat().st_size, provider_id, model_id, agent
-        except OSError:
-            continue
-    return None
+    candidates = opencode_log_candidates()
+    if not candidates:
+        return None
+    path = candidates[0]
+    try:
+        offset = path.stat().st_size
+    except FileNotFoundError:
+        offset = 0
+    except OSError:
+        return None
+    return path, offset, provider_id, model_id, agent
 
 
 def opencode_log_candidates() -> list[Path]:
