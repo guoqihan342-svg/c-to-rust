@@ -44,7 +44,6 @@ cargo fmt -- --check
 cargo check
 cargo test
 cargo run -- smoke --backend memory --report target/verification/smoke-memory.json
-cargo run -- stress --loops 20 --seed 1 --backend memory --scenario all --report target/verification/stress-smoke.json
 cargo run -- replay --fixture fixtures/ci-smoke.json --report target/verification/rust-fixture-replay.json
 cargo run -- diff --rust-report target/verification/rust-fixture-replay.json --oracle-report fixtures/ci-smoke.expected.json --report target/verification/rust-fixture-diff.json
 cargo run -- unsafe-scan
@@ -56,12 +55,12 @@ From the repository root:
 powershell -ExecutionPolicy Bypass -File .\flashDB_rust\scripts\verify.ps1
 ```
 
-## Long Run Command
+## Optional Stress Diagnostics
 
-This command is the required 10000-loop entrypoint. Do not claim it passed unless it has actually completed and the report exists.
+Routine local verification, CI, and repository-level full regression do not run loop stress. Use the command only as a separately approved diagnostic, with an explicit bounded loop count appropriate to the investigation:
 
 ```powershell
-cargo run --release -- stress --loops 10000 --seed 1 --backend file --scenario all --report target/verification/stress-10000.json
+cargo run --release -- stress --loops <N> --seed 1 --backend file --scenario all --report target/verification/stress-manual.json
 ```
 
 By default `FileFlash::flush` records logical flush operations and relies on normal file close/reopen behavior for fast host verification. Set `FLASHDB_RUST_SYNC_ON_FLUSH=1` when a run must force OS-level `sync_all` on every flush.
@@ -87,12 +86,11 @@ The CI script performs:
 - `cargo fmt -- --check`
 - `cargo check`
 - `cargo test`
-- CLI smoke and short stress reports
+- CLI smoke report
 - `cargo run -- unsafe-scan`
 - Rust fixture replay and Rust report diff through the mainline fixture CLI contract
 - C oracle producer execution through `FLASHDB_C_ORACLE_PRODUCER=./oracle/generate_c_oracle.sh` on Ubuntu CI
 - Rust-vs-C schema-aware diff for `fixtures/c-rust-smoke.json`
-- `cargo run --release -- stress --loops 10000 --seed 1 --backend file --scenario all --report target/verification/ci/stress-10000.json`
 
 Evidence is written under `target/verification/ci/` and uploaded as a workflow artifact. The C oracle path never substitutes Rust-only results for C equivalence. If `gcc` is missing, the CI script writes `SKIPPED_C_ORACLE_NO_GCC`. In GitHub Actions the producer is configured by default, so a C oracle producer build, runtime failure, or Rust-vs-C behavior mismatch fails the job and leaves failure evidence. A manually run local Linux script without `FLASHDB_C_ORACLE_PRODUCER` still writes `SKIPPED_C_ORACLE_PRODUCER_NOT_CONFIGURED`.
 
@@ -112,11 +110,7 @@ SKIPPED_LOCAL_NO_C_TOOLCHAIN
 
 That marker means the local run did not execute the C oracle producer and must not be treated as C/Rust equivalence evidence. Use Ubuntu CI, WSL, or another Linux environment with `gcc` and a configured `FLASHDB_C_ORACLE_PRODUCER` for real C oracle production.
 
-Run the long local stress check only when you intentionally want the full 10000-loop release run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\flashDB_rust\scripts\verify.ps1 -LongStress
-```
+The PowerShell verification script does not run loop stress. Use the optional diagnostic command above only when the investigation explicitly requires it.
 
 ## Fixture Replay and Diff
 

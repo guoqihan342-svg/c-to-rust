@@ -293,7 +293,7 @@ python validation/tools/validate_auto_translation_evidence.py --target-id flashd
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
 
 # 全量回归
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1 -SkipLongStress
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1
 ```
 
 ## 9. 边界与限制

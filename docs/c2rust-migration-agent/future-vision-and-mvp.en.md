@@ -117,7 +117,7 @@ The current WSL probe on 2026-07-11 reports:
 
 Running `source config/competition-env/env.sh && bash config/competition-env/toolchain-check.sh` in current WSL returns exit code 1 with ten mismatches. System clang exists, but `env.sh` auto-selects only `CLANG_PATH` or a repo-local vendored clang. With explicit `export CLANG_PATH=/usr/bin/clang`, the observed resource dir is `/usr/lib/llvm-18/lib/clang/18` and the minimum-TU JSON AST smoke passes, but the other ten environment differences still fail the overall check.
 
-Current WSL results therefore remain `wsl-local-simulation`. They can verify Linux paths, gcc/explicit clang, the Python harness, Rust replay, FlashDB build/stress, and most of the evidence chain. They cannot prove equivalence for the target kernel, Rust 1.96, Node 24, Java/Maven, the no-CMake baseline, the strict OpenCode/GLM host, or competition resource limits.
+Current WSL results therefore remain `wsl-local-simulation`. They can verify Linux paths, gcc/explicit clang, the Python harness, Rust replay, FlashDB build/smoke, and most of the evidence chain. They cannot prove equivalence for the target kernel, Rust 1.96, Node 24, Java/Maven, the no-CMake baseline, the strict OpenCode/GLM host, or competition resource limits.
 
 ### 2.4 Self-Check, Simulation, and Exact Run Entrypoints
 
@@ -165,7 +165,7 @@ Use `--dry-run` for plan inspection and `--entrypoint-id` for focused debugging.
 
 ### 2.5 Currently Proven and Unproven Boundaries
 
-The WSL competition-like lane currently proves the P0-T20 C oracle, generated Rust replay, diff, negative mutation, unsafe gates, and strict validator. Historical run `20260711T061416Z` passed a 10,000-iteration FlashDB file-backend stress test, but routine full regression now defaults to 1,000 iterations and does not require repeating 10,000. Volatile test counts are recorded only in section 5 with a run or commit binding.
+The WSL competition-like lane currently proves the P0-T20 C oracle, generated Rust replay, diff, negative mutation, unsafe gates, and strict validator. Routine full regression runs no loop stress step, and loop stress is no longer a normal acceptance condition. Volatile test counts are recorded only in section 5 with a run or commit binding.
 
 Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Huawei host package/runtime differences, competition resource limits, real-host `COMPETITION_EXACT_HOST=1` attestation, a complete OpenCode preflight marker, GLM-5.1 worker/session artifacts, and the full competition-exact judge bundle/public packet. P0-H9 therefore remains open.
 
@@ -254,7 +254,7 @@ Validation run bindings:
 | --- | --- | --- |
 | P0-T21 translator candidate | commit `02067028`, 2026-07-11 | library `228` passed; bounded `657` passed with `133` real-clang opt-in ignores; integer conversion `4` passed |
 | P0-T20 Python core historical snapshot | 2026-07-11 stage snapshot | `293 passed, 6 skipped`, plus `90` subtests; proves only that revision |
-| Full regression | run `20260711T061416Z` | 26 of 34 passed; P0-T21 added no failure, FlashDB code gates and the 10,000-loop stress test passed, and the same eight historical evidence drifts failed |
+| Full regression | run `20260711T061416Z` | 26 of 34 passed; P0-T21 added no failure and the same eight historical evidence drifts failed; future runner defaults omit loop stress |
 | P0-T21 strict validator | evidence generated from commit `8a261787` | `semantic_pass=true`, `generated_draft_semantic_pass=true`, and all 12 semantic binding classes passed |
 | P0-T20 strict validator | P0-T20 evidence | `semantic_pass=true` and `generated_draft_semantic_pass=true` |
 | Accepted-evidence strict status | `libuv/ip4-addr` | verified-unsafe-baseline SHA drift; the ledger count is not a current strict pass |

@@ -119,7 +119,7 @@ provider-qualified id 可以作为 resolved model id，但逻辑型号、probe �
 
 当前 WSL 实跑 `source config/competition-env/env.sh && bash config/competition-env/toolchain-check.sh` 返回 exit code 1 和 10 个不匹配项。系统 clang 虽然存在，但 `env.sh` 只自动选择 `CLANG_PATH` 或 repo-local vendored clang；在 WSL 模拟 competition clang lane 时必须先显式 `export CLANG_PATH=/usr/bin/clang`。实测显式设置后 resource-dir 为 `/usr/lib/llvm-18/lib/clang/18`，minimum-TU JSON AST smoke 通过，但其它 10 个环境差异仍使整体自检失败。
 
-因此当前阶段的 WSL 结果只能标为 `wsl-local-simulation`。它能验证 Linux 路径、gcc/显式 clang、Python harness、Rust replay、FlashDB build/stress 和大部分证据链，但不能证明目标 kernel、Rust 1.96、Node 24、Java/Maven、无 CMake 基线、strict OpenCode/GLM host 或比赛资源约束完全一致。
+因此当前阶段的 WSL 结果只能标为 `wsl-local-simulation`。它能验证 Linux 路径、gcc/显式 clang、Python harness、Rust replay、FlashDB build/smoke 和大部分证据链，但不能证明目标 kernel、Rust 1.96、Node 24、Java/Maven、无 CMake 基线、strict OpenCode/GLM host 或比赛资源约束完全一致。
 
 ### 2.4 自检、模拟和正式运行入口
 
@@ -167,7 +167,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 ### 2.5 当前已验证与未验证边界
 
-当前已在 WSL competition-like lane 验证：P0-T20 的 C oracle、generated Rust replay、diff、negative mutation、unsafe gate 和严格 validator。历史 run `20260711T061416Z` 的 FlashDB file backend 10,000 次压力测试通过，但日常全量回归默认已降为 1,000 次，不再要求重复运行 10,000 次。易变的测试数量只在第 5 节按运行或提交绑定记录。
+当前已在 WSL competition-like lane 验证：P0-T20 的 C oracle、generated Rust replay、diff、negative mutation、unsafe gate 和严格 validator。日常全量回归不执行循环压力测试，压力循环不再是常规验收条件。易变的测试数量只在第 5 节按运行或提交绑定记录。
 
 当前尚未验证：目标 kernel、Rust/Cargo 1.96、Node/npm 目标版本、真实 Huawei host package/runtime 差异、比赛资源上限、真实主机 `COMPETITION_EXACT_HOST=1` attestation、完整 OpenCode preflight marker、GLM-5.1 worker/session artifacts、全入口 competition-exact judge bundle 和 public packet。因此 P0-H9 仍未关闭。
 
@@ -256,7 +256,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | --- | --- | --- |
 | P0-T21 translator candidate | commit `02067028`，2026-07-11 | library `228` 通过；bounded `657` 通过、`133` 个 real-clang opt-in 忽略；integer conversion `4` 通过 |
 | P0-T20 Python core 历史快照 | 2026-07-11 阶段快照 | `293 passed, 6 skipped`，另有 `90` 个 subtests；只证明当时提交 |
-| 全量回归 | run `20260711T061416Z` | 34 项中 26 项通过；P0-T21 未新增失败，FlashDB 代码门禁和 10,000 轮压力测试通过；8 项仍为历史 evidence 漂移 |
+| 全量回归 | run `20260711T061416Z` | 34 项中 26 项通过；P0-T21 未新增失败，8 项仍为历史 evidence 漂移；后续 runner 默认取消循环压力测试 |
 | P0-T21 严格 validator | commit `8a261787` 生成的 evidence | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过 |
 | P0-T20 严格 validator | P0-T20 evidence | `semantic_pass=true`、`generated_draft_semantic_pass=true` |
 | accepted-evidence 严格状态 | `libuv/ip4-addr` | verified-unsafe-baseline SHA 漂移，ledger 计数不等于当前严格通过 |

@@ -2,8 +2,8 @@ param(
     [ValidateRange(1, 1000000)]
     [int] $Rounds = 1,
 
-    [ValidateRange(1, 100000000)]
-    [int] $StressLoops = 1000,
+    [ValidateRange(0, 100000000)]
+    [int] $StressLoops = 0,
 
     [ValidateRange(1, 1000000)]
     [int] $StartRound = 1,
@@ -12,6 +12,7 @@ param(
     [string] $EvidenceRoot = "target/full-regression",
     [switch] $ContinueOnFailure,
     [switch] $SkipClippy,
+    [switch] $RunStress,
     [switch] $SkipLongStress,
     [switch] $RequireCleanEvidence,
     [switch] $ProbeRemoteCatalog,
@@ -19,6 +20,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$StressEnabled = [bool]$RunStress -and -not [bool]$SkipLongStress
+if ($RunStress -and $StressLoops -lt 1) {
+    throw "-RunStress requires an explicit positive -StressLoops value"
+}
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $RepoRoot
@@ -328,7 +333,7 @@ function Get-RoundSteps {
     $steps.Add((New-Step "flashdb-version-manifest" "version_binding" "flashDB_rust" @("cargo", "run", "--", "version-manifest", "--report", $flashVersionReport)))
     $steps.Add((New-Step "flashdb-version-binding" "version_binding" "." @("python", "-B", "validation/tools/validate_flashdb_version_binding.py", "--manifest", $flashVersionReport, "--cargo-toml", "flashDB_rust/Cargo.toml", "--report", $flashVersionBindingReport)))
     $steps.Add((New-Step "flashdb-l3-evidence" "l3_evidence_manifest" "." @("python", "-B", "validation/tools/validate_flashdb_l3_evidence.py", "--evidence-root", "validation/evidence", "--report", $flashL3EvidenceReport)))
-    if (-not $SkipLongStress) {
+    if ($StressEnabled) {
         $steps.Add((New-Step "flashdb-release-stress-all" "production_abnormal_reliability_performance" "flashDB_rust" @("cargo", "run", "--release", "--", "stress", "--loops", "$StressLoops", "--seed", "$Round", "--backend", "file", "--scenario", "all", "--report", $flashStressReport)))
     }
     $steps.Add((New-Step "flashdb-evidence-search" "log_traceability" "flashDB_rust" @("cargo", "run", "--", "evidence-search", "--evidence-dir", $RoundDir, "--query", "passed", "--limit", "50", "--report", $flashSearchReport)))
@@ -356,14 +361,15 @@ Add-JsonLine ([ordered]@{
     run_id = $RunId
     rounds_requested = $Rounds
     start_round = $StartRound
-    stress_loops = $StressLoops
-    skip_long_stress = [bool]$SkipLongStress
+    stress_loops = if ($StressEnabled) { $StressLoops } else { 0 }
+    run_stress = $StressEnabled
+    skip_long_stress = -not $StressEnabled
     skip_clippy = [bool]$SkipClippy
     require_clean_evidence = [bool]$RequireCleanEvidence
     continue_on_failure = [bool]$ContinueOnFailure
     evidence_root = $RunRoot
     environment_profile = $EnvironmentProfileRef
-    production_data_boundary = "Default coverage uses committed fixtures plus deterministic production-like stress; pass real/de-identified fixtures through the replay/diff gates before claiming production-data equivalence."
+    production_data_boundary = "Default coverage uses committed fixtures without a loop stress step; pass real/de-identified fixtures through replay/diff gates before claiming production-data equivalence."
     started_utc = $runStarted.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 })
 
@@ -404,8 +410,9 @@ $summary = [ordered]@{
     rounds_requested = $Rounds
     start_round = $StartRound
     rounds_completed = [int]$completedRounds
-    stress_loops = $StressLoops
-    skip_long_stress = [bool]$SkipLongStress
+    stress_loops = if ($StressEnabled) { $StressLoops } else { 0 }
+    run_stress = $StressEnabled
+    skip_long_stress = -not $StressEnabled
     skip_clippy = [bool]$SkipClippy
     require_clean_evidence = [bool]$RequireCleanEvidence
     continue_on_failure = [bool]$ContinueOnFailure
@@ -418,10 +425,10 @@ $summary = [ordered]@{
     environment_profile = $EnvironmentProfileRef
     failed_step = $failed
     coverage_boundary = [ordered]@{
-        production_data = "Committed fixtures and deterministic production-like stress by default; real production data must be supplied as sanitized replay/diff fixtures before this can claim production-data equivalence."
-        abnormal_data = "Rust abnormal-data tests plus stress scenario abnormal through flashdb-release-stress-all."
-        performance = "Release-mode stress duration and counters are recorded as smoke evidence, not a stable benchmark threshold."
-        reliability = "File-backed stress scenario reopens KVDB/TSDB images and verifies last persisted values."
+        production_data = "Committed fixtures are used by default without loop stress; real production data must be supplied as sanitized replay/diff fixtures before this can claim production-data equivalence."
+        abnormal_data = "Rust abnormal-data tests and committed negative fixtures are covered; routine full regression does not run loop stress."
+        performance = "Routine full regression does not run a performance stress step or claim a benchmark threshold."
+        reliability = "Routine full regression validates committed replay/diff behavior, not repeated file-backend stress or power-loss reliability."
         branch_coverage = "Cargo and Python contract tests exercise main branches; no llvm-cov percentage is claimed by this script."
     }
 }

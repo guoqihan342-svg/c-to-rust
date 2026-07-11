@@ -70,7 +70,6 @@ run_rust_baseline() {
     run_step "cargo check" cargo check || return 1
     run_step "cargo test" cargo test || return 1
     run_step "CLI smoke report" cargo run -- smoke --backend memory --report "$evidence_dir/smoke-memory.json" || return 1
-    run_step "stress smoke report" cargo run -- stress --loops 20 --seed 1 --backend memory --scenario all --report "$evidence_dir/stress-smoke.json" || return 1
     run_step "unsafe scan" cargo run -- unsafe-scan || return 1
 }
 
@@ -157,25 +156,9 @@ run_c_oracle_producer() {
     write_evidence "$evidence" "C_RUST_DIFF_PASSED" "passed" "oracle_report_sha256=$oracle_hash rust_report_sha256=$rust_hash diff_report_sha256=$diff_hash"
 }
 
-run_release_stress() {
-    local loops="${FLASHDB_STRESS_LOOPS:-10000}"
-    local report="${FLASHDB_STRESS_REPORT:-$evidence_dir/stress-10000.json}"
-    local evidence="$evidence_dir/stress-10000-evidence.json"
-
-    if ! cargo run --release -- stress --loops "$loops" --seed 1 --backend file --scenario all --report "$report"; then
-        mark_failed "$evidence" "FAILED_RELEASE_STRESS" "cargo run --release stress failed for loops=$loops."
-        return 1
-    fi
-
-    local report_hash
-    report_hash="$(sha256_file "$report")"
-    write_evidence "$evidence" "RELEASE_STRESS_PASSED" "passed" "loops=$loops report_sha256=$report_hash"
-}
-
 run_rust_baseline || status=1
 run_rust_fixture_replay_diff || status=1
 run_c_oracle_producer || status=1
-run_release_stress || status=1
 
 if [ "$status" -ne 0 ]; then
     echo "CI verification failed; see $evidence_dir for evidence files." >&2

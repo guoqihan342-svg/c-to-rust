@@ -266,9 +266,6 @@ fn help() -> String {
         "  unsafe-scan",
         "  version-manifest [--report path]",
         "  evidence-search --evidence-dir dir --query text [--limit 1..10000] [--report path]",
-        "",
-        "Long run example:",
-        "  cargo run --release -- stress --loops 10000 --seed 1 --backend file --scenario all --report target/verification/stress-10000.json",
     ]
     .join("\n")
 }

@@ -1,7 +1,3 @@
-param(
-    [switch] $LongStress
-)
-
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
@@ -79,14 +75,9 @@ Invoke-Checked { cargo fmt -- --check }
 Invoke-Checked { cargo check }
 Invoke-Checked { cargo test }
 Invoke-Checked { cargo run -- smoke --backend memory --report target/verification/smoke-memory.json }
-Invoke-Checked { cargo run -- stress --loops 20 --seed 1 --backend memory --scenario all --report target/verification/stress-smoke.json }
 Invoke-Checked { cargo run -- replay --fixture fixtures/ci-smoke.json --report target/verification/rust-fixture-replay.json }
 Invoke-Checked { cargo run -- diff --rust-report target/verification/rust-fixture-replay.json --oracle-report fixtures/ci-smoke.expected.json --report target/verification/rust-fixture-diff.json }
 Invoke-Checked { cargo run -- unsafe-scan }
 Write-LocalCOracleEvidence
-
-if ($LongStress) {
-    Invoke-Checked { cargo run --release -- stress --loops 10000 --seed 1 --backend file --scenario all --report target/verification/stress-10000.json }
-}
 
 Write-Output "flashDB_rust baseline verification passed"

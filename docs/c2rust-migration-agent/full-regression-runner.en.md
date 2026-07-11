@@ -22,5 +22,5 @@ The Chinese source currently contains these major headings:
 
 - Keep filenames paired as `full-regression-runner.md` and `full-regression-runner.en.md` in the same directory.
 - Keep the first line of the Chinese source pointing to `full-regression-runner.en.md` with the repository-standard mirror notice.
-- Routine full regression uses 1,000 FlashDB stress iterations; 10,000 is not a normal acceptance requirement.
+- Routine full regression runs no loop stress step; standalone stress diagnostics require separate explicit approval.
 - For project-wide priorities, follow `docs/c2rust-migration-agent/future-vision-and-mvp.md`; local plans, Superpowers tasks, and validation checklists are scoped artifacts only.
