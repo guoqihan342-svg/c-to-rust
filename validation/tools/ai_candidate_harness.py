@@ -17,13 +17,34 @@ from validation.tools._ai_candidate_harness_parts.repair import (
     coordinate_repairs,
 )
 from validation.tools._ai_candidate_harness_parts.repair_contract import parse_repair_response
+from validation.tools._ai_candidate_harness_parts.router import (
+    ALLOWED_SOURCES,
+    DEFAULT_PROVIDER_INVOCATION_BUDGET,
+    HARD_MAX_PROVIDER_INVOCATIONS,
+    MAX_CANDIDATE_ID_BYTES,
+    MAX_CANDIDATES,
+    REQUIRED_GATES,
+    SOURCE_ORDER,
+    build_selection_policy,
+    recompute_router_metrics,
+    route_candidates,
+    selection_policy_sha256,
+)
 
 __all__ = [
     "MAX_PROVIDER_STDOUT_BYTES",
     "ProviderExecution",
     "DEFAULT_MAX_REPAIR_ROUNDS",
+    "DEFAULT_PROVIDER_INVOCATION_BUDGET",
     "HARD_MAX_REPAIR_ROUNDS",
+    "HARD_MAX_PROVIDER_INVOCATIONS",
+    "MAX_CANDIDATE_ID_BYTES",
+    "MAX_CANDIDATES",
+    "REQUIRED_GATES",
+    "SOURCE_ORDER",
+    "ALLOWED_SOURCES",
     "apply_generated_candidate",
+    "build_selection_policy",
     "build_context_pack",
     "coordinate_repairs",
     "canonical_json_bytes",
@@ -32,6 +53,9 @@ __all__ = [
     "main",
     "parse_candidate_response",
     "parse_repair_response",
+    "recompute_router_metrics",
+    "route_candidates",
+    "selection_policy_sha256",
 ]
 
 
