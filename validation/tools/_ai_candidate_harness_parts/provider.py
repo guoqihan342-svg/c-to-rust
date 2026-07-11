@@ -9,6 +9,7 @@ import subprocess
 from typing import Any, Callable
 
 from .context import atomic_write_bytes, atomic_write_json, canonical_json_bytes, sha256_bytes, sha256_path
+from .provider_readiness import evaluate_provider_readiness
 
 
 LOGICAL_MODEL = "GLM-5.1"
@@ -61,6 +62,32 @@ def generate_candidate(
     atomic_write_json(context_path, context_pack)
     prompt = render_prompt(context_pack)
     atomic_write_bytes(prompt_path, prompt.encode("utf-8"))
+    provider_preflight = evaluate_provider_readiness(context_pack)
+    if provider_preflight["status"] != "ready":
+        atomic_write_bytes(response_path, b"")
+        base = manifest_base(
+            target_id,
+            slice_id,
+            resolved_model,
+            agent,
+            variant,
+            context_path,
+            prompt_path,
+            response_path,
+            provider_invocations=0,
+            provider_preflight=provider_preflight,
+        )
+        manifest = {
+            **base,
+            "status": "blocked",
+            "candidates": [],
+            "failure": {
+                "kind": "context_not_provider_ready",
+                "message": "ContextPack source span is not ready for provider invocation",
+            },
+        }
+        atomic_write_json(manifest_path, manifest)
+        return manifest
     argv = [
         *provider_command_prefix(opencode_command),
         "run",
@@ -91,6 +118,8 @@ def generate_candidate(
         context_path,
         prompt_path,
         response_path,
+        provider_invocations=1,
+        provider_preflight=provider_preflight,
     )
     failure = classify_provider_failure(execution)
     if failure is not None:
@@ -343,12 +372,17 @@ def manifest_base(
     context_path: Path,
     prompt_path: Path,
     response_path: Path,
+    *,
+    provider_invocations: int,
+    provider_preflight: dict[str, str],
 ) -> dict[str, Any]:
     return {
         "schema_version": 2,
         "target_id": target_id,
         "slice_id": slice_id,
         "ai_required_for_default_pipeline": True,
+        "provider_invocations": provider_invocations,
+        "provider_preflight": provider_preflight,
         "generator": {
             "tool": "opencode",
             "provider": "zai",

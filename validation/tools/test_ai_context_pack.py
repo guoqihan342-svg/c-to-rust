@@ -5,8 +5,10 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from validation.tools import ai_candidate_harness
+from validation.tools._ai_candidate_harness_parts.provider_readiness import evaluate_provider_readiness
 
 
 def sha256(data: bytes) -> str:
@@ -126,7 +128,7 @@ class AiContextPackTests(unittest.TestCase):
     def test_compile_database_selects_exact_source_entry_deterministically(self) -> None:
         with tempfile.TemporaryDirectory(prefix="context-pack-selection-") as tmp:
             root = Path(tmp)
-            source_root, _function, spec = self.make_project(root)
+            source_root, function, spec = self.make_project(root)
             other = source_root / "src" / "other.c"
             other.write_text("int other(void) { return 1; }\n", encoding="utf-8")
             entries = [
@@ -184,6 +186,206 @@ class AiContextPackTests(unittest.TestCase):
             self.assertEqual(span["status"], "blocked_source_hash_mismatch")
             self.assertNotIn("content", span)
             self.assertEqual(len(context["source"]["input"]["sha256"]), 64)
+
+    def test_source_change_during_read_is_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="context-pack-toctou-") as tmp:
+            root = Path(tmp)
+            source_root, _function, spec = self.make_project(root)
+            spec_path = self.write_spec(root, spec)
+
+            initial_sha = spec["source_file_hashes"]["src/unit.c"]
+            with patch(
+                "validation.tools._ai_candidate_harness_parts.context_source.sha256_path",
+                side_effect=[initial_sha, "0" * 64],
+            ):
+                context = ai_candidate_harness.build_context_pack(
+                    spec_path,
+                    source_root=source_root,
+                )
+
+            span = context["source"]["span"]
+            self.assertEqual("source_file_changed_during_read", span["status"])
+            self.assertNotIn("content", span)
+
+    def test_boolean_source_coordinates_are_not_integers(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="context-pack-bool-coordinates-") as tmp:
+            root = Path(tmp)
+            source_root, _function, spec = self.make_project(root)
+            spec["function_source_span"].update(
+                {
+                    "byte_start": True,
+                    "line_start": True,
+                }
+            )
+            spec_path = self.write_spec(root, spec)
+
+            context = ai_candidate_harness.build_context_pack(
+                spec_path,
+                source_root=source_root,
+            )
+
+            self.assertEqual(
+                "source_span_coordinates_missing",
+                context["source"]["span"]["status"],
+            )
+
+    def test_real_source_without_declared_hashes_is_not_provider_ready(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="context-pack-unbound-source-") as tmp:
+            root = Path(tmp)
+            source_root, _function, spec = self.make_project(root)
+            spec.pop("source_file_hashes")
+            spec["function_source_span"].pop("sha256")
+            spec_path = self.write_spec(root, spec)
+
+            context = ai_candidate_harness.build_context_pack(
+                spec_path,
+                source_root=source_root,
+            )
+
+            self.assertEqual("real_source_bound", context["source"]["span"]["status"])
+            self.assertEqual(
+                {"status": "blocked", "source_span_status": "source_binding_incomplete"},
+                evaluate_provider_readiness(context),
+            )
+
+    def test_source_and_span_hashes_accept_lf_crlf_equivalence(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="context-pack-newlines-") as tmp:
+            root = Path(tmp)
+            source_root, function, spec = self.make_project(root)
+            source_path = source_root / "src" / "unit.c"
+            lf_source = source_path.read_bytes()
+            crlf_source = lf_source.replace(b"\n", b"\r\n")
+            source_path.write_bytes(crlf_source)
+            spec["source_file_hashes"] = {"src/unit.c": sha256(lf_source)}
+            spec["function_source_span"] = {
+                "file": "src/unit.c",
+                "line_start": 3,
+                "line_end": 5,
+                "byte_start": lf_source.index(function),
+                "byte_end": lf_source.index(function) + len(function),
+                "sha256": sha256(function),
+            }
+            spec_path = self.write_spec(root, spec)
+
+            context = ai_candidate_harness.build_context_pack(
+                spec_path,
+                source_root=source_root,
+            )
+
+            source = context["source"]
+            self.assertEqual("real_source_bound", source["span"]["status"])
+            self.assertEqual("newline_equivalent", source["input"]["hash_match_mode"])
+            self.assertEqual("newline_equivalent", source["span"]["hash_match_mode"])
+            self.assertEqual(sha256(crlf_source), source["input"]["sha256"])
+            self.assertEqual(sha256(lf_source), source["input"]["declared_sha256"])
+
+    def test_exact_fragment_carrier_binds_inline_source_to_real_fragment(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="context-pack-carrier-") as tmp:
+            root = Path(tmp)
+            source_root, function, spec = self.make_project(root)
+            source_path = source_root / "src" / "unit.c"
+            fragment = b"    return value + FEATURE;\n"
+            carrier_source = (
+                "int transform_probe(int value) {\n"
+                + fragment.decode("utf-8")
+                + "}\n"
+            )
+            spec["function_name"] = "transform_probe"
+            spec["c_source"] = carrier_source
+            spec["translation_carrier"] = {
+                "kind": "exact_source_fragment_wrapper",
+                "carrier_function": "transform_probe",
+                "carrier_source_sha256": sha256(carrier_source.encode("utf-8")),
+                "embedding_mode": "verbatim_once",
+                "frontend_contract": "live_clang_slice_source",
+                "source_text_normalization": "utf8_universal_newlines",
+                "source_file_hash_mode": "raw_bytes",
+                "artifact_source_hash_mode": "lf_stable_text",
+                "real_source": {
+                    "file": "src/unit.c",
+                    "containing_function": {
+                        "name": "transform",
+                        "line_start": 3,
+                        "line_end": 5,
+                        "sha256": sha256(function.strip()),
+                        "hash_mode": "trimmed_normalized_span",
+                        "declaration_text": "int transform(",
+                    },
+                    "fragment": {
+                        "line_start": 4,
+                        "line_end": 4,
+                        "sha256": sha256(fragment),
+                        "hash_mode": "normalized_line_span_with_newline",
+                        "text": fragment.decode("utf-8"),
+                    },
+                },
+                "claim_boundary": {
+                    "scope": "source_fragment_only",
+                    "whole_function_semantics_verified": False,
+                    "external_callee_semantics_verified": False,
+                },
+            }
+            spec["function_source_span"] = {"file": "src/unit.c"}
+            spec_path = self.write_spec(root, spec)
+
+            context = ai_candidate_harness.build_context_pack(
+                spec_path,
+                source_root=source_root,
+            )
+
+            span = context["source"]["span"]
+            self.assertEqual("inline_translation_carrier_bound", span["status"])
+            self.assertEqual(carrier_source, span["content"])
+            self.assertEqual(fragment.decode("utf-8"), span["real_source_fragment"]["content"])
+
+            disabled_carrier = "# \tif(0)\n" + carrier_source + "# endif /* disabled */\n"
+            spec["c_source"] = disabled_carrier
+            spec["translation_carrier"]["carrier_source_sha256"] = sha256(
+                disabled_carrier.encode("utf-8")
+            )
+            disabled_path = root / "disabled-slice.json"
+            disabled_path.write_text(json.dumps(spec), encoding="utf-8")
+            disabled = ai_candidate_harness.build_context_pack(
+                disabled_path,
+                source_root=source_root,
+            )
+            self.assertEqual(
+                "fragment_inside_preprocessor_conditional",
+                disabled["source"]["span"]["reason"],
+            )
+
+            commented_carrier = "/*\n" + carrier_source + "*/\n"
+            spec["c_source"] = commented_carrier
+            spec["translation_carrier"]["carrier_source_sha256"] = sha256(
+                commented_carrier.encode("utf-8")
+            )
+            commented_path = root / "commented-slice.json"
+            commented_path.write_text(json.dumps(spec), encoding="utf-8")
+            commented = ai_candidate_harness.build_context_pack(
+                commented_path,
+                source_root=source_root,
+            )
+            self.assertEqual(
+                "fragment_inside_comment",
+                commented["source"]["span"]["reason"],
+            )
+
+            spec["c_source"] = carrier_source
+            spec["translation_carrier"]["carrier_source_sha256"] = sha256(
+                carrier_source.encode("utf-8")
+            )
+            spec["translation_carrier"]["real_source"]["fragment"]["sha256"] = "0" * 64
+            blocked_path = root / "blocked-slice.json"
+            blocked_path.write_text(json.dumps(spec), encoding="utf-8")
+            blocked = ai_candidate_harness.build_context_pack(
+                blocked_path,
+                source_root=source_root,
+            )
+            self.assertEqual(
+                "blocked_translation_carrier_contract",
+                blocked["source"]["span"]["status"],
+            )
+            self.assertEqual("fragment_hash_mismatch", blocked["source"]["span"]["reason"])
 
     def test_deterministic_artifacts_expose_bounded_failure_summary_with_hashes(self) -> None:
         with tempfile.TemporaryDirectory(prefix="context-pack-artifacts-") as tmp:
