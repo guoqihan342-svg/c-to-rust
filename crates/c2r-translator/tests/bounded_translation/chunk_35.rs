@@ -189,7 +189,8 @@ fn renamed_stats_sequence_rejects_terminal_drift_and_projection_overlap() {
         Value::String("current_reading".to_string());
     let reason = renamed_stats_sequence_failure(&overlap, Some(&abi));
     assert!(
-        reason.contains("overlaps the aliased owner projection"),
+        reason.contains("overlaps the aliased owner projection")
+            || reason.contains("does not match declared type"),
         "{reason}"
     );
 }

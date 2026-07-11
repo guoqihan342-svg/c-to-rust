@@ -1,0 +1,49 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-stats-sequence-negative-diff.json",
+    "sha256": "951efecc585dfbf725390bd960a197608dd0b569a30bf9bddc3041a9bd68b029",
+    "status": "passed"
+  },
+  "accepted_negative_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-c2rust-baseline-manifest.json",
+    "sha256": "9895963979273894419dc73a3bb2c7912ca673a5eec73566e7b833b3e6515e48",
+    "status": "skipped"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "accepted_value": 27,
+    "case_id": "ordinary",
+    "field": "itr_iterated_value_bytes",
+    "mutated_value": 13
+  },
+  "mutation_detected": true,
+  "negative_diff_gate": "schema_aware_negative_diff",
+  "required_inputs": {
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "negative_diff_actual_status": "expected_failed",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed",
+    "schema_diff_required_first_mismatch": null,
+    "schema_diff_required_status": "passed"
+  },
+  "root_blocked_by": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-route-decision.json",
+    "sha256": "26dbcd6740f3b92a754295109d10c0a1c09f47ff9636899e2b32e309a15fe44e",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-stats-sequence",
+  "status": "expected_failed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "3ac88f26c75809101dc43a857940f56e9b335505d839124697176fcbaa49e5bb",
+    "status": "passed"
+  }
+}

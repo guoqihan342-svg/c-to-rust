@@ -31,7 +31,7 @@
         "declaration_text": "bool fdb_kv_iterate("
       },
       "fragment": {
-        "kind": "ordered_statement_sequence",
+        "kind": "conditional_block_prefix",
         "line_start": 1880,
         "line_end": 1883,
         "sha256": "aba7c0c829fd906d10e5aa2f3c9d047631ff431d6a29b875ab64f15283cf78cb",
@@ -135,12 +135,12 @@
       "size_t_width": 64
     },
     "scalar_arithmetic_contract": {
-      "wrapping_profile": "u32 modulo-2^32 increment followed by two LP64 size_t modulo-2^64 additions",
-      "signed_overflow": "not_applicable",
-      "division_by_zero": "not_applicable",
-      "signed_division_overflow": "not_applicable",
-      "shift_count": "not_applicable",
-      "signed_right_shift": "not_applicable",
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "not_declared",
+      "division_by_zero": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "shift_count": "not_declared",
+      "signed_right_shift": "not_declared",
       "comparison": "not_applicable"
     },
     "external_direct_callees": [],
@@ -277,7 +277,9 @@
     "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-stats-sequence-c-oracle.json",
     "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-stats-sequence-rust-report.json",
     "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-stats-sequence-diff.json",
-    "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-stats-sequence-negative-diff.json"
+    "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-stats-sequence-negative-diff.json",
+    "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-unsafe-ledger.json"
   },
   "replay_contract": {
     "schema_version": 1,
@@ -477,32 +479,9 @@
           "kind": "read_write",
           "expression": "itr->iterated_value_bytes += kv->value_len",
           "source": "src/fdb_kvdb.c:1882"
-        },
-        {
-          "id": "return-true",
-          "pointer_node": "return",
-          "kind": "return",
-          "expression": "return true",
-          "source": "src/fdb_kvdb.c:1883"
         }
       ],
-      "edges": [
-        {
-          "from_effect": "increment-count",
-          "to_effect": "add-object-bytes",
-          "relationship": "sequenced_before"
-        },
-        {
-          "from_effect": "add-object-bytes",
-          "to_effect": "add-value-bytes",
-          "relationship": "sequenced_before"
-        },
-        {
-          "from_effect": "add-value-bytes",
-          "to_effect": "return-true",
-          "relationship": "sequenced_before"
-        }
-      ],
+      "edges": [],
       "summary": {
         "reads": [
           "itr.iterated_cnt",

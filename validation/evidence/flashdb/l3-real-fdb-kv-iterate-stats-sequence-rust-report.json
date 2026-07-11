@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-stats-sequence",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 4,
+  "compared_fields": [
+    "return_value",
+    "itr_iterated_count",
+    "itr_iterated_obj_bytes",
+    "itr_iterated_value_bytes"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "One mutable owner record root performs one direct u32 postfix increment followed in order by two distinct direct LP64 usize wrapping additions from two distinct direct u32 fields reached through one pointer-typedef interior alias, then returns true.",
+    "external_callee": null,
+    "ordered_updates": [
+      {
+        "operation": "postfix_increment",
+        "target": {
+          "owner_field_path": [
+            "iterated_cnt"
+          ],
+          "fixture_field": "itr_iterated_count",
+          "rust_type": "u32"
+        },
+        "increment": 1
+      },
+      {
+        "operation": "wrapping_add",
+        "target": {
+          "owner_field_path": [
+            "iterated_obj_bytes"
+          ],
+          "fixture_field": "itr_iterated_obj_bytes",
+          "rust_type": "usize"
+        },
+        "source": {
+          "alias_field_path": [
+            "len"
+          ],
+          "owner_field_path": [
+            "curr_kv",
+            "len"
+          ],
+          "rust_type": "u32",
+          "mode": "direct_field_value"
+        },
+        "widening": {
+          "conversion": "u32_to_usize",
+          "source_rust_type": "u32",
+          "target_rust_type": "usize",
+          "source_bits": 32,
+          "target_bits": 64,
+          "signedness": "unsigned",
+          "lossless": true,
+          "target_abi_binding": "build_profile.target+c_boundary.target_abi_contract"
+        }
+      },
+      {
+        "operation": "wrapping_add",
+        "target": {
+          "owner_field_path": [
+            "iterated_value_bytes"
+          ],
+          "fixture_field": "itr_iterated_value_bytes",
+          "rust_type": "usize"
+        },
+        "source": {
+          "alias_field_path": [
+            "value_len"
+          ],
+          "owner_field_path": [
+            "curr_kv",
+            "value_len"
+          ],
+          "rust_type": "u32",
+          "mode": "direct_field_value"
+        },
+        "widening": {
+          "conversion": "u32_to_usize",
+          "source_rust_type": "u32",
+          "target_rust_type": "usize",
+          "source_bits": 32,
+          "target_bits": 64,
+          "signedness": "unsigned",
+          "lossless": true,
+          "target_abi_binding": "build_profile.target+c_boundary.target_abi_contract"
+        }
+      }
+    ],
+    "projection_path": [
+      "curr_kv"
+    ],
+    "excluded_semantics": [
+      "source line 1877 condition and all status/CRC selection semantics",
+      "the enclosing iterator loop, loop exits, cross-iteration behavior, and complete fdb_kv_iterate function",
+      "real FlashDB iterator and KV layouts, typedef definitions beyond pointer-alias provenance, alignment, and whole ABI",
+      "FlashDB storage behavior and whole-project migration or semantic-equivalence claims"
+    ]
+  },
+  "status": "passed",
+  "replay_contract_kind": "record_owner_interior_stats_sequence_state",
+  "replay_engine": "exact_generated_rust_replay_plus_declarative_field_check",
+  "generated_draft_replay_pass": true,
+  "generated_draft_semantic_pass": false,
+  "provenance": {
+    "status": "passed",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": false,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "<generated-replay-executable> --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/generated-rust-replay.stdout.log"
+    },
+    "refs": {
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-rust-draft.rs",
+        "sha256": "cb3b3bddc84d083101bfaf5542660e22245c5ac0e832c5bb75b954cbc4fa1e9c"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/rust-check.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-rust-replay-test-draft.rs",
+        "sha256": "2b9da5a61f017c2e3edbb9abd79aedeaf576c1179fa40e37470c1da1f72ec8ae",
+        "declared_sha256": "2b9da5a61f017c2e3edbb9abd79aedeaf576c1179fa40e37470c1da1f72ec8ae"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/generated-rust-replay.stdout.log",
+        "sha256": "607bdad1f7996f26da9cc34e01c6cf019b87a435f6af12cf0045e3697f586bb5"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-rust-report.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      }
+    },
+    "fixture_state_model": {
+      "kind": "record_owner_interior_stats_sequence_state",
+      "operation": "ordered_updates",
+      "pointer_root_count": 1,
+      "projection_mode": "owner_interior_mutable",
+      "scope": "fixture_only",
+      "source_bits": 32,
+      "target_bits": 64,
+      "updates": [
+        {
+          "increment": 1,
+          "operation": "wrapping_add",
+          "target_type": "u32"
+        },
+        {
+          "conversion": "u32_to_usize",
+          "operation": "wrapping_add",
+          "source_type": "u32",
+          "target_type": "usize"
+        },
+        {
+          "conversion": "u32_to_usize",
+          "operation": "wrapping_add",
+          "source_type": "u32",
+          "target_type": "usize"
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "ordinary",
+      "return_value": true,
+      "itr_iterated_count": 5,
+      "itr_iterated_obj_bytes": 13,
+      "itr_iterated_value_bytes": 27,
+      "status": "passed"
+    },
+    {
+      "id": "zero-rhs",
+      "return_value": true,
+      "itr_iterated_count": 9,
+      "itr_iterated_obj_bytes": 42,
+      "itr_iterated_value_bytes": 99,
+      "status": "passed"
+    },
+    {
+      "id": "all-wrap",
+      "return_value": true,
+      "itr_iterated_count": 0,
+      "itr_iterated_obj_bytes": 1,
+      "itr_iterated_value_bytes": 2,
+      "status": "passed"
+    },
+    {
+      "id": "source-discriminator",
+      "return_value": true,
+      "itr_iterated_count": 18,
+      "itr_iterated_obj_bytes": 101,
+      "itr_iterated_value_bytes": 209,
+      "status": "passed"
+    }
+  ]
+}

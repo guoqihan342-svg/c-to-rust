@@ -1,0 +1,6 @@
+
+thread 'replay_real_fdb_kv_iterate_stats_sequence_fixture_contract' (81560) panicked at <translation-carrier-negative>/mutated_same_replay.rs:43:9:
+assertion `left == right` failed: ordinary state 2 drifted
+  left: 13
+ right: 27
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

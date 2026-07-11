@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-stats-sequence",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 4,
+  "compared_fields": [
+    "return_value",
+    "itr_iterated_count",
+    "itr_iterated_obj_bytes",
+    "itr_iterated_value_bytes"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "One mutable owner record root performs one direct u32 postfix increment followed in order by two distinct direct LP64 usize wrapping additions from two distinct direct u32 fields reached through one pointer-typedef interior alias, then returns true.",
+    "external_callee": null,
+    "ordered_updates": [
+      {
+        "operation": "postfix_increment",
+        "target": {
+          "owner_field_path": [
+            "iterated_cnt"
+          ],
+          "fixture_field": "itr_iterated_count",
+          "rust_type": "u32"
+        },
+        "increment": 1
+      },
+      {
+        "operation": "wrapping_add",
+        "target": {
+          "owner_field_path": [
+            "iterated_obj_bytes"
+          ],
+          "fixture_field": "itr_iterated_obj_bytes",
+          "rust_type": "usize"
+        },
+        "source": {
+          "alias_field_path": [
+            "len"
+          ],
+          "owner_field_path": [
+            "curr_kv",
+            "len"
+          ],
+          "rust_type": "u32",
+          "mode": "direct_field_value"
+        },
+        "widening": {
+          "conversion": "u32_to_usize",
+          "source_rust_type": "u32",
+          "target_rust_type": "usize",
+          "source_bits": 32,
+          "target_bits": 64,
+          "signedness": "unsigned",
+          "lossless": true,
+          "target_abi_binding": "build_profile.target+c_boundary.target_abi_contract"
+        }
+      },
+      {
+        "operation": "wrapping_add",
+        "target": {
+          "owner_field_path": [
+            "iterated_value_bytes"
+          ],
+          "fixture_field": "itr_iterated_value_bytes",
+          "rust_type": "usize"
+        },
+        "source": {
+          "alias_field_path": [
+            "value_len"
+          ],
+          "owner_field_path": [
+            "curr_kv",
+            "value_len"
+          ],
+          "rust_type": "u32",
+          "mode": "direct_field_value"
+        },
+        "widening": {
+          "conversion": "u32_to_usize",
+          "source_rust_type": "u32",
+          "target_rust_type": "usize",
+          "source_bits": 32,
+          "target_bits": 64,
+          "signedness": "unsigned",
+          "lossless": true,
+          "target_abi_binding": "build_profile.target+c_boundary.target_abi_contract"
+        }
+      }
+    ],
+    "projection_path": [
+      "curr_kv"
+    ],
+    "excluded_semantics": [
+      "source line 1877 condition and all status/CRC selection semantics",
+      "the enclosing iterator loop, loop exits, cross-iteration behavior, and complete fdb_kv_iterate function",
+      "real FlashDB iterator and KV layouts, typedef definitions beyond pointer-alias provenance, alignment, and whole ABI",
+      "FlashDB storage behavior and whole-project migration or semantic-equivalence claims"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "first_mismatch": null
+}

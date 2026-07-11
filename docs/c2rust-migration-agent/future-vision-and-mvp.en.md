@@ -20,12 +20,12 @@ input.c
 
 | Item | Current value | Exact meaning |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 37 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
+| `translator_generated_semantic_pass_count` | 38 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
 | `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
-| Active translator track | P0-T30 | Audit `fdb_kvdb.c:1882-1883` and the `:1880-1883` composition, prioritizing a new construct family instead of duplicate counting |
+| Active translator track | P0-T32 | Audit the generic short-circuit and branch composition of `fdb_kvdb.c:1877` with the accepted `:1880-1883` body without recounting existing constructs |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |
-| Latest development stage | P0-T29 | Source-backed strict acceptance for the `:1881` owner-interior u32-to-LP64-usize sibling accumulation is complete; the count is now 37 |
-| Current strict regression | `26/34` | Run `20260711T061416Z`; eight historical evidence drifts remain |
+| Latest development stage | P0-T31 | Source-backed strict acceptance for the `:1880-1883` ordered stats sequence is complete; the count is now 38 |
+| Current strict regression | `25/33` | Run `20260711T-finite-p0-t31`; `stress_loops=0`, and eight historical evidence drifts remain |
 | Current proof class | `wsl-local-simulation` | Valid for development and approximation, but not `competition-exact` |
 
 `validation/translator-coverage-matrix.json` is the machine-readable source of truth for capability counts. A native C build, typed-IR unit test, rustc compile, C2Rust output, or LLM output alone is candidate evidence only.
@@ -246,9 +246,17 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   The exact line-1881 source span, pointer-typedef carrier, and LP64 ABI are bound to three finite fixtures covering ordinary, zero-addend, and usize-wrap cases. The actually compiled and executed C oracle, generated Rust replay, schema diff, negative mutation, unsafe ledger, route/profile, and final verification all pass. The WSL competition clang lane reports `schema_status=passed`, `semantic_pass=true`, and `generated_draft_semantic_pass=true` across all 12 strict binding classes, moving the matrix-derived count from 36 to 37. The claim covers only one owner, one scoped interior alias, and one u32-to-usize sibling wrapping add at line 1881; lines 1882-1883, the enclosing branch/loop, complete function, real layout/whole ABI, and the FlashDB project remain excluded.
 
-- [ ] **P0-T30: composition decision gate for `fdb_kvdb.c:1882-1883` and `:1880-1883`**
+- [x] **P0-T30: generic composition candidate for `fdb_kvdb.c:1882-1883` and `:1880-1883`**
 
-  Audit the `iterated_value_bytes` update, threshold condition, and early return line by line, then determine whether their composition introduces a new generic conversion, expression, short-circuit, or control-flow capability. Do not increase the semantic numerator if the slice only repeats an existing record-field construct. Establish the smallest candidate and nearest fail-closed boundaries before entering source-backed closure.
+  A project-independent bounded ordered sequence now supports one direct u32 wrapping increment, two distinct u32 fields read through one scoped interior alias and added into distinct LP64 usize sibling fields, and a fixed `return true`. Production analysis checks only AST, type, ABI, alias, and effect constraints; it does not read project, function, field, slice, or fixture names. A renamed no-clang AST, runtime positives, and adjacent shape/alias/type/effect negatives pass. This remains candidate-only, so the count stays 37.
+
+- [x] **P0-T31: source-backed semantic closure for `fdb_kvdb.c:1880-1883`**
+
+  The exact source span, single-owner/interior-alias carrier, and LP64 ABI are bound to four finite fixtures. The compiled C oracle, generated Rust replay, schema diff, negative mutation, unsafe ledger, route/profile, and final verification pass. The WSL competition clang lane reports `schema_status=passed`, `semantic_pass=true`, and `generated_draft_semantic_pass=true` across all 12 strict binding classes, moving the matrix-derived count from 37 to 38. Line 1877, the enclosing branch/loop, complete function, real layout/whole ABI, and whole-project FlashDB translation remain excluded.
+
+- [ ] **P0-T32: compose the `fdb_kvdb.c:1877` condition with the `:1880-1883` body**
+
+  Audit whether short-circuit, comparison, and branch composition can reuse existing typed IR, then select the smallest generic boundary. Increase the numerator only for a new generic construct with source-backed strict evidence; do not recount the accepted stats body.
 
 ### P0-A: AI/Harness Efficiency
 
@@ -270,6 +278,10 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   `.opencode/agents/c2rust-migrator.md` was reduced from 5408 bytes to 1439 bytes while preserving `opencode + GLM-5.1 + c2rust-migrator + max`, Required Preflight, the non-gating Superpowers boundary, the first-and-only exact Command line tool call, prohibitions on exploration/editing/subagents/substitute commands, hash-bound handoff/session/contract verification, and the non-semantic chat boundary. The bundle manifest and profile contract tests were updated. This only reduces model context and ambiguity; it remains `semantic_gate=false`.
 
+- [x] **P0-A5: keep one command representation in OpenCode prompts**
+
+  Worker and preflight prompts remove the duplicate `Command: <JSON argv>` text and retain one executable `Command line:`. Structured argv, command hashes, sessions, and handoff evidence remain unchanged. Representative prompts are 13.2%-16.1% smaller and the full harness suite passes. This only reduces token use and command ambiguity; it remains `semantic_gate=false`.
+
 ### P0-B: Competition Host and OpenCode
 
 - [ ] **P0-H9: exact OpenCode + GLM-5.1 competition contract revalidation**
@@ -286,7 +298,7 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
 ### P0-C: Stage Closure
 
-- [ ] **P0-C1: historical evidence drift**. Fix the eight failures in run `20260711T061416Z` in artifact-ownership batches, separate from translator behavior changes.
+- [ ] **P0-C1: historical evidence drift**. Fix the eight failures reconfirmed by run `20260711T-finite-p0-t31` in artifact-ownership batches, separate from translator behavior changes.
 - [ ] **P0-C2: all-feature Clippy**. Commit `81a772d1` cleared nine low-risk warnings; eight remain: two `large_enum_variant`, one `redundant_guards`, one `needless_lifetimes`, and four `too_many_arguments`. New slices must add no warnings.
 
 ## 4. Later Backlog
@@ -329,11 +341,14 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 | P0-T27 | Strict source-backed acceptance for the `:1880` u32 mutable record-pointer postfix increment | 35 -> 36 |
 | P0-T28 | Select and validate the `:1881` owner-interior u32-to-LP64-usize sibling accumulation candidate | 36 -> 36 (candidate only) |
 | P0-T29 | Strict source-backed acceptance for the `:1881` owner-interior sibling accumulation | 36 -> 37 |
+| P0-T30 | Select and validate the `:1880-1883` bounded ordered stats sequence candidate | 37 -> 37 (candidate only) |
+| P0-T31 | Strict source-backed acceptance for the `:1880-1883` ordered stats sequence | 37 -> 38 |
 
 Validation run bindings:
 
 | Validation | Binding | Result |
 | --- | --- | --- |
+| P0-T31 strict validator | WSL competition clang lane, 2026-07-11 | `schema_status=passed`, `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; only four finite fixtures ran, with no stress loop or repeated rounds |
 | P0-T29 strict validator | WSL competition clang lane, 2026-07-11 | `schema_status=passed`, `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; only three bounded fixtures ran, with no 1,000/10,000-round or other loop stress test |
 | P0-T27 strict validator | WSL competition clang lane, 2026-07-11 | `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; only three bounded fixtures ran and no loop stress was run |
 | P0-T25 strict validator | WSL competition clang lane, 2026-07-11 | `semantic_pass=true`, `generated_draft_semantic_pass=true`; all 12 semantic-binding checks passed; three bounded fixtures cover 1/2/3 ordered body/tail calls; no loop stress was run |
@@ -342,7 +357,7 @@ Validation run bindings:
 | P0-T22 translator candidate | current worktree, 2026-07-11 | library `228` passed; bounded `659` passed with `133` real-clang opt-in ignores; integer conversion `4` passed; coverage matrix passed |
 | P0-T21 translator candidate | commit `02067028`, 2026-07-11 | library `228` passed; bounded `657` passed with `133` real-clang opt-in ignores; integer conversion `4` passed |
 | P0-T20 Python core historical snapshot | 2026-07-11 stage snapshot | `293 passed, 6 skipped`, plus `90` subtests; proves only that revision |
-| Full regression | run `20260711T061416Z` | 26 of 34 passed; P0-T21 added no failure and the same eight historical evidence drifts failed; future runner defaults omit loop stress |
+| Full regression | run `20260711T-finite-p0-t31` | 25 of 33 passed; P0-T31 added no failure and the same eight historical evidence drifts failed; `stress_loops=0`, `run_stress=false` |
 | P0-T21 strict validator | evidence generated from commit `8a261787` | `semantic_pass=true`, `generated_draft_semantic_pass=true`, and all 12 semantic binding classes passed |
 | P0-T20 strict validator | P0-T20 evidence | `semantic_pass=true` and `generated_draft_semantic_pass=true` |
 | Accepted-evidence strict status | `libuv/ip4-addr` | verified-unsafe-baseline SHA drift; the ledger count is not a current strict pass |

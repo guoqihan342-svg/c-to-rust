@@ -24,7 +24,7 @@ class AutoMigrateStatsSequenceReplayTests(unittest.TestCase):
             spec, binding
         )
         self.assertIn("UINT32_C(1)", oracle["statements"])
-        self.assertEqual(oracle["statements"].count("(size_t)"), 8)
+        self.assertEqual(oracle["statements"].count(" + (size_t)"), 8)
         replay = self.module.rust_replay_record_owner_interior_stats_sequence_state_cases_source(
             spec, binding
         )
@@ -50,7 +50,7 @@ class AutoMigrateStatsSequenceReplayTests(unittest.TestCase):
             reordered["replay_contract"]["updates"][1],
             reordered["replay_contract"]["updates"][0],
         )
-        mutations.append((reordered, "updates\[0\] shape drifted"))
+        mutations.append((reordered, r"updates\[0\] shape drifted"))
         extra = copy.deepcopy(spec)
         extra["replay_contract"]["updates"].append(copy.deepcopy(extra["replay_contract"]["updates"][2]))
         mutations.append((extra, "exactly three ordered updates"))

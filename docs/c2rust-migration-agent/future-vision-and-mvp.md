@@ -22,12 +22,12 @@ input.c
 
 | 项目 | 当前值 | 准确含义 |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 37 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
+| `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
-| 当前翻译主线 | P0-T30 | 审计 `fdb_kvdb.c:1882-1883` 及 `:1880-1883` 组合，优先选择新增 construct family 而不是重复计数 |
+| 当前翻译主线 | P0-T32 | 审计 `fdb_kvdb.c:1877` 条件与已验收 `:1880-1883` body 的通用短路/分支组合，不重复计算既有构造 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-T29 | `:1881` owner-interior u32-to-LP64-usize sibling accumulation 已完成 source-backed 严格验收，计数更新为 37 |
-| 当前严格回归 | `26/34` | run `20260711T061416Z`；8 项历史 evidence 漂移仍未修复 |
+| 最近开发阶段 | P0-T31 | `:1880-1883` ordered stats sequence 已完成 source-backed 严格验收，计数更新为 38 |
+| 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
 `validation/translator-coverage-matrix.json` 是能力计数的机器可读事实源。native C build、typed-IR 单测、rustc 编译、C2Rust output 或 LLM 输出单独通过都只是 candidate evidence。
@@ -248,9 +248,17 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   已固定 line 1881 source span、pointer-typedef carrier 和 LP64 ABI，建立 3 个有限 fixture（普通、零增量、usize 回绕）、实际编译执行的 C oracle、generated Rust replay、schema diff、negative mutation、unsafe ledger、route/profile 和 final verification。WSL competition clang lane 的 12 类严格绑定检查全部通过，`schema_status=passed`、`semantic_pass=true`、`generated_draft_semantic_pass=true`，matrix 派生计数由 36 更新为 37。声明只覆盖 line 1881 的单 owner、scoped interior alias、u32-to-usize sibling wrapping add；不覆盖 lines 1882-1883、外层条件/循环、完整函数、真实布局/整体 ABI 或 FlashDB 项目。
 
-- [ ] **P0-T30：`fdb_kvdb.c:1882-1883` 与 `:1880-1883` 组合决策门**
+- [x] **P0-T30：`fdb_kvdb.c:1882-1883` 与 `:1880-1883` 通用组合候选**
 
-  逐行审计 `iterated_value_bytes` 更新、阈值条件和 early return，并判断组合是否引入新的通用类型转换、表达式、短路或控制流能力。若只是重复已有 record-field construct，不增加 semantic numerator；先建立最小候选与最近邻 fail-closed 边界，再决定是否进入 source-backed 闭环。
+  已实现 project-independent 的有界 ordered sequence：一个 direct u32 wrapping increment、两个来自同一 scoped interior alias 的不同 u32 字段到不同 LP64 usize sibling 字段的 wrapping add，以及固定 `return true`。生产分析只检查 AST/类型/ABI/alias/effect 约束，不读取项目名、函数名、字段名、slice id 或 fixture 常量；renamed no-clang AST、运行时正例和相邻形状/alias/类型/effect 负例通过。该阶段为 candidate only，计数保持 37。
+
+- [x] **P0-T31：`fdb_kvdb.c:1880-1883` source-backed 语义闭环**
+
+  已固定 lines 1880-1883 的 source span、单 owner/interior-alias carrier 和 LP64 ABI，建立 4 个有限 fixture，完成实际编译执行的 C oracle、generated Rust replay、schema diff、negative mutation、unsafe ledger、route/profile 和 final verification。WSL competition clang lane 的 12 类严格绑定检查全部通过，`schema_status=passed`、`semantic_pass=true`、`generated_draft_semantic_pass=true`，matrix 派生计数由 37 更新为 38。声明不覆盖 line 1877 条件、外层分支/循环、完整函数、真实布局/整体 ABI 或 FlashDB 全项目。
+
+- [ ] **P0-T32：组合 `fdb_kvdb.c:1877` 条件与 `:1880-1883` body**
+
+  审计条件表达式的短路、比较和分支组合是否能复用现有 typed IR，并选择最小通用边界。只在新增通用构造且 source-backed 严格证据闭环时增加 numerator；已有 stats body 不重复计数。
 
 ### P0-A：AI/Harness 效率
 
@@ -272,6 +280,10 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   `.opencode/agents/c2rust-migrator.md` 从 5408 bytes 精简到 1439 bytes，同时保留 `opencode + GLM-5.1 + c2rust-migrator + max`、Required Preflight、Superpowers 非门禁边界、首个且唯一精确 Command line tool call、禁止探索/编辑/子代理/替代命令、hash-bound handoff/session/contract 校验和 chat 非语义事实边界。bundle manifest 与 profile contract tests 同步更新；该优化只减少模型上下文和歧义，`semantic_gate=false`。
 
+- [x] **P0-A5：OpenCode prompt 只保留一种命令表示**
+
+  worker 与 preflight prompt 删除重复的 `Command: <JSON argv>` 文本，只保留一条可执行 `Command line:`；结构化 argv、命令 hash、session 和 handoff 证据保持不变。代表性 prompt 减少 13.2%-16.1% bytes，完整 harness 测试通过；该项只降低 token 和命令歧义，`semantic_gate=false`。
+
 ### P0-B：比赛主机与 OpenCode
 
 - [ ] **P0-H9：真实 OpenCode + GLM-5.1 比赛合同复验**
@@ -288,7 +300,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 ### P0-C：阶段收口
 
-- [ ] **P0-C1：历史 evidence 漂移**。修复 run `20260711T061416Z` 的 8 个失败项，按 artifact 所有权分批处理，不与翻译层功能改动混交。
+- [ ] **P0-C1：历史 evidence 漂移**。修复 run `20260711T-finite-p0-t31` 再确认的 8 个失败项，按 artifact 所有权分批处理，不与翻译层功能改动混交。
 - [ ] **P0-C2：全功能 Clippy**。commit `81a772d1` 已清理 9 个低风险告警；当前剩余 8 个（2 个 `large_enum_variant`、1 个 `redundant_guards`、1 个 `needless_lifetimes`、4 个 `too_many_arguments`）。新切片不得增加告警。
 
 ## 4. 后续 Backlog
@@ -331,11 +343,14 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | P0-T27 | `:1880` u32 mutable record-pointer postfix increment source-backed 严格验收 | 35 -> 36 |
 | P0-T28 | 选择并验证 `:1881` owner-interior u32-to-LP64-usize sibling accumulation candidate | 36 -> 36（candidate only） |
 | P0-T29 | `:1881` owner-interior sibling accumulation source-backed 严格验收 | 36 -> 37 |
+| P0-T30 | 选择并验证 `:1880-1883` bounded ordered stats sequence candidate | 37 -> 37（candidate only） |
+| P0-T31 | `:1880-1883` ordered stats sequence source-backed 严格验收 | 37 -> 38 |
 
 验证运行绑定：
 
 | 验证项 | 绑定 | 结果 |
 | --- | --- | --- |
+| P0-T31 严格 validator | WSL competition clang lane，2026-07-11 | `schema_status=passed`、`semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过；仅运行 4 个有限 fixture，不执行压力循环或重复轮次 |
 | P0-T29 严格 validator | WSL competition clang lane，2026-07-11 | `schema_status=passed`、`semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过；仅运行 3 个有限 fixture，未执行 1000/10000 轮或其他循环压力测试 |
 | P0-T27 严格 validator | WSL competition clang lane，2026-07-11 | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过；仅运行 3 个有限 fixture，未执行循环压力测试 |
 | P0-T25 严格 validator | WSL competition clang lane，2026-07-11 | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过；3 个有限 fixture 案例覆盖 1/2/3 次 body/tail 有序调用；未执行循环压力测试 |
@@ -344,7 +359,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | P0-T22 translator candidate | 当前工作树，2026-07-11 | library `228` 通过；bounded `659` 通过、`133` 个 real-clang opt-in 忽略；integer conversion `4` 通过；coverage matrix passed |
 | P0-T21 translator candidate | commit `02067028`，2026-07-11 | library `228` 通过；bounded `657` 通过、`133` 个 real-clang opt-in 忽略；integer conversion `4` 通过 |
 | P0-T20 Python core 历史快照 | 2026-07-11 阶段快照 | `293 passed, 6 skipped`，另有 `90` 个 subtests；只证明当时提交 |
-| 全量回归 | run `20260711T061416Z` | 34 项中 26 项通过；P0-T21 未新增失败，8 项仍为历史 evidence 漂移；后续 runner 默认取消循环压力测试 |
+| 全量回归 | run `20260711T-finite-p0-t31` | 33 项中 25 项通过；P0-T31 未新增失败，8 项仍为历史 evidence 漂移；`stress_loops=0`、`run_stress=false` |
 | P0-T21 严格 validator | commit `8a261787` 生成的 evidence | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过 |
 | P0-T20 严格 validator | P0-T20 evidence | `semantic_pass=true`、`generated_draft_semantic_pass=true` |
 | accepted-evidence 严格状态 | `libuv/ip4-addr` | verified-unsafe-baseline SHA 漂移，ledger 计数不等于当前严格通过 |

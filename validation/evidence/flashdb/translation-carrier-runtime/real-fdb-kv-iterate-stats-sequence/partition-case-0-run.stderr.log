@@ -1,0 +1,6 @@
+
+thread '__c2r_negative_partition_case_0' (81580) panicked at <translation-carrier-negative>/mutated_partition_replay.rs:29:5:
+assertion `left == right` failed: ordinary itr_iterated_value_bytes drifted
+  left: 13
+ right: 27
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

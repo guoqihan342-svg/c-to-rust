@@ -14,10 +14,10 @@
 
 | 项目 | 当前状态 |
 | --- | --- |
-| Translator-generated semantic pass | `35` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
+| Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
-| 最近开发阶段 | P0-T25：完成 `fdb_kvdb.c:1876` source-backed 严格语义闭环 |
-| 当前翻译任务 | P0-T26：审计并选择 `fdb_kvdb.c:1877-1883` 的最小通用切片 |
+| 最近开发阶段 | P0-T31：完成 `fdb_kvdb.c:1880-1883` ordered stats sequence 的 source-backed 严格语义闭环 |
+| 当前翻译任务 | P0-T32：组合 `fdb_kvdb.c:1877` 条件与已验收 `:1880-1883` body，且不重复计数 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
@@ -39,6 +39,8 @@
 7. **评委输出**：生成 workflow metrics、before/after、judge bundle、release notes 和 public packet。
 
 OpenCode retry 额外受 no-progress 门控制：相同有效输入和相同确定性失败连续两次后，第三次启动会在 runner 前被拒绝并留下 hash-bound 事件；暂态环境、凭据、锁和合同问题继续重试。该机制只节省无效调用，不改变语义验收门禁。
+
+OpenCode worker 与 preflight prompt 只保留一条可执行 `Command line:`；重复 JSON argv 文本已删除，结构化 argv、命令 hash、session 与 handoff 证据仍完整保留。该调整减少 13.2%-16.1% 的代表性 prompt bytes，不改变语义门禁。
 
 批处理还支持 `mode=auto` 的 deterministic-first admission gate：只有全部 worker 都绑定 accepted evidence、现存 evidence root、source hash 和 slice spec，且没有 repair policy 时，才会在 OpenCode preflight 前选择 deterministic；其余输入 fail closed。`competition-exact`、hostless rehearsal 和显式 OpenCode attestation 不允许自动降级。
 

@@ -10,10 +10,10 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 
 | Item | Status |
 | --- | --- |
-| Translator-generated semantic pass | `35` named slices, derived from `validation/translator-coverage-matrix.json` |
+| Translator-generated semantic pass | `38` named slices, derived from `validation/translator-coverage-matrix.json` |
 | Accepted-evidence authoritative | `1`, reported separately from the translator numerator |
-| Latest development stage | P0-T25: complete source-backed strict semantic closure for `fdb_kvdb.c:1876` |
-| Active translator task | P0-T26: audit and select the smallest generic slice within `fdb_kvdb.c:1877-1883` |
+| Latest development stage | P0-T31: complete source-backed strict semantic closure for the `fdb_kvdb.c:1880-1883` ordered stats sequence |
+| Active translator task | P0-T32: compose the `fdb_kvdb.c:1877` condition with the accepted `:1880-1883` body without duplicate counting |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | Superpowers specs/plans, canonical roadmap, and harness evidence gates |
@@ -33,6 +33,8 @@ The canonical backlog is [future-vision-and-mvp.md](docs/c2rust-migration-agent/
 7. Produces workflow metrics, before/after exhibits, judge bundles, release notes, and public packets.
 
 OpenCode retries are also guarded by a no-progress gate: after two identical deterministic failures with identical effective inputs, a third launch is refused before the runner and recorded as a hash-bound event. Transient environment, credential, lock, and contract failures remain retryable. This saves calls without changing semantic acceptance gates.
+
+OpenCode worker and preflight prompts retain one executable `Command line:`. The duplicate JSON argv text was removed while structured argv, command hashes, sessions, and handoff evidence remain intact. Representative prompt size dropped by 13.2%-16.1% without changing semantic gates.
 
 Batch profiles also support a deterministic-first `mode=auto` admission gate. It selects deterministic execution before OpenCode preflight only when every worker binds accepted evidence, an existing evidence root, a source hash, and a slice spec with no repair policy. All other inputs fail closed. `competition-exact`, hostless rehearsal, and explicit OpenCode attestation cannot auto-downgrade.
 

@@ -1,0 +1,359 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-stats-sequence",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 4,
+  "compared_fields": [
+    "return_value",
+    "itr_iterated_count",
+    "itr_iterated_obj_bytes",
+    "itr_iterated_value_bytes"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "One mutable owner record root performs one direct u32 postfix increment followed in order by two distinct direct LP64 usize wrapping additions from two distinct direct u32 fields reached through one pointer-typedef interior alias, then returns true.",
+    "external_callee": null,
+    "ordered_updates": [
+      {
+        "operation": "postfix_increment",
+        "target": {
+          "owner_field_path": [
+            "iterated_cnt"
+          ],
+          "fixture_field": "itr_iterated_count",
+          "rust_type": "u32"
+        },
+        "increment": 1
+      },
+      {
+        "operation": "wrapping_add",
+        "target": {
+          "owner_field_path": [
+            "iterated_obj_bytes"
+          ],
+          "fixture_field": "itr_iterated_obj_bytes",
+          "rust_type": "usize"
+        },
+        "source": {
+          "alias_field_path": [
+            "len"
+          ],
+          "owner_field_path": [
+            "curr_kv",
+            "len"
+          ],
+          "rust_type": "u32",
+          "mode": "direct_field_value"
+        },
+        "widening": {
+          "conversion": "u32_to_usize",
+          "source_rust_type": "u32",
+          "target_rust_type": "usize",
+          "source_bits": 32,
+          "target_bits": 64,
+          "signedness": "unsigned",
+          "lossless": true,
+          "target_abi_binding": "build_profile.target+c_boundary.target_abi_contract"
+        }
+      },
+      {
+        "operation": "wrapping_add",
+        "target": {
+          "owner_field_path": [
+            "iterated_value_bytes"
+          ],
+          "fixture_field": "itr_iterated_value_bytes",
+          "rust_type": "usize"
+        },
+        "source": {
+          "alias_field_path": [
+            "value_len"
+          ],
+          "owner_field_path": [
+            "curr_kv",
+            "value_len"
+          ],
+          "rust_type": "u32",
+          "mode": "direct_field_value"
+        },
+        "widening": {
+          "conversion": "u32_to_usize",
+          "source_rust_type": "u32",
+          "target_rust_type": "usize",
+          "source_bits": 32,
+          "target_bits": 64,
+          "signedness": "unsigned",
+          "lossless": true,
+          "target_abi_binding": "build_profile.target+c_boundary.target_abi_contract"
+        }
+      }
+    ],
+    "projection_path": [
+      "curr_kv"
+    ],
+    "excluded_semantics": [
+      "source line 1877 condition and all status/CRC selection semantics",
+      "the enclosing iterator loop, loop exits, cross-iteration behavior, and complete fdb_kv_iterate function",
+      "real FlashDB iterator and KV layouts, typedef definitions beyond pointer-alias provenance, alignment, and whole ABI",
+      "FlashDB storage behavior and whole-project migration or semantic-equivalence claims"
+    ]
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:ordered-statistics-sequence@1880-1883"
+    ]
+  },
+  "provenance": {
+    "binding_mode": "executed_harness",
+    "evidence_refs": {
+      "slice_spec": {
+        "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-stats-sequence.json",
+        "sha256": "25a7e161b60e8fd1c265f105ce01427eb465950c9c736001bb201ac94cdd13ce"
+      },
+      "fixture": {
+        "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-stats-sequence.json",
+        "sha256": "166d43aa77081e5df340d1e4023599f9e86e1ed542f001b5ec873c4b028a2f1b"
+      },
+      "real_source": {
+        "path": "sources/FlashDB/src/fdb_kvdb.c",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+        "artifact_lf_stable_sha256": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b",
+        "containing_function_sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d",
+        "source_fragment_sha256": "aba7c0c829fd906d10e5aa2f3c9d047631ff431d6a29b875ab64f15283cf78cb"
+      },
+      "translation_carrier": {
+        "kind": "exact_source_fragment_wrapper",
+        "carrier_function": "fdb_kv_iterate_stats_sequence_probe",
+        "carrier_source_sha256": "8b4447a06be5c52641ee61fe01bbf3dfc8f674af90feab7b2354913ae676e4f2"
+      },
+      "translator_input": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-translator-input.json",
+        "sha256": "8e7b51fbd847a8a7e600b3cd9b9f47cca19fc576288a3667835799deda1fe186"
+      },
+      "translation_plan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-auto-translation-plan.json",
+        "binding_mode": "field_bound",
+        "status": "draft_generated",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "clang_lowering_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-clang-lowering-report.json",
+        "binding_mode": "field_bound",
+        "status": "lowered",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "c_oracle_status": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-c-oracle-status.json",
+        "binding_mode": "field_bound",
+        "status": "DRAFT_GENERATED",
+        "semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "c_oracle_harness": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-c-oracle-harness-draft.c",
+        "sha256": "6ebbf451618aeaaa5c8b751fd55c34b704973bc77a4faaaba93f370df4f391c4"
+      },
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-rust-draft.rs",
+        "sha256": "cb3b3bddc84d083101bfaf5542660e22245c5ac0e832c5bb75b954cbc4fa1e9c"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/rust-check.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_evidence": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "generated_replay_test": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-rust-replay-test-draft.rs",
+        "sha256": "2b9da5a61f017c2e3edbb9abd79aedeaf576c1179fa40e37470c1da1f72ec8ae",
+        "declared_sha256": "2b9da5a61f017c2e3edbb9abd79aedeaf576c1179fa40e37470c1da1f72ec8ae"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/generated-rust-replay.stdout.log",
+        "sha256": "607bdad1f7996f26da9cc34e01c6cf019b87a435f6af12cf0045e3697f586bb5"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "candidate_rust_report": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-rust-report.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      },
+      "test_translation": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-test-translation-generated.json",
+        "binding_mode": "field_bound",
+        "status": "passed",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
+      }
+    },
+    "compile_execution": {
+      "argv": [
+        "cc",
+        "-std=c99",
+        "l3-real-fdb-kv-iterate-stats-sequence-c-oracle-harness-draft.c",
+        "-o",
+        "l3-real-fdb-kv-iterate-stats-sequence-c-oracle-harness-draft.exe"
+      ],
+      "attempted": true,
+      "compiler_candidates": [
+        "cc",
+        "gcc",
+        "clang"
+      ],
+      "compiler_name": "cc",
+      "compiler_path": "cc",
+      "diagnostics": [
+        "C oracle compile command succeeded, but execution/diff gates are still required."
+      ],
+      "execution_argv": [
+        "cc",
+        "-std=c99",
+        "l3-real-fdb-kv-iterate-stats-sequence-c-oracle-harness-draft.c",
+        "-o",
+        "l3-real-fdb-kv-iterate-stats-sequence-c-oracle-harness-draft.exe"
+      ],
+      "harness_execution": {
+        "argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-c-oracle-harness-draft.exe"
+        ],
+        "attempted": true,
+        "diagnostics": [
+          "C oracle harness executed, but execution output has not passed oracle diff gates."
+        ],
+        "output_gate": {
+          "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+          "compared_fields": [
+            "return_value",
+            "itr_iterated_count",
+            "itr_iterated_obj_bytes",
+            "itr_iterated_value_bytes"
+          ],
+          "diagnostics": [
+            "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+          ],
+          "expected_stdout_fragments": [
+            "fixture case ordinary return_value matched",
+            "fixture case ordinary itr_iterated_count matched",
+            "fixture case ordinary itr_iterated_obj_bytes matched",
+            "fixture case ordinary itr_iterated_value_bytes matched",
+            "fixture case zero-rhs return_value matched",
+            "fixture case zero-rhs itr_iterated_count matched",
+            "fixture case zero-rhs itr_iterated_obj_bytes matched",
+            "fixture case zero-rhs itr_iterated_value_bytes matched",
+            "fixture case all-wrap return_value matched",
+            "fixture case all-wrap itr_iterated_count matched",
+            "fixture case all-wrap itr_iterated_obj_bytes matched",
+            "fixture case all-wrap itr_iterated_value_bytes matched",
+            "fixture case source-discriminator return_value matched",
+            "fixture case source-discriminator itr_iterated_count matched",
+            "fixture case source-discriminator itr_iterated_obj_bytes matched",
+            "fixture case source-discriminator itr_iterated_value_bytes matched"
+          ],
+          "fixture_expected_output_status": "declared_not_executed",
+          "gate": "c_oracle_harness_output",
+          "matched_stdout_fragments": [
+            "fixture case ordinary return_value matched",
+            "fixture case ordinary itr_iterated_count matched",
+            "fixture case ordinary itr_iterated_obj_bytes matched",
+            "fixture case ordinary itr_iterated_value_bytes matched",
+            "fixture case zero-rhs return_value matched",
+            "fixture case zero-rhs itr_iterated_count matched",
+            "fixture case zero-rhs itr_iterated_obj_bytes matched",
+            "fixture case zero-rhs itr_iterated_value_bytes matched",
+            "fixture case all-wrap return_value matched",
+            "fixture case all-wrap itr_iterated_count matched",
+            "fixture case all-wrap itr_iterated_obj_bytes matched",
+            "fixture case all-wrap itr_iterated_value_bytes matched",
+            "fixture case source-discriminator return_value matched",
+            "fixture case source-discriminator itr_iterated_count matched",
+            "fixture case source-discriminator itr_iterated_obj_bytes matched",
+            "fixture case source-discriminator itr_iterated_value_bytes matched"
+          ],
+          "missing_stdout_fragments": [],
+          "schema_version": 1,
+          "semantic_pass": false,
+          "status": "matched_not_oracle"
+        },
+        "returncode": 0,
+        "semantic_pass": false,
+        "status": "exited_zero_not_oracle",
+        "stderr": "",
+        "stdout": "oracle harness draft for fdb_kv_iterate_stats_sequence_probe\nfixture input: validation/l2_slices/fixtures/real-fdb-kv-iterate-stats-sequence.json\nfixture case ordinary return_value matched\nfixture case ordinary itr_iterated_count matched\nfixture case ordinary itr_iterated_obj_bytes matched\nfixture case ordinary itr_iterated_value_bytes matched\nfixture case zero-rhs return_value matched\nfixture case zero-rhs itr_iterated_count matched\nfixture case zero-rhs itr_iterated_obj_bytes matched\nfixture case zero-rhs itr_iterated_value_bytes matched\nfixture case all-wrap return_value matched\nfixture case all-wrap itr_iterated_count matched\nfixture case all-wrap itr_iterated_obj_bytes matched\nfixture case all-wrap itr_iterated_value_bytes matched\nfixture case source-discriminator return_value matched\nfixture case source-discriminator itr_iterated_count matched\nfixture case source-discriminator itr_iterated_obj_bytes matched\nfixture case source-discriminator itr_iterated_value_bytes matched\n",
+        "timeout_seconds": 30,
+        "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence",
+        "execution_argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-c-oracle-harness-draft.exe"
+        ]
+      },
+      "requested_compiler": "cc",
+      "returncode": 0,
+      "semantic_pass": false,
+      "status": "compile_succeeded_not_oracle",
+      "stderr": "",
+      "stdout": "",
+      "toolchain_adapter": "local",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence",
+      "command_recording": "portable_logical_argv"
+    }
+  },
+  "cases": [
+    {
+      "id": "ordinary",
+      "return_value": true,
+      "itr_iterated_count": 5,
+      "itr_iterated_obj_bytes": 13,
+      "itr_iterated_value_bytes": 27,
+      "status": "passed"
+    },
+    {
+      "id": "zero-rhs",
+      "return_value": true,
+      "itr_iterated_count": 9,
+      "itr_iterated_obj_bytes": 42,
+      "itr_iterated_value_bytes": 99,
+      "status": "passed"
+    },
+    {
+      "id": "all-wrap",
+      "return_value": true,
+      "itr_iterated_count": 0,
+      "itr_iterated_obj_bytes": 1,
+      "itr_iterated_value_bytes": 2,
+      "status": "passed"
+    },
+    {
+      "id": "source-discriminator",
+      "return_value": true,
+      "itr_iterated_count": 18,
+      "itr_iterated_obj_bytes": 101,
+      "itr_iterated_value_bytes": 209,
+      "status": "passed"
+    }
+  ]
+}

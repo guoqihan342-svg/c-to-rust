@@ -1,0 +1,49 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=25a7e161b60e8fd1c265f105ce01427eb465950c9c736001bb201ac94cdd13ce",
+    "fixture_hash=166d43aa77081e5df340d1e4023599f9e86e1ed542f001b5ec873c4b028a2f1b",
+    "build_profile_hash=949084aea8fce3d3d55594609f8ad62449fe047c7ae3e294037061502e24d923",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edge_to_callee_binding": [],
+  "call_edges": [],
+  "callee_sources": [],
+  "direct_c_files": [
+    "src/fdb_kvdb.c"
+  ],
+  "direct_call_edges": [],
+  "direct_rust_files": [
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-stats-sequence/l3-real-fdb-kv-iterate-stats-sequence-rust-draft.rs"
+  ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
+  "external_direct_callees": [],
+  "fixture": "validation/l2_slices/fixtures/real-fdb-kv-iterate-stats-sequence.json",
+  "global_dependencies": [],
+  "level": "L3",
+  "repo_commit": "1f16c29a3f547212934e06de580c98a1a27fcde2",
+  "schema_version": 1,
+  "signature_bindings": [],
+  "slice_id": "real-fdb-kv-iterate-stats-sequence",
+  "slice_spec": {
+    "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-stats-sequence.json",
+    "sha256": "25a7e161b60e8fd1c265f105ce01427eb465950c9c736001bb201ac94cdd13ce"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate_stats_sequence_probe"
+    ],
+    "globals": [],
+    "structs": []
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "stub_boundaries": [],
+  "target_id": "flashdb"
+}

@@ -102,6 +102,7 @@ def c_oracle_record_owner_interior_stats_sequence_state_execution_source(
             f"    fprintf(stderr, {c_string_literal(case_id + ' return mismatch\\n')});\n",
             "    return 1;\n",
             "  }\n",
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + str(result['fixture_field']) + ' matched')});\n",
         ])
         for index, update in enumerate(contract["updates"]):
             target = update["target"]
