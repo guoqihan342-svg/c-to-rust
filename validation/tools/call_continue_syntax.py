@@ -6,7 +6,8 @@ from typing import Any
 
 def validate_c_call_continue_source(source: str, contract: dict[str, Any]) -> dict[str, Any]:
     entries = {item["parameter"]: item for item in contract["entry_arguments"]}
-    db, local, owner = (item["parameter"] for item in contract["entry_arguments"])
+    db = contract["entry_arguments"][0]["parameter"]
+    owner = contract["owner_parameter"]
     projection = contract["projection"]
     alias = projection["alias_local"]
     external = contract["external_callee"]
@@ -46,8 +47,22 @@ def validate_c_call_continue_source(source: str, contract: dict[str, Any]) -> di
     clear = unique(re.compile(
         rf"\b{re.escape(control['sentinel_local'])}\s*=\s*false\s*;"
     ), source, "body-first sentinel clear")
+    zero_branch = None
+    call_prefix = ""
+    if contract.get("schema_version") == 2:
+        zero = contract["zero_start"]
+        record = zero["assignment"]["record"]
+        offset = zero["assignment"]["offset"]["parameter"]
+        record_root = call_local if record["parameter"] == local_entry else record["parameter"]
+        record_field = c_access(record_root, record["field_path"], arrow=False)
+        zero_branch = unique(re.compile(
+            rf"\bif\s*\(\s*{alias_state}\s*==\s*(?:\(\s*uint32_t\s*\)\s*)?0[uU]?\s*\)\s*\{{\s*"
+            rf"{alias_state}\s*=\s*{record_field}\s*\+\s*{re.escape(offset)}\s*;\s*"
+            rf"\}}\s*else\s+if\s*\("
+        ), source, "zero-start branch")
+        call_prefix = r"\s*"
     call_condition = unique(re.compile(
-        rf"\(\s*{alias_state}\s*=\s*{re.escape(external['name'])}\s*\(\s*"
+        rf"{call_prefix}\(\s*{alias_state}\s*=\s*{re.escape(external['name'])}\s*\(\s*"
         rf"{re.escape(db)}\s*,\s*&\s*{re.escape(call_local)}\s*,\s*{re.escape(alias)}\s*\)\s*\)"
         rf"\s*==\s*(?:FAILED_ADDR|(?:\(\s*uint32_t\s*\)\s*)?{contract['comparison']['sentinel']}[uU]?)"
     ), source, "assigned external-call equality")
@@ -61,7 +76,7 @@ def validate_c_call_continue_source(source: str, contract: dict[str, Any]) -> di
     if re.search(rf"{owner_state}\s*=\s*(?:\(\s*uint32_t\s*\)\s*)?0[uU]?\s*;", source):
         raise ValueError("hit reset must use the owner interior alias")
     ordered = tuple(item for item in (
-        typedef, alias_decl, local_decl, sentinel_decl, loop, clear, call_condition,
+        typedef, alias_decl, local_decl, sentinel_decl, loop, clear, zero_branch, call_condition,
         reset, addition, continuation, miss, terminal,
     ) if item is not None)
     require_order(ordered, "C call/compare/reset/add/continue order drifted")
@@ -79,7 +94,9 @@ def validate_rust_call_continue_draft(source: str, contract: dict[str, Any]) -> 
     found = [label for label, pattern in forbidden.items() if pattern.search(source)]
     if found:
         raise ValueError("generated Rust draft must not use " + ", ".join(found))
-    db, local, owner = (item["parameter"] for item in contract["entry_arguments"])
+    db = contract["entry_arguments"][0]["parameter"]
+    local = contract["entry_arguments"][1]["parameter"]
+    owner = contract["owner_parameter"]
     entries = {item["parameter"]: item for item in contract["entry_arguments"]}
     projection = contract["projection"]
     alias = projection["alias_local"]
@@ -93,11 +110,18 @@ def validate_rust_call_continue_draft(source: str, contract: dict[str, Any]) -> 
     local_entry = local_argument["entry_parameter"]
     call_local = local_argument["callee_parameter"]
 
+    signature_parameters = []
+    for entry in contract["entry_arguments"]:
+        prefix = r"&\s*mut\s+" if entry["pass_mode"] == "mutable_ref" else ""
+        mutable_binding = "" if entry["pass_mode"] == "mutable_ref" else r"(?:mut\s+)?"
+        signature_parameters.append(
+            rf"{mutable_binding}{re.escape(entry['parameter'])}\s*:\s*{prefix}"
+            rf"{re.escape(entry['rust_type'])}"
+        )
     unique(re.compile(
         rf"\b(?:pub\s+)?fn\s+(?!{re.escape(external['name'])}\b)[A-Za-z_][A-Za-z0-9_]*\s*\(\s*"
-        rf"{re.escape(db)}\s*:\s*&\s*mut\s+{re.escape(entries[db]['rust_type'])}\s*,\s*"
-        rf"(?:mut\s+)?{re.escape(local)}\s*:\s*{re.escape(entries[local]['rust_type'])}\s*,\s*"
-        rf"(?:mut\s+)?{re.escape(owner)}\s*:\s*&\s*mut\s+{re.escape(entries[owner]['rust_type'])}\s*\)"
+        + r"\s*,\s*".join(signature_parameters)
+        + rf"\s*\)"
         rf"\s*->\s*bool\s*\{{"
     ), source, "safe target signature")
     alias_state = rust_access(alias, assigned["alias_field_path"])
@@ -120,6 +144,18 @@ def validate_rust_call_continue_draft(source: str, contract: dict[str, Any]) -> 
     ), source, "run-once sentinel")
     loop = unique(re.compile(rf"\bwhile\s+{re.escape(control['sentinel_local'])}(?:\s*!=\s*false)?\s*\{{"), source, "run-once while")
     clear = unique(re.compile(rf"\b{re.escape(control['sentinel_local'])}\s*=\s*false\s*;"), source, "body-first sentinel clear")
+    zero_branch = None
+    if contract.get("schema_version") == 2:
+        zero = contract["zero_start"]
+        record = zero["assignment"]["record"]
+        offset = zero["assignment"]["offset"]["parameter"]
+        record_root = call_local if record["parameter"] == local_entry else record["parameter"]
+        record_field = rust_access(record_root, record["field_path"])
+        zero_branch = unique(re.compile(
+            rf"\bif\s*(?:\(\s*)?{alias_state}\s*==\s*0(?:u32)?\s*(?:\)\s*)?\{{\s*"
+            rf"{alias_state}\s*=\s*{record_field}\s*\.\s*wrapping_add\s*\(\s*"
+            rf"{re.escape(offset)}\s*\)\s*;\s*\}}\s*else\s*\{{"
+        ), source, "zero-start wrapping branch")
     assignment = unique(re.compile(
         rf"{alias_state}\s*=\s*{re.escape(external['name'])}\s*\(\s*"
         rf"(?:{re.escape(db)}|&\s*mut\s*\*\s*{re.escape(db)})\s*,\s*"
@@ -150,19 +186,21 @@ def validate_rust_call_continue_draft(source: str, contract: dict[str, Any]) -> 
     if len(re.findall(rf"(?<!fn )\b{re.escape(external['name'])}\s*\(", source)) != 1:
         raise ValueError("generated Rust must contain exactly one direct external call")
     ordered = tuple(item for item in (
-        alias_decl, local_decl, sentinel_decl, loop, clear, assignment, comparison,
+        alias_decl, local_decl, sentinel_decl, loop, clear, zero_branch, assignment, comparison,
         reset, addition, continuation, miss, terminal,
     ) if item is not None)
     require_order(ordered, "generated Rust call/compare/reset/add/continue order drifted")
     if source[loop.end():clear.start()].strip():
         raise ValueError("generated Rust sentinel clear must be first in while body")
+    if zero_branch is not None and source[zero_branch.end():assignment.start()].strip():
+        raise ValueError("generated Rust external call must be first in zero-start else path")
     return {
         **syntax_report(contract, "safe_mutable_reference"),
         "raw_pointer_count": 0,
         "unsafe_count": 0,
         "external_call_count": 1,
-        "equality_count": 1,
-        "wrapping_add_count": 1,
+        "equality_count": 2 if zero_branch is not None else 1,
+        "wrapping_add_count": 2 if zero_branch is not None else 1,
         "continue_count": 1,
     }
 

@@ -89,6 +89,61 @@ def renamed_spec() -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return spec, cases
 
 
+def renamed_zero_start_spec() -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    spec, _ = renamed_spec()
+    contract = spec["replay_contract"]
+    contract["schema_version"] = 2
+    entries = contract["entry_arguments"]
+    entries[1]["initializer"]["fields"].append(
+        {"name": "base", "fixture_field": "window_base", "rust_type": "u32"}
+    )
+    entries.insert(2, {
+        "parameter": "header_span",
+        "c_type": "uint32_t",
+        "rust_type": "u32",
+        "pass_mode": "value",
+        "direction": "input",
+        "fixture_field": "header_span",
+    })
+    contract["zero_start"] = {
+        "external_call": "skip",
+        "else_path": "call_sentinel_reset_add_continue",
+        "condition": {
+            "target": "assigned_state",
+            "operation": "eq",
+            "value": 0,
+            "rust_type": "u32",
+        },
+        "assignment": {
+            "target": "assigned_state",
+            "operation": "wrapping_add",
+            "rust_type": "u32",
+            "record": {
+                "mode": "entry_record_u32_field",
+                "parameter": "window_seed",
+                "field_path": ["base"],
+            },
+            "offset": {"mode": "entry_u32_value", "parameter": "header_span"},
+        },
+    }
+    target_signature = next(
+        item for item in spec["c_boundary"]["signatures"] if item["function"] == "advance_window"
+    )
+    target_signature["parameters"].insert(
+        2, {"name": "header_span", "c_type": "uint32_t", "direction": "input"}
+    )
+    spec["c_source"] = renamed_zero_start_c_source()
+    spec["translation_carrier"]["carrier_source_sha256"] = hashlib.sha256(
+        spec["c_source"].encode("utf-8")
+    ).hexdigest()
+    cases = renamed_zero_start_cases()
+    parsed = parse_contract(spec)
+    for case in cases:
+        case["expected_outputs"] = reference_outputs(case, parsed)
+    spec["fixture_contract"]["cases"] = copy.deepcopy(cases)
+    return spec, cases
+
+
 def _rename_entry(
     entry: dict[str, Any], parameter: str, rust_type: str, fields: tuple[tuple[str, str], ...]
 ) -> None:
@@ -128,6 +183,33 @@ def renamed_cases() -> list[dict[str, Any]]:
     ]
 
 
+def renamed_zero_start_cases() -> list[dict[str, Any]]:
+    sentinel = 0xA5A5A5A5
+    values = (
+        ("zero-start-wrap", 11, 12, 13, 0xFFFFFFF8, 16, 0, 14, sentinel),
+        ("hit-plain", 21, 22, 23, 24, 25, 26, 27, sentinel),
+        ("hit-wrap", 31, 9, 32, 33, 34, 35, 0xFFFFFFFC, sentinel),
+        ("miss-zero-return", 41, 42, 43, 44, 45, 46, 47, 0),
+        ("miss-ordinary", 51, 52, 53, 54, 55, 56, 57, 6),
+    )
+    return [
+        {
+            "id": case_id,
+            "inputs": {
+                "db_observed_initial": seen,
+                "db_add_rhs": step,
+                "sector_seed": tag,
+                "window_base": base,
+                "header_span": offset,
+                "alias_start_initial": phase,
+                "owner_traversed_initial": total,
+                "scripted_return": scripted,
+            },
+        }
+        for case_id, seen, step, tag, base, offset, phase, total, scripted in values
+    ]
+
+
 def renamed_c_source() -> str:
     return """#define SOURCE_SENTINEL ((uint32_t)2779096485u)
 #define source_step(source) ((source)->step)
@@ -148,6 +230,37 @@ static bool advance_window(struct Metrics *source, struct Window window_seed, st
         if (0) {
         } else if ((cursor->meta.phase = probe_next(source, &window, cursor)) == 2779096485u) {
             cursor->meta.phase = 0;
+            owner->total += source_step(source);
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+"""
+
+
+def renamed_zero_start_c_source() -> str:
+    return """#define SOURCE_SENTINEL ((uint32_t)2779096485u)
+#define source_step(source) ((source)->step)
+struct Metrics { uint32_t seen; uint32_t step; };
+struct Window { uint32_t tag; uint32_t base; };
+struct Meta { uint32_t phase; };
+struct Cell { struct Meta meta; };
+typedef struct Cell *CellPtr;
+struct CursorOwner { struct Cell active; uint32_t total; };
+uint32_t probe_next(struct Metrics *metrics, struct Window *window, struct Cell *cell);
+static bool advance_window(struct Metrics *source, struct Window window_seed, uint32_t header_span, struct CursorOwner *owner)
+{
+    CellPtr cursor = &(owner->active);
+    struct Window window = window_seed;
+    bool once = true;
+    while (once) {
+        once = false;
+        if (cursor->meta.phase == 0u) {
+            cursor->meta.phase = window.base + header_span;
+        } else if ((cursor->meta.phase = probe_next(source, &window, cursor)) == 2779096485u) {
+            cursor->meta.phase = 0u;
             owner->total += source_step(source);
             continue;
         }
@@ -197,6 +310,49 @@ fn advance_window(source: &mut Metrics, window_seed: Window, owner: &mut CursorO
 """
 
 
+def renamed_zero_start_rust_draft() -> str:
+    return """#[derive(Clone, Copy)] struct Metrics { seen: u32, step: u32 }
+#[derive(Clone, Copy)] struct Window { tag: u32, base: u32 }
+#[derive(Clone, Copy)] struct Meta { phase: u32 }
+#[derive(Clone, Copy)] struct Cell { meta: Meta }
+struct CursorOwner { active: Cell, total: u32 }
+std::thread_local! {
+    static RET: std::cell::Cell<u32> = std::cell::Cell::new(0);
+    static COUNT: std::cell::Cell<usize> = std::cell::Cell::new(0);
+    static ARGS: std::cell::Cell<(u32,u32,u32)> = std::cell::Cell::new((0,0,0));
+}
+fn __c2r_scripted_external_set_return(value: u32) { RET.with(|slot| slot.set(value)); }
+fn __c2r_scripted_external_reset_calls() { COUNT.with(|slot| slot.set(0)); ARGS.with(|slot| slot.set((0,0,0))); }
+fn __c2r_scripted_external_call_count() -> usize { COUNT.with(std::cell::Cell::get) }
+fn __c2r_scripted_external_call_args() -> (u32,u32,u32) { ARGS.with(std::cell::Cell::get) }
+fn probe_next(metrics: &mut Metrics, window: &mut Window, cell: &mut Cell) -> u32 {
+    ARGS.with(|slot| slot.set((metrics.seen, window.tag, cell.meta.phase)));
+    COUNT.with(|slot| slot.set(slot.get() + 1));
+    RET.with(std::cell::Cell::get)
+}
+fn advance_window(source: &mut Metrics, window_seed: Window, header_span: u32, owner: &mut CursorOwner) -> bool {
+    let cursor: &mut Cell = &mut owner.active;
+    let mut window = window_seed;
+    let mut once = true;
+    while once {
+        once = false;
+        if cursor.meta.phase == 0u32 {
+            cursor.meta.phase = window.base.wrapping_add(header_span);
+        } else {
+            cursor.meta.phase = probe_next(source, &mut window, cursor);
+            if cursor.meta.phase == 2779096485u32 {
+                cursor.meta.phase = 0u32;
+                owner.total = owner.total.wrapping_add(source.step);
+                continue;
+            }
+        }
+        return false;
+    }
+    return true;
+}
+"""
+
+
 def replay_source(cases: list[dict[str, Any]]) -> str:
     blocks = []
     for index, case in enumerate(cases):
@@ -212,6 +368,30 @@ fn replay_case_{index}() {{
     let mut owner = CursorOwner {{ active: Cell {{ meta: Meta {{ phase: {values['alias_start_initial']}u32 }} }}, total: {values['owner_traversed_initial']}u32 }};
     let actual = advance_window(&mut source, window, &mut owner);
     assert_eq!(actual, {str(expected['return_value']).lower()});
+    assert_eq!(owner.active.meta.phase, {expected['alias_start_after']}u32);
+    assert_eq!(owner.total, {expected['owner_traversed_after']}u32);
+}}
+""")
+    return "".join(blocks)
+
+
+def zero_start_replay_source(cases: list[dict[str, Any]]) -> str:
+    blocks = []
+    for index, case in enumerate(cases):
+        values = case["inputs"]
+        expected = case["expected_outputs"]
+        blocks.append(f"""
+#[test]
+fn zero_start_replay_case_{index}() {{
+    __c2r_scripted_external_set_return({values['scripted_return']}u32);
+    __c2r_scripted_external_reset_calls();
+    let mut source = Metrics {{ seen: {values['db_observed_initial']}u32, step: {values['db_add_rhs']}u32 }};
+    let window = Window {{ tag: {values['sector_seed']}u32, base: {values['window_base']}u32 }};
+    let mut owner = CursorOwner {{ active: Cell {{ meta: Meta {{ phase: {values['alias_start_initial']}u32 }} }}, total: {values['owner_traversed_initial']}u32 }};
+    let actual = advance_window(&mut source, window, {values['header_span']}u32, &mut owner);
+    assert_eq!(actual, {str(expected['return_value']).lower()});
+    assert_eq!(__c2r_scripted_external_call_count(), {expected['call_count']}usize);
+    assert_eq!(__c2r_scripted_external_call_args(), ({expected['call_db_observed']}u32, {expected['call_sector_seed']}u32, {expected['call_alias_start']}u32));
     assert_eq!(owner.active.meta.phase, {expected['alias_start_after']}u32);
     assert_eq!(owner.total, {expected['owner_traversed_after']}u32);
 }}

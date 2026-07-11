@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .call_continue_contract import behavior_fields
+from .call_continue_contract import behavior_fields, entry_fixture_fields
 from .errors import ReporterError
 from .record_contract import (
     initializer_fixture_paths,
@@ -19,10 +19,18 @@ U32_MASK = (1 << 32) - 1
 
 
 def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]:
-    if not isinstance(cases, list) or len(cases) < 4:
-        raise ReporterError("call-continue fixture requires at least four cases")
+    schema_version = int(contract["schema_version"])
+    minimum = 5 if schema_version == 2 else 4
+    if not isinstance(cases, list) or len(cases) < minimum:
+        raise ReporterError(f"call-continue fixture requires at least {minimum} cases")
     ids: set[str] = set()
-    partitions = {"hit": 0, "zero_miss": 0, "nonzero_miss": 0}
+    partitions = {
+        "zero_start": 0,
+        "hit": 0,
+        "zero_return_miss": 0,
+        "ordinary_miss": 0,
+    }
+    u32_wraps = {"zero_start": 0, "hit": 0}
     for index, raw in enumerate(cases):
         case = require_dict(raw, f"cases[{index}]")
         case_id = require_nonempty_string(case.get("id"), f"cases[{index}].id")
@@ -31,19 +39,38 @@ def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]
         ids.add(case_id)
         inputs = case_inputs(case)
         for entry in contract["entry_arguments"]:
-            for fixture_field, _ in initializer_fixture_paths(entry["initializer"]):
+            for fixture_field in entry_fixture_fields(entry):
                 require_u32(inputs.get(fixture_field), f"{case_id}.{fixture_field}")
         return_field = contract["external_callee"]["return_fixture_field"]
         scripted = require_u32(inputs.get(return_field), f"{case_id}.{return_field}")
         sentinel = int(contract["comparison"]["sentinel"])
-        partition = "hit" if scripted == sentinel else "zero_miss" if scripted == 0 else "nonzero_miss"
+        zero_start = is_zero_start_case(inputs, contract)
+        partition = (
+            "zero_start" if zero_start else "hit" if scripted == sentinel
+            else "zero_return_miss" if scripted == 0 else "ordinary_miss"
+        )
         partitions[partition] += 1
+        if partition in u32_wraps:
+            u32_wraps[partition] += int(case_wraps_u32(inputs, contract, partition))
         expected = require_dict(case.get("expected_outputs"), f"{case_id}.expected_outputs")
         if list(expected) != behavior_fields(contract) or expected != reference_outputs(case, contract):
             raise ReporterError(f"{case_id} expected outputs disagree with call-continue model")
         require_usize(expected[contract["external_callee"]["call_count_output"]], f"{case_id}.call_count")
-    if partitions["hit"] < 2 or partitions["zero_miss"] < 1 or partitions["nonzero_miss"] < 1:
-        raise ReporterError("fixture must cover two hits, zero miss, and nonzero miss")
+    if (
+        partitions["hit"] < 2
+        or partitions["zero_return_miss"] < 1
+        or partitions["ordinary_miss"] < 1
+    ):
+        message = (
+            "fixture must cover two hits, zero-return miss, and ordinary miss"
+            if schema_version == 2
+            else "fixture must cover two hits, zero miss, and nonzero miss"
+        )
+        raise ReporterError(message)
+    if schema_version == 2 and partitions["zero_start"] < 1:
+        raise ReporterError("schema v2 fixture must cover zero-start")
+    if schema_version == 2 and (u32_wraps["zero_start"] < 1 or u32_wraps["hit"] < 1):
+        raise ReporterError("schema v2 fixture must cover zero-start and hit u32 wrap")
     return cases
 
 
@@ -51,19 +78,24 @@ def reference_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[st
     inputs = case_inputs(case)
     external = contract["external_callee"]
     scripted = int(inputs[external["return_fixture_field"]])
-    hit = scripted == int(contract["comparison"]["sentinel"])
+    zero_start = is_zero_start_case(inputs, contract)
+    hit = not zero_start and scripted == int(contract["comparison"]["sentinel"])
     owner = contract["owner_parameter"]
     add = contract["add_state"]
     rhs = add["rhs"]
     owner_before = field_value(inputs, contract, owner, add["owner_field_path"])
     rhs_value = field_value(inputs, contract, rhs["parameter"], rhs["field_path"])
     fields = behavior_fields(contract)
-    snapshots = snapshot_values(inputs, contract)
+    snapshots = [0, 0, 0] if zero_start else snapshot_values(inputs, contract)
+    assigned_after = scripted
+    if zero_start:
+        record_value, offset_value = zero_start_operands(inputs, contract)
+        assigned_after = (record_value + offset_value) & U32_MASK
     return {
         fields[0]: hit,
-        fields[1]: 1,
+        fields[1]: 0 if zero_start else 1,
         **{field: value for field, value in zip(fields[2:5], snapshots, strict=True)},
-        fields[5]: 0 if hit else scripted,
+        fields[5]: assigned_after if zero_start else 0 if hit else scripted,
         fields[6]: (owner_before + rhs_value) & U32_MASK if hit else owner_before,
     }
 
@@ -75,6 +107,8 @@ def replay_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, 
 def comparison_mutated_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
     outputs = reference_outputs(case, contract)
     inputs = case_inputs(case)
+    if is_zero_start_case(inputs, contract):
+        return outputs
     scripted = int(inputs[contract["external_callee"]["return_fixture_field"]])
     mutated_hit = scripted != int(contract["comparison"]["sentinel"])
     owner = contract["owner_parameter"]
@@ -111,7 +145,12 @@ def negative_partition_probe_source(context: Any, scenario: str) -> str:
             local = f"actual_{index}_{entry['parameter']}"
             locals_by_parameter[entry["parameter"]] = local
             mutable = "mut " if entry["pass_mode"] == "mutable_ref" else ""
-            declarations.append(f"    let {mutable}{local} = {rust_initializer(entry['initializer'], inputs)};")
+            initializer = (
+                rust_initializer(entry["initializer"], inputs)
+                if "initializer" in entry
+                else f"{inputs[entry['fixture_field']]}u32"
+            )
+            declarations.append(f"    let {mutable}{local} = {initializer};")
             arguments.append(f"&mut {local}" if entry["pass_mode"] == "mutable_ref" else local)
         owner = locals_by_parameter[contract["owner_parameter"]]
         assigned = owner + "." + ".".join(contract["assigned_state"]["owner_field_path"])
@@ -154,6 +193,46 @@ def field_value(
     entry = next(item for item in contract["entry_arguments"] if item["parameter"] == parameter)
     fixture_by_path = {path: field for field, path in initializer_fixture_paths(entry["initializer"])}
     return int(inputs[fixture_by_path[tuple(raw_path)]])
+
+
+def is_zero_start_case(inputs: dict[str, Any], contract: dict[str, Any]) -> bool:
+    if contract.get("schema_version") != 2:
+        return False
+    assigned = contract["assigned_state"]
+    return field_value(
+        inputs, contract, contract["owner_parameter"], assigned["owner_field_path"]
+    ) == int(contract["zero_start"]["condition"]["value"])
+
+
+def zero_start_operands(
+    inputs: dict[str, Any], contract: dict[str, Any]
+) -> tuple[int, int]:
+    assignment = contract["zero_start"]["assignment"]
+    record = assignment["record"]
+    record_value = field_value(inputs, contract, record["parameter"], record["field_path"])
+    offset_entry = next(
+        item for item in contract["entry_arguments"]
+        if item["parameter"] == assignment["offset"]["parameter"]
+    )
+    return record_value, int(inputs[offset_entry["fixture_field"]])
+
+
+def case_wraps_u32(
+    inputs: dict[str, Any], contract: dict[str, Any], partition: str
+) -> bool:
+    if partition == "zero_start":
+        left, right = zero_start_operands(inputs, contract)
+        return left + right > U32_MASK
+    if partition != "hit":
+        return False
+    add = contract["add_state"]
+    owner_before = field_value(
+        inputs, contract, contract["owner_parameter"], add["owner_field_path"]
+    )
+    rhs = add["rhs"]
+    return owner_before + field_value(
+        inputs, contract, rhs["parameter"], rhs["field_path"]
+    ) > U32_MASK
 
 
 def case_inputs(case: dict[str, Any]) -> dict[str, Any]:
