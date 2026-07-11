@@ -116,6 +116,7 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
             exit_code=exit_code,
             summary_path=returned_path or summary_path,
             summary=summary if returned_summary is None else returned_summary,
+            summary_validated=True,
         )
 
     def test_blocked_preflight_never_calls_competition_runner(self) -> None:
@@ -305,6 +306,24 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
 
         self.assertEqual(1, exit_code)
         self.assertEqual("competition_summary_result_mismatch", report["runs"][0]["error"])
+        self.assertEqual([], report["slices"])
+
+    def test_unvalidated_competition_summary_fails_closed(self) -> None:
+        def fake_runner(**kwargs: object) -> SimpleNamespace:
+            result = self._fake_result(kwargs)
+            result.summary_validated = False
+            return result
+
+        exit_code, report, _ = module.run_suite(
+            suite=self.suite_path,
+            out_root=self.root / "out",
+            repo_root=self.root,
+            preflight_validator=self._ready_preflight,
+            competition_runner=fake_runner,
+        )
+
+        self.assertEqual(1, exit_code)
+        self.assertEqual("competition_summary_validation_failed", report["runs"][0]["error"])
         self.assertEqual([], report["slices"])
 
     def test_attempted_count_mismatch_fails_closed_without_semantic_copy(self) -> None:

@@ -238,6 +238,8 @@ def _load_bound_competition_summary(
         return None, None, "competition_summary_not_object"
     if getattr(result, "summary", None) != summary:
         return None, None, "competition_summary_result_mismatch"
+    if getattr(result, "summary_validated", None) is not True:
+        return None, None, "competition_summary_validation_failed"
     if not isinstance(summary.get("slices"), dict):
         return None, None, "competition_summary_slices_missing"
     if not isinstance(summary.get("ai_translation_metrics"), dict):

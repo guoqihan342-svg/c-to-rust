@@ -219,10 +219,43 @@
                         evidence_root = cwd / evidence_root
                     evidence_dir = evidence_root / spec["target_id"] / "auto-translation" / spec["slice_id"]
                     evidence_dir.mkdir(parents=True, exist_ok=True)
+                    context_path = evidence_dir / f"l3-{spec['slice_id']}-ai-context-pack.json"
+                    prompt_path = evidence_dir / f"l3-{spec['slice_id']}-ai-prompt.txt"
+                    response_path = evidence_dir / f"l3-{spec['slice_id']}-ai-response.jsonl"
+                    context_path.write_text("{}\n", encoding="utf-8")
+                    prompt_path.write_text("test prompt\n", encoding="utf-8")
+                    response_path.write_text("", encoding="utf-8")
                     (evidence_dir / f"l3-{spec['slice_id']}-ai-candidate-manifest.json").write_text(
                         json.dumps(
                             {
+                                "schema_version": 2,
+                                "target_id": spec["target_id"],
+                                "slice_id": spec["slice_id"],
                                 "status": "blocked",
+                                "ai_required_for_default_pipeline": True,
+                                "generator": {
+                                    "tool": "opencode",
+                                    "provider": "zai",
+                                    "logical_model": "GLM-5.1",
+                                    "resolved_model": "zai/glm-5.1",
+                                    "agent": "c2rust-migrator",
+                                    "variant": "max",
+                                },
+                                "bindings": {
+                                    "context_pack": {
+                                        "path": context_path.name,
+                                        "sha256": lf_stable_sha256(context_path),
+                                    },
+                                    "prompt": {
+                                        "path": prompt_path.name,
+                                        "sha256": lf_stable_sha256(prompt_path),
+                                    },
+                                    "raw_response": {
+                                        "path": response_path.name,
+                                        "sha256": lf_stable_sha256(response_path),
+                                    },
+                                },
+                                "candidates": [],
                                 "failure": {"kind": "provider_timeout", "message": "timed out"},
                             }
                         ),

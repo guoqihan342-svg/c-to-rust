@@ -258,6 +258,18 @@ def evaluate_ai_metric_unit(
 
     validate_ai_artifact_identities(unit, payloads, reasons)
     validate_ai_cross_bindings(payloads, paths, summary_path=summary_path, repo_root=repo_root, reasons=reasons)
+    manifest_failure = (payloads.get("manifest") or {}).get("failure")
+    provider_timeout = (
+        (payloads.get("manifest") or {}).get("status") == "blocked"
+        and isinstance(manifest_failure, dict)
+        and manifest_failure.get("kind") == "provider_timeout"
+    )
+    if provider_timeout:
+        reasons = [
+            reason
+            for reason in reasons
+            if reason not in {"manifest_profile_binding_missing", "manifest_route_binding_missing"}
+        ]
     execution_mode = validate_ai_unit_execution_binding(
         unit,
         policy=policy,

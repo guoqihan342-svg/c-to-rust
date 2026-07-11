@@ -66,10 +66,18 @@ ExtractionSpecInput = Path | dict[str, Any]
 
 
 class CompetitionRunResult:
-    def __init__(self, *, exit_code: int, summary_path: Path, summary: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        *,
+        exit_code: int,
+        summary_path: Path,
+        summary: dict[str, Any],
+        summary_validated: bool,
+    ) -> None:
         self.exit_code = exit_code
         self.summary_path = summary_path
         self.summary = summary
+        self.summary_validated = summary_validated
 
 
 def main() -> int:
@@ -561,6 +569,7 @@ def run_competition(
         exit_code=0 if summary["final_gate"]["status"] == "passed" and slice_failures == 0 and gate_failures == 0 else 1,
         summary_path=summary_path,
         summary=summary,
+        summary_validated=summary_validation.returncode == 0,
     )
 
 

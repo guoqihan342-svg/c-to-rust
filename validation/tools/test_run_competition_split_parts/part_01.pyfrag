@@ -266,6 +266,7 @@
                 exit_code=0,
                 summary_path=Path("summary.json"),
                 summary={"status": "fake"},
+                summary_validated=True,
             )
 
         original_argv = sys.argv
@@ -332,6 +333,7 @@
                 exit_code=0,
                 summary_path=Path("summary.json"),
                 summary={"status": "fake"},
+                summary_validated=True,
             )
 
         original_argv = sys.argv
