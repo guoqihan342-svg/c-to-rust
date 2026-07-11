@@ -133,7 +133,7 @@
   },
   "translation_summary": {
     "alias_gate": {
-      "complete_alias_safety": false,
+      "complete_alias_safety": true,
       "decision": "requires_noalias_contract",
       "evidence_source": "c_boundary.pointer_contract.aliasing_proven=false",
       "requires_noalias": true,

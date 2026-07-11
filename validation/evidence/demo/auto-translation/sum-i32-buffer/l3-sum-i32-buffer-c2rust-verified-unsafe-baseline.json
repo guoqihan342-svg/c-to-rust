@@ -79,7 +79,7 @@
     },
     "negative_diff": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-negative-diff.json",
-      "sha256": "f1edae98972e74a4b84ebeb60b964137fc370f7de8292a89e536663aa10d7fc8",
+      "sha256": "8ebe56425e042454e8fc9e7fb54f1154d6665a2ffa124f31823c13dbc0896ff8",
       "status": "passed"
     },
     "rust_replay": {
@@ -89,17 +89,17 @@
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-diff.json",
-      "sha256": "11eef6fddec80cf01a3f34d63c9049269a307bb659f42f214da243fe866e3150",
+      "sha256": "bb29305d25548178c4804f8ade27bbb83dda579a8e352f088379cf921c89cac8",
       "status": "passed"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-unsafe-ledger.json",
-      "sha256": "df15200380c3f66108d29546ac8fa6d26ae28eb192e3b4052828bef5957970ec",
+      "sha256": "8ec68877ae4a1c851779219b3517dcf7b818799f315879ec0f6f3ab348b4cf9d",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-unsafe-scan.json",
-      "sha256": "cc59a623dfea0cee68708715a3c52f910c5005b3b7a6af24362cbb5b73af8ced",
+      "sha256": "a08a2d547c52b642e1672132ad16414abc442dfc1af5817e4771fd3d208b52e4",
       "status": "passed"
     }
   },
@@ -107,7 +107,7 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-route-decision.json",
-    "sha256": "83c89f724533f22c078820d506f00120b1f65da77edd61fdbfda58fdb2ffe1d6",
+    "sha256": "6595bca101be564aba3099112b20de7600441c1d20bfeb43786c4ba6f58899af",
     "status": "recorded"
   },
   "same_output_gate_refs": null,

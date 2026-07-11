@@ -79,7 +79,7 @@
     },
     "negative_diff": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-negative-diff.json",
-      "sha256": "d770cb5d5f08e550550e1332d5074c1a2f6e77719c6bd0739ee2c35deca9cb30",
+      "sha256": "fb38bd70171d03efc11948bbd95a5c93706ea7041f937325e31bd6429fb0b8d4",
       "status": "passed"
     },
     "rust_replay": {
@@ -89,17 +89,17 @@
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-diff.json",
-      "sha256": "c4bdfe69a621e4de72aa2c5b9f0ff6dbea01cbd04c60b8cf44a698a5e2a63c31",
+      "sha256": "20e57c014178205b522cca5c747a842ce87304942289fc7759f4edb58e85093e",
       "status": "passed"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-unsafe-ledger.json",
-      "sha256": "4d43bd0a96f08a879abda4361fd84d808cc630d8ba693f11f26a48ad71e2b50c",
+      "sha256": "7a10aa2cefd9ea257a49576bfc7a0c363d0aa810dbba6d23862837e0c157d267",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-unsafe-scan.json",
-      "sha256": "d3c08a2da9635f878ed1b480b4483888fadd6662a3a2423510deab93edf66521",
+      "sha256": "87afe3677a6c8e1162d8b7141bca34a6a0e82c0fb9ee0ef8664198ce0b00c895",
       "status": "passed"
     }
   },
@@ -107,7 +107,7 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
-    "sha256": "03f9f45a30bee2a67e788e5c6005bdeed5ae2b8d43bc3f1e6e12bd0fbf6fc6e3",
+    "sha256": "471a2f35e147eeb785ff064b3b23b32e9f365990e789075c4777e8b98d9540b5",
     "status": "recorded"
   },
   "same_output_gate_refs": null,

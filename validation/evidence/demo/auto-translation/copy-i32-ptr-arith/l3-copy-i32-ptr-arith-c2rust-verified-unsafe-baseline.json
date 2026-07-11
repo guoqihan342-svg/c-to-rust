@@ -79,7 +79,7 @@
     },
     "negative_diff": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-negative-diff.json",
-      "sha256": "9433926a70a6fe069a759d612dfe839a4bebfe837ee27457e0fd22acea260139",
+      "sha256": "dc5c36e9614ac4616a77840edff6639a411c1873d259ddff6c2ac4f9d9db0061",
       "status": "passed"
     },
     "rust_replay": {
@@ -89,17 +89,17 @@
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-diff.json",
-      "sha256": "debb84c9427f552c058d6edc3810a0ff01ae8f6cd2e6a28d7fc41481cd9f6539",
+      "sha256": "0c4edc994ecbcf1a31d241637004eaa751d1c20852e44defca8750a528ff07f9",
       "status": "passed"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-unsafe-ledger.json",
-      "sha256": "4e5e7efaa47d74fffcae700e0df3ecb239187c1fa1a27bf25d8a799579f95f6d",
+      "sha256": "bc901561e6a152b2fcaf112040b2dbed14a7776efb9159fd1d0653a60636a6bf",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-unsafe-scan.json",
-      "sha256": "d8ff9c642a1727bf053764f588c3a5fbb1edc5bb5443e40d8e971f0f00d727c4",
+      "sha256": "f4af2c35c826b85a8127e32b90436c96f5201366f33c6bbacd5a677fa720dd85",
       "status": "passed"
     }
   },
@@ -107,7 +107,7 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-    "sha256": "1eb65b237d3ff5948284f434debf9e0ef43bd063b98e670c1bfa28c666f3497d",
+    "sha256": "2d60a32d45f5cdb3e9a9d2cc3edd15de957e399839606e1c01b79e5cd356c368",
     "status": "recorded"
   },
   "same_output_gate_refs": null,

@@ -65,7 +65,7 @@
     "fixture": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
     "generated_draft_acceptance": {
       "accepted_evidence_binding": {
-        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "binding_boundary": "Accepted semantics bind independent oracle/replay/diff evidence and stable generated-draft unsafe gates; final accepted reports are downstream and cannot hash-bind themselves.",
         "fixture_path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
         "fixture_sha256": "b9a65e653541e27bee2035c9687d1697f5bc4d79e39f96cfdf2d2855dab85324",
         "generated_draft_semantic_pass": false,
@@ -74,22 +74,23 @@
           "diff": "241e5f7ad6da760281d859542d6ab96eb30b41b5c7a93dfa471449d886f96f02",
           "negative_diff": "601b79c2325e7ccaa455a56442d253bf143ddab9316e60ded91fbdcd9408d24a",
           "rust_report": "b9a38918ae00c5765e2b4a47168724561ae4dbe13befd72d8d524b5386b26966",
-          "unsafe_ledger": "e6dbe6df40abd9750aee481c321e6c96cc81c56fb88374bf1a6d626c9ba84593",
-          "unsafe_scan": "bcb004bfbdf0e342901c02c32ce0ad7e4e2c84af3fbff5022ea4a45580a6b611"
+          "unsafe_ledger": "c307606cacc0c49d70b6fec6be773d89cc5d93add04601ffa89fb1ae410a11d8",
+          "unsafe_scan": "c1e6fd9ef021bbd13b20724e9e8ac4f09c1998d4a114fc86b3af5ba2fae2f2c6"
         },
         "paths": {
           "c_oracle": "validation/evidence/l2-slices/zlib-adler32-oracle.json",
           "diff": "validation/evidence/l2-slices/zlib-adler32-diff.json",
           "negative_diff": "validation/evidence/l2-slices/zlib-adler32-negative-diff.json",
           "rust_report": "validation/evidence/l2-slices/zlib-adler32-rust-report.json",
-          "unsafe_ledger": "validation/evidence/l2-slices/unsafe-ledger.json",
-          "unsafe_scan": "validation/evidence/l2-slices/unsafe-scan.json"
+          "unsafe_ledger": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-generated-draft-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-generated-draft-unsafe-scan.json"
         },
         "slice_id": "adler32-step",
         "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
         "status": "accepted",
         "target_id": "zlib-ng",
-        "toolchain_status": "C_ORACLE_GENERATED"
+        "toolchain_status": "C_ORACLE_GENERATED",
+        "unsafe_gate_source": "generated_draft_unsafe_gates"
       },
       "accepted_evidence_refs": {
         "c_oracle": {
@@ -113,13 +114,13 @@
           "status": "passed"
         },
         "unsafe_ledger": {
-          "path": "validation/evidence/l2-slices/unsafe-ledger.json",
-          "sha256": "8ff91c6e3f5382a78fe3522e84b0a0c3c5560d3f8fa1818788342916bdf41201",
+          "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-generated-draft-unsafe-ledger.json",
+          "sha256": "c307606cacc0c49d70b6fec6be773d89cc5d93add04601ffa89fb1ae410a11d8",
           "status": "passed"
         },
         "unsafe_scan": {
-          "path": "validation/evidence/l2-slices/unsafe-scan.json",
-          "sha256": "bcb004bfbdf0e342901c02c32ce0ad7e4e2c84af3fbff5022ea4a45580a6b611",
+          "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-generated-draft-unsafe-scan.json",
+          "sha256": "c1e6fd9ef021bbd13b20724e9e8ac4f09c1998d4a114fc86b3af5ba2fae2f2c6",
           "status": "passed"
         }
       },
@@ -139,6 +140,8 @@
         "stdout_log": "validation/evidence/zlib-ng/auto-translation/adler32-step/generated-rust-replay.stdout.log"
       },
       "rust_check": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
         "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/rust-check.json",
         "status": "passed"
       },
@@ -151,7 +154,8 @@
       "slice_id": "adler32-step",
       "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
       "status": "passed",
-      "target_id": "zlib-ng"
+      "target_id": "zlib-ng",
+      "unsafe_gate_source": "generated_draft_unsafe_gates"
     },
     "generated_draft_replay_pass": true,
     "generated_draft_semantic_pass": true,

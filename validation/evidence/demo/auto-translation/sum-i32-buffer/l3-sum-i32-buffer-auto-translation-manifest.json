@@ -126,7 +126,7 @@
       "route_decision": {
         "level": "L1",
         "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-route-decision.json",
-        "sha256": "83c89f724533f22c078820d506f00120b1f65da77edd61fdbfda58fdb2ffe1d6",
+        "sha256": "6595bca101be564aba3099112b20de7600441c1d20bfeb43786c4ba6f58899af",
         "status": "recorded"
       },
       "validation_profile": {
@@ -224,7 +224,7 @@
   "claim_boundary": {
     "accepted_evidence_authoritative": false,
     "alias_gate": {
-      "complete_alias_safety": false,
+      "complete_alias_safety": true,
       "decision": "requires_noalias_contract",
       "preconditions": [
         {
@@ -680,7 +680,7 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-route-decision.json",
-    "sha256": "83c89f724533f22c078820d506f00120b1f65da77edd61fdbfda58fdb2ffe1d6",
+    "sha256": "6595bca101be564aba3099112b20de7600441c1d20bfeb43786c4ba6f58899af",
     "status": "recorded"
   },
   "rust_check": {
@@ -741,7 +741,7 @@
   },
   "verified_unsafe_baseline": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-verified-unsafe-baseline.json",
-    "sha256": "d16fc2ff5791c343da54433e524667ad78fb0243760774f75e5c2423b1a9e514",
+    "sha256": "f5e0535f04ea9f651fb601bf6757680eacab0a7fd68b20fd8d32b07e7d9ac8a6",
     "status": "blocked"
   }
 }

@@ -86,7 +86,7 @@
     "route_decision": {
       "level": "L1",
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-      "sha256": "1eb65b237d3ff5948284f434debf9e0ef43bd063b98e670c1bfa28c666f3497d",
+      "sha256": "2d60a32d45f5cdb3e9a9d2cc3edd15de957e399839606e1c01b79e5cd356c368",
       "status": "recorded"
     },
     "validation_profile": {

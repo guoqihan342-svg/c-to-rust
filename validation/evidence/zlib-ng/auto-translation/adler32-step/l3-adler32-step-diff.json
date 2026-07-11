@@ -39,7 +39,7 @@
   "validation_profile": {
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "e177e28b47665c614de27044e463228a83e988c750e9d9de1814792f207ec031",
+    "sha256": "a39d3fe616bd51bb8c0e6851d080119e03d7ac92fb5c8a655222f34ebfe9cdad",
     "status": "passed"
   }
 }

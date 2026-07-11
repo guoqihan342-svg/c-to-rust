@@ -93,7 +93,7 @@
     "validation_profile": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
       "profile": "L4-accepted-evidence",
-      "sha256": "e177e28b47665c614de27044e463228a83e988c750e9d9de1814792f207ec031",
+      "sha256": "a39d3fe616bd51bb8c0e6851d080119e03d7ac92fb5c8a655222f34ebfe9cdad",
       "status": "passed"
     }
   },
@@ -174,7 +174,7 @@
   "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "9f0eb29b72cf43bf3170be38e973023f1fec9e772ef355ba24b19c3700762b14",
+    "sha256": "63d4ae0842157f084de5117435944669534ed7ffd1f6efce89542d3faa07b076",
     "status": "passed"
   }
 }

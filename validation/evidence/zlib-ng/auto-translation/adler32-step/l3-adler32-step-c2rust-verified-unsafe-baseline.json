@@ -73,27 +73,27 @@
     },
     "negative_diff": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-negative-diff.json",
-      "sha256": "6e2edbb0a6db5c51ac35f30e8edabc9e1d243e0885454fd1a782b108b62d3792",
+      "sha256": "4b4642eac440f471faa15f2fb6a498531d1be831c8b2ff17d34f41e47f000362",
       "status": "passed"
     },
     "rust_replay": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-report.json",
-      "sha256": "242a9c617d47a6ae7ec0f2eb7e12fc22903c8435981c80241253894400f0f871",
+      "sha256": "c2dcca0963e8f083542b9ff69d42c379764ab16accbd305a73d60b00ab8ab97d",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-diff.json",
-      "sha256": "71a87e3e444eb66dc9e1546137fa94257c6fc6159e5affc5c922f5cad3533111",
+      "sha256": "9b589b481326ed13f254f43b6148a7f3d7964f1b510f5a58c95e60bf9cd7fe00",
       "status": "passed"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-unsafe-ledger.json",
-      "sha256": "e2c957b3679a2d45997a4d33e8ee52a5e6829d0d78c3499f7006491a4dfc7dc0",
+      "sha256": "babd3a45d55c43a31d30ca33197202f06c8a140ccc83365e3042936f5fec45a4",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-unsafe-scan.json",
-      "sha256": "7ea346d8f670b8e25c214da43b05fcd7d33fc56405186f2bf9fe9301ad42f02b",
+      "sha256": "b4f99ecc5a3c20392fbca3ab7a1ee423751c7687f2ea2402d5141707851ef335",
       "status": "passed"
     }
   },
@@ -115,7 +115,7 @@
   "validation_profile": {
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "e177e28b47665c614de27044e463228a83e988c750e9d9de1814792f207ec031",
+    "sha256": "a39d3fe616bd51bb8c0e6851d080119e03d7ac92fb5c8a655222f34ebfe9cdad",
     "status": "passed"
   }
 }

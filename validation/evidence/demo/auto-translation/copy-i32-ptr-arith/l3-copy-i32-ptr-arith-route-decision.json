@@ -260,7 +260,7 @@
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-pointer-graph.json",
-      "sha256": "67e9fdaf41091a003b7a222121bb17f4c2623e06b7250d41cb42c388233a805b",
+      "sha256": "32c4656b1b6487bc695a2b0683cf488c479d45bf4ebf0b00925dafb5624539cc",
       "status": "recorded"
     },
     "translation_plan": {

@@ -280,7 +280,7 @@
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-pointer-graph.json",
-      "sha256": "092ad0c389d105eca70dc6cb18c9f01e9fc8d09d0cb016dafe53cb6e0a080316",
+      "sha256": "28cb54a14c7e195abf354666d50b6d57539e1d245b235bebdc7fa062aa40c9b1",
       "status": "recorded"
     },
     "translation_plan": {

@@ -153,7 +153,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-validation-profile.json",
     "profile": "L2-dev",
-    "sha256": "2c798072f34e98166808161a9a3b118b17dc58e6875e0be42f36c0cedf24e633",
+    "sha256": "b848f22d63b84f393f9100fd53314614f998854de5e1f37169d985e4f3137c68",
     "status": "passed"
   },
   "verification_plan": [

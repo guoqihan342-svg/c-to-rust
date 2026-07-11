@@ -280,7 +280,7 @@
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-pointer-graph.json",
-      "sha256": "35bfa0e643bcedb97c71a89ad73d50fbf9bb38241cad988e469ef8c54be0a48a",
+      "sha256": "edd9b0080f51cf03194ef0e38681da3edbee8c8a9ce34d4b55aef40139058402",
       "status": "recorded"
     },
     "translation_plan": {

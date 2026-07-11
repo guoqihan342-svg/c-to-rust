@@ -69,6 +69,86 @@
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "validation/l2_slices/tools/generate_add_i32_pair_ptr_arith_oracle.py",
+      "compile_commands": null,
+      "defines": [],
+      "flags": [],
+      "include_paths": [],
+      "tool_versions": {
+        "gcc": "captured_by_wsl_oracle",
+        "rustc": "captured_at_validation"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 8,
+      "case_source": "fixture_contract",
+      "declared_case_count": 4,
+      "fixture_hash": "add-i32-pair-ptr-arith-fixture",
+      "fixture_path": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_code",
+      "status",
+      "len",
+      "lhs",
+      "rhs",
+      "out_values",
+      "source_reads",
+      "canonical_reads",
+      "source_writes",
+      "canonical_writes",
+      "write_count",
+      "safe_noalias_precondition",
+      "alias_case",
+      "alias_matrix"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": false,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "demo slice uses explicit C source and no external headers"
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "char_align": "unknown",
+      "char_width": "unknown",
+      "endianness": "little",
+      "int_align": "unknown",
+      "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
+      "long_long_width": "unknown",
+      "long_width": 64,
+      "plain_char_signed": "unknown",
+      "pointer_align": "unknown",
+      "pointer_width": 64,
+      "short_align": "unknown",
+      "short_width": "unknown",
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {}
+    }
+  },
   "route_decision": {
     "level": "L2",
     "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-route-decision.json",
@@ -90,7 +170,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-validation-profile.json",
     "profile": "L2-dev",
-    "sha256": "2c798072f34e98166808161a9a3b118b17dc58e6875e0be42f36c0cedf24e633",
+    "sha256": "b848f22d63b84f393f9100fd53314614f998854de5e1f37169d985e4f3137c68",
     "status": "passed"
   },
   "validation_profile_status": "passed",

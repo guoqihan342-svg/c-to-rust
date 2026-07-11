@@ -1,7 +1,7 @@
 {
   "accepted_performance_smoke": {
     "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-performance-smoke.json",
-    "sha256": "b8842b777fe1510478a708a86a94417979fbe9f30ddd20566780782b7abbbbaf",
+    "sha256": "8f2f33febc21e94858249f2eed5bdc67e00ac3301b50a08249acd2ead15a9249",
     "status": "recorded"
   },
   "schema_version": 1,

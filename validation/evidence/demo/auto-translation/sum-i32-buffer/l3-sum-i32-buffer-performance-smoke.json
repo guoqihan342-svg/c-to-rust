@@ -1,7 +1,7 @@
 {
   "accepted_performance_smoke": {
     "path": "validation/evidence/demo/l3-sum-i32-buffer-performance-smoke.json",
-    "sha256": "b34e2540d923a257a6b56308d7d68152315f3e172c8f58e45e87a655e9302090",
+    "sha256": "3b395157bd919a664279cfde882cd04abb706b9059adc42e3ad52f8461bc4f6a",
     "status": "recorded"
   },
   "schema_version": 1,

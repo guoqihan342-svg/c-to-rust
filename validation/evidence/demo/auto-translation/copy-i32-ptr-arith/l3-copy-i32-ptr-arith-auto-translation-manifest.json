@@ -125,7 +125,7 @@
       "route_decision": {
         "level": "L1",
         "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-        "sha256": "1eb65b237d3ff5948284f434debf9e0ef43bd063b98e670c1bfa28c666f3497d",
+        "sha256": "2d60a32d45f5cdb3e9a9d2cc3edd15de957e399839606e1c01b79e5cd356c368",
         "status": "recorded"
       },
       "validation_profile": {
@@ -222,7 +222,7 @@
   "claim_boundary": {
     "accepted_evidence_authoritative": false,
     "alias_gate": {
-      "complete_alias_safety": false,
+      "complete_alias_safety": true,
       "decision": "requires_noalias_contract",
       "preconditions": [
         {
@@ -694,7 +694,7 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-    "sha256": "1eb65b237d3ff5948284f434debf9e0ef43bd063b98e670c1bfa28c666f3497d",
+    "sha256": "2d60a32d45f5cdb3e9a9d2cc3edd15de957e399839606e1c01b79e5cd356c368",
     "status": "recorded"
   },
   "rust_check": {
@@ -755,7 +755,7 @@
   },
   "verified_unsafe_baseline": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-verified-unsafe-baseline.json",
-    "sha256": "bf7aab1ab1f15e7b087a82416c3d661548245cad76984061e6c594c190677c50",
+    "sha256": "86697060dcc4de0ef54c253fed5361bd3046ef954b3b938da3738c28f854fa4c",
     "status": "blocked"
   }
 }

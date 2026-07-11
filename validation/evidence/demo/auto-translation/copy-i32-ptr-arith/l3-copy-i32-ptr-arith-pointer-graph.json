@@ -1,6 +1,6 @@
 {
   "alias_contract": {
-    "complete_alias_safety": false,
+    "complete_alias_safety": true,
     "decision": "requires_noalias_contract",
     "evidence_refs": [],
     "proven": false,
@@ -223,7 +223,7 @@
   "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "risk_summary": {
     "alias_gate": {
-      "complete_alias_safety": false,
+      "complete_alias_safety": true,
       "decision": "requires_noalias_contract",
       "evidence_source": "c_boundary.pointer_contract.aliasing_proven=false",
       "requires_noalias": true,
