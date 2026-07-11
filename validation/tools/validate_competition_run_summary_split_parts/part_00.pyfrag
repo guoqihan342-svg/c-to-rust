@@ -43,11 +43,14 @@ COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
 COMPETITION_OPENCODE_VARIANT = "max"
 REPAIR_ROUND_CAP = 5
-PROVIDER_CIRCUIT_FAILURE_KINDS = {
-    "provider_timeout",
-    "provider_insufficient_balance",
-    "provider_authentication_failed",
+PROVIDER_CIRCUIT_FAILURE_THRESHOLDS = {
+    "provider_timeout": 2,
+    "provider_invocation_failed": 1,
+    "provider_insufficient_balance": 1,
+    "provider_authentication_failed": 1,
 }
+PROVIDER_CIRCUIT_FAILURE_KINDS = set(PROVIDER_CIRCUIT_FAILURE_THRESHOLDS)
+PROVIDER_CIRCUIT_DEFAULT_THRESHOLD = 2
 
 
 def main() -> int:
@@ -141,6 +144,15 @@ def validate_provider_circuit_breaker(
     observation_kinds = {item["failure_kind"] for item in observations}
     if not observation_kinds.issubset(PROVIDER_CIRCUIT_FAILURE_KINDS):
         raise SystemExit("provider_circuit_breaker observation failure_kind is not shared")
+    if len(observation_kinds) > 1:
+        raise SystemExit("provider_circuit_breaker observations must share failure_kind")
+    active_kind = observations[-1]["failure_kind"] if observations else None
+    effective_threshold = PROVIDER_CIRCUIT_FAILURE_THRESHOLDS.get(
+        active_kind,
+        PROVIDER_CIRCUIT_DEFAULT_THRESHOLD,
+    )
+    if circuit["threshold"] != effective_threshold:
+        raise SystemExit("provider_circuit_breaker threshold must match the active failure kind")
     if circuit["status"] == "open":
         if circuit["consecutive_failures"] < circuit["threshold"]:
             raise SystemExit("open provider_circuit_breaker requires the failure threshold")
@@ -153,6 +165,8 @@ def validate_provider_circuit_breaker(
     else:
         if skipped != 0 or circuit["failure_kind"] is not None:
             raise SystemExit("closed provider_circuit_breaker cannot report skipped slices or failure_kind")
+        if circuit["consecutive_failures"] >= circuit["threshold"]:
+            raise SystemExit("closed provider_circuit_breaker must remain below the failure threshold")
 
     if summary.get("schema_version") != 2 or summary_path is None:
         return
