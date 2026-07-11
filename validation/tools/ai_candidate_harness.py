@@ -10,15 +10,25 @@ from validation.tools._ai_candidate_harness_parts.provider import (
     generate_candidate,
     parse_candidate_response,
 )
+from validation.tools._ai_candidate_harness_parts.repair import (
+    DEFAULT_MAX_REPAIR_ROUNDS,
+    HARD_MAX_REPAIR_ROUNDS,
+    coordinate_repairs,
+)
+from validation.tools._ai_candidate_harness_parts.repair_contract import parse_repair_response
 
 __all__ = [
     "MAX_PROVIDER_STDOUT_BYTES",
     "ProviderExecution",
+    "DEFAULT_MAX_REPAIR_ROUNDS",
+    "HARD_MAX_REPAIR_ROUNDS",
     "apply_generated_candidate",
     "build_context_pack",
+    "coordinate_repairs",
     "generate_candidate",
     "main",
     "parse_candidate_response",
+    "parse_repair_response",
 ]
 
 
