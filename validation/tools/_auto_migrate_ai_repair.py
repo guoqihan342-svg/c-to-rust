@@ -12,6 +12,7 @@ from validation.tools.ai_candidate_harness import (
 
 CompileRunner = Callable[[Path], dict[str, Any]]
 ProviderRunner = Callable[[list[str], int], ProviderExecution]
+ValidationRunner = Callable[[Path, int], dict[str, Any]]
 
 
 def repair_ai_candidate_after_compile(
@@ -49,6 +50,63 @@ def repair_ai_candidate_after_compile(
         timeout_seconds=timeout_seconds,
         runner=provider_runner,
     )
+    return apply_ai_repair_report(
+        manifest,
+        report,
+        out_dir=out_dir,
+        canonical_draft_path=canonical_draft_path,
+    )
+
+
+def repair_ai_candidate_after_validation(
+    context_pack: dict[str, Any],
+    manifest: dict[str, Any],
+    *,
+    out_dir: Path,
+    canonical_draft_path: Path,
+    initial_failure_facts: dict[str, Any],
+    validation_runner: ValidationRunner,
+    max_rounds: int,
+    opencode_command: str,
+    resolved_model: str,
+    agent: str,
+    variant: str,
+    timeout_seconds: int,
+    provider_runner: ProviderRunner | None = None,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    if manifest.get("status") != "generated" or max_rounds == 0:
+        return manifest, None
+    if initial_failure_facts.get("status") != "failed":
+        return manifest, None
+    report = coordinate_repairs(
+        context_pack,
+        candidate_path=canonical_draft_path,
+        initial_failure_facts=initial_failure_facts,
+        out_dir=out_dir,
+        validation_runner=validation_runner,
+        max_rounds=max_rounds,
+        opencode_command=opencode_command,
+        resolved_model=resolved_model,
+        agent=agent,
+        variant=variant,
+        timeout_seconds=timeout_seconds,
+        runner=provider_runner,
+    )
+    return apply_ai_repair_report(
+        manifest,
+        report,
+        out_dir=out_dir,
+        canonical_draft_path=canonical_draft_path,
+    )
+
+
+def apply_ai_repair_report(
+    manifest: dict[str, Any],
+    report: dict[str, Any],
+    *,
+    out_dir: Path,
+    canonical_draft_path: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     if report.get("status") != "candidate_ready_for_common_validation":
         manifest["repair"] = repair_report_binding(report, out_dir)
         apply_generated_candidate(

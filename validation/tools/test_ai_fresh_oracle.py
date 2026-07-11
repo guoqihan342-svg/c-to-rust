@@ -48,6 +48,7 @@ class AiFreshOracleTests(unittest.TestCase):
             "fixture_contract": {
                 "path": "fixtures/cases.json",
                 "hash": fixture_hash,
+                "sha256": fixture_hash,
                 "c_oracle": "history/oracle.json",
                 "rust_report": "history/rust.json",
                 "diff": "history/diff.json",
@@ -81,7 +82,19 @@ class AiFreshOracleTests(unittest.TestCase):
             "harness_draft": "run/harness.c",
             "harness_draft_ref": {"path": "run/harness.c", "sha256": sha256(harness), "status": "draft"},
             "fixture": "fixtures/cases.json",
-            "fixture_binding": {"path": "fixtures/cases.json", "case_count": 1},
+            "fixture_binding": {
+                "path": "fixtures/cases.json",
+                "case_count": 1,
+                "behavior_fields": ["return_value"],
+                "case_bindings": [
+                    {
+                        "id": "one",
+                        "input_ref": "cases[0]",
+                        "expected_outputs": {"return_value": 3},
+                        "missing_observable_outputs": [],
+                    }
+                ],
+            },
             "harness_contract": {"source_files": copy.deepcopy(spec["c_boundary"]["files"])},
             "compile_command_draft": {
                 "status": "draft_not_executed",

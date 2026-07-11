@@ -30,7 +30,13 @@ for _C2R_NESTED_TEMP_NAME in (
 ):
     globals().pop(_C2R_NESTED_TEMP_NAME, None)
 del _C2R_NESTED_TEMP_NAME
-def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def run_rust_check(
+    evidence_dir: Path,
+    skip: bool,
+    spec: dict[str, Any],
+    *,
+    allow_self_heal: bool = True,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     path = next(evidence_dir.glob("l3-*-rust-draft.rs"), None)
     slice_id = required_str(spec, "slice_id")
     external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
@@ -57,16 +63,16 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
             write_log_text(evidence_dir / "rust-check-initial.stderr.jsonl", first["stderr"])
             final = first
         finally:
-            path.write_text(original_draft, encoding="utf-8")
+            path.write_bytes(original_draft.encode("utf-8"))
         patch = write_no_patch_required(spec, evidence_dir, path)
-        if final["returncode"] != 0:
+        if final["returncode"] != 0 and allow_self_heal:
             final, patch = run_safe_self_heal_loop(spec, evidence_dir, path, final)
         if (
             final["returncode"] == 0
             and injected_stubs
             and rust_check_bindings_are_fixture_bound(external_context)
         ):
-            path.write_text(checked_draft, encoding="utf-8")
+            path.write_bytes(checked_draft.encode("utf-8"))
         if final["returncode"] != 0 and patch["status"] != "blocked":
             patch = write_blocked_patch(
                 spec,

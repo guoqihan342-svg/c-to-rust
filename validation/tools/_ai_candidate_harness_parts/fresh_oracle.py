@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 from typing import Any
 
+from .context import canonical_json_bytes
 from .context_security import redact_metadata_text, resolve_under, sanitize_value, sha256_path
 
 
@@ -24,6 +25,8 @@ def prove_fresh_oracle(
     oracle_payload: Mapping[str, Any] | Any,
     harness_path: str | Path,
     source_root: str | Path | None = None,
+    *,
+    artifact_root: str | Path | None = None,
 ) -> dict[str, Any]:
     """Prove one freshly generated C harness run without trusting old evidence.
 
@@ -35,13 +38,14 @@ def prove_fresh_oracle(
         return _result({}, [_failure("malformed_input", "Spec and oracle payload must be objects.")])
 
     root = Path(source_root or Path.cwd()).resolve()
-    harness = _safe_path(root, harness_path, "harness", failures)
+    artifact_base = Path(artifact_root or root).resolve()
+    harness = _safe_path(artifact_base, harness_path, "harness", failures)
     harness_sha = _file_sha(harness, "harness", failures)
     harness_ref = oracle_payload.get("harness_draft_ref")
     if not isinstance(harness_ref, Mapping):
         failures.append(_failure("harness_binding_missing", "Fresh harness reference is missing."))
     else:
-        _verify_ref(root, harness_ref, harness, harness_sha, "harness", failures)
+        _verify_ref(artifact_base, harness_ref, harness, harness_sha, "harness", failures)
 
     if oracle_payload.get("status") != "DRAFT_GENERATED" or oracle_payload.get("semantic_pass") is not False:
         failures.append(
@@ -54,26 +58,33 @@ def prove_fresh_oracle(
         failures.append(_failure("historical_evidence_present", "Fresh oracle payload contains accepted evidence."))
 
     fixture_path, fixture_sha = _fixture_binding(spec, oracle_payload, root, failures)
+    fixture_identity, observable_outputs = _fixture_outputs(
+        oracle_payload,
+        fixture_sha,
+        failures,
+    )
     source_bindings, span_binding = _source_bindings(spec, oracle_payload, root, failures)
-    compile_binding = _compile_binding(spec, oracle_payload, harness, root, failures)
+    compile_binding = _compile_binding(spec, oracle_payload, harness, artifact_base, failures)
     build_profile = spec.get("build_profile")
     if not isinstance(build_profile, Mapping):
         failures.append(_failure("build_profile_missing", "Build profile identity is missing."))
         build_profile = {}
+    target_contract = _target_contract(build_profile)
     abi = {
         "target": build_profile.get("target"),
         "target_abi_contract": _mapping(spec.get("c_boundary")).get("target_abi_contract"),
+        "normalized_target_contract": target_contract,
     }
-    if not isinstance(abi["target"], Mapping) and not isinstance(abi["target_abi_contract"], Mapping):
+    if not target_contract:
         failures.append(_failure("abi_identity_missing", "Target ABI identity is missing."))
 
     source_identity = _hash_json({"files": source_bindings, "span": span_binding})
-    fixture_identity = fixture_sha if _valid_sha(fixture_sha) else _hash_json({"status": "invalid"})
+    fixture_content_sha = fixture_sha if _valid_sha(fixture_sha) else _hash_json({"status": "invalid"})
     flags_identity = _hash_json(compile_binding.get("flags", {}))
     abi_identity = _hash_json(abi)
     reuse_identity = {
         "source_sha256": source_identity,
-        "fixture_sha256": fixture_identity,
+        "fixture_sha256": fixture_content_sha,
         "flags_sha256": flags_identity,
         "abi_sha256": abi_identity,
     }
@@ -86,7 +97,7 @@ def prove_fresh_oracle(
         "build_profile_sha256": build_profile_identity,
     }
     bindings = {
-        "harness": {"sha256": harness_sha},
+        "harness": {"sha256": harness_sha, "path": _logical(artifact_base, harness)},
         "fixture": {"sha256": fixture_sha, "path": _logical(root, fixture_path)},
         "source_files": source_bindings,
         "source_span": span_binding,
@@ -95,7 +106,13 @@ def prove_fresh_oracle(
         "flags_sha256": flags_identity,
         "reuse_key_sha256": run_identity["reuse_key_sha256"],
     }
-    return _result({"run": run_identity, "bindings": bindings}, failures)
+    proof = {
+        "shared_fixture_identity": fixture_identity,
+        "observable_outputs": observable_outputs,
+        "target_contract": target_contract,
+        "target_contract_sha256": _hash_json(target_contract),
+    }
+    return _result({"run": run_identity, "bindings": bindings, "proof": proof}, failures)
 
 
 def _fixture_binding(
@@ -103,12 +120,12 @@ def _fixture_binding(
 ) -> tuple[Path | None, str | None]:
     fixture = _mapping(spec.get("fixture_contract"))
     raw_path = fixture.get("path") or fixture.get("input")
-    expected_sha = fixture.get("hash") or spec.get("fixture_hash")
+    expected_sha = fixture.get("sha256")
     path = _safe_path(root, raw_path, "fixture", failures)
     actual_sha = _file_sha(path, "fixture", failures)
-    if not _valid_sha(expected_sha):
-        failures.append(_failure("fixture_hash_missing", "Fixture requires an exact SHA-256 binding."))
-    elif actual_sha != str(expected_sha).lower():
+    if expected_sha is not None and not _valid_sha(expected_sha):
+        failures.append(_failure("fixture_hash_invalid", "Explicit fixture SHA-256 binding is invalid."))
+    elif _valid_sha(expected_sha) and actual_sha != str(expected_sha).lower():
         failures.append(_failure("fixture_hash_mismatch", "Fixture SHA-256 drifted."))
     declared = payload.get("fixture")
     binding_path = _mapping(payload.get("fixture_binding")).get("path")
@@ -118,6 +135,62 @@ def _fixture_binding(
         elif _safe_path(root, value, "fixture binding", failures) != path:
             failures.append(_failure("fixture_path_mismatch", "Fresh run used a different fixture path."))
     return path, actual_sha
+
+
+def _fixture_outputs(
+    payload: Mapping[str, Any],
+    fixture_sha: str | None,
+    failures: list[dict[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    binding = _mapping(payload.get("fixture_binding"))
+    fields = binding.get("behavior_fields")
+    cases = binding.get("case_bindings")
+    if not isinstance(fields, list) or not fields or not all(isinstance(item, str) for item in fields):
+        failures.append(_failure("observable_fields_missing", "Fixture observable outputs are missing."))
+        fields = []
+    if not isinstance(cases, list) or not cases:
+        failures.append(_failure("fixture_cases_missing", "Fresh oracle fixture cases are missing."))
+        cases = []
+    identity_cases: list[dict[str, Any]] = []
+    outputs: dict[str, Any] = {}
+    for case in cases:
+        if not isinstance(case, Mapping):
+            failures.append(_failure("fixture_case_invalid", "Fresh oracle fixture case is invalid."))
+            continue
+        case_id = case.get("id")
+        expected = case.get("expected_outputs")
+        if not isinstance(case_id, str) or not case_id or not isinstance(expected, Mapping):
+            failures.append(_failure("fixture_case_invalid", "Fresh oracle fixture case is incomplete."))
+            continue
+        if case.get("missing_observable_outputs"):
+            failures.append(_failure("fixture_outputs_incomplete", "Fixture case misses observable outputs."))
+            continue
+        identity_cases.append({"id": case_id, "input_binding": case.get("input_ref")})
+        outputs[case_id] = sanitize_value(dict(expected))
+    identity = {
+        "fixture_sha256": fixture_sha,
+        "behavior_fields": list(fields),
+        "cases": identity_cases,
+    }
+    return identity, outputs
+
+
+def _target_contract(build_profile: Mapping[str, Any]) -> dict[str, Any]:
+    target = _mapping(build_profile.get("target"))
+    triple = target.get("triple_or_abi") or build_profile.get("target_triple") or build_profile.get("abi")
+    pointer_width = target.get("pointer_width")
+    endianness = target.get("endianness")
+    if not isinstance(triple, str) or not triple.strip():
+        return {}
+    if pointer_width not in {16, 32, 64, 128} or endianness not in {"little", "big"}:
+        return {}
+    return {
+        "schema_version": 1,
+        "target_triple": triple,
+        "pointer_width": pointer_width,
+        "endianness": endianness,
+        "calling_convention": str(target.get("calling_convention") or "C"),
+    }
 
 
 def _source_bindings(
@@ -323,6 +396,11 @@ def _safe_path(root: Path, value: Any, label: str, failures: list[dict[str, Any]
         failures.append(_failure("path_missing", f"{label.title()} path is missing."))
         return None
     try:
+        candidate = Path(value)
+        if candidate.is_absolute():
+            resolved = candidate.resolve()
+            resolved.relative_to(root.resolve())
+            return resolved
         return resolve_under(root, value)
     except (OSError, ValueError):
         failures.append(_failure("path_escape", f"{label.title()} path escapes the proof root."))
@@ -365,6 +443,7 @@ def _result(identity: Mapping[str, Any], failures: list[dict[str, Any]]) -> dict
     if not bounded:
         result["reuse_key_sha256"] = run.get("reuse_key_sha256")
         result["bindings"] = identity.get("bindings")
+        result.update(_mapping(identity.get("proof")))
     return result
 
 
@@ -377,9 +456,7 @@ def _valid_sha(value: Any) -> bool:
 
 
 def _hash_json(value: Any) -> str:
-    return hashlib.sha256(
-        json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
 
 
 def _logical(root: Path, path: Path | None) -> str:
