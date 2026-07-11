@@ -60,7 +60,6 @@
   "toolchain": {
     "rustc_version": "rustc 1.96.0",
     "cargo_version": "cargo 1.96.0",
-    "openspec_version": "1.4.1",
     "git_version": "git version 2.53.0.windows.3",
     "host_os": "windows",
     "c_oracle_host": "wsl-or-ci-required-for-pass"
@@ -89,7 +88,6 @@
     "rust_profile.cargo_lock_sha256",
     "toolchain.rustc_version",
     "toolchain.cargo_version",
-    "toolchain.openspec_version",
     "environment_profile.sha256"
   ],
   "invalidates": [

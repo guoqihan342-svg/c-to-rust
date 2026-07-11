@@ -8,9 +8,9 @@
   "agents": [
     {
       "id": "019ef898-2921-7ae1-b9e9-7f9f3a9095aa",
-      "role": "OpenSpec encoding and bilingual spec audit",
+      "role": "retired governance encoding and bilingual spec audit",
       "mode": "read-only",
-      "result": "main spec UTF-8 content is valid; preserve OpenSpec anchors"
+      "result": "main spec UTF-8 content is valid; preserve retired governance anchors"
     },
     {
       "id": "019ef898-df5f-7b11-ab9d-4a32c0f62118",
@@ -26,7 +26,7 @@
     },
     {
       "id": "019ef899-3147-7491-9198-0710cef8e8c8",
-      "role": "OpenSpec evidence and archive checklist review",
+      "role": "retired governance evidence and archive checklist review",
       "mode": "read-only",
       "result": "use standard 7 task groups and l3-tsdb-error-boundary evidence prefix"
     }

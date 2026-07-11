@@ -1,110 +1,94 @@
 {
-    "schema_version":  1,
-    "level":  "L3",
-    "target_id":  "flashdb",
-    "slice_id":  "kvdb-compact-overwrite",
-    "status":  "passed",
-    "generated_at_utc":  "2026-06-24T07:00:00.8008952Z",
-    "source_commit":  "93d175549da579b8abac07bd175ce4c3f9dde829",
-    "fixture_hash":  "78e5ef24",
-    "c_oracle_toolchain_status":  "C_ORACLE_GENERATED",
-    "diff_status":  "passed",
-    "checks":  [
-                   {
-                       "name":  "cargo_fmt_check",
-                       "command":  "cargo fmt -- --check",
-                       "workdir":  "./flashDB_rust",
-                       "exit_code":  0,
-                       "status":  "passed",
-                       "log_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-cargo-fmt.log"
-                   },
-                   {
-                       "name":  "kvdb_targeted_tests",
-                       "command":  "cargo test --test kvdb_main_paths -- --nocapture",
-                       "workdir":  "./flashDB_rust",
-                       "exit_code":  0,
-                       "status":  "passed",
-                       "log_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-kvdb-targeted-tests.log"
-                   },
-                   {
-                       "name":  "differential_replay_tests",
-                       "command":  "cargo test --test differential_replay -- --nocapture",
-                       "workdir":  "./flashDB_rust",
-                       "exit_code":  0,
-                       "status":  "passed",
-                       "log_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-differential-replay-tests.log"
-                   },
-                   {
-                       "name":  "cargo_check",
-                       "command":  "cargo check",
-                       "workdir":  "./flashDB_rust",
-                       "exit_code":  0,
-                       "status":  "passed",
-                       "log_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-cargo-check.log"
-                   },
-                   {
-                       "name":  "cargo_test",
-                       "command":  "cargo test",
-                       "workdir":  "./flashDB_rust",
-                       "exit_code":  0,
-                       "status":  "passed",
-                       "log_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-cargo-test.log"
-                   },
-                   {
-                       "name":  "cli_replay",
-                       "command":  "cargo run -- replay --fixture fixtures/l3-kvdb-compact-overwrite.json --backend file --report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json",
-                       "workdir":  "./flashDB_rust",
-                       "exit_code":  0,
-                       "status":  "passed",
-                       "log_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-cli-replay.log"
-                   },
-                   {
-                       "name":  "schema_diff",
-                       "command":  "cargo run -- diff --rust-report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json --oracle-report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json --report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-diff.json",
-                       "workdir":  "./flashDB_rust",
-                       "exit_code":  0,
-                       "status":  "passed",
-                       "log_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-schema-diff.log"
-                   },
-                   {
-                       "name":  "unsafe_scan",
-                       "command":  "cargo run --quiet -- unsafe-scan",
-                       "workdir":  "./flashDB_rust",
-                       "exit_code":  0,
-                       "status":  "passed",
-                       "log_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-unsafe-scan.log"
-                   },
-                   {
-                       "name":  "performance_smoke",
-                       "command":  "cargo run -- replay --fixture fixtures/l3-kvdb-compact-overwrite.json --backend file --report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-performance-replay.json",
-                       "workdir":  "./flashDB_rust",
-                       "exit_code":  0,
-                       "status":  "passed",
-                       "log_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-performance-smoke.log"
-                   },
-                   {
-                       "name":  "openspec_change_strict",
-                       "command":  "openspec validate run-flashdb-kvdb-compact-overwrite-l3-loop --strict",
-                       "workdir":  ".",
-                       "exit_code":  0,
-                       "status":  "passed",
-                       "log_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-openspec-change-strict.log"
-                   },
-                   {
-                       "name":  "openspec_all",
-                       "command":  "openspec validate --all",
-                       "workdir":  ".",
-                       "exit_code":  0,
-                       "status":  "passed",
-                       "log_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-openspec-all.log"
-                   },
-                   {
-                       "name":  "git_diff_check",
-                       "command":  "git diff --check",
-                       "workdir":  ".",
-                       "exit_code":  0,
-                       "status":  "passed",
-                       "log_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-git-diff-check.log"
-                   }
-               ]
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-compact-overwrite",
+  "status": "passed",
+  "generated_at_utc": "2026-06-24T07:00:00.8008952Z",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "fixture_hash": "78e5ef24",
+  "c_oracle_toolchain_status": "C_ORACLE_GENERATED",
+  "diff_status": "passed",
+  "checks": [
+    {
+      "name": "cargo_fmt_check",
+      "command": "cargo fmt -- --check",
+      "workdir": "./flashDB_rust",
+      "exit_code": 0,
+      "status": "passed",
+      "log_path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-cargo-fmt.log"
+    },
+    {
+      "name": "kvdb_targeted_tests",
+      "command": "cargo test --test kvdb_main_paths -- --nocapture",
+      "workdir": "./flashDB_rust",
+      "exit_code": 0,
+      "status": "passed",
+      "log_path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-kvdb-targeted-tests.log"
+    },
+    {
+      "name": "differential_replay_tests",
+      "command": "cargo test --test differential_replay -- --nocapture",
+      "workdir": "./flashDB_rust",
+      "exit_code": 0,
+      "status": "passed",
+      "log_path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-differential-replay-tests.log"
+    },
+    {
+      "name": "cargo_check",
+      "command": "cargo check",
+      "workdir": "./flashDB_rust",
+      "exit_code": 0,
+      "status": "passed",
+      "log_path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-cargo-check.log"
+    },
+    {
+      "name": "cargo_test",
+      "command": "cargo test",
+      "workdir": "./flashDB_rust",
+      "exit_code": 0,
+      "status": "passed",
+      "log_path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-cargo-test.log"
+    },
+    {
+      "name": "cli_replay",
+      "command": "cargo run -- replay --fixture fixtures/l3-kvdb-compact-overwrite.json --backend file --report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json",
+      "workdir": "./flashDB_rust",
+      "exit_code": 0,
+      "status": "passed",
+      "log_path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-cli-replay.log"
+    },
+    {
+      "name": "schema_diff",
+      "command": "cargo run -- diff --rust-report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json --oracle-report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json --report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-diff.json",
+      "workdir": "./flashDB_rust",
+      "exit_code": 0,
+      "status": "passed",
+      "log_path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-schema-diff.log"
+    },
+    {
+      "name": "unsafe_scan",
+      "command": "cargo run --quiet -- unsafe-scan",
+      "workdir": "./flashDB_rust",
+      "exit_code": 0,
+      "status": "passed",
+      "log_path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-unsafe-scan.log"
+    },
+    {
+      "name": "performance_smoke",
+      "command": "cargo run -- replay --fixture fixtures/l3-kvdb-compact-overwrite.json --backend file --report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-performance-replay.json",
+      "workdir": "./flashDB_rust",
+      "exit_code": 0,
+      "status": "passed",
+      "log_path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-performance-smoke.log"
+    },
+    {
+      "name": "git_diff_check",
+      "command": "git diff --check",
+      "workdir": ".",
+      "exit_code": 0,
+      "status": "passed",
+      "log_path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-git-diff-check.log"
+    }
+  ]
 }

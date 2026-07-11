@@ -150,7 +150,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-auto-cache-metadata.json",
-      "sha256": "3b0bc96e5d1bc66af5361a685ab9232925b8104422317a625b708366f4657a5c",
+      "sha256": "677ff3ad287db315e65f3c4e848286c59e153ed8d39eeb251c9e85fff0fdd602",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -161,7 +161,7 @@
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-config-profile.json",
       "profile_id": "demo-sparse-designated-array-lookup-wsl-gcc",
-      "sha256": "35bde716ad9f0841d92c681691af23de262539f681347e44b94a5c2289e4a867",
+      "sha256": "cb00ef97462f9205b70e1902203fbee453472c5f9dccfd0798683ed389e60638",
       "status": "recorded"
     },
     "context_pack": {
@@ -252,7 +252,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-version-manifest.json",
-      "sha256": "fc4acc793a15b51056114bb555dcbed0aab13f2630e839e757ccb06853b3289d",
+      "sha256": "5f64146e8e195dfb229c4f8ca64473338e2f2702256e87c32484584e6fc936d6",
       "status": "recorded"
     }
   },

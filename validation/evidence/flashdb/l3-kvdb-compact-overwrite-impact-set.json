@@ -1,51 +1,45 @@
 {
-    "schema_version":  1,
-    "level":  "L3",
-    "target_id":  "flashdb",
-    "slice_id":  "kvdb-compact-overwrite",
-    "changed_files":  [
-                          "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
-                          "flashDB_rust/tests/differential_replay.rs",
-                          "openspec/changes/run-flashdb-kvdb-compact-overwrite-l3-loop/*",
-                          "validation/evidence/flashdb/l3-kvdb-compact-overwrite-*",
-                          "validation/evidence/flashdb/error-events.jsonl",
-                          "validation/evidence/flashdb/patches.jsonl"
-                      ],
-    "production_code_changes":  [
-
-                                ],
-    "public_api_changes":  [
-
-                           ],
-    "test_changes":  [
-                         "added visible behavior replay integration test",
-                         "added negative diff regression test for post-reopen value mismatch"
-                     ],
-    "fixture_changes":  [
-                            "added deterministic L3 KVDB fixture with 14 operations"
-                        ],
-    "affected_runtime_paths":  [
-                                   "replay fixture parsing",
-                                   "KvDb set/get/delete/entries/compact/open behavior as exercised by existing API"
-                               ],
-    "unaffected_runtime_paths":  [
-                                     "TSDB runtime",
-                                     "flash format encoding",
-                                     "CLI command parsing",
-                                     "oracle C source contract",
-                                     "public Rust API signatures"
-                                 ],
-    "risk_assessment":  {
-                            "blast_radius":  "low",
-                            "reason":  "No production Rust source changed; new fixture/tests/evidence only."
-                        },
-    "rollback":  {
-                     "rollback_id":  "7c2fdff2311ecdf0d7d3643ca188723a724145c3",
-                     "revert_scope":  [
-                                          "new fixture",
-                                          "new differential replay tests",
-                                          "new evidence files",
-                                          "OpenSpec change artifacts"
-                                      ]
-                 }
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-compact-overwrite",
+  "changed_files": [
+    "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
+    "flashDB_rust/tests/differential_replay.rs",
+    "validation/evidence/flashdb/l3-kvdb-compact-overwrite-*",
+    "validation/evidence/flashdb/error-events.jsonl",
+    "validation/evidence/flashdb/patches.jsonl"
+  ],
+  "production_code_changes": [],
+  "public_api_changes": [],
+  "test_changes": [
+    "added visible behavior replay integration test",
+    "added negative diff regression test for post-reopen value mismatch"
+  ],
+  "fixture_changes": [
+    "added deterministic L3 KVDB fixture with 14 operations"
+  ],
+  "affected_runtime_paths": [
+    "replay fixture parsing",
+    "KvDb set/get/delete/entries/compact/open behavior as exercised by existing API"
+  ],
+  "unaffected_runtime_paths": [
+    "TSDB runtime",
+    "flash format encoding",
+    "CLI command parsing",
+    "oracle C source contract",
+    "public Rust API signatures"
+  ],
+  "risk_assessment": {
+    "blast_radius": "low",
+    "reason": "No production Rust source changed; new fixture/tests/evidence only."
+  },
+  "rollback": {
+    "rollback_id": "7c2fdff2311ecdf0d7d3643ca188723a724145c3",
+    "revert_scope": [
+      "new fixture",
+      "new differential replay tests",
+      "new evidence files"
+    ]
+  }
 }

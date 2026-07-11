@@ -18,11 +18,6 @@
     "tsdb-status-transition"
   ],
   "active_change": "run-flashdb-tsdb-non-monotonic-timestamp-l3-loop",
-  "context_files": [
-    "openspec/changes/run-flashdb-tsdb-non-monotonic-timestamp-l3-loop/proposal.md",
-    "openspec/changes/run-flashdb-tsdb-non-monotonic-timestamp-l3-loop/design.md",
-    "openspec/changes/run-flashdb-tsdb-non-monotonic-timestamp-l3-loop/specs/flashdb-l3-agent-migration-loop/spec.md",
-    "openspec/changes/run-flashdb-tsdb-non-monotonic-timestamp-l3-loop/tasks.md"
-  ],
+  "context_files": [],
   "c_semantic_anchor": "FlashDB src/fdb_tsdb.c tsl_append rejects cur_time <= db->last_time with FDB_WRITE_ERR before writing a TSL."
 }

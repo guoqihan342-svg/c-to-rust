@@ -15,7 +15,6 @@
   - 新增 `test_scalar_typed_ir_candidate_without_zero_token_cost_stays_l1` 和 `test_scalar_typed_ir_candidate_with_nonzero_token_cost_stays_l1`，锁住缺失或非 0 token cost 不走 L0。
   - 在 `test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence` 中确认 FlashDB 这类 pointer-bearing `GenericTypedIr + token_cost=0` 仍是 L1。
   - 保留 alias risk / blocked alias / unsupported typed IR 测试，并新增 unknown pointer ownership 测试，分别证明 L2/L3/L2/L2 边界未被破坏。
-- 双语文档与 OpenSpec 已同步：
   - `docs/c2rust-migration-agent/README.md`
   - `docs/c2rust-migration-agent/README.en.md`
   - `docs/c2rust-migration-agent/core-translation-architecture.md`
@@ -25,7 +24,6 @@
   - `validation/README.md`
   - `validation/gates.md`
   - `validation/auto-translation-template/README.md`
-  - `openspec/specs/bounded-auto-translation-pipeline/spec.md`
 
 已确认红灯：
 
@@ -119,7 +117,6 @@ $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\cla
 提交前最终验证结果：
 
 - `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
-- `openspec validate --all --strict`: PASS，37 items passed。
 - `git diff --check -- <本轮白名单文件>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
 - `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir`: PASS，142 bounded translation tests 通过。
 - `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir`: PASS，25 个 lib tests + 242 个 bounded translation tests 通过。
@@ -839,7 +836,6 @@ value = (((value as i32) + 1i32) as u8);
   - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
   - `docs/superpowers/plans/2026-06-27-compound-assignment-integer-promotion.md`
   - `docs/superpowers/plans/2026-06-27-typed-ir-scoped-forstmt.md`
-  - `openspec/changes/expand-translator-compound-statement-support/*`
 
 聚焦验证已通过：
 

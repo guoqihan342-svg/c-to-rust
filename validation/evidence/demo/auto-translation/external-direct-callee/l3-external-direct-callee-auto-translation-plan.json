@@ -1,7 +1,7 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-    "sha256": "7d9ed7d896025c451dd5b354cd849028fcf6d0061e0d9ad19b2d4de430569dc4",
+    "sha256": "3cec3d0c1b8eea85969ba9a3593937d78eb8b911b61940cf3522bc0dcfa85e15",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
@@ -101,7 +101,7 @@
     },
     "slice_spec": {
       "path": "validation/slice-specs/demo-external-direct-callee.json",
-      "sha256": "d1cfb0ab00ec4dc555c59ab9710c587acd005d0e42755bf0d1f9a86846e16974",
+      "sha256": "0968143ea11d4e302e2ad53d93b4f981a8e6c38238abc3cf19dde9fe0690b0e1",
       "status": "ready"
     },
     "type_map": {
@@ -189,7 +189,7 @@
         "source_files": [
           {
             "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
-            "sha256": "generated-at-validation"
+            "sha256": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
           }
         ],
         "source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
@@ -217,7 +217,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
     "profile": "L0-dev",
-    "sha256": "ef37d6f1c592394a946f6d1e2f390b9cd1df7ba748c4f7fdeddec0d97bc65737",
+    "sha256": "87751fdf4380e3b8fe976740ea9703a7af8b3f08be154389322ed1017ffb245f",
     "status": "passed"
   },
   "verification_plan": [

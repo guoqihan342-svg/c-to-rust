@@ -137,8 +137,7 @@
     },
     "preprocessing_mode": "compile_commands",
     "tool_versions": {
-      "clang": "example-clang-version",
-      "openspec": "example-openspec-version"
+      "clang": "example-clang-version"
     },
     "clang_type_extraction": {
       "available": true,

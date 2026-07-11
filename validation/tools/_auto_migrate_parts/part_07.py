@@ -30,10 +30,6 @@ def tool_versions() -> dict[str, str]:
         "python": command_version([sys.executable, "--version"]),
         "rustc": command_version(["rustc", "--version"]),
         "cargo": command_version(["cargo", "--version"]),
-        "openspec": command_version(
-            ["openspec", "--version"],
-            fallback=["powershell", "-NoProfile", "-Command", "openspec --version"],
-        ),
     }
 
 

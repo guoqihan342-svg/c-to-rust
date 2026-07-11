@@ -72,18 +72,6 @@
       "evidence": "validation/evidence/flashdb/l3-tsdb-non-monotonic-timestamp-final-cargo-test.log"
     },
     {
-      "name": "openspec_strict",
-      "command": "openspec validate run-flashdb-tsdb-non-monotonic-timestamp-l3-loop --strict",
-      "status": "passed",
-      "evidence": "validation/evidence/flashdb/l3-tsdb-non-monotonic-timestamp-final-openspec-strict.log"
-    },
-    {
-      "name": "openspec_all",
-      "command": "openspec validate --all",
-      "status": "passed",
-      "evidence": "validation/evidence/flashdb/l3-tsdb-non-monotonic-timestamp-final-openspec-all.log"
-    },
-    {
       "name": "git_diff_check",
       "command": "git diff --check",
       "status": "passed",

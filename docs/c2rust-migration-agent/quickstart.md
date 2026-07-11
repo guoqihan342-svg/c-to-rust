@@ -130,7 +130,6 @@ runner 自动完成：
 5. unsafe budget 扫描
 6. `competition-run-summary.json` 生成与校验
 
-OpenSpec 历史治理校验不是默认比赛 gate；需要本地治理检查时，给 runner 显式追加 `--run-optional-governance-checks`。
 
 **手动展开版**（如需逐步调试）：
 
@@ -545,9 +544,7 @@ python3 -B -m validation.tools.validate_public_release_packet \
 # 检查 unsafe
 python3 -B validation/tools/unsafe_budget.py --max-ratio 0.10
 
-# 可选：检查 OpenSpec 历史治理归档。默认比赛 runner 不执行；
-# 只有显式 `--run-optional-governance-checks` 时才纳入 optional governance gate。
-openspec validate --all --strict
+# 可选：检查 Superpowers 历史治理归档。默认比赛 runner 不执行；
 
 # 运行 translator 单元测试
 cargo test --manifest-path crates/c2r-translator/Cargo.toml

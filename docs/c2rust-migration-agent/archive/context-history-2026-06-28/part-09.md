@@ -604,7 +604,6 @@ English mirror summary:
 本轮继续按多智能体推进 `c2r-translator` 通用语法面，完成第 117 节建议的 nested pure direct call 快刀，并把用户补充的比赛环境约束核对到独立配置目录。四个只读子智能体分别给出结论：
 - nested direct call：建议只放开“一层、一个、整个实参就是 direct call”，保留 deeper / multiple sibling / condition call / side-effect argument fail-closed。
 - standalone typed clang inc/dec statement：当前真实 clang AST 还不支持普通 `value++; ++value;` statement；下一刀应复用 `ForStmt` step 的 inc/dec-to-Assign helper，只放开 statement value-discarded 场景。
-- alias/memory model：mutable pointer output write 仍缺 noalias/ownership/length/effect graph 证明；下一阶段应先补 struct/alias memory model OpenSpec 和 pointer/slice evidence schema。本条关于 effect graph 生成的缺口已被第 122 节 supersede；完整 pointer ownership model 仍未完成。
 - 比赛环境配置：`config/competition-env/` 已完整匹配用户给出的 Ubuntu 24.04.4、kernel、Huawei mirrors、Python/Node/Java/Maven/Rust/GCC/Make 和 Go/CMake 缺失事实；validation 侧目录只是 compatibility entrypoint。
 
 核心翻译改动：
@@ -680,7 +679,6 @@ git diff --check
 - 可以说：generic typed IR 现在支持一层单个 nested direct call argument，例如 `return outer(inner(value));`，并且 direct typed IR、真实 clang AST 和 rustc snippet smoke 均已覆盖。
 - 可以说：这个支持仍是 candidate generation，不是外部 callee semantic acceptance；external callee 仍需要现有 call evidence/signature/source binding 以及完整 validation gates。
 - 不应说：已支持 function pointer call、任意 nested call、多个 sibling nested call、condition 中 call、复杂 call side effect、call argument 中 inc/dec/deref、full C argument evaluation semantics 或 semantic acceptance。
-- 后续建议：下一刀优先 standalone typed clang inc/dec statement；并行推进 struct/alias memory model OpenSpec + pointer/slice evidence schema，避免 mutable pointer output write 误扩张成完整 C pointer ownership 模型。该 schema/effect graph 对齐已由第 120 和第 122 节推进完成，完整 pointer ownership model 仍未完成。
 
 English mirror summary:
 
@@ -695,7 +693,6 @@ English mirror summary:
 本轮继续按多智能体推进 `c2r-translator` 通用语法面，完成第 118 节建议的 standalone typed clang inc/dec statement 快刀。三个只读子智能体分别给出结论：
 - inc/dec 代码路径：当前普通函数体 `UnaryOperator` statement 会在 `stmt_skeleton_from_ast()` 落到 `Unsupported`；已有 `ForStmt` step helper 可把 inc/dec 降成 `Assign`，应抽成 statement 通用 helper。
 - 文档同步：需要更新 `core-translation-architecture` 中英文、README 中英文、translator-strengthening-analysis 中英文，并在 CONTEXT 新章节说明第 118 节的下一刀建议已完成。
-- alias/memory model：应单独做 `add-struct-alias-memory-model-evidence` OpenSpec，不应和 inc/dec 语法切片混在一起；当前 pointer graph / slice spec / manifest schema 与 validator 的 alias gate 字段仍不一致。
 
 核心翻译改动：
 - `crates/c2r-translator/src/clang_frontend.rs`
@@ -777,7 +774,6 @@ English mirror summary:
 - `validation/auto-translation-template/auto-translation-plan.schema.json` 和 example 新增 `translation_summary.alias_gate`。
 - `validation/l3-template/evidence-manifest.schema.json` 和 example 新增 `claim_boundary.alias_gate`，并修复 example 缺失的 `c2rust_baseline`、`route_decision`、`validation_profile` required refs。
 - pointer graph、slice spec、auto translation、L3 template 的 README/checklist 已补中英文说明，强调 FlashDB 只是用例，alias gate 是通用 pointer/struct/external-state 风险门禁，不是 whole-program alias proof。
-- 新增 OpenSpec change：`openspec/changes/add-struct-alias-memory-model-evidence/`。
 
 兼容策略：
 
@@ -799,8 +795,6 @@ python -m json.tool validation/auto-translation-template/auto-translation-plan.s
 python -m json.tool validation/auto-translation-template/auto-translation-plan.example.json > $null
 python -m json.tool validation/l3-template/evidence-manifest.schema.json > $null
 python -m json.tool validation/l3-template/evidence-manifest.example.json > $null
-openspec validate add-struct-alias-memory-model-evidence --strict
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -810,8 +804,6 @@ git diff --check
 - alias auto-migrate focused tests: 3 passed。
 - alias validator focused tests: 3 passed。
 - 8 个修改 JSON 文件均可 parse。
-- OpenSpec change valid。
-- OpenSpec 全量 strict 校验 38 passed, 0 failed。
 - `git diff --check` exit 0，仅有 Windows LF/CRLF 提示。
 
 下一步建议：
@@ -826,7 +818,6 @@ English mirror summary:
 - Slice spec templates now expose `c_boundary.pointer_contract` and `memory_model`.
 - Auto-translation plan and L3 manifest templates now expose alias-gate summaries.
 - Docs/checklists are bilingual and clarify that FlashDB is only a use case; the gate is generic evidence, not a whole-program alias proof.
-- Focused schema, auto-migrate, validator, JSON, OpenSpec, and whitespace checks pass.
 
 ## 121. 2026-06-27 competition environment binding for auto translation
 

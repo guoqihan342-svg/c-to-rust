@@ -154,7 +154,7 @@
       "run_id": "harness-flashdb-explicit-workers-evaluate-profile-20260701",
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json",
-        "sha256": "99d3d698f4b6a3714476ac62015dcd67ead2ba67f7e5bfc92f45589fcd3d8057"
+        "sha256": "bd30b85ded03617c12d05518a7a786e19b82fb661b6e3f6cf23021a5cacb8285"
       },
       "verification_commands": [
         "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json"
@@ -197,7 +197,7 @@
       "run_id": "harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/harness/l3-flashdb-opencode-explicit-workers-harness-run.json",
-        "sha256": "fe9c10db120e2a740e77120fab01f2812e2c89970ce588501b3bc7f1a983cadd"
+        "sha256": "4b0dd3ef3df9515a5a2ad1daa8f8e638b609b794edbaa152cdc46ed4315884ed"
       },
       "verification_commands": [
         "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json"

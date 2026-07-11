@@ -73,7 +73,7 @@
     },
     "negative_diff": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-negative-diff.json",
-      "sha256": "9b8d86a0ca8cb3dc9dabeadeb8fbb0fc90e5a21bd08e947a413330ebc8a35a78",
+      "sha256": "cd8ca0a5d458347dccb493146cdeda73ca4f1d9b59dbc6703f0ea25defe27091",
       "status": "passed"
     },
     "rust_replay": {
@@ -83,7 +83,7 @@
     },
     "schema_diff": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-diff.json",
-      "sha256": "148558ea3b75e8c141c48ae20e1282a29d6153997d4290dcfd7774a240d9fe6f",
+      "sha256": "a39f842783c1a6d3f1ba0265071321f7f456be8bae35f3236e83b209428aa4c4",
       "status": "passed"
     },
     "unsafe_ledger": {

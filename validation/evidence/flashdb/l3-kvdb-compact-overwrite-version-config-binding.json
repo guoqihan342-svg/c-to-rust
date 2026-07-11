@@ -27,7 +27,6 @@
     "cargo_lock_sha256",
     "rustc_version",
     "cargo_version",
-    "openspec_version",
     "command_arguments"
   ],
   "binding_boundary": "This binding is slice-local evidence for kvdb-compact-overwrite; it does not upgrade older FlashDB L3 legacy summaries without their own strict binding file."

@@ -55,7 +55,7 @@
       "accepted_evidence_refs": {
         "c_oracle": {
           "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-reset-c-oracle.json",
-          "sha256": "24dcedbd79f02a6929e2d94829699cc955979578186aa3b432e8a59fcef0b7cf",
+          "sha256": "876fb4186a30b3e14893b76a254f63011e5c351092ec264ac36e6d56bf860a0b",
           "status": "passed"
         },
         "negative_diff": {
@@ -148,7 +148,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-auto-cache-metadata.json",
-      "sha256": "d7a06f4e88301e6071641107fa121422ab24131d719fcd47b2d1b3fccd509cef",
+      "sha256": "d254f915f3ae4bb2e321a78bc7636c9c15c6df67c84797488c8d05aebc9387a4",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -159,7 +159,7 @@
     "config_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-config-profile.json",
       "profile_id": "flashdb-real-fdb-kv-iterate-kv-reset-carrier",
-      "sha256": "e74e89e4e61b48ca789fcdb7bf0b687e6d5f85357a3360ffdf1ebad8541d4da7",
+      "sha256": "38b790acdac493704de59ede99f3d34168f25f4560ef2b139ee0b3bd9bd59613",
       "status": "recorded"
     },
     "context_pack": {
@@ -169,7 +169,7 @@
     },
     "final_verification": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-final-verification.json",
-      "sha256": "ed5e785986633ae354b5261501a168298d86a5c9180a6bed4d6cc638e5865152",
+      "sha256": "02a96c5cdab2bcd259bb7433103a6550fbb7c5e98b6bbb4dc75f0e627a526ba5",
       "status": "passed"
     },
     "negative_diff": {
@@ -218,7 +218,7 @@
     },
     "summary": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-summary.json",
-      "sha256": "87871ca293cf75c6bf840d73430def99072a68761ff4e7b140624e4b519a0c15",
+      "sha256": "c31e5932fe4adce5cac7b0bda2740634d5f258df273691c63ece9b1720af68ae",
       "status": "passed"
     },
     "test_translation": {
@@ -249,7 +249,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-kv-reset/l3-real-fdb-kv-iterate-kv-reset-version-manifest.json",
-      "sha256": "ee5476af5ec05b36c353062a4c6d82a98619b8fc6b0dc78da59ac3e55ba39ed1",
+      "sha256": "32884e9aadc933d1675663296f369e4ecb78be18763377cd7c4d4e37bcfb5a87",
       "status": "recorded"
     }
   },

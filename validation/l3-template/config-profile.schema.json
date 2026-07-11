@@ -185,8 +185,7 @@
       "type": "object",
       "required": [
         "rustc_version",
-        "cargo_version",
-        "openspec_version"
+        "cargo_version"
       ]
     },
     "environment_profile": {

@@ -98,7 +98,7 @@
     "accepted_evidence_refs": {
       "c_oracle": {
         "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-traversed-len-c-oracle.json",
-        "sha256": "f5ecdb1f13d15ee78d2641fb6d2e84c9b36529b9cdcfc731d9475b3bd5e567e0",
+        "sha256": "95037e29d88513705a2f464b4b002bf4292fed73f07776b4e311a2c431c37b68",
         "status": "passed"
       },
       "negative_diff": {

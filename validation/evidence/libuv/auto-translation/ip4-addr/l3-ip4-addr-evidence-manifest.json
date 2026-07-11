@@ -48,7 +48,7 @@
   "evidence": {
     "c2rust_baseline": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
-      "sha256": "0eca3d16becf2c25686c38b96beafe6ccaeac5121c5d6453bb469351e1538e9c",
+      "sha256": "02d19a02027641d850ab39e60399b2eb2aa19aaf6e316a534540e4b6273b5bda",
       "status": "skipped"
     },
     "c_oracle": {
@@ -58,13 +58,13 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-auto-cache-metadata.json",
-      "sha256": "2fdb908a2483a61d7a14730ed62f45c8e637a85e22fda507df2a3aab23b94ae6",
+      "sha256": "eb493124a1fb1a89835bad8716baa29e5fd2c9db640a278f25727ec370f8a2d9",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-config-profile.json",
       "profile_id": "libuv-ip4-addr-linux-gnu",
-      "sha256": "14fce957fd65bb52880bc0054b6773fd704ca77c2190c000fd8fd95ec9b3bebf",
+      "sha256": "60488c48142895b1878be26cc41292a4426c2c04f67c12ac9fe3cfa171537f94",
       "status": "recorded"
     },
     "context_pack": {
@@ -74,14 +74,14 @@
     },
     "final_verification": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-final-verification.json",
-      "sha256": "1f50667564cd38f2b6eb8459e332b8bff8592440c660cb061ae938288154611b",
+      "sha256": "f18804cbcdc7dc838386e9a5496cbe618b809fcc21b168e1c91d02a40ae70ea8",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-negative-diff.json",
-      "sha256": "2d2e4f14498552765aebc54afb78c4c472bd4d873852bcdd359868c1cf42156d",
+      "sha256": "c83ea696416b5117b0a6e58d619281a7e04f9e2ddcaa6a5e06d5fc7dbd2a19d0",
       "status": "expected_failed"
     },
     "performance_smoke": {
@@ -98,12 +98,12 @@
     "route_decision": {
       "level": "L4",
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-route-decision.json",
-      "sha256": "2f84ea8be339b025fa2e0dee86eb29b16fe3ddf327d5bfdce9564c94723a0e3d",
+      "sha256": "ff2c4363ba7913d1142decccd5727fd1bdf5b46249625bcb551d0fe96690c79b",
       "status": "refused"
     },
     "rust_check": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/rust-check.json",
-      "sha256": "75b9442110364d29e28062da6e0d54044d2f7f960a0496cd5de22097173ab659",
+      "sha256": "3734d48995ece61dfdf791cc8f022d5d32091b897f987f45461aa5e9e73471e1",
       "status": "passed"
     },
     "rust_report": {
@@ -113,7 +113,7 @@
     },
     "schema_diff": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-diff.json",
-      "sha256": "92dc0a716f5d3f3be86b691f367c0d0b5483805ebe9c369b36972dc7459db05e",
+      "sha256": "96d5158dba7a3fe76705fe372d6e8ac54e034d392d0af1c98d1100acd1a90587",
       "status": "passed"
     },
     "slice_contract": {
@@ -133,28 +133,28 @@
     },
     "unsafe_ledger": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-unsafe-ledger.json",
-      "sha256": "015ea6e02c7b616f9e7a94c0e769914d9d5896444a25a77ed954ca1ce5432674",
+      "sha256": "2317d61063275e4724a8c77a08df90bb5ae15863bf9a8fbc72fd302ab1208834",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-unsafe-scan.json",
-      "sha256": "9caea6a34bef9dc45c05c83c95443133ec6652b291f86f1079e2d5bba5e48887",
+      "sha256": "ac7c312eb3092c383b5832d73d2a55e6524996dd8753e02ddfd2a70ee63076db",
       "status": "passed"
     },
     "validation_profile": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-validation-profile.json",
       "profile": "L4-accepted-evidence",
-      "sha256": "26aa85430e20f554f87b2cbe46485adb1b4ae3f36bf6a7f7014a1477912dde4e",
+      "sha256": "ec9e3471e51fb7ee5716c19773e5eb1edad31bd8c2d70a385630eea55a90490d",
       "status": "passed"
     },
     "verified_unsafe_baseline": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-verified-unsafe-baseline.json",
-      "sha256": "3e6c84096a00eeeafeccfee338c7d054734b3013aa86fe7e3795f1c887a67680",
+      "sha256": "d746611d0e4a3c26665d1410f4edea41019966698305980779521deb231364b1",
       "status": "blocked"
     },
     "version_or_config_binding": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-version-manifest.json",
-      "sha256": "7c5f976c7c1d9d3659bbb987081eb06e5cf95040f453141902d7b3248064b3f1",
+      "sha256": "f598a368ceb0d35c21892a7e7dfa06bfe2ead9923b1ffb930fb39f7c79203218",
       "status": "recorded"
     }
   },

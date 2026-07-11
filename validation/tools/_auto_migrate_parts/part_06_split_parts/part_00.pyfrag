@@ -310,7 +310,6 @@ def write_l3_config_profile(spec: dict[str, Any], evidence_dir: Path, slice_spec
             "toolchain": {
                 "rustc_version": "captured_by_rust_check",
                 "cargo_version": "captured_by_validation",
-                "openspec_version": "captured_by_validation",
                 "target_triple_or_abi": target.get("triple_or_abi") or build.get("target_triple") or "unknown",
             },
             "cache_invalidation_keys": cache_keys(spec, slice_spec_path),

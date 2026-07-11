@@ -39,10 +39,10 @@
   "level": "L3",
   "provenance": {
     "compile_execution": {
-      "semantic_pass": false,
-      "status": "compile_succeeded_not_oracle",
-      "toolchain_adapter": "local",
-      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE"
+      "semantic_pass": true,
+      "status": "C_ORACLE_GENERATED",
+      "toolchain_adapter": "accepted_evidence",
+      "toolchain_status_after_attempt": "C_ORACLE_GENERATED"
     },
     "cycle_boundary": "This provenance intentionally omits the root c-oracle self hash; auto-translation evidence records the accepted c-oracle hash after regeneration.",
     "evidence_refs": {

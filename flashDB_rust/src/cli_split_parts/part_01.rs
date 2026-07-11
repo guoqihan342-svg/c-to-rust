@@ -4,7 +4,6 @@ fn version_manifest(report_path: Option<&Path>) -> Result<String> {
     let rustc_version = command_version("rustc", &["--version"]);
     let cargo_version = command_version("cargo", &["--version"]);
     let git_version = command_version("git", &["--version"]);
-    let openspec_version = command_version_any(&["openspec", "openspec.cmd"], &["--version"]);
     let branch = command_version("git", &["branch", "--show-current"]);
     let repo_commit = command_version("git", &["rev-parse", "HEAD"]);
     let json = format!(
@@ -25,7 +24,6 @@ fn version_manifest(report_path: Option<&Path>) -> Result<String> {
             "\"rustc_version\":\"{}\",",
             "\"cargo_version\":\"{}\",",
             "\"git_version\":\"{}\",",
-            "\"openspec_version\":\"{}\",",
             "\"rust_toolchain_file\":null,",
             "\"host_os\":\"{}\",",
             "\"workspace_branch\":\"{}\",",
@@ -53,7 +51,6 @@ fn version_manifest(report_path: Option<&Path>) -> Result<String> {
             "\"cargo_lock_sha256\",",
             "\"rustc_version\",",
             "\"cargo_version\",",
-            "\"openspec_version\",",
             "\"flashdb_source_commit\",",
             "\"flashdb_feature_matrix\",",
             "\"command_arguments\",",
@@ -69,7 +66,6 @@ fn version_manifest(report_path: Option<&Path>) -> Result<String> {
         escape_json(&rustc_version),
         escape_json(&cargo_version),
         escape_json(&git_version),
-        escape_json(&openspec_version),
         escape_json(std::env::consts::OS),
         escape_json(&branch),
         escape_json(&repo_commit)
@@ -268,14 +264,6 @@ fn evidence_snippet(line: &str) -> String {
 
 fn manifest_path(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(name)
-}
-
-fn command_version_any(commands: &[&str], args: &[&str]) -> String {
-    commands
-        .iter()
-        .map(|command| command_version(command, args))
-        .find(|version| version != "NOT_FOUND")
-        .unwrap_or_else(|| "NOT_FOUND".to_string())
 }
 
 fn command_version(command: &str, args: &[&str]) -> String {

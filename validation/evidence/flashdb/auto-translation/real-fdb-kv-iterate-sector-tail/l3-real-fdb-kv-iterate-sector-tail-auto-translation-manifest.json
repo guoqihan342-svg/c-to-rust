@@ -204,7 +204,6 @@
     "target_id": "flashdb",
     "tool_versions": {
       "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
-      "openspec": "1.3.1",
       "python": "Python 3.12.3",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
@@ -282,7 +281,7 @@
       "accepted_evidence_refs": {
         "c_oracle": {
           "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-c-oracle.json",
-          "sha256": "ba1050482cc03514a0f4b9eca4468a3df74c0c6af11a0bfb461d3a4d1fc67601",
+          "sha256": "f3a7db0c344a48cb68ee2ce6a1b3515143ed3c0ae10ba9f6f7e7e8ce82006da6",
           "status": "passed"
         },
         "negative_diff": {
@@ -363,7 +362,7 @@
   "oracle": {
     "accepted_oracle": {
       "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-c-oracle.json",
-      "sha256": "ba1050482cc03514a0f4b9eca4468a3df74c0c6af11a0bfb461d3a4d1fc67601",
+      "sha256": "f3a7db0c344a48cb68ee2ce6a1b3515143ed3c0ae10ba9f6f7e7e8ce82006da6",
       "status": "passed"
     },
     "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
@@ -424,7 +423,7 @@
     "evidence_links": {
       "c_oracle": {
         "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-c-oracle.json",
-        "sha256": "ba1050482cc03514a0f4b9eca4468a3df74c0c6af11a0bfb461d3a4d1fc67601",
+        "sha256": "f3a7db0c344a48cb68ee2ce6a1b3515143ed3c0ae10ba9f6f7e7e8ce82006da6",
         "status": "passed"
       },
       "negative_diff": {
@@ -485,7 +484,7 @@
       "accepted_evidence_refs": {
         "c_oracle": {
           "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-c-oracle.json",
-          "sha256": "ba1050482cc03514a0f4b9eca4468a3df74c0c6af11a0bfb461d3a4d1fc67601",
+          "sha256": "f3a7db0c344a48cb68ee2ce6a1b3515143ed3c0ae10ba9f6f7e7e8ce82006da6",
           "status": "passed"
         },
         "negative_diff": {
@@ -597,7 +596,7 @@
       "oracle_reports": [
         {
           "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-c-oracle.json",
-          "sha256": "ba1050482cc03514a0f4b9eca4468a3df74c0c6af11a0bfb461d3a4d1fc67601",
+          "sha256": "f3a7db0c344a48cb68ee2ce6a1b3515143ed3c0ae10ba9f6f7e7e8ce82006da6",
           "status": "passed"
         },
         {
@@ -623,7 +622,7 @@
         "evidence": [
           {
             "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-tail-c-oracle.json",
-            "sha256": "ba1050482cc03514a0f4b9eca4468a3df74c0c6af11a0bfb461d3a4d1fc67601",
+            "sha256": "f3a7db0c344a48cb68ee2ce6a1b3515143ed3c0ae10ba9f6f7e7e8ce82006da6",
             "status": "passed"
           },
           {

@@ -53,7 +53,6 @@
 - P0 新增：拆分 `bounded_translation.rs` 测试巨文件，按能力域拆分，但不能用测试文件数冒充覆盖提升。
 - P0 新增：执行 `CONTEXT.md` handoff 收敛，建立短 current-state 入口，归档或标记 superseded 旧段，release/README/roadmap 不得依赖旧会话段作为能力证明。
 - P1 强化：扩真实切片池时，FlashDB slice 必须绑定 translator-generated candidate，不能只用 `flashDB_rust` 手写 skeleton 当自动翻译证据。
-- P1 新增：FlashDB FFI/C ABI/hardware 路线，`ffi.rs`、C ABI、on-disk layout、FAL/RTOS/Zephyr/hardware backend、错误/日志接口和同步/断电语义必须有 OpenSpec change、unsafe ledger、target evidence 或明确 deferred/L4 refusal。
 - P2 新增：开源反馈循环，外部可评估 milestone 前补 `CONTRIBUTING`/issue template/review checklist 或等价文档；社区指标不是能力证明，但没有公开反馈记录时不能写成熟生产工具。
 - `flashDB_rust/README.md` 修正：0 unsafe scan 只是当前 skeleton 扫描结果，不是生产安全、硬件安全、C ABI 兼容或完整语义等价证明；手写 skeleton 不算自动翻译产物。
 
@@ -75,7 +74,6 @@
 本轮处理用户新贴的“项目缺点深度分析”。两个只读子智能体分别核查代码/evidence 事实与 `future-vision-and-mvp.md` 覆盖情况。结论是：评价大方向仍有价值，但部分事实混淆了 candidate draft、route refusal 和 accepted evidence。
 
 判断：
-- 成立或部分成立：项目还不是大型真实 C 项目自动迁移工具；FlashDB skeleton 是手写 seed/验证脚手架；C2Rust baseline 仍基本 skipped/candidate_context_only；typed IR 覆盖面窄；OpenSpec/validation/evidence 体系重；catalog L1 仍有失败；新手上手和跨平台复现仍需要更直接的入口。
 - 不准确或过时：`real-fdb-calc-crc32` 不是仍 `semantic_pass=false`。当前 committed final verification/summary 是 `semantic_pass=true`，但 `generated_draft_semantic_pass=false`，route decision 可为 L4/accepted-evidence-authoritative/refused boundary。正确说法是：accepted evidence 语义通过，generated draft 仍是 candidate。`README.md` 也已存在，不是完全依赖 `CONTEXT.md`。
 - 重要细节：代码路径支持 real clang AST dump lowering，但当前 committed evidence 仍缺 durable `clang-lowering-report` artifact；如果没有该 artifact，公开叙述应区分“代码路径支持”和“当前 committed evidence 已包含 real-clang lowering 证据”。
 
@@ -91,7 +89,6 @@
 - Phase 3 新增：catalogue L1 失败治理，报告 success/fail/skipped 比例、top failure classes、可修复/不可修复/环境缺失分类、排除规则和下一步。
 - P0 新增：提交 durable real-clang lowering evidence，关键 real-source slice 必须有 real `clang-lowering-report` 或等价 artifact；no-clang/compatibility evidence 不能支撑 real-clang claim。
 - P0 新增：evidence portability 清理，检查本机绝对路径、旧 WSL/Windows 工作目录、临时目录和缺失 profile hash。
-- P0 新增：OpenSpec/validation 复杂度治理，归档 stale active changes，区分 lightweight release gate、developer smoke gate 和 full-regression gate。
 - P2 强化：C2Rust baseline/repair 路线必须至少让一个真实 slice 产生 C2Rust output，并记录 output path/status/sha256，不能长期只有 skipped。
 - P2 强化：量化评估必须加入 raw C2Rust、C2Rust+repair、typed-IR route、LLM candidate 和手写参考实现的竞品/基线对比。
 - P2 新增：新手 quickstart，README 或 docs/quickstart 提供 10-15 分钟最小复现路径、Linux/CI 命令、可选 PowerShell 命令、第一条可验证 slice、预期 artifacts、常见失败和边界。
@@ -107,7 +104,6 @@
 
 边界：
 - 可以说：这次把成熟度、C2Rust skipped、复现路径、catalog L1 failure、竞品对比和 quickstart 风险纳入 roadmap，并收窄了 real-clang evidence 表述。
-- 不应说：C2Rust 已可执行、durable real-clang evidence 已提交、quickstart 已实现、catalog L1 失败治理已实现或 OpenSpec/validation 复杂度已收敛。
 
 ## 157. 2026-06-28 external review triage: fail-closed repair and evidence cost
 

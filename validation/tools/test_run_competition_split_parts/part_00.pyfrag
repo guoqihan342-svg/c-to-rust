@@ -452,7 +452,6 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertTrue(any("auto_migrate.py" in text and "--competition-clang-lane" in text for text in command_texts))
             self.assertTrue(any("validate_auto_translation_evidence.py" in text for text in command_texts))
             self.assertTrue(any("unsafe_budget.py" in text for text in command_texts))
-            self.assertFalse(any("openspec validate --all --strict" in text for text in command_texts))
             self.assertTrue(any("validate_competition_run_summary.py" in text for text in command_texts))
 
             summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
@@ -460,41 +459,3 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["attempted"], 1)
             self.assertEqual(summary["slices"]["semantic_pass"], 1)
             self.assertEqual(summary["final_gate"]["status"], "passed")
-
-    def test_default_runner_does_not_launch_openspec_governance_check(self) -> None:
-        # OpenSpec is repository governance history, not competition evidence.
-        # The judge path must not launch it unless explicitly requested.
-        module = load_runner_module()
-        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
-            tmp_path = Path(tmp)
-            out_root = tmp_path / "competition-out"
-            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
-            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
-            fake_runner = FakeCommandRunner()
-
-            result = module.run_competition(
-                slice_specs=[spec_path],
-                out_root=out_root,
-                proof_class="local-simulation",
-                command_runner=fake_runner,
-                repo_root=REPO_ROOT,
-                run_id="run-test-openspec-default-skipped",
-            )
-
-            self.assertEqual(result.exit_code, 0, json.dumps(result.summary, default=str))
-            self.assertEqual(result.summary["final_gate"]["status"], "passed")
-            command_texts = [" ".join(command) for command in fake_runner.commands]
-            self.assertFalse(any("openspec validate --all --strict" in text for text in command_texts))
-
-    def test_optional_openspec_governance_check_failure_fails_final_gate(self) -> None:
-        # Developers may opt into the historical governance check; when they
-        # do, a present-but-failing OpenSpec validation remains a failure.
-        module = load_runner_module()
-        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
-            tmp_path = Path(tmp)
-            out_root = tmp_path / "competition-out"
-            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
-            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
-            fake_runner = FakeCommandRunner(fail_commands_containing={"openspec validate"})
-
-            result = module.run_competition(

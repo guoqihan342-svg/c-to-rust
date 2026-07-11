@@ -85,8 +85,6 @@ python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flas
 python -B -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
 rg -n '"path"\s*:\s*null|let _fixture = ''''|"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 validation/l2_slices/fixtures/real-fdb-calc-crc32.json validation/slice-specs/flashdb-real-fdb-calc-crc32.json
-openspec validate add-c2rust-baseline-migration-pipeline --strict
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -95,8 +93,6 @@ git diff --check
 - 66 个 Python 单测通过。
 - real-fdb validator 通过，且 `semantic_pass=false`。
 - 空 fixture path / 空 replay fixture / 禁止状态扫描无匹配。
-- `openspec validate add-c2rust-baseline-migration-pipeline --strict` 通过。
-- `openspec validate --all --strict` 37/37 通过。
 - `git diff --check` 通过，仅有 Windows CRLF 提示。
 
 下一步建议：

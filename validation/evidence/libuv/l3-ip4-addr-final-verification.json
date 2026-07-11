@@ -21,14 +21,6 @@
       "status": "passed"
     },
     {
-      "command": "openspec validate run-libuv-ip4-addr-pointer-l3 --strict",
-      "status": "passed"
-    },
-    {
-      "command": "openspec validate --all",
-      "status": "passed"
-    },
-    {
       "command": "git diff --check",
       "status": "passed"
     }

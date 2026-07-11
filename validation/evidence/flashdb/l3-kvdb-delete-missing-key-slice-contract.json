@@ -1,68 +1,67 @@
 {
-    "schema_version":  1,
-    "slice_id":  "kvdb-delete-missing-key",
-    "fixture":  "flashDB_rust/fixtures/l3-kvdb-delete-missing-key.json",
-    "flashdb_source_commit":  "93d175549da579b8abac07bd175ce4c3f9dde829",
-    "workspace_commit_before_slice":  "8c3816a6e70835e5822cebc564a8a87fe02893ec",
-    "rust_apis":  [
-                      "KvDb::delete",
-                      "KvDb::set",
-                      "KvDb::get",
-                      "KvDb::entries",
-                      "KvDb::open"
-                  ],
-    "c_oracle_operations":  [
-                                "kv.delete",
-                                "kv.set",
-                                "kv.get",
-                                "kv.entries",
-                                "kv.reopen"
-                            ],
-    "included_behavior":  [
-                              "valid missing key delete returns FDB_KV_NAME_ERR",
-                              "delete-after-delete second delete returns FDB_KV_NAME_ERR",
-                              "missing get remains OK/null",
-                              "unrelated live keys survive missing delete and reopen"
-                          ],
-    "excluded_behavior":  [
-                              "empty key delete",
-                              "overlong key delete",
-                              "native FlashDB GC",
-                              "tombstone layout",
-                              "sector movement",
-                              "capacity pressure",
-                              "byte-for-byte image layout",
-                              "power-loss recovery",
-                              "async runtime",
-                              "internal multithreading"
-                          ],
-    "strict_fields":  [
-                          "step.id",
-                          "step.op",
-                          "step.status",
-                          "step.code",
-                          "step.value",
-                          "step.entries",
-                          "operation success/error"
-                      ],
-    "accepted_difference_fields":  [
-                                       "image_hash",
-                                       "message",
-                                       "backend",
-                                       "toolchain_status",
-                                       "source",
-                                       "fixture",
-                                       "fixture_hash",
-                                       "report_path"
-                                   ],
-    "pass_gates":  [
-                       "red test captured before production change",
-                       "targeted Rust replay test passes",
-                       "C oracle report generated",
-                       "schema-aware diff passes",
-                       "negative diff fails as expected",
-                       "cargo check/test pass",
-                       "unsafe ratio \u003c 10% and first-party non-test unsafe remains 0%",
-                       "openspec strict/all validate"
-                   ]
+  "schema_version": 1,
+  "slice_id": "kvdb-delete-missing-key",
+  "fixture": "flashDB_rust/fixtures/l3-kvdb-delete-missing-key.json",
+  "flashdb_source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "workspace_commit_before_slice": "8c3816a6e70835e5822cebc564a8a87fe02893ec",
+  "rust_apis": [
+    "KvDb::delete",
+    "KvDb::set",
+    "KvDb::get",
+    "KvDb::entries",
+    "KvDb::open"
+  ],
+  "c_oracle_operations": [
+    "kv.delete",
+    "kv.set",
+    "kv.get",
+    "kv.entries",
+    "kv.reopen"
+  ],
+  "included_behavior": [
+    "valid missing key delete returns FDB_KV_NAME_ERR",
+    "delete-after-delete second delete returns FDB_KV_NAME_ERR",
+    "missing get remains OK/null",
+    "unrelated live keys survive missing delete and reopen"
+  ],
+  "excluded_behavior": [
+    "empty key delete",
+    "overlong key delete",
+    "native FlashDB GC",
+    "tombstone layout",
+    "sector movement",
+    "capacity pressure",
+    "byte-for-byte image layout",
+    "power-loss recovery",
+    "async runtime",
+    "internal multithreading"
+  ],
+  "strict_fields": [
+    "step.id",
+    "step.op",
+    "step.status",
+    "step.code",
+    "step.value",
+    "step.entries",
+    "operation success/error"
+  ],
+  "accepted_difference_fields": [
+    "image_hash",
+    "message",
+    "backend",
+    "toolchain_status",
+    "source",
+    "fixture",
+    "fixture_hash",
+    "report_path"
+  ],
+  "pass_gates": [
+    "red test captured before production change",
+    "targeted Rust replay test passes",
+    "C oracle report generated",
+    "schema-aware diff passes",
+    "negative diff fails as expected",
+    "cargo check/test pass",
+    "unsafe ratio < 10% and first-party non-test unsafe remains 0%"
+  ]
 }

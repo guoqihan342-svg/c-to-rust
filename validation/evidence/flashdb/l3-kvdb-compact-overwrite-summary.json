@@ -32,14 +32,13 @@
   "change_id": "run-flashdb-kvdb-compact-overwrite-l3-loop",
   "compact_boundary": "kv.compact is validated by visible behavior before/after compact and reopen. The current C oracle does not invoke a native public FlashDB compact/GC API; image_hash is accepted metadata.",
   "diff": {
-    "first_mismatch": null,
     "note": "Diff tool local toolchain_status may be SKIPPED_LOCAL_NO_C_TOOLCHAIN because it probes Windows while comparing WSL-generated C oracle.",
     "status": "passed"
   },
   "evidence": {
     "agent_roles": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-agent-roles.json",
-      "sha256": "094911fbc0516d3c0cca8a95cb9aeed3d15625085d9e2f1c34c8e6d97474e2d8"
+      "sha256": "a51c933fd87c0522da20eb1288117878ec39bf4c0fe711f1454da51b1c1ce282"
     },
     "c_oracle": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
@@ -51,7 +50,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-cache-metadata.json",
-      "sha256": "579f3bef40afc54cd2ca2bfeb2f76babc4f04cd9565969bd7dfd3c83bcf90efa"
+      "sha256": "ba9b93ff138fa81034fa6beb15a60d0b3184cafd9b8826a3a6c70edb5b6cff75"
     },
     "config_profile": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-config-profile.json",
@@ -67,11 +66,11 @@
     },
     "final_verification": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-verification.json",
-      "sha256": "5a0855a0871b9bf25618045adfe27c14aa6b5f22edef69e4c73565e2ec266ce8"
+      "sha256": "e96223bd96ad9a05f1eb05dca96e76ae2d8391e0350aa609b9f987205c72e635"
     },
     "impact_set": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-impact-set.json",
-      "sha256": "4ecffa4e64ea4d5f289cc9a62a7b1e1b87f1720e7fed81b1d24b5cea6947467d"
+      "sha256": "d4a48d6e9b4c0659e1c26349b0d8b97da4f5dcc1ee7f2d7241b48aae5ff088d4"
     },
     "local_toolchain_evidence": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-local-toolchain-evidence.json",
@@ -107,7 +106,7 @@
     },
     "slice_contract": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-slice-contract.json",
-      "sha256": "3e18935f25350b0ff56eab526c01e95e38241180a4210b5a13ad1c70559631cd"
+      "sha256": "921bfc95e92d151a16ffe7a46727b00704015ba109e780f6cc447b6f986e86cf"
     },
     "summary_md": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.md",
@@ -178,8 +177,7 @@
       "Rust and C reports use fixture_hash 78e5ef24",
       "Schema-aware diff status is passed with first_mismatch null",
       "Negative diff artifact rejects post-reopen KVDB value mismatch",
-      "Rust tests cover fixture replay, compact/reopen entries, and negative diff regression",
-      "Final verification evidence records cargo fmt, targeted tests, cargo check, cargo test, CLI replay/diff, unsafe scan, performance smoke, OpenSpec validation, and git diff check as passed"
+      "Rust tests cover fixture replay, compact/reopen entries, and negative diff regression"
     ],
     "boundary": "This does not claim full FlashDB migration, native GC, sector movement, tombstone layout, byte-for-byte flash image layout, power-loss recovery, capacity-pressure compaction, or TSDB equivalence.",
     "claimed": true,

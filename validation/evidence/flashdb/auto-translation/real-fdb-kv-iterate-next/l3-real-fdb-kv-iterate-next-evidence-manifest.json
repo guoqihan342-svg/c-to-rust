@@ -70,7 +70,7 @@
       "accepted_evidence_refs": {
         "c_oracle": {
           "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-c-oracle.json",
-          "sha256": "4bd49d7439e306c180da83f49f96568997340ef7284da7c72f31b8b343b99e3b",
+          "sha256": "a2496a0b75512cd00e57f72b96cb4fb2a65c2833afb7cdb62427cc8e69ea328d",
           "status": "passed"
         },
         "negative_diff": {
@@ -163,7 +163,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-auto-cache-metadata.json",
-      "sha256": "53a44c32125cba50eaf1d4a889c01803ecba6f3bb864d3c60fd4eb6390fdf11f",
+      "sha256": "105160861609f6b74eb973cab699579537258e0ef31e72c2e337cd6549bed6c0",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -174,7 +174,7 @@
     "config_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-config-profile.json",
       "profile_id": "flashdb-real-fdb-kv-iterate-next-carrier",
-      "sha256": "9f43e83a166d7e1ae1e3c8df8dc010890aae0c0ef9bc548b8ac467e22854a46e",
+      "sha256": "766b791bc4ec536ba74dee64f20f12806e4ee53c743bef5c3dda818c34892458",
       "status": "recorded"
     },
     "context_pack": {
@@ -184,7 +184,7 @@
     },
     "final_verification": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-final-verification.json",
-      "sha256": "98a2b51dd001f913be22d6c627384e278c269ad956927bdd3b9a1e9c20a0db83",
+      "sha256": "e08505c04b4cb0562c64cc95b68e937ceb5227ae42c49322c022f7f6d2e8c784",
       "status": "passed"
     },
     "negative_diff": {
@@ -233,7 +233,7 @@
     },
     "summary": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-summary.json",
-      "sha256": "fd49f0923a3130bebea6be1d574a78466a543584bae309b8b68752db8997723f",
+      "sha256": "cd339f0f5f068ae35e4ac39a495bece9f925314e7e9e3c93592bd84e0b2cc833",
       "status": "passed"
     },
     "test_translation": {
@@ -264,7 +264,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next/l3-real-fdb-kv-iterate-next-version-manifest.json",
-      "sha256": "4004456a6a1d7234079eb72a1d27bbc2ee7b8769994e1a776357932c1d906ac2",
+      "sha256": "81be6366dd502df42c72cfb6f133cdb0f303b880716325737010f1a8ccf458dc",
       "status": "recorded"
     }
   },

@@ -9,7 +9,7 @@
   "branch": "codex/flashdb-rust-skeleton",
   "worktree_state": {
     "dirty": true,
-    "note": "ContextPack is bound to file hashes because the L3 implementation is in progress and contains local OpenSpec artifacts."
+    "note": "ContextPack is bound to file hashes because the L3 implementation is in progress and contains local retired governance artifacts."
   },
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
   "created_for_change": "run-flashdb-tsdb-error-boundary-l3-loop",

@@ -22,7 +22,7 @@
     {
       "id": "019ef887-ba97-7653-a868-26bbfd09d80e",
       "name": "Kierkegaard",
-      "role": "OpenSpec and evidence audit",
+      "role": "retired governance and evidence audit",
       "edit_permissions": "read-only",
       "result": "Pending at initial context freeze; expected to audit evidence boundaries and archive requirements."
     },

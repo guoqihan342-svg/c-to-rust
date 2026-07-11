@@ -37,7 +37,7 @@
   "slice_id": "external-direct-callee",
   "slice_spec": {
     "path": "validation/slice-specs/demo-external-direct-callee.json",
-    "sha256": "04ee35f835bf1bbde32f56e389e489276628ccb39ad3838a4dd721d79a0d16bc"
+    "sha256": "0968143ea11d4e302e2ad53d93b4f981a8e6c38238abc3cf19dde9fe0690b0e1"
   },
   "source_commit": "demo-external-direct-callee-20260625",
   "status": "skipped",

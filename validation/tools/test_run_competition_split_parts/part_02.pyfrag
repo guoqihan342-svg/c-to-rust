@@ -65,7 +65,6 @@
                     "validate-competition-summary",
                 ],
             )
-            self.assertNotIn("openspec-validate", steps)
             self.assertEqual(entries[0]["step"], "environment-check")
             self.assertIn("config/competition-env/env.sh", " ".join(entries[0]["command"]))
             self.assertEqual(entries[0]["returncode"], 0)

@@ -78,7 +78,6 @@
   "target_id": "flashdb",
   "toolchain": {
     "cargo_version": "captured_by_validation",
-    "openspec_version": "captured_by_validation",
     "rustc_version": "captured_by_rust_check",
     "target_triple_or_abi": "x86_64-unknown-linux-gnu"
   }

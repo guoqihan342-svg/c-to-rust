@@ -14,13 +14,13 @@
     },
     {
       "agent": "019ef8d4-56b7-7763-8d66-4e3319ef8ab0",
-      "role": "OpenSpec and evidence shape review",
-      "result": "Assigned read-only review of existing L3 OpenSpec and evidence naming patterns."
+      "role": "retired governance and evidence shape review",
+      "result": "Assigned read-only review of existing L3 retired governance and evidence naming patterns."
     },
     {
       "agent": "main",
       "role": "implementation coordinator",
-      "result": "Owns TDD patch, fixture integration, verification evidence, OpenSpec task updates, commit, archive, and push."
+      "result": "Owns TDD patch, fixture integration, verification evidence, retired governance task updates, commit, archive, and push."
     }
   ]
 }

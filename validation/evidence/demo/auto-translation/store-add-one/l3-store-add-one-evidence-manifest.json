@@ -151,7 +151,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-auto-cache-metadata.json",
-      "sha256": "a61cf71d9411a4a69c9c242ee618a228063738f115ed648bf1f0877330c91bfc",
+      "sha256": "e96dac2dc8d8bad5f701cf96cb6a90855e66f21eb7b01fe3ed78730b34ec9ec8",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -162,7 +162,7 @@
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-config-profile.json",
       "profile_id": "demo-store-add-one-wsl-gcc",
-      "sha256": "e707ad07f117966991dcbf1bfb43b995c2f83bcb96a1541db4f8445bdf429efe",
+      "sha256": "e0095e175f542591e069cfdeaf55bb174a0bcf1de8012db2989f57a6a04802df",
       "status": "recorded"
     },
     "context_pack": {
@@ -252,7 +252,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-version-manifest.json",
-      "sha256": "47b7af777375b09fdbd38ba8a15765ab1b9f4d33258e2b8a0349bd7ddb3cf531",
+      "sha256": "0b72b7c720d9573e7a439029761883dee3831f1987a886e4a74be218d4a247e4",
       "status": "recorded"
     }
   },

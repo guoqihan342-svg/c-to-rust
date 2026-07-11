@@ -48,7 +48,7 @@
         "source_files": [
           {
             "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
-            "sha256": "generated-at-validation"
+            "sha256": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
           }
         ],
         "source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
@@ -60,13 +60,13 @@
         "entry_role": "slice_entry",
         "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
         "role": "source",
-        "sha256": "generated-at-validation"
+        "sha256": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
       },
       {
         "callee_role": "external_direct_callee",
         "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
         "role": "source",
-        "sha256": "generated-at-validation"
+        "sha256": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
       },
       {
         "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",

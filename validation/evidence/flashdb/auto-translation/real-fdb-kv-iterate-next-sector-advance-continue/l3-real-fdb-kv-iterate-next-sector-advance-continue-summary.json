@@ -5,7 +5,7 @@
     "fixture_sha256": "a81dffee77616387b5eddf2ce4437d34f8b788d6799dfc93df95f8b7673cd307",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+      "c_oracle": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
       "diff": "a25a016147ed728b074596765ec2ed2e7b37bf1148825f0a9613b5669e1d8f4d",
       "negative_diff": "879f141aaee8aef5166e277e8b4b819df72ee0473fcc77d4ee9bc0f80ad8fca1",
       "rust_report": "2f8125269da5191286e0343598d62b697e3a17c0e7eaa2e1655a25f2a67fa4f7",
@@ -34,7 +34,7 @@
       "fixture_sha256": "a81dffee77616387b5eddf2ce4437d34f8b788d6799dfc93df95f8b7673cd307",
       "generated_draft_semantic_pass": false,
       "path_sha256": {
-        "c_oracle": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+        "c_oracle": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
         "diff": "a25a016147ed728b074596765ec2ed2e7b37bf1148825f0a9613b5669e1d8f4d",
         "negative_diff": "879f141aaee8aef5166e277e8b4b819df72ee0473fcc77d4ee9bc0f80ad8fca1",
         "rust_report": "2f8125269da5191286e0343598d62b697e3a17c0e7eaa2e1655a25f2a67fa4f7",
@@ -59,7 +59,7 @@
     "accepted_evidence_refs": {
       "c_oracle": {
         "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-sector-advance-continue-c-oracle.json",
-        "sha256": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+        "sha256": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
         "status": "passed"
       },
       "negative_diff": {

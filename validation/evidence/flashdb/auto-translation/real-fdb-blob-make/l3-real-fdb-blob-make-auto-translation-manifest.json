@@ -198,7 +198,6 @@
     "target_id": "flashdb",
     "tool_versions": {
       "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
-      "openspec": "1.4.1",
       "python": "Python 3.14.2",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
@@ -745,7 +744,7 @@
   },
   "verified_unsafe_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-verified-unsafe-baseline.json",
-    "sha256": "66e0442ff5b32c32ccc99eb293b7055e73c95648c20a8b9644afce1bb51d892f",
+    "sha256": "5ad8761a73062464ba92b130a4a490238b62d9e582af5b88fad22e002adb7c30",
     "status": "blocked"
   }
 }

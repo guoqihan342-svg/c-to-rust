@@ -1,70 +1,69 @@
 {
-    "schema_version":  1,
-    "level":  "L3",
-    "target_id":  "flashdb",
-    "slice_id":  "kvdb-error-boundary",
-    "status":  "frozen",
-    "included_behavior":  [
-                              "missing-key kv.get returns status ok, code OK, value null",
-                              "empty-key kv.set returns status error and code INVALID_KEY",
-                              "overlong-key kv.set returns status error and code KEY_TOO_LONG",
-                              "valid kv.set after errors returns status ok and code OK",
-                              "valid kv.get after errors returns expected value"
-                          ],
-    "excluded_behavior":  [
-                              "kv.delete invalid-key behavior",
-                              "TSDB error behavior",
-                              "native FlashDB GC execution",
-                              "sector state transitions",
-                              "tombstone relocation",
-                              "byte-for-byte flash image equivalence",
-                              "power-loss or crash recovery",
-                              "capacity-pressure behavior",
-                              "wear-leveling"
-                          ],
-    "rust_public_api_impact_set":  [
-                                       "KvDb::set",
-                                       "KvDb::get",
-                                       "replay::run_replay",
-                                       "replay::run_diff"
-                                   ],
-    "c_oracle_operations":  [
-                                "kv.set",
-                                "kv.get"
-                            ],
-    "accepted_difference_policy":  {
-                                       "allowed_metadata_fields":  [
-                                                                       "image_hash",
-                                                                       "backend",
-                                                                       "toolchain_status",
-                                                                       "source",
-                                                                       "fixture",
-                                                                       "fixture_hash",
-                                                                       "report_path",
-                                                                       "message"
-                                                                   ],
-                                       "forbidden_behavior_fields":  [
-                                                                         "status",
-                                                                         "code",
-                                                                         "value",
-                                                                         "key",
-                                                                         "operation success",
-                                                                         "error semantics",
-                                                                         "steps.len",
-                                                                         "step id",
-                                                                         "op"
-                                                                     ],
-                                       "error_note":  "message text may differ only as metadata; status, code, value, op, and step identity may not differ."
-                                   },
-    "pass_fail_gates":  [
-                            "Rust replay completes for l3-kvdb-error-boundary fixture",
-                            "WSL/Linux/CI C oracle report has toolchain_status C_ORACLE_GENERATED",
-                            "schema-aware diff status passed with first_mismatch null",
-                            "negative diff fails on code or status mutation",
-                            "cargo check raw JSON build-finished success=true",
-                            "unsafe scan reports zero first-party non-test unsafe",
-                            "OpenSpec validation passes"
-                        ],
-    "concurrency_boundary":  "Parallel agents may analyze/review/evidence-audit only; code edits are single-writer.",
-    "async_threading_boundary":  "No async runtime, internal multithreading, or concurrency changes are introduced in this slice."
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-error-boundary",
+  "status": "frozen",
+  "included_behavior": [
+    "missing-key kv.get returns status ok, code OK, value null",
+    "empty-key kv.set returns status error and code INVALID_KEY",
+    "overlong-key kv.set returns status error and code KEY_TOO_LONG",
+    "valid kv.set after errors returns status ok and code OK",
+    "valid kv.get after errors returns expected value"
+  ],
+  "excluded_behavior": [
+    "kv.delete invalid-key behavior",
+    "TSDB error behavior",
+    "native FlashDB GC execution",
+    "sector state transitions",
+    "tombstone relocation",
+    "byte-for-byte flash image equivalence",
+    "power-loss or crash recovery",
+    "capacity-pressure behavior",
+    "wear-leveling"
+  ],
+  "rust_public_api_impact_set": [
+    "KvDb::set",
+    "KvDb::get",
+    "replay::run_replay",
+    "replay::run_diff"
+  ],
+  "c_oracle_operations": [
+    "kv.set",
+    "kv.get"
+  ],
+  "accepted_difference_policy": {
+    "allowed_metadata_fields": [
+      "image_hash",
+      "backend",
+      "toolchain_status",
+      "source",
+      "fixture",
+      "fixture_hash",
+      "report_path",
+      "message"
+    ],
+    "forbidden_behavior_fields": [
+      "status",
+      "code",
+      "value",
+      "key",
+      "operation success",
+      "error semantics",
+      "steps.len",
+      "step id",
+      "op"
+    ],
+    "error_note": "message text may differ only as metadata; status, code, value, op, and step identity may not differ."
+  },
+  "pass_fail_gates": [
+    "Rust replay completes for l3-kvdb-error-boundary fixture",
+    "WSL/Linux/CI C oracle report has toolchain_status C_ORACLE_GENERATED",
+    "schema-aware diff status passed with first_mismatch null",
+    "negative diff fails on code or status mutation",
+    "cargo check raw JSON build-finished success=true",
+    "unsafe scan reports zero first-party non-test unsafe"
+  ],
+  "concurrency_boundary": "Parallel agents may analyze/review/evidence-audit only; code edits are single-writer.",
+  "async_threading_boundary": "No async runtime, internal multithreading, or concurrency changes are introduced in this slice."
 }

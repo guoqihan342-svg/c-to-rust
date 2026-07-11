@@ -113,7 +113,6 @@
         self.assertIn("contract_verification", skill)
         self.assertIn("recompute", skill)
         self.assertIn("Required Preflight", skill)
-        self.assertIn("OpenSpec", skill)
         self.assertIn("superpowers", skill)
         self.assertIn("optional and non-gating", skill)
         self.assertIn("Keep Codex skills out of the competition config archive", skill)

@@ -81,13 +81,13 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-auto-cache-metadata.json",
-      "sha256": "6f9c8210e1bb6fd64f42cc9aaf8ae1b5180baf56b01add99da2c548e1f5d5a05",
+      "sha256": "08868717a39f95401b957d6887690d110e090cd9d875b5cd1d2ecec2a940f4fc",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-config-profile.json",
       "profile_id": "demo-add-i32-pair-ptr-arith-wsl-gcc",
-      "sha256": "1de34e39f66caf4dc43e05b045cc9c7f292e768ef36d90f35f3a4bd234114d49",
+      "sha256": "063eca1178b3dd87d34afdbdfaf02e11e6b9b206924f8e5e625ed75a4d8a62b3",
       "status": "recorded"
     },
     "context_pack": {
@@ -131,7 +131,7 @@
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-rust-report.json",
-      "sha256": "f70491564b87d3ab77dbf16c84e5889b3c188d59817a1b67fbc6118e687fbabb",
+      "sha256": "29c09e69497ed1669030902b17f41a278c8b04f5b836d2dcbe70d41e8ed77a5e",
       "status": "passed"
     },
     "schema_diff": {
@@ -172,7 +172,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-version-manifest.json",
-      "sha256": "dd06b55f326f9d7cb26f6aa734fdda421473d7dd97c023600ed08919637c4a0b",
+      "sha256": "e1e04efe26c68492cfbd32f79314784673ffb84e992d88bef9d41cf11cef11ac",
       "status": "recorded"
     }
   },

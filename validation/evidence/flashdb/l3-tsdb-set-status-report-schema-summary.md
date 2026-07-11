@@ -22,7 +22,6 @@ This repair keeps step execution status as `status:"ok"` and moves the TSDB busi
 - Cargo check: passed with 0 errors and 0 warnings; automatic repair was not needed.
 - Unsafe: first-party non-test unsafe count is 0.
 - Performance smoke: secondary-only, elapsed_ms `406`.
-- OpenSpec: change strict validation and `openspec validate --all` passed.
 
 ## Non-Goals / 非目标
 

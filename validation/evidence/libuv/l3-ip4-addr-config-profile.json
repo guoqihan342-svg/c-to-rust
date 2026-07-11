@@ -15,8 +15,7 @@
     "rust_profile.cargo_toml_sha256",
     "rust_profile.cargo_lock_sha256",
     "toolchain.rustc_version",
-    "toolchain.cargo_version",
-    "toolchain.openspec_version"
+    "toolchain.cargo_version"
   ],
   "compile_profile": {
     "c_oracle_command": "python3 validation/l2_slices/tools/generate_libuv_ip4_oracle.py --libuv-root <pinned-libuv-root>",
@@ -78,7 +77,6 @@
     "c_oracle_host": "WSL/Linux",
     "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
     "git_version": "git version 2.53.0.windows.3",
-    "openspec_version": "unknown",
     "rustc_version": "rustc 1.95.0 (59807616e 2026-04-14)"
   }
 }

@@ -2,15 +2,14 @@
 
 # 受限自动翻译管线 Agent 使用文档
 
-本文面向 OpenCode、Codex 和其他可执行 Agent，说明 OpenSpec change `add-bounded-auto-translation-pipeline` 的受限自动 C-to-Rust 翻译流程。该流程生成的是 evidence-bound Rust draft candidate，不是默认接受的实现；最终是否通过仍由 L1-L3 evidence gates 判定。
+本文面向 OpenCode、Codex 和其他可执行 Agent，说明受限自动 C-to-Rust 翻译流程。设计与执行计划由 `docs/superpowers/` 管理；该流程生成的是 evidence-bound Rust draft candidate，不是默认接受的实现，最终是否通过仍由 L1-L3 evidence gates 判定。
 
 ## 入口原则
 
 - 项目规模不再要求“只小而精”：可以增加 crate、工具、批处理和更多 target 验证；但每个迁移结论必须保持 slice 级、证据绑定、可回滚、可复现，不能放宽 L1-L3 gates。
-- 从 OpenSpec 开始：先读取 `openspec status --change "add-bounded-auto-translation-pipeline" --json` 和 `openspec instructions apply --change "add-bounded-auto-translation-pipeline" --json`。
 - 从 slice spec 开始：自动翻译不得直接吃一段裸 `c_source`。输入必须包含 target id、slice id、source commit、C 文件、函数签名、L1 evidence、build profile、fixture contract、Rust 输出边界、accepted metadata differences 和 non-goals。
 - 从证据开始生成代码：`context-pack`、`type-map`、`cfg`、`pointer-graph` 必须先落盘，再允许 Rust draft。
-- 把 AI 当候选生成器：AI 可以建议 draft 或 PatchPlan，但 AI 输出不是正确性证据，不能绕过本地编译、C oracle、Rust replay、schema-aware diff、negative diff、unsafe scan 和 version/cache 语义 gate；OpenSpec validation 只作为历史治理/变更管理检查，不属于默认比赛语义 gate。
+- 把 AI 当候选生成器：AI 可以建议 draft 或 PatchPlan，但 AI 输出不是正确性证据，不能绕过本地编译、C oracle、Rust replay、schema-aware diff、negative diff、unsafe scan 和 version/cache 语义 gate；Superpowers validation 只作为历史治理/变更管理检查，不属于默认比赛语义 gate。
 - 多 Agent 并行时只允许拆分只读分析或不相交写入。`slice spec`、public API、fixture、oracle 合约、unsafe ledger、schema 和自动修复中的文件不能被多个 Agent 同时改。
 
 ## 工作流
@@ -22,7 +21,7 @@
 5. 从同一个 fixture contract 生成 C oracle harness draft 和 Rust replay test draft；无法映射输入/输出时标记 blocked。
 6. 运行 `cargo check --message-format=json`。失败时写 `l3-<slice>-rust-check.json`，再生成 PatchPlan，默认最多 5 轮局部自愈。
 7. 运行 Rust replay、schema-aware diff、negative diff、unsafe scan、version/cache gate 和 evidence manifest gate。
-8. 只有同一 source commit、fixture hash、slice spec hash 和 build profile hash 下的 C oracle、Rust replay、diff、unsafe 和 version/cache 语义 gate 都通过，才能把 candidate 升级为 accepted slice；OpenSpec validation 只能作为历史治理/变更管理检查，不能替代这些证据。
+8. 只有同一 source commit、fixture hash、slice spec hash 和 build profile hash 下的 C oracle、Rust replay、diff、unsafe 和 version/cache 语义 gate 都通过，才能把 candidate 升级为 accepted slice；Superpowers validation 只能作为历史治理/变更管理检查，不能替代这些证据。
 
 ## 支持的 C 子集
 
@@ -112,13 +111,9 @@ safe promotion 是可审计优化，不是默认猜测。每一次从 raw pointe
 
 以下命令从当前仓库根目录运行。部分命令是本 change 预期新增的接口；在 schema、translator、auto_migrate 并行实现完成前，它们用于 Agent 对齐调用约定。
 
-### OpenSpec 状态和任务
+### Superpowers 状态和任务
 
 ```powershell
-openspec status --change "add-bounded-auto-translation-pipeline" --json
-openspec instructions apply --change "add-bounded-auto-translation-pipeline" --json
-openspec validate add-bounded-auto-translation-pipeline --strict
-openspec validate --all
 ```
 
 ### L1 input selection
@@ -223,8 +218,6 @@ Pop-Location
 对文档或管线 change，至少运行：
 
 ```powershell
-openspec validate add-bounded-auto-translation-pipeline --strict
-openspec validate --all
 git diff --check
 ```
 
@@ -258,4 +251,4 @@ Agent 只有在以下证据都存在且新鲜时才能报告自动翻译 slice �
 - context pack、type map、CFG、pointer graph 在 Rust draft 前生成。
 - unsupported constructs 或 blocked repairs 已显式记录。
 - C oracle、Rust replay、schema-aware diff、negative diff、rust check、unsafe scan、unsafe ledger、final verification 都在 L3 evidence manifest 中引用。
-- 如本地治理流程显式要求，OpenSpec change validation 通过；`git diff --check` 通过。
+- 对应 Superpowers 执行计划中的验收项已完成；`git diff --check` 通过。

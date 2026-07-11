@@ -11,7 +11,7 @@
   },
   "generated_draft": {
     "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-rust-draft.rs",
-    "sha256": "c311aed53bf7f469543a59ba48ea355d78c23d490f6a0cb3265486f7e85bd3cf",
+    "sha256": "656df714ed044103bf7c218f80ccd38755cf7dc890163b9f3247080e0054ee78",
     "status": "candidate"
   },
   "generated_draft_semantic_pass": false,

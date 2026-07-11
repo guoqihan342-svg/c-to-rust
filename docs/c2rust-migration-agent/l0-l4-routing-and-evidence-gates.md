@@ -284,8 +284,7 @@ python -m unittest validation.tools.test_auto_migrate validation.tools.test_vali
 # Schema 合同测试
 python -m unittest validation.tools.test_template_schema_contracts
 
-# OpenSpec 全量 validation
-openspec validate --all --strict
+# Superpowers 全量 validation
 
 # FlashDB real-fdb-calc-crc32 证据验证
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json

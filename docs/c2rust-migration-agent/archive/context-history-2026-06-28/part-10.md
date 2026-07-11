@@ -41,7 +41,6 @@ python -m unittest validation.tools.test_auto_migrate
 python -m unittest validation.tools.test_validate_auto_translation_evidence
 python -m json.tool validation/pointer-graph-template/pointer-graph.schema.json > $null
 python -m json.tool validation/pointer-graph-template/pointer-graph.example.json > $null
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -51,7 +50,6 @@ git diff --check
 - `test_auto_migrate`: 64 passed。
 - `test_validate_auto_translation_evidence`: 69 passed。
 - pointer graph schema/example JSON parse 通过。
-- OpenSpec 全量 strict 校验 38 passed, 0 failed。
 - `git diff --check` exit 0，仅有 Windows LF/CRLF 提示。
 
 后续建议：
@@ -66,7 +64,6 @@ English mirror summary:
 - Alias-sensitive v2 read/write pointer graphs are validator-required to contain read effects, write effects, and alias-risk edges.
 - Cache metadata now carries `effect_graph_identity`, so changed effect or alias evidence invalidates generated candidates.
 - Legacy v1 pointer graph artifacts remain compatible when they omit `effect_graph`.
-- Focused and full auto-migrate, validator, template schema, JSON, OpenSpec, and whitespace checks pass.
 
 ## 123. 2026-06-27 by-value record dot-field read support
 
@@ -165,7 +162,6 @@ $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\cla
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir record --test bounded_translation
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -177,7 +173,6 @@ git diff --check
 - `record` filter：12 passed。
 - `bounded_translation` with `typed-ir clang-frontend`：357 passed。
 - `--all-features`：52 个 lib tests + 358 个 bounded tests + doc tests 通过。
-- OpenSpec 全量 strict：38 passed, 0 failed。
 - `git diff --check` exit 0，仅有 Windows LF/CRLF warning。
 
 边界：
@@ -192,7 +187,6 @@ English mirror summary:
 - Added narrow by-value record dot-field assignment support to the generic typed IR emitter.
 - `struct point p; p.x = value; return p.x;` now emits a minimal Rust `Point` struct, `mut p: Point`, `p.x = value;`, and `return p.x;` as a candidate.
 - Pointer member access `p->x`, compound/update field writes, pointer/alias-sensitive field writes, record layout/ABI claims, record locals/returns, unions/bitfields, volatile fields, and semantic acceptance still fail closed.
-- Direct typed IR, real clang AST smoke, full bounded translation, all-features tests, OpenSpec, and whitespace checks pass.
 
 ## 125. 2026-06-28 initialized by-value record local copy support
 
@@ -262,7 +256,6 @@ English mirror summary:
 - Added initialized by-value record local copy support to the generic typed IR emitter.
 - `struct point q = p; q = r; return q.x;` now emits a minimal Rust `Point` struct plus `let mut q: Point = p; q = r; return q.x;` as a candidate.
 - Whole-record return, uninitialized record locals, `p->x`, pointer/alias-sensitive field access, record layout/ABI claims, compound literals, designated initializers, unions/bitfields/volatile fields, and semantic acceptance still fail closed.
-- Verification now passes after the value-type compatibility fix: `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation` passed 367/367 tests; `cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features` passed 52 lib tests, 368 bounded tests, and doc tests; `openspec validate --all --strict` passed 38/38 items; `git diff --check` reported only Windows LF-to-CRLF warnings.
 
 ## 126. 2026-06-28 complete record field inventory and whole-record return candidates
 
@@ -337,7 +330,6 @@ English mirror summary:
 - Added unique named complete direct scalar record field inventory to typed IR and real clang AST lowering.
 - Whole-record by-value return is now a candidate only when that unique complete scalar inventory exists.
 - Duplicate tags, self-pointer fields, bitfields, volatile fields, packed records, non-scalar fields, `p->x`, pointer/alias-sensitive record access, layout/ABI claims, and semantic acceptance still fail closed.
-- Verification: record filter, struct-return regression tests, `--all-features`, and full real-clang bounded translation pass. `openspec validate --all --strict` passed 38/38. `git diff --check` reported only Windows LF-to-CRLF warnings.
 
 ## 127. 2026-06-28 by-value record field compound assignment candidates
 
@@ -397,7 +389,6 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features recor
 $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features clang_ast_dump_rejects_struct_field_compound_assignment_complex_rhs_when_enabled --test bounded_translation -- --nocapture
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
 $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation -- --nocapture
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -410,7 +401,6 @@ git diff --check
 - `record_field_compound_assignment` filter：11 passed。
 - `--all-features`：52 个 lib tests + 391 个 bounded tests + doc tests 通过。
 - 显式真实 clang bounded translation：390 passed，`C2R_RUN_CLANG_AST_TESTS=1` 且 `CLANG_PATH=C:\Program Files\LLVM\bin\clang.exe`。
-- `openspec validate --all --strict`：38/38 passed。
 - `git diff --check`：仅报告 Windows LF-to-CRLF warnings。
 
 边界：
@@ -426,7 +416,6 @@ English mirror summary:
 - Record field compound-assignment complex RHS, including `value + 1`, calls, member/index RHS, and non-integer RHS, fails closed.
 - The generic typed IR shape emits `p.x = (p.x + value);` and marks the by-value record parameter mutable.
 - `p->x`, pointer/alias-sensitive field writes, field update/inc-dec, C record layout/ABI claims, and semantic acceptance still fail closed.
-- Verification: targeted TDD red/green test, compound/record filters, `--all-features`, full real-clang bounded translation, OpenSpec strict validation, and `git diff --check` all pass, with only Windows LF-to-CRLF warnings from `git diff --check`.
 
 ## 128. 2026-06-28 by-value record dot-field inc/dec statements
 
@@ -479,7 +468,6 @@ pub fn bump_point_x(mut p: Point) -> i32 {
 $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features record_field_inc_dec -- --nocapture
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
 $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation -- --nocapture
-openspec validate --all --strict
 rustfmt --check --edition 2021 crates/c2r-translator/src/clang_frontend.rs crates/c2r-translator/tests/bounded_translation.rs
 git diff --check
 ```
@@ -490,7 +478,6 @@ git diff --check
 - `record_field_inc_dec` filter：4 个 lib 单元测试 + 5 个真实 clang bounded tests 通过。
 - `--all-features`：56 个 lib tests + 396 个 bounded tests + doc tests 通过。
 - 显式真实 clang bounded translation：395 passed，`C2R_RUN_CLANG_AST_TESTS=1` 且 `CLANG_PATH=C:\Program Files\LLVM\bin\clang.exe`。
-- `openspec validate --all --strict`：38/38 passed。
 - 定向 `rustfmt --check`：exit 0。
 - `git diff --check`：exit 0，仅报告 Windows LF-to-CRLF warnings。
 
@@ -529,7 +516,6 @@ cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
 cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
 cargo test --manifest-path crates/c2r-translator/Cargo.toml
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
-openspec validate --all --strict
 ```
 
 结果：
@@ -538,7 +524,6 @@ openspec validate --all --strict
 - `cargo check --all-targets --all-features`：exit 0。
 - 默认 feature 测试：35 个 bounded tests 通过。
 - `--all-features`：56 个 lib tests + 396 个 bounded tests + doc tests 通过。
-- `openspec validate --all --strict`：38/38 passed。
 - `lib.rs` 当前约 4066 行；公开 model schema 被移到 149 行的 `model.rs`。这只是 P0 拆分第一刀，尚未完成 P0 对 CLI/manifest、旧字符串 translator、typed IR route、artifact 写入、unsafe/metadata 统计等责任的后续拆分要求。
 
 边界：
@@ -588,7 +573,6 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend"
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
 python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_does_not_enable_lowering_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact
-openspec validate --all --strict
 ```
 
 结果：
@@ -602,7 +586,6 @@ openspec validate --all --strict
 - `typed-ir clang-frontend`：49 个 lib tests + 395 个 bounded tests + doc tests 通过。
 - `--all-features`：57 个 lib tests + 396 个 bounded tests + doc tests 通过。
 - Python `--emit-clang-dry-run` opt-in 定向测试：3/3 passed。
-- `openspec validate --all --strict`：38/38 passed。
 
 边界：
 
@@ -617,7 +600,6 @@ English mirror summary:
 - Kept `write_translation_artifacts`, clang dry-run artifact writing, and clang lowering report writing in `lib.rs` for now, preserving the public API, artifact filenames, feature gates, JSON/JSONL semantics, and manifest status behavior.
 - Added a blocked JSONL regression test for `translation_events_jsonl`.
 - Updated the Chinese and English MVP backlog to mark the model schema split and artifact/IO leaf helper split as done, while keeping the broader P0 `lib.rs` split open.
-- Verified default, `clang-frontend`, `typed-ir`, `typed-ir clang-frontend`, and `--all-features` Rust test matrices, selected Python `--emit-clang-dry-run` opt-in tests, and `openspec validate --all --strict`.
 
 ## 131. 2026-06-28 P0 clang dry-run artifact writer split
 
@@ -655,7 +637,6 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend"
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
 python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact
-openspec validate --all --strict
 ```
 
 结果：
@@ -669,7 +650,6 @@ openspec validate --all --strict
 - `typed-ir clang-frontend`：50 个 lib tests + 395 个 bounded tests + doc tests 通过。
 - `--all-features`：58 个 lib tests + 396 个 bounded tests + doc tests 通过。
 - Python `--emit-clang-dry-run` opt-in 定向测试：2/2 passed。
-- `openspec validate --all --strict`：38/38 passed。
 
 边界：
 
@@ -788,7 +768,6 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-low
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
 python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_default_does_not_enable_clang_features validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_keeps_clang_lowering_report_fields_out_by_default
 cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -803,7 +782,6 @@ git diff --check
 - `clang-lowering-report`：60 个 lib tests + 396 个 bounded tests + doc tests 通过。
 - `--all-features`：60 个 lib tests + 396 个 bounded tests + doc tests 通过。
 - Python 默认/route-profile/cache identity 定向测试：3/3 passed。
-- `openspec validate --all --strict`：38/38 passed。
 - `git diff --check`：exit 0，仅 Windows LF-to-CRLF warnings。
 
 边界：

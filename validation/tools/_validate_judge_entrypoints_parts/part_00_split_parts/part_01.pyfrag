@@ -76,19 +76,17 @@ def validate_opencode_agent_runbook_contract(path: Path) -> None:
     ):
         if required not in required_preflight:
             raise ValueError(f"OpenCode agent runbook Required Preflight must include {required}")
-    if "openspec" in lower_required_preflight or "superpowers" in lower_required_preflight:
-        raise ValueError(
-            "OpenCode agent runbook Required Preflight must not depend on OpenSpec or superpowers"
-        )
-    optional_governance = markdown_section(text, "Optional Governance Checks")
-    lower_optional_governance = optional_governance.lower()
+    if "superpowers" in lower_required_preflight:
+        raise ValueError("OpenCode agent runbook Required Preflight must not depend on superpowers")
+    workflow_boundary = markdown_section(text, "Superpowers Workflow Boundary")
+    lower_workflow_boundary = workflow_boundary.lower()
     if (
-        "openspec" not in lower_optional_governance
-        or "not" not in lower_optional_governance
-        or "competition preflight" not in lower_optional_governance
+        "superpowers" not in lower_workflow_boundary
+        or "not" not in lower_workflow_boundary
+        or "competition preflight" not in lower_workflow_boundary
     ):
         raise ValueError(
-            "OpenCode agent runbook Optional Governance Checks must mark OpenSpec as non-gating"
+            "OpenCode agent runbook Superpowers Workflow Boundary must mark Superpowers as non-gating"
         )
 
 

@@ -2,7 +2,7 @@
 
 # Full Regression Runner
 
-中文说明：`scripts/run-full-regression.ps1` 是根目录级总控回归入口，用来把 FlashDB Rust、L2 slices、bounded translator、auto-translation evidence、OpenSpec gates 和仓库 whitespace 检查串成可重复轮次。它不把合成负载冒充真实生产数据，也不声称 `cargo-llvm-cov` 分支覆盖率。
+中文说明：`scripts/run-full-regression.ps1` 是根目录级总控回归入口，用来把 FlashDB Rust、L2 slices、bounded translator、auto-translation evidence、Superpowers gates 和仓库 whitespace 检查串成可重复轮次。它不把合成负载冒充真实生产数据，也不声称 `cargo-llvm-cov` 分支覆盖率。
 
 English summary: `scripts/run-full-regression.ps1` is the repository-level regression orchestrator for repeated validation rounds. It records machine-readable evidence under `target/full-regression/` and keeps correctness claims bounded to the executed gates.
 
@@ -32,7 +32,6 @@ This runs:
 - auto-translation evidence schema plus semantic-pass validators for the accepted libuv and zlib slices.
 - `flashDB_rust` fmt, check, tests, clippy unless `-SkipClippy` is set, smoke, replay/diff, unsafe scan, version manifest, and release stress.
 - evidence search for traceability.
-- `openspec validate --all`.
 - `git diff --check`.
 
 ## 10000 Full Rounds
@@ -74,5 +73,5 @@ All of these live under `target/`, which is ignored by git.
 - Abnormal data: covered by Rust tests, abnormal fixtures, and the FlashDB stress abnormal scenario.
 - Performance: release stress records duration, counters, bytes processed, and image hashes. It is performance smoke evidence, not a stable benchmark threshold.
 - Reliability: file-backed stress reopens images and checks persisted values. It is not crash-power-loss or hardware reliability proof.
-- Branch coverage: cargo tests and OpenSpec gates cover main behavior paths, but this runner does not claim line or branch coverage percentage.
+- Branch coverage: cargo tests and Superpowers gates cover main behavior paths, but this runner does not claim line or branch coverage percentage.
 - C/Rust equivalence: accepted L3 evidence is checked where committed. Full FlashDB C semantic equivalence still depends on the C oracle boundary and fixture scope.

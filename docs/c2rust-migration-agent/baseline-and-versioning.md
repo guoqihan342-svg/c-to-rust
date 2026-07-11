@@ -8,7 +8,7 @@ English summary: this document pins the current migration baseline and defines v
 
 ## Locked Baseline
 
-- OpenSpec: `1.4.1`
+- Superpowers: `1.4.1`
 - Agent draft: `c2rust-migration-agent 0.1.0`
 - Context schema: `0.1.0`
 - PatchPlan schema: `0.1.0`
@@ -61,7 +61,7 @@ Every FlashDB L3 slice MUST generate a version manifest before implementation ed
 flashdb-rust version-manifest --report validation/evidence/flashdb/<slice>-version-manifest.json
 ```
 
-The manifest is the slice-local version contract. It records Agent contract version, context schema version, PatchPlan schema version, fixture schema version, evidence schema version, `flashDB_rust` crate version, Cargo.toml/Cargo.lock hashes, Rust/Cargo/Git/OpenSpec versions, FlashDB clone URL and commit, feature matrix, host OS, workspace branch/commit, and cache key inputs.
+The manifest is the slice-local version contract. It records Agent contract version, context schema version, PatchPlan schema version, fixture schema version, evidence schema version, `flashDB_rust` crate version, Cargo.toml/Cargo.lock hashes, Rust/Cargo/Git/Superpowers versions, FlashDB clone URL and commit, feature matrix, host OS, workspace branch/commit, and cache key inputs.
 
 中文：每个切片最终验证证据必须引用 version manifest 的路径和 hash。若 manifest 中任一缓存键输入漂移，包括 FlashDB source commit、Cargo.lock、schema version、toolchain version、feature matrix、fixture hash 或 AI metadata，旧 ContextPack、PatchPlan、C oracle、diff 结论和 AI 候选补丁都不能直接复用。
 

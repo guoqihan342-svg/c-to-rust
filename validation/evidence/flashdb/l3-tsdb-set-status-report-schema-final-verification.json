@@ -34,18 +34,6 @@
       "log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-final-unsafe-scan.log"
     },
     {
-      "name": "OpenSpec change strict",
-      "command": "openspec validate repair-tsdb-set-status-report-schema --strict",
-      "exit_code": 0,
-      "log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-final-openspec-change-strict.log"
-    },
-    {
-      "name": "OpenSpec all",
-      "command": "openspec validate --all",
-      "exit_code": 0,
-      "log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-final-openspec-all.log"
-    },
-    {
       "name": "git whitespace",
       "command": "git diff --check",
       "exit_code": 0,

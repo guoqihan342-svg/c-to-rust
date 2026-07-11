@@ -48,7 +48,7 @@
         "fixture_sha256": "a81dffee77616387b5eddf2ce4437d34f8b788d6799dfc93df95f8b7673cd307",
         "generated_draft_semantic_pass": false,
         "path_sha256": {
-          "c_oracle": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+          "c_oracle": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
           "diff": "a25a016147ed728b074596765ec2ed2e7b37bf1148825f0a9613b5669e1d8f4d",
           "negative_diff": "879f141aaee8aef5166e277e8b4b819df72ee0473fcc77d4ee9bc0f80ad8fca1",
           "rust_report": "2f8125269da5191286e0343598d62b697e3a17c0e7eaa2e1655a25f2a67fa4f7",
@@ -73,7 +73,7 @@
       "accepted_evidence_refs": {
         "c_oracle": {
           "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-sector-advance-continue-c-oracle.json",
-          "sha256": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+          "sha256": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
           "status": "passed"
         },
         "negative_diff": {
@@ -159,12 +159,12 @@
     },
     "c_oracle": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-c-oracle-status.json",
-      "sha256": "e44be67e6cb8ce4e1625c770d4fe0e0fca4b99f4bd0e270da7b95a9759f9acbe",
+      "sha256": "2c148ec1d50151926fb53f3ea0867e5e8975fe7b0249862516758e28d2902c03",
       "status": "C_ORACLE_GENERATED"
     },
     "cache_metadata": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-auto-cache-metadata.json",
-      "sha256": "5fd2bee80747b374d1c8c0cbfcea5e48823309c9965c918425957f08a7002800",
+      "sha256": "2beb5c1de9ae01b9b13ff00b0bcfad3656e10477efbdfd6858a1efa531bb5b48",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -175,7 +175,7 @@
     "config_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-config-profile.json",
       "profile_id": "flashdb-real-fdb-kv-iterate-next-sector-advance-continue-carrier",
-      "sha256": "d22eb30f5e180619120b63b7b3ff0abb5dbbe9597ed36048f91d7921214d43dc",
+      "sha256": "d94433c0cc5e51b9e799320df05cb6315ca1146836eebe88b89dd05922637d61",
       "status": "recorded"
     },
     "context_pack": {
@@ -185,14 +185,14 @@
     },
     "final_verification": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-final-verification.json",
-      "sha256": "d8512f37449b0c3786e9f9ecd845915ce5863edcb37e4645c86d4044094fd268",
+      "sha256": "9483ae05107e9166008c4a1220672f7bacdb664d268cd381df0ca5b5dca5bfa9",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-negative-diff.json",
-      "sha256": "9c92000cb7d1f39cf5d5fa792506013382ed806e9a687259cb8055ef72ab81b7",
+      "sha256": "731e00eac64a1b0b63bc3f0884489a751a3f73a347674a2118d02438fe53c06b",
       "status": "expected_failed"
     },
     "performance_smoke": {
@@ -219,12 +219,12 @@
     },
     "rust_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-rust-report.json",
-      "sha256": "1053312c65b2a92c2ea890211553184845285ae2ed2d743948ffe8f719364215",
+      "sha256": "16ef63ec4a33b8a632ca65c2c7a39f73186c78db692478617fe918ad7994fb01",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-diff.json",
-      "sha256": "223b1556930aa2a81b0d151754a9d0b3a97a15ac33ee9475921671da09090fa8",
+      "sha256": "f214a878404793d6694567cbf3ccfb61230960f1ab146a920eb7d431e794c145",
       "status": "passed"
     },
     "slice_contract": {
@@ -234,38 +234,38 @@
     },
     "summary": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-summary.json",
-      "sha256": "76eee9225e0186ee01b8bdd6658ca1d464687f02d0892bf7af6c91f3d2ef6917",
+      "sha256": "7655ebd74f327b083e2b119744008295ffd0d186c74b65902b6b907a3a744bf5",
       "status": "passed"
     },
     "test_translation": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-test-translation-generated.json",
-      "sha256": "2c9a5fdae255ec87cfcb22c3e9b56bc520e82b61a811aed70607f4ecc17e4c3a",
+      "sha256": "e0ff9222056025d001899e1c1ec2f4fe750b828e6d2e8b6d1506e19661825ce4",
       "status": "recorded"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-unsafe-ledger.json",
-      "sha256": "660f09dadfaed857a3324d5b456f12e71c6638dcfaa65c7de84a5abc0cc37dbe",
+      "sha256": "dc0f9a816c5c5021b9d992ff27e92088a7532876d564e5888d6c3b80d0c2f930",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-unsafe-scan.json",
-      "sha256": "7e39b49a5db7e6dfeb547332d6bd32a7edd928d2a69c45261c78466cbd3d91d5",
+      "sha256": "3264b5a69dd8db1ad0e8471d759059541f4bc150a557834cdf42ec284fc263b5",
       "status": "passed"
     },
     "validation_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-validation-profile.json",
       "profile": "L1-dev",
-      "sha256": "f214e176f696f07abcdf63db3790b8951588980d11ba9e2f5d82caea10060c4d",
+      "sha256": "a7a68fef7c9efd402c14afbea4485df9757cb9c657fff5683dc9cafbe2ef32f6",
       "status": "passed"
     },
     "verified_unsafe_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-c2rust-verified-unsafe-baseline.json",
-      "sha256": "61d56713a24f7ae6b714bfae4dc17a4557f813429cbf1e8f57ca63218aadfce8",
+      "sha256": "9a26544f00f8a5c4324c521bec0a846ff6eb9c8bb573ac53f6790fb8228cee8e",
       "status": "blocked"
     },
     "version_or_config_binding": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-version-manifest.json",
-      "sha256": "56f5ee40e277640c01a768c6dab48bbf15ac8ff47f8ad34cfe8c48d3eb5c540a",
+      "sha256": "07da585e1db619eafba323c7397cd474cd8d33491779a14ee2021e0853fdfd09",
       "status": "recorded"
     }
   },

@@ -1,8 +1,6 @@
 # FlashDB L3 TSDB Non-Monotonic Timestamp Summary
 
-Passed. The `tsdb-non-monotonic-timestamp` slice validates FlashDB TSDB strict timestamp ordering through Rust replay, C oracle generation, schema-aware diff, negative diff, compile check, unsafe scan, and OpenSpec validation.
 
-通过。`tsdb-non-monotonic-timestamp` 切片已通过 Rust replay、C oracle 生成、schema-aware diff、负向 diff、编译检查、unsafe 扫描和 OpenSpec 验证，确认 FlashDB TSDB 的 timestamp 严格递增语义。
 
 ## Behavior
 

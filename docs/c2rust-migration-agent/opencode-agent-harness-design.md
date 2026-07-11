@@ -15,7 +15,6 @@ P0 采用 **SQLite 调度队列级持久化**：SQLite 记录 run、agent、task
 - `validate_auto_translation_evidence.py --require-semantic-pass`
 - `validate_competition_run_summary.py`
 - `unsafe_budget.py`
-- 可选 `openspec validate --all --strict`（仅显式 `--run-optional-governance-checks` 时作为历史治理检查，不属于默认比赛语义 gate）
 
 SQLite 中任何 `passed` 字段都只能索引这些证据，不能替代证据。
 
@@ -66,7 +65,7 @@ target/competition-out/state/opencode-agent-harness.sqlite3
 | `agent_tasks` | 记录 worker 任务、phase、attempt、status、allowed paths 和错误键。 |
 | `slices` | 记录 target/slice/source/function/source commit/slice spec hash。 |
 | `candidates` | 记录 typed IR、C2Rust、legacy compatibility 等候选；候选本身不等于 semantic pass。 |
-| `gates` | 记录 environment、auto_migrate、semantic validator、unsafe、summary validator，以及显式启用时的 optional OpenSpec 历史治理 gate。 |
+| `gates` | 记录 environment、auto_migrate、semantic validator、unsafe、summary validator，以及显式启用时的 optional Superpowers 历史治理 gate。 |
 | `artifacts` | 索引落盘 artifact 的 repo-relative path、sha256、kind、semantic role。 |
 | `artifact_links` | 记录 manifest/cache/final verification 引用关系。 |
 | `events` | 镜像 `commands.jsonl`、auto-translation events 和 harness events。 |

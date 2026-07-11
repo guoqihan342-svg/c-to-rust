@@ -1,221 +1,372 @@
 英文镜像见 `README.en.md`。
 
-# C-to-Rust Progressive Migration Pipeline
+# C-to-Rust 可验证迁移 Harness
 
-面向 Agent（Codex / OpenCode）调用的 C 到 Rust 渐进式迁移管线。本项目不是单次手工重写，而是一套可审计、fail-closed 的自动翻译器 + 强验证框架。
+本项目是一套面向真实 C 项目的渐进式 C-to-Rust 翻译与验证系统。它把 clang/typed IR、C2Rust 和 OpenCode/LLM 都视为候选来源，再通过同一套 C oracle、Rust replay、差异比较、负向变异、unsafe ledger 和 final verification 决定候选是否可以接受。
 
-## 愿景
+项目重点不是“生成一段看起来像 Rust 的代码”，而是建立一条可复现、可审计、失败时自动收口的迁移链：
 
-把真实 C 项目以**受限自动翻译 + 强验证**的方式渐进迁移到 safe Rust，同时保持业务逻辑不被破坏。核心理念：
-
-- **翻译候选不是正确性来源**：C2Rust、LLM/Agent、手写规则都只能生成 candidate，必须经统一验证门禁。
-- **正确性以原始 C 行为为准**：C oracle 是唯一语义 ground truth。
-- **Fail-closed 优先**：不确定时宁可拒绝翻译，不可假装成功。
-- **证据链可审计**：每一步决策和验证都有机器可读的 evidence manifest。
-
-## 架构概览
-
+```text
+真实 C 源码 -> 有边界的 Rust candidate -> 可执行等价性证据 -> accepted / refused / blocked
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                        C Source Repository                           │
-└──────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  Source Slice Extraction: extract_source_slice.py                    │
-│  - 从真实 C 源文件抽取函数切片                                         │
-│  - 识别全局依赖（如 crc32_table）                                     │
-│  - 生成 typed slice spec                                             │
-└──────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  Translator: crates/c2r-translator/                                  │
-│  ┌────────────────────────────────────────────────────────────────┐  │
-│  │  clang_frontend.rs: clang AST dump 前端                        │  │
-│  │  - 真实 clang -ast-dump=json 解析                               │  │
-│  │  - C AST -> skeleton AST -> typed IR lowering                  │  │
-│  │  - readonly global const array 收集（含 clang array_filler sparse initializer） │  │
-│  └────────────────────────────────────────────────────────────────┘  │
-│  ┌────────────────────────────────────────────────────────────────┐  │
-│  │  typed_ir.rs: Typed IR + Generic Rust Emitter                  │  │
-│  │  - IrFunction / IrStmt / IrExpr / IrType                      │  │
-│  │  - scalar / while / if / for / do-while / break / continue     │  │
-│  │  - 整数运算、comparison、logical not、short-circuit            │  │
-│  │  - readonly pointer slice、mutable pointer write               │  │
-│  │  - global/local array、record field read                       │  │
-│  └────────────────────────────────────────────────────────────────┘  │
-│  ┌────────────────────────────────────────────────────────────────┐  │
-│  │  translation_route.rs: Candidate Route 元数据                   │  │
-│  │  - GenericTypedIr: 通用 emitter 成功                             │  │
-│  │  - Unsupported: fail-closed，保留 reason                       │  │
-│  └────────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  Auto Migration Pipeline: auto_migrate.py                            │
-│  - 翻译器调用、C oracle harness 草稿                                  │
-│  - Rust replay test 生成和执行                                       │
-│  - route decision（L0-L4）和 validation profile 生成                  │
-│  - cache metadata、evidence manifest                                 │
-│  - 比赛环境 profile 绑定                                              │
-└──────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  Evidence Validator: validate_auto_translation_evidence.py           │
-│  - schema 校验和跨 artifact 一致性检查                                │
-│  - semantic pass gate 判定                                           │
-│  - alias/effect graph 证据门禁                                        │
-│  - external callee signature binding                                 │
-│  - competition environment identity 校验                              │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-## L0-L4 验证分层
-
-| 层级 | 含义 | 核心证据 |
-|------|------|----------|
-| L0 | Catalog 目录校验 + 确定性零 token 候选路由 | `projects.json`、typed IR `token_cost=0` scalar-only candidate |
-| L1 | Native C 编译和测试烟测 | `l1-native-build.json`、pinned commit、环境 profile |
-| L2 | 受限迁移切片编译 + 安全证据 | pointer graph、unsafe ledger、Rust compile、negative diff |
-| L3 | 行为级别等价性证据 | C oracle、Rust replay、schema diff、final verification |
-| L4 | 显式拒绝对翻译或 accepted evidence authoritative | route `refused` 或 `accepted_evidence_authoritative=true` |
-
-> 重要：`route_decision.level=L0`（typed IR 确定性候选路由）与 catalog L0（目录校验）是两回事。前者只表示翻译候选不需要额外 AI/token 路线，不证明语义等价。
 
 ## 当前状态
 
-- **typed IR emitter**: `GenericTypedIr` 覆盖 scalar 算术（无符号 `+`/`-`/`*` 显式 wrapping）/控制流、bitwise、comparison、logical not、short-circuit、`?:`、scoped `for`/`do-while`、`break`/`continue`、readonly pointer slice、mutable pointer write、global/local fixed-length integer array read/write/init（global 仅 readonly `static const` index read，含受限 clang `array_filler` sparse initializer）、record field read、bounded direct call
-- **clang 前端**: 真实 `fdb_calc_crc32` 已能经 clang AST dump → skeleton → typed IR → global table → Rust draft 生成 `GenericTypedIr` candidate
-- **FlashDB accepted evidence**: `real-fdb-calc-crc32`、`real-fdb-blob-make`、`real-fdb-kv-del` 和 `real-fdb-kv-set` 已有绑定语义证据；其中 `real-fdb-kv-set` 是 exact typed-IR generated draft 通过 `generated_draft_acceptance.status=passed` 的未初始化 DB `return_code=FDB_INIT_FAILED` fixture 边界。
-- **FlashDB `fdb_kv_set` 边界**: 不能声明完整 `fdb_kv_set`/KV 写入语义；initialized set/delete、blob 持久化、`fdb_kv_set_blob` 和完整 external callee 语义仍未关闭。
-- **旧 crc32 特例代码**: typed IR canned matcher 和旧 string recognizer crc32 模板已删除；正向路径只走 clang-lowered typed IR + globals
-- **候选清单 provenance**: 新 route/profile evidence 记录 `selection_policy.stage=post_generation_provenance`、`selected_candidate_id` 和 `candidate_set`（primary draft、typed-IR signal、C2Rust baseline context），并由 validator 拒绝任何 candidate 自称 `semantic_pass=true`；C2Rust baseline candidate 还会绑定 baseline manifest 与 generated output ref/hash，防止 route/profile 中的 baseline status、reason 或输出引用漂移。这还不是带 score/hard gate 的完整多候选 router。
-- **仓库级 unsafe budget**: `validation/tools/unsafe_budget.py` 现在默认扫描 `crates/c2r-translator/src`、`flashDB_rust/src`、`validation/l2_slices/src`，加载 `validation/unsafe-budget-ledger.json`，并作为 core translator validation CI gate 执行。
-- **入口 unsafe claim 边界（P0-162）**: unsafe < 10% 或 0 findings 只表示当前扫描/ledger 未超出预算或未发现已建模问题，不证明 C ABI、FFI、flash hardware、volatile register、RTOS、多线程或中断语义已经解决。任何这类能力进入实现前，必须先有 unsafe ledger span、safe/typed 替代方案、target/test evidence 和人工 review 状态。
+| 项目 | 当前状态 |
+| --- | --- |
+| Translator-generated semantic pass | `32` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
+| Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
+| 最近完成 | P0-T20：组合 `fdb_kvdb.c:1870-1873` assignment-call、reset/add 和 current-level `continue` |
+| 当前翻译任务 | P0-T21：组合 `fdb_kvdb.c:1868-1874` 的 zero-start 与 next-address 二分支 |
+| 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
+| FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
+| 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
 
-## 当前 Harness MVP 状态
+能力计数只代表已绑定 named-slice 边界。它不表示完整 C 语言覆盖、完整 `fdb_kv_iterate`、FlashDB 全项目自动迁移或生产级安全性。
 
-- 当前分支：`codex/flashdb-rust-skeleton`
-- OpenCode harness 已有最小执行器：`python3 -B -m validation.tools.opencode_agent_harness run-worker --mode deterministic` 调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，并在 worker summary 存在时自动入 SQLite ledger。
-- OpenCode 包装入口已接好：`run-worker --mode opencode --opencode-variant max` 执行同一份 assignment request；preflight、run-plan、worker report 和 handoff contract 会绑定结构化 launch policy（command/model/agent/variant/skip-permissions），缺失或漂移会在启动 OpenCode 前 fail-closed；OpenCode/LLM 输出仍不是 evidence。
-- accepted evidence 复用链路已接好：`assign-slice --reuse-accepted-evidence --accepted-evidence-root validation/evidence --slice-spec <maintained-spec>` 可在 worker 隔离目录下验证已提交 evidence。
-- 评委 before/after demo 入口：`docs/c2rust-migration-agent/judge-demo.md`。首选真实 FlashDB profile 生成 `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`，并绑定 competition summary、workflow metrics、before/after exhibit、milestone report 与复制后的 `target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json` 的路径和 sha256；保底 demo profile 仍生成 `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json` 和 `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`。二者展示 baseline unsafe Rust → final safe Rust、accepted patch、oracle evidence、unsafe reduction，以及 planner/worker/verifier/repairer/reporter 五阶段 contract；review gate 只解除 release readiness 的 review blocker，不是 semantic acceptance gate；accepted-evidence before/after artifact 不增加 `translation_coverage_numerator`。
-- 评委一键 harness runner：`python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json` 会按配置执行 competition smoke、before/after、显式多 worker 和 OpenCode 入口，并生成 `summary/judge-milestone-bundle.json` 与 `summary/milestone-release-notes.md`。本地执行层会把配置中的 portable `python3 -B` 命令解析到可运行的非绝对 Python launcher，公开配置和证据仍固定使用 `python3 -B`。本地 artifact 深校验现在会把 `competition-smoke-summary.json` 绑定到 judge config 的 `environment_profile.profile_id/sha256` 与 entrypoint 的 `proof_class/run_id`，并拒绝 CI/WSL/Windows 本地证据或带 `proof-class-limiting` deviation 的 summary 冒充 `competition-exact`；两个 `evaluate --profile` 入口还会写出 `harness/resume-manifest.json`，把 SQLite ledger、context pack、agent index、worker summary 和续跑入口串成 current-state 索引。`config/competition-env/bundle-manifest.json` 还把比赛配置目录升级为 hash-bound 归档合同，runner 报告会内嵌 `competition_config_archive` 快照。bundle 聚合 `core_translation_quality`、`harness_architecture_summary`、`route_governance_metrics`、`evidence_cost_retention`、`claim_scope`、`proof_classes`、`publishability`、`known_gaps`、`must_not_claim` 和复现命令，作为评委外部审阅索引；Markdown release notes 只是该 bundle 的人类可读投影，便于评委快速看 commit、source pin、scorecard、baseline comparison、known gaps 和禁止声明项。`validation/judge-milestone-bundle.schema.json` 锁定公开 claim boundary，并要求 run report `schema_version=1` 与 validator-owned proof-class contract 防越权；bundle、release notes 和 resume manifest 都不是 semantic gate，也不增加 `translation_coverage_numerator`。
-- `judge-milestone-bundle.json` 的 `harness_architecture_summary` 现在包含 `contract_matrix`，按 `plan/translate/verify/repair/report` 展示 stage、role、artifact、validator 和边界；schema 要求每一行保持 `semantic_gate=false`、`chat_output_is_evidence=false`、`translation_coverage_numerator=0`。OpenCode `run-plan` graph 也会直接暴露 `opencode_worker.opencode_variant`，避免评委必须钻进 preflight artifact 才能看到运行变体。
-- 公开 release packet：全量 runner 成功后还会写出 `summary/public-release-packet.json`，hash 绑定 run report、readiness report、milestone bundle、Markdown release notes 和 competition config archive，并由 `validation.tools.validate_public_release_packet` 按 `validation/public-release-packet.schema.json` 校验 schema、hash、claim boundary、本机路径泄漏，检查 packet 中复制的 publication manifest、`quantitative_evaluation`、`progress_delta_ledger`、`summary.workflow_metrics`、known gaps、reproduction commands、must-not-claim 覆盖是否与被绑定的 bundle 一致，并要求 release notes 等于该 bundle 渲染出的 Markdown；它只是评委发布包索引，不是 semantic gate，也不增加 `translation_coverage_numerator`。
-- S4 进度增量账本：`judge-milestone-bundle.json` 现在公开 `progress_delta_ledger`，把 translator capability delta、governance/evidence delta 与 workflow repair delta 分开计数；当 `workflow_metrics.repair_activity` 稀疏或为 0 但 `before_after_repair_exhibit` 已验证 repair 时，`workflow_delta` 会按 entrypoint 补齐 observed repair、auto-recovered、rollback evidence 和 source 计数，避免评委低估自愈闭环。`public-release-packet.json` 会在顶层和 `summary` 中复制该账本，release notes 会渲染 `Progress Delta Ledger` 表；该账本固定 `semantic_gate=false`、`generated_draft_semantic_pass=false`、`translation_coverage_numerator=0`。
-- FlashDB 当前已通过语义证据绑定的切片：`real-fdb-calc-crc32`、`real-fdb-blob-make`、`real-fdb-kv-del`、`real-fdb-kv-set`。`real-fdb-kv-set` 仅关闭未初始化 DB 返回码 fixture 的 exact generated draft acceptance。
-- FlashDB 当前开放 KV 语义：initialized `fdb_kv_set`/delete、blob 持久化、`fdb_kv_set_blob` 和完整 external callee 语义尚未关闭。
+全局待办唯一入口：[future-vision-and-mvp.md](docs/c2rust-migration-agent/future-vision-and-mvp.md)。设计与实施计划维护在 `docs/superpowers/specs/` 和 `docs/superpowers/plans/`。
 
-- **显式多 worker profile smoke**: `config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json` 会 fan-out 两个带 source pin 的 worker（`real-fdb-calc-crc32`、`real-fdb-blob-make`），并按 planner 顺序 merge。已验证 run `harness-flashdb-explicit-workers-20260701` 通过，accepted-evidence `semantic_pass=2`；同一 profile 的 `evaluate --profile` 入口也通过并生成 `harness/evaluate-report.json` 与 `harness/judge-evidence-index.json`，后者只索引已验证 batch artifacts 的路径与 sha256。语义结论仍来自 accepted-evidence binding、competition summary、workflow metrics 和 validators；它不是新的 semantic gate，也不增加 `translation_coverage_numerator`。tracked run manifest：`validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json`。
-- 启用 route-governance metrics 的 profiles 还会产出并绑定 `summary/route-governance-metrics-report.json`；`validation/route-governance-metrics.schema.json` 与 report 内 `retention_policy` 只锁定报告字段、artifact 保留策略和 public-claim boundary，不把 accepted-evidence、before/after 展品或 route-governance 指标升级为 translator-generated semantic pass，也不增加 `translation_coverage_numerator`。
-- C2Rust baseline manifest 状态现在会进入 route-governance metrics 和 milestone scorecard：报告会统计 manifest/generated-output/skipped/compile-only 状态，并在 release notes 的 baseline comparison 中展示；这些字段仍是 candidate context only，`semantic_gate=false` 且 `translation_coverage_numerator=0`。
+## Harness 解决什么问题
 
-- 评委入口本地 artifact 校验现在也会对非 smoke `competition_summary` 调用 `validate_competition_run_summary.py`，因此 workflow metrics、before/after artifact ref、repair history、unsafe 账本、final-gate 规则和 slice counts 都会走已有 summary 合同深校验，不再只靠 path+sha256 通过。
+普通翻译器通常在“输出 Rust”处结束。本项目的 harness 继续负责：
+
+1. **固定输入**：绑定仓库、分支、commit、真实函数、编译数据库和 fixture。
+2. **规划与隔离**：把 source file 拆成独立 worker assignment，每个 worker 使用独立 out-root。
+3. **候选生成**：选择 generic typed IR、raw C2Rust/C2Rust+repair 或 OpenCode candidate。
+4. **共同验证**：执行 C oracle、Rust replay、schema diff、negative diff、unsafe 和 profile gates。
+5. **自动修复**：每轮只处理一个具体 compile/semantic/unsafe blocker；失败回滚 last-good。
+6. **状态恢复**：SQLite 保存 assignment、lease、event 和 artifact index，磁盘 summary 保存语义事实。
+7. **评委输出**：生成 workflow metrics、before/after、judge bundle、release notes 和 public packet。
+
+SQLite 不是语义事实源，Agent 对话也不是 evidence。语义结论只来自落盘 artifact 和 validator。
+
+## Harness 架构图
+
+```mermaid
+flowchart TB
+    subgraph Inputs["输入与配置"]
+        SRC["Pinned C repository"]
+        SPEC["Slice spec / extract spec"]
+        PROFILE["Batch profile"]
+        JCFG["Judge entrypoints"]
+        SP["Superpowers specs and plans"]
+    end
+
+    subgraph Control["控制平面"]
+        JUDGE["run_judge_entrypoints"]
+        DEMO["judge_demo"]
+        HARNESS["opencode_agent_harness"]
+        LEDGER[("SQLite ledger")]
+        PLAN["Planner / assignment / lease"]
+    end
+
+    subgraph Execution["执行平面"]
+        EXTRACT["extract_source_slice"]
+        WORKER["Isolated worker out-root"]
+        MIGRATOR["scripts/c2rust-migrator.py"]
+        AUTO["auto_migrate.py"]
+        TRANSLATOR["c2r-translator\nclang AST -> typed IR -> Rust"]
+        C2RUST["C2Rust baseline / repair"]
+        OPENCODE["OpenCode worker\nGLM-5.1 + c2rust-migrator + max"]
+    end
+
+    subgraph Proof["证明平面"]
+        ORACLE["C oracle"]
+        REPLAY["Rust replay"]
+        DIFF["Schema diff"]
+        NEG["Negative mutation"]
+        UNSAFE["Unsafe scan / ledger"]
+        VERIFY["Final verification"]
+    end
+
+    subgraph Reports["报告与发布平面"]
+        WREPORT["run-worker-report"]
+        SUMMARY["competition-run-summary"]
+        METRICS["workflow-metrics"]
+        BUNDLE["judge-milestone-bundle"]
+        PACKET["public-release-packet"]
+    end
+
+    SP -. "开发约束" .-> PLAN
+    SRC --> EXTRACT
+    SPEC --> EXTRACT
+    PROFILE --> HARNESS
+    JCFG --> JUDGE
+    JUDGE --> DEMO
+    JUDGE --> HARNESS
+    HARNESS <--> LEDGER
+    HARNESS --> PLAN
+    PLAN --> WORKER
+    EXTRACT --> WORKER
+    WORKER --> MIGRATOR
+    MIGRATOR --> AUTO
+    AUTO --> TRANSLATOR
+    AUTO --> C2RUST
+    HARNESS --> OPENCODE
+    OPENCODE --> WORKER
+    TRANSLATOR --> ORACLE
+    TRANSLATOR --> REPLAY
+    C2RUST --> REPLAY
+    ORACLE --> DIFF
+    REPLAY --> DIFF
+    DIFF --> NEG
+    NEG --> UNSAFE
+    UNSAFE --> VERIFY
+    VERIFY --> WREPORT
+    WREPORT --> SUMMARY
+    SUMMARY --> METRICS
+    DEMO --> BUNDLE
+    SUMMARY --> BUNDLE
+    METRICS --> BUNDLE
+    BUNDLE --> PACKET
+```
+
+## 数据流图
+
+```mermaid
+flowchart LR
+    A["1. Source pin\nrepo + branch + commit"]
+    B["2. Source extraction\nfunction + dependencies"]
+    C["3. Slice spec\nboundary + fixture + build profile"]
+    D["4. Context pack\ntypes + calls + globals + hashes"]
+    E["5. Worker assignment\nworker id + isolated out-root"]
+    F["6. Candidate generation\ntyped IR / C2Rust / OpenCode"]
+    G["7. Rust candidate\ncompile status + provenance"]
+    H["8. Executed evidence\nC oracle + Rust replay"]
+    I["9. Differential gates\ndiff + negative diff + unsafe"]
+    J{"10. Final gate"}
+    K["accepted\ndeclared slice only"]
+    L["refused\nunsupported construct"]
+    M["blocked\nmissing environment/evidence"]
+    N["11. Worker summary\nartifact refs + hashes"]
+    O["12. Merge and metrics\ncompetition summary + workflow metrics"]
+    P["13. Judge publication\nbundle + notes + public packet"]
+
+    A --> B --> C --> D --> E --> F --> G --> H --> I --> J
+    J -->|"all gates pass"| K
+    J -->|"known unsupported"| L
+    J -->|"missing proof/tool"| M
+    K --> N
+    L --> N
+    M --> N
+    N --> O --> P
+```
+
+每个阶段都写出 repo-relative path 和 hash。下游 validator 会重新打开 artifact，而不是信任上游报告中的文字结论。
+
+## Repair / Retry 数据流
+
+```mermaid
+sequenceDiagram
+    participant P as Planner
+    participant DB as SQLite ledger
+    participant W as Worker
+    participant V as Verifier
+    participant R as Repairer
+    participant O as On-disk evidence
+
+    P->>DB: assign slice and isolated out-root
+    DB-->>W: lease plus assignment request
+    W->>O: write candidate and worker report
+    W->>V: request compile/oracle/diff validation
+    V->>O: write final gate and concrete failure
+    alt gate passed
+        V->>DB: record converged summary
+    else repairable blocker and rounds remain
+        V->>R: emit one bounded repair hint
+        R->>O: record rollback id and minimal patch
+        R->>W: retry from last-good candidate
+        W->>V: revalidate all affected gates
+    else unproven or exhausted
+        V->>DB: record refused or blocked
+    end
+```
+
+默认 repair cap 是 5 轮。进程返回码、LLM 文本和 repair history 只能说明执行过程；只有重新通过共同门禁的 candidate 才能 accepted。
+
+## 关键组件
+
+| 组件 | 职责 | 主要输出 |
+| --- | --- | --- |
+| `extract_source_slice.py` | 从真实 C checkout 抽取函数、依赖和 source identity | slice spec |
+| `crates/c2r-translator/` | clang AST、typed IR、通用 Rust emitter、fail-closed reason | Rust candidate、lowering report |
+| `auto_migrate.py` | 编排候选生成、oracle/replay 草稿、route/profile 和 evidence | `validation/evidence/<target>/auto-translation/...` |
+| `validate_auto_translation_evidence.py` | schema、hash、identity、semantic gate 交叉校验 | strict validation result |
+| `opencode_agent_harness.py` | run/plan/worker/retry/evaluate、SQLite ledger、隔离和恢复 | worker reports、context pack、agent index、merge plan |
+| `run_competition.py` | 汇总 slice/worker，执行环境、unsafe、summary gates | competition summary、workflow metrics |
+| `judge_demo.py` | 构建 before/after 安全化展品 | before-after exhibit、judge evidence index |
+| `run_judge_entrypoints.py` | 执行 smoke、before/after、多 worker、OpenCode 入口 | run report、milestone bundle、public packet |
+
+## Candidate 与语义验收
+
+| 来源 | 用途 | 单独能否 semantic pass |
+| --- | --- | --- |
+| Generic typed IR | 项目无关的 AST/type/alias 驱动候选 | 否 |
+| Raw C2Rust | 广覆盖 unsafe baseline | 否 |
+| C2Rust + repair | 安全化 before/after candidate | 否 |
+| OpenCode / LLM | 候选生成和最小修复 | 否 |
+| C oracle + Rust replay + diff gates | 声明边界内的可执行等价证据 | 是 |
+
+Named slice 增加 semantic numerator 必须同时满足：
+
+1. source/commit/fixture/carrier/candidate hash 一致；
+2. C oracle 和 Rust replay 实际编译执行；
+3. schema-aware diff 通过；
+4. 至少一个可区分错误实现的 negative mutation 被检测；
+5. unsafe ledger、route、profile、final verification 相互绑定；
+6. strict validator 以 `--require-semantic-pass` 通过。
+
+## Worker 隔离与状态
+
+默认目录结构：
+
+```text
+target/competition-out/
+  state/opencode-agent-harness.sqlite3
+  harness/
+    context-pack.json
+    agent-index.json
+    plans/*.json
+    merge-plan.json
+    resume-manifest.json
+  workers/<worker-id>/
+    request.json
+    evidence/
+    harness/run-worker-report.json
+    summary/competition-run-summary.json
+  summary/
+    competition-run-summary.json
+    workflow-metrics.json
+```
+
+规则：
+
+- 一个 worker 只写自己的 `isolated_out_root`。
+- `request.out_root` 必须与 SQLite assignment 一致。
+- worker 启动前删除 stale expected summary。
+- OpenCode worker 必须绑定同一 run 的 passed preflight report。
+- merge 只消费机器可读 worker summary；缺 summary、hash drift 或 final gate 失败都会 fail-closed。
+
+## 比赛环境与 proof class
+
+机器可读环境入口：`config/competition-env/environment.json`。
+
+| Proof class | 来源 | 能否关闭比赛环境验收 |
+| --- | --- | --- |
+| `local-simulation` | Windows/本机 | 否 |
+| `wsl-local-simulation` | WSL | 否 |
+| `ci-approximation` | Linux CI | 否 |
+| `competition-exact` | 真实比赛主机 + `COMPETITION_EXACT_HOST=1` | 是 |
+
+当前 WSL 与官方 profile 并不完全一致：kernel、Rust/Cargo、Node/npm、Java/Maven、CMake 基线和 strict GLM model probe 仍有差异。完整对照见 canonical roadmap 的“比赛环境”章节。
+
+## 快速开始
+
+### 1. 开发验证
+
+```bash
+cargo fmt --all --check
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+python3 -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python3 -B validation/tools/translator_coverage_matrix.py --matrix validation/translator-coverage-matrix.json
+```
+
+### 2. WSL 比赛配置模拟
+
+```bash
+source config/competition-env/env.sh
+export CLANG_PATH=/usr/bin/clang
+bash config/competition-env/toolchain-check.sh
+bash config/competition-env/smoke.sh wsl-local-simulation target/competition-smoke-wsl
+```
+
+`toolchain-check.sh` 在当前 WSL 会如实报告与目标机的差异；不能因为部分工具可用就改写为 `competition-exact`。
+
+### 3. 单切片翻译与严格验证
+
+```bash
+python3 -B validation/tools/auto_migrate.py \
+  --slice-spec validation/slice-specs/flashdb-real-fdb-kv-iterate-next-sector-advance-continue.json \
+  --out-root target/auto-translation \
+  --competition-clang-lane
+
+python3 -B validation/tools/validate_auto_translation_evidence.py \
+  --target-id flashdb \
+  --slice-id real-fdb-kv-iterate-next-sector-advance-continue \
+  --slice-spec validation/slice-specs/flashdb-real-fdb-kv-iterate-next-sector-advance-continue.json \
+  --evidence-root target/auto-translation \
+  --require-semantic-pass
+```
+
+### 4. Harness before/after 展品
+
+```bash
+python3 -B -m validation.tools.judge_demo \
+  --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json \
+  --run-id competition-flashdb-before-after-exhibit \
+  --out-root target/competition-out-flashdb-before-after-exhibit \
+  --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
+```
+
+### 5. 评委全入口
+
+```bash
+python3 -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+```
+
+真实比赛主机运行时追加 `--proof-class competition-exact` 并设置 `COMPETITION_EXACT_HOST=1`。
+
+### 6. OpenCode preflight
+
+```bash
+python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id <run-id> \
+  --out-root target/opencode-preflight \
+  --opencode-model GLM-5.1 \
+  --opencode-agent c2rust-migrator \
+  --opencode-variant max
+```
+
+只有同一 run/runtime 的 preflight report 为 passed、marker 存在且 contract verification 已执行，才能启动 OpenCode worker。
+
+## Superpowers 工作流
+
+项目只维护以下开发入口：
+
+1. `docs/superpowers/specs/`：行为、架构和边界设计。
+2. `docs/superpowers/plans/`：可执行实施计划、测试和回滚步骤。
+3. `docs/c2rust-migration-agent/future-vision-and-mvp.md`：唯一全局 backlog 和当前状态。
+4. `validation/**`：机器可执行合同和 evidence；它们决定是否通过，不由文档勾选替代。
+
+设计或计划变更必须与实际代码、测试、coverage matrix 和 evidence 一起收口。Superpowers 文档是开发指导，不进入比赛 preflight，也不是 semantic gate。
 
 ## 核心目录
 
-| 目录 | 说明 |
-|------|------|
-| `crates/c2r-translator/` | Rust 翻译器 crate（clang 前端 + typed IR + emitter） |
-| `validation/tools/` | Python 工具：`auto_migrate.py`、`validate_auto_translation_evidence.py`、`extract_source_slice.py` |
-| `validation/slice-specs/` | 切片规格定义（FlashDB、demo slices 等） |
-| `validation/evidence/` | 生成证据（demo、flashdb、libuv、zlib-ng 及 40+ 项目） |
-| `validation/*-template/` | JSON Schema 和模板（pointer graph、slice spec、route、profile、L3 manifest 等） |
-| `validation/l2_slices/` | Rust L2 参考实现和 C oracle fixture |
-| `docs/c2rust-migration-agent/` | C2Rust migration agent 专题文档、分类索引、架构说明、contract、analysis 和 context archive |
-| `docs/superpowers/` | 历史设计 specs 和 plans；不作为当前全局待办来源 |
-| `openspec/` | OpenSpec 治理（specs、changes、config） |
-| `scripts/` | 自动化脚本（全量回归等） |
-| `config/competition-env/` | 比赛环境配置（Ubuntu 24.04、华为镜像、工具链版本、OpenCode 单次交互流程） |
+| 路径 | 内容 |
+| --- | --- |
+| `crates/c2r-translator/` | Rust translator、clang frontend、typed IR、emitter |
+| `validation/tools/` | migration、harness、validator、judge 和 report 工具 |
+| `validation/slice-specs/` | 真实 source-backed slice 合同 |
+| `validation/evidence/` | hash-bound oracle/replay/diff/unsafe/route/profile evidence |
+| `validation/l2_slices/` | Rust replay 与 C oracle fixture |
+| `flashDB_rust/` | FlashDB Rust skeleton/reference runtime |
+| `config/competition-env/` | 比赛环境、planned batch、judge entrypoints、OpenCode runbook |
+| `docs/superpowers/` | 当前设计与实施计划 |
+| `docs/c2rust-migration-agent/` | 架构、运行手册、roadmap 和边界说明 |
+| `scripts/` | 全量回归和辅助脚本 |
 
-## 待办来源
+## 核心原则
 
-全局 roadmap/backlog 只维护在 `docs/c2rust-migration-agent/future-vision-and-mvp.md` 与 `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`。其它清单只允许是局部用途：OpenSpec `tasks.md` 是单个 change 的交付步骤，`validation/**/checklist.md` 是证据模板验收清单，`docs/superpowers/plans/**` 是历史实施计划，`validation/evidence/**/*.md` 是历史证据记录。
+- **Candidate 不等于正确**：任何生成路径都必须经过共同门禁。
+- **C oracle 是声明边界内的 ground truth**：但它仍受 fixture、compiler、ABI 和 observable contract 限制。
+- **Fail-closed**：证据不足时拒绝或阻塞，并给出下一最小步骤。
+- **禁止项目特判**：FlashDB 是测试输入，不是 translator 中的项目名/函数名模板。
+- **Unsafe 数字不是完整安全证明**：FFI、volatile、并发、ABI 和硬件需要独立 evidence。
+- **路径和 hash 可移植**：公开 artifact 使用 repo-relative path，不记录密钥和宿主绝对路径。
 
-## OpenCode 比赛单次交互
+## 分支与仓库
 
-比赛使用 OpenCode 直接调用本仓库，一次交互完成 C→Rust 迁移；若评测方设置 **600 分钟**，它只是外部预算参考，项目目标仍是准确性和证据完整性优先。详见 `config/competition-env/opencode-single-interaction.md`：
-
-- 单次 prompt 模板（可并行处理互不依赖的 slice）
-- 管线参考耗时（只用于规划，不作为验收条件）
-- Agent 行为约束（不修改源码、并行输出隔离、fail-closed）
-- 容错设计和比赛输出结构
-
-## 快速命令
-
-```powershell
-# 运行翻译器测试（默认 feature）
-cargo test --manifest-path crates/c2r-translator/Cargo.toml
-
-# 运行翻译器测试（含 typed IR + clang frontend）
-cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
-
-# 运行 auto migration（以 FlashDB crc32 为例）
-python3 -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root target/tmp --emit-clang-lowering-report
-
-# 验证自动翻译证据
-python3 -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
-
-# 语义通过验证
-python3 -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
-python3 -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-blob-make --slice-spec validation/slice-specs/flashdb-real-fdb-blob-make.json --require-semantic-pass
-
-# Harness worker accepted-evidence 复用 smoke
-python3 -B -m validation.tools.opencode_agent_harness run-worker --db target/competition-out/state/opencode-agent-harness.sqlite3 --run-id run-demo-001 --worker-id worker-a --mode deterministic
-
-# 评委 before/after demo（首选真实 FlashDB 路径）
-python3 -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
-# 输出: target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json
-# 证据索引: target/competition-out-flashdb-before-after-exhibit/harness/judge-evidence-index.json
-# 保底 demo 输出: target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json
-
-# 评委一键 harness runner（默认执行 competition smoke、before/after、多 worker、OpenCode 入口并深校验本地 artifacts）
-python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
-# 公开审阅 Markdown: target/competition-out-flashdb-judge-entrypoints/summary/milestone-release-notes.md
-# 公开 release packet JSON: target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
-python3 -B -m validation.tools.validate_public_release_packet --packet target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
-# evaluate 入口续跑索引: target/competition-out-flashdb-*-evaluate-profile-20260701/harness/resume-manifest.json
-# 聚焦 before/after 展品时可只跑单入口；competition smoke 只证明环境和轻量 evidence gate，semantic_gate=false
-python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id before_after_judge_demo --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
-# 只检查将要执行的入口，不运行命令或要求本地 artifacts
-python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --dry-run
-
-# 全量回归
-cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
-python3 -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
-python3 -B validation/tools/unsafe_budget.py --max-ratio 0.10
-# OpenSpec 历史治理归档校验（可选）：不是当前开发必经入口；默认比赛 runner 不会执行。
-# 如需把它纳入本地治理检查，给 run_competition.py 显式追加 --run-optional-governance-checks；
-# 缺少 openspec CLI 时按 optional skip 处理，CLI 存在但校验失败时该 optional gate 会失败。
-openspec validate --all --strict
-```
-
-## 设计原则
-
-1. **OpenSpec 治理**：`openspec/` 保留为历史治理归档，用于追溯需求 → 设计 → 任务 → 验收；它不是当前开发的必经入口，也不是默认比赛 gate。默认 `run_competition.py` 不执行 OpenSpec；只有显式追加 `--run-optional-governance-checks` 才把它作为 optional governance check 运行。
-2. **Candidate ≠ Correctness**：C2Rust、LLM、手写规则都只提供候选；正确性由 C oracle + evidence gates 决定。
-3. **Fail-closed**：不确定时拒绝翻译并记录原因，不可假装成功。
-4. **真实源码优先**：从真实 C 源文件抽取 slice/context，不能继续堆手写 `c_source` demo。
-5. **证据链可审计**：每个函数的迁移证据包含 typed IR route、validation profile、diff、unsafe ledger、cache identity。
-6. **Unsafe 控制**：Rust first-party non-test `unsafe` 比例目标 < 10%，但不把 0% 当硬性验收条件；unsafe < 10% 或 0 findings 也不代表 C ABI、FFI、flash hardware、volatile register、RTOS、多线程或中断语义已解决。上述能力进入实现前必须绑定 unsafe ledger span、替代方案、target/test evidence 和人工 review 状态。
-7. **比赛环境可追溯**：所有自动翻译证据绑定 `config/competition-env/environment.json` 的 profile identity。
-
-## 贡献与文档
-
-- 当前状态、接力和全局待办唯一入口：`docs/c2rust-migration-agent/future-vision-and-mvp.md` / `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
-- C2Rust 专题文档索引：`docs/c2rust-migration-agent/README.md`
-- 文档分类索引：`docs/c2rust-migration-agent/index/README.md`
-- 唯一全局待办：`docs/c2rust-migration-agent/future-vision-and-mvp.md` / `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
-- 验证框架：`validation/README.md`
-- 验证门禁：`validation/gates.md`
-- 核心翻译架构：`docs/c2rust-migration-agent/core-translation-architecture.md`
-- L0-L4 路由与证据门禁设计：`docs/c2rust-migration-agent/l0-l4-routing-and-evidence-gates.md`
-
-## 代码分支
-
-- 当前主开发分支：`codex/flashdb-rust-skeleton`
-- GitHub: `https://github.com/guoqihan342-svg/c-to-rust`
+- 主开发分支：`codex/flashdb-rust-skeleton`
+- GitHub：`https://github.com/guoqihan342-svg/c-to-rust`

@@ -2,9 +2,7 @@
 
 ## Result
 
-Passed. The `tsdb-user2-status` slice validates FlashDB TSDB `user2` as a public visible status through Rust replay, C oracle generation, schema-aware diff, negative diff, compile check, unsafe scan, and OpenSpec validation.
 
-通过。`tsdb-user2-status` 切片已通过 Rust replay、C oracle、schema-aware diff、负向 diff、编译检查、unsafe 扫描和 OpenSpec 验证，确认 FlashDB TSDB 的 `user2` 是可见公共状态语义。
 
 ## Fixture
 
@@ -35,8 +33,6 @@ The negative diff mutates `ts_status:"user2"` to `ts_status:"user1"` and fails a
 - `cargo test --test differential_replay user2_status -- --nocapture`: 2 passed, 0 failed.
 - `cargo test`: passed.
 - `cargo run -- unsafe-scan`: `unsafe_blocks:0`, `unsafe_fns:0`.
-- `openspec validate run-flashdb-tsdb-user2-status-l3-loop --strict`: passed.
-- `openspec validate --all`: 16 passed, 0 failed.
 - `git diff --check`: exit 0; Git emitted an LF-to-CRLF working-copy warning but no whitespace error.
 
 ## Non-Goals

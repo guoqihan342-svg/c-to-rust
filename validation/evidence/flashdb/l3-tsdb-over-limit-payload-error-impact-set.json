@@ -1,16 +1,15 @@
 {
-    "schema_version":  1,
-    "change":  "run-flashdb-tsdb-over-limit-payload-error-l3-loop",
-    "affected_files":  [
-                           "flashDB_rust/fixtures/l3-tsdb-over-limit-payload-error.json",
-                           "flashDB_rust/tests/differential_replay.rs",
-                           "flashDB_rust/src/tsdb.rs",
-                           "flashDB_rust/src/replay.rs",
-                           "flashDB_rust/oracle/flashdb_c_oracle.c",
-                           "validation/evidence/flashdb/l3-tsdb-over-limit-payload-error-*",
-                           "openspec/specs/flashdb-l3-agent-migration-loop/spec.md after archive"
-                       ],
-    "expected_public_api_change":  false,
-    "expected_storage_layout_change":  false,
-    "expected_unsafe_change":  false
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-over-limit-payload-error-l3-loop",
+  "affected_files": [
+    "flashDB_rust/fixtures/l3-tsdb-over-limit-payload-error.json",
+    "flashDB_rust/tests/differential_replay.rs",
+    "flashDB_rust/src/tsdb.rs",
+    "flashDB_rust/src/replay.rs",
+    "flashDB_rust/oracle/flashdb_c_oracle.c",
+    "validation/evidence/flashdb/l3-tsdb-over-limit-payload-error-*"
+  ],
+  "expected_public_api_change": false,
+  "expected_storage_layout_change": false,
+  "expected_unsafe_change": false
 }

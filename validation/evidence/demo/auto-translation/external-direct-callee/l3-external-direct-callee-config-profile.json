@@ -54,7 +54,7 @@
   "config_header": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "f2f9814f76901726de56c6f855ceaeb1357b6946fd8a64384a9415316f2c42b4"
+    "sha256": "61ab13a760c240126f76726feac0e56abdde54d9db4066102d1d6898de1798f4"
   },
   "feature_matrix": {
     "auto_translation_candidate": true
@@ -86,7 +86,6 @@
   "target_id": "demo",
   "toolchain": {
     "cargo_version": "captured_by_validation",
-    "openspec_version": "captured_by_validation",
     "rustc_version": "captured_by_rust_check",
     "target_triple_or_abi": "x86_64-unknown-linux-gnu"
   }

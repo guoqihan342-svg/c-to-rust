@@ -20,43 +20,43 @@
     "artifacts": {
       "agent_index": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/agent-index.json",
-        "sha256": "1af4a2ce8542e3f234a0e4819c3dd8ea46969967c8f93b87f46c979297f6837c"
+        "sha256": "8881e40ae588e81a2851db36642d0de162ab4b316eaef1950f680023152547da"
       },
       "batch_profile_report": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/batch-profile-report.json",
-        "sha256": "8ce60b2d29a821b43bbcf3c2a026a34e9af8d02106d7548ecfdcec0b40f9fc39"
+        "sha256": "355a5f412e11c1ba159b685e045a629bef97fd36a07d15d1366b7eeea22da9e8"
       },
       "competition_summary": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json",
-        "sha256": "8bb0b6a161d0636325cc7a0d2232aaefdc55da1979863cf4de28506249417a2a"
+        "sha256": "31a671de1294ae2c60cc4b39082096177f89fc17b125e460270cd1b57af232f1"
       },
       "context_pack": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/context-pack.json",
-        "sha256": "1019386be6ff045699ee3b2035793ca14b67a6008cf026922d77c1462bb17522"
+        "sha256": "a0ee539eeb1bc8e5ef076c7959781c998e173498941f3cc5fc066e98a6a0b28c"
       },
       "evaluate_report": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/evaluate-report.json",
-        "sha256": "a70262654911c91caa8f43b266e9ea62275220af2e3787b35da01a1d64c5d140"
+        "sha256": "145be1fb9e3a382e51720a5b92491a43a86bf81d96d0ad06079b72e59b9f5c8f"
       },
       "judge_evidence_index": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/judge-evidence-index.json",
-        "sha256": "4eac2e40a6c95e0aa535a46a5f72673be52fbdd6271f612f1412784a50a29bb5"
+        "sha256": "cf82905e2812710cfb6d35612fa792a4c9e18876ec7c44337b2f0a51f032067a"
       },
       "merge_plan": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/merge-plan.json",
-        "sha256": "37171c47c6741ad323b87b48fe56063d7335878d0fd8d2ff3cc5cfc99bbf2675"
+        "sha256": "d0ed693884bf99b4bc18459525e79b3590dc77bb23e05b5b7edb9d7f53aebeed"
       },
       "route_governance_metrics_report": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/route-governance-metrics-report.json",
-        "sha256": "468487022c608550bcba435968acf8df1645d947bd0f861f6afbe7075b953073"
+        "sha256": "f9bab9675d47b7bc17115c1784acac403c7caac49888dc588771c9d6b6d21416"
       },
       "run_plan_report": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/run-plan-report.json",
-        "sha256": "61f282fb212187878b17db04ec878b965e5f4e9bfd19a1bfb0d6304d30d7d0f6"
+        "sha256": "f309975e1aeffaebddb0f548318a5393255ff20e0ad990935e9a375e93e9687c"
       },
       "workflow_metrics": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/workflow-metrics.json",
-        "sha256": "6eeb4edd0ca3ec8f5b6c356bb55895043efd5f838bc86fc174e1754ac1a02c26"
+        "sha256": "d398e46c51a7145f781ff2ab3543c0f734e03b85e1d63120c9840976a24ef9cc"
       }
     },
     "status": "recorded_not_tracked"

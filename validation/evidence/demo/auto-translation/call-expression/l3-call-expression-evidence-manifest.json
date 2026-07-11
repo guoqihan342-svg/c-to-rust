@@ -155,7 +155,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-auto-cache-metadata.json",
-      "sha256": "19e16698cf92f024316ce029a71896ccd3407271661af43da41c56bef54d2f75",
+      "sha256": "17181e7fb48bed5d063acf275084590576752e2172958e253dbb04c928b447cd",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -166,7 +166,7 @@
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-config-profile.json",
       "profile_id": "demo-call-expression-wsl-gcc",
-      "sha256": "2895eed0b5554aae3d393211aaaf363be959c6ff5cbabeee992a7a36d46ea55a",
+      "sha256": "09fe76c4ea67c946844ff1ff0753daf590f1a5bab9cbfaf04a8282ed53bc36b4",
       "status": "recorded"
     },
     "context_pack": {
@@ -257,7 +257,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-version-manifest.json",
-      "sha256": "51085d57959decab42ce4124a25b0376aba95975bb7edc7d268a4429d6eeb57a",
+      "sha256": "8eee58814c949e5336c76a416e83c48b89cd1ce745e7f36b229c26150cee6cfc",
       "status": "recorded"
     }
   },

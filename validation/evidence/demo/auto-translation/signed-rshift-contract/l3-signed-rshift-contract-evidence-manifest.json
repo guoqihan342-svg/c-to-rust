@@ -153,7 +153,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-auto-cache-metadata.json",
-      "sha256": "331ef8b70c08ce01296fccc0f27faf606d07bd813f7faab4abb8a464e8b8cddc",
+      "sha256": "5a0b9036fbbbd8d648a12320d4a4a81b4cb548e9ccfebb557681cfd18ccda9bd",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -164,7 +164,7 @@
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-config-profile.json",
       "profile_id": "demo-signed-rshift-contract-wsl-gcc",
-      "sha256": "ed0930bd6831cd2370ad2d72cdbf9df84774b5c9944d3d9d8f89924122a3eaf2",
+      "sha256": "f96f1ecf0512debec438491727f4fb11ae0e8bfb512b6f3cc7e295c4af1dfc2f",
       "status": "recorded"
     },
     "context_pack": {
@@ -255,7 +255,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-version-manifest.json",
-      "sha256": "971b3d96ce16d6845d22d9a6b0695b62b35e68784061e43cfe054286c67bb693",
+      "sha256": "34c3f50c68198acfb1a7e016ccd96ea9b938942863296f3abdc2be32beb22fcf",
       "status": "recorded"
     }
   },

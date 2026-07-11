@@ -1,46 +1,46 @@
 {
-  "schema_version": 1,
-  "status": "measured",
-  "target_id": "demo",
-  "slice_id": "store-add-one",
-  "method": "validation.tools.unsafe_budget.unsafe_findings_in_line",
   "baseline": {
-    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-baseline-unsafe.rs",
-    "sha256": "34b6214df0783c6adde909f0eb18423f63f7e04d95e87b45d9fd6d3ac5d006bd",
-    "first_party_non_test_unsafe_count": 3,
     "findings": [
       {
-        "line": 13,
         "category": "raw_pointer",
+        "line": 13,
         "text": "let return_code = store_add_one_raw(value, &mut out0 as *mut i32);"
       },
       {
-        "line": 22,
         "category": "raw_pointer",
+        "line": 22,
         "text": "fn store_add_one_raw(value: i32, out: *mut i32) -> i32 {"
       },
       {
-        "line": 23,
         "category": "unsafe_block",
+        "line": 23,
         "text": "unsafe {"
       }
-    ]
+    ],
+    "first_party_non_test_unsafe_count": 3,
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-baseline-unsafe.rs",
+    "sha256": "34b6214df0783c6adde909f0eb18423f63f7e04d95e87b45d9fd6d3ac5d006bd"
   },
   "final": {
+    "findings": [],
+    "first_party_non_test_unsafe_count": 0,
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-safe.rs",
     "sha256": "2dbe1e11e8e3aff43307a340d34dd66bdb82d035db6bdb73af56467c592fc771",
     "source_snapshot_of": {
       "path": "validation/l2_slices/src/store_add_one.rs",
-      "sha256": "b12284e94a7e5ba1e10091ff6046847fc6e5e0755c82143d1d28ed06dcad7902"
-    },
-    "first_party_non_test_unsafe_count": 0,
-    "findings": []
+      "sha256": "2dbe1e11e8e3aff43307a340d34dd66bdb82d035db6bdb73af56467c592fc771"
+    }
   },
+  "method": "validation.tools.unsafe_budget.unsafe_findings_in_line",
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "status": "measured",
+  "target_id": "demo",
   "unsafe_reduction": {
-    "status": "measured",
     "baseline_total_unsafe": 3,
     "current_total_unsafe": 0,
+    "ratio": 0.0,
     "reduced_by": 3,
-    "ratio": 0.0
+    "status": "measured"
   }
 }

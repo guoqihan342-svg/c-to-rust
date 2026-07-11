@@ -9,13 +9,13 @@
     },
     {
       "agent": "019ef8ad-65c6-7c33-881f-29226db86646",
-      "role": "OpenSpec and evidence review",
+      "role": "retired governance and evidence review",
       "result": "Confirmed change artifacts were missing at first and recommended a focused schema repair slice with Rust/C oracle, negative diff, unsafe, and final verification evidence."
     },
     {
       "agent": "main",
       "role": "implementation coordinator",
-      "result": "Owns TDD, minimal code changes, verification, OpenSpec task updates, commit, and push."
+      "result": "Owns TDD, minimal code changes, verification, retired governance task updates, commit, and push."
     }
   ]
 }

@@ -449,19 +449,19 @@ class _JudgeEntrypointsValidatorTestsPart00:
         write_json(temp_manifest, manifest)
         original_read_text = Path.read_text
 
-        def read_text_with_required_openspec(path: Path, *args: object, **kwargs: object) -> str:
+        def read_text_with_required_superpowers(path: Path, *args: object, **kwargs: object) -> str:
             text = original_read_text(path, *args, **kwargs)
             if Path(path).as_posix().endswith(".opencode/agents/c2rust-migrator.md"):
                 return text.replace(
                     "  --opencode-variant max\n```",
-                    "  --opencode-variant max\nopenspec validate --all --strict\n```",
+                    "  --opencode-variant max\nsuperpowers required-preflight\n```",
                 )
             return text
 
-        with mock.patch.object(Path, "read_text", read_text_with_required_openspec):
+        with mock.patch.object(Path, "read_text", read_text_with_required_superpowers):
             with self.assertRaisesRegex(
                 ValueError,
-                "OpenCode agent runbook Required Preflight must not depend on OpenSpec or superpowers",
+                "OpenCode agent runbook Required Preflight must not depend on superpowers",
             ):
                 validator.validate_competition_env_bundle_contract(
                     load_default_config(),

@@ -37,8 +37,6 @@
     "self_healing_needed": false,
     "unsafe_count": 0,
     "unsafe_ratio": 0,
-    "openspec_strict": "passed",
-    "openspec_all": "16 passed, 0 failed",
     "git_diff_check": "passed"
   },
   "non_goals": [

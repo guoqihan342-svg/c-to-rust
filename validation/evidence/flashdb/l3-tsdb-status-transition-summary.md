@@ -35,8 +35,6 @@ The negative diff mutates final query entry 1 from `status:"deleted"` to `status
 - `cargo test --test differential_replay status_transition -- --nocapture`: 2 passed, 0 failed.
 - `cargo test`: passed.
 - `cargo run -- unsafe-scan`: `unsafe_blocks:0`, `unsafe_fns:0`.
-- `openspec validate run-flashdb-tsdb-status-transition-l3-loop --strict`: passed.
-- `openspec validate --all`: 16 passed, 0 failed.
 - `git diff --check`: passed.
 
 ## Non-Goals

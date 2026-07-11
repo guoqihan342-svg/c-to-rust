@@ -92,7 +92,7 @@
         "hash": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
         "operation_count": 3,
         "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
-        "sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
+        "sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
         "source_kind": "fixture"
       }
     ],

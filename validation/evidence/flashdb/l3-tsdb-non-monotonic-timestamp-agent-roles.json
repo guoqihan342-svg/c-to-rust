@@ -20,7 +20,7 @@
     {
       "agent": "main",
       "role": "implementation coordinator",
-      "result": "Owns TDD patch, fixture integration, verification evidence, OpenSpec task updates, commit, archive, and push."
+      "result": "Owns TDD patch, fixture integration, verification evidence, retired governance task updates, commit, archive, and push."
     }
   ]
 }

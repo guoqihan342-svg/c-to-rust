@@ -1,35 +1,33 @@
 {
-    "schema_version":  1,
-    "slice_id":  "kvdb-delete-missing-key",
-    "allowed_edits":  [
-                          "flashDB_rust/fixtures/l3-kvdb-delete-missing-key.json",
-                          "flashDB_rust/tests/differential_replay.rs",
-                          "flashDB_rust/tests/persistence.rs",
-                          "flashDB_rust/src/types.rs",
-                          "flashDB_rust/src/kvdb.rs",
-                          "openspec/changes/run-flashdb-kvdb-delete-missing-key-l3-loop/**",
-                          "validation/evidence/flashdb/l3-kvdb-delete-missing-key-*",
-                          "validation/evidence/flashdb/error-events.jsonl",
-                          "validation/evidence/flashdb/patches.jsonl"
-                      ],
-    "read_only_inputs":  [
-                             "flashDB_rust/oracle/flashdb_c_oracle.c",
-                             "flashDB_rust/oracle/.work/FlashDB/src/fdb_kvdb.c",
-                             "archived OpenSpec changes",
-                             "existing L3 fixture files except new fixture"
-                         ],
-    "forbidden_changes":  [
-                              "C oracle contract changes",
-                              "accepted differences widening for status/code/value/entries",
-                              "async runtime introduction",
-                              "internal multithreading",
-                              "unsafe widening",
-                              "TSDB source changes",
-                              "flash format/layout changes",
-                              "GC or sector layout claims"
-                          ],
-    "production_change_budget":  [
-                                     "Error code mapping in types.rs",
-                                     "missing-key guard in KvDb::delete"
-                                 ]
+  "schema_version": 1,
+  "slice_id": "kvdb-delete-missing-key",
+  "allowed_edits": [
+    "flashDB_rust/fixtures/l3-kvdb-delete-missing-key.json",
+    "flashDB_rust/tests/differential_replay.rs",
+    "flashDB_rust/tests/persistence.rs",
+    "flashDB_rust/src/types.rs",
+    "flashDB_rust/src/kvdb.rs",
+    "validation/evidence/flashdb/l3-kvdb-delete-missing-key-*",
+    "validation/evidence/flashdb/error-events.jsonl",
+    "validation/evidence/flashdb/patches.jsonl"
+  ],
+  "read_only_inputs": [
+    "flashDB_rust/oracle/flashdb_c_oracle.c",
+    "flashDB_rust/oracle/.work/FlashDB/src/fdb_kvdb.c",
+    "existing L3 fixture files except new fixture"
+  ],
+  "forbidden_changes": [
+    "C oracle contract changes",
+    "accepted differences widening for status/code/value/entries",
+    "async runtime introduction",
+    "internal multithreading",
+    "unsafe widening",
+    "TSDB source changes",
+    "flash format/layout changes",
+    "GC or sector layout claims"
+  ],
+  "production_change_budget": [
+    "Error code mapping in types.rs",
+    "missing-key guard in KvDb::delete"
+  ]
 }

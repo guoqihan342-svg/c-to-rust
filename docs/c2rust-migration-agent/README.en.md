@@ -1,10 +1,10 @@
 # C2Rust Migration Agent
 
-`docs/c2rust-migration-agent/` is the topic documentation folder for the C2Rust migration agent. It contains the executable design contract for the OpenSpec-governed C-to-Rust migration Agent. The Chinese mirror is `README.md`.
+`docs/c2rust-migration-agent/` is the topic documentation folder for the C2Rust migration agent. It contains the executable design contract for the Superpowers-governed C-to-Rust migration Agent. The Chinese mirror is `README.md`.
 
 ## Current Status
 
-- OpenSpec change: `design-c2rust-migration-agent`
+- Superpowers design and plans: `docs/superpowers/specs/`, `docs/superpowers/plans/`
 - First target: FlashDB
 - Source clone: `sources/FlashDB`
 - Source commit: `f9d0421315c564fb890a1b14eee77b290e0d7bbe`
@@ -42,7 +42,7 @@
 
 - New user-facing or Agent-facing docs use a Chinese primary `.md` file and an English mirror `.en.md` by default.
 - When an existing document receives more than a small edit, keep the matching English mirror synchronized.
-- OpenSpec parser anchors must remain in English, including `## ADDED Requirements`, `### Requirement:`, `#### Scenario:`, `WHEN`, and `THEN`.
+- Superpowers documents use ordinary Markdown: designs live in `docs/superpowers/specs/` and executable plans live in `docs/superpowers/plans/`.
 - Some older files in this directory still use a mixed "Chinese note + English summary" format. When touched, they should be split into full bilingual versions under this convention.
 - The only global backlog source is `future-vision-and-mvp.md`; `future-vision-and-mvp.en.md` is only a synchronized mirror and does not define a separate backlog source.
 
@@ -58,21 +58,19 @@
 ## Quick Use
 
 ```bash
-openspec status --change "design-c2rust-migration-agent" --json
-openspec instructions apply --change "design-c2rust-migration-agent" --json
 ```
 
 Then run the Agent phase, for example:
 
 ```bash
-c2rust-migrator --phase index --change design-c2rust-migration-agent --input request.json
+c2rust-migrator --phase index --input request.json
 ```
 
 The current judge-facing demo path is `judge-demo.md`; the preferred route uses `config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json` to produce the FlashDB before/after exhibit, judge report, context pack, agent index, and milestone release report. That profile now exercises a real `baseline_repair_gate` for `real-fdb-calc-crc32`: attempt 1 records `unsafe_baseline_requires_repair`, and retry attempt 2 revalidates accepted safe evidence with the repair hint. The repo-local demo profile remains a fallback.
 
 ## Operating Principles
 
-- Use OpenSpec before implementation.
+- Use Superpowers before implementation.
 - Keep context local-first and token-bounded.
 - Spawn multiple subagents for read-only or disjoint work.
 - Use deterministic rules before AI.

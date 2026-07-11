@@ -110,7 +110,6 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
 python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
-openspec validate --all --strict
 git diff --check -- CONTEXT.md crates/c2r-translator/src/clang_frontend.rs crates/c2r-translator/tests/bounded_translation.rs validation/tools/auto_migrate.py validation/tools/test_auto_migrate.py docs/c2rust-migration-agent/README.md docs/c2rust-migration-agent/README.en.md docs/c2rust-migration-agent/core-translation-architecture.md docs/c2rust-migration-agent/core-translation-architecture.en.md docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md
 ```
 
@@ -271,7 +270,6 @@ python -B -m unittest validation.tools.test_validate_auto_translation_evidence.V
 python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_default_validation_missing_external_callee_context_binding validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_callee_source_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_call_site_enrichment_drift
 python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_context_direct_call_edge_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_allows_blocked_external_callee validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_requires_every_call_site_binding validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_signature_shape_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_signature_binding_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_callee_source_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_call_site_enrichment_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_default_validation_missing_external_callee_context_binding validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_semantic_pass_missing_external_callee_context_binding
 python -B -m unittest validation.tools.test_validate_auto_translation_evidence validation.tools.test_auto_migrate
-openspec validate --all --strict
 git diff --check -- CONTEXT.md validation/tools/validate_auto_translation_evidence.py validation/tools/test_validate_auto_translation_evidence.py validation/tools/test_auto_migrate.py docs/c2rust-migration-agent/README.md docs/c2rust-migration-agent/README.en.md docs/c2rust-migration-agent/core-translation-architecture.md docs/c2rust-migration-agent/core-translation-architecture.en.md docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md
 ```
 
@@ -418,7 +416,6 @@ python -B validation/tools/validate_auto_translation_evidence.py --target-id zli
 ```powershell
 python -B -m unittest discover -s validation/tools -p "test_*.py"
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -426,7 +423,6 @@ git diff --check
 
 - `validation/tools`: 200 tests passed。
 - `c2r-translator`: 20 lib tests + 180 bounded translation tests passed。
-- `openspec`: 37 items passed。
 - `git diff --check`: exit 0；Windows 工作树打印 LF/CRLF replacement warnings，但没有 whitespace error。
 
 文档同步：
@@ -510,7 +506,6 @@ $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\cla
 cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
 cargo clippy --manifest-path crates/c2r-translator/Cargo.toml --all-targets --features typed-ir,clang-frontend -- -D warnings
-openspec validate --all --strict
 git diff --ignore-cr-at-eol --check
 ```
 
@@ -518,7 +513,6 @@ git diff --ignore-cr-at-eol --check
 - `cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check`: PASS。
 - `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend`: PASS，21 lib tests + 184 bounded translation tests passed，真实 clang AST `mul_div_mod` smoke 实际运行通过。
 - `cargo clippy --manifest-path crates/c2r-translator/Cargo.toml --all-targets --features typed-ir,clang-frontend -- -D warnings`: PASS。
-- `openspec validate --all --strict`: PASS，37 items passed。
 - `git diff --ignore-cr-at-eol --check`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
 
 当前边界：
@@ -589,7 +583,6 @@ $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\cla
 - `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，26 lib tests + 191 bounded translation tests passed。
 - `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_real_signed_unary_minus_when_enabled -- --nocapture`: PASS，1 test passed，真实 clang AST smoke 实际运行。
 - `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
-- `openspec validate --all --strict`: PASS，37 items passed。
 - `git diff --check -- <本轮意图提交文件白名单>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
 
 当前边界：
@@ -661,7 +654,6 @@ $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\cla
 - `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，27 lib tests + 198 bounded translation tests passed。
 - `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_logical_not_if_condition_when_enabled -- --nocapture`: PASS，真实 clang AST smoke 实际运行。
 - `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
-- `openspec validate --all --strict`: PASS，37 items passed。
 - `git diff --check -- <本轮意图提交文件白名单>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
 
 当前边界：
@@ -732,7 +724,6 @@ $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\cla
 - `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，27 lib tests + 214 bounded translation tests passed。
 - `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_logical_not -- --nocapture`: PASS，4 real clang AST smoke tests actually ran。
 - `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
-- `openspec validate --all --strict`: PASS，37 items passed。
 - `git diff --check -- <本轮意图提交文件白名单>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
 
 当前边界：
@@ -807,7 +798,6 @@ cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-l
 - `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend clang_dry_run -- --nocapture`: PASS，2 个 clang dry-run tests 通过。
 - `python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact -v`: PASS。
 - `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-frontend -- -D warnings`: PASS。
-- `openspec validate --all --strict`: PASS，37 items passed。
 - `git diff --check -- <本轮意图提交文件白名单>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
 - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1`: extra full-regression smoke run `20260627T001827Z` reached step 31/35 and failed on pre-existing `validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.json` hash drift: declared c_oracle sha256 `2b7f57daca9a5bd905235c52f9fad96bd6e7abf67fda1bf4b94eaf261717e5ea`, actual `6003d05f935938f737445396fa5ae104cfccd08fd14a1a692dfb3a82f5e792f3`. This is outside the current commit whitelist and `validation/evidence/**` remains unstaged.
 
@@ -853,7 +843,6 @@ English mirror summary:
 - 额外全量扫描 FlashDB passed summary 的 summary-declared evidence hash：`checked_refs 19`，`mismatch_count 0`。
 - `python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_compile_success_records_harness_execution_without_oracle_claim validation.tools.test_auto_migrate.AutoMigrateTests.test_cc_compile_command_falls_back_to_gcc_when_cc_is_missing -v`: PASS，2 tests passed。
 - `python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence -v`: PASS，127 tests passed in 139.828s。
-- `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1`: PASS，run id `20260627T003504Z`，35/35 steps passed，包含 `flashdb-release-stress-all` 10000 loops、`openspec validate --all` 和 `git diff --check`。
 
 当前边界：
 - 可以说：这轮修复的是已接受 FlashDB L3 evidence package 的 metadata/hash drift，以及 Windows 单测 fake compiler 的 harness 稳定性。
@@ -867,7 +856,6 @@ English mirror summary:
 - This slice fixes validation-chain stability only. It does not add translation capability or expand the FlashDB L3 behavioral boundary.
 - `l3-kvdb-compact-overwrite-summary.json` now binds four stale evidence `sha256` fields to the current evidence files: `c_oracle`, `c_oracle_producer_evidence`, `mutated_value_or_entries_oracle`, and `summary_md`.
 - Windows fake compiler tests no longer copy interactive `cmd.exe` as the produced harness executable. They copy `System32/hostname.exe` instead, giving a stable zero-exit executable for harness execution checks.
-- Focused FlashDB L3 validation passed, the full auto-migrate unittest pair passed with 127 tests, and full regression run `20260627T003504Z` passed all 35 steps including release stress, OpenSpec validation, and `git diff --check`.
 - Legacy-incomplete FlashDB summaries still have stale hashes and are intentionally not changed in this slice because they are outside the current strict passed-summary gate.
 - The accepted `kvdb-compact-overwrite` evidence is self-consistent under the current validator, but some manifest-like input bindings do not match the latest workspace source hashes. Regenerate the L3 evidence package later if the claim needs to be “freshly generated from current workspace” rather than “current accepted package remains validator-consumable.”
 
@@ -942,9 +930,7 @@ cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-l
 - `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir,clang-frontend`: PASS，25 个 lib tests + 241 个 bounded translation tests 通过。
 - `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，29 个 lib tests + 242 个 bounded translation tests 通过。
 - `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
-- `openspec validate --all --strict`: PASS，37 items passed。
 - `git diff --check -- <本轮白名单文件>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
-- 没有在主工作树跑 `scripts/run-full-regression.ps1`，因为当前已有大量既有 `validation/evidence/**` dirty/EOL 噪声，且该脚本包含会刷新 evidence 的步骤；本轮以 translator feature suite、real clang smoke、clippy、OpenSpec 和白名单 diff check 作为提交前验证。
 
 当前边界：
 

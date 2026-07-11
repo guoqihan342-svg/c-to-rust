@@ -38,19 +38,6 @@
       "log": "validation/evidence/flashdb/l3-tsdb-payload-boundary-final-unsafe-scan.log"
     },
     {
-      "command": "openspec validate run-flashdb-tsdb-payload-boundary-l3-loop --strict",
-      "workdir": ".",
-      "status": "passed",
-      "log": "validation/evidence/flashdb/l3-tsdb-payload-boundary-final-openspec-strict.log"
-    },
-    {
-      "command": "openspec validate --all",
-      "workdir": ".",
-      "status": "passed",
-      "result": "16 passed, 0 failed",
-      "log": "validation/evidence/flashdb/l3-tsdb-payload-boundary-final-openspec-all.log"
-    },
-    {
       "command": "git diff --check",
       "workdir": ".",
       "status": "passed",

@@ -1,72 +1,69 @@
-﻿{
-    "schema_version":  1,
-    "level":  "L3",
-    "target_id":  "flashdb",
-    "slice_id":  "tsdb-append-query-status",
-    "impact_set_id":  "impact-tsdb-append-query-status-001",
-    "status":  "approved_for_minimal_changes",
-    "context_pack_ref":  "validation/evidence/flashdb/l3-tsdb-append-query-status-context-pack.json",
-    "rollback_id":  "b41e17561b3575c4060c819f560cb1b30734b2b6",
-    "allowed_write_sets":  {
-                               "fixtures":  [
-                                                "flashDB_rust/fixtures/l3-tsdb-append-query-status.json"
-                                            ],
-                               "rust_tests":  [
-                                                  "flashDB_rust/tests/differential_replay.rs",
-                                                  "flashDB_rust/tests/tsdb_basic_paths.rs",
-                                                  "flashDB_rust/tests/persistence.rs",
-                                                  "flashDB_rust/tests/unsafe_scan.rs"
-                                              ],
-                               "rust_sources":  [
-                                                    "flashDB_rust/src/tsdb.rs",
-                                                    "flashDB_rust/src/replay.rs",
-                                                    "flashDB_rust/src/cli.rs",
-                                                    "flashDB_rust/src/types.rs",
-                                                    "flashDB_rust/src/format.rs"
-                                                ],
-                               "oracle":  [
-                                              "flashDB_rust/oracle/flashdb_c_oracle.c",
-                                              "flashDB_rust/oracle/generate_c_oracle.sh",
-                                              "flashDB_rust/oracle/README.md",
-                                              "flashDB_rust/oracle/fdb_cfg.h"
-                                          ],
-                               "evidence":  [
-                                                "validation/evidence/flashdb/"
-                                            ],
-                               "openspec":  [
-                                                "openspec/changes/run-flashdb-tsdb-l3-agent-migration-loop/tasks.md"
-                                            ]
-                           },
-    "public_api_change_policy":  {
-                                     "default":  "forbidden",
-                                     "allowed_without_design_update":  [
-                                                                           "new test-only helper inside tests",
-                                                                           "additive report field that preserves old fields"
-                                                                       ],
-                                     "requires_updated_impact_set":  [
-                                                                         "changing TsDb public method signatures",
-                                                                         "changing TsStatus mapping",
-                                                                         "changing replay fixture operation semantics",
-                                                                         "changing diff accepted-difference allowlist",
-                                                                         "changing C oracle contract",
-                                                                         "changing persistent flash image layout"
-                                                                     ]
-                                 },
-    "forbidden_automatic_changes":  [
-                                        "add first-party non-test unsafe",
-                                        "weaken tests or assertions",
-                                        "change fixture outcomes to hide mismatches",
-                                        "add behavior fields to accepted differences",
-                                        "replace deterministic sync semantics with async or multithreading",
-                                        "modify unrelated KVDB behavior",
-                                        "rewrite broad modules outside the selected slice"
-                                    ],
-    "required_verification_after_patch":  [
-                                              "cargo check --message-format=json",
-                                              "targeted TSDB tests",
-                                              "cargo test",
-                                              "fixture replay",
-                                              "schema-aware diff",
-                                              "unsafe scan"
-                                          ]
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-append-query-status",
+  "impact_set_id": "impact-tsdb-append-query-status-001",
+  "status": "approved_for_minimal_changes",
+  "context_pack_ref": "validation/evidence/flashdb/l3-tsdb-append-query-status-context-pack.json",
+  "rollback_id": "b41e17561b3575c4060c819f560cb1b30734b2b6",
+  "allowed_write_sets": {
+    "fixtures": [
+      "flashDB_rust/fixtures/l3-tsdb-append-query-status.json"
+    ],
+    "rust_tests": [
+      "flashDB_rust/tests/differential_replay.rs",
+      "flashDB_rust/tests/tsdb_basic_paths.rs",
+      "flashDB_rust/tests/persistence.rs",
+      "flashDB_rust/tests/unsafe_scan.rs"
+    ],
+    "rust_sources": [
+      "flashDB_rust/src/tsdb.rs",
+      "flashDB_rust/src/replay.rs",
+      "flashDB_rust/src/cli.rs",
+      "flashDB_rust/src/types.rs",
+      "flashDB_rust/src/format.rs"
+    ],
+    "oracle": [
+      "flashDB_rust/oracle/flashdb_c_oracle.c",
+      "flashDB_rust/oracle/generate_c_oracle.sh",
+      "flashDB_rust/oracle/README.md",
+      "flashDB_rust/oracle/fdb_cfg.h"
+    ],
+    "evidence": [
+      "validation/evidence/flashdb/"
+    ]
+  },
+  "public_api_change_policy": {
+    "default": "forbidden",
+    "allowed_without_design_update": [
+      "new test-only helper inside tests",
+      "additive report field that preserves old fields"
+    ],
+    "requires_updated_impact_set": [
+      "changing TsDb public method signatures",
+      "changing TsStatus mapping",
+      "changing replay fixture operation semantics",
+      "changing diff accepted-difference allowlist",
+      "changing C oracle contract",
+      "changing persistent flash image layout"
+    ]
+  },
+  "forbidden_automatic_changes": [
+    "add first-party non-test unsafe",
+    "weaken tests or assertions",
+    "change fixture outcomes to hide mismatches",
+    "add behavior fields to accepted differences",
+    "replace deterministic sync semantics with async or multithreading",
+    "modify unrelated KVDB behavior",
+    "rewrite broad modules outside the selected slice"
+  ],
+  "required_verification_after_patch": [
+    "cargo check --message-format=json",
+    "targeted TSDB tests",
+    "cargo test",
+    "fixture replay",
+    "schema-aware diff",
+    "unsafe scan"
+  ]
 }

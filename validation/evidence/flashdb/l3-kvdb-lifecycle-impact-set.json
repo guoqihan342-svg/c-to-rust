@@ -30,9 +30,6 @@
     ],
     "evidence": [
       "validation/evidence/flashdb/"
-    ],
-    "openspec": [
-      "openspec/changes/run-flashdb-l3-agent-migration-loop/tasks.md"
     ]
   },
   "public_api_change_policy": {

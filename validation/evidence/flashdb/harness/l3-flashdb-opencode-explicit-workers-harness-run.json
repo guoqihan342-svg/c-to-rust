@@ -24,7 +24,7 @@
       },
       "batch_profile_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/batch-profile-report.json",
-        "sha256": "a158e95f7c72c636da57c5a26838f017edfab884d4fbb283502f66ac111afa7b"
+        "sha256": "e3c04f96702d1ec99a2981e5790c67ef6b5fa6973980ea58405f06e99a98d8d6"
       },
       "competition_summary": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json",
@@ -36,11 +36,11 @@
       },
       "evaluate_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/evaluate-report.json",
-        "sha256": "5b2a1333117998a59e02231d47258eab50e50eecc899bb3cbb8ed69032a09104"
+        "sha256": "3ad5c4346315276e856eae43f9de98be71a0a7cdccb16d38cd32234a3b8a3624"
       },
       "judge_evidence_index": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/judge-evidence-index.json",
-        "sha256": "0a2b0d5dea0493ed99cccef4b6d7e9d1dfe817caf45997fc9f3840c70fcb0902"
+        "sha256": "3021747831b92dc5d33303e22931dc74e5b77a78282dddad5392cceb1216e88f"
       },
       "merge_plan": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/merge-plan.json",
@@ -74,11 +74,11 @@
     "opencode_runtime_artifacts": {
       "opencode_preflight_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/opencode-preflight-report.json",
-        "sha256": "35f1a11246067be2019b3f3af17eafbcd32d9f708df7da28f44b61cc535aa58d"
+        "sha256": "83b46caeb265eca58da3988d05755b8562fde3a5b0213f379cfce3cdc2faa1a7"
       },
       "opencode_preflight_session_evidence": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/logs/opencode-preflight-session-evidence.json",
-        "sha256": "ca277f7dfa8dfb1b02252de28b1e741a6a98958433620b96ea8f67b16a239354"
+        "sha256": "7f23149ac10bd94a8ba7cd1d5e32c7351f4a12ec85f59b4c0606d0b9392a55b7"
       }
     },
     "status": "recorded_not_tracked"

@@ -31,8 +31,6 @@
     "cargo fmt -- --check",
     "cargo test --test differential_replay non_monotonic_timestamp -- --nocapture",
     "cargo test",
-    "openspec validate run-flashdb-tsdb-non-monotonic-timestamp-l3-loop --strict",
-    "openspec validate --all",
     "git diff --check"
   ],
   "next_slice_recommendation": "KVDB missing-key delete should be the next focused L3 bugfix candidate because parallel review found likely C/Rust error-code divergence around fdb_kv_del missing keys."

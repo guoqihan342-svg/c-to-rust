@@ -1,82 +1,81 @@
 {
-    "schema_version":  1,
-    "level":  "L3",
-    "target_id":  "flashdb",
-    "slice_id":  "kvdb-compact-overwrite",
-    "status":  "frozen",
-    "included_behavior":  [
-                              "same-key overwrite keeps latest visible value",
-                              "kv.get latest value before compact",
-                              "kv.entries live sorted entries after overwrite",
-                              "kv.compact returns success and metadata image hash only",
-                              "post-compact kv.get and kv.entries remain unchanged",
-                              "kv.reopen after compact preserves latest visible values",
-                              "kv.delete removes overwritten key",
-                              "post-delete kv.get returns null"
-                          ],
-    "excluded_behavior":  [
-                              "native FlashDB GC execution",
-                              "sector state transitions",
-                              "tombstone relocation",
-                              "byte-for-byte flash image equivalence",
-                              "power-loss or crash recovery",
-                              "capacity-pressure compaction",
-                              "wear-leveling",
-                              "TSDB behavior",
-                              "binary/blob value encoding"
-                          ],
-    "rust_public_api_impact_set":  [
-                                       "KvDb::set",
-                                       "KvDb::get",
-                                       "KvDb::entries",
-                                       "KvDb::compact",
-                                       "KvDb::open",
-                                       "KvDb::delete",
-                                       "replay::run_replay",
-                                       "replay::run_diff"
-                                   ],
-    "c_oracle_operations":  [
-                                "kv.set",
-                                "kv.get",
-                                "kv.entries",
-                                "kv.compact",
-                                "kv.reopen",
-                                "kv.delete"
-                            ],
-    "accepted_difference_policy":  {
-                                       "allowed_metadata_fields":  [
-                                                                       "image_hash",
-                                                                       "backend",
-                                                                       "toolchain_status",
-                                                                       "source",
-                                                                       "fixture",
-                                                                       "fixture_hash",
-                                                                       "report_path"
-                                                                   ],
-                                       "forbidden_behavior_fields":  [
-                                                                         "value",
-                                                                         "entries",
-                                                                         "key",
-                                                                         "status",
-                                                                         "code",
-                                                                         "count",
-                                                                         "operation success",
-                                                                         "error semantics",
-                                                                         "steps.len",
-                                                                         "step id",
-                                                                         "op"
-                                                                     ],
-                                       "compact_note":  "image_hash may differ on kv.compact and kv.reopen; value, entries, status, code, op, and step identity may not differ."
-                                   },
-    "pass_fail_gates":  [
-                            "Rust replay completes with fixture_hash 78e5ef24",
-                            "WSL/Linux/CI C oracle report has toolchain_status C_ORACLE_GENERATED",
-                            "schema-aware diff status passed with first_mismatch null",
-                            "negative diff fails on behavior mutation",
-                            "cargo check raw JSON build-finished success=true",
-                            "unsafe scan reports zero first-party non-test unsafe",
-                            "OpenSpec validation passes"
-                        ],
-    "concurrency_boundary":  "Parallel agents may analyze/review/evidence-audit only; code edits are single-writer.",
-    "async_threading_boundary":  "No async runtime, internal multithreading, or concurrency changes are introduced in this slice."
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-compact-overwrite",
+  "status": "frozen",
+  "included_behavior": [
+    "same-key overwrite keeps latest visible value",
+    "kv.get latest value before compact",
+    "kv.entries live sorted entries after overwrite",
+    "kv.compact returns success and metadata image hash only",
+    "post-compact kv.get and kv.entries remain unchanged",
+    "kv.reopen after compact preserves latest visible values",
+    "kv.delete removes overwritten key",
+    "post-delete kv.get returns null"
+  ],
+  "excluded_behavior": [
+    "native FlashDB GC execution",
+    "sector state transitions",
+    "tombstone relocation",
+    "byte-for-byte flash image equivalence",
+    "power-loss or crash recovery",
+    "capacity-pressure compaction",
+    "wear-leveling",
+    "TSDB behavior",
+    "binary/blob value encoding"
+  ],
+  "rust_public_api_impact_set": [
+    "KvDb::set",
+    "KvDb::get",
+    "KvDb::entries",
+    "KvDb::compact",
+    "KvDb::open",
+    "KvDb::delete",
+    "replay::run_replay",
+    "replay::run_diff"
+  ],
+  "c_oracle_operations": [
+    "kv.set",
+    "kv.get",
+    "kv.entries",
+    "kv.compact",
+    "kv.reopen",
+    "kv.delete"
+  ],
+  "accepted_difference_policy": {
+    "allowed_metadata_fields": [
+      "image_hash",
+      "backend",
+      "toolchain_status",
+      "source",
+      "fixture",
+      "fixture_hash",
+      "report_path"
+    ],
+    "forbidden_behavior_fields": [
+      "value",
+      "entries",
+      "key",
+      "status",
+      "code",
+      "count",
+      "operation success",
+      "error semantics",
+      "steps.len",
+      "step id",
+      "op"
+    ],
+    "compact_note": "image_hash may differ on kv.compact and kv.reopen; value, entries, status, code, op, and step identity may not differ."
+  },
+  "pass_fail_gates": [
+    "Rust replay completes with fixture_hash 78e5ef24",
+    "WSL/Linux/CI C oracle report has toolchain_status C_ORACLE_GENERATED",
+    "schema-aware diff status passed with first_mismatch null",
+    "negative diff fails on behavior mutation",
+    "cargo check raw JSON build-finished success=true",
+    "unsafe scan reports zero first-party non-test unsafe"
+  ],
+  "concurrency_boundary": "Parallel agents may analyze/review/evidence-audit only; code edits are single-writer.",
+  "async_threading_boundary": "No async runtime, internal multithreading, or concurrency changes are introduced in this slice."
 }

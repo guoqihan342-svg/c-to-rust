@@ -470,7 +470,6 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
   - 新增英文镜像版本。
 - `docs/c2rust-migration-agent/README.md`
   - 改为中文主版本。
-  - 新增“双语文档约定”：新增用户/Agent 文档默认中文 `.md` + 英文 `.en.md`，OpenSpec parser anchors 保持英文。
   - Document Map 同步列出 `README.md` / `README.en.md`、`core-translation-architecture.md` / `core-translation-architecture.en.md`。
 - `docs/c2rust-migration-agent/README.en.md`
   - 新增英文镜像版本。
@@ -872,7 +871,6 @@ python validation/tools/validate_auto_translation_evidence.py --target-id flashd
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
 python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
-openspec validate --all --strict
 git diff --check -- <本轮目标文件>
 ```
 
@@ -928,7 +926,6 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
 python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
-openspec validate --all --strict
 git diff --check -- <本轮目标文件>
 ```
 

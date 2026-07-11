@@ -67,7 +67,7 @@
       "accepted_evidence_refs": {
         "c_oracle": {
           "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-advance-continue-c-oracle.json",
-          "sha256": "248682f5706e632cc096b9a5bb545271e434101cc666a6a07ef4c0d8fd199442",
+          "sha256": "43a5123c70f71ce29905d7e9f801a622f56804cb12a6f48602c9f9930ee141ad",
           "status": "passed"
         },
         "negative_diff": {
@@ -162,7 +162,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-auto-cache-metadata.json",
-      "sha256": "8ad7576d6bfd2e093f3edee8ba83911808e74d2c6fc3f065595f7bf56cce5e02",
+      "sha256": "84f835cfb68140dbaa5be45df65cf4c7a0de20d7715c8c8d92ab91eba364a8e7",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -173,7 +173,7 @@
     "config_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-config-profile.json",
       "profile_id": "flashdb-real-fdb-kv-iterate-sector-advance-continue-carrier",
-      "sha256": "c7759796eaf7e1a4db95bb165f5b5f0febbad54d025c04453d3ab6a53116efd5",
+      "sha256": "c4caa4349fceb6481a8304e8baa79f43d5bcfc5f0e96de705724cb715dfc64b3",
       "status": "recorded"
     },
     "context_pack": {
@@ -183,7 +183,7 @@
     },
     "final_verification": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-final-verification.json",
-      "sha256": "dc189f97483d3ae4681dbb0c1ee91ec2d66bc8b7672e25727ad7574890963ca2",
+      "sha256": "f5b37136f73fdfe2dd8b234cad5d8e1942f398ca79668c690a62e5905b15a1ba",
       "status": "passed"
     },
     "negative_diff": {
@@ -232,7 +232,7 @@
     },
     "summary": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-summary.json",
-      "sha256": "aae503b0062e88198a0670c9f3c2fd40a8e8c5e180ec94944024e31544adff15",
+      "sha256": "86bece71df4b1e2e0399cb6dba3d6d63b1e93a26ba001b6c6ea21bcd336e1348",
       "status": "passed"
     },
     "test_translation": {
@@ -263,7 +263,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-version-manifest.json",
-      "sha256": "5df956debada30cfd3cc25ca7a5b9361fdcd8b71b8271cad4e81e0572e45f9c2",
+      "sha256": "51d09a369fa0644f4bca3fd40a0d38119a37efbbed037098998d374a6dba2220",
       "status": "recorded"
     }
   },

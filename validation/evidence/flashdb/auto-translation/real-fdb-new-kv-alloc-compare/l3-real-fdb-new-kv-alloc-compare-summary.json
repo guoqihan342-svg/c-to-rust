@@ -57,7 +57,7 @@
     "accepted_evidence_refs": {
       "c_oracle": {
         "path": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-c-oracle.json",
-        "sha256": "5b43dd6f0233d39f34e36e17d769f778786cb6c368b98bcff7e9a7cfacbe3bb1",
+        "sha256": "ea18bbf16ea77e9d332cad154c9a600eaad0d9f1de9b9a74e8087f299ad1342c",
         "status": "passed"
       },
       "negative_diff": {

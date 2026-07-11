@@ -17,12 +17,12 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-      "sha256": "d4b560bc079507d3751a91de8c9ac3688c0a92f0f9ce67d2252172e1eeea372e",
+      "sha256": "3cec3d0c1b8eea85969ba9a3593937d78eb8b911b61940cf3522bc0dcfa85e15",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-cfg.json",
-      "sha256": "02056812fb99ff10399a01b4e928496de1411dc110f6953d46f8b4d318ea20a1",
+      "sha256": "048be6f7a12ee06927182bfffdc7cf847a8c0baf4702e1d893556d4b036211fb",
       "status": "recorded"
     },
     "pointer_graph": {
@@ -37,7 +37,7 @@
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-type-map.json",
-      "sha256": "592ca298ec4088988420570a08b3a8eb72435e6fbf2976070bd2f1dcbfc3dc94",
+      "sha256": "a494508d343624c3bbb703f318e29057aff5b0e0d47e97404019a96ad67909a6",
       "status": "recorded"
     }
   },

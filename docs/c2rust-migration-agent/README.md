@@ -2,11 +2,11 @@
 
 # C2Rust Migration Agent
 
-`docs/c2rust-migration-agent/` 是 C2Rust migration agent 的专题文档文件夹，收纳 `design-c2rust-migration-agent` 的可执行设计文档集合，供 OpenCode、Codex 或其他智能体按 OpenSpec 分阶段执行 C 到 Rust 迁移。英文镜像见 `README.en.md`。
+`docs/c2rust-migration-agent/` 是 C2Rust migration agent 的专题文档文件夹，收纳 `design-c2rust-migration-agent` 的可执行设计文档集合，供 OpenCode、Codex 或其他智能体按 Superpowers 分阶段执行 C 到 Rust 迁移。英文镜像见 `README.en.md`。
 
 ## 当前状态
 
-- OpenSpec change：`design-c2rust-migration-agent`
+- Superpowers 设计与计划：`docs/superpowers/specs/`、`docs/superpowers/plans/`
 - 第一目标：FlashDB
 - 源码克隆：`sources/FlashDB`
 - 源码 commit：`f9d0421315c564fb890a1b14eee77b290e0d7bbe`
@@ -45,7 +45,7 @@
 
 - 面向用户或 Agent 的新增文档，默认使用中文主文档 `.md` 和英文镜像 `.en.md`。
 - 修改已有文档时，如果改动超过小修小补，应同步维护对应英文镜像。
-- OpenSpec parser anchors 必须保留英文，例如 `## ADDED Requirements`、`### Requirement:`、`#### Scenario:`、`WHEN`、`THEN`。
+- Superpowers 文档使用普通 Markdown；设计放入 `docs/superpowers/specs/`，可执行计划放入 `docs/superpowers/plans/`。
 - 本目录仍有早期文档采用“中文说明 + English summary”混合格式；后续触及时按上述约定拆成完整双语版本。
 - 全局待办唯一来源是 `future-vision-and-mvp.md`；`future-vision-and-mvp.en.md` 只是同步镜像，不另立待办来源。
 
@@ -62,21 +62,19 @@
 ## 快速使用
 
 ```bash
-openspec status --change "design-c2rust-migration-agent" --json
-openspec instructions apply --change "design-c2rust-migration-agent" --json
 ```
 
 然后运行 Agent phase，例如：
 
 ```bash
-c2rust-migrator --phase index --change design-c2rust-migration-agent --input request.json
+c2rust-migrator --phase index --input request.json
 ```
 
 当前评委展示路径见 `judge-demo.md`，首选从 `config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json` 生成真实 FlashDB before/after exhibit、judge report、context pack、agent index 和 milestone release report。该 profile 已接入 `real-fdb-calc-crc32` 的真实 `baseline_repair_gate`：第 1 轮记录 `unsafe_baseline_requires_repair`，第 2 轮携带 repair hint 复验 accepted safe evidence；repo-local demo profile 仅作为保底路径。
 
 ## 运行原则
 
-- 实现前先走 OpenSpec。
+- 实现前先走 Superpowers。
 - context local-first，并限制 token。
 - 只在只读任务或不相交写入任务上并行多个 subagent。
 - 先用确定性规则，再使用 AI。

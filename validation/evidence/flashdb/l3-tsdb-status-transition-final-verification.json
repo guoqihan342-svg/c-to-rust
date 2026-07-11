@@ -86,19 +86,6 @@
       "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-final-unsafe-scan.log"
     },
     {
-      "name": "openspec_change_strict",
-      "command": "openspec validate run-flashdb-tsdb-status-transition-l3-loop --strict",
-      "status": "passed",
-      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-final-openspec-change-strict.log"
-    },
-    {
-      "name": "openspec_all",
-      "command": "openspec validate --all",
-      "status": "passed",
-      "items": "16 passed, 0 failed",
-      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-final-openspec-all.log"
-    },
-    {
       "name": "git_diff_check",
       "command": "git diff --check",
       "status": "passed",

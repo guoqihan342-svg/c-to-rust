@@ -150,7 +150,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-auto-cache-metadata.json",
-      "sha256": "662c3b51a8bb9484ece3da0889c07727fe4213a8532d65e4269ec49e5bcd300a",
+      "sha256": "bed2251538681e0aa1da3b76c1765a329cb61176fc182eee8544ac59ed791137",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -161,7 +161,7 @@
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-config-profile.json",
       "profile_id": "demo-while-countdown-positive-wsl-gcc",
-      "sha256": "6a4bd5dff932f41d3c64bcc119eff3a8f8c2fa382e677566597f39f89f136f8a",
+      "sha256": "285d0dc66c91aeaf65aa44fd9894b79c4c8fc6e6e5f97b633854bd327901dd89",
       "status": "recorded"
     },
     "context_pack": {
@@ -252,7 +252,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-version-manifest.json",
-      "sha256": "612cf3e83d682d304ca9f6e5e7b00b244849368bd115190aafcf60611fe168fb",
+      "sha256": "55ca6881c337cf458523ca87f9f66babfe2a324378f0b0e94cb8358354f8424b",
       "status": "recorded"
     }
   },

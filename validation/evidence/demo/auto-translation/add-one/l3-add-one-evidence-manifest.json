@@ -148,7 +148,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-auto-cache-metadata.json",
-      "sha256": "5ed27590c2c30da98c71f2ce788d840428b60337a7332a5a15890f8a56b55379",
+      "sha256": "508f8129ecc08a6df89f3757fc6f8064512ec0123e4cbecaf1f34032d92f7f45",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -159,7 +159,7 @@
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-config-profile.json",
       "profile_id": "demo-add-one-wsl-gcc",
-      "sha256": "8734eb2856133200c6e4b56a655c360c6cc0ce7b53043ee29aed507e39b61960",
+      "sha256": "df6fc42830fc2493fac99b01205e9a8715533179e2eefec80e84338731646433",
       "status": "recorded"
     },
     "context_pack": {
@@ -250,7 +250,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-version-manifest.json",
-      "sha256": "e07fd0cd2c1e241d789deb2cebadeaacb6078c712b3af6147024f8f1bb3d2f43",
+      "sha256": "3ba38ab8de78570ea4bd1b6a813d12b6695b442ffff6fa5b20677579155327e6",
       "status": "recorded"
     }
   },

@@ -1,33 +1,32 @@
 {
-    "schema_version":  1,
-    "change":  "add-versioned-migration-governance",
-    "generated_at":  "2026-06-24T18:29:04.8694998+08:00",
-    "agents":  [
-                   {
-                       "id":  "019ef928-5383-7f60-bd0a-8a050c949c38",
-                       "role":  "OpenSpec and agent version-governance gap review",
-                       "result":  "Baseline exists but lacks executable per-slice version manifest, schema bump rules, fixture/evidence compatibility, and upstream bump invalidation policy.",
-                       "important_gaps":  [
-                                              "OpenSpec/spec revision not in L3 evidence",
-                                              "agent/cache/AI policy versions missing",
-                                              "fixture schema versions missing",
-                                              "evidence schema registry missing",
-                                              "per-slice concrete tool versions incomplete",
-                                              "upstream FlashDB bump workflow missing"
-                                          ]
-                   },
-                   {
-                       "id":  "019ef928-7aef-79b2-b04b-797f19eed0c1",
-                       "role":  "Rust crate, toolchain, oracle, fixture, and evidence version source review",
-                       "result":  "Crate version and toolchain are known; FlashDB is pinned by commit; schema fields and cache metadata are inconsistent across historical artifacts.",
-                       "important_gaps":  [
-                                              "fixtures mostly lack schema_version",
-                                              "some evidence lacks schema_version",
-                                              "cache metadata shapes differ",
-                                              "replay reports lack crate/rustc/cargo versions",
-                                              "short hashes are not enough for cache invalidation"
-                                          ]
-                   }
-               ],
-    "scoped_decision":  "This change adds an executable version-manifest command and future L3 requirements; it does not bulk-migrate historical fixture/evidence schemas."
+  "schema_version": 1,
+  "change": "add-versioned-migration-governance",
+  "generated_at": "2026-06-24T18:29:04.8694998+08:00",
+  "agents": [
+    {
+      "id": "019ef928-5383-7f60-bd0a-8a050c949c38",
+      "role": "retired governance and agent version-governance gap review",
+      "result": "Baseline exists but lacks executable per-slice version manifest, schema bump rules, fixture/evidence compatibility, and upstream bump invalidation policy.",
+      "important_gaps": [
+        "agent/cache/AI policy versions missing",
+        "fixture schema versions missing",
+        "evidence schema registry missing",
+        "per-slice concrete tool versions incomplete",
+        "upstream FlashDB bump workflow missing"
+      ]
+    },
+    {
+      "id": "019ef928-7aef-79b2-b04b-797f19eed0c1",
+      "role": "Rust crate, toolchain, oracle, fixture, and evidence version source review",
+      "result": "Crate version and toolchain are known; FlashDB is pinned by commit; schema fields and cache metadata are inconsistent across historical artifacts.",
+      "important_gaps": [
+        "fixtures mostly lack schema_version",
+        "some evidence lacks schema_version",
+        "cache metadata shapes differ",
+        "replay reports lack crate/rustc/cargo versions",
+        "short hashes are not enough for cache invalidation"
+      ]
+    }
+  ],
+  "scoped_decision": "This change adds an executable version-manifest command and future L3 requirements; it does not bulk-migrate historical fixture/evidence schemas."
 }

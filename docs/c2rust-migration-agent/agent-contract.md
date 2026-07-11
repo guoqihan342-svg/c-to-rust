@@ -11,20 +11,18 @@ English summary: this is the runtime contract for OpenCode, Codex, or other agen
 OpenCode entry:
 
 ```bash
-c2rust-migrator --phase <phase> --change design-c2rust-migration-agent --input request.json
+c2rust-migrator --phase <phase> --input request.json
 ```
 
 Codex or generic agent entry:
 
 ```bash
-openspec status --change "design-c2rust-migration-agent" --json
-openspec instructions apply --change "design-c2rust-migration-agent" --json
 c2rust-migrator --phase <phase> --input request.json
 ```
 
 Phases:
 
-- `propose`: create or update OpenSpec proposal artifacts.
+- `propose`: create or update Superpowers proposal artifacts.
 - `plan`: produce concrete task slices, owners, gates, and rollback points.
 - `index`: build SQLite/JSONL context from C, Rust, build, test, and error facts.
 - `skeleton`: create a compilable `flashDB_rust` crate before function-body migration.
@@ -32,7 +30,7 @@ Phases:
 - `repair`: run compile/test self-healing through PatchPlan.
 - `verify`: run compile, tests, differential checks, unsafe audit, cache gates, and performance smoke.
 - `audit`: review evidence, unsafe ledger, cache correctness, version records, and traceability.
-- `archive`: archive a completed OpenSpec change only after all gates pass.
+- `archive`: archive completed run artifacts only after all gates pass.
 
 Version manifest gate:
 
@@ -151,8 +149,8 @@ First milestone rule:
 
 - Prefer synchronous, deterministic storage operations.
 - Add async wrappers later only as adapters over proven synchronous semantics.
-- Add multithreaded tests later for API safety, but do not change storage ordering without a separate OpenSpec change.
+- Add multithreaded tests later for API safety, but do not change storage ordering without a separately reviewed Superpowers design and execution plan.
 
 ## Bilingual Documentation Rule
 
-User-facing docs should include Chinese as the primary explanation and English labels where useful. OpenSpec parser anchors must remain in English, including `## ADDED Requirements`, `### Requirement:`, `#### Scenario:`, `WHEN`, and `THEN`.
+User-facing docs should include Chinese as the primary explanation and English labels where useful. Superpowers designs use ordinary Markdown under `docs/superpowers/specs/`; executable plans use checkbox tasks under `docs/superpowers/plans/`.

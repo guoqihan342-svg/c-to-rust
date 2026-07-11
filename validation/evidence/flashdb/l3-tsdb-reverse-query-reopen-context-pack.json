@@ -32,10 +32,6 @@
     "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-*"
   ],
   "context_files_read": [
-    "openspec/changes/run-flashdb-tsdb-reverse-query-reopen-l3-loop/proposal.md",
-    "openspec/changes/run-flashdb-tsdb-reverse-query-reopen-l3-loop/design.md",
-    "openspec/changes/run-flashdb-tsdb-reverse-query-reopen-l3-loop/specs/flashdb-l3-agent-migration-loop/spec.md",
-    "openspec/changes/run-flashdb-tsdb-reverse-query-reopen-l3-loop/tasks.md",
     "flashDB_rust/src/tsdb.rs",
     "flashDB_rust/src/replay.rs",
     "flashDB_rust/oracle/flashdb_c_oracle.c",

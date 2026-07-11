@@ -49,7 +49,7 @@
     {
       "callee": "helper_add_one",
       "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
-      "sha256": "generated-at-validation"
+      "sha256": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
     }
   ],
   "direct_c_files": [
@@ -119,7 +119,7 @@
       "source_files": [
         {
           "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
-          "sha256": "generated-at-validation"
+          "sha256": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
         }
       ],
       "source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
@@ -145,7 +145,7 @@
   "slice_id": "external-direct-callee",
   "slice_spec": {
     "path": "validation/slice-specs/demo-external-direct-callee.json",
-    "sha256": "d1cfb0ab00ec4dc555c59ab9710c587acd005d0e42755bf0d1f9a86846e16974"
+    "sha256": "0968143ea11d4e302e2ad53d93b4f981a8e6c38238abc3cf19dde9fe0690b0e1"
   },
   "source_commit": "demo-external-direct-callee-20260625",
   "status": "recorded",

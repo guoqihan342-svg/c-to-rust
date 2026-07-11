@@ -1,22 +1,22 @@
 {
-    "schema_version":  1,
-    "change":  "run-flashdb-tsdb-over-limit-payload-error-l3-loop",
-    "roles":  [
-                  {
-                      "agent":  "019ef8ee-023f-7340-8cd4-e82028c066b3",
-                      "nickname":  "Aristotle",
-                      "scope":  "read-only C oracle over-limit append error feasibility"
-                  },
-                  {
-                      "agent":  "019ef8ee-3296-7473-b549-efe4262372d0",
-                      "nickname":  "Volta",
-                      "scope":  "read-only Rust replay and differential test feasibility"
-                  },
-                  {
-                      "agent":  "019ef8ee-5f56-7103-ab97-e370e724b028",
-                      "nickname":  "Schrodinger",
-                      "scope":  "read-only OpenSpec and evidence audit"
-                  }
-              ],
-    "coordination":  "main thread owns edits, evidence, commits, archive, and push; subagents are read-only to avoid write conflicts"
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-over-limit-payload-error-l3-loop",
+  "roles": [
+    {
+      "agent": "019ef8ee-023f-7340-8cd4-e82028c066b3",
+      "nickname": "Aristotle",
+      "scope": "read-only C oracle over-limit append error feasibility"
+    },
+    {
+      "agent": "019ef8ee-3296-7473-b549-efe4262372d0",
+      "nickname": "Volta",
+      "scope": "read-only Rust replay and differential test feasibility"
+    },
+    {
+      "agent": "019ef8ee-5f56-7103-ab97-e370e724b028",
+      "nickname": "Schrodinger",
+      "scope": "read-only retired governance and evidence audit"
+    }
+  ],
+  "coordination": "main thread owns edits, evidence, commits, archive, and push; subagents are read-only to avoid write conflicts"
 }

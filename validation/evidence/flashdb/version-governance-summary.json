@@ -13,10 +13,9 @@
   "version_manifest": {
     "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
     "flashdb_source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-    "openspec_version": "1.4.1",
     "package_version": "0.1.0",
     "path": "validation/evidence/flashdb/version-governance-manifest.json",
     "rustc_version": "rustc 1.95.0 (59807616e 2026-04-14)",
-    "sha256": "16f1e9a40d6071c59c886a0d0432f145e4d63cc93d7e0ddf5b2dbba6acb66fba"
+    "sha256": "dd039ae52e5f00ec729701fe0c596f2798eab234ee185e97222b3e785fdfc0c9"
   }
 }

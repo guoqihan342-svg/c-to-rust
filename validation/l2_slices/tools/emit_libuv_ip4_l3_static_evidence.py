@@ -181,7 +181,6 @@ def main() -> int:
             "toolchain": {
                 "rustc_version": run(["rustc", "--version"]),
                 "cargo_version": run(["cargo", "--version"]),
-                "openspec_version": openspec_version(),
                 "git_version": run(["git", "--version"]),
                 "c_oracle_host": "WSL/Linux",
             },
@@ -198,7 +197,6 @@ def main() -> int:
                 "rust_profile.cargo_lock_sha256",
                 "toolchain.rustc_version",
                 "toolchain.cargo_version",
-                "toolchain.openspec_version",
             ],
             "non_goals": ["Does not prove all libuv platform branches.", "Does not replace C oracle or diff evidence."],
         },
@@ -451,8 +449,6 @@ def write_final_verification(evidence: Path, common: dict) -> None:
                 {"command": "cargo run --bin emit_reports", "status": "passed"},
                 {"command": "cargo fmt -- --check", "status": "passed"},
                 {"command": "cargo test", "status": "passed"},
-                {"command": "openspec validate run-libuv-ip4-addr-pointer-l3 --strict", "status": "passed"},
-                {"command": "openspec validate --all", "status": "passed"},
                 {"command": "git diff --check", "status": "passed"},
             ],
         },
@@ -482,13 +478,6 @@ def rel(path: Path) -> str:
 
 def run(args: list[str]) -> str:
     return subprocess.check_output(args, text=True).strip()
-
-
-def openspec_version() -> str:
-    try:
-        return run(["openspec", "--version"])
-    except Exception:
-        return "unknown"
 
 
 if __name__ == "__main__":

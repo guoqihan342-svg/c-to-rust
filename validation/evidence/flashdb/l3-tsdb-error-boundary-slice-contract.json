@@ -77,8 +77,7 @@
     "schema-aware diff status passed with first_mismatch null",
     "negative diff fails on code or status mutation",
     "cargo check raw JSON build-finished success=true",
-    "unsafe scan reports zero first-party non-test unsafe",
-    "OpenSpec validation passes"
+    "unsafe scan reports zero first-party non-test unsafe"
   ],
   "concurrency_boundary": "Parallel agents may analyze/review/evidence-audit only; code edits are single-writer.",
   "async_threading_boundary": "No async runtime, internal multithreading, or concurrency changes are introduced in this slice."

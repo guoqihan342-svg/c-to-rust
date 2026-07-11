@@ -59,7 +59,7 @@
     "accepted_evidence_refs": {
       "c_oracle": {
         "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-kv-reset-c-oracle.json",
-        "sha256": "24dcedbd79f02a6929e2d94829699cc955979578186aa3b432e8a59fcef0b7cf",
+        "sha256": "876fb4186a30b3e14893b76a254f63011e5c351092ec264ac36e6d56bf860a0b",
         "status": "passed"
       },
       "negative_diff": {

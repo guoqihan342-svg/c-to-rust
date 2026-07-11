@@ -167,7 +167,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-auto-cache-metadata.json",
-      "sha256": "bb73b1e068fd374d46a004b6dfd852a31b8ca3de049600eaaac4c5e0816ec457",
+      "sha256": "3d15af3e3aee88a5d3955bb135c2cccaa678772e82371f5da13acd4e4944c736",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -178,7 +178,7 @@
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-config-profile.json",
       "profile_id": "demo-sum-i32-buffer-wsl-gcc",
-      "sha256": "5d9a1ccc37623fa6e54149a962dde4f521d16cdd12efa205ebf2bf25dd172e77",
+      "sha256": "de509428afd692831bc549b7b124ea33d8310aba46f56df46c4bea171911779e",
       "status": "recorded"
     },
     "context_pack": {
@@ -268,7 +268,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-version-manifest.json",
-      "sha256": "74184f71bc3ba03e52b0bba9cf29c46e2d7f176ea9bc9985eff0957950abe643",
+      "sha256": "ba0bf88c9f0a7ba9de32b748b7ea5b471fd28f51cbdc7466f1a7f827d2107c36",
       "status": "recorded"
     }
   },

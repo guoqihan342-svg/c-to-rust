@@ -1,7 +1,7 @@
 {
   "accepted_unsafe_ledger": {
     "path": "validation/evidence/l2-slices/unsafe-ledger.json",
-    "sha256": "e6dbe6df40abd9750aee481c321e6c96cc81c56fb88374bf1a6d626c9ba84593",
+    "sha256": "8ff91c6e3f5382a78fe3522e84b0a0c3c5560d3f8fa1818788342916bdf41201",
     "status": "passed"
   },
   "c2rust_baseline": {
@@ -25,7 +25,7 @@
   "validation_profile": {
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "af53732a6958e07af29d0c803ade409435eaae8f489d6cecbac6d128ccf8cf77",
+    "sha256": "e177e28b47665c614de27044e463228a83e988c750e9d9de1814792f207ec031",
     "status": "passed"
   }
 }

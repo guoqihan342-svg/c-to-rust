@@ -1,7 +1,7 @@
 {
   "build_profile_ref": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-translator-input.json",
-    "sha256": "f2f9814f76901726de56c6f855ceaeb1357b6946fd8a64384a9415316f2c42b4",
+    "sha256": "61ab13a760c240126f76726feac0e56abdde54d9db4066102d1d6898de1798f4",
     "status": "recorded"
   },
   "cache_invalidation_keys": [
@@ -50,7 +50,7 @@
   "slice_id": "external-direct-callee",
   "slice_spec_ref": {
     "path": "validation/slice-specs/demo-external-direct-callee.json",
-    "sha256": "d1cfb0ab00ec4dc555c59ab9710c587acd005d0e42755bf0d1f9a86846e16974",
+    "sha256": "0968143ea11d4e302e2ad53d93b4f981a8e6c38238abc3cf19dde9fe0690b0e1",
     "status": "ready"
   },
   "source_commit": "demo-external-direct-callee-20260625",

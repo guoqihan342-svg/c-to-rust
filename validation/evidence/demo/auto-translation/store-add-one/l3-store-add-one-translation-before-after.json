@@ -58,6 +58,6 @@
   },
   "unsafe_scan_evidence": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-before-after-unsafe-scan.json",
-    "sha256": "7dd34594ddca5c619370dcf61b64df181bbb92db14edbc45df320fad8cc81f77"
+    "sha256": "73b06aa0aac1aec22d52aea2c810e8d5186a9925393fd904c1eb5f051b2116e1"
   }
 }

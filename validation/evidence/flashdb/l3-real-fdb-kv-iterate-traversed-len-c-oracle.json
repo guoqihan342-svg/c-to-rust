@@ -1,146 +1,55 @@
 {
-  "schema_version": 1,
-  "level": "L3",
-  "target_id": "flashdb",
-  "slice_id": "real-fdb-kv-iterate-traversed-len",
-  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "case_count": 3,
-  "compared_fields": [
-    "return_value",
-    "itr_traversed_len"
+  "cases": [
+    {
+      "id": "first-sector",
+      "itr_traversed_len": 4096,
+      "return_value": true,
+      "status": "passed"
+    },
+    {
+      "id": "accumulated-sectors",
+      "itr_traversed_len": 12288,
+      "return_value": true,
+      "status": "passed"
+    },
+    {
+      "id": "u32-wrap",
+      "itr_traversed_len": 3,
+      "return_value": true,
+      "status": "passed"
+    }
   ],
   "claim_boundary": {
-    "scope": "source_fragment_only",
-    "whole_function_semantics_verified": false,
-    "external_callee_semantics_verified": false,
-    "verified_behavior": "Fixture-created records cross the declared entry boundary; the target u32 field is updated with wrapping_add from one direct source-record u32 field, and the declared constant bool result is observed.",
-    "external_callee": null,
-    "field_update": {
-      "operation": "wrapping_add",
-      "target_parameter": "itr",
-      "target_field_path": [
-        "traversed_len"
-      ],
-      "source_parameter": "db",
-      "source_field_path": [
-        "sec_size"
-      ]
-    },
     "excluded_semantics": [
       "fdb_kv_iterate control flow and iterator/KV writes outside the exact line-1892 expression",
       "the real fdb_db_t cast and FlashDB database/iterator layout or ABI",
       "storage behavior and cross-iteration effects"
-    ]
-  },
-  "status": "passed",
-  "semantic_pass": true,
-  "toolchain_status": "C_ORACLE_GENERATED",
-  "source_boundary": {
-    "files": [
-      "src/fdb_kvdb.c"
     ],
-    "functions": [
-      "fdb_kv_iterate:compound-assignment@1892"
-    ]
+    "external_callee": null,
+    "external_callee_semantics_verified": false,
+    "field_update": {
+      "operation": "wrapping_add",
+      "source_field_path": [
+        "sec_size"
+      ],
+      "source_parameter": "db",
+      "target_field_path": [
+        "traversed_len"
+      ],
+      "target_parameter": "itr"
+    },
+    "scope": "source_fragment_only",
+    "verified_behavior": "Fixture-created records cross the declared entry boundary; the target u32 field is updated with wrapping_add from one direct source-record u32 field, and the declared constant bool result is observed.",
+    "whole_function_semantics_verified": false
   },
+  "compared_fields": [
+    "return_value",
+    "itr_traversed_len"
+  ],
+  "level": "L3",
   "provenance": {
     "binding_mode": "executed_harness",
-    "evidence_refs": {
-      "slice_spec": {
-        "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-traversed-len.json",
-        "sha256": "c462e6d2d253c3f627670655e7cf9ea167d923f3d44df96d6f758ca69f4d75e3"
-      },
-      "fixture": {
-        "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-traversed-len.json",
-        "sha256": "14a7a37800b6136ecd6960425872d79e37f5566db9efbc2e31e80f79e25aefce"
-      },
-      "real_source": {
-        "path": "sources/FlashDB/src/fdb_kvdb.c",
-        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
-        "artifact_lf_stable_sha256": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b",
-        "containing_function_sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d",
-        "source_fragment_sha256": "120aec2aa3fb302e0e95b6655c656fa51e57365f2bc974cc1dc0de8df25ac840"
-      },
-      "translation_carrier": {
-        "kind": "exact_source_fragment_wrapper",
-        "carrier_function": "fdb_kv_iterate_traversed_len_probe",
-        "carrier_source_sha256": "fd870d6e8fcdcc6091a5e6cae3cfebaeaa38125a6572f02fe1a6750d5b48d5d5"
-      },
-      "translator_input": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-translator-input.json",
-        "sha256": "2d4536ad89627bd1a0ddddd3293d8fb220e4e090a9ea45a75c30a653cfbef04d"
-      },
-      "translation_plan": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-auto-translation-plan.json",
-        "binding_mode": "field_bound",
-        "status": "draft_generated",
-        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
-      },
-      "clang_lowering_report": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-clang-lowering-report.json",
-        "binding_mode": "field_bound",
-        "status": "lowered",
-        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
-      },
-      "c_oracle_status": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-c-oracle-status.json",
-        "binding_mode": "field_bound",
-        "status": "DRAFT_GENERATED",
-        "semantic_pass": false,
-        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
-      },
-      "c_oracle_harness": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-c-oracle-harness-draft.c",
-        "sha256": "c3326263a9f2cbe9cf59d29728808ffd05ad9a2be0aaa3ceb7fecd17dfcf90a3"
-      },
-      "generated_rust_draft": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-rust-draft.rs",
-        "sha256": "5bfb1af50e30295de66c89db36fc4cfb6b6b5c0db7c7c31b1037b48e26754ba9"
-      },
-      "rust_check": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/rust-check.json",
-        "binding_mode": "field_bound",
-        "status": "passed",
-        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
-      },
-      "generated_replay_evidence": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-test-translation-generated.json",
-        "binding_mode": "field_bound",
-        "status": "passed",
-        "generated_draft_replay_pass": true,
-        "generated_draft_semantic_pass": false,
-        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
-      },
-      "generated_replay_test": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-rust-replay-test-draft.rs",
-        "sha256": "0b4c720fe657bb3f98b1e167f4df954c5c3d17241f3415783243abab3a3be279",
-        "declared_sha256": "0b4c720fe657bb3f98b1e167f4df954c5c3d17241f3415783243abab3a3be279"
-      },
-      "generated_replay_stdout": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/generated-rust-replay.stdout.log",
-        "sha256": "5f6b640a4dc4bffe83e7017dfe9ebb8df4a8bf756f0287511d22b8b9a7edea63"
-      },
-      "generated_replay_stderr": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/generated-rust-replay.stderr.log",
-        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      },
-      "candidate_rust_report": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-rust-report.json",
-        "binding_mode": "field_bound",
-        "status": "passed",
-        "generated_draft_replay_pass": true,
-        "generated_draft_semantic_pass": false,
-        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
-      },
-      "test_translation": {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-test-translation-generated.json",
-        "binding_mode": "field_bound",
-        "status": "passed",
-        "generated_draft_replay_pass": true,
-        "generated_draft_semantic_pass": false,
-        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings."
-      }
-    },
     "compile_execution": {
       "argv": [
         "cc",
@@ -150,6 +59,7 @@
         "l3-real-fdb-kv-iterate-traversed-len-c-oracle-harness-draft.exe"
       ],
       "attempted": true,
+      "command_recording": "portable_logical_argv",
       "compiler_candidates": [
         "cc",
         "gcc",
@@ -174,6 +84,9 @@
         "attempted": true,
         "diagnostics": [
           "C oracle harness executed, but execution output has not passed oracle diff gates."
+        ],
+        "execution_argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-c-oracle-harness-draft.exe"
         ],
         "output_gate": {
           "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
@@ -213,10 +126,7 @@
         "stderr": "",
         "stdout": "oracle harness draft for fdb_kv_iterate_traversed_len_probe\nfixture input: validation/l2_slices/fixtures/real-fdb-kv-iterate-traversed-len.json\nfixture case first-sector return_value matched\nfixture case first-sector itr_traversed_len matched\nfixture case accumulated-sectors return_value matched\nfixture case accumulated-sectors itr_traversed_len matched\nfixture case u32-wrap return_value matched\nfixture case u32-wrap itr_traversed_len matched\n",
         "timeout_seconds": 30,
-        "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len",
-        "execution_argv": [
-          "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-c-oracle-harness-draft.exe"
-        ]
+        "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len"
       },
       "requested_compiler": "cc",
       "returncode": 0,
@@ -226,28 +136,118 @@
       "stdout": "",
       "toolchain_adapter": "local",
       "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
-      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len",
-      "command_recording": "portable_logical_argv"
+      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len"
+    },
+    "evidence_refs": {
+      "c_oracle_harness": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-c-oracle-harness-draft.c",
+        "sha256": "c3326263a9f2cbe9cf59d29728808ffd05ad9a2be0aaa3ceb7fecd17dfcf90a3"
+      },
+      "c_oracle_status": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings.",
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-c-oracle-status.json",
+        "semantic_pass": false,
+        "status": "DRAFT_GENERATED"
+      },
+      "candidate_rust_report": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings.",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-rust-report.json",
+        "status": "passed"
+      },
+      "clang_lowering_report": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings.",
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-clang-lowering-report.json",
+        "status": "lowered"
+      },
+      "fixture": {
+        "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-traversed-len.json",
+        "sha256": "14a7a37800b6136ecd6960425872d79e37f5566db9efbc2e31e80f79e25aefce"
+      },
+      "generated_replay_evidence": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings.",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-test-translation-generated.json",
+        "status": "passed"
+      },
+      "generated_replay_stderr": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/generated-rust-replay.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "generated_replay_stdout": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/generated-rust-replay.stdout.log",
+        "sha256": "5f6b640a4dc4bffe83e7017dfe9ebb8df4a8bf756f0287511d22b8b9a7edea63"
+      },
+      "generated_replay_test": {
+        "declared_sha256": "0b4c720fe657bb3f98b1e167f4df954c5c3d17241f3415783243abab3a3be279",
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-rust-replay-test-draft.rs",
+        "sha256": "0b4c720fe657bb3f98b1e167f4df954c5c3d17241f3415783243abab3a3be279"
+      },
+      "generated_rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-rust-draft.rs",
+        "sha256": "5bfb1af50e30295de66c89db36fc4cfb6b6b5c0db7c7c31b1037b48e26754ba9"
+      },
+      "real_source": {
+        "artifact_lf_stable_sha256": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b",
+        "containing_function_sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d",
+        "path": "sources/FlashDB/src/fdb_kvdb.c",
+        "sha256": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b",
+        "source_fragment_sha256": "120aec2aa3fb302e0e95b6655c656fa51e57365f2bc974cc1dc0de8df25ac840"
+      },
+      "rust_check": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings.",
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/rust-check.json",
+        "status": "passed"
+      },
+      "slice_spec": {
+        "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-traversed-len.json",
+        "sha256": "c462e6d2d253c3f627670655e7cf9ea167d923f3d44df96d6f758ca69f4d75e3"
+      },
+      "test_translation": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings.",
+        "generated_draft_replay_pass": true,
+        "generated_draft_semantic_pass": false,
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-test-translation-generated.json",
+        "status": "passed"
+      },
+      "translation_carrier": {
+        "carrier_function": "fdb_kv_iterate_traversed_len_probe",
+        "carrier_source_sha256": "fd870d6e8fcdcc6091a5e6cae3cfebaeaa38125a6572f02fe1a6750d5b48d5d5",
+        "kind": "exact_source_fragment_wrapper"
+      },
+      "translation_plan": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "Accepted-evidence promotion may rewrite this mutable auto artifact after reporter validation; this reference is field-bound rather than hash-bound to avoid cyclic or stale sha256 bindings.",
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-auto-translation-plan.json",
+        "status": "draft_generated"
+      },
+      "translator_input": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-traversed-len/l3-real-fdb-kv-iterate-traversed-len-translator-input.json",
+        "sha256": "2d4536ad89627bd1a0ddddd3293d8fb220e4e090a9ea45a75c30a653cfbef04d"
+      }
     }
   },
-  "cases": [
-    {
-      "id": "first-sector",
-      "return_value": true,
-      "itr_traversed_len": 4096,
-      "status": "passed"
-    },
-    {
-      "id": "accumulated-sectors",
-      "return_value": true,
-      "itr_traversed_len": 12288,
-      "status": "passed"
-    },
-    {
-      "id": "u32-wrap",
-      "return_value": true,
-      "itr_traversed_len": 3,
-      "status": "passed"
-    }
-  ]
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-kv-iterate-traversed-len",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:compound-assignment@1892"
+    ]
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_GENERATED"
 }

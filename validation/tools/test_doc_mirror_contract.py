@@ -11,8 +11,6 @@ DOC_ROOTS = (
     Path("docs"),
     Path("flashDB_rust/README.md"),
     Path("flashDB_rust/oracle/README.md"),
-    Path("openspec/project.md"),
-    Path("openspec/specs"),
     Path("validation"),
 )
 
@@ -28,7 +26,6 @@ EXCLUDED_PARTS = {
 
 EXCLUDED_RELATIVE_PREFIXES = (
     Path("docs/superpowers"),
-    Path("openspec/changes"),
     Path("validation/evidence"),
 )
 

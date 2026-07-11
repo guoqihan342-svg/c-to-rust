@@ -9,16 +9,14 @@
     "flashDB_rust/tests/differential_replay.rs",
     "validation/evidence/flashdb/l3-tsdb-error-boundary-*",
     "validation/evidence/flashdb/error-events.jsonl",
-    "validation/evidence/flashdb/patches.jsonl",
-    "openspec/changes/run-flashdb-tsdb-error-boundary-l3-loop/**"
+    "validation/evidence/flashdb/patches.jsonl"
   ],
   "read_set": [
     "flashDB_rust/src/tsdb.rs",
     "flashDB_rust/src/replay.rs",
     "flashDB_rust/src/types.rs",
     "flashDB_rust/oracle/flashdb_c_oracle.c",
-    "flashDB_rust/oracle/generate_c_oracle.sh",
-    "openspec/specs/flashdb-l3-agent-migration-loop/spec.md"
+    "flashDB_rust/oracle/generate_c_oracle.sh"
   ],
   "public_api_changes": [],
   "expected_production_code_changes": [],

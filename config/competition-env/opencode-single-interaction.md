@@ -60,7 +60,6 @@ Standalone handoff files such as `CONTEXT.md` are not maintained; current state 
 | 9 | unsafe scan + unsafe ledger | < 1 min |
 | 10 | 全量 evidence validation (`--require-semantic-pass`) | < 3 min |
 | 11 | summary validation (`validate_competition_run_summary.py`) | < 1 min |
-| optional | OpenSpec 历史治理检查（仅显式 `--run-optional-governance-checks`） | < 2 min |
 | **总计预估** | | **< 20 min / slice** |
 
 对 FlashDB crc32（已通过的案例）：typed IR 候选生成到 validation profile 生成约 5-8 分钟。
@@ -195,8 +194,6 @@ python3 -B -m validation.tools.opencode_agent_harness write-merge-plan \
    — 使用统一 runner 执行 slice 抽取、环境检查、typed-IR 迁移、证据验证、unsafe、summary validation 和 `competition-run-summary.json` 生成；runner 会把生成的 slice spec 写入 `target/competition-out/slice-specs/`。
    — 批量或可复用输入用 `--extract-spec target/competition-out/extract-specs/<id>-<slice>.json` 替代直接 source 参数。
    — 若多个独立 worker 已分别产出 summary，可用 `--worker-summary target/competition-out/workers/<worker>/summary/competition-run-summary.json` 重复传入汇总；汇总 runner 不会重新处理这些 slice，会合并计数并在任一 worker failed/blocked 时让最终 gate 失败。
-   — OpenSpec 是历史治理检查，不属于默认比赛 gate；仅在开发者显式追加 `--run-optional-governance-checks` 时由 runner 调用。缺少 OpenSpec CLI 时按 optional skip 处理；CLI 存在但校验失败时该 optional gate 会失败。
-
 4. python3 -B validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
    — 手动展开版的真实 C 源函数切片抽取。使用 runner 的 `--extract-spec` 时该步骤由 runner 调用。
 
@@ -206,12 +203,9 @@ python3 -B -m validation.tools.opencode_agent_harness write-merge-plan \
 6. python3 -B validation/tools/validate_auto_translation_evidence.py --target-id <id> --slice-id <slice> --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --evidence-root target/competition-out/evidence --require-semantic-pass
    — 手动展开版的全量证据验证。使用 runner 时该步骤由 runner 调用。
 
-7. openspec validate --all --strict
-   — 手动展开版的 OpenSpec 历史治理校验。默认 runner 不调用该步骤；只有加 `--run-optional-governance-checks` 时才由 runner 作为 optional governance check 调用。
+7. 为提高覆盖面和准确性，可对额外的真实 C 源函数重复步骤 2-3；互不依赖的 slice 可并行运行，但最终汇总必须用统一 runner + `--worker-summary` 合并并通过同一 summary validator。
 
-8. 为提高覆盖面和准确性，可对额外的真实 C 源函数重复步骤 2-3；互不依赖的 slice 可并行运行，但最终汇总必须用统一 runner + `--worker-summary` 合并并通过同一 summary validator。
-
-9. 如需多 agent 并行，优先把可复用输入写成 `config/competition-env/planned-batches/*.json`，再用 `run-batch-profile` 一键建立 ledger、生成有序 assignment、用 `max_workers` 执行 planned workers、运行 bounded `auto_retry=true` 并运行最终 worker-summary 聚合；调试时可手工展开为 `init-run`、`plan-source-file`、`run-plan --mode deterministic --execute-merge --auto-retry --max-workers <N>`。profile 设置 `emit_route_governance_metrics_report=true` 时，还会生成并绑定 `summary/route-governance-metrics-report.json`。手工 `assign-slice` 加重复 `run-worker --mode deterministic` 加 `write-merge-plan` 仍是更低层展开版。先用同一个 `run_id` 运行 `opencode-preflight` 证明 OpenCode 能遵守 exact-command contract；只有 preflight 通过且要让 OpenCode 包装一个 assigned request 时，才使用 `run-worker --mode opencode --opencode-model GLM-5.1 --opencode-agent c2rust-migrator --opencode-variant max --opencode-preflight-report <report>` 或 `run-plan --mode opencode --opencode-model GLM-5.1 --opencode-agent c2rust-migrator --opencode-variant max --opencode-preflight-report <report>`。旧 run 的 preflight report 不可复用，worker summary 仍必须通过 final runner 和 common summary validator 收敛；最多 5 轮 repair retry 后仍缺少 planned worker summary 时最终 merge 会 fail-closed 跳过，OpenCode 启动数据库锁重试则单独记录为 `opencode_process_retries`。
+8. 如需多 agent 并行，优先把可复用输入写成 `config/competition-env/planned-batches/*.json`，再用 `run-batch-profile` 一键建立 ledger、生成有序 assignment、用 `max_workers` 执行 planned workers、运行 bounded `auto_retry=true` 并运行最终 worker-summary 聚合；调试时可手工展开为 `init-run`、`plan-source-file`、`run-plan --mode deterministic --execute-merge --auto-retry --max-workers <N>`。profile 设置 `emit_route_governance_metrics_report=true` 时，还会生成并绑定 `summary/route-governance-metrics-report.json`。手工 `assign-slice` 加重复 `run-worker --mode deterministic` 加 `write-merge-plan` 仍是更低层展开版。先用同一个 `run_id` 运行 `opencode-preflight` 证明 OpenCode 能遵守 exact-command contract；只有 preflight 通过且要让 OpenCode 包装一个 assigned request 时，才使用 `run-worker --mode opencode --opencode-model GLM-5.1 --opencode-agent c2rust-migrator --opencode-variant max --opencode-preflight-report <report>` 或 `run-plan --mode opencode --opencode-model GLM-5.1 --opencode-agent c2rust-migrator --opencode-variant max --opencode-preflight-report <report>`。旧 run 的 preflight report 不可复用，worker summary 仍必须通过 final runner 和 common summary validator 收敛；最多 5 轮 repair retry 后仍缺少 planned worker summary 时最终 merge 会 fail-closed 跳过，OpenCode 启动数据库锁重试则单独记录为 `opencode_process_retries`。
 
 若评测方设置 600 分钟上限，将其视为外部预算；没有该限制时也不要降低证据门禁。当前状态和下一步只读取 `docs/c2rust-migration-agent/future-vision-and-mvp.md`；不得把独立 handoff 文件当作评委入口或证据来源。
 只使用 Shell 工具执行命令，不用 Write/Edit 工具改项目源码。

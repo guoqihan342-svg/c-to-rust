@@ -58,7 +58,7 @@
       "accepted_evidence_refs": {
         "c_oracle": {
           "path": "validation/evidence/flashdb/l3-real-fdb-new-kv-alloc-compare-c-oracle.json",
-          "sha256": "5b43dd6f0233d39f34e36e17d769f778786cb6c368b98bcff7e9a7cfacbe3bb1",
+          "sha256": "ea18bbf16ea77e9d332cad154c9a600eaad0d9f1de9b9a74e8087f299ad1342c",
           "status": "passed"
         },
         "negative_diff": {
@@ -145,7 +145,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-auto-cache-metadata.json",
-      "sha256": "113f90f9f666cc128e9e7c3abaa8ec2849f9cc68a1f11c7fcd866318f925ae82",
+      "sha256": "a4f72018a733d329e57025915732d6450ccc49be091dd595761b83db96ebc8fb",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -156,7 +156,7 @@
     "config_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-config-profile.json",
       "profile_id": "flashdb-real-fdb-new-kv-alloc-compare-carrier",
-      "sha256": "83a5865f95c650648a6a1161d2622058070f06d668f60fd841fed625fbc17489",
+      "sha256": "d07c769c87fcc5eb495288ae6a0118099e0ed37535ea220d862298a82469f284",
       "status": "recorded"
     },
     "context_pack": {
@@ -166,7 +166,7 @@
     },
     "final_verification": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-final-verification.json",
-      "sha256": "873fc8d7337b5aae9013316bdb8a5c5ae01904ff55a1aeed712ecad7b139ab6d",
+      "sha256": "798f19004c15b194b3ebef67229bcfd186a8d69b442aea93af1226707aa45ab7",
       "status": "passed"
     },
     "negative_diff": {
@@ -215,7 +215,7 @@
     },
     "summary": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-summary.json",
-      "sha256": "10b4a8071876fa45dbf39e11c3d1af23520f22052a5d42b6965797a7d64ac6cb",
+      "sha256": "79912c2e5b25624a9299567daa4344e1520297fb78fde31a4376f2052068b7b1",
       "status": "passed"
     },
     "test_translation": {
@@ -246,7 +246,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-new-kv-alloc-compare/l3-real-fdb-new-kv-alloc-compare-version-manifest.json",
-      "sha256": "378c511fd88c6834387dc03e86740736a04939f1d73f75f9ee42b175631e3b33",
+      "sha256": "5f97b3b6df6cf7bf64265d8e36e02156f8338355933b5a01cfbe35dfab1177a7",
       "status": "recorded"
     }
   },

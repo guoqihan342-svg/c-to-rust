@@ -7,8 +7,7 @@
     "flashDB_rust/src/tsdb.rs",
     "flashDB_rust/src/replay.rs",
     "flashDB_rust/oracle/flashdb_c_oracle.c",
-    "validation/evidence/flashdb/l3-tsdb-non-monotonic-timestamp-*",
-    "openspec/specs/flashdb-l3-agent-migration-loop/spec.md after archive"
+    "validation/evidence/flashdb/l3-tsdb-non-monotonic-timestamp-*"
   ],
   "expected_public_api_change": false,
   "expected_storage_layout_change": false,

@@ -89,5 +89,5 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Rust check/test command is recorded.
 - [ ] Test translation manifest and cargo test commands are recorded.
 - [ ] Unsafe scan command is recorded.
-- [ ] OpenSpec validation is recorded when a change is involved.
+- [ ] Superpowers validation is recorded when a change is involved.
 - [ ] `git diff --check` or equivalent whitespace check is recorded before commit.

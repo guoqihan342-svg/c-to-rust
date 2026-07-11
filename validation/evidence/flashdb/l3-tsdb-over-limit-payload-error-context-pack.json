@@ -1,22 +1,17 @@
 {
-    "schema_version":  1,
-    "change":  "run-flashdb-tsdb-over-limit-payload-error-l3-loop",
-    "slice_id":  "tsdb-over-limit-payload-error",
-    "level":  "L3",
-    "target_id":  "flashdb",
-    "source":  {
-                   "clone_url":  "https://gitcode.com/xwxf/FlashDB.git",
-                   "commit":  "93d175549da579b8abac07bd175ce4c3f9dde829"
-               },
-    "prior_slices":  [
-                         "tsdb-payload-boundary",
-                         "tsdb-reverse-query-reopen"
-                     ],
-    "active_change":  "run-flashdb-tsdb-over-limit-payload-error-l3-loop",
-    "context_files":  [
-                          "openspec/changes/run-flashdb-tsdb-over-limit-payload-error-l3-loop/proposal.md",
-                          "openspec/changes/run-flashdb-tsdb-over-limit-payload-error-l3-loop/design.md",
-                          "openspec/changes/run-flashdb-tsdb-over-limit-payload-error-l3-loop/specs/flashdb-l3-agent-migration-loop/spec.md",
-                          "openspec/changes/run-flashdb-tsdb-over-limit-payload-error-l3-loop/tasks.md"
-                      ]
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-over-limit-payload-error-l3-loop",
+  "slice_id": "tsdb-over-limit-payload-error",
+  "level": "L3",
+  "target_id": "flashdb",
+  "source": {
+    "clone_url": "https://gitcode.com/xwxf/FlashDB.git",
+    "commit": "93d175549da579b8abac07bd175ce4c3f9dde829"
+  },
+  "prior_slices": [
+    "tsdb-payload-boundary",
+    "tsdb-reverse-query-reopen"
+  ],
+  "active_change": "run-flashdb-tsdb-over-limit-payload-error-l3-loop",
+  "context_files": []
 }

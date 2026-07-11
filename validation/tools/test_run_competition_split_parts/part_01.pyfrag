@@ -1,42 +1,3 @@
-                slice_specs=[spec_path],
-                out_root=out_root,
-                proof_class="local-simulation",
-                command_runner=fake_runner,
-                repo_root=REPO_ROOT,
-                run_id="run-test-openspec-failed",
-                run_optional_governance_checks=True,
-            )
-
-            self.assertEqual(result.exit_code, 1)
-            self.assertEqual(result.summary["final_gate"]["status"], "failed")
-
-    def test_optional_missing_openspec_cli_does_not_fail_final_gate(self) -> None:
-        # Even when the optional governance check is requested, a missing CLI
-        # remains a skip because the competition host is not required to
-        # provide OpenSpec.
-        module = load_runner_module()
-        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
-            tmp_path = Path(tmp)
-            out_root = tmp_path / "competition-out"
-            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
-            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
-            fake_runner = FakeCommandRunner(missing_commands_containing={"openspec validate"})
-
-            result = module.run_competition(
-                slice_specs=[spec_path],
-                out_root=out_root,
-                proof_class="local-simulation",
-                command_runner=fake_runner,
-                repo_root=REPO_ROOT,
-                run_id="run-test-openspec-missing",
-                run_optional_governance_checks=True,
-            )
-
-            self.assertEqual(result.exit_code, 0, json.dumps(result.summary, default=str))
-            self.assertEqual(result.summary["final_gate"]["status"], "passed")
-            command_texts = [" ".join(command) for command in fake_runner.commands]
-            self.assertTrue(any("openspec validate --all --strict" in text for text in command_texts))
-
     def test_runner_writes_machine_readable_workflow_metrics_artifact(self) -> None:
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
@@ -360,38 +321,6 @@
         self.assertEqual(extraction["compiler_command_source"], "compile_commands.json")
         self.assertEqual(extraction["include_paths"], ["include"])
         self.assertEqual(extraction["defines"], ["DIRECT=1"])
-
-    def test_main_accepts_optional_governance_check_cli_arg(self) -> None:
-        module = load_runner_module()
-        calls: dict[str, object] = {}
-
-        def fake_run_competition(**kwargs: object) -> object:
-            calls.update(kwargs)
-            return module.CompetitionRunResult(
-                exit_code=0,
-                summary_path=Path("summary.json"),
-                summary={"status": "fake"},
-            )
-
-        original_argv = sys.argv
-        original_run_competition = module.run_competition
-        try:
-            module.run_competition = fake_run_competition
-            sys.argv = [
-                "run_competition.py",
-                "--slice-spec",
-                "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-                "--run-optional-governance-checks",
-            ]
-
-            with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(module.main(), 0)
-        finally:
-            sys.argv = original_argv
-            module.run_competition = original_run_competition
-
-        self.assertEqual(calls["slice_specs"], [Path("validation/slice-specs/flashdb-real-fdb-calc-crc32.json")])
-        self.assertTrue(calls["run_optional_governance_checks"])
 
     def test_main_accepts_worker_summary_cli_args(self) -> None:
         module = load_runner_module()

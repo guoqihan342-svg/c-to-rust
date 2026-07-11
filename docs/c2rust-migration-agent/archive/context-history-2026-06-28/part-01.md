@@ -28,7 +28,6 @@ git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 push origin codex/flas
 
 当前明确要求：
 
-- 使用 OpenSpec 管理需求、设计、任务和验收。
 - 复杂任务可以开多个智能体或并行子任务，但共享文件写入必须受控，不能互相覆盖。
 - 项目不再要求“小而精”，可以适当扩大规模以补齐真实翻译能力。
 - 不再把 10000 轮回归作为每次开发的阻塞条件。
@@ -78,14 +77,11 @@ flowchart TD
 - Tree-sitter 或手写语法扫描只能提供 syntax indexing，不能直接证明类型、别名和 UB 语义。
 - 真实 typed semantic facts 需要 compile profile、clang/libclang、原始 C oracle 或显式 unsupported/block 记录。
 - C-side UB 和 Rust-side UB 证据要分开。MIRI 不是 C UB 证明。
-- OpenSpec 管能力和批次，slice evidence manifest 管每个函数迁移证据。
 - 不支持的情况必须 fail closed，不能假装翻译成功。
 
 ## 4. 已完成的主要实现
 
-最近完成并推送的 OpenSpec change：
 
-- `openspec/changes/add-c2rust-baseline-migration-pipeline/`
 
 该 change 的任务已全部勾选完成，核心目标是把 C2Rust baseline、route decision 和 validation profile 纳入 L3 自动翻译证据链。
 
@@ -128,8 +124,6 @@ flowchart TD
   - `validation/README.md`
   - `validation/gates.md`
 
-- OpenSpec active spec 更新：
-  - `openspec/specs/flashdb-l3-agent-migration-loop/spec.md`
   - 已将 `unsafe` 要求改为 first-party non-test `<10%`，不再写 0% 硬性要求。
 
 ## 5. 当前真实证据状态
@@ -183,10 +177,8 @@ Ran 32 tests in 37.812s
 OK
 ```
 
-OpenSpec 验证：
 
 ```powershell
-openspec validate --all --strict
 ```
 
 结果：
@@ -217,12 +209,10 @@ git diff --check
 cd C:\Users\Administrator\Documents\c-to-rust-flashdb
 git status --short --branch --untracked-files=all
 git log -3 --oneline --decorate
-openspec validate --all --strict
 python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
 ```
 
-如果只是文档改动，不需要重跑完整迁移。若要继续开发 translator、validator 或 evidence schema，至少跑上面的 unittest 和 OpenSpec validate。
 
 ## 8. 代码地图
 
@@ -252,9 +242,6 @@ python validation/tools/validate_auto_translation_evidence.py --target-id flashd
 
 - `validation/README.md`
 - `validation/gates.md`
-- `openspec/specs/flashdb-l3-agent-migration-loop/spec.md`
-- `openspec/changes/add-c2rust-baseline-migration-pipeline/design.md`
-- `openspec/changes/add-c2rust-baseline-migration-pipeline/tasks.md`
 
 ## 9. 下一步建议
 
@@ -280,7 +267,6 @@ python validation/tools/validate_auto_translation_evidence.py --target-id flashd
 - Rustine/SACTOR/Syzygy 等方案说明，“LLM/Agent 候选 + 强验证 + 修复闭环”比只靠手写规则更现实。
 - 本项目差异化不应吹成“验证世界第一”或“翻译已规模化”，而应定位为：
   - Agent 编排友好。
-  - OpenSpec 治理。
   - 机器可读证据交接。
   - fail-closed。
   - 原始 C oracle 驱动的可审计渐进迁移。
@@ -292,7 +278,6 @@ python validation/tools/validate_auto_translation_evidence.py --target-id flashd
 - 用户不喜欢无意义等待和频繁自动消息。长跑监控不应主动恢复。
 - 如果问“好了没有”，必须回答已验证状态、剩余缺口和下一步，不要把 partial pass 说成 done。
 - 如果要提交或推送，必须先验证，并且只有实际完成 git action 后才能在最终答复里发 git directive。
-- 如果工作涉及 OpenSpec artifact，保留 parser-required anchors，例如 `Purpose`、`Requirements`、`Scenario`、`WHEN`、`THEN`、`## ADDED Requirements` 和任务 checkbox 语法。
 
 ## 12. 2026-06-26 最新接手状态
 
@@ -332,8 +317,6 @@ python validation/tools/validate_auto_translation_evidence.py --target-id flashd
 ```powershell
 python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
-openspec validate add-c2rust-baseline-migration-pipeline --strict
-openspec validate --all --strict
 ```
 
 建议下一步优先级：
@@ -422,8 +405,6 @@ artifact drift。已修复：
 ```powershell
 python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
-openspec validate add-c2rust-baseline-migration-pipeline --strict
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -580,8 +561,6 @@ rg -n '"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|
 python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
 rg -n '"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32
-openspec validate add-c2rust-baseline-migration-pipeline --strict
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -590,8 +569,6 @@ git diff --check
 - 59 个 Python 单测通过。
 - real-fdb validator 通过，且 `semantic_pass=false`。
 - 禁止状态扫描无匹配。
-- `openspec validate add-c2rust-baseline-migration-pipeline --strict` 通过。
-- `openspec validate --all --strict` 37/37 通过。
 - `git diff --check` 通过，仅有 Windows CRLF 提示。
 
 下一步建议：
@@ -658,8 +635,6 @@ C oracle，也不声明语义通过。
 python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
 rg -n '"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32
-openspec validate add-c2rust-baseline-migration-pipeline --strict
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -668,8 +643,6 @@ git diff --check
 - 62 个 Python 单测通过。
 - real-fdb validator 通过，且 `semantic_pass=false`。
 - 禁止状态扫描无匹配。
-- `openspec validate add-c2rust-baseline-migration-pipeline --strict` 通过。
-- `openspec validate --all --strict` 37/37 通过。
 - `git diff --check` 通过，仅有 Windows CRLF 提示。
 
 下一步建议：
@@ -738,8 +711,6 @@ git diff --check
 python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
 rg -n '"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32
-openspec validate add-c2rust-baseline-migration-pipeline --strict
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -748,8 +719,6 @@ git diff --check
 - 65 个 Python 单测通过。
 - real-fdb validator 通过，且 `semantic_pass=false`。
 - 禁止状态扫描无匹配。
-- `openspec validate add-c2rust-baseline-migration-pipeline --strict` 通过。
-- `openspec validate --all --strict` 37/37 通过。
 - `git diff --check` 通过，仅有 Windows CRLF 提示。
 
 下一步建议：
@@ -854,8 +823,6 @@ harness draft 也已刷新，包含：
 python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
 rg -n '"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 validation/l2_slices/fixtures/real-fdb-calc-crc32.json validation/slice-specs/flashdb-real-fdb-calc-crc32.json
-openspec validate add-c2rust-baseline-migration-pipeline --strict
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -864,8 +831,6 @@ git diff --check
 - 65 个 Python 单测通过。
 - real-fdb validator 通过，且 `semantic_pass=false`。
 - 禁止状态扫描无匹配。
-- `openspec validate add-c2rust-baseline-migration-pipeline --strict` 通过。
-- `openspec validate --all --strict` 37/37 通过。
 - `git diff --check` 通过，仅有 Windows CRLF 提示。
 
 下一步建议：
@@ -964,8 +929,6 @@ python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_rout
 python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
 rg -n '"path"\s*:\s*null|let _fixture = ''''|"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 validation/l2_slices/fixtures/real-fdb-calc-crc32.json validation/slice-specs/flashdb-real-fdb-calc-crc32.json
-openspec validate add-c2rust-baseline-migration-pipeline --strict
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -975,8 +938,6 @@ git diff --check
 - 65 个 Python 单测通过。
 - real-fdb validator 通过，且 `semantic_pass=false`。
 - 空 fixture path / 空 replay fixture / 禁止状态扫描无匹配。
-- `openspec validate add-c2rust-baseline-migration-pipeline --strict` 通过。
-- `openspec validate --all --strict` 37/37 通过。
 - `git diff --check` 通过，仅有 Windows CRLF 提示。
 
 下一步建议：

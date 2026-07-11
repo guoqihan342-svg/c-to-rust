@@ -130,7 +130,6 @@ The runner automatically performs:
 5. Unsafe budget scan
 6. `competition-run-summary.json` generation and validation
 
-OpenSpec historical governance validation is not part of the default competition gate; add `--run-optional-governance-checks` explicitly when local governance checks are needed.
 
 **Manual step-by-step** (for debugging):
 
@@ -545,10 +544,8 @@ python3 -B -m validation.tools.validate_public_release_packet \
 # Check unsafe
 python3 -B validation/tools/unsafe_budget.py --max-ratio 0.10
 
-# Optional: check the historical OpenSpec governance archive. The default
+# Optional: check the historical Superpowers governance archive. The default
 # competition runner does not execute this; only explicit
-# `--run-optional-governance-checks` includes it as an optional governance gate.
-openspec validate --all --strict
 
 # Run translator unit tests
 cargo test --manifest-path crates/c2r-translator/Cargo.toml

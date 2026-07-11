@@ -5,7 +5,7 @@
     "fixture_sha256": "a81dffee77616387b5eddf2ce4437d34f8b788d6799dfc93df95f8b7673cd307",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+      "c_oracle": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
       "diff": "a25a016147ed728b074596765ec2ed2e7b37bf1148825f0a9613b5669e1d8f4d",
       "negative_diff": "879f141aaee8aef5166e277e8b4b819df72ee0473fcc77d4ee9bc0f80ad8fca1",
       "rust_report": "2f8125269da5191286e0343598d62b697e3a17c0e7eaa2e1655a25f2a67fa4f7",
@@ -129,7 +129,7 @@
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-validation-profile.json",
         "profile": "L1-dev",
-        "sha256": "f214e176f696f07abcdf63db3790b8951588980d11ba9e2f5d82caea10060c4d",
+        "sha256": "a7a68fef7c9efd402c14afbea4485df9757cb9c657fff5683dc9cafbe2ef32f6",
         "status": "passed"
       }
     },
@@ -199,7 +199,6 @@
     "target_id": "flashdb",
     "tool_versions": {
       "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
-      "openspec": "1.3.1",
       "python": "Python 3.12.3",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
@@ -252,7 +251,7 @@
         "fixture_sha256": "a81dffee77616387b5eddf2ce4437d34f8b788d6799dfc93df95f8b7673cd307",
         "generated_draft_semantic_pass": false,
         "path_sha256": {
-          "c_oracle": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+          "c_oracle": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
           "diff": "a25a016147ed728b074596765ec2ed2e7b37bf1148825f0a9613b5669e1d8f4d",
           "negative_diff": "879f141aaee8aef5166e277e8b4b819df72ee0473fcc77d4ee9bc0f80ad8fca1",
           "rust_report": "2f8125269da5191286e0343598d62b697e3a17c0e7eaa2e1655a25f2a67fa4f7",
@@ -277,7 +276,7 @@
       "accepted_evidence_refs": {
         "c_oracle": {
           "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-sector-advance-continue-c-oracle.json",
-          "sha256": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+          "sha256": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
           "status": "passed"
         },
         "negative_diff": {
@@ -358,7 +357,7 @@
   "oracle": {
     "accepted_oracle": {
       "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-sector-advance-continue-c-oracle.json",
-      "sha256": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+      "sha256": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
       "status": "passed"
     },
     "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
@@ -425,7 +424,7 @@
     "evidence_links": {
       "c_oracle": {
         "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-sector-advance-continue-c-oracle.json",
-        "sha256": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+        "sha256": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
         "status": "passed"
       },
       "negative_diff": {
@@ -486,7 +485,7 @@
         "fixture_sha256": "a81dffee77616387b5eddf2ce4437d34f8b788d6799dfc93df95f8b7673cd307",
         "generated_draft_semantic_pass": false,
         "path_sha256": {
-          "c_oracle": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+          "c_oracle": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
           "diff": "a25a016147ed728b074596765ec2ed2e7b37bf1148825f0a9613b5669e1d8f4d",
           "negative_diff": "879f141aaee8aef5166e277e8b4b819df72ee0473fcc77d4ee9bc0f80ad8fca1",
           "rust_report": "2f8125269da5191286e0343598d62b697e3a17c0e7eaa2e1655a25f2a67fa4f7",
@@ -511,7 +510,7 @@
       "accepted_evidence_refs": {
         "c_oracle": {
           "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-sector-advance-continue-c-oracle.json",
-          "sha256": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+          "sha256": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
           "status": "passed"
         },
         "negative_diff": {
@@ -646,7 +645,7 @@
       "oracle_reports": [
         {
           "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-sector-advance-continue-c-oracle.json",
-          "sha256": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+          "sha256": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
           "status": "passed"
         },
         {
@@ -675,7 +674,7 @@
         "evidence": [
           {
             "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-sector-advance-continue-c-oracle.json",
-            "sha256": "e2bcc9708f518ab8ca6d3673638dc971e90c742e8e761c85e0c10c8118cf5a73",
+            "sha256": "50f138a365ff640035bc6c9a9cd1b0e8d8d904d39a99d52a97ea776dd243f4a3",
             "status": "passed"
           },
           {
@@ -796,12 +795,12 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "f214e176f696f07abcdf63db3790b8951588980d11ba9e2f5d82caea10060c4d",
+    "sha256": "a7a68fef7c9efd402c14afbea4485df9757cb9c657fff5683dc9cafbe2ef32f6",
     "status": "passed"
   },
   "verified_unsafe_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-c2rust-verified-unsafe-baseline.json",
-    "sha256": "61d56713a24f7ae6b714bfae4dc17a4557f813429cbf1e8f57ca63218aadfce8",
+    "sha256": "9a26544f00f8a5c4324c521bec0a846ff6eb9c8bb573ac53f6790fb8228cee8e",
     "status": "blocked"
   }
 }

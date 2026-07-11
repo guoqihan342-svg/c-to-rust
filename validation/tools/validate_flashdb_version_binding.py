@@ -26,7 +26,6 @@ REQUIRED_FIELDS = [
     "cargo_lock_sha256",
     "rustc_version",
     "cargo_version",
-    "openspec_version",
     "flashdb_source_commit",
     "flashdb_feature_matrix",
     "command_arguments",
@@ -45,7 +44,6 @@ REQUIRED_CACHE_KEYS = [
     "cargo_lock_sha256",
     "rustc_version",
     "cargo_version",
-    "openspec_version",
     "flashdb_source_commit",
     "flashdb_feature_matrix",
     "command_arguments",
@@ -101,7 +99,7 @@ def validate_version_binding(manifest_path: Path, cargo_toml_path: Path) -> dict
     for key, expected in expected_hashes.items():
         value = str(manifest.get(key, "")).lower()
         require(value == expected, f"{key} drift: {value} != {expected}")
-    for key in ("rustc_version", "cargo_version", "openspec_version"):
+    for key in ("rustc_version", "cargo_version"):
         value = str(manifest.get(key, ""))
         require(value and value != "NOT_FOUND", f"{key} is missing or NOT_FOUND")
     require(

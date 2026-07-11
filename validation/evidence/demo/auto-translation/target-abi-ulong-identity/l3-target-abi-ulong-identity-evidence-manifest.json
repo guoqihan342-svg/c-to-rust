@@ -150,7 +150,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-auto-cache-metadata.json",
-      "sha256": "1e05744444a6e59cbb244903ae1cc7e129b0dfeac1c4cd2bd22d59c6b1a6b47e",
+      "sha256": "269abf271b0764f3ad4d7e18ad3c5387dd418382dba17e2bc2c75a5e87f7350f",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -161,7 +161,7 @@
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-config-profile.json",
       "profile_id": "demo-target-abi-ulong-identity-wsl-gcc-lp64",
-      "sha256": "1c4e4430ca8e77e6c03e5afd2f79e0535bc21c25e2ce659fdddb632983be3b0d",
+      "sha256": "f6f50c06b2e23de3686ddf735d141636e0b12df967ac6cf9765ae1956df6dec8",
       "status": "recorded"
     },
     "context_pack": {
@@ -252,7 +252,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-version-manifest.json",
-      "sha256": "8fcd613538dd66905a1e33e9cea9c54a87b645f9f36a9e678a5ea3c7007d426f",
+      "sha256": "f40d3d1236842f7d9f40eea2287e1e38b15a4e6f5d9753cdcd1af21acff7a38d",
       "status": "recorded"
     }
   },

@@ -13,7 +13,6 @@ Semantic acceptance is still decided only by on-disk evidence and validators:
 - `validate_auto_translation_evidence.py --require-semantic-pass`
 - `validate_competition_run_summary.py`
 - `unsafe_budget.py`
-- optional `openspec validate --all --strict` (historical governance only when `--run-optional-governance-checks` is explicit, not part of the default competition semantic gate)
 
 Any `passed` field inside SQLite can only index validated evidence. It cannot replace evidence.
 
@@ -64,7 +63,7 @@ Core tables:
 | `agent_tasks` | Worker tasks, phase, attempt, status, allowed paths, and error keys. |
 | `slices` | Target/slice/source/function/source commit/slice spec hash. |
 | `candidates` | typed IR, C2Rust, legacy compatibility, and future candidates; candidates are not semantic acceptance. |
-| `gates` | environment, auto_migrate, semantic validator, unsafe, summary-validator gates, and the optional OpenSpec historical-governance gate when explicitly enabled. |
+| `gates` | environment, auto_migrate, semantic validator, unsafe, summary-validator gates, and the optional Superpowers historical-governance gate when explicitly enabled. |
 | `artifacts` | Repo-relative artifact path, sha256, kind, and semantic role. |
 | `artifact_links` | Manifest/cache/final-verification reference edges. |
 | `events` | Mirror of `commands.jsonl`, auto-translation events, and harness events. |

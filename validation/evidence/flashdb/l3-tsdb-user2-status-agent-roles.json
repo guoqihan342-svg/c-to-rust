@@ -9,7 +9,7 @@
     },
     {
       "agent": "019ef8b8-f707-71a0-8b02-764a2b387a64",
-      "role": "OpenSpec and evidence review",
+      "role": "retired governance and evidence review",
       "result": "Confirmed artifacts should add a public visible user2 L3 slice with Rust report, C oracle, diff, negative diff, unsafe, and final verification evidence."
     },
     {
@@ -25,7 +25,7 @@
     {
       "agent": "main",
       "role": "implementation coordinator",
-      "result": "Owns TDD patch, fixture integration, verification evidence, OpenSpec task updates, commit, archive, and push."
+      "result": "Owns TDD patch, fixture integration, verification evidence, retired governance task updates, commit, archive, and push."
     }
   ]
 }

@@ -5,7 +5,6 @@
 - Change: `add-versioned-migration-governance`
 - Version manifest: `validation/evidence/flashdb/version-governance-manifest.json`
 - Manifest SHA256: `c676278f841eaa79c97d5444b6be219682873e82d0ee9aeadd709266760cb4fa`
-- OpenSpec version: `1.4.1`
 - Rust/Cargo: `rustc 1.95.0 (59807616e 2026-04-14)` / `cargo 1.95.0 (f2d3ce0bd 2026-03-21)`
 - FlashDB source commit: `93d175549da579b8abac07bd175ce4c3f9dde829`
 - Rust crate version: `flashdb_rust 0.1.0`
@@ -19,7 +18,6 @@ The red test was preserved at `validation/evidence/flashdb/version-governance-re
 - 变更：`add-versioned-migration-governance`
 - 版本清单：`validation/evidence/flashdb/version-governance-manifest.json`
 - 清单 SHA256：`c676278f841eaa79c97d5444b6be219682873e82d0ee9aeadd709266760cb4fa`
-- OpenSpec 版本：`1.4.1`
 - Rust/Cargo：`rustc 1.95.0 (59807616e 2026-04-14)` / `cargo 1.95.0 (f2d3ce0bd 2026-03-21)`
 - FlashDB 源码提交：`93d175549da579b8abac07bd175ce4c3f9dde829`
 - Rust crate 版本：`flashdb_rust 0.1.0`

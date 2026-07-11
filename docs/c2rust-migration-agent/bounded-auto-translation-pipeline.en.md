@@ -1,14 +1,13 @@
 # Bounded Automatic Translation Pipeline Agent Guide
 
-This guide is for OpenCode, Codex, and other executable agents working on OpenSpec change `add-bounded-auto-translation-pipeline`. The pipeline produces evidence-bound Rust draft candidates. It does not make an implementation accepted by default; acceptance still comes from the L1-L3 evidence gates.
+This guide is for OpenCode, Codex, and other executable agents working on the bounded automatic C-to-Rust translation pipeline. Design and execution plans are managed under `docs/superpowers/`. The pipeline produces evidence-bound Rust draft candidates; acceptance still comes from the L1-L3 evidence gates.
 
 ## Entry Rules
 
 - The project is no longer constrained to be "small and fine-grained" overall: it may grow into multiple crates, tools, batch jobs, and target validations. Each migration claim must still remain slice-level, evidence-bound, rollbackable, reproducible, and gated by L1-L3 evidence.
-- Start from OpenSpec: read `openspec status --change "add-bounded-auto-translation-pipeline" --json` and `openspec instructions apply --change "add-bounded-auto-translation-pipeline" --json`.
 - Start from a slice spec: automatic translation must not consume raw `c_source` alone. The input must include target id, slice id, source commit, C files, function signatures, L1 evidence, build profile, fixture contract, Rust output boundary, accepted metadata differences, and non-goals.
 - Emit evidence before code: `context-pack`, `type-map`, `cfg`, and `pointer-graph` must be persisted before any Rust draft is accepted.
-- Treat AI as candidate generation only: AI may propose a draft or PatchPlan, but AI output is never correctness evidence and cannot bypass local compile, C oracle, Rust replay, schema-aware diff, negative diff, unsafe scan, or version/cache semantic gates. OpenSpec validation is historical governance/change-management only and is not part of the default competition semantic gate.
+- Treat AI as candidate generation only: AI may propose a draft or PatchPlan, but AI output is never correctness evidence and cannot bypass local compile, C oracle, Rust replay, schema-aware diff, negative diff, unsafe scan, or version/cache semantic gates. Superpowers validation is historical governance/change-management only and is not part of the default competition semantic gate.
 - Parallel agents may split read-only analysis or disjoint writes only. Slice specs, public APIs, fixtures, oracle contracts, unsafe ledgers, schemas, and files under active self-healing must not be edited concurrently.
 
 ## Workflow
@@ -20,7 +19,7 @@ This guide is for OpenCode, Codex, and other executable agents working on OpenSp
 5. Generate a C oracle harness draft and Rust replay test draft from the same fixture contract. If inputs or outputs cannot be mapped, mark the run blocked.
 6. Run `cargo check --message-format=json`. On failure, write `l3-<slice>-rust-check.json`, generate a PatchPlan, and run at most five bounded repair rounds by default.
 7. Run Rust replay, schema-aware diff, negative diff, unsafe scan, version/cache gates, and evidence manifest gates.
-8. Promote the candidate to an accepted slice only when the C oracle, Rust replay, diff, unsafe, and version/cache semantic gates pass for the same source commit, fixture hash, slice spec hash, and build profile hash. OpenSpec validation is only a historical governance/change-management check and cannot replace those evidence gates.
+8. Promote the candidate to an accepted slice only when the C oracle, Rust replay, diff, unsafe, and version/cache semantic gates pass for the same source commit, fixture hash, slice spec hash, and build profile hash. Superpowers validation is only a historical governance/change-management check and cannot replace those evidence gates.
 
 ## Supported C Subset
 
@@ -110,13 +109,8 @@ Deferred:
 
 Run these commands from the current repository root. Some commands are expected interfaces for this change; until schema, translator, and `auto_migrate` work lands, they define the agent contract rather than current availability.
 
-### OpenSpec Status And Tasks
 
 ```powershell
-openspec status --change "add-bounded-auto-translation-pipeline" --json
-openspec instructions apply --change "add-bounded-auto-translation-pipeline" --json
-openspec validate add-bounded-auto-translation-pipeline --strict
-openspec validate --all
 ```
 
 ### L1 Input Selection
@@ -221,8 +215,6 @@ Pop-Location
 For a documentation or pipeline change, run at least:
 
 ```powershell
-openspec validate add-bounded-auto-translation-pipeline --strict
-openspec validate --all
 git diff --check
 ```
 
@@ -256,4 +248,4 @@ An agent may report an auto-translated slice complete only when all evidence is 
 - Context pack, type map, CFG, and pointer graph were generated before the Rust draft.
 - Unsupported constructs or blocked repairs are explicitly recorded.
 - C oracle, Rust replay, schema-aware diff, negative diff, rust check, unsafe scan, unsafe ledger, and final verification are referenced from the L3 evidence manifest.
-- If the local governance flow explicitly requires it, OpenSpec change validation passes; `git diff --check` passes.
+- The acceptance items in the corresponding Superpowers execution plan are complete; `git diff --check` passes.

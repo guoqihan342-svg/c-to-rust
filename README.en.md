@@ -1,89 +1,321 @@
-# English Mirror:  README
+# Verifiable C-to-Rust Migration Harness
 
-Chinese original: `README.md`.
+This repository is a progressive C-to-Rust translation and verification system for real C projects. clang/typed IR, C2Rust, and OpenCode/LLM output are candidate sources only. A shared C oracle, Rust replay, schema diff, negative mutation, unsafe ledger, and final-verification chain decides whether a candidate is accepted.
 
-This file is the English mirror for `README.md`. The Chinese source is the authoritative maintenance document; update this file in the same change whenever the Chinese document changes.
-
-## Scope
-
-This mirror covers the repository overview and quick entry point. It is intentionally concise for older plans, templates, and OpenSpec records so that the repository has a stable bilingual entry point without turning historical artifacts into the active backlog.
-
-## Source Outline
-
-The Chinese source currently contains these major headings:
-
-- `# C-to-Rust Progressive Migration Pipeline`
-- `## 愿景`
-- `## 架构概览`
-- `## L0-L4 验证分层`
-- `## 当前状态`
-- `## 核心目录`
-- `## 待办来源`
-- `## OpenCode 比赛单次交互`
-- `## 快速命令`
-- `# 运行翻译器测试（默认 feature）`
-- `# 运行翻译器测试（含 typed IR + clang frontend）`
-- `# 运行 auto migration（以 FlashDB crc32 为例）`
-- `# 验证自动翻译证据`
-- `# 语义通过验证`
-- `# 全量回归`
-- `## 设计原则`
-
-## Current OpenCode Competition Summary
-
-The Chinese README now treats the 600-minute figure as an optional external evaluation budget, not as an optimization target. The competition path prioritizes accuracy and complete evidence, may process independent slices with parallel agents or batch workers, and requires isolated worker outputs plus common validator/final-verification acceptance.
-
-The current typed-IR route includes local fixed-size integer arrays and readonly `static const` fixed-size integer global array index reads, including the restricted clang `array_filler` sparse initializer subset.
-
-Current FlashDB accepted evidence includes both `real-fdb-calc-crc32` and `real-fdb-blob-make` through the L4 accepted-evidence-authoritative path. Their generated Rust drafts remain candidates with `generated_draft_semantic_pass=false`. `fdb_kv_set` still has L4 refused/blocked evidence because its external callee semantics are not closed by verified shims, models, or oracle evidence.
-
-The current development branch is `codex/flashdb-rust-skeleton`.
-
-## Current Harness MVP Status
-
-- Current branch: `codex/flashdb-rust-skeleton`.
-- The OpenCode harness now has a minimal executor: `python3 -B -m validation.tools.opencode_agent_harness run-worker --mode deterministic` invokes the repo-local `scripts/c2rust-migrator.py --phase migrate --input ...` path and records the worker summary into the SQLite ledger when present.
-- The OpenCode wrapper path is wired: `run-worker --mode opencode --opencode-variant max` runs the same assignment request. OpenCode/LLM output remains non-evidence.
-- Competition-facing agent evidence must be launched by OpenCode with `GLM-5.1`; `.codex/skills/c2rust-migration/SKILL.md` is the repo-owned maintenance/runbook skill, while the exact-command preflight itself proves model availability with `opencode models` and fails closed with `opencode_model_unavailable` when GLM-5.1 is absent.
-- Accepted-evidence reuse is wired: `assign-slice --reuse-accepted-evidence --accepted-evidence-root validation/evidence --slice-spec <maintained-spec>` validates committed evidence inside an isolated worker output directory.
-- Judge-facing before/after demo entrypoint: `docs/c2rust-migration-agent/judge-demo.md`. The preferred path uses `config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json` to generate `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`, `before-after-exhibit.json`, `milestone-release-report.json`, copied `target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json`, and `harness/judge-evidence-index.json`. The harness now exercises a real FlashDB `baseline_repair_gate`: attempt 1 records the unsafe baseline failure for `real-fdb-calc-crc32` with root cause `unsafe_baseline_requires_repair`, and retry attempt 2 requires the repair hint before revalidating accepted safe evidence. It shows unsafe 2 -> 0 and the planner/worker/verifier/repairer/reporter contract, while keeping `generated_draft_semantic_pass=false` and not increasing `translation_coverage_numerator`. The review gate only clears release-readiness review blockers; it is not a semantic acceptance gate. The tracked H4 run manifest is `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json`.
-- Judge-facing one-click runner: `python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json` executes the configured competition smoke, before/after, multi-worker, and OpenCode entrypoints in config order, then invokes the existing judge-entrypoint validator with local-artifact checks. The local execution layer resolves configured portable `python3 -B` commands to a runnable non-absolute Python launcher, while public config and evidence stay pinned to `python3 -B`. Local artifact validation now binds `competition-smoke-summary.json` to the judge config `environment_profile.profile_id/sha256` and the entrypoint `proof_class/run_id`, and rejects CI/WSL/Windows-local evidence or `proof-class-limiting` deviations being mislabeled as `competition-exact`; the two `evaluate --profile` entrypoints also write `harness/resume-manifest.json`, a current-state resume index over the SQLite ledger, context pack, agent index, worker summaries, and resume entrypoints. `config/competition-env/bundle-manifest.json` also promotes the competition config folder to a hash-bound archive contract, and the runner report embeds a `competition_config_archive` snapshot. It also writes `summary/judge-milestone-bundle.json`, `summary/milestone-release-notes.md`, and `summary/public-release-packet.json`: the bundle aggregates `core_translation_quality`, `harness_architecture_summary`, `route_governance_metrics`, `evidence_cost_retention`, `claim_scope`, `proof_classes`, `publishability`, `known_gaps`, `must_not_claim`, and reproduction commands as the external review index; the Markdown release notes render a judge packet index with config/run/readiness/bundle refs; the JSON public release packet hash-binds the run report, readiness report, bundle, release notes, and config archive for quick judge review, then `validation.tools.validate_public_release_packet` checks it against `validation/public-release-packet.schema.json`, verifies the packet's copied publication manifest, `quantitative_evaluation`, `progress_delta_ledger`, `summary.workflow_metrics`, known gaps, reproduction commands, and must-not-claim coverage against the bound bundle, and requires the release notes to match the Markdown rendered from that bundle. Use `--entrypoint-id before_after_judge_demo` for the focused before/after run or `--dry-run` to write only the execution plan. The smoke entrypoint is environment evidence only and keeps `semantic_gate=false`; the bundle, release notes, public release packet, and resume manifest are not semantic gates or translation-coverage numerators.
-- S4 progress-delta ledger: `judge-milestone-bundle.json` now exposes `progress_delta_ledger`, separating translator capability deltas, governance/evidence deltas, and workflow repair deltas. When `workflow_metrics.repair_activity` is sparse or zero but `before_after_repair_exhibit` has verified repair evidence, `workflow_delta` fills reviewer-facing observed repair, auto-recovered, rollback-evidence, and source counts by entrypoint so the self-healing loop is not under-reported. `public-release-packet.json` copies the same ledger at the top level and under `summary`, and release notes render a `Progress Delta Ledger` table. The ledger is fixed at `semantic_gate=false`, `generated_draft_semantic_pass=false`, and `translation_coverage_numerator=0`.
-- `judge-milestone-bundle.json` now includes `harness_architecture_summary.contract_matrix`, a stage/role/artifact/validator/boundary matrix for `plan/translate/verify/repair/report`; the schema requires every row to keep `semantic_gate=false`, `chat_output_is_evidence=false`, and `translation_coverage_numerator=0`. The OpenCode `run-plan` graph now also exposes `opencode_worker.opencode_variant`, so reviewers do not need to drill into the preflight artifact to see the runtime variant.
-- Judge-entrypoint local-artifact validation now also runs `validate_competition_run_summary.py` for non-smoke `competition_summary` artifacts, so workflow metrics, before/after artifact refs, repair history, unsafe accounting, final-gate rules, and slice counts are checked by the existing summary contract instead of only by path and sha256.
-- Explicit multi-worker profile smoke: `config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json` fans out two source-pinned workers (`real-fdb-calc-crc32`, `real-fdb-blob-make`) and merges in planner order. The verified run `harness-flashdb-explicit-workers-20260701` passed with accepted-evidence `semantic_pass=2`; `evaluate --profile` with the same profile also passed and now emits `harness/evaluate-report.json` plus `harness/judge-evidence-index.json`. The index only binds verified batch artifacts by path and sha256. Semantic acceptance remains owned by accepted-evidence binding, the competition summary, workflow metrics, and validators; it is not a new semantic gate and does not increase `translation_coverage_numerator`. The tracked run manifest is `validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json`.
-- Profiles that enable route-governance metrics also emit and bind `summary/route-governance-metrics-report.json`; `validation/route-governance-metrics.schema.json` and the report `retention_policy` only lock the report fields, artifact-retention policy, and public-claim boundary. They do not promote accepted evidence, before/after exhibits, or route-governance metrics into translator-generated semantic pass, and they do not increase `translation_coverage_numerator`.
-- C2Rust baseline manifest status now flows into route-governance metrics and the milestone scorecard: reports count manifest, generated-output, skipped, and compile-only states, then render the baseline comparison in release notes. These fields remain candidate context only with `semantic_gate=false` and `translation_coverage_numerator=0`.
-- FlashDB slices currently passing through semantic evidence binding: `real-fdb-calc-crc32` and `real-fdb-blob-make`. Both are L4 accepted-evidence authoritative; generated drafts are still not semantic pass.
-- FlashDB slice currently blocked: `real-fdb-kv-set`. Its direct callees have signature/source provenance, but `strlen`, `fdb_blob_make`, `fdb_kv_set_blob`, and `fdb_kv_del` shim/model/oracle semantics are not closed.
-
-Key commands mirrored from the Chinese README:
-
-```bash
-python3 -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
-python3 -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-blob-make --slice-spec validation/slice-specs/flashdb-real-fdb-blob-make.json --require-semantic-pass
-python3 -B -m validation.tools.opencode_agent_harness run-worker --db target/competition-out/state/opencode-agent-harness.sqlite3 --run-id run-demo-001 --worker-id worker-a --mode deterministic
-python3 -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
-python3 -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
-python3 -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --review-checklist target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
-python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
-# Public review Markdown: target/competition-out-flashdb-judge-entrypoints/summary/milestone-release-notes.md
-# Public release packet JSON: target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
-python3 -B -m validation.tools.validate_public_release_packet --packet target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
-# Evaluate resume index: target/competition-out-flashdb-*-evaluate-profile-20260701/harness/resume-manifest.json
-python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id before_after_judge_demo --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
-# Optional historical OpenSpec archive validation: not a required current development entrypoint; the default competition runner does not execute it.
-# To include it in local governance checks, pass --run-optional-governance-checks to run_competition.py explicitly.
-# A missing openspec CLI is treated as an optional skip; a present but failing CLI fails that optional gate.
-openspec validate --all --strict
+```text
+real C source -> bounded Rust candidate -> executable equivalence evidence -> accepted / refused / blocked
 ```
 
-## Design Principles
+## Current Status
 
-1. **OpenSpec governance**: `openspec/` is kept as a historical governance archive for the requirements -> design -> tasks -> acceptance trail. It is not the required current development entrypoint and is not part of the default competition gate. The default `run_competition.py` path does not execute OpenSpec; only an explicit `--run-optional-governance-checks` opt-in runs it as an optional governance check.
+| Item | Status |
+| --- | --- |
+| Translator-generated semantic pass | `32` named slices, derived from `validation/translator-coverage-matrix.json` |
+| Accepted-evidence authoritative | `1`, reported separately from the translator numerator |
+| Latest completed stage | P0-T20: compose `fdb_kvdb.c:1870-1873` assignment-call, reset/add, and current-level `continue` |
+| Active translator task | P0-T21: compose the zero-start and next-address branches at `fdb_kvdb.c:1868-1874` |
+| Current environment proof | `wsl-local-simulation`, not `competition-exact` |
+| FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
+| Development workflow | Superpowers specs/plans, canonical roadmap, and harness evidence gates |
 
-## Maintenance Notes
+These counts cover declared named-slice boundaries only. They do not prove complete C support, complete `fdb_kv_iterate`, whole-project FlashDB migration, or production safety.
 
-- Keep filenames paired as `README.md` and `README.en.md` in the same directory.
-- Keep the first line of the Chinese source pointing to `README.en.md` with the repository-standard mirror notice.
-- For project-wide priorities, follow `docs/c2rust-migration-agent/future-vision-and-mvp.md`; local plans, OpenSpec tasks, and validation checklists are scoped artifacts only.
+The canonical backlog is [future-vision-and-mvp.md](docs/c2rust-migration-agent/future-vision-and-mvp.md). Designs and implementation plans live under `docs/superpowers/specs/` and `docs/superpowers/plans/`.
+
+## What the Harness Does
+
+1. Pins repository, branch, commit, function, compile database, and fixture input.
+2. Plans isolated worker assignments with one out-root per worker.
+3. Generates candidates through generic typed IR, C2Rust/C2Rust+repair, or OpenCode.
+4. Executes the shared C oracle, Rust replay, diff, negative-diff, unsafe, and profile gates.
+5. Applies one bounded repair per round and rolls back to the last-good candidate on failure.
+6. Stores scheduling state in SQLite and semantic facts in on-disk validated artifacts.
+7. Produces workflow metrics, before/after exhibits, judge bundles, release notes, and public packets.
+
+SQLite and agent conversation are not semantic evidence. Only on-disk artifacts and validators establish acceptance.
+
+## Harness Architecture
+
+```mermaid
+flowchart TB
+    subgraph Inputs["Inputs and configuration"]
+        SRC["Pinned C repository"]
+        SPEC["Slice spec / extract spec"]
+        PROFILE["Batch profile"]
+        JCFG["Judge entrypoints"]
+        SP["Superpowers specs and plans"]
+    end
+
+    subgraph Control["Control plane"]
+        JUDGE["run_judge_entrypoints"]
+        DEMO["judge_demo"]
+        HARNESS["opencode_agent_harness"]
+        LEDGER[("SQLite ledger")]
+        PLAN["Planner / assignment / lease"]
+    end
+
+    subgraph Execution["Execution plane"]
+        EXTRACT["extract_source_slice"]
+        WORKER["Isolated worker out-root"]
+        MIGRATOR["scripts/c2rust-migrator.py"]
+        AUTO["auto_migrate.py"]
+        TRANSLATOR["c2r-translator\nclang AST -> typed IR -> Rust"]
+        C2RUST["C2Rust baseline / repair"]
+        OPENCODE["OpenCode worker\nGLM-5.1 + c2rust-migrator + max"]
+    end
+
+    subgraph Proof["Proof plane"]
+        ORACLE["C oracle"]
+        REPLAY["Rust replay"]
+        DIFF["Schema diff"]
+        NEG["Negative mutation"]
+        UNSAFE["Unsafe scan / ledger"]
+        VERIFY["Final verification"]
+    end
+
+    subgraph Reports["Reporting and publication"]
+        WREPORT["run-worker-report"]
+        SUMMARY["competition-run-summary"]
+        METRICS["workflow-metrics"]
+        BUNDLE["judge-milestone-bundle"]
+        PACKET["public-release-packet"]
+    end
+
+    SP -. "development constraints" .-> PLAN
+    SRC --> EXTRACT
+    SPEC --> EXTRACT
+    PROFILE --> HARNESS
+    JCFG --> JUDGE
+    JUDGE --> DEMO
+    JUDGE --> HARNESS
+    HARNESS <--> LEDGER
+    HARNESS --> PLAN
+    PLAN --> WORKER
+    EXTRACT --> WORKER
+    WORKER --> MIGRATOR
+    MIGRATOR --> AUTO
+    AUTO --> TRANSLATOR
+    AUTO --> C2RUST
+    HARNESS --> OPENCODE
+    OPENCODE --> WORKER
+    TRANSLATOR --> ORACLE
+    TRANSLATOR --> REPLAY
+    C2RUST --> REPLAY
+    ORACLE --> DIFF
+    REPLAY --> DIFF
+    DIFF --> NEG
+    NEG --> UNSAFE
+    UNSAFE --> VERIFY
+    VERIFY --> WREPORT
+    WREPORT --> SUMMARY
+    SUMMARY --> METRICS
+    DEMO --> BUNDLE
+    SUMMARY --> BUNDLE
+    METRICS --> BUNDLE
+    BUNDLE --> PACKET
+```
+
+## Artifact Data Flow
+
+```mermaid
+flowchart LR
+    A["1. Source pin\nrepo + branch + commit"]
+    B["2. Source extraction\nfunction + dependencies"]
+    C["3. Slice spec\nboundary + fixture + build profile"]
+    D["4. Context pack\ntypes + calls + globals + hashes"]
+    E["5. Worker assignment\nworker id + isolated out-root"]
+    F["6. Candidate generation\ntyped IR / C2Rust / OpenCode"]
+    G["7. Rust candidate\ncompile status + provenance"]
+    H["8. Executed evidence\nC oracle + Rust replay"]
+    I["9. Differential gates\ndiff + negative diff + unsafe"]
+    J{"10. Final gate"}
+    K["accepted\ndeclared slice only"]
+    L["refused\nunsupported construct"]
+    M["blocked\nmissing environment/evidence"]
+    N["11. Worker summary\nartifact refs + hashes"]
+    O["12. Merge and metrics\ncompetition summary + workflow metrics"]
+    P["13. Judge publication\nbundle + notes + public packet"]
+
+    A --> B --> C --> D --> E --> F --> G --> H --> I --> J
+    J -->|"all gates pass"| K
+    J -->|"known unsupported"| L
+    J -->|"missing proof/tool"| M
+    K --> N
+    L --> N
+    M --> N
+    N --> O --> P
+```
+
+Every stage emits repo-relative paths and hashes. Downstream validators reopen artifacts instead of trusting upstream prose.
+
+## Repair / Retry Flow
+
+```mermaid
+sequenceDiagram
+    participant P as Planner
+    participant DB as SQLite ledger
+    participant W as Worker
+    participant V as Verifier
+    participant R as Repairer
+    participant O as On-disk evidence
+
+    P->>DB: assign slice and isolated out-root
+    DB-->>W: lease and assignment request
+    W->>O: write candidate and worker report
+    W->>V: request compile/oracle/diff validation
+    V->>O: write final gate and concrete failure
+    alt gate passed
+        V->>DB: record converged summary
+    else repairable blocker and rounds remain
+        V->>R: emit one bounded repair hint
+        R->>O: record rollback id and minimal patch
+        R->>W: retry from last-good candidate
+        W->>V: revalidate affected gates
+    else unproven or exhausted
+        V->>DB: record refused or blocked
+    end
+```
+
+The default repair cap is five rounds. Process exit status, model text, and repair history prove execution only; a candidate is accepted only after shared gates pass again.
+
+## Main Components
+
+| Component | Responsibility | Main output |
+| --- | --- | --- |
+| `extract_source_slice.py` | Extract function, dependencies, and source identity from a real checkout | slice spec |
+| `crates/c2r-translator/` | clang AST, typed IR, generic Rust emitter, fail-closed reasons | candidate and lowering report |
+| `auto_migrate.py` | Orchestrate generation, oracle/replay drafts, route/profile, and evidence | auto-translation evidence |
+| `validate_auto_translation_evidence.py` | Cross-check schema, hashes, identity, and semantic gates | strict validation result |
+| `opencode_agent_harness.py` | Run/plan/worker/retry/evaluate, SQLite state, isolation, recovery | worker reports, indexes, merge plan |
+| `run_competition.py` | Aggregate slices/workers and run environment, unsafe, and summary gates | competition summary and workflow metrics |
+| `judge_demo.py` | Build the before/after safety exhibit | exhibit and judge evidence index |
+| `run_judge_entrypoints.py` | Run smoke, before/after, multi-worker, and OpenCode entrypoints | run report, bundle, public packet |
+
+## Candidate and Acceptance Boundary
+
+| Source | Purpose | Semantic pass by itself? |
+| --- | --- | --- |
+| Generic typed IR | Generic AST/type/alias-driven candidate | No |
+| Raw C2Rust | Broad unsafe baseline | No |
+| C2Rust + repair | Safety before/after candidate | No |
+| OpenCode / LLM | Candidate generation and bounded repair | No |
+| C oracle + Rust replay + diff gates | Executable equivalence within the declared boundary | Yes |
+
+A named slice may increase the semantic numerator only when source/fixture/candidate hashes agree, C and Rust execute, schema diff and a discriminating negative mutation pass, unsafe/route/profile/final-verification artifacts are cross-bound, and the strict validator passes with `--require-semantic-pass`.
+
+## Worker Isolation and State
+
+```text
+target/competition-out/
+  state/opencode-agent-harness.sqlite3
+  harness/
+    context-pack.json
+    agent-index.json
+    plans/*.json
+    merge-plan.json
+    resume-manifest.json
+  workers/<worker-id>/
+    request.json
+    evidence/
+    harness/run-worker-report.json
+    summary/competition-run-summary.json
+  summary/
+    competition-run-summary.json
+    workflow-metrics.json
+```
+
+Each worker writes only its assigned out-root. Request and ledger paths must match. Stale summaries are removed before execution. OpenCode workers require a passed preflight from the same run. Merge consumes machine-readable worker summaries only and fails closed on missing summaries, hash drift, or failed final gates.
+
+## Competition Proof Classes
+
+The machine-readable environment profile is `config/competition-env/environment.json`.
+
+| Proof class | Source | Closes competition-host acceptance? |
+| --- | --- | --- |
+| `local-simulation` | Windows/local host | No |
+| `wsl-local-simulation` | WSL | No |
+| `ci-approximation` | Linux CI | No |
+| `competition-exact` | Real host with `COMPETITION_EXACT_HOST=1` | Yes |
+
+Current WSL differs from the target in kernel, Rust/Cargo, Node/npm, Java/Maven, CMake baseline, and strict GLM model probe. See the competition-environment section in the canonical roadmap for the exact comparison.
+
+## Quick Start
+
+```bash
+# Development verification
+cargo fmt --all --check
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+python3 -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python3 -B validation/tools/translator_coverage_matrix.py --matrix validation/translator-coverage-matrix.json
+
+# WSL competition-profile simulation
+source config/competition-env/env.sh
+export CLANG_PATH=/usr/bin/clang
+bash config/competition-env/toolchain-check.sh
+bash config/competition-env/smoke.sh wsl-local-simulation target/competition-smoke-wsl
+
+# Judge before/after exhibit
+python3 -B -m validation.tools.judge_demo \
+  --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json \
+  --run-id competition-flashdb-before-after-exhibit \
+  --out-root target/competition-out-flashdb-before-after-exhibit \
+  --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
+
+# All judge entrypoints
+python3 -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+```
+
+On the real competition host, set `COMPETITION_EXACT_HOST=1` and add `--proof-class competition-exact`.
+
+OpenCode preflight:
+
+```bash
+python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id <run-id> \
+  --out-root target/opencode-preflight \
+  --opencode-model GLM-5.1 \
+  --opencode-agent c2rust-migrator \
+  --opencode-variant max
+```
+
+## Superpowers Workflow
+
+The project uses these development entrypoints:
+
+1. `docs/superpowers/specs/` for behavioral and architectural designs.
+2. `docs/superpowers/plans/` for executable implementation, test, and rollback plans.
+3. `docs/c2rust-migration-agent/future-vision-and-mvp.md` as the only global backlog.
+4. `validation/**` as executable contracts and evidence; documentation checkboxes cannot replace them.
+
+Superpowers documents guide development. They are not competition preflight inputs or semantic gates.
+
+## Core Directories
+
+| Path | Contents |
+| --- | --- |
+| `crates/c2r-translator/` | translator, clang frontend, typed IR, emitter |
+| `validation/tools/` | migration, harness, validation, judge, and report tools |
+| `validation/slice-specs/` | real source-backed slice contracts |
+| `validation/evidence/` | hash-bound oracle/replay/diff/unsafe/route/profile evidence |
+| `validation/l2_slices/` | Rust replay and C oracle fixtures |
+| `flashDB_rust/` | FlashDB Rust skeleton/reference runtime |
+| `config/competition-env/` | environment, batch profiles, judge entrypoints, OpenCode runbook |
+| `docs/superpowers/` | current designs and implementation plans |
+| `docs/c2rust-migration-agent/` | architecture, runbooks, roadmap, and boundaries |
+| `scripts/` | full regression and helper scripts |
+
+## Core Principles
+
+- Candidates are not correctness; every route passes the same gates.
+- The C oracle is ground truth only within its declared fixture/compiler/ABI contract.
+- Fail closed with an actionable next step when proof is missing.
+- FlashDB is a real test input, never a project/function-name translation specialization.
+- Unsafe counts are metrics, not complete proof for FFI, volatile, concurrency, ABI, or hardware.
+- Public artifacts use repo-relative paths and never contain secrets or host absolute paths.
+
+## Repository
+
+- Main development branch: `codex/flashdb-rust-skeleton`
+- GitHub: `https://github.com/guoqihan342-svg/c-to-rust`

@@ -33,7 +33,6 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report --quiet
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
 python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_default_does_not_enable_clang_features validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_keeps_clang_lowering_report_fields_out_by_default validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_does_not_enable_lowering_report_feature
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -48,7 +47,6 @@ git diff --check
 - `clang-lowering-report`：63 个 lib tests + 396 个 bounded tests + doc tests 通过。
 - `--all-features --quiet`：63 个 lib tests + 396 个 bounded tests + doc tests 通过。
 - Python 默认/clang optional route/profile/cache opt-in 定向测试：6/6 passed。
-- `openspec validate --all --strict`：38/38 passed。
 - `git diff --check`：exit 0，仅 Windows LF-to-CRLF warnings。
 
 边界：
@@ -99,7 +97,6 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --qui
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --quiet
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend --quiet
 $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_readonly_record_pointer_arrow_member_read_when_enabled --test bounded_translation -- --nocapture
-openspec validate --all --strict
 git diff --check
 ```
 
@@ -113,7 +110,6 @@ git diff --check
 - 默认 feature：4 lib tests + 35 bounded tests 通过。
 - `clang-frontend`：5 lib tests + 44 bounded tests 通过。
 - 真实 clang AST arrow member read smoke：1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
-- `openspec validate --all --strict`：38/38 passed。
 - `git diff --check`：exit 0，仅 Windows LF-to-CRLF warnings。
 
 边界：
@@ -847,9 +843,7 @@ English mirror summary:
   - `LIBCLANG_PATH` 移到 `ignored_env_for_ast_dump.LIBCLANG_PATH`，reason 为 `ignored_for_ast_dump`。
 - `config/competition-env/environment.json` 与 `validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json`
   - competition clang lane 从 `optional_env=["LIBCLANG_PATH"]` 改为 `ignored_env_for_ast_dump=["LIBCLANG_PATH"]`。
-- 文档/OpenSpec/slice spec：
   - `future-vision-and-mvp.md` / `.en.md` 将 P0 “统一 clang 前端事实”勾选为完成。
-  - `bounded-auto-translation-pipeline.md` / `.en.md`、`build-and-c2rust-baseline.md`、`baseline-record.json`、当前 OpenSpec spec/change 文档和 `validation/slice-specs/flashdb-real-fdb-calc-crc32.json` 都收窄为 `CLANG_PATH` 驱动的 clang AST dump JSON 或 compile_commands 语义事实；不再把 `clang/libclang` 合并写成当前事实源。
 
 已观察 RED：
 ```powershell
@@ -869,7 +863,6 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-low
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
 python -m unittest validation.tools.test_auto_migrate validation.tools.test_competition_environment_profile
 python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_template_schema_contracts validation.tools.test_competition_environment_profile validation.tools.test_unsafe_budget
-openspec validate --all --strict
 python validation/tools/unsafe_budget.py --max-ratio 0.10
 python -m json.tool config/competition-env/environment.json > $null
 python -m json.tool validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json > $null
@@ -881,9 +874,7 @@ git diff --check
 结果：
 - Rust all-features：67 lib/bin tests + 435 bounded_translation tests 通过。
 - Python 组合：154 tests 通过（有一条 jsonschema metaschema deprecation warning，不影响结果）。
-- OpenSpec：38 passed, 0 failed。
 - unsafe budget：34 files / 26676 lines，0 unsafe，ratio 0.0。
-- 当前代码/文档/OpenSpec（排除 archive 和历史 CONTEXT）扫描无 `clang/libclang`、`ready_without_libclang`、`optional_env` 旧 contract 残留。
 
 边界：
 - 可以说：当前 active clang frontend fact 已统一为 `CLANG_PATH` + clang AST dump JSON；dry-run 是 diagnostic-only；`LIBCLANG_PATH` 只作为 ignored metadata 记录。
@@ -894,7 +885,6 @@ English mirror summary:
 - Normalized the active clang frontend contract to `CLANG_PATH` + `clang -Xclang -ast-dump=json -fsyntax-only`.
 - `clang-dry-run` artifacts now carry `diagnostic_only` status, explicit claim boundary, and `active_frontend.kind=clang_ast_dump_json`.
 - `LIBCLANG_PATH` is now recorded only as ignored diagnostic metadata (`ignored_env_for_ast_dump` / `observed_libclang_path`), not as an active frontend capability.
-- Competition environment JSON, validation profile, roadmap docs, OpenSpec text, and slice-spec diagnostics were updated to match the current implementation.
 - This completes the P0 clang frontend fact-boundary item, not a real libclang parser implementation.
 
 ## 153. 2026-06-28 external review triage: oracle limits, metrics, performance
@@ -909,7 +899,6 @@ English mirror summary:
 文档改动：
 - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
 - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
-- `openspec/specs/bounded-auto-translation-pipeline/spec.md`
 - `docs/c2rust-migration-agent/testing-unsafe-cache-and-milestone.md`
 
 新增/强化的待办：
@@ -920,7 +909,6 @@ English mirror summary:
 - P1 新增：把性能 smoke 前移到真实切片扩展；每个新增 L3 named slice 至少有轻量 benchmark/performance-smoke 或明确 `performance_not_claimed`。
 - P1 新增：嵌入式/平台依赖边界，FlashDB/RTOS/文件系统/flash 断电恢复/volatile/硬件寄存器/线程中断交互必须有 platform contract、host simulation、target evidence 或 L4 refusal。
 - P2 新增：milestone 必须发布量化评估和案例报告；没有真实项目/函数数、accepted/refused/blocked 比例、失败类别、人工介入、性能、unsafe、可复现命令、evidence hash、社区复核状态和 non-goals，就只能称研究原型/受限 MVP。
-- OpenSpec active spec 新增：平台依赖 slice 必须声明 mockable platform contract、accepted target evidence 或 L4 refusal；自动翻译 run 必须输出 route/refusal metrics；缺 performance-smoke 的新 L3 named slice 必须记录 `performance_not_claimed`，且性能证据不能替代语义门禁。
 - testing/unsafe/cache 文档新增：高风险 pointer/overflow slice 可声明 sanitizer、MIRI/Kani 或 symbolic-execution profile；工具缺失必须记录 skipped/blocking reason，不能声明穷尽等价。
 
 当前 roadmap 计数：

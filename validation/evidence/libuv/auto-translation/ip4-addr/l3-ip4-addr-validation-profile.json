@@ -4,7 +4,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
-        "sha256": "0eca3d16becf2c25686c38b96beafe6ccaeac5121c5d6453bb469351e1538e9c",
+        "sha256": "02d19a02027641d850ab39e60399b2eb2aa19aaf6e316a534540e4b6273b5bda",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -38,7 +38,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
-          "sha256": "0eca3d16becf2c25686c38b96beafe6ccaeac5121c5d6453bb469351e1538e9c",
+          "sha256": "02d19a02027641d850ab39e60399b2eb2aa19aaf6e316a534540e4b6273b5bda",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",

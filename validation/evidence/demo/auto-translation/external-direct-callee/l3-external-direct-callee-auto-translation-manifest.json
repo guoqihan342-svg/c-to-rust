@@ -34,7 +34,7 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-    "sha256": "d4b560bc079507d3751a91de8c9ac3688c0a92f0f9ce67d2252172e1eeea372e",
+    "sha256": "3cec3d0c1b8eea85969ba9a3593937d78eb8b911b61940cf3522bc0dcfa85e15",
     "status": "skipped"
   },
   "cache": {
@@ -79,13 +79,13 @@
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-        "sha256": "d4b560bc079507d3751a91de8c9ac3688c0a92f0f9ce67d2252172e1eeea372e",
+        "sha256": "3cec3d0c1b8eea85969ba9a3593937d78eb8b911b61940cf3522bc0dcfa85e15",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L0",
         "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-        "sha256": "eb7c3f68051f7130f2ad1c214960d73dab107987888232d31d2f9ea7ded81ea1",
+        "sha256": "855dafcc4768a35dae1c120e489d9fd54fb6ea41b54cb1b3097b319ded9532f0",
         "status": "recorded"
       },
       "validation_profile": {
@@ -138,7 +138,6 @@
     "target_id": "demo",
     "tool_versions": {
       "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
-      "openspec": "1.4.1",
       "python": "Python 3.14.2",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
@@ -179,12 +178,12 @@
   "fixture": {
     "hash": "external-direct-callee-fixture",
     "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
-    "sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6"
+    "sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b"
   },
   "l3_evidence_manifest": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-evidence-manifest.json",
     "semantic_pass": true,
-    "sha256": "648c5d9cd5a7d1f4847a57e7377d17ba25a8dbb904b901b66fbe39ddae64762e",
+    "sha256": "f0a37602a5be3406c478c23c75fb10a90b8228a127a229c4a44748ccc8b9f2d6",
     "status": "passed"
   },
   "level": "L3",
@@ -311,7 +310,7 @@
           "hash": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
           "operation_count": 3,
           "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
-          "sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
+          "sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
           "source_kind": "fixture"
         }
       ],
@@ -390,7 +389,7 @@
   "route_decision": {
     "level": "L0",
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-    "sha256": "eb7c3f68051f7130f2ad1c214960d73dab107987888232d31d2f9ea7ded81ea1",
+    "sha256": "855dafcc4768a35dae1c120e489d9fd54fb6ea41b54cb1b3097b319ded9532f0",
     "status": "recorded"
   },
   "rust_check": {
