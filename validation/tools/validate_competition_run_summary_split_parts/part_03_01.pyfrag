@@ -1,0 +1,264 @@
+
+
+def validate_ai_cross_bindings(
+    payloads: dict[str, dict[str, Any] | None],
+    paths: dict[str, Path | None],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+    reasons: list[str],
+) -> None:
+    manifest = payloads.get("manifest")
+    route = payloads.get("route")
+    profile = payloads.get("profile")
+    final = payloads.get("final")
+    if not all(isinstance(payload, dict) for payload in [manifest, route, profile, final]):
+        return
+    validate_nested_ai_ref(final.get("route_decision"), paths["route"], paths["final"], "final_route", summary_path, repo_root, reasons)
+    validate_nested_ai_ref(final.get("validation_profile"), paths["profile"], paths["final"], "final_profile", summary_path, repo_root, reasons)
+    if manifest.get("status") == "generated":
+        route_ref = route.get("source_artifacts", {}).get("ai_candidate_manifest")
+        profile_ref = profile.get("candidate_generation", {}).get("ai", {}).get("source_artifact")
+        validate_nested_ai_ref(route_ref, paths["manifest"], paths["route"], "route_manifest", summary_path, repo_root, reasons)
+        validate_nested_ai_ref(profile_ref, paths["manifest"], paths["profile"], "profile_manifest", summary_path, repo_root, reasons)
+    else:
+        validate_nested_ai_ref(manifest.get("route_decision"), paths["route"], paths["manifest"], "manifest_route", summary_path, repo_root, reasons)
+        validate_nested_ai_ref(manifest.get("validation_profile"), paths["profile"], paths["manifest"], "manifest_profile", summary_path, repo_root, reasons)
+
+
+def validate_nested_ai_ref(
+    ref: Any,
+    expected_path: Path | None,
+    owner_path: Path | None,
+    label: str,
+    summary_path: Path,
+    repo_root: Path,
+    reasons: list[str],
+) -> None:
+    if expected_path is None or owner_path is None or not isinstance(ref, dict):
+        reasons.append(f"{label}_binding_missing")
+        return
+    path_ref = ref.get("path")
+    expected_sha = ref.get("sha256")
+    if not isinstance(path_ref, str) or not is_repo_relative_posix_path(path_ref) or not is_sha256(str(expected_sha)):
+        reasons.append(f"{label}_binding_invalid")
+        return
+    resolved = resolve_nested_ai_artifact(path_ref, owner_path=owner_path, summary_path=summary_path, repo_root=repo_root)
+    if resolved is None or resolved.resolve() != expected_path.resolve() or expected_sha != sha256(expected_path):
+        reasons.append(f"{label}_binding_drift")
+
+
+def resolve_nested_ai_artifact(
+    value: str,
+    *,
+    owner_path: Path,
+    summary_path: Path,
+    repo_root: Path,
+) -> Path | None:
+    candidates = [repo_root / value, owner_path.parent / value]
+    summary_candidate = resolve_summary_artifact(value, summary_path=summary_path, repo_root=repo_root)
+    if summary_candidate is not None:
+        candidates.append(summary_candidate)
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
+
+
+def validate_fresh_ai_manifest(
+    manifest: dict[str, Any],
+    *,
+    manifest_path: Path | None,
+    policy: dict[str, Any],
+    summary_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    reasons: list[str] = []
+    generator = manifest.get("generator")
+    expected_generator = {
+        "tool": "opencode",
+        "logical_model": COMPETITION_OPENCODE_MODEL,
+        "resolved_model": policy["model"],
+        "agent": policy["agent"],
+        "variant": policy["variant"],
+    }
+    if not isinstance(generator, dict) or any(generator.get(key) != value for key, value in expected_generator.items()):
+        reasons.append("ai_manifest_generator_does_not_match_execution_policy")
+    if manifest.get("ai_required_for_default_pipeline") is not True:
+        reasons.append("ai_manifest_does_not_require_default_ai_pipeline")
+    status = manifest.get("status")
+    if status not in {"generated", "blocked"}:
+        reasons.append("ai_first_manifest_not_invoked")
+    if manifest_path is None:
+        reasons.append("ai_manifest_path_missing")
+    else:
+        bindings = manifest.get("bindings")
+        for key in ["context_pack", "prompt", "raw_response"]:
+            ref = bindings.get(key) if isinstance(bindings, dict) else None
+            if not nested_ai_ref_is_hash_bound(ref, owner_path=manifest_path, summary_path=summary_path, repo_root=repo_root):
+                reasons.append(f"ai_manifest_{key}_binding_invalid")
+    candidates = manifest.get("candidates")
+    if not isinstance(candidates, list):
+        reasons.append("ai_manifest_candidates_invalid")
+        candidates = []
+    rust_candidates = [candidate for candidate in candidates if isinstance(candidate, dict) and candidate.get("purpose") == "rust_draft"]
+    repair_candidates = [candidate for candidate in candidates if isinstance(candidate, dict) and candidate.get("purpose") == "repair_candidate"]
+    if status == "blocked" and candidates:
+        reasons.append("blocked_ai_manifest_must_not_contain_candidates")
+    if status == "generated" and len(rust_candidates) != 1:
+        reasons.append("generated_ai_manifest_requires_one_rust_draft")
+    candidate = rust_candidates[0] if len(rust_candidates) == 1 else None
+    if candidate is not None and manifest_path is not None:
+        validate_ai_candidate_artifacts(candidate, manifest_path, summary_path, repo_root, reasons)
+    valid_repairs = 0
+    seen_rounds: set[int] = set()
+    for repair in repair_candidates:
+        round_value = repair.get("round")
+        bindings = repair.get("bindings")
+        raw_response = bindings.get("raw_response") if isinstance(bindings, dict) else None
+        if (
+            not isinstance(round_value, int)
+            or isinstance(round_value, bool)
+            or round_value < 1
+            or round_value in seen_rounds
+            or manifest_path is None
+            or not nested_ai_ref_is_hash_bound(raw_response, owner_path=manifest_path, summary_path=summary_path, repo_root=repo_root)
+        ):
+            reasons.append("ai_repair_round_is_not_hash_bound")
+            continue
+        seen_rounds.add(round_value)
+        validate_ai_candidate_artifacts(repair, manifest_path, summary_path, repo_root, reasons)
+        valid_repairs += 1
+    return {
+        "candidate": candidate,
+        "repair_rounds": valid_repairs,
+        "invocations": 1 + valid_repairs if status in {"generated", "blocked"} else 0,
+        "reasons": sorted(set(reasons)),
+    }
+
+
+def validate_ai_candidate_artifacts(
+    candidate: dict[str, Any],
+    manifest_path: Path,
+    summary_path: Path,
+    repo_root: Path,
+    reasons: list[str],
+) -> None:
+    if candidate.get("kind") != "opencode-ai" or candidate.get("semantic_pass") is not False:
+        reasons.append("ai_candidate_claim_boundary_invalid")
+    artifact = candidate.get("artifact")
+    if not nested_ai_ref_is_hash_bound(artifact, owner_path=manifest_path, summary_path=summary_path, repo_root=repo_root):
+        reasons.append("ai_candidate_artifact_binding_invalid")
+    elif candidate.get("output_hash") != artifact.get("sha256"):
+        reasons.append("ai_candidate_output_hash_mismatch")
+    if candidate.get("applied") is True:
+        applied = candidate.get("applied_artifact")
+        if not nested_ai_ref_is_hash_bound(applied, owner_path=manifest_path, summary_path=summary_path, repo_root=repo_root):
+            reasons.append("ai_candidate_applied_artifact_binding_invalid")
+        elif applied.get("sha256") != artifact.get("sha256") or candidate.get("rust_draft_sha256") != applied.get("sha256"):
+            reasons.append("ai_candidate_applied_hash_mismatch")
+
+
+def nested_ai_ref_is_hash_bound(
+    ref: Any,
+    *,
+    owner_path: Path,
+    summary_path: Path,
+    repo_root: Path,
+) -> bool:
+    if not isinstance(ref, dict):
+        return False
+    path_ref = ref.get("path")
+    expected_sha = ref.get("sha256")
+    if not isinstance(path_ref, str) or not is_repo_relative_posix_path(path_ref) or not is_sha256(str(expected_sha)):
+        return False
+    resolved = resolve_nested_ai_artifact(path_ref, owner_path=owner_path, summary_path=summary_path, repo_root=repo_root)
+    return resolved is not None and sha256(resolved) == expected_sha
+
+
+def ai_candidate_is_applied(candidate: Any, *, manifest_path: Path | None) -> bool:
+    if not isinstance(candidate, dict) or manifest_path is None or candidate.get("applied") is not True:
+        return False
+    artifact = candidate.get("artifact")
+    applied = candidate.get("applied_artifact")
+    return (
+        isinstance(artifact, dict)
+        and isinstance(applied, dict)
+        and artifact.get("sha256") == applied.get("sha256")
+        and candidate.get("output_hash") == applied.get("sha256")
+        and candidate.get("rust_draft_sha256") == applied.get("sha256")
+    )
+
+
+def ai_candidate_is_selected(
+    candidate: Any,
+    manifest: dict[str, Any],
+    route: dict[str, Any],
+    profile: dict[str, Any],
+) -> bool:
+    if not isinstance(candidate, dict):
+        return False
+    candidate_id = candidate.get("candidate_id")
+    route_generation = route.get("candidate_generation")
+    profile_generation = profile.get("candidate_generation")
+    if not isinstance(route_generation, dict) or not isinstance(profile_generation, dict):
+        return False
+    route_ai = route_generation.get("ai")
+    profile_ai = profile_generation.get("ai")
+    route_primary = route_generation.get("primary_candidate")
+    return (
+        isinstance(candidate_id, str)
+        and manifest.get("selected_candidate_id") == candidate_id
+        and route_generation.get("selected_candidate_id") == candidate_id
+        and profile_generation.get("selected_candidate_id") == candidate_id
+        and isinstance(route_ai, dict)
+        and isinstance(profile_ai, dict)
+        and route_ai.get("candidate_id") == candidate_id
+        and profile_ai.get("candidate_id") == candidate_id
+        and route_ai.get("kind") == "opencode-ai"
+        and profile_ai.get("kind") == "opencode-ai"
+        and route_ai.get("applied") is True
+        and profile_ai.get("applied") is True
+        and isinstance(route_primary, dict)
+        and route_primary.get("selected") == "opencode-ai"
+    )
+
+
+def ai_candidate_rustc_passes(candidate: Any, profile: dict[str, Any], final: dict[str, Any]) -> bool:
+    if not isinstance(candidate, dict) or final.get("rust_check_status") != "passed":
+        return False
+    acceptance = profile.get("generated_draft_acceptance")
+    rust_check = acceptance.get("rust_check") if isinstance(acceptance, dict) else None
+    rust_draft = acceptance.get("rust_draft") if isinstance(acceptance, dict) else None
+    return (
+        isinstance(rust_check, dict)
+        and rust_check.get("status") == "passed"
+        and isinstance(rust_draft, dict)
+        and rust_draft.get("sha256") == candidate.get("rust_draft_sha256")
+    )
+
+
+def ai_candidate_semantically_accepted(candidate: Any, profile: dict[str, Any], final: dict[str, Any]) -> bool:
+    if not isinstance(candidate, dict) or profile.get("accepted_evidence_authoritative") is not False:
+        return False
+    acceptance = profile.get("generated_draft_acceptance")
+    if not isinstance(acceptance, dict):
+        return False
+    claim_source = acceptance.get("claim_source")
+    return (
+        profile.get("status") == "passed"
+        and profile.get("generated_draft_semantic_pass") is True
+        and acceptance.get("status") == "passed"
+        and acceptance.get("generated_draft_semantic_pass") is True
+        and acceptance.get("selected_candidate_id") == candidate.get("candidate_id")
+        and acceptance.get("accepted_evidence_binding") is None
+        and isinstance(claim_source, str)
+        and "accepted" not in claim_source.lower()
+        and final.get("status") == "passed"
+        and final.get("validation_profile_status") == "passed"
+        and final.get("semantic_pass") is True
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
