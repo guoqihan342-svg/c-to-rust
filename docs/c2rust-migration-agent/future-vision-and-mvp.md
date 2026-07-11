@@ -279,7 +279,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   OpenCode `zai/glm-5.1` 读取 hash-bound ContextPack，输出单一结构化 Rust candidate；记录 provider、logical/resolved model、variant、prompt、输入、原始响应、解析结果和候选 SHA-256。模型输出、聊天文本和文件写入本身都保持 `semantic_gate=false`。无凭据、超时、响应格式错误或候选缺失必须结构化 blocked，不得静默回退后冒充 AI 已运行。
 
-  当前进度：候选生成器、schema-v2 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、余额/鉴权/超时分类和 `auto_migrate --ai-first-candidate` 已实现。WSL 能列出并实际启动 `zai/glm-5.1`。OpenCode 会把 provider 错误写入受限日志后继续内部重试，旧 harness 因外层 30/180 秒先到而把空响应记为 `provider_timeout`；2026-07-12 新增的日志偏移诊断只提取固定哨兵、不保存原始日志或密钥，单次真实调用已把根因还原为 `provider_insufficient_balance`。因此尚无真实 GLM candidate，本项保持未完成。模型可见、进程已启动和确定性 fallback 通过都不能替代候选证据。
+  当前进度：候选生成器、schema-v2 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、余额/鉴权/超时分类和 `auto_migrate --ai-first-candidate` 已实现。WSL 能列出并实际启动 `zai/glm-5.1`。OpenCode 会把 provider 错误写入受限日志后继续内部重试，旧 harness 因外层 30/180 秒先到而把空响应记为 `provider_timeout`；2026-07-12 新增的日志偏移诊断绑定首选日志及调用前偏移，首次创建日志时从偏移 0 读取，并且只提取固定哨兵、不保存原始日志或密钥。单次真实调用已把根因还原为 `provider_insufficient_balance`。因此尚无真实 GLM candidate，本项保持未完成。模型可见、进程已启动和确定性 fallback 通过都不能替代候选证据。
 
 - [x] **P0-A7：项目级 ContextPack 与编译上下文闭环**
 
