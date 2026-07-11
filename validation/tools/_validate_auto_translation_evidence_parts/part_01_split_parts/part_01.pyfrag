@@ -455,6 +455,7 @@ def validate_ai_candidate_binding(
         raise SystemExit("AI candidate id drifted from AI manifest")
     if manifest_candidate.get("semantic_pass") is not False:
         raise SystemExit("AI manifest candidate cannot claim semantic_pass")
+    validate_ai_repair_binding(manifest, manifest_candidate, evidence_dir=evidence_dir, prefix=prefix)
     displaced = manifest.get("displaced_candidate")
     if displaced is not None:
         displaced_path = evidence_dir / f"{prefix}-pre-ai-rust-candidate.rs"

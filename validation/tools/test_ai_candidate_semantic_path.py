@@ -106,6 +106,102 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
                 f"stdout:\n{validation.stdout}\nstderr:\n{validation.stderr}",
             )
 
+    def test_compile_failure_uses_one_bounded_repair_before_common_gates(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-semantic-repair-") as tmp:
+            root = Path(tmp)
+            provider = root / "fake_opencode.py"
+            launcher = root / "fake-opencode.cmd"
+            provider.write_text(
+                "import json, sys\n"
+                "prompt = sys.argv[-1]\n"
+                "if 'Repair only the supplied Rust candidate' in prompt:\n"
+                "    payload = {\n"
+                "        'schema_version': 1,\n"
+                "        'repair': {\n"
+                "            'kind': 'candidate',\n"
+                "            'language': 'rust',\n"
+                "            'source': 'pub fn add_one(value: i32) -> i32 {\\n    value.wrapping_add(1)\\n}\\n',\n"
+                "        },\n"
+                "        'assumptions': [],\n"
+                "    }\n"
+                "else:\n"
+                "    payload = {\n"
+                "        'schema_version': 1,\n"
+                "        'candidate': {\n"
+                "            'language': 'rust',\n"
+                "            'source': 'pub fn add_one(value: i32) -> i32 { value.wrapping_add( }\\n',\n"
+                "        },\n"
+                "        'assumptions': [],\n"
+                "    }\n"
+                "print(json.dumps({'type': 'message.part.updated', 'part': {'type': 'text', 'text': json.dumps(payload)}}))\n",
+                encoding="utf-8",
+            )
+            launcher.write_text(f'@"{sys.executable}" "{provider}" %*\n', encoding="utf-8")
+            out_root = root / "evidence"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "demo-add-one.json"),
+                    "--out-root",
+                    str(out_root),
+                    "--emit-clang-lowering-report",
+                    "--accept-existing-evidence",
+                    "--ai-first-candidate",
+                    "--ai-opencode-command",
+                    str(launcher),
+                    "--ai-repair-rounds",
+                    "1",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(result.returncode, 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+            evidence_dir = out_root / "demo" / "auto-translation" / "add-one"
+            profile = json.loads(
+                (evidence_dir / "l3-add-one-validation-profile.json").read_text(encoding="utf-8")
+            )
+            manifest = json.loads(
+                (evidence_dir / "l3-add-one-ai-candidate-manifest.json").read_text(encoding="utf-8")
+            )
+            repair = json.loads(
+                (evidence_dir / "l3-add-one-ai-repair-report.json").read_text(encoding="utf-8")
+            )
+            candidate = manifest["candidates"][0]
+
+            self.assertEqual(repair["status"], "candidate_ready_for_common_validation")
+            self.assertEqual(candidate["repair_rounds"], 1)
+            self.assertNotEqual(candidate["initial_output_hash"], candidate["output_hash"])
+            self.assertFalse(candidate["semantic_pass"])
+            self.assertTrue(profile["generated_draft_semantic_pass"])
+
+            validation = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "add-one",
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "demo-add-one.json"),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(
+                validation.returncode,
+                0,
+                f"stdout:\n{validation.stdout}\nstderr:\n{validation.stderr}",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,7 +9,7 @@ from .provider import LOGICAL_MODEL
 
 DEFAULT_MAX_REPAIR_ROUNDS = 3
 HARD_MAX_REPAIR_ROUNDS = 5
-MAX_CANDIDATE_BYTES = 512_000
+MAX_CANDIDATE_BYTES = 256_000
 PROTECTED_ARTIFACT_CLASSES = ("oracle", "fixture", "validator", "gate_configuration")
 
 

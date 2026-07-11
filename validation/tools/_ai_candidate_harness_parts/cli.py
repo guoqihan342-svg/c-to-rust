@@ -11,6 +11,7 @@ from .provider import DEFAULT_AGENT, DEFAULT_RESOLVED_MODEL, DEFAULT_VARIANT, ge
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate a hash-bound OpenCode Rust candidate")
     parser.add_argument("--slice-spec", required=True, type=Path)
+    parser.add_argument("--source-root", type=Path)
     parser.add_argument("--deterministic-evidence-dir", type=Path)
     parser.add_argument("--out-dir", required=True, type=Path)
     parser.add_argument("--opencode-command", default="opencode")
@@ -24,6 +25,7 @@ def main() -> int:
 
     context = build_context_pack(
         args.slice_spec,
+        source_root=args.source_root,
         deterministic_evidence_dir=args.deterministic_evidence_dir,
     )
     manifest = generate_candidate(

@@ -14,6 +14,7 @@
     "generator": {"$ref": "#/definitions/generator"},
     "bindings": {"$ref": "#/definitions/bindings"},
     "displaced_candidate": {"$ref": "#/definitions/candidateContextRef"},
+    "repair": {"$ref": "#/definitions/repairReportRef"},
     "claim_boundary": {"$ref": "#/definitions/claimBoundary"},
     "failure": {"$ref": "#/definitions/failure"},
     "cache_invalidation_keys": {"type": "array", "items": {"type": "string"}}
@@ -74,6 +75,17 @@
         "status": {"const": "candidate_context_only"}
       }
     },
+    "repairReportRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "status", "semantic_pass"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "status": {"enum": ["blocked", "stopped", "exhausted", "candidate_ready_for_common_validation"]},
+        "semantic_pass": {"const": false}
+      }
+    },
     "generator": {
       "type": "object",
       "additionalProperties": false,
@@ -131,6 +143,10 @@
         "input_artifact_hashes": {"type": "object", "additionalProperties": {"type": "string"}},
         "output_hash": {"type": "string"},
         "artifact": {"$ref": "#/definitions/artifactRef"},
+        "initial_artifact": {"$ref": "#/definitions/artifactRef"},
+        "initial_output_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "repair": {"$ref": "#/definitions/repairReportRef"},
+        "repair_rounds": {"type": "integer", "minimum": 1, "maximum": 5},
         "applied": {"type": "boolean"},
         "semantic_pass": {"type": "boolean"},
         "accepted_by_gates": {"type": "array", "items": {"type": "string"}},

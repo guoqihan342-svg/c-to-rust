@@ -10,6 +10,8 @@ from .provider import assistant_text_from_jsonl
 
 MAX_FAILURE_FACTS_BYTES = 64_000
 MAX_REPAIR_RESPONSE_BYTES = 512_000
+MAX_ASSUMPTIONS = 32
+MAX_ASSUMPTION_BYTES = 1_024
 FAILURE_FACT_KEYS = frozenset({"gate", "kind", "message", "location", "expected", "actual", "details"})
 SENSITIVE_DETAIL_KEYS = ("api_key", "apikey", "password", "secret", "credential", "access_token", "refresh_token")
 
@@ -103,6 +105,10 @@ def parse_repair_response(stdout: str) -> dict[str, Any]:
     assumptions = payload.get("assumptions")
     if not isinstance(assumptions, list) or not all(isinstance(item, str) for item in assumptions):
         raise ValueError("repair response assumptions must be a string array")
+    if len(assumptions) > MAX_ASSUMPTIONS or any(
+        len(item.encode("utf-8")) > MAX_ASSUMPTION_BYTES for item in assumptions
+    ):
+        raise ValueError("repair response assumptions exceed bounded count or item size")
     repair = payload.get("repair")
     if not isinstance(repair, dict):
         raise ValueError("repair response requires one repair object")
@@ -115,6 +121,8 @@ def parse_repair_response(stdout: str) -> dict[str, Any]:
         source = repair.get("source")
         if not isinstance(source, str) or not source.strip():
             raise ValueError("candidate repair source must be non-empty")
+        if "\x00" in source:
+            raise ValueError("candidate repair source must be NUL-free")
     elif kind == "patch":
         if set(repair) != {"kind", "format", "content"}:
             raise ValueError("patch repair requires only kind, format, and content")
