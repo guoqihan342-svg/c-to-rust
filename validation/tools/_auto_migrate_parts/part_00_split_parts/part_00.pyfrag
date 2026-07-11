@@ -29,6 +29,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from validation.tools import validate_judge_entrypoints as judge_validator
+from validation.tools.ai_candidate_harness import build_context_pack, generate_candidate
 TRANSLATOR_MANIFEST = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.toml"
 TRANSLATOR_LOCK = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.lock"
 COMPETITION_ENVIRONMENT_PROFILE = REPO_ROOT / "config" / "competition-env" / "environment.json"
@@ -109,7 +110,20 @@ def main() -> int:
         action="store_true",
         help="Bind already accepted oracle/replay/diff/unsafe evidence from the slice spec instead of claiming the generated draft is accepted.",
     )
+    parser.add_argument(
+        "--ai-first-candidate",
+        action="store_true",
+        help="Generate a hash-bound OpenCode/GLM-5.1 candidate after deterministic discovery and before route selection. The AI candidate remains non-semantic until common-gate routing is implemented.",
+    )
+    parser.add_argument("--ai-model", default="zai/glm-5.1")
+    parser.add_argument("--ai-agent", default="c2rust-migrator")
+    parser.add_argument("--ai-variant", default="max")
+    parser.add_argument("--ai-timeout-seconds", type=int, default=180)
     args = parser.parse_args()
+    if args.ai_timeout_seconds < 1 or args.ai_timeout_seconds > 600:
+        parser.error("--ai-timeout-seconds must be between 1 and 600")
+    if args.ai_first_candidate and args.accept_existing_evidence:
+        parser.error("--ai-first-candidate cannot reuse accepted evidence")
     if args.competition_clang_lane:
         args.emit_clang_lowering_report = True
         require_competition_clang_lane()
@@ -136,6 +150,19 @@ def main() -> int:
                 environment=os.environ,
                 competition_clang_lane=args.competition_clang_lane,
             ),
+        )
+    if args.ai_first_candidate:
+        context_pack = build_context_pack(
+            args.slice_spec,
+            deterministic_evidence_dir=evidence_dir,
+        )
+        generate_candidate(
+            context_pack,
+            out_dir=evidence_dir,
+            resolved_model=args.ai_model,
+            agent=args.ai_agent,
+            variant=args.ai_variant,
+            timeout_seconds=args.ai_timeout_seconds,
         )
     c2rust_baseline = emit_c2rust_baseline_manifest(spec, args.slice_spec, evidence_dir)
     route_decision = emit_route_decision(spec, evidence_dir, translator_summary, c2rust_baseline)

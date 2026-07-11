@@ -8,12 +8,124 @@
     "schema_version": {"type": "integer", "minimum": 1},
     "target_id": {"type": "string"},
     "slice_id": {"type": "string"},
-    "status": {"enum": ["not_used", "recorded", "stale", "incomplete"]},
-    "ai_required_for_default_pipeline": {"const": false},
+    "status": {"enum": ["not_used", "recorded", "generated", "blocked", "stale", "incomplete"]},
+    "ai_required_for_default_pipeline": {"type": "boolean"},
     "candidates": {"type": "array", "items": {"$ref": "#/definitions/candidate"}},
+    "generator": {"$ref": "#/definitions/generator"},
+    "bindings": {"$ref": "#/definitions/bindings"},
+    "claim_boundary": {"$ref": "#/definitions/claimBoundary"},
+    "failure": {"$ref": "#/definitions/failure"},
     "cache_invalidation_keys": {"type": "array", "items": {"type": "string"}}
   },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "generated"}}},
+      "then": {
+        "required": ["generator", "bindings", "claim_boundary"],
+        "properties": {
+          "ai_required_for_default_pipeline": {"const": true},
+          "candidates": {
+            "minItems": 1,
+            "items": {
+              "allOf": [
+                {"$ref": "#/definitions/candidate"},
+                {
+                  "required": ["kind", "resolved_model", "artifact", "semantic_pass"],
+                  "properties": {
+                    "kind": {"const": "opencode-ai"},
+                    "semantic_pass": {"const": false}
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "blocked"}}},
+      "then": {
+        "required": ["generator", "bindings", "claim_boundary", "failure"],
+        "properties": {
+          "ai_required_for_default_pipeline": {"const": true},
+          "candidates": {"maxItems": 0}
+        }
+      }
+    }
+  ],
   "definitions": {
-    "candidate": {"type": "object", "required": ["candidate_id", "purpose", "prompt_scope", "input_artifact_hashes", "output_hash", "applied", "accepted_by_gates"], "properties": {"candidate_id": {"type": "string"}, "purpose": {"enum": ["rust_draft", "patch_plan", "repair_candidate", "explanation"]}, "provider_label": {"type": "string"}, "model_label": {"type": "string"}, "prompt_scope": {"type": "array", "items": {"enum": ["slice_spec", "root_cause_summary", "source_spans", "type_map_excerpt", "cfg_excerpt", "pointer_graph_excerpt", "direct_caller_callee_facts", "verification_delta", "two_hop_expansion"]}}, "two_hop_expansion_justification": {"type": "string"}, "input_artifact_hashes": {"type": "object", "additionalProperties": {"type": "string"}}, "output_hash": {"type": "string"}, "applied": {"type": "boolean"}, "accepted_by_gates": {"type": "array", "items": {"type": "string"}}, "rejected_by_gates": {"type": "array", "items": {"type": "string"}}}}
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "provider", "logical_model", "resolved_model", "agent", "variant"],
+      "properties": {
+        "tool": {"const": "opencode"},
+        "provider": {"type": "string", "minLength": 1},
+        "logical_model": {"const": "GLM-5.1"},
+        "resolved_model": {"type": "string", "minLength": 1},
+        "agent": {"type": "string", "minLength": 1},
+        "variant": {"type": "string", "minLength": 1}
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["context_pack", "prompt", "raw_response"],
+      "properties": {
+        "context_pack": {"$ref": "#/definitions/artifactRef"},
+        "prompt": {"$ref": "#/definitions/artifactRef"},
+        "raw_response": {"$ref": "#/definitions/artifactRef"}
+      }
+    },
+    "claimBoundary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["semantic_gate", "translation_coverage_numerator", "candidate_requires_common_validation"],
+      "properties": {
+        "semantic_gate": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "candidate_requires_common_validation": {"const": true}
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "message"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "required": ["candidate_id", "purpose", "prompt_scope", "input_artifact_hashes", "output_hash", "applied", "accepted_by_gates"],
+      "properties": {
+        "candidate_id": {"type": "string"},
+        "purpose": {"enum": ["rust_draft", "patch_plan", "repair_candidate", "explanation"]},
+        "kind": {"type": "string"},
+        "provider_label": {"type": "string"},
+        "model_label": {"type": "string"},
+        "resolved_model": {"type": "string"},
+        "prompt_scope": {"type": "array", "items": {"enum": ["slice_spec", "root_cause_summary", "source_spans", "type_map_excerpt", "cfg_excerpt", "pointer_graph_excerpt", "direct_caller_callee_facts", "verification_delta", "two_hop_expansion"]}},
+        "two_hop_expansion_justification": {"type": "string"},
+        "input_artifact_hashes": {"type": "object", "additionalProperties": {"type": "string"}},
+        "output_hash": {"type": "string"},
+        "artifact": {"$ref": "#/definitions/artifactRef"},
+        "applied": {"type": "boolean"},
+        "semantic_pass": {"type": "boolean"},
+        "accepted_by_gates": {"type": "array", "items": {"type": "string"}},
+        "rejected_by_gates": {"type": "array", "items": {"type": "string"}},
+        "assumptions": {"type": "array", "items": {"type": "string"}}
+      }
+    }
   }
 }

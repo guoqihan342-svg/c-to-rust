@@ -54,7 +54,7 @@
     {
       "path": ".opencode/agents/c2rust-migrator.md",
       "role": "opencode-agent-runbook",
-      "sha256": "0e5e229b680d9eeb280d5a29f75b41b53a87f60318e02b85c52e057dbb586b10"
+      "sha256": "fd3f6caef67eb9e9256fd4883e41248b7b631da4269ce76b299bb114254b058b"
     }
   ],
   "files": [

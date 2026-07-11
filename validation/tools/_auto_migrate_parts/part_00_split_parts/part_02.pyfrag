@@ -488,14 +488,15 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
         },
     )
 
+    ai_manifest_path = evidence_dir / f"{prefix}-ai-candidate-manifest.json"
     write_json(
-        evidence_dir / f"{prefix}-ai-candidate-manifest.json",
+        ai_manifest_path,
         {
             "schema_version": 1,
             "target_id": target_id,
             "slice_id": slice_id,
             "status": "not_used",
-            "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+            "skipped_reason": "AI_SKIPPED: AI-first candidate generation was not requested",
             "ai_required_for_default_pipeline": False,
             "candidates": [],
             "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
