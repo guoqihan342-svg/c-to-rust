@@ -120,7 +120,7 @@ def _claim_boundary(*, dry_run: bool) -> dict[str, Any]:
         "accepted_evidence_shortcut": False,
         "fresh_execution_only": True,
         "outer_retry_count": 0,
-        "semantic_claim_source": "hash_bound_run_competition_final_summaries",
+        "semantic_claim_source": "hash_bound_run_competition_final_summary",
         "semantic_numbers_copied_only": True,
         "suite_report_is_independent_semantic_evidence": False,
         "dry_run_creates_success_claim": False,
@@ -181,26 +181,33 @@ def _plan(
     repo_root: Path,
     ai_options: dict[str, Any],
 ) -> dict[str, Any]:
-    invocations = []
-    for index, item in enumerate(items):
-        spec = item["slice_spec"]
-        invocations.append(
-            {
-                "index": index,
-                "item_id": item.get("id"),
-                "slice_spec": {"path": spec["path"], "sha256": spec["sha256"]},
-                "out_root": (Path("runs") / f"{index:02d}").as_posix(),
-                "reuse_accepted_evidence": False,
-                "ai": ai_options,
-            }
-        )
+    suite_items = [
+        {
+            "index": index,
+            "item_id": item.get("id"),
+            "project_id": item.get("project_id"),
+            "slice_id": item.get("slice_id"),
+            "slice_spec": {
+                "path": item["slice_spec"]["path"],
+                "sha256": item["slice_spec"]["sha256"],
+            },
+        }
+        for index, item in enumerate(items)
+    ]
     return {
         **base,
         "status": "planned",
         "exit_code": 0,
         "plan": {
             "out_root": _portable_ref(out_root, base=repo_root),
-            "invocations": invocations,
+            "competition_run": {
+                "out_root": "competition",
+                "suite_items": suite_items,
+                "reuse_accepted_evidence": False,
+                "outer_attempts": 1,
+                "ai": ai_options,
+            },
+            "competition_runner_invocations": 0,
             "model_invocations": 0,
             "translations_executed": 0,
             "success_claim_created": False,
@@ -326,41 +333,45 @@ def run_suite(
             ai_options=ai_options,
         ), None
 
-    runs: list[dict[str, Any]] = []
-    copied_slices: list[dict[str, Any]] = []
-    copied_ai_metrics: list[dict[str, Any]] = []
-    for index, item in enumerate(items):
-        item_out_root = output_root / "runs" / f"{index:02d}"
-        expected_summary = item_out_root / "summary" / "competition-run-summary.json"
-        spec_ref = item["slice_spec"]
-        run_record: dict[str, Any] = {
+    competition_out_root = output_root / "competition"
+    expected_summary = competition_out_root / "summary" / "competition-run-summary.json"
+    suite_items = [
+        {
             "index": index,
             "item_id": item.get("id"),
             "project_id": item.get("project_id"),
             "slice_id": item.get("slice_id"),
-            "slice_spec": {"path": spec_ref["path"], "sha256": spec_ref["sha256"]},
-            "fresh_execution": True,
-            "outer_attempts": 1,
+            "slice_spec": {
+                "path": item["slice_spec"]["path"],
+                "sha256": item["slice_spec"]["sha256"],
+            },
         }
-        try:
-            result = competition_runner(
-                slice_specs=[Path(spec_ref["path"])],
-                out_root=item_out_root,
-                proof_class=proof_class,
-                repo_root=root,
-                run_id=run_id,
-                reuse_accepted_evidence=False,
-                ai_model=ai_model,
-                ai_agent=ai_agent,
-                ai_variant=ai_variant,
-                ai_timeout_seconds=ai_timeout_seconds,
-                ai_opencode_command=ai_opencode_command,
-            )
-        except (Exception, SystemExit) as exc:
-            run_record.update(status="failed", exit_code=1, error=f"competition_runner_failed: {exc}")
-            runs.append(run_record)
-            continue
-
+        for index, item in enumerate(items)
+    ]
+    run_record: dict[str, Any] = {
+        "suite_items": suite_items,
+        "fresh_execution": True,
+        "outer_attempts": 1,
+    }
+    copied_slices: list[dict[str, Any]] = []
+    copied_ai_metrics: list[dict[str, Any]] = []
+    try:
+        result = competition_runner(
+            slice_specs=[Path(item["slice_spec"]["path"]) for item in items],
+            out_root=competition_out_root,
+            proof_class=proof_class,
+            repo_root=root,
+            run_id=run_id,
+            reuse_accepted_evidence=False,
+            ai_model=ai_model,
+            ai_agent=ai_agent,
+            ai_variant=ai_variant,
+            ai_timeout_seconds=ai_timeout_seconds,
+            ai_opencode_command=ai_opencode_command,
+        )
+    except (Exception, SystemExit) as exc:
+        run_record.update(status="failed", exit_code=1, error=f"competition_runner_failed: {exc}")
+    else:
         summary, summary_sha, error = _load_bound_competition_summary(
             result=result,
             expected_path=expected_summary,
@@ -368,31 +379,34 @@ def run_suite(
         runner_exit = getattr(result, "exit_code", 1)
         if error is not None or summary is None or summary_sha is None:
             run_record.update(status="failed", exit_code=runner_exit, error=error)
-            runs.append(run_record)
-            continue
+        else:
+            slices = summary["slices"]
+            ai_metrics = summary["ai_translation_metrics"]
+            if slices.get("attempted") != len(items):
+                run_record.update(
+                    status="failed",
+                    exit_code=runner_exit,
+                    error="competition_summary_attempted_count_mismatch",
+                )
+            else:
+                final_gate = summary.get("final_gate")
+                passed = runner_exit == 0 and isinstance(final_gate, dict) and final_gate.get("status") == "passed"
+                summary_ref = {
+                    "path": _portable_ref(expected_summary, base=output_root),
+                    "sha256": summary_sha,
+                }
+                run_record.update(
+                    status="passed" if passed else "failed",
+                    exit_code=runner_exit,
+                    competition_summary=summary_ref,
+                    slices=slices,
+                    ai_translation_metrics=ai_metrics,
+                )
+                copied_slices.append({"competition_summary": summary_ref, "value": slices})
+                copied_ai_metrics.append({"competition_summary": summary_ref, "value": ai_metrics})
 
-        slices = summary["slices"]
-        ai_metrics = summary["ai_translation_metrics"]
-        final_gate = summary.get("final_gate")
-        passed = runner_exit == 0 and isinstance(final_gate, dict) and final_gate.get("status") == "passed"
-        summary_ref = {
-            "path": _portable_ref(expected_summary, base=output_root),
-            "sha256": summary_sha,
-        }
-        run_record.update(
-            status="passed" if passed else "failed",
-            exit_code=runner_exit,
-            competition_summary=summary_ref,
-            slices=slices,
-            ai_translation_metrics=ai_metrics,
-        )
-        runs.append(run_record)
-        copied_slices.append({"item_id": item.get("id"), "competition_summary": summary_ref, "value": slices})
-        copied_ai_metrics.append(
-            {"item_id": item.get("id"), "competition_summary": summary_ref, "value": ai_metrics}
-        )
-
-    passed = len(runs) == len(items) and all(run.get("status") == "passed" for run in runs)
+    runs = [run_record]
+    passed = run_record.get("status") == "passed"
     report = {
         **base,
         "status": "passed" if passed else "failed",
