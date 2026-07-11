@@ -35,6 +35,20 @@
       }
     },
     {
+      "if": {
+        "required": ["schema_version", "status"],
+        "properties": {
+          "schema_version": {"minimum": 3},
+          "status": {"enum": ["generated", "blocked"]}
+        }
+      },
+      "then": {
+        "properties": {
+          "generator": {"required": ["prompt_transport"]}
+        }
+      }
+    },
+    {
       "if": {"properties": {"status": {"const": "generated"}}},
       "then": {
         "required": ["generator", "bindings", "claim_boundary"],
@@ -142,7 +156,20 @@
         "logical_model": {"const": "GLM-5.1"},
         "resolved_model": {"type": "string", "minLength": 1},
         "agent": {"type": "string", "minLength": 1},
-        "variant": {"type": "string", "minLength": 1}
+        "variant": {"type": "string", "minLength": 1},
+        "prompt_transport": {"$ref": "#/definitions/promptTransport"}
+      }
+    },
+    "promptTransport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "file_option", "file_option_style", "message_sha256", "inline_prompt_in_argv"],
+      "properties": {
+        "kind": {"const": "opencode-file-attachment-v1"},
+        "file_option": {"const": "--file"},
+        "file_option_style": {"const": "equals"},
+        "message_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "inline_prompt_in_argv": {"const": false}
       }
     },
     "providerPreflight": {

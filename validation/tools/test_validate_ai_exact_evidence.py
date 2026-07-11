@@ -8,6 +8,9 @@ import sys
 import tempfile
 import unittest
 
+from validation.tools._ai_candidate_harness_parts.prompt_transport import (
+    prompt_transport_contract,
+)
 from validation.tools._ai_candidate_harness_parts.router import (
     route_candidates,
     selection_policy_sha256,
@@ -225,10 +228,18 @@ class Fixture:
         self.repair_report = self.directory / "l3-add-one-c2rust-repair-report.json"
         status = "candidate_ready_for_common_validation"
         write_json(self.repair_report, {
-            "schema_version": 1,
+            "schema_version": 2,
             "artifact_label": "c2rust-repair",
             "input_source": "c2rust-baseline",
             "status": status,
+            "generator": {
+                "tool": "opencode",
+                "logical_model": "GLM-5.1",
+                "resolved_model": "zai/glm-5.1",
+                "agent": "c2rust-migrator",
+                "variant": "max",
+                "prompt_transport": prompt_transport_contract(),
+            },
             "initial_candidate": {"name": baseline.name, "sha256": digest(baseline)},
             "claim_boundary": {
                 "semantic_gate": False,
@@ -398,7 +409,14 @@ class ValidateAiExactEvidenceTests(unittest.TestCase):
             self.assertEqual(report["selected_candidate_id"], "c2rust-repair:round-1")
             self.assertTrue(report["semantic_pass"])
 
-        for case in ("missing_audit", "report_sha", "round_binding", "path_escape", "semantic_pass"):
+        for case in (
+            "missing_audit",
+            "report_sha",
+            "round_binding",
+            "path_escape",
+            "semantic_pass",
+            "prompt_transport",
+        ):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
                 fixture = Fixture(Path(tmp), repair=True)
                 if case == "missing_audit":
@@ -417,6 +435,8 @@ class ValidateAiExactEvidenceTests(unittest.TestCase):
                     repair_report = read_json(fixture.repair_report)
                     if case == "path_escape":
                         repair_report["rounds"][0]["bindings"]["prompt"]["path"] = "../prompt.txt"
+                    elif case == "prompt_transport":
+                        repair_report["generator"]["prompt_transport"]["message_sha256"] = "0" * 64
                     else:
                         repair_report["claim_boundary"]["semantic_pass"] = True
                     write_json(fixture.repair_report, repair_report)

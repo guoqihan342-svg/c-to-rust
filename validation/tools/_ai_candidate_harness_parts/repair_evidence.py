@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .context import atomic_write_json, canonical_json_bytes, sha256_bytes, sha256_path
+from .prompt_transport import prompt_transport_contract
 from .provider import LOGICAL_MODEL
 
 
@@ -27,7 +28,7 @@ def report_base(
     input_source: str,
 ) -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "target_id": target_id,
         "slice_id": slice_id,
         "artifact_label": artifact_label,
@@ -47,6 +48,7 @@ def report_base(
             "resolved_model": resolved_model,
             "agent": agent,
             "variant": variant,
+            "prompt_transport": prompt_transport_contract(),
         },
         "bindings": {
             "context_pack_sha256": sha256_bytes(canonical_json_bytes(context_pack)),

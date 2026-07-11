@@ -7,6 +7,8 @@ import tempfile
 import unittest
 
 from validation.tools import ai_candidate_harness
+from validation.tools import validate_competition_run_summary as summary_validator
+from validation.tools._ai_candidate_harness_parts import prompt_transport
 
 
 INITIAL_SOURCE = "pub fn add_one(value: i32) -> i32 {\n    value + 2\n}\n"
@@ -69,9 +71,11 @@ class AiCandidateRepairTests(unittest.TestCase):
     def test_candidate_repair_is_hash_bound_and_never_semantic_acceptance(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ai-repair-candidate-") as tmp:
             root = Path(tmp)
-            initial = write_candidate(root)
+            initial_source = INITIAL_SOURCE + "// " + ("candidate" * 2_500) + "\n"
+            initial = write_candidate(root, initial_source)
             repaired = "pub fn add_one(value: i32) -> i32 {\n    value.wrapping_add(1)\n}\n"
             observed_argv: list[str] = []
+            out_dir = root / "out with spaces"
 
             def provider(argv: list[str], timeout: int) -> ai_candidate_harness.ProviderExecution:
                 observed_argv.extend(argv)
@@ -87,7 +91,7 @@ class AiCandidateRepairTests(unittest.TestCase):
                 context_pack(),
                 candidate_path=initial,
                 initial_failure_facts=failed_result(),
-                out_dir=root / "out",
+                out_dir=out_dir,
                 validation_runner=validator,
                 timeout_seconds=30,
                 runner=provider,
@@ -98,20 +102,53 @@ class AiCandidateRepairTests(unittest.TestCase):
             self.assertEqual(report["input_source"], "opencode-ai")
             self.assertEqual(report["policy"]["effective_max_rounds"], 3)
             self.assertEqual(report["policy"]["hard_max_rounds"], 5)
+            self.assertEqual(2, report["schema_version"])
+            self.assertEqual(
+                prompt_transport.prompt_transport_contract(),
+                report["generator"]["prompt_transport"],
+            )
             self.assertFalse(report["claim_boundary"]["semantic_pass"])
             self.assertEqual(report["claim_boundary"]["translation_coverage_numerator"], 0)
             self.assertNotIn('"semantic_pass": true', json.dumps(report).lower())
-            self.assertEqual(initial.read_text(encoding="utf-8"), INITIAL_SOURCE)
-            self.assertEqual(observed_argv[-1].splitlines()[0], "Task mode: generate-candidate")
-            self.assertIn("Oracle, fixture, validator, and gate configuration are immutable", observed_argv[-1])
+            self.assertEqual(initial.read_text(encoding="utf-8"), initial_source)
+            file_args = [arg for arg in observed_argv if arg.startswith("--file=")]
+            self.assertEqual(1, len(file_args))
+            attached_prompt = Path(file_args[0].split("=", 1)[1])
+            self.assertEqual(prompt_transport.PROMPT_FILE_MESSAGE, observed_argv[-1])
+            self.assertNotIn("Task mode: generate-candidate", observed_argv)
+            self.assertLess(sum(len(arg.encode("utf-8")) for arg in observed_argv), 2_048)
+            self.assertGreater(attached_prompt.stat().st_size, 16_000)
+            prompt_text = attached_prompt.read_text(encoding="utf-8")
+            self.assertEqual(prompt_text.splitlines()[0], "Task mode: generate-candidate")
+            self.assertIn("Oracle, fixture, validator, and gate configuration are immutable", prompt_text)
             round_record = report["rounds"][0]
             self.assertEqual(round_record["repair_kind"], "candidate")
             self.assertEqual(round_record["bindings"]["previous_candidate_sha256"], sha256(initial))
             self.assertEqual(len(round_record["repair_input_sha256"]), 64)
             for name in ("failure_facts", "prompt", "raw_response", "repair_artifact", "candidate"):
                 binding = round_record["bindings"][name]
-                self.assertEqual(binding["sha256"], sha256(root / "out" / binding["path"]))
-            self.assertTrue((root / "out" / "l3-generic-add-one-ai-repair-report.json").is_file())
+                self.assertEqual(binding["sha256"], sha256(out_dir / binding["path"]))
+            report_path = out_dir / "l3-generic-add-one-ai-repair-report.json"
+            self.assertTrue(report_path.is_file())
+
+            tampered_report = json.loads(report_path.read_text(encoding="utf-8"))
+            tampered_report["generator"]["prompt_transport"]["file_option"] = "--inline"
+            report_path.write_text(json.dumps(tampered_report), encoding="utf-8")
+            ref = {
+                "path": report_path.name,
+                "sha256": sha256(report_path),
+                "status": tampered_report["status"],
+                "semantic_pass": False,
+            }
+            _rounds, reasons = summary_validator.validate_bound_ai_repair_report(
+                ref,
+                manifest_path=out_dir / "l3-generic-add-one-ai-candidate-manifest.json",
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+                candidate=None,
+                require_transport=True,
+            )
+            self.assertIn("ai_repair_report_prompt_transport_invalid", reasons)
 
     def test_c2rust_artifact_label_isolated_and_unknown_labels_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="c2rust-repair-label-") as tmp:

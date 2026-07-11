@@ -93,7 +93,9 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
             provider = root / "fake_opencode.py"
             provider.write_text(
                 "import json, sys\n"
-                "prompt = sys.argv[-1]\n"
+                "from pathlib import Path\n"
+                "prompt_path = next(arg.split('=', 1)[1] for arg in sys.argv if arg.startswith('--file='))\n"
+                "prompt = Path(prompt_path).read_text(encoding='utf-8')\n"
                 "if 'Repair only the supplied Rust candidate' in prompt:\n"
                 "    payload = {\n"
                 "        'schema_version': 1,\n"
@@ -177,7 +179,9 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
             provider = root / "fake_opencode.py"
             provider.write_text(
                 "import json, sys\n"
-                "prompt = sys.argv[-1]\n"
+                "from pathlib import Path\n"
+                "prompt_path = next(arg.split('=', 1)[1] for arg in sys.argv if arg.startswith('--file='))\n"
+                "prompt = Path(prompt_path).read_text(encoding='utf-8')\n"
                 "if 'Repair only the supplied Rust candidate' in prompt:\n"
                 "    assert '\"gate\":\"generated_replay\"' in prompt or '\"gate\":\"schema_diff\"' in prompt\n"
                 "    payload = {\n"

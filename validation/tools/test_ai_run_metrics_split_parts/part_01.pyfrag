@@ -292,6 +292,7 @@ class AiRunMetricsTests(unittest.TestCase):
                 summary_path=summary_path,
                 repo_root=REPO_ROOT,
                 candidate=candidate,
+                require_transport=False,
             )
             self.assertEqual(rounds, 1)
             self.assertEqual(reasons, [])

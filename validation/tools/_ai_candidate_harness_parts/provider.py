@@ -9,6 +9,7 @@ import subprocess
 from typing import Any, Callable
 
 from .context import atomic_write_bytes, atomic_write_json, canonical_json_bytes, sha256_bytes, sha256_path
+from .prompt_transport import prompt_file_arguments, prompt_transport_contract
 from .provider_readiness import evaluate_provider_readiness
 
 
@@ -103,7 +104,7 @@ def generate_candidate(
         agent,
         "--variant",
         variant,
-        prompt,
+        *prompt_file_arguments(prompt_path),
     ]
     execution = (runner or subprocess_runner)(argv, timeout_seconds)
     response_bytes = execution.stdout.encode("utf-8")
@@ -377,7 +378,7 @@ def manifest_base(
     provider_preflight: dict[str, str],
 ) -> dict[str, Any]:
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "target_id": target_id,
         "slice_id": slice_id,
         "ai_required_for_default_pipeline": True,
@@ -390,6 +391,7 @@ def manifest_base(
             "resolved_model": resolved_model,
             "agent": agent,
             "variant": variant,
+            "prompt_transport": prompt_transport_contract(),
         },
         "bindings": {
             "context_pack": {"path": context_path.name, "sha256": sha256_path(context_path)},

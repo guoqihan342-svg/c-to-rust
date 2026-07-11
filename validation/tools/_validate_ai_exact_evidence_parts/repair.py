@@ -3,6 +3,10 @@ from __future__ import annotations
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from validation.tools._ai_candidate_harness_parts.prompt_transport import (
+    prompt_transport_contract,
+)
+
 from .io import EvidenceStore, fail, reject_accepted_proof, require_sha, sha256_file
 
 
@@ -94,8 +98,18 @@ def validate_c2rust_repair_audit(store: EvidenceStore, router: dict[str, Any]) -
 
 
 def _validate_report_shape(report: dict[str, Any], *, base_sha: str) -> None:
-    if report.get("schema_version") != 1 or report.get("artifact_label") != REPAIR_SOURCE:
+    if report.get("schema_version") != 2 or report.get("artifact_label") != REPAIR_SOURCE:
         fail("c2rust_repair_report_identity", "repair report identity drifted", path="router")
+    generator = report.get("generator")
+    if (
+        not isinstance(generator, dict)
+        or generator.get("prompt_transport") != prompt_transport_contract()
+    ):
+        fail(
+            "c2rust_repair_prompt_transport",
+            "repair prompt transport drifted",
+            path="router",
+        )
     if report.get("input_source") != "c2rust-baseline":
         fail("c2rust_repair_input_source", "repair report input source drifted", path="router")
     boundary = report.get("claim_boundary")
