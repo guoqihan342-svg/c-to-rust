@@ -18,6 +18,10 @@ from validation.tools._ai_candidate_harness_parts.context import (
     sha256_bytes,
     sha256_path,
 )
+from validation.tools._auto_migrate_c2rust_repair import (
+    repair_c2rust_candidate_after_validation,
+    repair_report_binding as c2rust_repair_report_binding,
+)
 from validation.tools._auto_migrate_ai_repair import repair_ai_candidate_after_validation
 
 
@@ -50,6 +54,12 @@ def run_ai_exact_stage(
 ) -> dict[str, Any]:
     slice_id = str(spec["slice_id"])
     attempts_root = evidence_dir / "ai-exact-attempts"
+    baseline_path, baseline_audit = resolve_current_c2rust_baseline_candidate(
+        c2rust_baseline,
+        manifest_path=c2rust_baseline_manifest_path,
+        evidence_dir=evidence_dir,
+        repo_root=proof_root,
+    )
     ai_result = _validate_with_new_attempt(
         spec,
         label="ai-initial",
@@ -64,6 +74,9 @@ def run_ai_exact_stage(
     )
     deterministic_result = None
     c2rust_baseline_result = None
+    c2rust_repair_result = None
+    c2rust_repair_audit = None
+    c2rust_repaired_candidate_path = None
     canonical_changed = False
 
     if (
@@ -85,61 +98,6 @@ def run_ai_exact_stage(
             replay_runner=replay_runner,
         )
 
-    if (
-        ai_result["status"] != "passed"
-        and not (deterministic_result and deterministic_result["status"] == "passed")
-        and max_repair_rounds > 0
-    ):
-        def validate_repair(path: Path, round_number: int) -> dict[str, Any]:
-            result = _validate_with_new_attempt(
-                spec,
-                label=f"ai-repair-{round_number:02d}",
-                candidate_path=path,
-                replay_test_path=replay_test_path,
-                oracle_payload=oracle_payload,
-                harness_path=harness_path,
-                proof_root=proof_root,
-                attempts_root=attempts_root,
-                compile_runner=compile_runner,
-                replay_runner=replay_runner,
-            )
-            return result["repair_validation_result"]
-
-        ai_manifest, repair_report = repair_ai_candidate_after_validation(
-            context_pack,
-            ai_manifest,
-            out_dir=evidence_dir,
-            canonical_draft_path=canonical_draft_path,
-            initial_failure_facts=ai_result["repair_validation_result"],
-            validation_runner=validate_repair,
-            max_rounds=max_repair_rounds,
-            opencode_command=opencode_command,
-            resolved_model=resolved_model,
-            agent=agent,
-            variant=variant,
-            timeout_seconds=timeout_seconds,
-        )
-        if repair_report and repair_report.get("status") == "candidate_ready_for_common_validation":
-            canonical_changed = True
-            ai_result = _validate_with_new_attempt(
-                spec,
-                label="ai-repair-final",
-                candidate_path=canonical_draft_path,
-                replay_test_path=replay_test_path,
-                oracle_payload=oracle_payload,
-                harness_path=harness_path,
-                proof_root=proof_root,
-                attempts_root=attempts_root,
-                compile_runner=compile_runner,
-                replay_runner=replay_runner,
-            )
-
-    baseline_path, baseline_audit = resolve_current_c2rust_baseline_candidate(
-        c2rust_baseline,
-        manifest_path=c2rust_baseline_manifest_path,
-        evidence_dir=evidence_dir,
-        repo_root=proof_root,
-    )
     if baseline_path is not None:
         baseline_sha = sha256_path(baseline_path)
         prior_result = next(
@@ -186,10 +144,135 @@ def run_ai_exact_stage(
                 reason="higher_priority_candidate_passed",
             )
 
+    zero_token_results = (ai_result, deterministic_result, c2rust_baseline_result)
+    if not any(result is not None and result.get("status") == "passed" for result in zero_token_results):
+        repair_raw_c2rust = (
+            max_repair_rounds > 0
+            and baseline_path is not None
+            and c2rust_baseline_result is not None
+            and baseline_audit.get("status") != "duplicate"
+            and _passed_gate_count(c2rust_baseline_result) > _passed_gate_count(ai_result)
+        )
+        if repair_raw_c2rust:
+            def validate_c2rust_repair(path: Path, round_number: int) -> dict[str, Any]:
+                result = _validate_with_new_attempt(
+                    spec,
+                    label=f"c2rust-repair-{round_number:02d}",
+                    candidate_path=path,
+                    replay_test_path=replay_test_path,
+                    oracle_payload=oracle_payload,
+                    harness_path=harness_path,
+                    proof_root=proof_root,
+                    attempts_root=attempts_root,
+                    compile_runner=compile_runner,
+                    replay_runner=replay_runner,
+                )
+                return result["repair_validation_result"]
+
+            repair_report, repaired_candidate_path = repair_c2rust_candidate_after_validation(
+                context_pack,
+                out_dir=evidence_dir,
+                baseline_candidate_path=baseline_path,
+                initial_failure_facts=c2rust_baseline_result["repair_validation_result"],
+                validation_runner=validate_c2rust_repair,
+                max_rounds=max_repair_rounds,
+                opencode_command=opencode_command,
+                resolved_model=resolved_model,
+                agent=agent,
+                variant=variant,
+                timeout_seconds=timeout_seconds,
+            )
+            c2rust_repaired_candidate_path = repaired_candidate_path
+            if repair_report is not None:
+                c2rust_repair_audit = {
+                    "source": "c2rust-repair",
+                    "status": "repair_completed_without_candidate",
+                    "reason": "repair_report_has_no_reopenable_candidate",
+                    "base_candidate_sha256": c2rust_baseline_result["candidate_sha256"],
+                    "repair_report": c2rust_repair_report_binding(
+                        repair_report,
+                        out_dir=evidence_dir,
+                    ),
+                    "repair_rounds": len(repair_report.get("rounds", [])),
+                }
+            if repaired_candidate_path is not None and c2rust_repair_audit is not None:
+                repaired_sha = sha256_path(repaired_candidate_path)
+                c2rust_repair_audit["final_candidate_sha256"] = repaired_sha
+                c2rust_repair_result = _validate_with_new_attempt(
+                    spec,
+                    label="c2rust-repair-final",
+                    candidate_path=repaired_candidate_path,
+                    replay_test_path=replay_test_path,
+                    oracle_payload=oracle_payload,
+                    harness_path=harness_path,
+                    proof_root=proof_root,
+                    attempts_root=attempts_root,
+                    compile_runner=compile_runner,
+                    replay_runner=replay_runner,
+                )
+                c2rust_repair_audit.update(
+                    status="exact_gates_completed",
+                    reason="fresh_exact_gates_passed"
+                    if c2rust_repair_result["status"] == "passed"
+                    else "fresh_exact_gates_failed",
+                )
+        elif max_repair_rounds > 0:
+            def validate_ai_repair(path: Path, round_number: int) -> dict[str, Any]:
+                result = _validate_with_new_attempt(
+                    spec,
+                    label=f"ai-repair-{round_number:02d}",
+                    candidate_path=path,
+                    replay_test_path=replay_test_path,
+                    oracle_payload=oracle_payload,
+                    harness_path=harness_path,
+                    proof_root=proof_root,
+                    attempts_root=attempts_root,
+                    compile_runner=compile_runner,
+                    replay_runner=replay_runner,
+                )
+                return result["repair_validation_result"]
+
+            ai_manifest, repair_report = repair_ai_candidate_after_validation(
+                context_pack,
+                ai_manifest,
+                out_dir=evidence_dir,
+                canonical_draft_path=canonical_draft_path,
+                initial_failure_facts=ai_result["repair_validation_result"],
+                validation_runner=validate_ai_repair,
+                max_rounds=max_repair_rounds,
+                opencode_command=opencode_command,
+                resolved_model=resolved_model,
+                agent=agent,
+                variant=variant,
+                timeout_seconds=timeout_seconds,
+            )
+            if repair_report and repair_report.get("status") == "candidate_ready_for_common_validation":
+                canonical_changed = True
+                ai_result = _validate_with_new_attempt(
+                    spec,
+                    label="ai-repair-final",
+                    candidate_path=canonical_draft_path,
+                    replay_test_path=replay_test_path,
+                    oracle_payload=oracle_payload,
+                    harness_path=harness_path,
+                    proof_root=proof_root,
+                    attempts_root=attempts_root,
+                    compile_runner=compile_runner,
+                    replay_runner=replay_runner,
+                )
+
     candidates = [_router_candidate("opencode-glm51-1", "opencode-ai", ai_result)]
     if deterministic_result is not None:
         candidates.append(
             _router_candidate("typed-ir:clang-lowered", "typed-ir", deterministic_result)
+        )
+    if c2rust_repair_result is not None:
+        candidates.append(
+            _router_candidate(
+                "c2rust-repair:raw-current-run",
+                "c2rust-repair",
+                c2rust_repair_result,
+            )
         )
     if c2rust_baseline_result is not None:
         candidates.append(
@@ -200,6 +283,14 @@ def run_ai_exact_stage(
             )
         )
     router = route_candidates(candidates, provider_invocations=1)
+    _sync_duplicate_audit(router, source="c2rust-baseline", audit=baseline_audit)
+    if c2rust_repair_audit is not None:
+        _sync_duplicate_audit(router, source="c2rust-repair", audit=c2rust_repair_audit)
+    unique_sources = {
+        candidate.get("source")
+        for candidate in router.get("candidate_set", [])
+        if isinstance(candidate, Mapping)
+    }
     selected_id = router.get("selected_candidate_id")
     if selected_id == "typed-ir:clang-lowered" and deterministic_candidate_path is not None:
         canonical_draft_path.write_bytes(deterministic_candidate_path.read_bytes())
@@ -209,27 +300,40 @@ def run_ai_exact_stage(
         canonical_draft_path.write_bytes(baseline_path.read_bytes())
         canonical_changed = True
         _mark_ai_not_applied(ai_manifest, evidence_dir, slice_id)
+    elif selected_id == "c2rust-repair:raw-current-run" and c2rust_repaired_candidate_path is not None:
+        canonical_draft_path.write_bytes(c2rust_repaired_candidate_path.read_bytes())
+        canonical_changed = True
+        _mark_ai_not_applied(ai_manifest, evidence_dir, slice_id)
 
     summaries: dict[str, Any] = {}
-    summaries["ai"] = _persist_candidate_result(
-        ai_result,
-        evidence_dir / f"l3-{slice_id}-ai-exact-validation.json",
-    )
-    if deterministic_result is not None:
+    if "opencode-ai" in unique_sources:
+        summaries["ai"] = _persist_candidate_result(
+            ai_result,
+            evidence_dir / f"l3-{slice_id}-ai-exact-validation.json",
+        )
+    if deterministic_result is not None and "typed-ir" in unique_sources:
         summaries["typed_ir"] = _persist_candidate_result(
             deterministic_result,
             evidence_dir / f"l3-{slice_id}-typed-ir-exact-validation.json",
         )
-    if c2rust_baseline_result is not None and baseline_audit["status"] != "duplicate":
+    if c2rust_repair_result is not None and "c2rust-repair" in unique_sources:
+        summaries["c2rust_repair"] = _persist_candidate_result(
+            c2rust_repair_result,
+            evidence_dir / f"l3-{slice_id}-c2rust-repair-exact-validation.json",
+        )
+    if c2rust_baseline_result is not None and "c2rust-baseline" in unique_sources:
         summaries["c2rust_baseline"] = _persist_candidate_result(
             c2rust_baseline_result,
             evidence_dir / f"l3-{slice_id}-c2rust-baseline-exact-validation.json",
         )
     router_path = evidence_dir / f"l3-{slice_id}-ai-router.json"
+    candidate_source_audit = {"c2rust_baseline": baseline_audit}
+    if c2rust_repair_audit is not None:
+        candidate_source_audit["c2rust_repair"] = c2rust_repair_audit
     router_payload = {
         **router,
         "candidate_evidence": summaries,
-        "candidate_source_audit": {"c2rust_baseline": baseline_audit},
+        "candidate_source_audit": candidate_source_audit,
         "canonical_draft_sha256": sha256_path(canonical_draft_path),
         "semantic_pass": selected_id is not None,
     }
@@ -402,6 +506,54 @@ def _router_candidate(candidate_id: str, source: str, result: Mapping[str, Any])
         "artifact_sha256": result["candidate_sha256"],
         "gate_results": result["router_gate_results"],
     }
+
+
+def _passed_gate_count(result: Mapping[str, Any]) -> int:
+    gate_results = result.get("router_gate_results")
+    if not isinstance(gate_results, Mapping):
+        return 0
+    return sum(
+        isinstance(gate_result, Mapping) and gate_result.get("status") == "passed"
+        for gate_result in gate_results.values()
+    )
+
+
+def _sync_duplicate_audit(
+    router: Mapping[str, Any],
+    *,
+    source: str,
+    audit: dict[str, Any],
+) -> None:
+    duplicates = router.get("deduplicated_candidates")
+    candidate_set = router.get("candidate_set")
+    if not isinstance(duplicates, list) or not isinstance(candidate_set, list):
+        return
+    duplicate = next(
+        (
+            item
+            for item in duplicates
+            if isinstance(item, Mapping) and item.get("source") == source
+        ),
+        None,
+    )
+    if duplicate is None:
+        return
+    duplicate_of = duplicate.get("duplicate_of")
+    unique = next(
+        (
+            item
+            for item in candidate_set
+            if isinstance(item, Mapping) and item.get("candidate_id") == duplicate_of
+        ),
+        None,
+    )
+    audit.update(
+        status="duplicate",
+        reason="duplicate_exact_artifact_sha256",
+        duplicate_of=duplicate_of,
+        duplicate_source=unique.get("source") if isinstance(unique, Mapping) else None,
+        duplicate_candidate_sha256=duplicate.get("artifact_sha256"),
+    )
 
 
 def _persist_candidate_result(result: Mapping[str, Any], path: Path) -> dict[str, Any]:

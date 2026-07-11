@@ -94,6 +94,8 @@ class AiCandidateRepairTests(unittest.TestCase):
             )
 
             self.assertEqual(report["status"], "candidate_ready_for_common_validation")
+            self.assertEqual(report["artifact_label"], "ai-repair")
+            self.assertEqual(report["input_source"], "opencode-ai")
             self.assertEqual(report["policy"]["effective_max_rounds"], 3)
             self.assertEqual(report["policy"]["hard_max_rounds"], 5)
             self.assertFalse(report["claim_boundary"]["semantic_pass"])
@@ -109,6 +111,43 @@ class AiCandidateRepairTests(unittest.TestCase):
             for name in ("failure_facts", "prompt", "raw_response", "repair_artifact", "candidate"):
                 binding = round_record["bindings"][name]
                 self.assertEqual(binding["sha256"], sha256(root / "out" / binding["path"]))
+            self.assertTrue((root / "out" / "l3-generic-add-one-ai-repair-report.json").is_file())
+
+    def test_c2rust_artifact_label_isolated_and_unknown_labels_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="c2rust-repair-label-") as tmp:
+            root = Path(tmp)
+            out_dir = root / "out"
+            report = ai_candidate_harness.coordinate_repairs(
+                context_pack(),
+                candidate_path=write_candidate(root),
+                initial_failure_facts=failed_result(),
+                out_dir=out_dir,
+                validation_runner=lambda _candidate, _round: passed_result(),
+                artifact_label="c2rust-repair",
+                runner=lambda _argv, _timeout: ai_candidate_harness.ProviderExecution(
+                    0,
+                    candidate_response("pub fn add_one(value: i32) -> i32 { value + 1 }\n"),
+                    "",
+                ),
+            )
+
+            self.assertEqual(report["artifact_label"], "c2rust-repair")
+            self.assertEqual(report["input_source"], "c2rust-baseline")
+            self.assertTrue((out_dir / "l3-generic-add-one-c2rust-repair-report.json").is_file())
+            self.assertFalse((out_dir / "l3-generic-add-one-ai-repair-report.json").exists())
+            self.assertTrue(
+                all(path.name.startswith("l3-generic-add-one-c2rust-repair-") for path in out_dir.iterdir())
+            )
+
+            with self.assertRaisesRegex(ValueError, "artifact_label must be one of"):
+                ai_candidate_harness.coordinate_repairs(
+                    context_pack(),
+                    candidate_path=write_candidate(root),
+                    initial_failure_facts=failed_result(),
+                    out_dir=root / "invalid",
+                    validation_runner=lambda _candidate, _round: passed_result(),
+                    artifact_label="raw-c2rust-repair",
+                )
 
     def test_single_file_patch_repairs_candidate(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ai-repair-patch-") as tmp:

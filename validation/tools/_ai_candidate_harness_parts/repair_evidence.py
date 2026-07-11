@@ -23,11 +23,15 @@ def report_base(
     resolved_model: str,
     agent: str,
     variant: str,
+    artifact_label: str,
+    input_source: str,
 ) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "target_id": target_id,
         "slice_id": slice_id,
+        "artifact_label": artifact_label,
+        "input_source": input_source,
         "status": "running",
         "policy": {
             "default_max_rounds": DEFAULT_MAX_REPAIR_ROUNDS,

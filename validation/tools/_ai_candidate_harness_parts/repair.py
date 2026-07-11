@@ -39,6 +39,10 @@ from .repair_patch import apply_candidate_patch
 
 ValidationRunner = Callable[[Path, int], dict[str, Any]]
 SAFE_EVIDENCE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+REPAIR_INPUT_SOURCES = {
+    "ai-repair": "opencode-ai",
+    "c2rust-repair": "c2rust-baseline",
+}
 
 
 def coordinate_repairs(
@@ -55,13 +59,15 @@ def coordinate_repairs(
     variant: str = DEFAULT_VARIANT,
     timeout_seconds: int = 180,
     runner: Runner | None = None,
+    artifact_label: str = "ai-repair",
 ) -> dict[str, Any]:
     """Run bounded candidate-only repairs; all semantic acceptance remains external."""
     validate_policy(max_rounds, timeout_seconds)
+    input_source = validate_artifact_label(artifact_label)
     target_id = required_context_string(context_pack, "target_id")
     slice_id = required_context_string(context_pack, "slice_id")
     out_dir.mkdir(parents=True, exist_ok=True)
-    report_path = out_dir / f"l3-{slice_id}-ai-repair-report.json"
+    report_path = out_dir / f"l3-{slice_id}-{artifact_label}-report.json"
     report = report_base(
         target_id,
         slice_id,
@@ -71,6 +77,8 @@ def coordinate_repairs(
         resolved_model=resolved_model,
         agent=agent,
         variant=variant,
+        artifact_label=artifact_label,
+        input_source=input_source,
     )
 
     try:
@@ -91,7 +99,7 @@ def coordinate_repairs(
             return finish_stopped(report, report_path, current_sha, "unchanged_input_and_failure")
         seen_inputs.add(input_key)
 
-        prefix = f"l3-{slice_id}-ai-repair-{round_number:02d}"
+        prefix = f"l3-{slice_id}-{artifact_label}-{round_number:02d}"
         failure_path = out_dir / f"{prefix}-failure-facts.json"
         prompt_path = out_dir / f"{prefix}-prompt.txt"
         response_path = out_dir / f"{prefix}-response.jsonl"
@@ -301,6 +309,13 @@ def validate_policy(max_rounds: int, timeout_seconds: int) -> None:
         raise ValueError(f"max_rounds must be between 1 and {HARD_MAX_REPAIR_ROUNDS}")
     if not isinstance(timeout_seconds, int) or isinstance(timeout_seconds, bool) or not 1 <= timeout_seconds <= 600:
         raise ValueError("timeout_seconds must be between 1 and 600")
+
+
+def validate_artifact_label(artifact_label: str) -> str:
+    if not isinstance(artifact_label, str) or artifact_label not in REPAIR_INPUT_SOURCES:
+        allowed = ", ".join(sorted(REPAIR_INPUT_SOURCES))
+        raise ValueError(f"artifact_label must be one of: {allowed}")
+    return REPAIR_INPUT_SOURCES[artifact_label]
 
 
 def provider_execution_error(execution: object) -> str | None:
