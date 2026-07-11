@@ -503,7 +503,7 @@ fn typed_ir_emits_value_comparison_with_record_null_pointer_operand() {
         rust.contains("return (if p.is_some() { 1i32 } else { 0i32 });"),
         "{rust}"
     );
-    assert_rust_snippet_compiles("typed-ir-record-null-pointer-value-comparison", &rust);
+    assert_rust_snippet_compiles("typed-ir-record-null-pointer-value-comparison", rust);
 }
 
 #[cfg(feature = "typed-ir")]

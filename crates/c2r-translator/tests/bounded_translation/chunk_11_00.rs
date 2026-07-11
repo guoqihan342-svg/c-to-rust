@@ -26,7 +26,7 @@ fn clang_ast_dump_emits_struct_field_read_when_enabled() {
     assert!(rust.contains("pub x: i32"), "{rust}");
     assert!(rust.contains("pub fn point_x(p: Point) -> i32"), "{rust}");
     assert!(rust.contains("return p.x;"), "{rust}");
-    assert_rust_snippet_compiles("typed-ir-real-clang-struct-field-read", &rust);
+    assert_rust_snippet_compiles("typed-ir-real-clang-struct-field-read", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -63,7 +63,7 @@ fn clang_ast_dump_emits_struct_field_assignment_when_enabled() {
     );
     assert!(rust.contains("p.x = value;"), "{rust}");
     assert!(rust.contains("return p.x;"), "{rust}");
-    assert_rust_snippet_compiles("typed-ir-real-clang-struct-field-assignment", &rust);
+    assert_rust_snippet_compiles("typed-ir-real-clang-struct-field-assignment", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

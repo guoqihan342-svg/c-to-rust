@@ -211,7 +211,7 @@ fn nested_record_pointer_scalar_field_copy_ir() -> IrFunction {
         ir_const(kv_ty),
         false,
     );
-    let ir = IrFunction {
+    IrFunction {
         name: "copy_nested_blob_saved".to_string(),
         return_type: blob_ptr_ty.clone(),
         params: vec![
@@ -285,8 +285,7 @@ fn nested_record_pointer_scalar_field_copy_ir() -> IrFunction {
             },
         ],
         source_span: None,
-    };
-    ir
+    }
 }
 
 #[cfg(feature = "typed-ir")]

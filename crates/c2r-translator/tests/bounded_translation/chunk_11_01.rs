@@ -75,7 +75,7 @@ fn clang_ast_dump_emits_struct_local_copy_field_read_when_enabled() {
     );
     assert!(rust.contains("let q: Point = p;"), "{rust}");
     assert!(rust.contains("return q.x;"), "{rust}");
-    assert_rust_snippet_compiles("typed-ir-real-clang-struct-local-copy-field-read", &rust);
+    assert_rust_snippet_compiles("typed-ir-real-clang-struct-local-copy-field-read", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -118,7 +118,7 @@ fn clang_ast_dump_emits_struct_local_assignment_value_copy_when_enabled() {
     assert!(rust.contains("return q.x;"), "{rust}");
     assert_rust_snippet_compiles(
         "typed-ir-real-clang-struct-local-assignment-value-copy",
-        &rust,
+        rust,
     );
 }
 

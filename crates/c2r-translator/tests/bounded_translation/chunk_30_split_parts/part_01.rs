@@ -85,7 +85,7 @@ fn assignment_call_reborrow_accepts_explicit_u32_cast_of_negative_literal() {
         signed: true,
         width: 32,
     };
-    *rhs = Box::new(IrExpr::Cast {
+    **rhs = IrExpr::Cast {
         target: u32_ty,
         expr: Box::new(IrExpr::Unary {
             op: IrUnOp::Neg,
@@ -100,7 +100,7 @@ fn assignment_call_reborrow_accepts_explicit_u32_cast_of_negative_literal() {
         }),
         implicit: false,
         source_span: None,
-    });
+    };
 
     let emitted = emit_rust_from_ir_with_globals_and_policy(
         &function,
