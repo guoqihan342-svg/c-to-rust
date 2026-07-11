@@ -316,6 +316,10 @@ def main() -> int:
                 if args.ai_deterministic_fallback == "auto" and deterministic_candidate_path.is_file()
                 else None
             ),
+            c2rust_baseline=c2rust_baseline,
+            c2rust_baseline_manifest_path=(
+                evidence_dir / f"l3-{slice_id}-c2rust-baseline-manifest.json"
+            ),
             replay_test_path=evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs",
             oracle_payload=pipeline["oracle"],
             harness_path=evidence_dir / f"l3-{slice_id}-c-oracle-harness-draft.c",

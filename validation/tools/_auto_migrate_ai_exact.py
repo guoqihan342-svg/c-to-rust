@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import json
 from pathlib import Path
 from typing import Any
 
+from validation.tools import validate_judge_entrypoints as judge_validator
 from validation.tools.ai_candidate_harness import (
     canonical_json_bytes,
     extract_gate_failure_facts,
@@ -31,6 +33,8 @@ def run_ai_exact_stage(
     evidence_dir: Path,
     canonical_draft_path: Path,
     deterministic_candidate_path: Path | None,
+    c2rust_baseline: Mapping[str, Any] | None,
+    c2rust_baseline_manifest_path: Path | None,
     replay_test_path: Path,
     oracle_payload: Mapping[str, Any],
     harness_path: Path,
@@ -59,6 +63,7 @@ def run_ai_exact_stage(
         replay_runner=replay_runner,
     )
     deterministic_result = None
+    c2rust_baseline_result = None
     canonical_changed = False
 
     if (
@@ -129,15 +134,79 @@ def run_ai_exact_stage(
                 replay_runner=replay_runner,
             )
 
+    baseline_path, baseline_audit = resolve_current_c2rust_baseline_candidate(
+        c2rust_baseline,
+        manifest_path=c2rust_baseline_manifest_path,
+        evidence_dir=evidence_dir,
+        repo_root=proof_root,
+    )
+    if baseline_path is not None:
+        baseline_sha = sha256_path(baseline_path)
+        prior_result = next(
+            (
+                result
+                for result in (ai_result, deterministic_result)
+                if result is not None and result.get("candidate_sha256") == baseline_sha
+            ),
+            None,
+        )
+        if prior_result is not None:
+            c2rust_baseline_result = prior_result
+            baseline_audit.update(
+                status="duplicate",
+                reason="duplicate_exact_artifact_sha256",
+                duplicate_candidate_sha256=baseline_sha,
+            )
+        elif not any(
+            result is not None and result.get("status") == "passed"
+            for result in (ai_result, deterministic_result)
+        ):
+            c2rust_baseline_result = _validate_with_new_attempt(
+                spec,
+                label="c2rust-baseline",
+                candidate_path=baseline_path,
+                replay_test_path=replay_test_path,
+                oracle_payload=oracle_payload,
+                harness_path=harness_path,
+                proof_root=proof_root,
+                attempts_root=attempts_root,
+                compile_runner=compile_runner,
+                replay_runner=replay_runner,
+            )
+            baseline_audit.update(
+                status="exact_gates_completed",
+                reason="fresh_exact_gates_passed"
+                if c2rust_baseline_result["status"] == "passed"
+                else "fresh_exact_gates_failed",
+                exact_validation_status=c2rust_baseline_result["status"],
+            )
+        else:
+            baseline_audit.update(
+                status="not_attempted",
+                reason="higher_priority_candidate_passed",
+            )
+
     candidates = [_router_candidate("opencode-glm51-1", "opencode-ai", ai_result)]
     if deterministic_result is not None:
         candidates.append(
             _router_candidate("typed-ir:clang-lowered", "typed-ir", deterministic_result)
         )
+    if c2rust_baseline_result is not None:
+        candidates.append(
+            _router_candidate(
+                "c2rust-baseline:raw-current-run",
+                "c2rust-baseline",
+                c2rust_baseline_result,
+            )
+        )
     router = route_candidates(candidates, provider_invocations=1)
     selected_id = router.get("selected_candidate_id")
     if selected_id == "typed-ir:clang-lowered" and deterministic_candidate_path is not None:
         canonical_draft_path.write_bytes(deterministic_candidate_path.read_bytes())
+        canonical_changed = True
+        _mark_ai_not_applied(ai_manifest, evidence_dir, slice_id)
+    elif selected_id == "c2rust-baseline:raw-current-run" and baseline_path is not None:
+        canonical_draft_path.write_bytes(baseline_path.read_bytes())
         canonical_changed = True
         _mark_ai_not_applied(ai_manifest, evidence_dir, slice_id)
 
@@ -151,10 +220,16 @@ def run_ai_exact_stage(
             deterministic_result,
             evidence_dir / f"l3-{slice_id}-typed-ir-exact-validation.json",
         )
+    if c2rust_baseline_result is not None and baseline_audit["status"] != "duplicate":
+        summaries["c2rust_baseline"] = _persist_candidate_result(
+            c2rust_baseline_result,
+            evidence_dir / f"l3-{slice_id}-c2rust-baseline-exact-validation.json",
+        )
     router_path = evidence_dir / f"l3-{slice_id}-ai-router.json"
     router_payload = {
         **router,
         "candidate_evidence": summaries,
+        "candidate_source_audit": {"c2rust_baseline": baseline_audit},
         "canonical_draft_sha256": sha256_path(canonical_draft_path),
         "semantic_pass": selected_id is not None,
     }
@@ -165,6 +240,120 @@ def run_ai_exact_stage(
         "router_path": router_path,
         "canonical_changed": canonical_changed,
     }
+
+
+def resolve_current_c2rust_baseline_candidate(
+    baseline_manifest: Mapping[str, Any] | None,
+    *,
+    manifest_path: Path | None,
+    evidence_dir: Path,
+    repo_root: Path,
+) -> tuple[Path | None, dict[str, Any]]:
+    audit: dict[str, Any] = {
+        "source": "c2rust-baseline",
+        "status": "rejected",
+        "reason": "baseline_manifest_missing",
+    }
+    if not isinstance(baseline_manifest, Mapping) or manifest_path is None:
+        return None, audit
+
+    evidence_root = evidence_dir.resolve()
+    resolved_manifest = manifest_path.resolve()
+    try:
+        resolved_manifest.relative_to(evidence_root)
+    except ValueError:
+        audit["reason"] = "baseline_manifest_outside_current_run"
+        return None, audit
+    if not resolved_manifest.is_file() or resolved_manifest.is_symlink():
+        audit["reason"] = "baseline_manifest_not_reopenable"
+        return None, audit
+    try:
+        reopened = json.loads(resolved_manifest.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        audit["reason"] = "baseline_manifest_invalid_json"
+        return None, audit
+    if not isinstance(reopened, dict) or canonical_json_bytes(reopened) != canonical_json_bytes(
+        dict(baseline_manifest)
+    ):
+        audit["reason"] = "baseline_manifest_payload_drift"
+        return None, audit
+
+    manifest_status = reopened.get("status")
+    audit["manifest_status"] = manifest_status if isinstance(manifest_status, str) else "invalid"
+    if manifest_status != "generated":
+        audit["reason"] = "baseline_manifest_not_generated"
+        return None, audit
+    output = reopened.get("output")
+    if not isinstance(output, dict) or output.get("status") != "generated":
+        audit["reason"] = "baseline_output_not_generated"
+        return None, audit
+    output_path_value = output.get("path")
+    declared_sha = output.get("sha256")
+    if not isinstance(output_path_value, str) or not output_path_value:
+        audit["reason"] = "baseline_output_path_missing"
+        return None, audit
+    if not _is_sha256(declared_sha):
+        audit["reason"] = "baseline_output_sha256_invalid"
+        return None, audit
+
+    output_path = _resolve_current_run_artifact(
+        output_path_value,
+        evidence_root=evidence_root,
+        repo_root=repo_root.resolve(),
+    )
+    if output_path is None:
+        audit["reason"] = "baseline_output_not_reopenable_in_current_run"
+        return None, audit
+    if judge_validator.sha256_file(output_path) != declared_sha:
+        audit["reason"] = "baseline_output_sha256_mismatch"
+        return None, audit
+
+    candidate_sha = sha256_path(output_path)
+    audit.update(
+        status="eligible_for_exact_gates",
+        reason="current_run_manifest_and_output_reopened",
+        manifest={
+            "path": resolved_manifest.relative_to(evidence_root).as_posix(),
+            "sha256": sha256_path(resolved_manifest),
+        },
+        artifact={
+            "path": output_path.relative_to(evidence_root).as_posix(),
+            "declared_sha256": declared_sha,
+            "candidate_sha256": candidate_sha,
+        },
+    )
+    return output_path, audit
+
+
+def _resolve_current_run_artifact(
+    value: str,
+    *,
+    evidence_root: Path,
+    repo_root: Path,
+) -> Path | None:
+    configured = Path(value)
+    candidates = (
+        [configured]
+        if configured.is_absolute()
+        else [repo_root / configured, evidence_root / configured]
+    )
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        try:
+            resolved.relative_to(evidence_root)
+        except ValueError:
+            continue
+        if resolved.is_file() and not resolved.is_symlink():
+            return resolved
+    return None
+
+
+def _is_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
 
 
 def _validate_with_new_attempt(
