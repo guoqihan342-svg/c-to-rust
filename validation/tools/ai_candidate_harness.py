@@ -4,6 +4,7 @@
 from validation.tools._ai_candidate_harness_parts.cli import main
 from validation.tools._ai_candidate_harness_parts.context import build_context_pack, canonical_json_bytes
 from validation.tools._ai_candidate_harness_parts.gate_feedback import extract_gate_failure_facts
+from validation.tools._ai_candidate_harness_parts.fresh_oracle import prove_fresh_oracle
 from validation.tools._ai_candidate_harness_parts.provider import (
     MAX_PROVIDER_STDOUT_BYTES,
     ProviderExecution,
@@ -53,6 +54,7 @@ __all__ = [
     "main",
     "parse_candidate_response",
     "parse_repair_response",
+    "prove_fresh_oracle",
     "recompute_router_metrics",
     "route_candidates",
     "selection_policy_sha256",
