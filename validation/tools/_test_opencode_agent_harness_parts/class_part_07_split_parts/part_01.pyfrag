@@ -52,7 +52,7 @@
             "--phase",
             "migrate",
             "--input",
-            "target/out/workers/worker a/harness/request 1.json",
+            "target/out/workers/worker's a/harness/request 1;$(noop).json",
         ]
         expected_command_line = shlex.join(worker_command)
         argv = harness.build_opencode_run_argv(
@@ -62,11 +62,14 @@
             opencode_variant="max",
             opencode_skip_permissions=False,
             worker_command=worker_command,
-            request_path=REPO_ROOT / "target/out/workers/worker a/harness/request 1.json",
+            request_path=REPO_ROOT / "target/out/workers/worker's a/harness/request 1;$(noop).json",
             summary_path=REPO_ROOT / "target/out/workers/worker a/summary/competition-run-summary.json",
             repo_root=REPO_ROOT,
         )
+        self.assertEqual(harness.shell_command_line(worker_command), expected_command_line)
+        self.assertEqual(argv[-1].count("Command line:"), 1)
         self.assertIn(f"Command line: {expected_command_line}", argv[-1])
+        self.assertNotIn("Command:", argv[-1])
 
         verification = harness.verify_opencode_contract_execution(
             session_evidence={
