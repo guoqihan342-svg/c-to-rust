@@ -58,7 +58,7 @@ impl EmitContext {
         policy: EmitPolicy,
     ) -> Result<Self, String> {
         let assigned_vars = collect_assigned_vars(&function.body);
-        let interior_reborrows = analyze_interior_reborrow(function)?;
+        let interior_reborrows = analyze_interior_reborrow(function, &policy)?;
         let byte_cursor_sources = collect_byte_cursor_sources(&function.body);
         let mut byte_slice_params = HashSet::new();
         for source in byte_cursor_sources.values() {
@@ -238,7 +238,7 @@ impl EmitContext {
         let key = if let Some(plan) = self.interior_reborrow(name) {
             MutableRecordPointerFieldKey {
                 base: plan.owner.clone(),
-                field: format!("{}.{}", plan.owner_field, field),
+                field: format!("{}.{}", plan.owner_path.join("."), field),
             }
         } else {
             MutableRecordPointerFieldKey {

@@ -1,0 +1,53 @@
+def rust_replay_record_interior_projection_u32_reset_add_while_continue_state_cases_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> str:
+    contract = record_interior_projection_u32_reset_add_while_continue_state_replay_contract(
+        spec, fixture_binding
+    )
+    if contract is None:
+        return "    // TODO: bind reset-add while-continue fixture cases.\n"
+    owner_name = contract["owner_parameter"]
+    reset = contract["reset_state"]
+    add = contract["add_state"]
+    result = contract["return"]
+    function_name = safe_ident(required_str(spec, "function_name"))
+    blocks = ["    // Exact safe reset/add/current-while-continue fixture replay.\n"]
+    for case_binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, case_binding)
+        expected = case_binding["expected_outputs"]
+        case_id = str(case_binding.get("id") or "case")
+        case_ident = safe_ident(case_id)
+        locals_by_parameter: dict[str, str] = {}
+        declarations: list[str] = []
+        call_arguments: list[str] = []
+        for entry in contract["entry_arguments"]:
+            parameter = str(entry["parameter"])
+            local_name = f"actual_{case_ident}_{safe_ident(parameter)}"
+            locals_by_parameter[parameter] = local_name
+            mutable = "mut " if entry["direction"] == "inout" else ""
+            declarations.append(
+                f"        let {mutable}{local_name} = "
+                f"{scripted_record_rust_initializer(entry['initializer'], payload)};\n"
+            )
+            call_arguments.append(
+                f"&mut {local_name}" if entry["direction"] == "inout" else f"&{local_name}"
+            )
+        owner_local = locals_by_parameter[owner_name]
+        reset_expression = owner_local + "." + ".".join(reset["owner_field_path"])
+        add_expression = owner_local + "." + ".".join(add["owner_field_path"])
+        expected_return = str(bool(expected[result["fixture_field"]])).lower()
+        blocks.extend(
+            [
+                "    {\n",
+                f"        let case_id = {rust_string_literal(case_id)};\n",
+                *declarations,
+                f"        let actual_return = {function_name}({', '.join(call_arguments)});\n",
+                f"        assert_eq!({reset_expression}, "
+                f"{int(expected[reset['fixture_field']])}u32, \"{{}} reset state drifted\", case_id);\n",
+                f"        assert_eq!({add_expression}, "
+                f"{int(expected[add['fixture_field']])}u32, \"{{}} add state drifted\", case_id);\n",
+                f"        assert_eq!(actual_return, {expected_return}, \"{{}} return drifted\", case_id);\n",
+                "    }\n",
+            ]
+        )
+    return "".join(blocks)

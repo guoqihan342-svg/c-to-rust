@@ -1,0 +1,44 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-c2rust-baseline-manifest.json",
+    "sha256": "0b54c600869058d1e8fe12b93ee874766f78c46c71809f5bd816066b2c9c8190",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir <rust-check-output> <draft>",
+  "error_count": 0,
+  "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [],
+    "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
+    "status": "not_applicable"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-route-decision.json",
+    "sha256": "469306c4622ea03fdeda2b5cbd0b73a289e0bdced8a618399d66a91c0aee7bc4",
+    "status": "recorded"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "mixed",
+    "bindings": [],
+    "semantics_verified": false,
+    "status": "none"
+  },
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "ee2f07c2c88f45754f2871b6f74e9e165f6393cabfe093fdef2b4de61610f880",
+    "status": "passed"
+  }
+}

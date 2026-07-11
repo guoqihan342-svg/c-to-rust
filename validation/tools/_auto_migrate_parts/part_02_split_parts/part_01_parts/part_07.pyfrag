@@ -22,6 +22,7 @@ def run_generated_rust_replay(
         return replay
     if not generated_rust_replay_supported(spec, evidence_dir):
         return replay
+    reset_add_safety = reset_add_generated_rust_safety(spec, draft_path)
     projection_safety = interior_projection_generated_rust_safety(spec, draft_path)
     external_context = external_direct_callee_context(
         spec,
@@ -43,7 +44,11 @@ def run_generated_rust_replay(
     replay["status"] = "passed" if passed else "failed"
     replay["generated_draft_replay_pass"] = passed
     replay["generated_draft_semantic_pass"] = False
-    if projection_safety is not None:
+    if reset_add_safety is not None:
+        contract = record_interior_projection_u32_reset_add_while_continue_state_replay_contract(spec)
+        replay["fixture_state_model"] = reset_add_fixture_state_model(contract)
+        replay["safe_mutable_projection"] = reset_add_safety
+    elif projection_safety is not None:
         replay["fixture_state_model"] = {
             "kind": RECORD_INTERIOR_PROJECTION_U32_CONSTANT_STATE_KIND,
             "scope": "fixture_only",
@@ -130,6 +135,7 @@ def rust_check_has_harness_only_external_bindings(rust_check: dict[str, Any]) ->
 def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) -> bool:
     if (
         behavior_fields(spec) != ["return_code"]
+        and not record_interior_projection_u32_reset_add_while_continue_state_replay_supported(spec)
         and not record_interior_projection_u32_constant_state_replay_supported(spec)
         and not record_u32_field_scalar_wrapping_add_state_replay_supported(spec)
         and not record_u32_field_constant_state_replay_supported(spec)

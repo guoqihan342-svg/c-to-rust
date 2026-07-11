@@ -70,6 +70,155 @@ def require_accepted_report(
         )
     if require_toolchain and report.get("toolchain_status") != "C_ORACLE_GENERATED":
         raise SystemExit(f"--accept-existing-evidence requires {label}.toolchain_status=C_ORACLE_GENERATED")
+    if accepted_evidence_identity_required(spec) and label in {
+        "c_oracle",
+        "rust_report",
+        "diff",
+        "negative_diff",
+    }:
+        require_accepted_evidence_identity(spec, label, report)
+        if label == "diff":
+            fixture = spec.get("fixture_contract", {})
+            c_oracle_path = required_repo_path(fixture.get("c_oracle"), "fixture_contract.c_oracle")
+            negative_path = optional_repo_path(fixture.get("negative_diff")) or derive_evidence_path(
+                c_oracle_path, "-oracle.json", "-negative-diff.json"
+            )
+            if not negative_path.exists():
+                raise SystemExit(f"--accept-existing-evidence requires negative_diff evidence at {negative_path}")
+            require_accepted_report(spec, "negative_diff", read_json(negative_path))
+
+
+def accepted_evidence_identity_required(spec: dict[str, Any]) -> bool:
+    contract = spec.get("replay_contract", {})
+    return isinstance(contract, dict) and contract.get("kind") == (
+        "record_interior_projection_u32_reset_add_while_continue_state"
+    )
+
+
+def require_accepted_evidence_identity(
+    spec: dict[str, Any], label: str, report: dict[str, Any]
+) -> None:
+    expected_top_level = {
+        "target_id": required_str(spec, "target_id"),
+        "slice_id": required_str(spec, "slice_id"),
+        "source_commit": source_commit(spec),
+    }
+    for key, expected in expected_top_level.items():
+        if report.get(key) != expected:
+            raise SystemExit(
+                f"--accept-existing-evidence {label}.{key} mismatch: "
+                f"{report.get(key)!r} != {expected!r}"
+            )
+
+    identity = report.get("evidence_identity")
+    bindings = identity.get("bindings") if isinstance(identity, dict) else None
+    if not isinstance(identity, dict) or not isinstance(bindings, dict):
+        raise SystemExit(f"--accept-existing-evidence requires {label}.evidence_identity.bindings")
+
+    fixture = spec.get("fixture_contract", {})
+    fixture_file = required_repo_path(fixture.get("path") or fixture.get("input"), "fixture_contract.path")
+    fixture_sha = hashlib.sha256(fixture_file.read_bytes()).hexdigest()
+    if fixture.get("hash") != fixture_sha or spec.get("fixture_hash") != fixture_sha:
+        raise SystemExit("--accept-existing-evidence fixture sha256 drifted from slice spec")
+
+    carrier = spec.get("translation_carrier", {})
+    real_source = carrier.get("real_source", {}) if isinstance(carrier, dict) else {}
+    fragment = real_source.get("fragment", {}) if isinstance(real_source, dict) else {}
+    line_start = fragment.get("line_start") if isinstance(fragment, dict) else None
+    line_end = fragment.get("line_end") if isinstance(fragment, dict) else None
+    if (
+        isinstance(line_start, bool)
+        or not isinstance(line_start, int)
+        or isinstance(line_end, bool)
+        or not isinstance(line_end, int)
+        or line_start < 1
+        or line_end < line_start
+    ):
+        raise SystemExit("--accept-existing-evidence source fragment line range is invalid")
+    source_root = Path(str(spec.get("source_root", "")))
+    if not source_root.is_absolute():
+        source_root = REPO_ROOT / source_root
+    source_file = source_root / required_str(spec, "source_file")
+    if not source_file.is_file():
+        raise SystemExit(f"--accept-existing-evidence requires source file: {source_file}")
+    source_text = source_file.read_text(encoding="utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
+    source_lines = source_text.splitlines(keepends=True)
+    if line_end > len(source_lines):
+        raise SystemExit("--accept-existing-evidence source fragment line range exceeds source file")
+    fragment_text = "".join(source_lines[line_start - 1 : line_end])
+    fragment_sha = hashlib.sha256(fragment_text.encode("utf-8")).hexdigest()
+    if fragment.get("sha256") != fragment_sha:
+        raise SystemExit("--accept-existing-evidence source fragment sha256 drifted from source file")
+
+    carrier_source = spec.get("c_source")
+    if not isinstance(carrier_source, str):
+        raise SystemExit("--accept-existing-evidence requires c_source for carrier identity")
+    carrier_sha = hashlib.sha256(carrier_source.encode("utf-8")).hexdigest()
+    if carrier.get("carrier_source_sha256") != carrier_sha:
+        raise SystemExit("--accept-existing-evidence carrier source sha256 drifted from c_source")
+
+    draft_ref = accepted_generated_draft_ref(spec, report)
+    draft_path = required_repo_path(draft_ref.get("path"), f"{label} generated Rust draft")
+    draft_sha = hashlib.sha256(draft_path.read_bytes()).hexdigest()
+    if draft_ref.get("sha256") != draft_sha:
+        raise SystemExit(f"--accept-existing-evidence {label} generated Rust draft sha256 drifted")
+
+    expected_identity = {
+        "schema_version": 1,
+        **expected_top_level,
+        "replay_contract_kind": spec["replay_contract"]["kind"],
+    }
+    for key, expected in expected_identity.items():
+        if identity.get(key) != expected:
+            raise SystemExit(f"--accept-existing-evidence {label}.evidence_identity.{key} mismatch")
+    expected_bindings = {
+        "fixture_sha256": fixture_sha,
+        "carrier_source_sha256": carrier_sha,
+        "source_fragment_sha256": fragment_sha,
+        "source_fragment_line_start": line_start,
+        "source_fragment_line_end": line_end,
+        "generated_rust_draft_sha256": draft_sha,
+    }
+    for key, expected in expected_bindings.items():
+        if bindings.get(key) != expected:
+            raise SystemExit(f"--accept-existing-evidence {label}.evidence_identity.bindings.{key} mismatch")
+    material = {key: value for key, value in identity.items() if key not in {"identity_sha256", "recomputed"}}
+    encoded = json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    if identity.get("recomputed") is not True or identity.get("identity_sha256") != hashlib.sha256(encoded).hexdigest():
+        raise SystemExit(f"--accept-existing-evidence {label}.evidence_identity digest mismatch")
+
+    if label == "negative_diff":
+        mutation = report.get("actual_mutation_execution", {}).get("mutation", {})
+        original = mutation.get("original_draft", {}) if isinstance(mutation, dict) else {}
+        if original.get("sha256") != draft_sha:
+            raise SystemExit(
+                "--accept-existing-evidence negative_diff mutation.original_draft.sha256 mismatch"
+            )
+
+
+def accepted_generated_draft_ref(spec: dict[str, Any], report: dict[str, Any]) -> dict[str, Any]:
+    provenance = report.get("provenance", {})
+    if not isinstance(provenance, dict):
+        provenance = {}
+    evidence_refs = provenance.get("evidence_refs", {})
+    replay_refs = provenance.get("refs", {})
+    candidates = [
+        evidence_refs.get("generated_rust_draft") if isinstance(evidence_refs, dict) else None,
+        replay_refs.get("generated_rust_draft") if isinstance(replay_refs, dict) else None,
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, dict) and candidate.get("path"):
+            return candidate
+    rust_report_path = required_repo_path(
+        spec.get("fixture_contract", {}).get("rust_report"), "fixture_contract.rust_report"
+    )
+    rust_report = read_json(rust_report_path)
+    rust_provenance = rust_report.get("provenance", {})
+    rust_refs = rust_provenance.get("refs", {}) if isinstance(rust_provenance, dict) else {}
+    candidate = rust_refs.get("generated_rust_draft") if isinstance(rust_refs, dict) else None
+    if not isinstance(candidate, dict) or not candidate.get("path"):
+        raise SystemExit("--accept-existing-evidence requires generated Rust draft reference")
+    return candidate
 
 
 def mutation_detected(report: dict[str, Any]) -> bool:

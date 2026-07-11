@@ -20,7 +20,11 @@ from .field_scalar_add_contract import KIND as FIELD_SCALAR_ADD_KIND
 from .field_scalar_add_source import validate_carrier_source as validate_field_scalar_add_source
 from .constant_state_contract import KIND as CONSTANT_STATE_KIND
 from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
+from .reset_add_while_continue_contract import KIND as RESET_ADD_CONTINUE_KIND
 from validation.tools.interior_projection_syntax import validate_c_interior_projection_source
+from validation.tools.reset_add_while_continue_syntax import (
+    validate_c_reset_add_while_continue_source,
+)
 
 
 @dataclass(frozen=True)
@@ -144,6 +148,11 @@ def validate_carrier(
         raise ReporterError("translation carrier excluded semantics must be declared")
     if contract.get("kind") == CONSTANT_STATE_KIND:
         validate_constant_state_carrier_source(c_source, contract)
+    elif contract.get("kind") == RESET_ADD_CONTINUE_KIND:
+        try:
+            validate_c_reset_add_while_continue_source(c_source, contract)
+        except ValueError as exc:
+            raise ReporterError(str(exc)) from exc
     elif contract.get("kind") == INTERIOR_PROJECTION_KIND:
         try:
             validate_c_interior_projection_source(c_source, contract)

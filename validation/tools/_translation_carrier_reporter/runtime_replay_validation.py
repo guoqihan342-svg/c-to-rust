@@ -8,7 +8,11 @@ from .runtime_oracle_validation import reject_host_path_text, resolve_repo_path
 from .source_binding import StaticContext, file_ref, sha256_file
 from .state_replay_kinds import expected_fixture_state_model, is_state_replay_kind
 from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
+from .reset_add_while_continue_contract import KIND as RESET_ADD_CONTINUE_KIND
 from validation.tools.interior_projection_syntax import validate_rust_interior_projection_draft
+from validation.tools.reset_add_while_continue_syntax import (
+    validate_rust_reset_add_while_continue_draft,
+)
 
 
 MUTABLE_AUTO_ARTIFACT_CYCLE_BOUNDARY = (
@@ -21,6 +25,13 @@ MUTABLE_AUTO_ARTIFACT_CYCLE_BOUNDARY = (
 def validate_safe_interior_projection_draft(
     context: StaticContext, draft_path: Path
 ) -> dict[str, Any] | None:
+    if context.contract.get("kind") == RESET_ADD_CONTINUE_KIND:
+        try:
+            return validate_rust_reset_add_while_continue_draft(
+                draft_path.read_text(encoding="utf-8-sig"), context.contract
+            )
+        except ValueError as exc:
+            raise ReporterError(str(exc)) from exc
     if context.contract.get("kind") != INTERIOR_PROJECTION_KIND:
         return None
     try:

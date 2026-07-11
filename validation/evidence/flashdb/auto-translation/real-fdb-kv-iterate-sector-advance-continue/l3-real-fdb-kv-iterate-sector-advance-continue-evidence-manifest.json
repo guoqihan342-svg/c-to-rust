@@ -1,0 +1,282 @@
+{
+  "claim_boundary": {
+    "accepted_evidence_authoritative": false,
+    "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": true,
+      "decision": "allow",
+      "preconditions": [
+        {
+          "applies_to": [
+            "db",
+            "itr"
+          ],
+          "id": "alias-precondition-1",
+          "kind": "noalias",
+          "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+          "required": true
+        }
+      ],
+      "requires_noalias": true,
+      "risk_count": 1,
+      "risk_level": "proven_noalias"
+    },
+    "behavior_fields_checked": [
+      "return_value",
+      "kv_addr_start",
+      "itr_traversed_len"
+    ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics bind independent oracle/replay/diff evidence and stable generated-draft unsafe gates; final accepted reports are downstream and cannot hash-bind themselves.",
+        "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-advance-continue.json",
+        "fixture_sha256": "ccc414647158553180bade2ad9e7fe2f4f99a2cafaea415f4065c3ae4ef417cd",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "248682f5706e632cc096b9a5bb545271e434101cc666a6a07ef4c0d8fd199442",
+          "diff": "7397c24cee7d37b8e93d28cbfb62cbc4b1fd9067abad1ff5c34067de5922406d",
+          "negative_diff": "e88d925bf74de27d5dc1f0a3abb0497423b7d375d2fe8ceaec031f4d3e31e46e",
+          "rust_report": "521e2beda025d8ee1be1093469c5fe94f808c2e84a72ddebe72529df6f8b873f",
+          "unsafe_ledger": "e6f6668b4c055b2d07ee97d9eae902c101fad6bf4c2ccc0ff15cbfad399c58d0",
+          "unsafe_scan": "45091f12c89ff174e90967237d5c1cc30d4336793069aa6efc8e1a24ece19a2a"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-advance-continue-c-oracle.json",
+          "diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-advance-continue-diff.json",
+          "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-advance-continue-negative-diff.json",
+          "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-advance-continue-rust-report.json",
+          "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-generated-draft-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-generated-draft-unsafe-scan.json"
+        },
+        "slice_id": "real-fdb-kv-iterate-sector-advance-continue",
+        "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+        "status": "accepted",
+        "target_id": "flashdb",
+        "toolchain_status": "C_ORACLE_GENERATED",
+        "unsafe_gate_source": "generated_draft_unsafe_gates"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-advance-continue-c-oracle.json",
+          "sha256": "248682f5706e632cc096b9a5bb545271e434101cc666a6a07ef4c0d8fd199442",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-advance-continue-negative-diff.json",
+          "sha256": "e88d925bf74de27d5dc1f0a3abb0497423b7d375d2fe8ceaec031f4d3e31e46e",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-advance-continue-rust-report.json",
+          "sha256": "521e2beda025d8ee1be1093469c5fe94f808c2e84a72ddebe72529df6f8b873f",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-sector-advance-continue-diff.json",
+          "sha256": "7397c24cee7d37b8e93d28cbfb62cbc4b1fd9067abad1ff5c34067de5922406d",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-generated-draft-unsafe-ledger.json",
+          "sha256": "e6f6668b4c055b2d07ee97d9eae902c101fad6bf4c2ccc0ff15cbfad399c58d0",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-generated-draft-unsafe-scan.json",
+          "sha256": "45091f12c89ff174e90967237d5c1cc30d4336793069aa6efc8e1a24ece19a2a",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json <generated-replay.rs> -o <generated-replay-executable>",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "<generated-replay-executable> --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-rust-draft.rs",
+        "sha256": "ac7d0ded1ec631a164b32571128abc4f41614e31f936016474a5c47022061495",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "real-fdb-kv-iterate-sector-advance-continue",
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "status": "passed",
+      "target_id": "flashdb",
+      "unsafe_gate_source": "generated_draft_unsafe_gates"
+    },
+    "generated_draft_semantic_pass": true,
+    "known_gaps": [
+      "No whole fdb_kv_iterate function migration claim.",
+      "No else-if FAILED_ADDR condition, get_next_kv_addr semantics, enclosing real loop, or sector-transition claim outside exact lines 1871-1873.",
+      "No claim that kv and itr are independent or noalias roots.",
+      "No real FlashDB database, KV, address, or iterator layout, fdb_db_t cast, padding, alignment, or ABI claim.",
+      "The bool run-once loop and unreachable false return are generic carrier sentinels that make current-level continue observable; they are not claimed as real FlashDB source.",
+      "Auto-generated Rust draft is accepted only by the generated_draft_acceptance binding for this exact draft sha."
+    ],
+    "must_not_claim": [
+      "whole-project migration",
+      "fdb_kv_iterate semantic equivalence",
+      "kv/itr noalias",
+      "FlashDB layout or ABI equivalence",
+      "semantic equivalence without safe generated Rust projection and C/Rust replay evidence bound to source lines 1871-1873",
+      "semantic equivalence for this auto-generated Rust draft",
+      "full C99/C11 automatic translation"
+    ],
+    "scope": "Automatic translation run completed with accepted evidence binding and generated_draft_acceptance for this exact Rust draft."
+  },
+  "evidence": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-c2rust-baseline-manifest.json",
+      "sha256": "0b54c600869058d1e8fe12b93ee874766f78c46c71809f5bd816066b2c9c8190",
+      "status": "skipped"
+    },
+    "c_oracle": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-c-oracle-status.json",
+      "sha256": "973082f2b07f6445c2da626da05b1e0876a034da7c1991c95d026df486999b18",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-auto-cache-metadata.json",
+      "sha256": "8ad7576d6bfd2e093f3edee8ba83911808e74d2c6fc3f065595f7bf56cce5e02",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-clang-lowering-report.json",
+      "sha256": "d78c821a20f93c685446e3dfd9b82fe912d97c4afe006260aceb4b74898fd334",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-config-profile.json",
+      "profile_id": "flashdb-real-fdb-kv-iterate-sector-advance-continue-carrier",
+      "sha256": "c7759796eaf7e1a4db95bb165f5b5f0febbad54d025c04453d3ab6a53116efd5",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-context-pack.json",
+      "sha256": "2b549ec23f46907007263e54e03e5f1092312f5527acccd62e4a1bbd8bd7481d",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-final-verification.json",
+      "sha256": "dc189f97483d3ae4681dbb0c1ee91ec2d66bc8b7672e25727ad7574890963ca2",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": true,
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-negative-diff.json",
+      "sha256": "89ed7ca9f9633a704f395ed514095a33181970d0c69633bd12e1758979faea28",
+      "status": "expected_failed"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-performance-smoke.json",
+      "secondary_only": true,
+      "sha256": "240e889356599013a31882e666e1ab3f04fd8ba40979e56548273e33ee2b035d",
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-pointer-graph.json",
+      "sha256": "bc5c3a07d35b0619941f212ae2793cc41be94e690cd0ffd59e95fa7e4ef5ab26",
+      "status": "recorded"
+    },
+    "route_decision": {
+      "level": "L1",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-route-decision.json",
+      "sha256": "469306c4622ea03fdeda2b5cbd0b73a289e0bdced8a618399d66a91c0aee7bc4",
+      "status": "recorded"
+    },
+    "rust_check": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/rust-check.json",
+      "sha256": "3e24966fa25f99ba47a88d4d870bbc1d24b651b97138dbb75ca7651092a6b540",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-rust-report.json",
+      "sha256": "ee6228a72e223449e8a24b8d625250fa732d1e0c43b95373d6f5ac26aac925c8",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-diff.json",
+      "sha256": "7fae009b8c8d0c072888a62f2000e2cfc6b031f094285accd12bcb485a273227",
+      "status": "passed"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-slice-contract.json",
+      "sha256": "02949d93ad12aea68d0d00c52aafc31d832eab361da673056d440a31ba985f40",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-summary.json",
+      "sha256": "aae503b0062e88198a0670c9f3c2fd40a8e8c5e180ec94944024e31544adff15",
+      "status": "passed"
+    },
+    "test_translation": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-test-translation-generated.json",
+      "sha256": "583293ed995a6cac62f77b17f1e98a5d967ed76d09e523c29a4b9acf7fdf3e19",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-unsafe-ledger.json",
+      "sha256": "d1f89773b4b8be63e0d2922967882786d3055262a095a70e570d018f8a22f5a9",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-unsafe-scan.json",
+      "sha256": "2c956383a4eba337c36086d93958cea694b8bf3cfb57b62a3e1e0f5b7364c903",
+      "status": "passed"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-validation-profile.json",
+      "profile": "L1-dev",
+      "sha256": "ee2f07c2c88f45754f2871b6f74e9e165f6393cabfe093fdef2b4de61610f880",
+      "status": "passed"
+    },
+    "verified_unsafe_baseline": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-c2rust-verified-unsafe-baseline.json",
+      "sha256": "ecb96d0962b3d6fc8e810765dbf731538c5097e937570c6ada5525dd64701b3b",
+      "status": "blocked"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-version-manifest.json",
+      "sha256": "5df956debada30cfd3cc25ca7a5b9361fdcd8b71b8271cad4e81e0572e45f9c2",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "ccc414647158553180bade2ad9e7fe2f4f99a2cafaea415f4065c3ae4ef417cd",
+    "operation_count": 3,
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-advance-continue.json"
+  },
+  "level": "L3",
+  "repo_commit": "741995540c9264d16b8446fa8029663a42becd4e",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-sector-advance-continue",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "passed",
+  "target_id": "flashdb"
+}

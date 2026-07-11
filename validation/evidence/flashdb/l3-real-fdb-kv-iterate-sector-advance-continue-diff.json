@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-sector-advance-continue",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 3,
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start",
+    "itr_traversed_len"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "A readonly source and mutable owner use the exact source-owner noalias pair; an owner interior alias resets nested u32 state, owner u32 state uses wrapping_add, and one current-level continue reaches the terminal true return.",
+    "external_callee": null,
+    "reset_add_while_continue": {
+      "owner_parameter": "itr",
+      "projection": {
+        "path": [
+          "curr_kv"
+        ],
+        "alias_local": "kv",
+        "alias_c_pointer_type": "fdb_kv_t",
+        "alias_rust_type": "Kv"
+      },
+      "reset_state": {
+        "alias_field_path": [
+          "addr",
+          "start"
+        ],
+        "owner_field_path": [
+          "curr_kv",
+          "addr",
+          "start"
+        ],
+        "fixture_field": "kv_addr_start",
+        "rust_type": "u32",
+        "value": 0
+      },
+      "add_state": {
+        "owner_field_path": [
+          "traversed_len"
+        ],
+        "fixture_field": "itr_traversed_len",
+        "rust_type": "u32",
+        "operation": "wrapping_add",
+        "rhs": {
+          "mode": "direct_record_u32_field",
+          "parameter": "db",
+          "field_path": [
+            "sec_size"
+          ],
+          "source_expression": "db_sec_size(db)"
+        }
+      },
+      "control_flow": {
+        "kind": "single_iteration_while_continue",
+        "sentinel_local": "run_once",
+        "initial_value": true,
+        "body_first_assignment": false,
+        "continue_target": "current_while",
+        "unreachable_return": false,
+        "terminal_return": true
+      },
+      "noalias_required": [
+        [
+          "db",
+          "itr"
+        ]
+      ]
+    },
+    "excluded_semantics": [
+      "the else-if FAILED_ADDR condition and all fdb_kv_iterate statements outside exact lines 1871-1873",
+      "the real fdb_db_t cast and full FlashDB database, KV, address, or iterator layout and ABI",
+      "the enclosing real do-while sector loop, storage calls, later KV loop, and cross-iteration effects",
+      "any claim that kv and itr are independent or noalias roots"
+    ]
+  },
+  "evidence_identity": {
+    "schema_version": 1,
+    "target_id": "flashdb",
+    "slice_id": "real-fdb-kv-iterate-sector-advance-continue",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "replay_contract_kind": "record_interior_projection_u32_reset_add_while_continue_state",
+    "bindings": {
+      "slice_spec_sha256": "2f2090cef0dafeb1e7e4a99916f60b3615d346b4e352e97d37e07ab36a5a411b",
+      "fixture_sha256": "ccc414647158553180bade2ad9e7fe2f4f99a2cafaea415f4065c3ae4ef417cd",
+      "real_source_sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+      "source_fragment_sha256": "87b894759a461fbd51076a5c70775c92e39cef82e1b689e22fec2815401fd721",
+      "source_fragment_line_start": 1871,
+      "source_fragment_line_end": 1873,
+      "carrier_source_sha256": "9e766b0031fe0008b17319ab695041d53a00f4ae930e2e04cff2f0c124289e23",
+      "c_oracle_harness_sha256": "25bd2290fbb60210927bc2b84db840aa8d4fcaf9bd69a6a4218a4471194557b9",
+      "generated_rust_draft_sha256": "ac7d0ded1ec631a164b32571128abc4f41614e31f936016474a5c47022061495",
+      "generated_replay_test_sha256": "2d7d1c6453e9602bed6ee1ee21d7fee9a85ed8005c40700cf389418f927a3d3e"
+    },
+    "identity_sha256": "166f75bdcb6d472af4e2763eee23ca48ae11f80f136b82c746adb5e3fb979c58",
+    "recomputed": true
+  },
+  "status": "passed",
+  "semantic_pass": true,
+  "first_mismatch": null
+}

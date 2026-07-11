@@ -31,6 +31,12 @@ from .field_scalar_add_reports import (
 from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
 from .interior_projection_reports import build_negative_report as build_projection_negative_report
 from .interior_projection_reports import build_report_claim as build_projection_report_claim
+from .reset_add_while_continue_contract import KIND as RESET_ADD_CONTINUE_KIND
+from .reset_add_while_continue_reports import (
+    build_negative_report as build_reset_add_negative_report,
+    build_report_claim as build_reset_add_report_claim,
+    evidence_identity as build_reset_add_evidence_identity,
+)
 from .record_contract import KIND as RECORD_KIND
 from .sequence_contract import KIND as SEQUENCE_KIND
 from .sequence_model import mutated_observable_outputs, mutation_partition
@@ -96,6 +102,8 @@ def build_reports(
         "compared_fields": fields,
         "claim_boundary": claim,
     }
+    if context.contract.get("kind") == RESET_ADD_CONTINUE_KIND:
+        common["evidence_identity"] = build_reset_add_evidence_identity(context, runtime)
     negative = build_negative_report(context, common, negative_execution)
     c_oracle = {
         **common,
@@ -138,6 +146,8 @@ def build_negative_report(
     common: dict[str, Any],
     execution: dict[str, Any],
 ) -> dict[str, Any]:
+    if context.contract.get("kind") == RESET_ADD_CONTINUE_KIND:
+        return build_reset_add_negative_report(context, common, execution)
     if context.contract.get("kind") == INTERIOR_PROJECTION_KIND:
         return build_projection_negative_report(context, common, execution)
     if context.contract.get("kind") == CONSTANT_STATE_KIND:
@@ -254,6 +264,8 @@ def build_sequence_negative_report(
 
 
 def report_claim(context: StaticContext) -> dict[str, Any]:
+    if context.contract.get("kind") == RESET_ADD_CONTINUE_KIND:
+        return build_reset_add_report_claim(context)
     if context.contract.get("kind") == INTERIOR_PROJECTION_KIND:
         return build_projection_report_claim(context)
     if context.contract.get("kind") == CONSTANT_STATE_KIND:

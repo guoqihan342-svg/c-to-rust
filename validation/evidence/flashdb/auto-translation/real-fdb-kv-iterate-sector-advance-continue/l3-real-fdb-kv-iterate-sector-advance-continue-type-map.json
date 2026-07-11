@@ -1,0 +1,82 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-sector-advance-continue/l3-real-fdb-kv-iterate-sector-advance-continue-translator-input.json",
+    "sha256": "ba7c06ededf0e67e3296ec9a4ca461506c1970ea952f3e85d7829589ab9fa0d2",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=2f2090cef0dafeb1e7e4a99916f60b3615d346b4e352e97d37e07ab36a5a411b",
+    "fixture_hash=ccc414647158553180bade2ad9e7fe2f4f99a2cafaea415f4065c3ae4ef417cd",
+    "build_profile_hash=e0ef2d12d02ef5b88f568e99937028a12a80f55198ae7096bcbd3391a3273fcb",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "bool",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "unsupported",
+      "rust_type": "u8",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "db",
+      "c_type": "const struct Database *",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "pointer",
+      "rust_type": "&Database",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "itr",
+      "c_type": "struct FdbKvIterator *",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "pointer",
+      "rust_type": "&mut FdbKvIterator",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "kv",
+      "c_type": "struct Kv *",
+      "confidence": "proven",
+      "id": "type-4",
+      "kind": "pointer",
+      "rust_type": "&mut Kv",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "run_once",
+      "c_type": "bool",
+      "confidence": "proven",
+      "id": "type-5",
+      "kind": "unsupported",
+      "rust_type": "u8",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "741995540c9264d16b8446fa8029663a42becd4e",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-sector-advance-continue",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-sector-advance-continue.json",
+    "sha256": "2f2090cef0dafeb1e7e4a99916f60b3615d346b4e352e97d37e07ab36a5a411b",
+    "status": "ready"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

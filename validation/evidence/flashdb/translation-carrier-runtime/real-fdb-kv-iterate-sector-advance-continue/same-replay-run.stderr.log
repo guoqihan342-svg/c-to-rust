@@ -1,0 +1,6 @@
+
+thread 'replay_real_fdb_kv_iterate_sector_advance_continue_fixture_contract' (438) panicked at <translation-carrier-negative>/mutated_same_replay.rs:48:9:
+assertion `left == right` failed: ordinary-sector-advance return drifted
+  left: false
+ right: true
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

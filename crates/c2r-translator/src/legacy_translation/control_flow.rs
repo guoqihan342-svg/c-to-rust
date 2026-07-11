@@ -75,7 +75,7 @@ fn structured_control_flow_evidence(
             .iter()
             .filter(|item| item.kind == "goto")
             .filter_map(|item| item.detail.as_deref())
-            .all(|target| label_names.iter().any(|label| *label == target))
+            .all(|target| label_names.contains(&target))
     {
         push_unique(&mut preconditions, "goto_target_resolved");
     }

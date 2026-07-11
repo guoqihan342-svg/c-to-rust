@@ -95,7 +95,9 @@ fn validate_declared_record_member(
     let declared = fields.iter().find(|candidate| candidate.name == field).ok_or_else(|| {
         format!("{context} record {name} has no declared field {field}")
     })?;
-    if !types_match_ignoring_spelling(use_ty, &declared.ty) {
+    if !types_match_ignoring_spelling(use_ty, &declared.ty)
+        && !propagated_const_record_member_matches(record_ty, use_ty, &declared.ty)
+    {
         return Err(format!(
             "{context} field {name}.{field} type {} does not match declared type {}",
             type_label(use_ty),
@@ -103,6 +105,53 @@ fn validate_declared_record_member(
         ));
     }
     Ok(())
+}
+
+fn propagated_const_record_member_matches(
+    record_ty: &IrType,
+    use_ty: &IrType,
+    declared_ty: &IrType,
+) -> bool {
+    if !record_ty.is_const || !use_ty.is_const || declared_ty.is_const {
+        return false;
+    }
+    if strip_single_top_level_const(&use_ty.spelled).is_none() {
+        return false;
+    }
+    let Some(use_canonical) = canonical_without_top_level_const(&use_ty.canonical) else {
+        return false;
+    };
+    let declared_canonical = declared_ty.canonical.trim();
+    !declared_canonical.is_empty()
+        && !contains_type_qualifier(declared_canonical)
+        && use_canonical == declared_canonical
+        && use_ty.kind == declared_ty.kind
+        && use_ty.width_bits == declared_ty.width_bits
+}
+
+fn strip_single_top_level_const(spelling: &str) -> Option<&str> {
+    let rest = spelling.trim().strip_prefix("const ")?.trim_start();
+    (!rest.is_empty() && !contains_type_qualifier(rest)).then_some(rest)
+}
+
+fn canonical_without_top_level_const(canonical: &str) -> Option<&str> {
+    let canonical = canonical.trim();
+    let canonical = canonical
+        .strip_prefix("const ")
+        .map(str::trim_start)
+        .unwrap_or(canonical);
+    (!canonical.is_empty() && !contains_type_qualifier(canonical)).then_some(canonical)
+}
+
+fn contains_type_qualifier(spelling: &str) -> bool {
+    spelling
+        .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+        .any(|token| {
+            matches!(
+                token,
+                "const" | "volatile" | "restrict" | "__restrict" | "__restrict__" | "_Atomic"
+            )
+        })
 }
 
 fn record_pointer_member_path_key(path: &RecordPointerMemberPath<'_>) -> String {

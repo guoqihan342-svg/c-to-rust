@@ -1,0 +1,1269 @@
+{
+  "artifact_kind": "clang-lowering-report",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "diagnostics": [
+    "clang lowering used slice-spec c_source with declared external callee prototypes; project macros were not expanded"
+  ],
+  "durable_evidence": {
+    "clang_path": "/usr/bin/clang",
+    "clang_version": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+    "competition_environment": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "frontend": "clang_ast_dump_json",
+    "hash_algorithm": "sha256",
+    "rust_draft_sha256": "ac7d0ded1ec631a164b32571128abc4f41614e31f936016474a5c47022061495",
+    "typed_ir_sha256": "83215b59118933ed3fe27b0bc8f7a2bae4d82b6a87fa9663cf640ea051a07ef9"
+  },
+  "errors": [],
+  "fixture_hash": "ccc414647158553180bade2ad9e7fe2f4f99a2cafaea415f4065c3ae4ef417cd",
+  "frontend": "clang",
+  "function_name": "fdb_kv_iterate_sector_advance_continue_probe",
+  "lowering_report": {
+    "arguments": [
+      "--slice-source-from-spec",
+      "<host>/c2r-slice-source-flashdb-real-fdb-kv-iterate-sector-advance-continue-503.c",
+      "src/fdb_kvdb.c"
+    ],
+    "clang_path": "<host>/clang",
+    "diagnostics": [
+      "clang lowering used slice-spec c_source with declared external callee prototypes; project macros were not expanded"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "errors": [],
+    "frontend": "clang_slice_source",
+    "function_ir": {
+      "body": [
+        {
+          "Decl": {
+            "init": {
+              "AddrOf": {
+                "operand": {
+                  "Member": {
+                    "base": {
+                      "Var": {
+                        "name": "itr",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "struct FdbKvIterator *",
+                          "is_const": false,
+                          "kind": {
+                            "Pointer": {
+                              "pointee": {
+                                "canonical": "struct FdbKvIterator",
+                                "is_const": false,
+                                "kind": {
+                                  "Record": {
+                                    "fields": [
+                                      {
+                                        "name": "curr_kv",
+                                        "ty": {
+                                          "canonical": "struct Kv",
+                                          "is_const": false,
+                                          "kind": {
+                                            "Record": {
+                                              "fields": [
+                                                {
+                                                  "name": "addr",
+                                                  "ty": {
+                                                    "canonical": "struct Address",
+                                                    "is_const": false,
+                                                    "kind": {
+                                                      "Record": {
+                                                        "fields": [
+                                                          {
+                                                            "name": "start",
+                                                            "ty": {
+                                                              "canonical": "uint32_t",
+                                                              "is_const": false,
+                                                              "kind": {
+                                                                "Integer": {
+                                                                  "signed": false,
+                                                                  "width": 32
+                                                                }
+                                                              },
+                                                              "source_span": null,
+                                                              "spelled": "uint32_t",
+                                                              "width_bits": 32
+                                                            }
+                                                          }
+                                                        ],
+                                                        "name": "Address"
+                                                      }
+                                                    },
+                                                    "source_span": null,
+                                                    "spelled": "struct Address",
+                                                    "width_bits": null
+                                                  }
+                                                }
+                                              ],
+                                              "name": "Kv"
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "struct Kv",
+                                          "width_bits": null
+                                        }
+                                      },
+                                      {
+                                        "name": "traversed_len",
+                                        "ty": {
+                                          "canonical": "uint32_t",
+                                          "is_const": false,
+                                          "kind": {
+                                            "Integer": {
+                                              "signed": false,
+                                              "width": 32
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "uint32_t",
+                                          "width_bits": 32
+                                        }
+                                      }
+                                    ],
+                                    "name": "FdbKvIterator"
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "struct FdbKvIterator",
+                                "width_bits": null
+                              }
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "struct FdbKvIterator *",
+                          "width_bits": null
+                        }
+                      }
+                    },
+                    "field": "curr_kv",
+                    "is_arrow": true,
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "struct Kv",
+                      "is_const": false,
+                      "kind": {
+                        "Record": {
+                          "fields": [
+                            {
+                              "name": "addr",
+                              "ty": {
+                                "canonical": "struct Address",
+                                "is_const": false,
+                                "kind": {
+                                  "Record": {
+                                    "fields": [
+                                      {
+                                        "name": "start",
+                                        "ty": {
+                                          "canonical": "uint32_t",
+                                          "is_const": false,
+                                          "kind": {
+                                            "Integer": {
+                                              "signed": false,
+                                              "width": 32
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "uint32_t",
+                                          "width_bits": 32
+                                        }
+                                      }
+                                    ],
+                                    "name": "Address"
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "struct Address",
+                                "width_bits": null
+                              }
+                            }
+                          ],
+                          "name": "Kv"
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "struct Kv",
+                      "width_bits": null
+                    }
+                  }
+                },
+                "source_span": null,
+                "ty": {
+                  "canonical": "struct Kv *",
+                  "is_const": false,
+                  "kind": {
+                    "Pointer": {
+                      "pointee": {
+                        "canonical": "struct Kv",
+                        "is_const": false,
+                        "kind": {
+                          "Record": {
+                            "fields": [
+                              {
+                                "name": "addr",
+                                "ty": {
+                                  "canonical": "struct Address",
+                                  "is_const": false,
+                                  "kind": {
+                                    "Record": {
+                                      "fields": [
+                                        {
+                                          "name": "start",
+                                          "ty": {
+                                            "canonical": "uint32_t",
+                                            "is_const": false,
+                                            "kind": {
+                                              "Integer": {
+                                                "signed": false,
+                                                "width": 32
+                                              }
+                                            },
+                                            "source_span": null,
+                                            "spelled": "uint32_t",
+                                            "width_bits": 32
+                                          }
+                                        }
+                                      ],
+                                      "name": "Address"
+                                    }
+                                  },
+                                  "source_span": null,
+                                  "spelled": "struct Address",
+                                  "width_bits": null
+                                }
+                              }
+                            ],
+                            "name": "Kv"
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "struct Kv",
+                        "width_bits": null
+                      }
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "struct Kv *",
+                  "width_bits": null
+                }
+              }
+            },
+            "name": "kv",
+            "source_span": null,
+            "ty": {
+              "canonical": "struct Kv *",
+              "is_const": false,
+              "kind": {
+                "Pointer": {
+                  "pointee": {
+                    "canonical": "struct Kv",
+                    "is_const": false,
+                    "kind": {
+                      "Record": {
+                        "fields": [
+                          {
+                            "name": "addr",
+                            "ty": {
+                              "canonical": "struct Address",
+                              "is_const": false,
+                              "kind": {
+                                "Record": {
+                                  "fields": [
+                                    {
+                                      "name": "start",
+                                      "ty": {
+                                        "canonical": "uint32_t",
+                                        "is_const": false,
+                                        "kind": {
+                                          "Integer": {
+                                            "signed": false,
+                                            "width": 32
+                                          }
+                                        },
+                                        "source_span": null,
+                                        "spelled": "uint32_t",
+                                        "width_bits": 32
+                                      }
+                                    }
+                                  ],
+                                  "name": "Address"
+                                }
+                              },
+                              "source_span": null,
+                              "spelled": "struct Address",
+                              "width_bits": null
+                            }
+                          }
+                        ],
+                        "name": "Kv"
+                      }
+                    },
+                    "source_span": null,
+                    "spelled": "struct Kv",
+                    "width_bits": null
+                  }
+                }
+              },
+              "source_span": null,
+              "spelled": "struct Kv *",
+              "width_bits": null
+            }
+          }
+        },
+        {
+          "Decl": {
+            "init": {
+              "LitInt": {
+                "source_span": null,
+                "spelling": "1",
+                "ty": {
+                  "canonical": "_Bool",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": false,
+                      "width": 8
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "bool",
+                  "width_bits": 8
+                },
+                "value": 1
+              }
+            },
+            "name": "run_once",
+            "source_span": null,
+            "ty": {
+              "canonical": "_Bool",
+              "is_const": false,
+              "kind": {
+                "Integer": {
+                  "signed": false,
+                  "width": 8
+                }
+              },
+              "source_span": null,
+              "spelled": "bool",
+              "width_bits": 8
+            }
+          }
+        },
+        {
+          "While": {
+            "body": [
+              {
+                "Assign": {
+                  "source_span": null,
+                  "target": {
+                    "Var": {
+                      "name": "run_once",
+                      "source_span": null,
+                      "ty": {
+                        "canonical": "_Bool",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": false,
+                            "width": 8
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "bool",
+                        "width_bits": 8
+                      }
+                    }
+                  },
+                  "value": {
+                    "LitInt": {
+                      "source_span": null,
+                      "spelling": "0",
+                      "ty": {
+                        "canonical": "_Bool",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": false,
+                            "width": 8
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "bool",
+                        "width_bits": 8
+                      },
+                      "value": 0
+                    }
+                  }
+                }
+              },
+              {
+                "Assign": {
+                  "source_span": null,
+                  "target": {
+                    "Member": {
+                      "base": {
+                        "Member": {
+                          "base": {
+                            "Var": {
+                              "name": "kv",
+                              "source_span": null,
+                              "ty": {
+                                "canonical": "struct Kv *",
+                                "is_const": false,
+                                "kind": {
+                                  "Pointer": {
+                                    "pointee": {
+                                      "canonical": "struct Kv",
+                                      "is_const": false,
+                                      "kind": {
+                                        "Record": {
+                                          "fields": [
+                                            {
+                                              "name": "addr",
+                                              "ty": {
+                                                "canonical": "struct Address",
+                                                "is_const": false,
+                                                "kind": {
+                                                  "Record": {
+                                                    "fields": [
+                                                      {
+                                                        "name": "start",
+                                                        "ty": {
+                                                          "canonical": "uint32_t",
+                                                          "is_const": false,
+                                                          "kind": {
+                                                            "Integer": {
+                                                              "signed": false,
+                                                              "width": 32
+                                                            }
+                                                          },
+                                                          "source_span": null,
+                                                          "spelled": "uint32_t",
+                                                          "width_bits": 32
+                                                        }
+                                                      }
+                                                    ],
+                                                    "name": "Address"
+                                                  }
+                                                },
+                                                "source_span": null,
+                                                "spelled": "struct Address",
+                                                "width_bits": null
+                                              }
+                                            }
+                                          ],
+                                          "name": "Kv"
+                                        }
+                                      },
+                                      "source_span": null,
+                                      "spelled": "struct Kv",
+                                      "width_bits": null
+                                    }
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "struct Kv *",
+                                "width_bits": null
+                              }
+                            }
+                          },
+                          "field": "addr",
+                          "is_arrow": true,
+                          "source_span": null,
+                          "ty": {
+                            "canonical": "struct Address",
+                            "is_const": false,
+                            "kind": {
+                              "Record": {
+                                "fields": [
+                                  {
+                                    "name": "start",
+                                    "ty": {
+                                      "canonical": "uint32_t",
+                                      "is_const": false,
+                                      "kind": {
+                                        "Integer": {
+                                          "signed": false,
+                                          "width": 32
+                                        }
+                                      },
+                                      "source_span": null,
+                                      "spelled": "uint32_t",
+                                      "width_bits": 32
+                                    }
+                                  }
+                                ],
+                                "name": "Address"
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "struct Address",
+                            "width_bits": null
+                          }
+                        }
+                      },
+                      "field": "start",
+                      "is_arrow": false,
+                      "source_span": null,
+                      "ty": {
+                        "canonical": "uint32_t",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": false,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "uint32_t",
+                        "width_bits": 32
+                      }
+                    }
+                  },
+                  "value": {
+                    "Cast": {
+                      "expr": {
+                        "LitInt": {
+                          "source_span": null,
+                          "spelling": "0",
+                          "ty": {
+                            "canonical": "int",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": true,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "int",
+                            "width_bits": 32
+                          },
+                          "value": 0
+                        }
+                      },
+                      "implicit": true,
+                      "source_span": null,
+                      "target": {
+                        "canonical": "uint32_t",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": false,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "uint32_t",
+                        "width_bits": 32
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "Assign": {
+                  "source_span": null,
+                  "target": {
+                    "Member": {
+                      "base": {
+                        "Var": {
+                          "name": "itr",
+                          "source_span": null,
+                          "ty": {
+                            "canonical": "struct FdbKvIterator *",
+                            "is_const": false,
+                            "kind": {
+                              "Pointer": {
+                                "pointee": {
+                                  "canonical": "struct FdbKvIterator",
+                                  "is_const": false,
+                                  "kind": {
+                                    "Record": {
+                                      "fields": [
+                                        {
+                                          "name": "curr_kv",
+                                          "ty": {
+                                            "canonical": "struct Kv",
+                                            "is_const": false,
+                                            "kind": {
+                                              "Record": {
+                                                "fields": [
+                                                  {
+                                                    "name": "addr",
+                                                    "ty": {
+                                                      "canonical": "struct Address",
+                                                      "is_const": false,
+                                                      "kind": {
+                                                        "Record": {
+                                                          "fields": [
+                                                            {
+                                                              "name": "start",
+                                                              "ty": {
+                                                                "canonical": "uint32_t",
+                                                                "is_const": false,
+                                                                "kind": {
+                                                                  "Integer": {
+                                                                    "signed": false,
+                                                                    "width": 32
+                                                                  }
+                                                                },
+                                                                "source_span": null,
+                                                                "spelled": "uint32_t",
+                                                                "width_bits": 32
+                                                              }
+                                                            }
+                                                          ],
+                                                          "name": "Address"
+                                                        }
+                                                      },
+                                                      "source_span": null,
+                                                      "spelled": "struct Address",
+                                                      "width_bits": null
+                                                    }
+                                                  }
+                                                ],
+                                                "name": "Kv"
+                                              }
+                                            },
+                                            "source_span": null,
+                                            "spelled": "struct Kv",
+                                            "width_bits": null
+                                          }
+                                        },
+                                        {
+                                          "name": "traversed_len",
+                                          "ty": {
+                                            "canonical": "uint32_t",
+                                            "is_const": false,
+                                            "kind": {
+                                              "Integer": {
+                                                "signed": false,
+                                                "width": 32
+                                              }
+                                            },
+                                            "source_span": null,
+                                            "spelled": "uint32_t",
+                                            "width_bits": 32
+                                          }
+                                        }
+                                      ],
+                                      "name": "FdbKvIterator"
+                                    }
+                                  },
+                                  "source_span": null,
+                                  "spelled": "struct FdbKvIterator",
+                                  "width_bits": null
+                                }
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "struct FdbKvIterator *",
+                            "width_bits": null
+                          }
+                        }
+                      },
+                      "field": "traversed_len",
+                      "is_arrow": true,
+                      "source_span": null,
+                      "ty": {
+                        "canonical": "uint32_t",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": false,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "uint32_t",
+                        "width_bits": 32
+                      }
+                    }
+                  },
+                  "value": {
+                    "Binary": {
+                      "lhs": {
+                        "Member": {
+                          "base": {
+                            "Var": {
+                              "name": "itr",
+                              "source_span": null,
+                              "ty": {
+                                "canonical": "struct FdbKvIterator *",
+                                "is_const": false,
+                                "kind": {
+                                  "Pointer": {
+                                    "pointee": {
+                                      "canonical": "struct FdbKvIterator",
+                                      "is_const": false,
+                                      "kind": {
+                                        "Record": {
+                                          "fields": [
+                                            {
+                                              "name": "curr_kv",
+                                              "ty": {
+                                                "canonical": "struct Kv",
+                                                "is_const": false,
+                                                "kind": {
+                                                  "Record": {
+                                                    "fields": [
+                                                      {
+                                                        "name": "addr",
+                                                        "ty": {
+                                                          "canonical": "struct Address",
+                                                          "is_const": false,
+                                                          "kind": {
+                                                            "Record": {
+                                                              "fields": [
+                                                                {
+                                                                  "name": "start",
+                                                                  "ty": {
+                                                                    "canonical": "uint32_t",
+                                                                    "is_const": false,
+                                                                    "kind": {
+                                                                      "Integer": {
+                                                                        "signed": false,
+                                                                        "width": 32
+                                                                      }
+                                                                    },
+                                                                    "source_span": null,
+                                                                    "spelled": "uint32_t",
+                                                                    "width_bits": 32
+                                                                  }
+                                                                }
+                                                              ],
+                                                              "name": "Address"
+                                                            }
+                                                          },
+                                                          "source_span": null,
+                                                          "spelled": "struct Address",
+                                                          "width_bits": null
+                                                        }
+                                                      }
+                                                    ],
+                                                    "name": "Kv"
+                                                  }
+                                                },
+                                                "source_span": null,
+                                                "spelled": "struct Kv",
+                                                "width_bits": null
+                                              }
+                                            },
+                                            {
+                                              "name": "traversed_len",
+                                              "ty": {
+                                                "canonical": "uint32_t",
+                                                "is_const": false,
+                                                "kind": {
+                                                  "Integer": {
+                                                    "signed": false,
+                                                    "width": 32
+                                                  }
+                                                },
+                                                "source_span": null,
+                                                "spelled": "uint32_t",
+                                                "width_bits": 32
+                                              }
+                                            }
+                                          ],
+                                          "name": "FdbKvIterator"
+                                        }
+                                      },
+                                      "source_span": null,
+                                      "spelled": "struct FdbKvIterator",
+                                      "width_bits": null
+                                    }
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "struct FdbKvIterator *",
+                                "width_bits": null
+                              }
+                            }
+                          },
+                          "field": "traversed_len",
+                          "is_arrow": true,
+                          "source_span": null,
+                          "ty": {
+                            "canonical": "uint32_t",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": false,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "uint32_t",
+                            "width_bits": 32
+                          }
+                        }
+                      },
+                      "op": "Add",
+                      "rhs": {
+                        "LValueToRValue": {
+                          "expr": {
+                            "Member": {
+                              "base": {
+                                "Var": {
+                                  "name": "db",
+                                  "source_span": null,
+                                  "ty": {
+                                    "canonical": "struct Database *",
+                                    "is_const": false,
+                                    "kind": {
+                                      "Pointer": {
+                                        "pointee": {
+                                          "canonical": "struct Database",
+                                          "is_const": true,
+                                          "kind": {
+                                            "Record": {
+                                              "fields": [
+                                                {
+                                                  "name": "sec_size",
+                                                  "ty": {
+                                                    "canonical": "uint32_t",
+                                                    "is_const": false,
+                                                    "kind": {
+                                                      "Integer": {
+                                                        "signed": false,
+                                                        "width": 32
+                                                      }
+                                                    },
+                                                    "source_span": null,
+                                                    "spelled": "uint32_t",
+                                                    "width_bits": 32
+                                                  }
+                                                }
+                                              ],
+                                              "name": "Database"
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "const struct Database",
+                                          "width_bits": null
+                                        }
+                                      }
+                                    },
+                                    "source_span": null,
+                                    "spelled": "const struct Database *",
+                                    "width_bits": null
+                                  }
+                                }
+                              },
+                              "field": "sec_size",
+                              "is_arrow": true,
+                              "source_span": null,
+                              "ty": {
+                                "canonical": "uint32_t",
+                                "is_const": true,
+                                "kind": {
+                                  "Integer": {
+                                    "signed": false,
+                                    "width": 32
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "const uint32_t",
+                                "width_bits": 32
+                              }
+                            }
+                          },
+                          "source_span": null,
+                          "target": {
+                            "canonical": "uint32_t",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": false,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "uint32_t",
+                            "width_bits": 32
+                          }
+                        }
+                      },
+                      "source_span": null,
+                      "ty": {
+                        "canonical": "uint32_t",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": false,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "uint32_t",
+                        "width_bits": 32
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "Continue": {
+                  "source_span": null
+                }
+              },
+              {
+                "Return": {
+                  "source_span": null,
+                  "value": {
+                    "LitInt": {
+                      "source_span": null,
+                      "spelling": "0",
+                      "ty": {
+                        "canonical": "_Bool",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": false,
+                            "width": 8
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "bool",
+                        "width_bits": 8
+                      },
+                      "value": 0
+                    }
+                  }
+                }
+              }
+            ],
+            "condition": {
+              "LValueToRValue": {
+                "expr": {
+                  "Var": {
+                    "name": "run_once",
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "_Bool",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": false,
+                          "width": 8
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "bool",
+                      "width_bits": 8
+                    }
+                  }
+                },
+                "source_span": null,
+                "target": {
+                  "canonical": "_Bool",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": false,
+                      "width": 8
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "bool",
+                  "width_bits": 8
+                }
+              }
+            },
+            "source_span": null
+          }
+        },
+        {
+          "Return": {
+            "source_span": null,
+            "value": {
+              "LitInt": {
+                "source_span": null,
+                "spelling": "1",
+                "ty": {
+                  "canonical": "_Bool",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": false,
+                      "width": 8
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "bool",
+                  "width_bits": 8
+                },
+                "value": 1
+              }
+            }
+          }
+        }
+      ],
+      "name": "fdb_kv_iterate_sector_advance_continue_probe",
+      "params": [
+        {
+          "name": "db",
+          "source_span": null,
+          "ty": {
+            "canonical": "struct Database *",
+            "is_const": false,
+            "kind": {
+              "Pointer": {
+                "pointee": {
+                  "canonical": "struct Database",
+                  "is_const": true,
+                  "kind": {
+                    "Record": {
+                      "fields": [
+                        {
+                          "name": "sec_size",
+                          "ty": {
+                            "canonical": "uint32_t",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": false,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "uint32_t",
+                            "width_bits": 32
+                          }
+                        }
+                      ],
+                      "name": "Database"
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "const struct Database",
+                  "width_bits": null
+                }
+              }
+            },
+            "source_span": null,
+            "spelled": "const struct Database *",
+            "width_bits": null
+          }
+        },
+        {
+          "name": "itr",
+          "source_span": null,
+          "ty": {
+            "canonical": "struct FdbKvIterator *",
+            "is_const": false,
+            "kind": {
+              "Pointer": {
+                "pointee": {
+                  "canonical": "struct FdbKvIterator",
+                  "is_const": false,
+                  "kind": {
+                    "Record": {
+                      "fields": [
+                        {
+                          "name": "curr_kv",
+                          "ty": {
+                            "canonical": "struct Kv",
+                            "is_const": false,
+                            "kind": {
+                              "Record": {
+                                "fields": [
+                                  {
+                                    "name": "addr",
+                                    "ty": {
+                                      "canonical": "struct Address",
+                                      "is_const": false,
+                                      "kind": {
+                                        "Record": {
+                                          "fields": [
+                                            {
+                                              "name": "start",
+                                              "ty": {
+                                                "canonical": "uint32_t",
+                                                "is_const": false,
+                                                "kind": {
+                                                  "Integer": {
+                                                    "signed": false,
+                                                    "width": 32
+                                                  }
+                                                },
+                                                "source_span": null,
+                                                "spelled": "uint32_t",
+                                                "width_bits": 32
+                                              }
+                                            }
+                                          ],
+                                          "name": "Address"
+                                        }
+                                      },
+                                      "source_span": null,
+                                      "spelled": "struct Address",
+                                      "width_bits": null
+                                    }
+                                  }
+                                ],
+                                "name": "Kv"
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "struct Kv",
+                            "width_bits": null
+                          }
+                        },
+                        {
+                          "name": "traversed_len",
+                          "ty": {
+                            "canonical": "uint32_t",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": false,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "uint32_t",
+                            "width_bits": 32
+                          }
+                        }
+                      ],
+                      "name": "FdbKvIterator"
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "struct FdbKvIterator",
+                  "width_bits": null
+                }
+              }
+            },
+            "source_span": null,
+            "spelled": "struct FdbKvIterator *",
+            "width_bits": null
+          }
+        }
+      ],
+      "return_type": {
+        "canonical": "_Bool",
+        "is_const": false,
+        "kind": {
+          "Integer": {
+            "signed": false,
+            "width": 8
+          }
+        },
+        "source_span": null,
+        "spelled": "bool",
+        "width_bits": 8
+      },
+      "source_span": null
+    },
+    "function_name": "fdb_kv_iterate_sector_advance_continue_probe",
+    "globals": [],
+    "source_file": "sources/FlashDB/src/fdb_kvdb.c",
+    "status": "lowered"
+  },
+  "metadata": {
+    "clang_ast_fixture": null,
+    "compile_commands": null,
+    "function_source_span": null,
+    "logical_source_file": "src/fdb_kvdb.c",
+    "source_file_hashes": {
+      "src/fdb_kvdb.c": "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b"
+    },
+    "source_root": "sources/FlashDB"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-sector-advance-continue",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_file": "sources/FlashDB/src/fdb_kvdb.c",
+  "status": "lowered",
+  "target_id": "flashdb",
+  "translation_carrier": {
+    "artifact_source_hash_mode": "lf_stable_text",
+    "carrier_function": "fdb_kv_iterate_sector_advance_continue_probe",
+    "carrier_source_sha256": "9e766b0031fe0008b17319ab695041d53a00f4ae930e2e04cff2f0c124289e23",
+    "claim_boundary": {
+      "excluded_semantics": [
+        "the else-if FAILED_ADDR condition and all fdb_kv_iterate statements outside exact lines 1871-1873",
+        "the real fdb_db_t cast and full FlashDB database, KV, address, or iterator layout and ABI",
+        "the enclosing real do-while sector loop, storage calls, later KV loop, and cross-iteration effects",
+        "any claim that kv and itr are independent or noalias roots"
+      ],
+      "external_callee_semantics_verified": false,
+      "scope": "source_fragment_only",
+      "whole_function_semantics_verified": false
+    },
+    "embedding_mode": "verbatim_once",
+    "frontend_contract": "live_clang_slice_source",
+    "kind": "exact_source_fragment_wrapper",
+    "real_source": {
+      "containing_function": {
+        "declaration_text": "bool fdb_kv_iterate(",
+        "hash_mode": "trimmed_normalized_span",
+        "line_end": 1896,
+        "line_start": 1860,
+        "name": "fdb_kv_iterate",
+        "sha256": "afd7c295cb2bd423b5818943a7abfead8fe1ec5057e95d2bc0d396a791285e2d"
+      },
+      "file": "src/fdb_kvdb.c",
+      "fragment": {
+        "hash_mode": "normalized_line_span_with_newline",
+        "kind": "expression_statement",
+        "line_end": 1873,
+        "line_start": 1871,
+        "sha256": "87b894759a461fbd51076a5c70775c92e39cef82e1b689e22fec2815401fd721",
+        "text": "                    kv->addr.start = 0;\n                    itr->traversed_len += db_sec_size(db);\n                    continue;\n"
+      }
+    },
+    "source_file_hash_mode": "raw_bytes",
+    "source_text_normalization": "utf8_universal_newlines"
+  },
+  "typed_ir_candidate": {
+    "candidate_route": {
+      "candidate_generator": "GenericTypedIrEmitter",
+      "delete_when": [],
+      "deprecated": false,
+      "fallback": null,
+      "reasons": [
+        {
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
+        }
+      ],
+      "replacement": null,
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
+      "suggested_required_gates": [
+        "rustc_smoke",
+        "typed_ir_contract_tests"
+      ],
+      "token_cost": 0
+    },
+    "readonly_globals": [],
+    "runtime_preconditions": [],
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "ac7d0ded1ec631a164b32571128abc4f41614e31f936016474a5c47022061495",
+    "semantic_pass": false,
+    "status": "generated",
+    "typed_ir_sha256": "83215b59118933ed3fe27b0bc8f7a2bae4d82b6a87fa9663cf640ea051a07ef9"
+  }
+}

@@ -1,0 +1,6 @@
+
+thread '__c2r_negative_partition_case_2' (462) panicked at <translation-carrier-negative>/mutated_partition_replay.rs:60:5:
+assertion `left == right` failed: u32-wrap-and-maximum-address continue mutation not detected
+  left: false
+ right: true
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -1,12 +1,13 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 use super::{
     assignment_call_sibling_record_read, emit_function_pointer_param_type,
-    emit_mutable_record_pointer_field_type, emit_scalar_type, mutable_pointer_slice_element_type,
-    mutable_record_pointer_pointee_type, record_pointer_member_path_from_expr,
-    record_pointer_member_path_key, type_label, EmitContext, IrExpr, IrFunction, IrGlobal, IrStmt,
-    IrType, MutablePointerSlotKey, MutableRecordPointerFieldKey,
+    emit_mutable_record_pointer_field_type, emit_scalar_type, interior_reborrow_decl_parts,
+    mutable_pointer_slice_element_type, mutable_record_pointer_pointee_type,
+    record_pointer_member_path_from_expr, record_pointer_member_path_key, type_label, EmitContext,
+    InteriorReborrowPlan, IrExpr, IrFunction, IrGlobal, IrStmt, IrType, MutablePointerSlotKey,
+    MutableRecordPointerFieldKey,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -17,6 +18,7 @@ struct DefiniteAssignmentState {
     mutable_pointer_slots: HashSet<MutablePointerSlotKey>,
     validated_mutable_pointer_read_slots: HashSet<MutablePointerSlotKey>,
     mutable_record_pointer_write_params: HashSet<String>,
+    interior_reborrows: HashMap<String, InteriorReborrowPlan>,
     mutable_record_pointer_fields: HashSet<MutableRecordPointerFieldKey>,
     validated_mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
 }
@@ -33,10 +35,14 @@ impl DefiniteAssignmentState {
         globals: &[IrGlobal],
         context: &EmitContext,
     ) -> Self {
-        let mut state = Self::default();
-        state.mutable_pointer_write_params = context.mutable_pointer_write_params.clone();
-        state.mutable_record_pointer_write_params =
-            context.mutable_record_pointer_write_params.clone();
+        let mut state = Self {
+            mutable_pointer_write_params: context.mutable_pointer_write_params.clone(),
+            mutable_record_pointer_write_params: context
+                .mutable_record_pointer_write_params
+                .clone(),
+            interior_reborrows: context.interior_reborrows.clone(),
+            ..Self::default()
+        };
         for param in &function.params {
             state.declared.insert(param.name.clone());
             state.initialized.insert(param.name.clone());
@@ -218,6 +224,15 @@ fn validate_definite_assignment_stmt(
 ) -> Result<(), String> {
     match stmt {
         IrStmt::Decl { name, init, .. } => {
+            if let Some(plan) = state.interior_reborrows.get(name).cloned() {
+                if interior_reborrow_decl_parts(stmt).is_none() {
+                    return Err(format!("decl {name} interior reborrow shape drifted"));
+                }
+                state
+                    .require_initialized(&plan.owner)
+                    .map_err(|detail| format!("decl {name} owner {detail}"))?;
+                return state.declare(name, true);
+            }
             if let Some(init) = init {
                 validate_definite_assignment_expr(init, state)
                     .map_err(|detail| format!("decl {name} initializer {detail}"))?;
@@ -614,10 +629,18 @@ fn mutable_record_pointer_field_key_for_definite_assignment(
             path.root_name
         )
     })?;
-    Ok(Some(MutableRecordPointerFieldKey {
-        base: path.root_name.to_string(),
-        field: field_path,
-    }))
+    let key = if let Some(plan) = state.interior_reborrows.get(path.root_name) {
+        MutableRecordPointerFieldKey {
+            base: plan.owner.clone(),
+            field: format!("{}.{}", plan.owner_path.join("."), field_path),
+        }
+    } else {
+        MutableRecordPointerFieldKey {
+            base: path.root_name.to_string(),
+            field: field_path,
+        }
+    };
+    Ok(Some(key))
 }
 
 fn mutable_pointer_slot_key_for_definite_assignment(

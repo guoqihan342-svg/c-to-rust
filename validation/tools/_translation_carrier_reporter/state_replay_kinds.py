@@ -6,10 +6,15 @@ from .constant_state_contract import KIND as CONSTANT_STATE_KIND
 from .field_add_contract import KIND as FIELD_ADD_KIND
 from .field_scalar_add_contract import KIND as FIELD_SCALAR_ADD_KIND
 from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
+from .reset_add_while_continue_contract import KIND as RESET_ADD_CONTINUE_KIND
+from .reset_add_while_continue_model import expected_fixture_state_model as reset_add_model
 
 
 STATE_REPLAY_KINDS = frozenset(
-    {CONSTANT_STATE_KIND, FIELD_ADD_KIND, FIELD_SCALAR_ADD_KIND, INTERIOR_PROJECTION_KIND}
+    {
+        CONSTANT_STATE_KIND, FIELD_ADD_KIND, FIELD_SCALAR_ADD_KIND,
+        INTERIOR_PROJECTION_KIND, RESET_ADD_CONTINUE_KIND,
+    }
 )
 
 
@@ -28,6 +33,8 @@ def expected_fixture_state_model(contract: dict[str, Any]) -> dict[str, Any]:
             "projection_mode": "owner_interior_mutable",
             "pointer_root_count": 1,
         }
+    if kind == RESET_ADD_CONTINUE_KIND:
+        return reset_add_model(contract)
     if kind == FIELD_ADD_KIND:
         return {**model, "operation": "wrapping_add"}
     if kind == FIELD_SCALAR_ADD_KIND:

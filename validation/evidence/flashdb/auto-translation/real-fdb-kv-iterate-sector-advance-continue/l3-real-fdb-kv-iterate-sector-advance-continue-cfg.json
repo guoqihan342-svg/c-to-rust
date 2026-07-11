@@ -1,0 +1,138 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=2f2090cef0dafeb1e7e4a99916f60b3615d346b4e352e97d37e07ab36a5a411b",
+    "fixture_hash=ccc414647158553180bade2ad9e7fe2f4f99a2cafaea415f4065c3ae4ef417cd",
+    "build_profile_hash=e0ef2d12d02ef5b88f568e99937028a12a80f55198ae7096bcbd3391a3273fcb",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [
+            {
+              "decision": "bounded_input_buffer",
+              "lvalue_kind": "bounded_input_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "decl kv",
+              "statement_index": 0,
+              "translation_rule_id": "bounded-input-buffer-read"
+            },
+            {
+              "decision": "bounded_pointer_index",
+              "lvalue_kind": "bounded_pointer_index",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "decl run_once",
+              "statement_index": 1,
+              "translation_rule_id": "bounded-pointer-index-write"
+            }
+          ],
+          "lvalue_kinds": [
+            "bounded_input_buffer",
+            "bounded_pointer_index"
+          ],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "primitive_declaration",
+            "while",
+            "return",
+            "bounded_input_buffer_read",
+            "bounded_pointer_index_write"
+          ],
+          "statements": [
+            "decl kv",
+            "decl run_once",
+            "while",
+            "return"
+          ],
+          "terminator": "return"
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "unsupported",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "while-2"
+        },
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return-3"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "fdb_kv_iterate_sector_advance_continue_probe",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "bool fdb_kv_iterate_sector_advance_continue_probe(const struct Database * db, struct FdbKvIterator * itr)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 1,
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "741995540c9264d16b8446fa8029663a42becd4e",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-iterate-sector-advance-continue",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-sector-advance-continue.json",
+    "sha256": "2f2090cef0dafeb1e7e4a99916f60b3615d346b4e352e97d37e07ab36a5a411b",
+    "status": "ready"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "unsupported_control_flow": []
+}

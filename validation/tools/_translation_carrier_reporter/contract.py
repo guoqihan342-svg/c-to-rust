@@ -39,6 +39,8 @@ from .field_scalar_add_model import (
 )
 from . import interior_projection_contract as interior_projection
 from . import interior_projection_model as interior_projection_model
+from . import reset_add_while_continue_contract as reset_add_continue
+from . import reset_add_while_continue_model as reset_add_continue_model
 from .record_contract import (
     KIND as RECORD_KIND,
     behavior_fields as record_behavior_fields,
@@ -65,6 +67,8 @@ U32_MAX = (1 << 32) - 1
 
 def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
     contract = require_dict(spec.get("replay_contract"), "replay_contract")
+    if contract.get("kind") == reset_add_continue.KIND:
+        return reset_add_continue.parse_contract(spec)
     if contract.get("kind") == interior_projection.KIND:
         return interior_projection.parse_contract(spec)
     if contract.get("kind") == CONSTANT_STATE_KIND:
@@ -127,6 +131,8 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def behavior_fields(contract: dict[str, Any]) -> list[str]:
+    if contract.get("kind") == reset_add_continue.KIND:
+        return reset_add_continue.behavior_fields(contract)
     if contract.get("kind") == interior_projection.KIND:
         return interior_projection.behavior_fields(contract)
     if contract.get("kind") == CONSTANT_STATE_KIND:
@@ -149,6 +155,8 @@ def behavior_fields(contract: dict[str, Any]) -> list[str]:
 
 
 def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]:
+    if contract.get("kind") == reset_add_continue.KIND:
+        return reset_add_continue_model.validate_cases(cases, contract)
     if contract.get("kind") == interior_projection.KIND:
         return interior_projection_model.validate_cases(cases, contract)
     if contract.get("kind") == CONSTANT_STATE_KIND:
@@ -196,6 +204,8 @@ def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]
 
 
 def reference_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    if contract.get("kind") == reset_add_continue.KIND:
+        return reset_add_continue_model.reference_outputs(case, contract)
     if contract.get("kind") == interior_projection.KIND:
         return interior_projection_model.reference_outputs(case, contract)
     if contract.get("kind") == CONSTANT_STATE_KIND:
@@ -222,6 +232,8 @@ def reference_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[st
 
 
 def replay_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    if contract.get("kind") == reset_add_continue.KIND:
+        return reset_add_continue_model.replay_outputs(case, contract)
     if contract.get("kind") == interior_projection.KIND:
         return interior_projection_model.replay_outputs(case, contract)
     if contract.get("kind") == CONSTANT_STATE_KIND:
@@ -247,6 +259,8 @@ def replay_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, 
 
 
 def mutated_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    if contract.get("kind") == reset_add_continue.KIND:
+        return reset_add_continue_model.mutated_outputs(case, contract)
     if contract.get("kind") == interior_projection.KIND:
         return interior_projection_model.mutated_outputs(case, contract)
     if contract.get("kind") == CONSTANT_STATE_KIND:

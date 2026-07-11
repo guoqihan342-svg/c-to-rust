@@ -11,10 +11,14 @@ from .field_scalar_add_contract import KIND as FIELD_SCALAR_ADD_KIND
 from .field_scalar_add_model import negative_partition_probe_source as field_scalar_probe
 from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
 from .interior_projection_model import negative_partition_probe_source as projection_probe
+from .reset_add_while_continue_contract import KIND as RESET_ADD_CONTINUE_KIND
+from .reset_add_while_continue_model import negative_partition_probe_source as reset_add_probe
 
 
 def mutation_spec(contract: dict[str, Any]) -> tuple[re.Pattern[bytes], bytes, bytes] | None:
     kind = contract.get("kind")
+    if kind == RESET_ADD_CONTINUE_KIND:
+        return re.compile(rb"\bcontinue;"), b"continue;", b"/*noop*/;"
     if kind == CONSTANT_STATE_KIND:
         return re.compile(rb"\b0(?=(?:u32|i32\s+as\s+u32\))?\s*;)"), b"0", b"1"
     if kind == INTERIOR_PROJECTION_KIND:
@@ -39,6 +43,8 @@ def mutation_spec(contract: dict[str, Any]) -> tuple[re.Pattern[bytes], bytes, b
 
 def negative_partition_probe_source(context: Any) -> str | None:
     kind = context.contract.get("kind")
+    if kind == RESET_ADD_CONTINUE_KIND:
+        return reset_add_probe(context)
     if kind == CONSTANT_STATE_KIND:
         return constant_probe(context)
     if kind == INTERIOR_PROJECTION_KIND:

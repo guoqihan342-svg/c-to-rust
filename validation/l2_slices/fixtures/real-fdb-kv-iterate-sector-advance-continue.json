@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-sector-advance-continue",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c"
+    ],
+    "functions": [
+      "fdb_kv_iterate:sector-advance-continue@1871-1873"
+    ]
+  },
+  "compared_fields": [
+    "return_value",
+    "kv_addr_start",
+    "itr_traversed_len"
+  ],
+  "case_count": 3,
+  "cases": [
+    {
+      "id": "ordinary-sector-advance",
+      "input_ref": "cases[0].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-advance-continue.json",
+      "inputs": {
+        "db_sec_size": 4096,
+        "kv_initial_start": 8192,
+        "itr_initial_traversed_len": 4096
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "kv_addr_start": 0,
+        "itr_traversed_len": 8192
+      }
+    },
+    {
+      "id": "zero-sector-size",
+      "input_ref": "cases[1].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-advance-continue.json",
+      "inputs": {
+        "db_sec_size": 0,
+        "kv_initial_start": 1,
+        "itr_initial_traversed_len": 17
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "kv_addr_start": 0,
+        "itr_traversed_len": 17
+      }
+    },
+    {
+      "id": "u32-wrap-and-maximum-address",
+      "input_ref": "cases[2].inputs",
+      "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-advance-continue.json",
+      "inputs": {
+        "db_sec_size": 5,
+        "kv_initial_start": 4294967295,
+        "itr_initial_traversed_len": 4294967294
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "kv_addr_start": 0,
+        "itr_traversed_len": 3
+      }
+    }
+  ]
+}

@@ -1,0 +1,298 @@
+RECORD_INTERIOR_PROJECTION_U32_RESET_ADD_WHILE_CONTINUE_STATE_KIND = (
+    "record_interior_projection_u32_reset_add_while_continue_state"
+)
+def record_interior_projection_u32_reset_add_while_continue_state_replay_supported(
+    spec: dict[str, Any], fixture_binding: dict[str, Any] | None = None
+) -> bool:
+    return record_interior_projection_u32_reset_add_while_continue_state_replay_contract(
+        spec, fixture_binding
+    ) is not None
+
+
+def record_interior_projection_u32_reset_add_while_continue_state_replay_contract(
+    spec: dict[str, Any], fixture_binding: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    contract = spec.get("replay_contract")
+    if not isinstance(contract, dict) or contract.get("kind") != (
+        RECORD_INTERIOR_PROJECTION_U32_RESET_ADD_WHILE_CONTINUE_STATE_KIND
+    ):
+        return None
+    if set(contract) != {
+        "schema_version", "kind", "entry_arguments", "owner_parameter", "projection",
+        "reset_state", "add_state", "control_flow", "return", "noalias_required",
+    }:
+        raise ValueError("reset-add while-continue replay contract shape drifted")
+    if contract.get("schema_version") != 1:
+        raise ValueError("reset-add while-continue schema_version must be 1")
+
+    entries = contract.get("entry_arguments")
+    if not isinstance(entries, list) or len(entries) != 2:
+        raise ValueError("reset-add while-continue requires exactly two record roots")
+    entry_by_name: dict[str, dict[str, Any]] = {}
+    fixture_fields: list[str] = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict) or set(entry) != {
+            "parameter", "c_type", "rust_type", "pass_mode", "direction", "initializer",
+        }:
+            raise ValueError(f"reset-add while-continue entry {index} shape drifted")
+        name = scripted_external_replay_identifier(
+            entry.get("parameter"), f"reset-add while-continue entry {index} parameter"
+        )
+        rust_type = scripted_external_replay_identifier(
+            entry.get("rust_type"), f"reset-add while-continue entry {index} rust_type"
+        )
+        if name in entry_by_name:
+            raise ValueError("reset-add while-continue entry parameters must be unique")
+        if entry.get("pass_mode") != "mutable_ref" or entry.get("direction") not in {"input", "inout"}:
+            raise ValueError("reset-add while-continue entries must use pointer-record directions")
+        expected_c_type = (
+            f"const struct {rust_type} *" if entry.get("direction") == "input"
+            else f"struct {rust_type} *"
+        )
+        if normalize_c_type(str(entry.get("c_type") or "")) != normalize_c_type(expected_c_type):
+            raise ValueError("reset-add while-continue entry C type drifted")
+        initializer = scripted_record_validate_initializer(
+            entry.get("initializer"), f"reset-add while-continue entry {index} initializer"
+        )
+        if initializer["record_type"] != rust_type:
+            raise ValueError("reset-add while-continue initializer type drifted")
+        fixture_fields.extend(
+            field for field, _ in scripted_record_initializer_fixture_paths(initializer)
+        )
+        entry_by_name[name] = entry
+
+    owner_name = scripted_external_replay_identifier(
+        contract.get("owner_parameter"), "reset-add while-continue owner_parameter"
+    )
+    owner = entry_by_name.get(owner_name)
+    if owner is None or owner.get("direction") != "inout":
+        raise ValueError("reset-add while-continue owner must be the mutable inout root")
+    readonly = [item for item in entries if item.get("direction") == "input"]
+    if len(readonly) != 1:
+        raise ValueError("reset-add while-continue requires one readonly source root")
+
+    projection = contract.get("projection")
+    if not isinstance(projection, dict) or set(projection) != {
+        "path", "alias_local", "alias_c_pointer_type", "alias_rust_type",
+    }:
+        raise ValueError("reset-add while-continue projection shape drifted")
+    projection_path = scripted_record_field_path(
+        projection.get("path"), "reset-add while-continue projection path"
+    )
+    projected = reset_add_projection_record_at(owner["initializer"], projection_path)
+    alias_name = scripted_external_replay_identifier(
+        projection.get("alias_local"), "reset-add while-continue alias local"
+    )
+    scripted_external_replay_identifier(
+        projection.get("alias_c_pointer_type"), "reset-add while-continue alias pointer type"
+    )
+    alias_type = scripted_external_replay_identifier(
+        projection.get("alias_rust_type"), "reset-add while-continue alias rust type"
+    )
+    if alias_name in entry_by_name or projected["record_type"] != alias_type:
+        raise ValueError("reset-add while-continue alias projection drifted")
+
+    reset = contract.get("reset_state")
+    if not isinstance(reset, dict) or set(reset) != {
+        "alias_field_path", "owner_field_path", "fixture_field", "rust_type", "value",
+    }:
+        raise ValueError("reset-add while-continue reset_state shape drifted")
+    reset_alias_path = scripted_record_field_path(
+        reset.get("alias_field_path"), "reset-add while-continue alias reset path"
+    )
+    reset_owner_path = scripted_record_field_path(
+        reset.get("owner_field_path"), "reset-add while-continue owner reset path"
+    )
+    if len(reset_alias_path) < 2 or reset_owner_path != projection_path + reset_alias_path:
+        raise ValueError("reset-add while-continue reset path must extend projection path")
+    if reset.get("rust_type") != "u32" or reset.get("value") != 0:
+        raise ValueError("reset-add while-continue reset must be exact u32 zero")
+    reset_fixture = scripted_external_replay_identifier(
+        reset.get("fixture_field"), "reset-add while-continue reset fixture field"
+    )
+    owner_paths = dict(scripted_record_initializer_fixture_paths(owner["initializer"]))
+    if reset_owner_path not in owner_paths.values():
+        raise ValueError("reset-add while-continue reset field is not initialized")
+
+    add = contract.get("add_state")
+    if not isinstance(add, dict) or set(add) != {
+        "owner_field_path", "fixture_field", "rust_type", "operation", "rhs",
+    }:
+        raise ValueError("reset-add while-continue add_state shape drifted")
+    add_owner_path = scripted_record_field_path(
+        add.get("owner_field_path"), "reset-add while-continue owner add path"
+    )
+    if add_owner_path == reset_owner_path or add_owner_path not in owner_paths.values():
+        raise ValueError("reset-add while-continue add target is not a distinct initialized field")
+    add_fixture = scripted_external_replay_identifier(
+        add.get("fixture_field"), "reset-add while-continue add fixture field"
+    )
+    if add.get("rust_type") != "u32" or add.get("operation") != "wrapping_add":
+        raise ValueError("reset-add while-continue add must be u32 wrapping_add")
+    rhs = add.get("rhs")
+    if not isinstance(rhs, dict) or set(rhs) != {
+        "mode", "parameter", "field_path", "source_expression",
+    }:
+        raise ValueError("reset-add while-continue rhs shape drifted")
+    source_name = scripted_external_replay_identifier(
+        rhs.get("parameter"), "reset-add while-continue rhs parameter"
+    )
+    source = entry_by_name.get(source_name)
+    source_path = scripted_record_field_path(
+        rhs.get("field_path"), "reset-add while-continue rhs field path"
+    )
+    if (
+        rhs.get("mode") != "direct_record_u32_field"
+        or source not in readonly
+        or len(source_path) != 1
+        or source_path not in dict(
+            scripted_record_initializer_fixture_paths(source["initializer"])
+        ).values()
+    ):
+        raise ValueError("reset-add while-continue rhs must be one direct readonly u32 field")
+    if not isinstance(rhs.get("source_expression"), str) or not rhs["source_expression"]:
+        raise ValueError("reset-add while-continue rhs source_expression is missing")
+
+    control = contract.get("control_flow")
+    if not isinstance(control, dict) or set(control) != {
+        "kind", "sentinel_local", "initial_value", "body_first_assignment",
+        "continue_target", "unreachable_return", "terminal_return",
+    }:
+        raise ValueError("reset-add while-continue control_flow shape drifted")
+    scripted_external_replay_identifier(
+        control.get("sentinel_local"), "reset-add while-continue sentinel local"
+    )
+    if control != {
+        "kind": "single_iteration_while_continue",
+        "sentinel_local": control["sentinel_local"],
+        "initial_value": True,
+        "body_first_assignment": False,
+        "continue_target": "current_while",
+        "unreachable_return": False,
+        "terminal_return": True,
+    }:
+        raise ValueError("reset-add while-continue control_flow semantics drifted")
+    result = contract.get("return")
+    if not isinstance(result, dict) or set(result) != {"fixture_field", "rust_type", "value"}:
+        raise ValueError("reset-add while-continue return shape drifted")
+    return_fixture = scripted_external_replay_identifier(
+        result.get("fixture_field"), "reset-add while-continue return fixture field"
+    )
+    if result.get("rust_type") != "bool" or result.get("value") is not True:
+        raise ValueError("reset-add while-continue return must bind terminal true")
+
+    declared = scripted_record_noalias_pairs(
+        contract.get("noalias_required"), "reset-add while-continue noalias_required"
+    )
+    pointer = spec.get("c_boundary", {}).get("pointer_contract")
+    if not isinstance(pointer, dict) or pointer.get("aliasing_proven") is not True:
+        raise ValueError("reset-add while-continue requires proven pointer metadata")
+    boundary = scripted_record_noalias_pairs(
+        pointer.get("noalias_required"), "reset-add while-continue pointer noalias_required"
+    )
+    expected_pair = {tuple(sorted((source_name, owner_name)))}
+    if declared != expected_pair or boundary != expected_pair:
+        raise ValueError("reset-add while-continue noalias must be the exact source-owner pair")
+    if alias_name in {name for pair in declared for name in pair}:
+        raise ValueError("reset-add while-continue projection alias cannot be a noalias root")
+    reset_add_validate_signature(spec, contract)
+
+    outputs = [return_fixture, reset_fixture, add_fixture]
+    if len([*fixture_fields, *outputs]) != len(set([*fixture_fields, *outputs])):
+        raise ValueError("reset-add while-continue fixture and output fields must be unique")
+    if behavior_fields(spec) != outputs:
+        raise ValueError("reset-add while-continue observable output mapping drifted")
+    from validation.tools.reset_add_while_continue_syntax import (
+        validate_c_reset_add_while_continue_source,
+    )
+    validate_c_reset_add_while_continue_source(required_str(spec, "c_source"), contract)
+    if fixture_binding is not None:
+        reset_add_validate_cases(spec, fixture_binding, contract)
+    return contract
+
+
+def reset_add_projection_record_at(initializer: dict[str, Any], path: tuple[str, ...]) -> dict[str, Any]:
+    current = initializer
+    for component in path:
+        match = next(
+            (item for item in current.get("fields", []) if item.get("name") == component), None
+        )
+        if not isinstance(match, dict) or not isinstance(match.get("record"), dict):
+            raise ValueError("reset-add while-continue projection must select nested records")
+        current = match["record"]
+    return current
+
+
+def reset_add_validate_signature(spec: dict[str, Any], contract: dict[str, Any]) -> None:
+    signature = c_function_signature(spec)
+    if not signature or normalize_c_type(str(signature.get("return_type") or "")) not in {"bool", "_Bool"}:
+        raise ValueError("reset-add while-continue entry signature drifted")
+    actual = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    entries = contract["entry_arguments"]
+    if [item.get("name") for item in actual] != [item["parameter"] for item in entries]:
+        raise ValueError("reset-add while-continue entry parameter order drifted")
+    if [normalize_c_type(str(item.get("c_type") or "")) for item in actual] != [
+        normalize_c_type(str(item["c_type"])) for item in entries
+    ] or [item.get("direction") for item in actual] != [item["direction"] for item in entries]:
+        raise ValueError("reset-add while-continue entry parameter boundary drifted")
+
+
+def reset_add_validate_cases(
+    spec: dict[str, Any], fixture_binding: dict[str, Any], contract: dict[str, Any]
+) -> None:
+    cases = fixture_binding.get("case_bindings")
+    fields = behavior_fields(spec)
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("reset-add while-continue fixture cases are missing")
+    for case in cases:
+        payload = oracle_fixture_input_payload(spec, case)
+        expected = case.get("expected_outputs")
+        if not isinstance(payload, dict) or not isinstance(expected, dict) or set(expected) != set(fields):
+            raise ValueError("reset-add while-continue fixture case shape drifted")
+        for entry in contract["entry_arguments"]:
+            for fixture_field, _ in scripted_record_initializer_fixture_paths(entry["initializer"]):
+                if not is_uint32_value(payload.get(fixture_field)):
+                    raise ValueError("reset-add while-continue fixture input must be u32")
+        if expected != reset_add_expected_outputs(payload, contract):
+            raise ValueError("reset-add while-continue expected outputs drifted")
+
+
+def reset_add_expected_outputs(payload: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    entries = {item["parameter"]: item for item in contract["entry_arguments"]}
+    add = contract["add_state"]
+    rhs = add["rhs"]
+    owner_initial = scripted_record_initial_field_value(
+        payload, entries, {"parameter": contract["owner_parameter"], "field_path": add["owner_field_path"]}
+    )
+    rhs_value = scripted_record_initial_field_value(
+        payload, entries, {"parameter": rhs["parameter"], "field_path": rhs["field_path"]}
+    )
+    return {
+        contract["return"]["fixture_field"]: True,
+        contract["reset_state"]["fixture_field"]: 0,
+        add["fixture_field"]: (owner_initial + rhs_value) & 0xFFFFFFFF,
+    }
+
+
+def reset_add_fixture_state_model(contract: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "kind": RECORD_INTERIOR_PROJECTION_U32_RESET_ADD_WHILE_CONTINUE_STATE_KIND,
+        "scope": "fixture_only",
+        "operations": ["alias_reset_zero", "owner_wrapping_add"],
+        "projection_mode": "owner_interior_mutable",
+        "pointer_root_count": 2,
+        "noalias_required": [list(pair) for pair in contract["noalias_required"]],
+        "continue_target": "current_while",
+    }
+
+
+def reset_add_generated_rust_safety(spec: dict[str, Any], draft_path: Path) -> dict[str, Any] | None:
+    contract = record_interior_projection_u32_reset_add_while_continue_state_replay_contract(spec)
+    if contract is None:
+        return None
+    from validation.tools.reset_add_while_continue_syntax import (
+        validate_rust_reset_add_while_continue_draft,
+    )
+    return validate_rust_reset_add_while_continue_draft(
+        draft_path.read_text(encoding="utf-8-sig"), contract
+    )
