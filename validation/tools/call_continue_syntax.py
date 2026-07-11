@@ -113,7 +113,7 @@ def validate_rust_call_continue_draft(source: str, contract: dict[str, Any]) -> 
     signature_parameters = []
     for entry in contract["entry_arguments"]:
         prefix = r"&\s*mut\s+" if entry["pass_mode"] == "mutable_ref" else ""
-        mutable_binding = "" if entry["pass_mode"] == "mutable_ref" else r"(?:mut\s+)?"
+        mutable_binding = r"(?:mut\s+)?"
         signature_parameters.append(
             rf"{mutable_binding}{re.escape(entry['parameter'])}\s*:\s*{prefix}"
             rf"{re.escape(entry['rust_type'])}"
@@ -151,8 +151,9 @@ def validate_rust_call_continue_draft(source: str, contract: dict[str, Any]) -> 
         offset = zero["assignment"]["offset"]["parameter"]
         record_root = call_local if record["parameter"] == local_entry else record["parameter"]
         record_field = rust_access(record_root, record["field_path"])
+        zero_forms = r"(?:0(?:u32)?|\(\s*0i32\s+as\s+u32\s*\))"
         zero_branch = unique(re.compile(
-            rf"\bif\s*(?:\(\s*)?{alias_state}\s*==\s*0(?:u32)?\s*(?:\)\s*)?\{{\s*"
+            rf"\bif\s*(?:\(\s*)?{alias_state}\s*==\s*{zero_forms}\s*(?:\)\s*)?\{{\s*"
             rf"{alias_state}\s*=\s*{record_field}\s*\.\s*wrapping_add\s*\(\s*"
             rf"{re.escape(offset)}\s*\)\s*;\s*\}}\s*else\s*\{{"
         ), source, "zero-start wrapping branch")

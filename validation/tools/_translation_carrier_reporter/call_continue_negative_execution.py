@@ -7,7 +7,12 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from .call_continue_model import negative_partition_probe_source, reference_outputs
+from .call_continue_model import (
+    case_inputs,
+    is_zero_start_case,
+    negative_partition_probe_source,
+    reference_outputs,
+)
 from .errors import ReporterError
 from .negative_runtime import (
     add_command_artifacts,
@@ -20,7 +25,7 @@ from .negative_runtime import (
 )
 
 
-SCENARIOS = (
+V1_SCENARIOS = (
     ("comparison-equality-flip", re.compile(rb"(?<![=!<>])==(?!=)"), b"==", b"!=", "all"),
     ("continue-noop", re.compile(rb"\bcontinue;"), b"continue;", b"let _=();", "hit"),
 )
@@ -38,7 +43,7 @@ def run_call_continue_negative_execution(
     ensure_contained(context.repo_root, artifact_dir, "negative output directory")
     artifacts: dict[Path, bytes] = {}
     scenarios: list[dict[str, Any]] = []
-    for scenario_id, pattern, before, after, partition in SCENARIOS:
+    for scenario_id, pattern, before, after, partition in _scenarios(context):
         scenarios.append(
             _run_scenario(
                 context, rustc, original, replay_test, artifact_dir, artifacts,
@@ -46,6 +51,27 @@ def run_call_continue_negative_execution(
             )
         )
     return {"scenarios": scenarios, "artifacts": artifacts}
+
+
+def _scenarios(context: Any) -> tuple[tuple[str, re.Pattern[bytes], bytes, bytes, str], ...]:
+    if context.contract.get("schema_version") != 2:
+        return V1_SCENARIOS
+    sentinel = int(context.contract["comparison"]["sentinel"])
+    forms = [str(sentinel).encode("ascii") + rb"(?:u32)?"]
+    signed = sentinel - (1 << 32)
+    if signed < 0:
+        forms.append(
+            rb"\(\s*\(\s*"
+            + str(signed).encode("ascii")
+            + rb"i32\s*\)\s*as\s*u32\s*\)"
+        )
+    sentinel_pattern = re.compile(
+        rb"(?<![=!<>])==(?!=)(?=\s*(?:" + rb"|".join(forms) + rb"))"
+    )
+    return (
+        ("comparison-equality-flip", sentinel_pattern, b"==", b"!=", "nonzero_start"),
+        ("continue-noop", re.compile(rb"\bcontinue;"), b"continue;", b"let _=();", "hit"),
+    )
 
 
 def _run_scenario(
@@ -170,6 +196,12 @@ def _run_scenario(
 def _expected_case_ids(context: Any, partition: str) -> list[str]:
     if partition == "all":
         return [str(case["id"]) for case in context.cases]
+    if partition == "nonzero_start":
+        return [
+            str(case["id"])
+            for case in context.cases
+            if not is_zero_start_case(case_inputs(case), context.contract)
+        ]
     return [
         str(case["id"])
         for case in context.cases

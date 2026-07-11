@@ -6,7 +6,12 @@ import re
 from typing import Any
 
 from .call_continue_contract import behavior_fields
-from .call_continue_model import comparison_mutated_outputs, continue_mutated_outputs
+from .call_continue_model import (
+    case_inputs,
+    comparison_mutated_outputs,
+    continue_mutated_outputs,
+    is_zero_start_case,
+)
 from .errors import ReporterError
 
 
@@ -21,7 +26,17 @@ def build_negative_report(
     all_ids = [str(case["id"]) for case in context.cases]
     hit_ids = [str(case["id"]) for case in context.cases if case["expected_outputs"][behavior_fields(context.contract)[0]]]
     miss_ids = [case_id for case_id in all_ids if case_id not in hit_ids]
-    expected = ((all_ids, []), (hit_ids, miss_ids))
+    if context.contract.get("schema_version") == 2:
+        zero_start_ids = [
+            str(case["id"])
+            for case in context.cases
+            if is_zero_start_case(case_inputs(case), context.contract)
+        ]
+        comparison_ids = [case_id for case_id in all_ids if case_id not in zero_start_ids]
+    else:
+        zero_start_ids = []
+        comparison_ids = all_ids
+    expected = ((comparison_ids, zero_start_ids), (hit_ids, miss_ids))
     mismatches: list[dict[str, Any]] = []
     for scenario, (detected, passed) in zip(scenarios, expected, strict=True):
         partition = scenario["partition_replay"]
@@ -60,9 +75,14 @@ def build_negative_report(
         "expected_failure": True,
         "mutation_detected": True,
         "mutation_manifest": mutation_manifest(execution),
-        "detected_case_ids": all_ids,
+        "detected_case_ids": [
+            case_id for case_id in all_ids if case_id in {*comparison_ids, *hit_ids}
+        ],
         "partition_detection": {
-            "comparison-equality-flip": {"detected_case_ids": all_ids, "passed_case_ids": []},
+            "comparison-equality-flip": {
+                "detected_case_ids": comparison_ids,
+                "passed_case_ids": zero_start_ids,
+            },
             "continue-noop": {"detected_case_ids": hit_ids, "passed_case_ids": miss_ids},
         },
         "actual_mutation_execution": execution,
@@ -73,15 +93,24 @@ def build_negative_report(
 
 def build_report_claim(context: Any) -> dict[str, Any]:
     contract = context.contract
+    if contract.get("schema_version") == 2:
+        verified_behavior = (
+            "Four renamed entry arguments preserve mutable db, by-value local, exact-u32 offset, "
+            "and mutable owner; zero-start performs one wrapping add without invoking the fixture-only "
+            "external call; the mutually exclusive else path preserves sentinel reset, owner wrapping add, "
+            "and current-level continue, while non-hit paths return false."
+        )
+    else:
+        verified_behavior = (
+            "Three renamed entry arguments preserve mutable db, by-value local, and mutable owner; "
+            "one direct fixture-only external call observes ordered root/local/owner-alias snapshots; "
+            "exact u32 sentinel hits reset the alias, wrapping-add owner state, and continue, while misses return false."
+        )
     return {
         "scope": "source_fragment_only",
         "whole_function_semantics_verified": False,
         "external_callee_semantics_verified": False,
-        "verified_behavior": (
-            "Three renamed entry arguments preserve mutable db, by-value local, and mutable owner; "
-            "one direct fixture-only external call observes ordered root/local/owner-alias snapshots; "
-            "exact u32 sentinel hits reset the alias, wrapping-add owner state, and continue, while misses return false."
-        ),
+        "verified_behavior": verified_behavior,
         "external_callee": contract["external_callee"]["name"],
         "argument_modes": [item["mode"] for item in contract["external_callee"]["arguments"]],
         "noalias_required": contract["noalias_required"],

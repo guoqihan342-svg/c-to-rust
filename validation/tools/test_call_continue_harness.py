@@ -126,6 +126,14 @@ class CallContinueHarnessTests(unittest.TestCase):
         self.assertEqual(rust_report["equality_count"], 2)
         self.assertEqual(rust_report["wrapping_add_count"], 2)
 
+        emitted_form = renamed_zero_start_rust_draft().replace(
+            "owner: &mut CursorOwner", "mut owner: &mut CursorOwner"
+        ).replace(" == 0u32", " == (0i32 as u32)")
+        self.assertEqual(
+            validate_rust_call_continue_draft(emitted_form, contract)["status"],
+            "passed",
+        )
+
         with tempfile.TemporaryDirectory(prefix="zero-start-replay-", dir=REPO_ROOT / "target") as tmp:
             root = Path(tmp)
             combined = root / "combined.rs"
