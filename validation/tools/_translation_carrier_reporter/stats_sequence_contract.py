@@ -103,7 +103,7 @@ def _validate_initializer(value: Any, label: str) -> None:
         names.add(name)
         if set(field) == {"name", "fixture_field", "rust_type"}:
             require_identifier(field.get("fixture_field"), f"{label}.fields[{index}].fixture_field")
-            if field.get("rust_type") not in {"u32", "usize"}:
+            if field.get("rust_type") not in {"bool", "u32", "usize"}:
                 raise ReporterError(f"{label}.fields[{index}].rust_type is unsupported")
         elif set(field) == {"name", "record"}:
             _validate_initializer(field.get("record"), f"{label}.fields[{index}].record")

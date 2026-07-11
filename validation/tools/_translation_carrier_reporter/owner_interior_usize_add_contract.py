@@ -66,7 +66,8 @@ def rust_initializer(initializer: dict[str, Any], inputs: dict[str, Any]) -> str
     for field in initializer["fields"]:
         if "fixture_field" in field:
             rust_type = str(field["rust_type"])
-            value = f"{int(inputs[str(field['fixture_field'])])}{rust_type}"
+            raw_value = inputs[str(field["fixture_field"])]
+            value = str(raw_value).lower() if rust_type == "bool" else f"{int(raw_value)}{rust_type}"
         else:
             value = rust_initializer(field["record"], inputs)
         fields.append(f"{field['name']}: {value}")

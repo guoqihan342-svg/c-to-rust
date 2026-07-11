@@ -143,6 +143,12 @@ def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict
         return rust_replay_record_owner_interior_stats_sequence_state_cases_source(
             spec, fixture_binding
         )
+    if record_owner_interior_guarded_stats_sequence_state_replay_supported(
+        spec, fixture_binding
+    ):
+        return rust_replay_record_owner_interior_guarded_stats_sequence_state_cases_source(
+            spec, fixture_binding
+        )
     if scripted_external_record_u32_sequence_do_while_state_replay_supported(
         spec, fixture_binding
     ):

@@ -97,8 +97,12 @@ def record_owner_interior_c_initializer(
     fields: list[str] = []
     for field in initializer["fields"]:
         if "fixture_field" in field:
-            c_type = "uint32_t" if field["rust_type"] == "u32" else "size_t"
-            value = c_integer_literal(c_type, int(payload[str(field["fixture_field"])]))
+            rust_type = str(field["rust_type"])
+            if rust_type == "bool":
+                value = "true" if payload[str(field["fixture_field"])] else "false"
+            else:
+                c_type = "uint32_t" if rust_type == "u32" else "size_t"
+                value = c_integer_literal(c_type, int(payload[str(field["fixture_field"])]))
         else:
             value = record_owner_interior_c_initializer(field["record"], payload)
         fields.append(f".{field['name']} = {value}")
@@ -112,7 +116,8 @@ def record_owner_interior_rust_initializer(
     for field in initializer["fields"]:
         if "fixture_field" in field:
             rust_type = str(field["rust_type"])
-            value = f"{int(payload[str(field['fixture_field'])])}{rust_type}"
+            raw_value = payload[str(field["fixture_field"])]
+            value = str(raw_value).lower() if rust_type == "bool" else f"{int(raw_value)}{rust_type}"
         else:
             value = record_owner_interior_rust_initializer(field["record"], payload)
         fields.append(f"{safe_ident(str(field['name']))}: {value}")
@@ -253,4 +258,78 @@ def record_owner_interior_stats_sequence_fixture_state_model() -> dict[str, Any]
         ],
         "source_bits": 32,
         "target_bits": 64,
+    }
+
+
+RECORD_OWNER_INTERIOR_GUARDED_STATS_SEQUENCE_STATE_KIND = (
+    "record_owner_interior_guarded_stats_sequence_state"
+)
+
+
+def record_owner_interior_guarded_stats_sequence_state_replay_supported(
+    spec: dict[str, Any], fixture_binding: dict[str, Any] | None = None
+) -> bool:
+    return record_owner_interior_guarded_stats_sequence_state_replay_contract(
+        spec, fixture_binding
+    ) is not None
+
+
+def record_owner_interior_guarded_stats_sequence_state_replay_contract(
+    spec: dict[str, Any], fixture_binding: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    raw = spec.get("replay_contract")
+    if (
+        not isinstance(raw, dict)
+        or raw.get("kind")
+        != RECORD_OWNER_INTERIOR_GUARDED_STATS_SEQUENCE_STATE_KIND
+    ):
+        return None
+    from validation.tools._translation_carrier_reporter.errors import ReporterError
+    from validation.tools._translation_carrier_reporter.guarded_stats_sequence_contract import (
+        parse_contract,
+    )
+    from validation.tools._translation_carrier_reporter.guarded_stats_sequence_model import (
+        mutated_outputs,
+        validate_cases,
+    )
+
+    try:
+        contract = parse_contract(spec)
+    except ReporterError as exc:
+        raise ValueError(str(exc)) from exc
+    if fixture_binding is not None:
+        cases = fixture_binding.get("case_bindings")
+        if not isinstance(cases, list) or not cases:
+            raise ValueError("guarded owner interior stats sequence fixture cases are missing")
+        normalized = [
+            {
+                "id": case.get("id"),
+                "inputs": oracle_fixture_input_payload(spec, case),
+                "expected_outputs": case.get("expected_outputs"),
+            }
+            for case in cases
+        ]
+        try:
+            validate_cases(normalized, contract)
+        except ReporterError as exc:
+            raise ValueError(str(exc)) from exc
+        if not any(
+            mutated_outputs(case, contract) != case["expected_outputs"]
+            for case in normalized
+        ):
+            raise ValueError(
+                "guarded owner interior stats fixtures do not observe second-equality mutation"
+            )
+    return contract
+
+
+def record_owner_interior_guarded_stats_sequence_fixture_state_model() -> dict[str, Any]:
+    model = record_owner_interior_stats_sequence_fixture_state_model()
+    return {
+        **model,
+        "kind": RECORD_OWNER_INTERIOR_GUARDED_STATS_SEQUENCE_STATE_KIND,
+        "operation": "guarded_ordered_updates",
+        "guard_operator": "short_circuit_and",
+        "predicate_operations": ["equality", "equality"],
+        "false_path": {"return_value": False, "state_effect": "none"},
     }

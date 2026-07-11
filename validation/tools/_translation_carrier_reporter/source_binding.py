@@ -28,6 +28,10 @@ from .owner_interior_usize_add_source import (
 )
 from .stats_sequence_contract import KIND as STATS_SEQUENCE_KIND
 from .stats_sequence_source import validate_carrier_source as validate_stats_sequence_source
+from .guarded_stats_sequence_contract import KIND as GUARDED_STATS_SEQUENCE_KIND
+from .guarded_stats_sequence_source import (
+    validate_carrier_source as validate_guarded_stats_sequence_source,
+)
 from .constant_state_contract import KIND as CONSTANT_STATE_KIND
 from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
 from .reset_add_while_continue_contract import KIND as RESET_ADD_CONTINUE_KIND
@@ -185,6 +189,8 @@ def validate_carrier(
         validate_owner_interior_usize_add_source(c_source, contract)
     elif contract.get("kind") == STATS_SEQUENCE_KIND:
         validate_stats_sequence_source(c_source, contract)
+    elif contract.get("kind") == GUARDED_STATS_SEQUENCE_KIND:
+        validate_guarded_stats_sequence_source(c_source, contract)
     else:
         external_name = str(contract["external_callee"]["name"])
         if f"{external_name}(" not in c_source:

@@ -19,6 +19,10 @@ from .owner_interior_usize_add_model import (
 )
 from .stats_sequence_contract import KIND as STATS_SEQUENCE_KIND
 from .stats_sequence_model import negative_partition_probe_source as stats_sequence_probe
+from .guarded_stats_sequence_contract import KIND as GUARDED_STATS_SEQUENCE_KIND
+from .guarded_stats_sequence_model import (
+    negative_partition_probe_source as guarded_stats_sequence_probe,
+)
 from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
 from .interior_projection_model import negative_partition_probe_source as projection_probe
 from .reset_add_while_continue_contract import KIND as RESET_ADD_CONTINUE_KIND
@@ -72,6 +76,16 @@ def mutation_spec(contract: dict[str, Any]) -> tuple[re.Pattern[bytes], bytes, b
             b"wrapping_add",
             b"wrapping_sub",
         )
+    if kind == GUARDED_STATS_SEQUENCE_KIND:
+        owner = str(contract["owner"]["parameter"]).encode("ascii")
+        path = [
+            str(item).encode("ascii")
+            for item in contract["guard"]["predicates"][1]["lhs"]["owner_field_path"]
+        ]
+        access = rb"\b" + re.escape(owner) + b"".join(
+            rb"\s*\.\s*" + re.escape(item) for item in path
+        )
+        return re.compile(access + rb"\s*(?P<value>==)(?!=)"), b"==", b"!="
     return None
 
 
@@ -93,4 +107,6 @@ def negative_partition_probe_source(context: Any) -> str | None:
         return owner_interior_usize_add_probe(context)
     if kind == STATS_SEQUENCE_KIND:
         return stats_sequence_probe(context)
+    if kind == GUARDED_STATS_SEQUENCE_KIND:
+        return guarded_stats_sequence_probe(context)
     return None

@@ -70,6 +70,17 @@ from .stats_sequence_model import (
     replay_outputs as stats_sequence_replay_outputs,
     validate_cases as validate_stats_sequence_cases,
 )
+from .guarded_stats_sequence_contract import (
+    KIND as GUARDED_STATS_SEQUENCE_KIND,
+    behavior_fields as guarded_stats_sequence_behavior_fields,
+    parse_contract as parse_guarded_stats_sequence_contract,
+)
+from .guarded_stats_sequence_model import (
+    mutated_outputs as guarded_stats_sequence_mutated_outputs,
+    reference_outputs as guarded_stats_sequence_reference_outputs,
+    replay_outputs as guarded_stats_sequence_replay_outputs,
+    validate_cases as validate_guarded_stats_sequence_cases,
+)
 from . import interior_projection_contract as interior_projection
 from . import interior_projection_model as interior_projection_model
 from . import reset_add_while_continue_contract as reset_add_continue
@@ -120,6 +131,8 @@ def parse_contract(spec: dict[str, Any]) -> dict[str, Any]:
         return parse_owner_interior_usize_add_contract(spec)
     if contract.get("kind") == STATS_SEQUENCE_KIND:
         return parse_stats_sequence_contract(spec)
+    if contract.get("kind") == GUARDED_STATS_SEQUENCE_KIND:
+        return parse_guarded_stats_sequence_contract(spec)
     if contract.get("kind") == SEQUENCE_KIND:
         return parse_sequence_contract(spec)
     if contract.get("kind") == RECORD_KIND:
@@ -192,6 +205,8 @@ def behavior_fields(contract: dict[str, Any]) -> list[str]:
         return owner_interior_usize_add_behavior_fields(contract)
     if contract.get("kind") == STATS_SEQUENCE_KIND:
         return stats_sequence_behavior_fields(contract)
+    if contract.get("kind") == GUARDED_STATS_SEQUENCE_KIND:
+        return guarded_stats_sequence_behavior_fields(contract)
     if contract.get("kind") == SEQUENCE_KIND:
         return sequence_behavior_fields(contract)
     if contract.get("kind") == RECORD_KIND:
@@ -224,6 +239,8 @@ def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]
         return validate_owner_interior_usize_add_cases(cases, contract)
     if contract.get("kind") == STATS_SEQUENCE_KIND:
         return validate_stats_sequence_cases(cases, contract)
+    if contract.get("kind") == GUARDED_STATS_SEQUENCE_KIND:
+        return validate_guarded_stats_sequence_cases(cases, contract)
     if contract.get("kind") == SEQUENCE_KIND:
         return validate_sequence_cases(cases, contract)
     if contract.get("kind") == RECORD_KIND:
@@ -281,6 +298,8 @@ def reference_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[st
         return owner_interior_usize_add_reference_outputs(case, contract)
     if contract.get("kind") == STATS_SEQUENCE_KIND:
         return stats_sequence_reference_outputs(case, contract)
+    if contract.get("kind") == GUARDED_STATS_SEQUENCE_KIND:
+        return guarded_stats_sequence_reference_outputs(case, contract)
     if contract.get("kind") == SEQUENCE_KIND:
         return sequence_reference_outputs(case, contract)
     if contract.get("kind") == RECORD_KIND:
@@ -317,6 +336,8 @@ def replay_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str, 
         return owner_interior_usize_add_replay_outputs(case, contract)
     if contract.get("kind") == STATS_SEQUENCE_KIND:
         return stats_sequence_replay_outputs(case, contract)
+    if contract.get("kind") == GUARDED_STATS_SEQUENCE_KIND:
+        return guarded_stats_sequence_replay_outputs(case, contract)
     if contract.get("kind") == SEQUENCE_KIND:
         return sequence_replay_outputs(case, contract)
     if contract.get("kind") == RECORD_KIND:
@@ -352,6 +373,8 @@ def mutated_outputs(case: dict[str, Any], contract: dict[str, Any]) -> dict[str,
         return owner_interior_usize_add_mutated_outputs(case, contract)
     if contract.get("kind") == STATS_SEQUENCE_KIND:
         return stats_sequence_mutated_outputs(case, contract)
+    if contract.get("kind") == GUARDED_STATS_SEQUENCE_KIND:
+        return guarded_stats_sequence_mutated_outputs(case, contract)
     output = replay_outputs(case, contract)
     return_field = behavior_fields(contract)[0]
     output[return_field] = not output[return_field]

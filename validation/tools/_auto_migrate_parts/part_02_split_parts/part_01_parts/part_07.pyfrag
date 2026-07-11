@@ -101,6 +101,10 @@ def run_generated_rust_replay(
         replay["fixture_state_model"] = record_owner_interior_usize_add_fixture_state_model()
     elif record_owner_interior_stats_sequence_state_replay_contract(spec) is not None:
         replay["fixture_state_model"] = record_owner_interior_stats_sequence_fixture_state_model()
+    elif record_owner_interior_guarded_stats_sequence_state_replay_contract(spec) is not None:
+        replay["fixture_state_model"] = (
+            record_owner_interior_guarded_stats_sequence_fixture_state_model()
+        )
     elif scripted_external_record_u32_sequence_do_while_state_replay_contract(spec) is not None:
         replay["fixture_external_stub"] = {
             "kind": SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND,
@@ -165,6 +169,7 @@ def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) ->
         and not record_u32_field_wrapping_add_state_replay_supported(spec)
         and not record_owner_interior_u32_to_usize_wrapping_add_state_replay_supported(spec)
         and not record_owner_interior_stats_sequence_state_replay_supported(spec)
+        and not record_owner_interior_guarded_stats_sequence_state_replay_supported(spec)
         and not scripted_external_record_u32_sequence_do_while_state_replay_supported(spec)
         and not scripted_external_record_u32_call_bool_state_replay_supported(spec)
         and not scripted_external_u32_call_bool_out_replay_supported(spec)
