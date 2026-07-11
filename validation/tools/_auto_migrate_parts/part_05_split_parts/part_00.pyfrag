@@ -361,7 +361,24 @@ def route_refuses_candidate_generation(route_decision: dict[str, Any]) -> bool:
 def route_has_generated_rust_draft(route_decision: dict[str, Any] | None) -> bool:
     if not isinstance(route_decision, dict):
         return False
-    typed_ir = route_decision.get("candidate_generation", {}).get("typed_ir", {})
+    candidate_generation = route_decision.get("candidate_generation", {})
+    selected_id = candidate_generation.get("selected_candidate_id")
+    candidate_set = candidate_generation.get("candidate_set", [])
+    selected = next(
+        (
+            candidate
+            for candidate in candidate_set
+            if isinstance(candidate, dict) and candidate.get("candidate_id") == selected_id
+        ),
+        None,
+    )
+    if isinstance(selected, dict) and selected.get("kind") == "opencode-ai":
+        return (
+            selected.get("status") == "generated"
+            and selected.get("applied") is True
+            and isinstance(selected.get("rust_draft_sha256"), str)
+        )
+    typed_ir = candidate_generation.get("typed_ir", {})
     return (
         isinstance(typed_ir, dict)
         and typed_ir.get("status") == "generated"
@@ -389,6 +406,7 @@ def generated_draft_acceptance_binding(
     prefix = f"l3-{slice_id}"
     draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
     typed_ir = route_decision.get("candidate_generation", {}).get("typed_ir", {})
+    selected_candidate = selected_candidate_binding(route_decision)
     blockers: list[str] = []
 
     if accepted is None or accepted.get("status") != "accepted":
@@ -402,7 +420,11 @@ def generated_draft_acceptance_binding(
         draft_ref = {"path": rel(draft_path), "status": "missing"}
     else:
         draft_ref = evidence_ref(draft_path, "accepted_after_gates")
-        expected_draft_sha = typed_ir.get("rust_draft_sha256")
+        expected_draft_sha = (
+            selected_candidate.get("rust_draft_sha256")
+            if isinstance(selected_candidate, dict) and selected_candidate.get("kind") == "opencode-ai"
+            else typed_ir.get("rust_draft_sha256")
+        )
         if expected_draft_sha != draft_ref.get("sha256"):
             blockers.append("rust_draft_sha256_drift")
     if rust_check.get("status") != "passed":
@@ -460,6 +482,7 @@ def generated_draft_acceptance_binding(
         "generated_draft_semantic_pass": passed,
         "generated_draft_replay_pass": replay.get("generated_draft_replay_pass") is True,
         "rust_draft": draft_ref,
+        "selected_candidate_id": route_decision.get("candidate_generation", {}).get("selected_candidate_id"),
         "rust_check": {
             "path": rel(evidence_dir / "rust-check.json"),
             "status": rust_check.get("status", "unknown"),
@@ -480,6 +503,20 @@ def generated_draft_acceptance_binding(
         "blocked_reasons": blockers,
         "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
     }
+
+
+def selected_candidate_binding(route_decision: dict[str, Any]) -> dict[str, Any] | None:
+    candidate_generation = route_decision.get("candidate_generation", {})
+    selected_id = candidate_generation.get("selected_candidate_id")
+    candidate_set = candidate_generation.get("candidate_set", [])
+    return next(
+        (
+            candidate
+            for candidate in candidate_set
+            if isinstance(candidate, dict) and candidate.get("candidate_id") == selected_id
+        ),
+        None,
+    )
 
 
 def generated_rust_draft_status(route_decision: dict[str, Any] | None) -> str:

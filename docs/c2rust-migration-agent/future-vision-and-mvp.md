@@ -268,6 +268,8 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   OpenCode `zai/glm-5.1` 读取 hash-bound ContextPack，输出单一结构化 Rust candidate；记录 provider、logical/resolved model、variant、prompt、输入、原始响应、解析结果和候选 SHA-256。模型输出、聊天文本和文件写入本身都保持 `semantic_gate=false`。无凭据、超时、响应格式错误或候选缺失必须结构化 blocked，不得静默回退后冒充 AI 已运行。
 
+  当前进度：候选生成器、schema-v2 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、余额/鉴权/超时分类和 `auto_migrate --ai-first-candidate` 已实现。WSL 实际调用已到达 `zai/glm-5.1`，但 provider 返回余额/资源包不足，因此尚无真实 GLM candidate，本项保持未完成。
+
 - [ ] **P0-A7：项目级 ContextPack 与编译上下文闭环**
 
   从真实 source root、source span、有效 `#include`、`compile_commands.json`/手工 flags、宏、target ABI、依赖声明、Clang AST/诊断、typed-IR/C2Rust 基线和验证失败中生成最小上下文。相对/绝对路径、生成头文件和构建目录必须可解析；禁止密钥、宿主绝对路径和无关大文件进入可发布 artifact。
@@ -279,6 +281,8 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 - [ ] **P0-A9：AI-primary 多候选路由**
 
   比赛翻译路径优先生成 GLM-5.1 candidate；typed IR、raw C2Rust、C2Rust+repair 作为确定性候选、提示上下文或 AI 失败后的替代候选。router 只能依据可重算 gate 结果排序，不能依据项目名、函数名、slice id 或模型自评。任何候选都必须经过相同 compile/oracle/replay/diff/negative/unsafe/final gates。
+
+  当前进度：已生成且 SHA 匹配的 `opencode-ai` candidate 可物化为 canonical Rust draft，并进入 `L3/agent` route；`selected_candidate_id`、AI manifest、原始 candidate、canonical draft 和 rustc 结果已有独立 validator 绑定。C oracle/replay/diff/negative/unsafe/final 的 AI 自身语义闭环和 run-level AI 指标仍未完成。
 
 - [ ] **P0-A10：有限跨项目稳定性验收**
 

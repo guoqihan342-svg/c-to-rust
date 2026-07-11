@@ -266,6 +266,8 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 
   OpenCode `zai/glm-5.1` consumes a hash-bound ContextPack and emits one structured Rust candidate. Record provider, logical/resolved model, variant, prompt, input, raw response, parse result, and candidate SHA-256. Model output, chat text, and file writes remain `semantic_gate=false`. Missing credentials, timeout, malformed response, or missing candidate must become structured blocked results; a silent fallback must not claim that AI ran.
 
+  Current progress: the candidate generator, schema-v2 manifest, sensitive/host-path cleanup, strict JSON parsing, candidate materialization SHA check, balance/auth/timeout classification, and `auto_migrate --ai-first-candidate` are implemented. A real WSL call reached `zai/glm-5.1`, but the provider reported insufficient balance/resource package, so no real GLM candidate exists yet and this item remains open.
+
 - [ ] **P0-A7: project-level ContextPack and compile-context closure**
 
   Build minimal context from the real source root/span, effective includes, `compile_commands.json` or manual flags, macros, target ABI, dependency declarations, Clang AST/diagnostics, typed-IR/C2Rust baselines, and validation failures. Relative/absolute paths, generated headers, and build directories must resolve. Secrets, host absolute paths, and unrelated large files must not enter publishable artifacts.
@@ -277,6 +279,8 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 - [ ] **P0-A9: AI-primary multi-candidate router**
 
   The competition translation path generates a GLM-5.1 candidate first. typed IR, raw C2Rust, and C2Rust+repair act as deterministic candidates, prompt context, or alternatives after AI failure. The router may rank only by recomputable gate results, never by project/function/slice names or model self-assessment. Every candidate traverses the same compile/oracle/replay/diff/negative/unsafe/final gates.
+
+  Current progress: a generated `opencode-ai` candidate with matching SHA can be materialized as the canonical Rust draft and routed through `L3/agent`. Independent validation now binds `selected_candidate_id`, the AI manifest, original candidate, canonical draft, and rustc result. The AI candidate's own C oracle/replay/diff/negative/unsafe/final semantic closure and run-level AI metrics remain incomplete.
 
 - [ ] **P0-A10: finite cross-project stability acceptance**
 

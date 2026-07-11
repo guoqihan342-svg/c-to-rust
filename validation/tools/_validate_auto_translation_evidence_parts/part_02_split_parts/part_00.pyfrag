@@ -539,15 +539,41 @@ def validate_generated_draft_acceptance_payload(
         raise SystemExit(f"{label}.generated_draft_acceptance.rust_draft path drift")
     if acceptance["rust_draft"].get("status") != "accepted_after_gates":
         raise SystemExit(f"{label}.generated_draft_acceptance.rust_draft status drift")
-    typed_ir = route.get("candidate_generation", {}).get("typed_ir", {})
-    if not (
-        isinstance(typed_ir, dict)
-        and typed_ir.get("status") == "generated"
-        and typed_ir.get("rust_draft_generated") is True
-    ):
-        raise SystemExit(f"{label}.generated_draft_acceptance requires generated typed_ir draft")
+    candidate_generation = route.get("candidate_generation", {})
+    selected_candidate_id = candidate_generation.get("selected_candidate_id")
+    selected_candidate = next(
+        (
+            candidate
+            for candidate in candidate_generation.get("candidate_set", [])
+            if isinstance(candidate, dict) and candidate.get("candidate_id") == selected_candidate_id
+        ),
+        None,
+    )
+    if not isinstance(selected_candidate, dict):
+        raise SystemExit(f"{label}.generated_draft_acceptance requires selected generated candidate")
     draft_sha = sha256(draft_path)
-    if typed_ir.get("rust_draft_sha256") != draft_sha:
+    if selected_candidate.get("kind") == "opencode-ai":
+        selected_generated = (
+            selected_candidate.get("status") == "generated"
+            and selected_candidate.get("applied") is True
+        )
+        expected_draft_sha = selected_candidate.get("rust_draft_sha256")
+    else:
+        typed_ir = candidate_generation.get("typed_ir", {})
+        selected_generated = (
+            isinstance(typed_ir, dict)
+            and typed_ir.get("status") == "generated"
+            and typed_ir.get("rust_draft_generated") is True
+        )
+        expected_draft_sha = typed_ir.get("rust_draft_sha256") if isinstance(typed_ir, dict) else None
+    if not selected_generated:
+        raise SystemExit(f"{label}.generated_draft_acceptance requires selected generated draft")
+    if selected_candidate.get("kind") == "opencode-ai":
+        if acceptance.get("selected_candidate_id") != selected_candidate_id:
+            raise SystemExit(f"{label}.generated_draft_acceptance selected_candidate_id drift")
+    elif acceptance.get("selected_candidate_id") is not None and acceptance.get("selected_candidate_id") != selected_candidate_id:
+        raise SystemExit(f"{label}.generated_draft_acceptance selected_candidate_id drift")
+    if expected_draft_sha != draft_sha:
         raise SystemExit(f"{label}.generated_draft_acceptance rust_draft_sha256 drift")
 
     rust_check_path = evidence_dir / "rust-check.json"

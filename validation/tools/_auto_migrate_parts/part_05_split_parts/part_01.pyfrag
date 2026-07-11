@@ -72,7 +72,6 @@ def bind_route_decision_to_generated_artifacts(
     }
     for file_name in [
         f"{prefix}-auto-translation-plan.json",
-        f"{prefix}-ai-candidate-manifest.json",
         "rust-check.json",
         f"{prefix}-diff.json",
         f"{prefix}-negative-diff.json",

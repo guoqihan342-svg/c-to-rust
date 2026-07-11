@@ -137,6 +137,59 @@ def generate_candidate(
     return manifest
 
 
+def apply_generated_candidate(
+    manifest: dict[str, Any],
+    *,
+    out_dir: Path,
+    canonical_draft_path: Path,
+) -> dict[str, Any]:
+    if manifest.get("status") != "generated":
+        return manifest
+    candidates = manifest.get("candidates")
+    if not isinstance(candidates, list) or len(candidates) != 1:
+        raise ValueError("generated AI manifest must contain exactly one candidate")
+    candidate = candidates[0]
+    if not isinstance(candidate, dict):
+        raise ValueError("generated AI candidate must be an object")
+    artifact = candidate.get("artifact")
+    if not isinstance(artifact, dict):
+        raise ValueError("generated AI candidate artifact binding is missing")
+    candidate_id = candidate.get("candidate_id")
+    if not isinstance(candidate_id, str) or not candidate_id:
+        raise ValueError("generated AI candidate id is missing")
+    relative_path = artifact.get("path")
+    expected_sha256 = artifact.get("sha256")
+    if not isinstance(relative_path, str) or not relative_path or Path(relative_path).is_absolute():
+        raise ValueError("generated AI candidate artifact path must be relative")
+    candidate_path = (out_dir / relative_path).resolve()
+    try:
+        candidate_path.relative_to(out_dir.resolve())
+    except ValueError as error:
+        raise ValueError("generated AI candidate artifact escapes output directory") from error
+    if not candidate_path.is_file():
+        raise ValueError("generated AI candidate artifact does not exist")
+    actual_sha256 = sha256_path(candidate_path)
+    if actual_sha256 != expected_sha256 or candidate.get("output_hash") != actual_sha256:
+        raise ValueError("generated AI candidate artifact sha256 drifted")
+    canonical_draft_path = canonical_draft_path.resolve()
+    try:
+        canonical_draft_path.relative_to(out_dir.resolve())
+    except ValueError as error:
+        raise ValueError("canonical Rust draft escapes output directory") from error
+    atomic_write_bytes(canonical_draft_path, candidate_path.read_bytes())
+    canonical_sha256 = sha256_path(canonical_draft_path)
+    candidate["applied"] = True
+    candidate["applied_artifact"] = {
+        "path": canonical_draft_path.name,
+        "sha256": canonical_sha256,
+    }
+    candidate["rust_draft_sha256"] = canonical_sha256
+    manifest["selected_candidate_id"] = candidate_id
+    manifest_path = out_dir / f"l3-{manifest['slice_id']}-ai-candidate-manifest.json"
+    atomic_write_json(manifest_path, manifest)
+    return manifest
+
+
 def render_prompt(context_pack: dict[str, Any]) -> str:
     context_json = json.dumps(context_pack, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return (

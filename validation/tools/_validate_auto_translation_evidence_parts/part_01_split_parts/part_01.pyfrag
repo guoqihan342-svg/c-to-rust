@@ -346,6 +346,14 @@ def validate_candidate_selection_record(
 
     validate_legacy_string_translator_candidate_binding(candidates_by_id, selected_candidate_id)
     validate_compatibility_sources_binding(compatibility_sources, candidates_by_id)
+    validate_ai_candidate_binding(
+        candidate_generation,
+        candidates_by_id,
+        selected_candidate_id,
+        evidence_dir=evidence_dir,
+        prefix=prefix,
+        route_level=route_level,
+    )
     if governance_stage or candidate_generation.get("governance_summary") is not None:
         validate_p0_route_governance_summary(
             candidate_generation,
@@ -374,6 +382,69 @@ def validate_candidate_selection_record(
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline missing from candidate_set")
         if c2rust_baseline != c2rust_candidate:
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline drifted from candidate_set")
+
+
+def validate_ai_candidate_binding(
+    candidate_generation: dict[str, Any],
+    candidates_by_id: dict[str, dict[str, Any]],
+    selected_candidate_id: Any,
+    *,
+    evidence_dir: Path | None,
+    prefix: str | None,
+    route_level: Any,
+) -> None:
+    ai = candidate_generation.get("ai")
+    if ai is None:
+        if any(candidate.get("kind") == "opencode-ai" for candidate in candidates_by_id.values()):
+            raise SystemExit("route_decision.candidate_generation.ai missing for opencode-ai candidate")
+        return
+    if not isinstance(ai, dict):
+        raise SystemExit("route_decision.candidate_generation.ai must be an object")
+    candidate_id = ai.get("candidate_id")
+    if candidate_id not in candidates_by_id:
+        raise SystemExit("route_decision.candidate_generation.ai missing from candidate_set")
+    if candidates_by_id[candidate_id] != ai:
+        raise SystemExit("route_decision.candidate_generation.ai drifted from candidate_set")
+    if ai.get("semantic_pass") is not False:
+        raise SystemExit("route_decision.candidate_generation.ai cannot claim semantic_pass")
+    if evidence_dir is None or prefix is None:
+        return
+    manifest_path = evidence_dir / f"{prefix}-ai-candidate-manifest.json"
+    require_ref(
+        ai.get("source_artifact"),
+        manifest_path,
+        "route_decision.candidate_generation.ai.source_artifact",
+    )
+    manifest = load_json(manifest_path)
+    if manifest.get("status") != ai.get("status"):
+        raise SystemExit("route_decision.candidate_generation.ai status drifted from AI manifest")
+    if ai.get("status") != "generated":
+        if selected_candidate_id == candidate_id:
+            raise SystemExit("blocked or incomplete AI candidate cannot be selected")
+        return
+    manifest_candidates = manifest.get("candidates")
+    if not isinstance(manifest_candidates, list) or len(manifest_candidates) != 1:
+        raise SystemExit("generated AI manifest must contain exactly one candidate")
+    manifest_candidate = manifest_candidates[0]
+    if not isinstance(manifest_candidate, dict) or manifest_candidate.get("candidate_id") != candidate_id:
+        raise SystemExit("AI candidate id drifted from AI manifest")
+    if manifest_candidate.get("semantic_pass") is not False:
+        raise SystemExit("AI manifest candidate cannot claim semantic_pass")
+    if manifest_candidate.get("applied") is not True or ai.get("applied") is not True:
+        raise SystemExit("generated AI candidate must be applied before route selection")
+    if selected_candidate_id != candidate_id:
+        raise SystemExit("applied AI candidate must be the selected candidate")
+    if route_level != "L3":
+        raise SystemExit("applied AI candidate requires L3 agent route")
+    draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
+    draft_sha = sha256(draft_path)
+    if ai.get("rust_draft_sha256") != draft_sha:
+        raise SystemExit("route AI rust_draft_sha256 drifted from canonical Rust draft")
+    if manifest_candidate.get("rust_draft_sha256") != draft_sha:
+        raise SystemExit("AI manifest rust_draft_sha256 drifted from canonical Rust draft")
+    applied_artifact = manifest_candidate.get("applied_artifact")
+    if not isinstance(applied_artifact, dict) or applied_artifact.get("sha256") != draft_sha:
+        raise SystemExit("AI manifest applied_artifact drifted from canonical Rust draft")
 
 
 P0_ROUTE_REQUIRED_ACCEPTANCE_GATES = {

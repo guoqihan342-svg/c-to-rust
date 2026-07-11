@@ -458,6 +458,21 @@ def route_level(
         "cfg": cfg.get("status"),
         "plan": plan.get("status"),
     }
+    ai_candidate = (candidate_generation or {}).get("ai", {})
+    if (
+        isinstance(ai_candidate, dict)
+        and ai_candidate.get("status") == "generated"
+        and ai_candidate.get("applied") is True
+        and isinstance(ai_candidate.get("rust_draft_sha256"), str)
+    ):
+        rationale.append(
+            {
+                "feature": "opencode_ai_candidate_applied",
+                "candidate_id": ai_candidate.get("candidate_id"),
+                "weight": "agent_verification_required",
+            }
+        )
+        return "L3", rationale
     if cfg.get("unsupported_control_flow"):
         rationale.append({"feature": "unsupported_control_flow", "weight": "hard_refuse"})
         return "L4", rationale

@@ -179,6 +179,9 @@ def emit_route_decision(
         "pointer_graph": evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer.get("status", "recorded")),
         "c2rust_baseline": c2rust_baseline_artifact,
     }
+    ai_source_artifact = candidate_generation.get("ai", {}).get("source_artifact")
+    if isinstance(ai_source_artifact, dict) and ai_source_artifact.get("status") != "missing":
+        source_artifacts["ai_candidate_manifest"] = ai_source_artifact
     typed_ir_source_artifact = candidate_generation.get("typed_ir", {}).get("source_artifact")
     if isinstance(typed_ir_source_artifact, dict) and typed_ir_source_artifact.get("status") != "missing":
         source_artifacts["clang_lowering_report"] = typed_ir_source_artifact
@@ -228,7 +231,8 @@ def candidate_generation_evidence(
     report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
     plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
     plan = read_json(plan_path) if plan_path.exists() else {}
-    primary_candidate = primary_candidate_binding(plan)
+    ai_candidate = ai_candidate_binding(evidence_dir, prefix)
+    primary_candidate = primary_candidate_binding(plan, ai_candidate)
     compatibility_sources = compatibility_source_bindings(plan)
     typed_ir_candidate = typed_ir_candidate_binding(report_path)
     typed_ir_candidate["scalar_admission"] = scalar_admission_from_runtime_preconditions(
@@ -240,23 +244,81 @@ def candidate_generation_evidence(
         baseline_manifest_ref=baseline_manifest_ref,
     )
     return {
-        "selection_policy": candidate_selection_policy(),
+        "selection_policy": candidate_selection_policy(
+            ai_primary=primary_candidate.get("selected") == "opencode-ai"
+        ),
         "selected_candidate_id": selected_candidate_id(primary_candidate),
         "candidate_set": candidate_set_binding(
             primary_candidate,
             compatibility_sources,
             typed_ir_candidate,
             c2rust_candidate,
+            ai_candidate,
         ),
         "compatibility_sources": compatibility_sources,
         "primary_candidate": primary_candidate,
         "typed_ir": typed_ir_candidate,
         "c2rust_baseline": c2rust_candidate,
+        "ai": ai_candidate,
         "generated_draft_semantic_pass": False,
     }
 
 
-def primary_candidate_binding(plan: dict[str, Any]) -> dict[str, Any]:
+def ai_candidate_binding(evidence_dir: Path, prefix: str) -> dict[str, Any]:
+    manifest_path = evidence_dir / f"{prefix}-ai-candidate-manifest.json"
+    if not manifest_path.exists():
+        return {
+            "candidate_id": "opencode-glm51-1",
+            "kind": "opencode-ai",
+            "status": "missing",
+            "role": "ai_primary_rust_draft",
+            "semantic_pass": False,
+            "source_artifact": {"path": rel(manifest_path), "status": "missing"},
+        }
+    manifest = read_json(manifest_path)
+    binding: dict[str, Any] = {
+        "candidate_id": "opencode-glm51-1",
+        "kind": "opencode-ai",
+        "status": str(manifest.get("status", "incomplete")),
+        "role": "ai_primary_rust_draft",
+        "semantic_pass": False,
+        "source_artifact": evidence_ref(manifest_path, str(manifest.get("status", "recorded"))),
+    }
+    candidates = manifest.get("candidates")
+    if isinstance(candidates, list) and len(candidates) == 1 and isinstance(candidates[0], dict):
+        candidate = candidates[0]
+        binding["candidate_id"] = str(candidate.get("candidate_id", binding["candidate_id"]))
+        binding["applied"] = candidate.get("applied") is True
+        binding["resolved_model"] = candidate.get("resolved_model")
+        binding["rust_draft_sha256"] = candidate.get("rust_draft_sha256")
+        applied_artifact = candidate.get("applied_artifact")
+        if isinstance(applied_artifact, dict):
+            binding["output_ref"] = {
+                **applied_artifact,
+                "status": "candidate",
+            }
+    if isinstance(manifest.get("failure"), dict):
+        binding["failure"] = manifest["failure"]
+    return binding
+
+
+def primary_candidate_binding(
+    plan: dict[str, Any],
+    ai_candidate: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if (
+        isinstance(ai_candidate, dict)
+        and ai_candidate.get("status") == "generated"
+        and ai_candidate.get("applied") is True
+        and isinstance(ai_candidate.get("rust_draft_sha256"), str)
+    ):
+        return {
+            "candidate_id": ai_candidate["candidate_id"],
+            "selected": "opencode-ai",
+            "fallback": False,
+            "semantic_pass": False,
+            "rust_draft_sha256": ai_candidate["rust_draft_sha256"],
+        }
     source = translation_source_from_plan(plan)
     if source["selected"] == "legacy-string-translator":
         return {
@@ -298,10 +360,14 @@ def compatibility_source_bindings(plan: dict[str, Any]) -> list[dict[str, Any]]:
     return [binding]
 
 
-def candidate_selection_policy() -> dict[str, Any]:
+def candidate_selection_policy(*, ai_primary: bool = False) -> dict[str, Any]:
     return {
-        "stage": "p0_route_governance",
-        "selection_basis": "translator_artifact_primary_candidate",
+        "stage": "ai_primary_provenance" if ai_primary else "p0_route_governance",
+        "selection_basis": (
+            "applied_ai_candidate_then_translator_artifact"
+            if ai_primary
+            else "translator_artifact_primary_candidate"
+        ),
         "semantic_acceptance": False,
         "full_router": False,
     }
@@ -405,6 +471,7 @@ def candidate_set_binding(
     compatibility_sources: list[dict[str, Any]],
     typed_ir_candidate: dict[str, Any],
     c2rust_candidate: dict[str, Any],
+    ai_candidate: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     selected = str(primary_candidate.get("selected", "unknown"))
     primary_status = "missing" if selected == "unknown" else "generated"
@@ -427,8 +494,11 @@ def candidate_set_binding(
     if primary_candidate.get("fallback_reason"):
         primary["fallback_reason"] = primary_candidate["fallback_reason"]
     candidates = []
+    if isinstance(ai_candidate, dict) and ai_candidate.get("status") != "missing":
+        candidates.append(dict(ai_candidate))
     if selected != "unknown":
-        candidates.append(primary)
+        if selected != "opencode-ai":
+            candidates.append(primary)
     candidates.extend(compatibility_candidate_set_items(compatibility_sources))
     candidates.extend(
         [

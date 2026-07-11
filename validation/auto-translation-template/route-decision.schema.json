@@ -115,6 +115,7 @@
         "primary_candidate": {"$ref": "#/definitions/primaryCandidateEvidence"},
         "typed_ir": {"$ref": "#/definitions/typedIrCandidateEvidence"},
         "c2rust_baseline": {"$ref": "#/definitions/candidateSetItem"},
+        "ai": {"$ref": "#/definitions/candidateSetItem"},
         "governance_summary": {"$ref": "#/definitions/routeGovernanceSummary"},
         "generated_draft_semantic_pass": {"const": false}
       }
@@ -124,7 +125,7 @@
       "additionalProperties": true,
       "required": ["stage", "semantic_acceptance", "full_router"],
       "properties": {
-        "stage": {"enum": ["post_generation_provenance", "p0_route_governance"]},
+        "stage": {"enum": ["post_generation_provenance", "p0_route_governance", "ai_primary_provenance"]},
         "selection_basis": {"type": "string", "minLength": 1},
         "semantic_acceptance": {"const": false},
         "full_router": {"const": false}
@@ -198,7 +199,8 @@
             "legacy-string-translator",
             "clang-lowered-typed-ir",
             "typed-ir",
-            "c2rust-baseline"
+            "c2rust-baseline",
+            "opencode-ai"
           ]
         },
         "status": {"type": "string", "minLength": 1},
@@ -209,7 +211,8 @@
             "typed_ir_candidate_signal",
             "candidate_context_only",
             "baseline_or_repair_candidate_context",
-            "compatibility_rust_draft"
+            "compatibility_rust_draft",
+            "ai_primary_rust_draft"
           ]
         },
         "semantic_pass": {"const": false},
@@ -278,7 +281,7 @@
       "required": ["selected", "fallback"],
       "properties": {
         "selected": {
-          "enum": ["unknown", "clang-lowered-typed-ir"]
+          "enum": ["unknown", "clang-lowered-typed-ir", "opencode-ai"]
         },
         "fallback": {"type": "boolean"},
         "fallback_from": {"enum": ["clang-lowered-typed-ir", "legacy-string-translator"]},

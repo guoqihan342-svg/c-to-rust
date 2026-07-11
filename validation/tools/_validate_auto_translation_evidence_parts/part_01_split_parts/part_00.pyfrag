@@ -453,6 +453,8 @@ def validate_route_source_artifact_refs(evidence_dir: Path, prefix: str, route: 
         "translation_plan": evidence_dir / f"{prefix}-auto-translation-plan.json",
         "c2rust_baseline": baseline_path,
     }
+    if "ai_candidate_manifest" in source_artifacts:
+        expected_paths["ai_candidate_manifest"] = evidence_dir / f"{prefix}-ai-candidate-manifest.json"
     for key, expected_path in expected_paths.items():
         require_ref(source_artifacts.get(key), expected_path, f"route_decision.source_artifacts.{key}")
 
