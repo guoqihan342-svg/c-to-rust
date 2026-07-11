@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from validation.tools._translation_carrier_reporter import emit_reports
+from validation.tools._translation_carrier_reporter.contract import (
+    ReporterError,
+    U32_MAX,
+    parse_contract,
+    reference_outputs,
+    validate_cases,
+)
+
+
+class TranslationCarrierReporterTests(unittest.TestCase):
+    def test_renamed_non_project_fixture_emits_name_independent_reports(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="carrier-reporter-") as tmp:
+            layout = build_renamed_layout(Path(tmp))
+            paths = emit_reports(**layout["emit_args"])
+
+            self.assertEqual(set(paths), {"c_oracle", "rust_report", "diff", "negative_diff"})
+            reports = {name: load_json(path) for name, path in paths.items()}
+            for report in reports.values():
+                self.assertEqual(report["target_id"], "orbit-store")
+                self.assertEqual(report["slice_id"], "reserve-slot-sentinel")
+                self.assertEqual(report["case_count"], 4)
+                self.assertEqual(report["claim_boundary"]["scope"], "source_fragment_only")
+                self.assertFalse(report["claim_boundary"]["whole_function_semantics_verified"])
+                self.assertFalse(report["claim_boundary"]["external_callee_semantics_verified"])
+
+            c_oracle = reports["c_oracle"]
+            self.assertEqual(c_oracle["status"], "passed")
+            self.assertEqual(c_oracle["provenance"]["binding_mode"], "executed_harness")
+            self.assertEqual(c_oracle["cases"][0]["is_exhausted"], True)
+            self.assertEqual(c_oracle["cases"][3]["assigned_slot"], 9001)
+            self.assertEqual(c_oracle["cases"][3]["forwarded_values"], [77, 88, 144])
+
+            self.assertEqual(reports["rust_report"]["status"], "passed")
+            self.assertEqual(reports["diff"]["status"], "passed")
+            self.assertIsNone(reports["diff"]["first_mismatch"])
+            negative = reports["negative_diff"]
+            self.assertEqual(negative["status"], "expected_failed")
+            self.assertTrue(negative["mutation_detected"])
+            self.assertEqual(
+                negative["partition_detection"]["comparison_true_case_ids"],
+                ["capacity-marker"],
+            )
+            self.assertEqual(
+                negative["partition_detection"]["comparison_false_case_ids"],
+                ["zero-slot", "small-slot", "wide-inputs"],
+            )
+            emitted_text = "\n".join(
+                path.read_text(encoding="utf-8", errors="replace")
+                for path in sorted(output_dir_files(layout["emit_args"]["output_dir"]))
+            )
+            self.assertNotIn(str(Path(tmp).resolve()), emitted_text)
+            self.assertNotIn("/tmp/", emitted_text)
+            self.assertNotRegex(emitted_text, r"[A-Za-z]:[\\/]")
+
+    def test_missing_runtime_artifact_fails_before_writing_reports(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="carrier-reporter-") as tmp:
+            layout = build_renamed_layout(Path(tmp))
+            layout["lowering_path"].unlink()
+            with self.assertRaisesRegex(ReporterError, "required runtime artifact is missing"):
+                emit_reports(**layout["emit_args"])
+            self.assertFalse(layout["emit_args"]["output_dir"].exists())
+
+    def test_generated_rust_replay_tampering_fails_closed(self) -> None:
+        mutations = (
+            "generated_draft_replay_pass",
+            "rust_draft_sha",
+            "rust_draft_path",
+            "rust_check_external_semantics",
+            "run_returncode",
+            "replay_host_path",
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory(
+                prefix="carrier-reporter-"
+            ) as tmp:
+                layout = build_renamed_layout(Path(tmp))
+                apply_replay_mutation(layout, mutation)
+                with self.assertRaises((ReporterError, OSError)):
+                    emit_reports(**layout["emit_args"])
+                self.assertFalse(layout["emit_args"]["output_dir"].exists())
+
+    def test_reporter_implementation_contains_no_project_or_function_name_switches(self) -> None:
+        tool_dir = Path(__file__).parent / "_translation_carrier_reporter"
+        implementation = "\n".join(
+            path.read_text(encoding="utf-8") for path in sorted(tool_dir.glob("*.py"))
+        )
+        implementation += (Path(__file__).parent / "translation_carrier_reporter.py").read_text(
+            encoding="utf-8"
+        )
+        for forbidden in ("flashdb", "new_kv", "alloc_kv", "real-fdb"):
+            self.assertNotIn(forbidden, implementation.lower())
+
+    def test_record_contract_recomputes_outputs_and_rejects_empty_noalias(self) -> None:
+        spec = build_record_contract_model()
+        contract = parse_contract(spec)
+        cases = validate_cases(spec["fixture_contract"]["cases"], contract)
+
+        self.assertEqual(contract["kind"], "scripted_external_record_u32_call_bool_state")
+        self.assertEqual(reference_outputs(cases[0], contract), cases[0]["expected_outputs"])
+        self.assertEqual(reference_outputs(cases[1], contract), cases[1]["expected_outputs"])
+
+        spec["replay_contract"]["noalias_required"] = []
+        spec["c_boundary"]["pointer_contract"]["noalias_required"] = []
+        with self.assertRaisesRegex(ReporterError, "must cover all forwarded mutable record pairs"):
+            parse_contract(spec)
