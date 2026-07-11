@@ -9,6 +9,11 @@ import unittest
 from pathlib import Path
 
 from validation.tools import auto_migrate
+from validation.tools.auto_migrate_call_continue_test_support import (
+    EXPECTED_V2_PARTITIONS,
+    partition_reports,
+    schema_v2_spec_with_five_partitions,
+)
 from validation.tools._translation_carrier_reporter.call_continue_contract import (
     parse_contract,
 )
@@ -19,40 +24,7 @@ from validation.tools.call_continue_test_support import (
     REPO_ROOT,
     renamed_spec,
     renamed_zero_start_rust_draft,
-    renamed_zero_start_spec,
 )
-
-
-EXPECTED_V2_PARTITIONS = {
-    "ordinary_zero_start": {
-        "external_call": "skipped",
-        "external_call_count": 0,
-        "case_requirement": "at_least_one",
-        "u32_wrapping": False,
-    },
-    "wrapping_zero_start": {
-        "external_call": "skipped",
-        "external_call_count": 0,
-        "case_requirement": "at_least_one",
-        "u32_wrapping": True,
-    },
-    "sentinel_hit": {
-        "external_call": "invoked",
-        "external_call_count": 1,
-        "case_requirement": "exactly_one",
-        "traversed_u32_wrapping": True,
-    },
-    "zero_miss": {
-        "external_call": "invoked",
-        "external_call_count": 1,
-        "case_requirement": "at_least_one",
-    },
-    "ordinary_miss": {
-        "external_call": "invoked",
-        "external_call_count": 1,
-        "case_requirement": "at_least_one",
-    },
-}
 
 
 class AutoMigrateCallContinueTests(unittest.TestCase):
@@ -67,7 +39,7 @@ class AutoMigrateCallContinueTests(unittest.TestCase):
 
         oracle = auto_migrate.oracle_fixture_execution_source(spec, fixture)
         self.assertIn(
-            "uint32_t actual_zero_start_plain_header_span = (uint32_t)7u;",
+            "uint32_t actual_zero_start_plain_header_span = (uint32_t)25u;",
             oracle["statements"],
         )
         self.assertNotIn("struct u32", oracle["statements"])
@@ -82,7 +54,7 @@ class AutoMigrateCallContinueTests(unittest.TestCase):
 
         replay = auto_migrate.rust_replay_fixture_cases_source(spec, fixture)
         self.assertIn(
-            "let actual_zero_start_plain_header_span = 7u32;",
+            "let actual_zero_start_plain_header_span = 25u32;",
             replay,
         )
         self.assertNotIn("u32 {", replay)
@@ -220,61 +192,6 @@ class AutoMigrateCallContinueTests(unittest.TestCase):
         self.assertNotIn("u32 {", replay)
         for case in cases:
             self.assertEqual(case["expected_outputs"]["call_count"], 1)
-
-
-def schema_v2_spec_with_five_partitions() -> tuple[
-    dict[str, object], list[dict[str, object]]
-]:
-    spec, cases = renamed_zero_start_spec()
-    ordinary_zero_start = copy.deepcopy(cases[0])
-    ordinary_zero_start["id"] = "zero-start-plain"
-    ordinary_zero_start["inputs"].update(
-        window_base=100,
-        header_span=7,
-        alias_start_initial=0,
-    )
-    ordinary_zero_start["expected_outputs"] = reference_outputs(
-        ordinary_zero_start, parse_contract(spec)
-    )
-    cases.insert(0, ordinary_zero_start)
-    cases = [case for case in cases if case["id"] != "hit-plain"]
-    if len(cases) != 5:
-        raise AssertionError("schema-v2 focused fixture must contain exactly five cases")
-    spec["fixture_contract"]["cases"] = copy.deepcopy(cases)
-    return spec, cases
-
-
-def partition_reports(
-    spec: dict[str, object], cases: list[dict[str, object]]
-) -> tuple[dict[str, object], dict[str, object]]:
-    zero_start_ids = ["zero-start-plain", "zero-start-wrap"]
-    hit_ids = ["hit-wrap"]
-    all_ids = [str(case["id"]) for case in cases]
-    nonzero_start_ids = [case_id for case_id in all_ids if case_id not in zero_start_ids]
-    scenarios = [
-        {
-            "scenario_id": "comparison-equality-flip",
-            "expected_detected_case_ids": nonzero_start_ids,
-            "partition_replay": {
-                "detected_case_ids": nonzero_start_ids,
-                "passed_case_ids": zero_start_ids,
-            },
-        },
-        {
-            "scenario_id": "continue-noop",
-            "expected_detected_case_ids": hit_ids,
-            "partition_replay": {
-                "detected_case_ids": hit_ids,
-                "passed_case_ids": [case_id for case_id in all_ids if case_id not in hit_ids],
-            },
-        },
-    ]
-    declared = {
-        scenario["scenario_id"]: copy.deepcopy(scenario["partition_replay"])
-        for scenario in scenarios
-    }
-    return {"scenarios": scenarios}, {"partition_detection": declared}
-
 
 if __name__ == "__main__":
     unittest.main()
