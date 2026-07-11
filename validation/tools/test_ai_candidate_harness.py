@@ -192,6 +192,36 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assert_manifest_schema(manifest)
             self.assertFalse(any((root / "out").glob("*-ai-rust-candidate.rs")))
 
+    def test_response_with_extra_fields_is_blocked(self) -> None:
+        payload = {
+            "schema_version": 1,
+            "candidate": {"language": "rust", "source": "fn value() {}", "bypass": True},
+            "assumptions": [],
+        }
+        with self.assertRaisesRegex(ValueError, "exactly language and source"):
+            ai_candidate_harness.parse_candidate_response(
+                json.dumps({"type": "text", "text": json.dumps(payload)}) + "\n"
+            )
+
+    def test_oversized_provider_output_is_blocked_and_capture_is_bounded(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-output-bound-") as tmp:
+            root = Path(tmp)
+            spec_path = root / "slice.json"
+            spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
+            context = ai_candidate_harness.build_context_pack(spec_path)
+            oversized = "x" * (ai_candidate_harness.MAX_PROVIDER_STDOUT_BYTES + 1)
+
+            manifest = ai_candidate_harness.generate_candidate(
+                context,
+                out_dir=root / "out",
+                runner=lambda _argv, _timeout: ai_candidate_harness.ProviderExecution(0, oversized, ""),
+            )
+
+            self.assertEqual(manifest["status"], "blocked")
+            self.assertEqual(manifest["failure"]["kind"], "provider_output_too_large")
+            response_path = root / "out" / "l3-generic-scale-ai-response.jsonl"
+            self.assertEqual(response_path.stat().st_size, ai_candidate_harness.MAX_PROVIDER_STDOUT_BYTES)
+
     def test_provider_balance_failure_is_structured_and_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ai-balance-") as tmp:
             root = Path(tmp)

@@ -4,6 +4,7 @@
 from validation.tools._ai_candidate_harness_parts.cli import main
 from validation.tools._ai_candidate_harness_parts.context import build_context_pack
 from validation.tools._ai_candidate_harness_parts.provider import (
+    MAX_PROVIDER_STDOUT_BYTES,
     ProviderExecution,
     apply_generated_candidate,
     generate_candidate,
@@ -11,6 +12,7 @@ from validation.tools._ai_candidate_harness_parts.provider import (
 )
 
 __all__ = [
+    "MAX_PROVIDER_STDOUT_BYTES",
     "ProviderExecution",
     "apply_generated_candidate",
     "build_context_pack",

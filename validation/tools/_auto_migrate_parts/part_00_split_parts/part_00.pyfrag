@@ -117,7 +117,7 @@ def main() -> int:
     parser.add_argument(
         "--ai-first-candidate",
         action="store_true",
-        help="Generate a hash-bound OpenCode/GLM-5.1 candidate after deterministic discovery and before route selection. The AI candidate remains non-semantic until common-gate routing is implemented.",
+        help="Generate a hash-bound OpenCode/GLM-5.1 candidate after deterministic discovery and route the exact applied draft through the common validation gates.",
     )
     parser.add_argument("--ai-model", default="zai/glm-5.1")
     parser.add_argument("--ai-agent", default="c2rust-migrator")
@@ -127,8 +127,6 @@ def main() -> int:
     args = parser.parse_args()
     if args.ai_timeout_seconds < 1 or args.ai_timeout_seconds > 600:
         parser.error("--ai-timeout-seconds must be between 1 and 600")
-    if args.ai_first_candidate and args.accept_existing_evidence:
-        parser.error("--ai-first-candidate cannot reuse accepted evidence")
     if args.competition_clang_lane:
         args.emit_clang_lowering_report = True
         require_competition_clang_lane()
@@ -170,10 +168,19 @@ def main() -> int:
             variant=args.ai_variant,
             timeout_seconds=args.ai_timeout_seconds,
         )
+        canonical_draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
+        if ai_manifest.get("status") == "generated" and canonical_draft_path.is_file():
+            displaced_draft_path = evidence_dir / f"l3-{slice_id}-pre-ai-rust-candidate.rs"
+            shutil.copyfile(canonical_draft_path, displaced_draft_path)
+            ai_manifest["displaced_candidate"] = {
+                "path": displaced_draft_path.name,
+                "sha256": sha256(displaced_draft_path),
+                "status": "candidate_context_only",
+            }
         apply_generated_candidate(
             ai_manifest,
             out_dir=evidence_dir,
-            canonical_draft_path=evidence_dir / f"l3-{slice_id}-rust-draft.rs",
+            canonical_draft_path=canonical_draft_path,
         )
     c2rust_baseline = emit_c2rust_baseline_manifest(spec, args.slice_spec, evidence_dir)
     route_decision = emit_route_decision(spec, evidence_dir, translator_summary, c2rust_baseline)

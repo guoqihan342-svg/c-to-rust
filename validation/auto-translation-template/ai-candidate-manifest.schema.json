@@ -13,6 +13,7 @@
     "candidates": {"type": "array", "items": {"$ref": "#/definitions/candidate"}},
     "generator": {"$ref": "#/definitions/generator"},
     "bindings": {"$ref": "#/definitions/bindings"},
+    "displaced_candidate": {"$ref": "#/definitions/candidateContextRef"},
     "claim_boundary": {"$ref": "#/definitions/claimBoundary"},
     "failure": {"$ref": "#/definitions/failure"},
     "cache_invalidation_keys": {"type": "array", "items": {"type": "string"}}
@@ -61,6 +62,16 @@
       "properties": {
         "path": {"type": "string", "minLength": 1},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "candidateContextRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "status"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "status": {"const": "candidate_context_only"}
       }
     },
     "generator": {

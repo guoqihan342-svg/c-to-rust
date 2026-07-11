@@ -509,6 +509,16 @@ def candidate_set_binding(
             "role": "typed_ir_candidate_signal",
             "rust_draft_generated": bool(typed_ir_candidate.get("rust_draft_generated", False)),
             "semantic_pass": False,
+            **(
+                {"rust_draft_sha256": typed_ir_candidate["rust_draft_sha256"]}
+                if typed_ir_candidate.get("rust_draft_sha256")
+                else {}
+            ),
+            **(
+                {"output_ref": typed_ir_candidate["output_ref"]}
+                if isinstance(typed_ir_candidate.get("output_ref"), dict)
+                else {}
+            ),
         },
             c2rust_candidate,
         ]

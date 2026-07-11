@@ -419,6 +419,11 @@ def typed_ir_candidate_binding(report_path: Path) -> dict[str, Any]:
         binding["typed_ir_sha256"] = str(candidate["typed_ir_sha256"])
     if candidate.get("rust_draft_sha256"):
         binding["rust_draft_sha256"] = str(candidate["rust_draft_sha256"])
+        displaced_path = report_path.with_name(
+            report_path.name.replace("-clang-lowering-report.json", "-pre-ai-rust-candidate.rs")
+        )
+        if displaced_path.is_file() and sha256(displaced_path) == binding["rust_draft_sha256"]:
+            binding["output_ref"] = evidence_ref(displaced_path, "candidate_context_only")
     return binding
 
 
