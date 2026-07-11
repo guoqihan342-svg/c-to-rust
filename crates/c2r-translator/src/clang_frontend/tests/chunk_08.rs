@@ -559,3 +559,40 @@ fn if_assignment_call_comparison_normalizes_to_assignment_and_pure_read() {
         )
     ));
 }
+
+#[test]
+fn clang_arguments_resolve_relative_include_paths_from_source_root() {
+    let parse_spec = ClangParseSpec {
+        source_root: PathBuf::from("/workspace/project"),
+        source_file: PathBuf::from("src/module.c"),
+        function_name: "module_size".to_string(),
+        include_paths: vec!["include".to_string()],
+        defines: Vec::new(),
+        target_abi: None,
+        compile_commands: None,
+        source_file_hashes: BTreeMap::new(),
+        function_source_span: None,
+    };
+
+    assert_eq!(
+        parse_spec.clang_arguments(),
+        vec!["-I/workspace/project/include"]
+    );
+}
+
+#[test]
+fn clang_arguments_preserve_absolute_include_paths() {
+    let parse_spec = ClangParseSpec {
+        source_root: PathBuf::from("/workspace/project"),
+        source_file: PathBuf::from("src/module.c"),
+        function_name: "module_size".to_string(),
+        include_paths: vec!["/opt/sdk/include".to_string()],
+        defines: Vec::new(),
+        target_abi: None,
+        compile_commands: None,
+        source_file_hashes: BTreeMap::new(),
+        function_source_span: None,
+    };
+
+    assert_eq!(parse_spec.clang_arguments(), vec!["-I/opt/sdk/include"]);
+}

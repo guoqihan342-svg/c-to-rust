@@ -90,7 +90,7 @@
       "function_name": "call_fn",
       "c_source": "int call_fn(int (*fp)(int), int value) { return fp(value); }",
       "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/function_pointer_call_ast.json",
-      "expected_classification": "refusal"
+      "expected_classification": "success"
     },
     {
       "id": "postincrement-loop",

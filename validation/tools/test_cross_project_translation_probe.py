@@ -44,7 +44,7 @@ class CrossProjectTranslationProbeTest(unittest.TestCase):
 
     def test_probe_reports_success_refusal_and_execution_failure(self) -> None:
         catalog, cases = probe.load_cases(probe.DEFAULT_FIXTURES, REPO_ROOT)
-        selected = [cases[0], cases[-2], cases[-1]]
+        selected = [cases[0], cases[-3], cases[-1]]
         fixtures_path = Path(self._tmpdir()) / "selected-cases.json"
         fixtures_path.write_text(
             json.dumps({"schema_version": 1, "source_file": catalog["source_file"], "cases": selected}),

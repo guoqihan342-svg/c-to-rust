@@ -171,7 +171,7 @@ fn emit_param_type(ty: &IrType) -> Result<String, String> {
     emit_value_type(ty)
 }
 
-fn emit_function_pointer_param_type(ty: &IrType) -> Result<Option<String>, String> {
+pub(crate) fn emit_function_pointer_param_type(ty: &IrType) -> Result<Option<String>, String> {
     let IrTypeKind::Pointer { pointee } = &ty.kind else {
         return Ok(None);
     };

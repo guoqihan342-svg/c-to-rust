@@ -531,3 +531,34 @@ int probe(void) {
             buf.boundary_decisions
         );
     }
+
+    #[test]
+    fn clang_lowered_type_map_records_supported_function_pointer_parameter() {
+        let function = IrType {
+            spelled: "int (int)".to_string(),
+            canonical: "int (int)".to_string(),
+            kind: IrTypeKind::Function,
+            is_const: false,
+            width_bits: None,
+            source_span: None,
+        };
+        let callback = IrType {
+            spelled: "int (*)(int)".to_string(),
+            canonical: "int (int) *".to_string(),
+            kind: IrTypeKind::Pointer {
+                pointee: Box::new(function),
+            },
+            is_const: false,
+            width_bits: None,
+            source_span: None,
+        };
+        let mut result = TranslationResult::default();
+
+        record_ir_type_mapping("callback", &callback, &test_profile(), &mut result);
+
+        assert!(result.type_map.uncertainties.is_empty());
+        assert!(result.errors.is_empty());
+        assert_eq!(result.type_map.mappings.len(), 1);
+        assert_eq!(result.type_map.mappings[0].symbol, "callback");
+        assert_eq!(result.type_map.mappings[0].rust_type, "fn(i32) -> i32");
+    }

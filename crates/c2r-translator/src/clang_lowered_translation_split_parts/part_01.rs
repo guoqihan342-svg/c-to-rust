@@ -181,6 +181,9 @@ fn record_ir_type_mapping_with_rust_type_override(
 }
 
 fn ir_rust_type(ty: &typed_ir::IrType) -> Option<String> {
+    if let Ok(Some(function_pointer)) = typed_ir::emit_function_pointer_param_type(ty) {
+        return Some(function_pointer);
+    }
     match &ty.kind {
         typed_ir::IrTypeKind::Void => Some("()".to_string()),
         typed_ir::IrTypeKind::Integer { signed, width } => {

@@ -43,6 +43,9 @@ class ExtractSourceSliceTests(unittest.TestCase):
                 textwrap.dedent(
                     """
                     /* fake ignored body: int add_one(int value) { return 99; } */
+                    /* #include \"fake.h\" */
+                    #include <stdint.h>
+                    #include "local.h"
                     static const char *ignored = "{ not a function brace }";
 
                     int helper(int value) {
@@ -75,23 +78,104 @@ class ExtractSourceSliceTests(unittest.TestCase):
             self.assertEqual(spec["status"], "draft")
             self.assertEqual(spec["function_name"], "add_one")
             self.assertEqual(spec["source"]["source_root"], str(root.resolve()))
+            self.assertEqual(spec["source_root"], str(root.resolve()))
+            self.assertEqual(spec["source_file"], "src/sample.c")
             self.assertEqual(spec["source"]["source_commit"], "unit-commit")
             self.assertEqual(spec["source"]["source_file_hashes"]["src/sample.c"], hashlib.sha256(src.read_bytes()).hexdigest())
+            self.assertEqual(spec["source_file_hashes"], spec["source"]["source_file_hashes"])
             self.assertEqual(spec["c_boundary"]["files"][0]["path"], "src/sample.c")
             self.assertEqual(spec["c_boundary"]["files"][0]["role"], "source")
             self.assertEqual(spec["c_boundary"]["signatures"][0]["function"], "add_one")
             self.assertEqual(spec["c_boundary"]["signatures"][0]["source_span"]["file"], "src/sample.c")
-            self.assertEqual(spec["c_boundary"]["signatures"][0]["source_span"]["line_start"], 8)
-            self.assertEqual(spec["c_boundary"]["signatures"][0]["source_span"]["line_end"], 10)
+            self.assertEqual(spec["c_boundary"]["signatures"][0]["source_span"]["line_start"], 11)
+            self.assertEqual(spec["c_boundary"]["signatures"][0]["source_span"]["line_end"], 13)
+            self.assertTrue(
+                spec["c_source"].startswith(
+                    '#include <stdint.h>\n#include "local.h"\n\n'
+                )
+            )
+            self.assertNotIn("fake.h", spec["c_source"])
+            self.assertEqual(
+                spec["function_source_span"],
+                spec["c_boundary"]["signatures"][0]["source_span"],
+            )
             self.assertIn("int add_one(int value)", spec["c_source"])
             self.assertNotIn("return 99", spec["c_source"])
             self.assertEqual(spec["build_profile"]["compiler_command_source"], "compile_commands.json")
             self.assertEqual(spec["build_profile"]["include_paths"], ["include"])
             self.assertEqual(spec["build_profile"]["defines"], ["UNIT=1"])
+            self.assertIs(spec["build_profile"]["clang_available"], True)
             self.assertEqual(spec["build_profile"]["preprocessing_mode"], "manual_flags")
             self.assertEqual(spec["build_profile"]["clang_type_extraction"]["available"], False)
             self.assertIn("syntax-indexed", spec["build_profile"]["clang_type_extraction"]["diagnostics"][0])
             self.assertEqual(spec["rust_boundary"]["public_api"][0]["boundary_kind"], "internal_ffi")
+
+    def test_strips_function_declaration_specifiers_from_return_type(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="source-slice-static-test-") as tmp:
+            root = Path(tmp)
+            src = root / "math.c"
+            src.write_text(
+                "static inline int scale(int value) { return value * 3; }\n",
+                encoding="utf-8",
+            )
+
+            module = load_extractor_module()
+            spec = module.generate_slice_spec(
+                repo_root=root,
+                source_file=Path("math.c"),
+                function_name="scale",
+                target_id="unit",
+                slice_id="real-scale",
+                source_commit="unit-commit",
+            )
+
+            signature = spec["c_boundary"]["signatures"][0]
+            self.assertEqual(signature["return_type"], "int")
+            self.assertNotIn(
+                "static int",
+                [
+                    item["name"]
+                    for item in spec["c_boundary"]["direct_dependencies"]
+                    if item["kind"] == "type"
+                ],
+            )
+
+    def test_preprocessor_directive_before_function_is_not_part_of_signature(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="source-slice-directive-test-") as tmp:
+            root = Path(tmp)
+            src = root / "module.c"
+            src.write_text(
+                textwrap.dedent(
+                    """
+                    #include <stddef.h>
+                    #undef TYPE_ALIAS
+
+                    size_t module_size(void) {
+                        return sizeof(int);
+                    }
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            module = load_extractor_module()
+            spec = module.generate_slice_spec(
+                repo_root=root,
+                source_file=Path("module.c"),
+                function_name="module_size",
+                target_id="unit",
+                slice_id="real-module-size",
+                source_commit="unit-commit",
+            )
+
+            signature = spec["c_boundary"]["signatures"][0]
+            self.assertEqual(signature["return_type"], "size_t")
+            self.assertNotIn("#undef", spec["c_source"])
+            self.assertNotIn("TYPE_ALIAS", spec["c_source"])
+            self.assertNotIn(
+                "TYPE_ALIAS",
+                [item["name"] for item in spec["c_boundary"]["direct_dependencies"]],
+            )
 
     def test_cli_writes_generated_slice_spec_json(self) -> None:
         with tempfile.TemporaryDirectory(prefix="source-slice-cli-test-") as tmp:

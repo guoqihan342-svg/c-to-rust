@@ -164,7 +164,11 @@ fn lower_parse_spec_from_slice_source_report(
     let mut temp_parse_spec = parse_spec.clone();
     temp_parse_spec.source_root = PathBuf::from(".");
     temp_parse_spec.source_file = temp_source.clone();
-    temp_parse_spec.include_paths = Vec::new();
+    temp_parse_spec.include_paths = parse_spec
+        .resolved_include_paths()
+        .iter()
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect();
     temp_parse_spec.compile_commands = None;
     temp_parse_spec.source_file_hashes = BTreeMap::new();
     temp_parse_spec.function_source_span = None;
@@ -176,7 +180,7 @@ fn lower_parse_spec_from_slice_source_report(
     report.arguments = slice_source_arguments(parse_spec, &temp_source);
     report.diagnostics.insert(
         0,
-        "clang lowering used slice-spec c_source with declared external callee prototypes; project macros were not expanded"
+        "clang lowering used slice-spec c_source with preserved include and define arguments; compile_commands replay was not used"
             .to_string(),
     );
     report

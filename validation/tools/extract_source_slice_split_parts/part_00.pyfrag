@@ -100,6 +100,12 @@ def generate_slice_spec(
     ensure_inside_root(root, source_path)
     text = source_path.read_text(encoding="utf-8")
     extracted = extract_function(text, function_name)
+    include_preamble = source_include_preamble(text)
+    translation_source = (
+        f"{include_preamble}\n\n{extracted.c_source}"
+        if include_preamble
+        else extracted.c_source
+    )
     actual_commit = git_commit(root)
     commit = source_commit or actual_commit
     actual_branch = git_branch(root)
@@ -155,9 +161,20 @@ def generate_slice_spec(
         "level": "L3",
         "status": "draft",
         "function_name": function_name,
-        "c_source": extracted.c_source,
+        "c_source": translation_source,
         "source_commit": commit,
         "fixture_hash": f"{slice_id}-fixture",
+        "source_root": source_identity["source_root"],
+        "source_file": relative_source,
+        "source_file_hashes": {relative_source: file_hash},
+        "function_source_span": {
+            "file": relative_source,
+            "line_start": extracted.line_start,
+            "line_end": extracted.line_end,
+            "byte_start": extracted.byte_start,
+            "byte_end": extracted.byte_end,
+            "sha256": sha256_text(extracted.c_source),
+        },
         "l1_evidence": {
             "path": f"validation/evidence/{target_id}/l1-native-build.json",
             "status": "required",
@@ -202,6 +219,7 @@ def generate_slice_spec(
             "compiler_command_source": compiler_command_source,
             "include_paths": include_paths or [],
             "defines": defines or [],
+            "clang_available": True,
             "target": {
                 "triple_or_abi": "unknown",
                 "endianness": "unknown",
@@ -302,6 +320,17 @@ def extract_function(text: str, function_name: str) -> FunctionSlice:
     raise SystemExit(f"function {function_name!r} not found as a definition")
 
 
+def source_include_preamble(text: str) -> str:
+    masked = mask_comments_and_strings(text)
+    includes: list[str] = []
+    for original_line, masked_line in zip(text.splitlines(), masked.splitlines(), strict=True):
+        if re.match(r"^\s*#\s*include\b", masked_line) and re.match(
+            r"^\s*#\s*include\s*(?:<[^>]+>|\"[^\"]+\")\s*$", original_line
+        ):
+            includes.append(original_line.strip())
+    return "\n".join(dict.fromkeys(includes))
+
+
 def mask_comments_and_strings(text: str) -> str:
     result = list(text)
     index = 0
@@ -359,7 +388,24 @@ def find_signature_start(masked: str, name_start: int) -> int | None:
         index -= 1
     while index >= 0 and masked[index] not in "{};":
         index -= 1
-    return skip_whitespace(masked, index + 1)
+    signature_start = skip_whitespace(masked, index + 1)
+    while signature_start < name_start and masked[signature_start] == "#":
+        signature_start = skip_preprocessor_directive(masked, signature_start)
+        signature_start = skip_whitespace(masked, signature_start)
+    return signature_start
+
+
+def skip_preprocessor_directive(text: str, start: int) -> int:
+    cursor = start
+    while cursor < len(text):
+        line_end = text.find("\n", cursor)
+        if line_end == -1:
+            return len(text)
+        line = text[cursor:line_end]
+        cursor = line_end + 1
+        if not line.rstrip().endswith("\\"):
+            return cursor
+    return cursor
 
 
 def skip_whitespace(text: str, index: int) -> int:
@@ -372,9 +418,30 @@ def parse_signature(signature: str, function_name: str) -> dict[str, Any]:
     match = re.match(rf"(?P<return_type>.+?)\b{re.escape(function_name)}\s*\((?P<params>.*)\)\s*$", signature, re.S)
     if not match:
         raise SystemExit(f"could not parse signature for {function_name!r}")
-    return_type = " ".join(match.group("return_type").split())
+    return_type = strip_function_declaration_specifiers(
+        " ".join(match.group("return_type").split())
+    )
+    if not return_type:
+        raise SystemExit(f"function {function_name!r} is missing a return type")
     params = parse_parameters(match.group("params"))
     return {"return_type": return_type, "parameters": params}
+
+
+FUNCTION_DECLARATION_SPECIFIERS = {
+    "extern",
+    "inline",
+    "static",
+    "_Noreturn",
+    "__inline",
+    "__inline__",
+}
+
+
+def strip_function_declaration_specifiers(return_type: str) -> str:
+    tokens = return_type.split()
+    while tokens and tokens[0] in FUNCTION_DECLARATION_SPECIFIERS:
+        tokens.pop(0)
+    return " ".join(tokens)
 
 
 def parse_parameters(params_text: str) -> list[dict[str, str]]:

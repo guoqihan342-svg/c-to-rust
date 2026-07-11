@@ -99,18 +99,26 @@ impl ClangParseSpec {
             return Vec::new();
         }
 
+        self.resolved_include_paths()
+            .iter()
+            .map(|include_path| {
+                format!("-I{}", include_path.to_string_lossy().replace('\\', "/"))
+            })
+            .chain(self.defines.iter().map(|define| format!("-D{define}")))
+            .collect()
+    }
+
+    pub(crate) fn resolved_include_paths(&self) -> Vec<PathBuf> {
         self.include_paths
             .iter()
             .map(|include_path| {
-                format!(
-                    "-I{}",
-                    self.source_root
-                        .join(include_path)
-                        .to_string_lossy()
-                        .replace('\\', "/")
-                )
+                let include_path = Path::new(include_path);
+                if include_path.is_absolute() {
+                    include_path.to_path_buf()
+                } else {
+                    self.source_root.join(include_path)
+                }
             })
-            .chain(self.defines.iter().map(|define| format!("-D{define}")))
             .collect()
     }
 }
