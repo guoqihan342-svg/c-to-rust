@@ -1,0 +1,52 @@
+
+
+def declared_external_direct_callee_map(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    c_boundary = spec.get("c_boundary", {})
+    signatures = c_boundary.get("signatures", [])
+    signatures_by_name = {str(item.get("function")): item for item in signatures if item.get("function")}
+    signatures_by_id = {str(item.get("id")): item for item in signatures if item.get("id")}
+    declared: dict[str, dict[str, Any]] = {}
+
+    for item in c_boundary.get("external_direct_callees", []):
+        name = str(item.get("name") or "")
+        if not name:
+            continue
+        signature = signatures_by_id.get(str(item.get("signature_ref") or "")) or signatures_by_name.get(name) or {}
+        declared[name] = external_callee_descriptor(spec, item, signature)
+
+    for signature in signatures:
+        if signature.get("role") != "external_direct_callee":
+            continue
+        name = str(signature.get("function") or "")
+        if not name or name in declared:
+            continue
+        declared[name] = external_callee_descriptor(
+            spec,
+            {
+                "name": name,
+                "signature_ref": signature.get("id") or name,
+                "source_files": source_files_for_external_callee(spec, name),
+                "definition_status": signature.get("definition_status", "real_source_bound"),
+                "stub_boundary": "compile_only",
+            },
+            signature,
+        )
+    return declared
+
+
+def external_callee_descriptor(
+    spec: dict[str, Any],
+    item: dict[str, Any],
+    signature: dict[str, Any],
+) -> dict[str, Any]:
+    name = str(item.get("name") or signature.get("function") or "")
+    signature_ref = str(item.get("signature_ref") or signature.get("id") or name)
+    parameters = []
+    for index, param in enumerate(signature.get("parameters", [])):
+        c_type = str(param.get("c_type") or param.get("type") or "")
+        parameters.append(
+            {
+                "name": str(param.get("name") or f"arg{index + 1}"),
+                "c_type": c_type,
+            }
+        )

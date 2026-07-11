@@ -1,0 +1,347 @@
+#!/usr/bin/env python3
+"""Run the bounded auto-translation pipeline for a slice spec.
+
+This module emits candidate evidence and, separately, accepted semantic-pass
+evidence. Generated Rust drafts, typed-IR candidates, and C2Rust baselines are
+provenance inputs until the validation profile and accepted evidence gates bind
+them to a final verification report.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from validation.tools import validate_judge_entrypoints as judge_validator
+from validation.tools.ai_candidate_harness import (
+    apply_generated_candidate,
+    build_context_pack,
+    generate_candidate,
+)
+from validation.tools._auto_migrate_ai_exact import run_ai_exact_stage
+TRANSLATOR_MANIFEST = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.toml"
+TRANSLATOR_LOCK = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.lock"
+COMPETITION_ENVIRONMENT_PROFILE = REPO_ROOT / "config" / "competition-env" / "environment.json"
+POINTER_GRAPH_SCHEMA_VERSION = 2
+CACHE_INPUT_FIELDS = [
+    "source_commit",
+    "source_file_hashes",
+    "slice_spec_sha256",
+    "fixture_hash",
+    "build_profile_hash",
+    "competition_environment_identity",
+    "cargo_lock_hash",
+    "tool_versions",
+    "schema_versions",
+    "translator_version",
+    "translator_manifest_sha256",
+    "command_arguments",
+    "alias_gate_identity",
+    "effect_graph_identity",
+    "scalar_ub_contract_identity",
+    "oracle_boundary_contract_identity",
+    "c2rust_baseline_identity",
+    "route_decision_identity",
+    "validation_profile_identity",
+    "global_dependency_identity",
+    "c_oracle_harness_identity",
+]
+CLANG_LOWERING_CACHE_INPUT_FIELDS = [
+    "translator_feature_set",
+    "clang_lowering_identity",
+]
+CACHE_INVALIDATED_ARTIFACTS = [
+    "context_pack",
+    "type_map",
+    "cfg",
+    "pointer_graph",
+    "c2rust_baseline",
+    "route_decision",
+    "validation_profile",
+    "rust_draft",
+    "patch_plan",
+    "ai_candidate",
+    "c_oracle",
+    "rust_replay",
+    "diff",
+    "negative_diff",
+    "unsafe_ledger",
+    "final_verification",
+    "auto_translation_manifest",
+    "summary",
+]
+REPAIR_ROUND_LIMIT = 5
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--slice-spec", required=True, type=Path)
+    parser.add_argument("--out-root", default=REPO_ROOT / "validation" / "evidence", type=Path)
+    parser.add_argument("--skip-c-oracle", action="store_true")
+    parser.add_argument("--skip-rust-check", action="store_true")
+    parser.add_argument(
+        "--emit-clang-dry-run",
+        action="store_true",
+        help="Opt in to the translator clang-frontend dry-run artifact under a temporary or explicit out-root.",
+    )
+    parser.add_argument(
+        "--emit-clang-lowering-report",
+        action="store_true",
+        help="Opt in to the translator clang lowering report artifact under a temporary or explicit out-root.",
+    )
+    parser.add_argument(
+        "--competition-clang-lane",
+        action="store_true",
+        help="Require the competition clang typed-IR lane: enables clang lowering report and fails clearly when neither CLANG_PATH nor a project-local clang binary is available.",
+    )
+    parser.add_argument(
+        "--accept-existing-evidence",
+        action="store_true",
+        help="Bind already accepted oracle/replay/diff/unsafe evidence from the slice spec instead of claiming the generated draft is accepted.",
+    )
+    parser.add_argument(
+        "--ai-first-candidate",
+        action="store_true",
+        help="Generate a hash-bound OpenCode/GLM-5.1 candidate after deterministic discovery and route the exact applied draft through the common validation gates.",
+    )
+    parser.add_argument("--ai-model", default="zai/glm-5.1")
+    parser.add_argument("--ai-agent", default="c2rust-migrator")
+    parser.add_argument("--ai-variant", default="max")
+    parser.add_argument("--ai-opencode-command", default="opencode")
+    parser.add_argument("--ai-source-root", type=Path)
+    parser.add_argument("--ai-timeout-seconds", type=int, default=180)
+    parser.add_argument("--ai-repair-rounds", type=int, default=3)
+    parser.add_argument(
+        "--ai-deterministic-fallback",
+        choices=("auto", "off"),
+        default="auto",
+        help="Keep zero-token deterministic fallback enabled by default; off is for isolated AI repair evaluation.",
+    )
+    args = parser.parse_args()
+    if args.ai_timeout_seconds < 1 or args.ai_timeout_seconds > 600:
+        parser.error("--ai-timeout-seconds must be between 1 and 600")
+    if args.ai_repair_rounds < 0 or args.ai_repair_rounds > 5:
+        parser.error("--ai-repair-rounds must be between 0 and 5")
+    if args.ai_first_candidate and args.accept_existing_evidence:
+        parser.error(
+            "--ai-first-candidate cannot reuse --accept-existing-evidence; "
+            "fresh AI candidates require candidate-bound oracle, replay, diff, negative, unsafe, and final gates"
+        )
+    if args.competition_clang_lane:
+        args.emit_clang_lowering_report = True
+        require_competition_clang_lane()
+
+    spec = read_json(args.slice_spec)
+    target_id = required_str(spec, "target_id")
+    slice_id = required_str(spec, "slice_id")
+    evidence_dir = args.out_root / target_id / "auto-translation" / slice_id
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+
+    translator_spec = write_translator_spec(spec, args.slice_spec, evidence_dir)
+    translator_summary = run_translator(
+        translator_spec,
+        evidence_dir,
+        emit_clang_dry_run=args.emit_clang_dry_run,
+        emit_clang_lowering_report=args.emit_clang_lowering_report,
+    )
+    normalize_translation_artifacts(spec, args.slice_spec, evidence_dir)
+    if args.emit_clang_lowering_report:
+        enrich_clang_lowering_report(
+            evidence_dir,
+            f"l3-{slice_id}",
+            clang_lowering_identity(
+                environment=os.environ,
+                competition_clang_lane=args.competition_clang_lane,
+            ),
+        )
+    context_pack = None
+    ai_manifest = None
+    if args.ai_first_candidate:
+        context_pack = build_context_pack(
+            args.slice_spec,
+            source_root=args.ai_source_root,
+            deterministic_evidence_dir=evidence_dir,
+        )
+        ai_manifest = generate_candidate(
+            context_pack,
+            out_dir=evidence_dir,
+            opencode_command=args.ai_opencode_command,
+            resolved_model=args.ai_model,
+            agent=args.ai_agent,
+            variant=args.ai_variant,
+            timeout_seconds=args.ai_timeout_seconds,
+        )
+        canonical_draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
+        if ai_manifest.get("status") == "generated" and canonical_draft_path.is_file():
+            displaced_draft_path = evidence_dir / f"l3-{slice_id}-pre-ai-rust-candidate.rs"
+            shutil.copyfile(canonical_draft_path, displaced_draft_path)
+            ai_manifest["displaced_candidate"] = {
+                "path": displaced_draft_path.name,
+                "sha256": sha256(displaced_draft_path),
+                "status": "candidate_context_only",
+            }
+        apply_generated_candidate(
+            ai_manifest,
+            out_dir=evidence_dir,
+            canonical_draft_path=canonical_draft_path,
+        )
+    c2rust_baseline = emit_c2rust_baseline_manifest(spec, args.slice_spec, evidence_dir)
+    def run_common_pipeline() -> dict[str, Any]:
+        route_decision = emit_route_decision(spec, evidence_dir, translator_summary, c2rust_baseline)
+        mark_route_refused_candidate_artifacts(spec, evidence_dir, route_decision)
+        oracle = generate_oracle_harness_draft(spec, evidence_dir, args.skip_c_oracle)
+        replay = generate_rust_replay_test_draft(spec, evidence_dir, args.slice_spec, route_decision)
+        rust_check, patch = run_rust_check(
+            evidence_dir,
+            args.skip_rust_check,
+            spec,
+            allow_self_heal=not args.ai_first_candidate,
+        )
+        route_decision = refresh_generated_rust_draft_binding(
+            evidence_dir,
+            f"l3-{slice_id}",
+            route_decision,
+        )
+        accepted = (
+            resolve_accepted_evidence(spec, args.slice_spec)
+            if args.accept_existing_evidence
+            else None
+        )
+        if accepted is not None:
+            stabilize_colliding_accepted_unsafe_evidence(spec, evidence_dir, accepted)
+            replay = run_generated_rust_replay(spec, evidence_dir, replay, rust_check)
+            oracle = promote_accepted_oracle(spec, evidence_dir, oracle, accepted)
+            mark_accepted_evidence_authoritative_route(spec, evidence_dir, route_decision, accepted)
+            replay = promote_accepted_test_translation(
+                spec,
+                evidence_dir,
+                replay,
+                rust_check,
+                accepted,
+                route_decision,
+            )
+        else:
+            replay = run_generated_rust_replay(spec, evidence_dir, replay, rust_check)
+        validation_profile = emit_validation_profile(
+            spec,
+            evidence_dir,
+            route_decision,
+            oracle,
+            rust_check,
+            accepted,
+            replay,
+        )
+        emit_scalar_refusal_evidence(spec, evidence_dir, route_decision, validation_profile)
+        if route_decision.get("level") == "L4":
+            patch = write_route_refused_patch(spec, evidence_dir, route_decision)
+        emit_capability_delta_ledger(
+            spec,
+            evidence_dir,
+            route_decision,
+            validation_profile,
+            rust_check,
+            replay,
+            oracle,
+        )
+        cache = emit_cache_metadata(
+            spec,
+            args.slice_spec,
+            evidence_dir,
+            c2rust_baseline=c2rust_baseline,
+            route_decision=route_decision,
+            validation_profile=validation_profile,
+            oracle=oracle,
+            accept_existing_evidence=args.accept_existing_evidence,
+            emit_clang_dry_run=args.emit_clang_dry_run,
+            emit_clang_lowering_report=args.emit_clang_lowering_report,
+            competition_clang_lane=args.competition_clang_lane,
+        )
+        manifest = emit_manifest(
+            spec,
+            evidence_dir,
+            args.slice_spec,
+            translator_summary,
+            oracle,
+            replay,
+            rust_check,
+            patch,
+            cache,
+            c2rust_baseline,
+            route_decision,
+            validation_profile,
+            accepted,
+        )
+        return {
+            "manifest": manifest,
+            "oracle": oracle,
+            "replay": replay,
+            "route_decision": route_decision,
+            "validation_profile": validation_profile,
+        }
+
+    pipeline = run_common_pipeline()
+    manifest = pipeline["manifest"]
+    if (
+        args.ai_first_candidate
+        and context_pack is not None
+        and isinstance(ai_manifest, dict)
+        and ai_manifest.get("status") == "generated"
+    ):
+        canonical_draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
+        deterministic_candidate_path = evidence_dir / f"l3-{slice_id}-pre-ai-rust-candidate.rs"
+        exact_stage = run_ai_exact_stage(
+            spec,
+            context_pack=context_pack,
+            ai_manifest=ai_manifest,
+            evidence_dir=evidence_dir,
+            canonical_draft_path=canonical_draft_path,
+            deterministic_candidate_path=(
+                deterministic_candidate_path
+                if args.ai_deterministic_fallback == "auto" and deterministic_candidate_path.is_file()
+                else None
+            ),
+            replay_test_path=evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs",
+            oracle_payload=pipeline["oracle"],
+            harness_path=evidence_dir / f"l3-{slice_id}-c-oracle-harness-draft.c",
+            proof_root=REPO_ROOT,
+            compile_runner=rust_check_once,
+            replay_runner=run_generated_rust_replay_once,
+            max_repair_rounds=args.ai_repair_rounds,
+            opencode_command=args.ai_opencode_command,
+            resolved_model=args.ai_model,
+            agent=args.ai_agent,
+            variant=args.ai_variant,
+            timeout_seconds=args.ai_timeout_seconds,
+        )
+        if exact_stage["canonical_changed"]:
+            pipeline = run_common_pipeline()
+            manifest = pipeline["manifest"]
+        router_path = exact_stage["router_path"]
+        manifest["ai_exact_validation"] = {
+            "path": rel(router_path),
+            "sha256": sha256(router_path),
+            "status": "passed" if exact_stage["router"].get("semantic_pass") else "failed",
+            "semantic_pass": exact_stage["router"].get("semantic_pass") is True,
+        }
+        write_json(
+            evidence_dir / f"l3-{slice_id}-auto-translation-manifest.json",
+            manifest,
+        )
+    print(json.dumps(manifest, indent=2, sort_keys=True))
+    return 0

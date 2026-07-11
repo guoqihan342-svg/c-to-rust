@@ -1,0 +1,283 @@
+
+
+def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_dir: Path) -> Path:
+    build_profile = spec.get("build_profile", {})
+    target = build_profile.get("target", {})
+    clang = build_profile.get("clang_type_extraction", {})
+    signatures = spec.get("c_boundary", {}).get("signatures", [])
+    function_name = spec.get("function_name")
+    c_source = spec.get("c_source")
+    if not function_name and signatures:
+        function_name = signatures[0].get("function")
+    if not c_source and signatures:
+        c_source = signatures[0].get("c_source")
+    if not c_source:
+        c_source = spec.get("c_boundary", {}).get("c_source")
+    if not function_name or not c_source:
+        raise SystemExit(f"{original_spec} must include function_name/c_source or c_boundary.signatures[].function/c_source")
+    translator_spec = {
+        "target_id": required_str(spec, "target_id"),
+        "slice_id": required_str(spec, "slice_id"),
+        "source_commit": source_commit(spec),
+        "function_name": function_name,
+        "c_source": c_source,
+        "fixture_hash": fixture_hash(spec),
+        "build_profile": {
+            "include_paths": build_profile.get("include_paths", []),
+            "defines": build_profile.get("defines", []),
+            "target": target if target else None,
+            "target_triple": spec.get("build_profile", {}).get("target_triple") or target.get("triple_or_abi"),
+            "abi": spec.get("build_profile", {}).get("abi") or target.get("triple_or_abi"),
+            "compiler_command_source": build_profile.get("compiler_command_source", "unknown"),
+            "clang_available": bool(build_profile.get("clang_available", clang.get("available", False))),
+            "clang_ast_fixture": build_profile.get("clang_ast_fixture"),
+        },
+    }
+    if translator_spec["build_profile"]["clang_ast_fixture"] is None:
+        del translator_spec["build_profile"]["clang_ast_fixture"]
+    if translator_spec["build_profile"]["target"] is None:
+        del translator_spec["build_profile"]["target"]
+    source_root = spec.get("source", {}).get("source_root")
+    if source_root:
+        translator_spec["source_root"] = source_root
+    source_files = c_boundary_source_files(spec)
+    source_span = function_source_span(signatures, function_name)
+    if source_files:
+        translator_spec["source_files"] = source_files
+        primary_source = primary_source_file(source_files, source_span)
+        if primary_source.get("path"):
+            translator_spec["source_file"] = primary_source["path"]
+    resolved_source_file_hashes = source_file_hashes(spec)
+    if resolved_source_file_hashes:
+        translator_spec["source_file_hashes"] = resolved_source_file_hashes
+    if source_span:
+        translator_spec["function_source_span"] = source_span
+    if "translation_carrier" in spec:
+        translator_spec["translation_carrier"] = spec["translation_carrier"]
+    c_boundary: dict[str, Any] = {}
+    scalar_contract = spec.get("c_boundary", {}).get("scalar_arithmetic_contract", {})
+    if scalar_contract:
+        c_boundary["scalar_arithmetic_contract"] = scalar_contract
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    if pointer_contract:
+        c_boundary["pointer_contract"] = pointer_contract
+    declared_signatures = spec.get("c_boundary", {}).get("signatures", [])
+    if declared_signatures:
+        c_boundary["signatures"] = declared_signatures
+    direct_dependencies = spec.get("c_boundary", {}).get("direct_dependencies", [])
+    if direct_dependencies:
+        c_boundary["direct_dependencies"] = direct_dependencies
+    external_direct_callees = spec.get("c_boundary", {}).get("external_direct_callees", [])
+    if external_direct_callees:
+        c_boundary["external_direct_callees"] = external_direct_callees
+    if c_boundary:
+        translator_spec["c_boundary"] = c_boundary
+    compile_commands = build_profile.get("compile_commands") or build_profile.get("compile_commands_path")
+    if compile_commands:
+        translator_spec["compile_commands"] = compile_commands
+    path = evidence_dir / f"l3-{spec['slice_id']}-translator-input.json"
+    write_json(path, translator_spec)
+    return path
+
+
+def c_boundary_source_files(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    files = spec.get("c_boundary", {}).get("files", [])
+    source_files: list[dict[str, Any]] = []
+    for item in files:
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        source_file = {
+            "path": item.get("path"),
+            "role": item.get("role", "source"),
+        }
+        if item.get("sha256"):
+            source_file["sha256"] = item["sha256"]
+        source_files.append(source_file)
+    return source_files
+
+
+def primary_source_file(
+    source_files: list[dict[str, Any]], source_span: dict[str, Any] | None
+) -> dict[str, Any]:
+    if source_span and source_span.get("file"):
+        span_file = normalized_metadata_path(source_span["file"])
+        for item in source_files:
+            if normalized_metadata_path(item.get("path")) == span_file:
+                return item
+    return next((item for item in source_files if item.get("role") == "source"), source_files[0])
+
+
+def normalized_metadata_path(value: Any) -> str:
+    return str(value or "").strip().replace("\\", "/")
+
+
+def function_source_span(signatures: list[dict[str, Any]], function_name: str) -> dict[str, Any] | None:
+    for signature in signatures:
+        if signature.get("function") != function_name:
+            continue
+        source_span = signature.get("source_span")
+        if isinstance(source_span, dict):
+            return source_span
+    return None
+
+
+def entry_function_name(spec: dict[str, Any]) -> str:
+    function_name = spec.get("function_name")
+    signatures = spec.get("c_boundary", {}).get("signatures", [])
+    if not function_name and signatures:
+        function_name = signatures[0].get("function")
+    return str(function_name or "")
+
+
+def rust_identifier(name: str) -> str:
+    return f"r#{name}" if name in RUST_KEYWORDS else name
+
+
+def primitive_rust_type(c_type: str) -> str | None:
+    normalized = " ".join(str(c_type).strip().split())
+    return {
+        "int": "i32",
+        "signed int": "i32",
+        "unsigned int": "u32",
+        "short": "i16",
+        "short int": "i16",
+        "unsigned short": "u16",
+        "unsigned short int": "u16",
+        "long": "i64",
+        "long int": "i64",
+        "unsigned long": "u64",
+        "unsigned long int": "u64",
+        "bool": "bool",
+        "_Bool": "bool",
+    }.get(normalized)
+
+
+def compact_c_type(c_type: str) -> str:
+    return "".join(str(c_type).strip().split())
+
+
+def is_modeled_strlen_contract(
+    name: str,
+    return_type: str,
+    parameters: list[dict[str, str]],
+) -> bool:
+    if name != "strlen":
+        return False
+    if compact_c_type(return_type) != "size_t":
+        return False
+    if len(parameters) != 1:
+        return False
+    return compact_c_type(parameters[0]["c_type"]) in {"constchar*", "charconst*"}
+
+
+def is_const_char_pointer_type(c_type: str) -> bool:
+    return compact_c_type(c_type) in {"constchar*", "charconst*"}
+
+
+def declared_external_context_rust_type(c_type: str, *, position: str) -> str | None:
+    primitive = primitive_rust_type(c_type)
+    if primitive is not None:
+        return primitive
+    normalized = compact_c_type(c_type)
+    if position == "return" and normalized == "void":
+        return "()"
+    if normalized in {"char*", "signedchar*"}:
+        return "*mut core::ffi::c_char"
+    if normalized in {"constchar*", "charconst*"}:
+        return "*const core::ffi::c_char"
+    if normalized in {"void*", "structvoid*"}:
+        return "*mut core::ffi::c_void"
+    if normalized in {"constvoid*", "voidconst*", "structvoidconst*"}:
+        return "*const core::ffi::c_void"
+    if normalized.endswith("*"):
+        return "*const core::ffi::c_void" if normalized.startswith("const") else "*mut core::ffi::c_void"
+    if position == "return" and (normalized.endswith("err_t") or normalized.endswith("error_t")):
+        return "i32"
+    if normalized.endswith("_t"):
+        return "*mut core::ffi::c_void"
+    return None
+
+
+def is_declared_external_context_signature(
+    item: dict[str, Any],
+    signature: dict[str, Any],
+    name: str,
+    return_type: str,
+    parameters: list[dict[str, str]],
+) -> bool:
+    definition_status = item.get("definition_status") or signature.get("definition_status")
+    if definition_status not in {"real_source_bound", "declared_external_direct_callee"}:
+        return False
+    if not name or not return_type or not parameters:
+        return False
+    if declared_external_context_rust_type(return_type, position="return") is None:
+        return False
+    if not all(
+        declared_external_context_rust_type(param["c_type"], position="param") is not None
+        for param in parameters
+    ):
+        return False
+    return (
+        primitive_rust_type(return_type) is None
+        or any(primitive_rust_type(param["c_type"]) is None for param in parameters)
+    )
+
+
+def accepted_named_slice_evidence_for_callee(
+    spec: dict[str, Any],
+    item: dict[str, Any],
+    signature: dict[str, Any],
+    name: str,
+) -> dict[str, Any] | None:
+    binding = item.get("accepted_named_slice_evidence") or signature.get("accepted_named_slice_evidence")
+    if not isinstance(binding, dict):
+        return None
+    target_id = str(binding.get("target_id") or spec.get("target_id") or "")
+    slice_id = str(binding.get("slice_id") or "")
+    final_path = binding.get("final_verification")
+    if final_path:
+        final_verification = Path(str(final_path))
+        if not final_verification.is_absolute():
+            final_verification = REPO_ROOT / final_verification
+    elif target_id and slice_id:
+        final_verification = (
+            REPO_ROOT
+            / "validation"
+            / "evidence"
+            / target_id
+            / "auto-translation"
+            / slice_id
+            / f"l3-{slice_id}-final-verification.json"
+        )
+    else:
+        return None
+    if not final_verification.exists():
+        return None
+    try:
+        final = json.loads(final_verification.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if final.get("target_id") != target_id or final.get("slice_id") != slice_id:
+        return None
+    if final.get("semantic_pass") is not True:
+        return None
+    if final.get("accepted_evidence_authoritative") is not True:
+        return None
+    return {
+        "kind": "accepted_named_slice_evidence",
+        "target_id": target_id,
+        "slice_id": slice_id,
+        "callee": name,
+        "final_verification_path": rel(final_verification),
+        "final_verification_sha256": sha256(final_verification),
+        "semantic_pass": True,
+        "accepted_evidence_authoritative": True,
+        "generated_draft_semantic_pass": bool(final.get("generated_draft_semantic_pass") is True),
+        "boundary": str(
+            binding.get("boundary")
+            or (
+                f"This validates external callee {name} through accepted named-slice evidence only; "
+                "it does not validate the caller or its generated Rust draft."
+            )
+        ),
+    }
