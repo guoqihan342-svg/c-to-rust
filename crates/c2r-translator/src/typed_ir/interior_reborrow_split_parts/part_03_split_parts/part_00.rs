@@ -113,6 +113,22 @@ fn validate_assignment_call_interior_reborrow_carrier(
             )?;
             None
         }
+        [clear, tail_loop @ IrStmt::DoWhile { .. }, miss_return] if offset.is_none() => {
+            validate_bool_sentinel_clear(clear, sentinel_name, sentinel_ty)?;
+            validate_reborrow_do_while_tail_assignment_call(
+                tail_loop,
+                plan,
+                db,
+                seed_local,
+                seed_local_ty,
+            )?;
+            validate_fixed_bool_return(
+                miss_return,
+                false,
+                "assignment-call interior reborrow do-while tail miss path",
+            )?;
+            None
+        }
         [clear, outer_branch, miss_return] => {
             validate_bool_sentinel_clear(clear, sentinel_name, sentinel_ty)?;
             let offset = offset.ok_or_else(|| {
@@ -136,7 +152,7 @@ fn validate_assignment_call_interior_reborrow_carrier(
         }
         _ => {
             return Err(
-                "assignment-call interior reborrow while body must preserve the exact P0-T20 or zero-start carrier order"
+                "assignment-call interior reborrow while body must preserve the exact call branch, do-while tail, or zero-start carrier order"
                     .to_string(),
             )
         }

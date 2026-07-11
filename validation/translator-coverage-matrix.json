@@ -2710,6 +2710,7 @@
         "run-once bool while over a safe interior record reborrow with nested u32 reset, distinct readonly record u32 wrapping add, current-level continue, and exact noalias evidence",
         "top-level const propagation for a scalar member read through a const record pointer when canonical kind and width remain exact",
         "assignment-call into a nested u32 field through a safe interior reborrow with a mutable call root, local record copy, exact u32 sentinel branch, reset, wrapping add, and current-level continue",
+        "empty-body do-while tail assignment-call into a nested u32 field through a safe interior reborrow where the same alias is the target and one direct call argument",
         "side-effect-free false empty-then else-if carrier wrapper normalization",
         "explicit u32 cast of a statically proven negative integer literal sentinel"
       ],
@@ -2866,6 +2867,12 @@
               "name": "assignment-call interior reborrow no-clang candidate",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_30_split_parts/part_01.rs",
               "assertion": "renamed db/seed/owner records emit a safe interior alias, one ordered external call, exact sentinel hit and miss paths, owner wrapping add, and current-level continue under the exact forward noalias pair",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "interior reborrow do-while tail assignment-call no-clang candidate",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_32_split_parts/part_01.rs",
+              "assertion": "renamed db/seed/owner records emit an empty-body do-while tail assignment-call whose nested u32 target alias is also the unique same-alias call argument under the exact forward noalias pair",
               "proof_class": "candidate_context_only"
             },
             {
@@ -3249,6 +3256,12 @@
               "name": "zero-start assignment-call interior reborrow emitted Rust runtime test",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_31_split_parts/part_01.rs",
               "assertion": "emits and executes mutually exclusive zero-start and assignment-call branches, skips the external call for both zero-start wrapping partitions, and preserves sentinel reset/wrapping-add/current-level continue without unsafe or raw pointers",
+              "proof_class": "candidate_context_only"
+            },
+            {
+              "name": "interior reborrow do-while tail assignment-call emitted Rust runtime test",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_32_split_parts/part_01.rs",
+              "assertion": "executes the normalized tail call repeatedly until the exact u32 sentinel while preserving owner-visible state without unsafe or raw pointers",
               "proof_class": "candidate_context_only"
             }
           ]
@@ -3933,6 +3946,12 @@
           "proof_class": "candidate_context_only"
         },
         {
+          "name": "clang_ast_interior_reborrow_do_while_tail_assignment_call_emits_and_runs",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_32_split_parts/part_01.rs",
+          "assertion": "candidate-only generic composition selected from exact FlashDB fdb_kvdb.c:1885; no C/Rust semantic acceptance is claimed",
+          "proof_class": "candidate_context_only"
+        },
+        {
           "name": "real-fdb-kv-iterate-zero-start-next-sector-advance-continue strict named-slice semantic verification",
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-zero-start-next-sector-advance-continue/l3-real-fdb-kv-iterate-zero-start-next-sector-advance-continue-final-verification.json",
           "assertion": "accepts only exact fdb_kvdb.c:1868-1874 with fixture-only offset and get_next_kv_addr semantics; line 1875 onward, whole function, layout, ABI, and the FlashDB project remain outside the claim"
@@ -3948,6 +3967,16 @@
           "name": "zero_start_assignment_call_rejects_condition_and_path_drift",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_31_split_parts/part_02.rs",
           "fail_closed_reason": "zero-start comparison, alias path, branch order, and local provenance must match the declared bounded carrier exactly"
+        },
+        {
+          "name": "interior_reborrow_do_while_tail_rejects_nonempty_body_and_comparison_drift",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_32_split_parts/part_01.rs",
+          "fail_closed_reason": "the T22 candidate admits only an empty original C body normalized to one tail assignment and an exact != comparison"
+        },
+        {
+          "name": "typed_ir_rejects_assignment_call_sibling_read_when_owner_is_mutably_borrowed",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_24_split_parts/part_02.rs",
+          "fail_closed_reason": "admitting the same interior alias as assignment target and one direct call argument does not permit sibling reads from the mutably borrowed owner"
         },
         {
           "name": "typed_ir_rejects_record_return_value_with_non_scalar_field_inventory",

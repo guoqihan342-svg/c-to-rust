@@ -22,9 +22,9 @@ input.c
 | --- | ---: | --- |
 | `translator_generated_semantic_pass_count` | 33 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
 | `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
-| Active translator track | P0-T22 | Select the next smallest real source-backed gap after strict P0-T21 closure |
+| Active translator track | P0-T23 | Build source-backed semantic evidence for the selected `fdb_kvdb.c:1885` do-while tail candidate |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |
-| Latest completed stage | P0-T21 | The `:1868-:1874` zero-start and assignment-call branches are strictly semantically accepted |
+| Latest completed stage | P0-T22 | The generic `:1885` interior-reborrow do-while tail candidate is selected and implemented but not counted as semantic acceptance |
 | Current strict regression | `26/34` | Run `20260711T061416Z`; eight historical evidence drifts remain |
 | Current proof class | `wsl-local-simulation` | Valid for development and approximation, but not `competition-exact` |
 
@@ -192,9 +192,19 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
   | semantic evidence | Complete | C oracle, Rust replay, diff, negative, and unsafe ledger are generated and cross-bound |
   | strict acceptance | Complete | Every section 7 gate passes and the matrix-derived count is 33 |
 
-- [ ] **P0-T22: next-slice decision gate**
+- [x] **P0-T22: next-slice decision gate**
 
-  Run it only after P0-T21 closes. The output must include a slice id, real source span, construct gap, nearest negative, and stop condition. Prefer adjacent control flow or a generic construct family from another real project. Do not pre-claim whole-function or whole-project translation.
+  - Slice id: `real-fdb-kv-iterate-kv-tail`.
+  - Real source span: `src/fdb_kvdb.c:1885` at the pinned FlashDB commit, limited to the empty-body do-while tail assignment-call.
+  - Construct gap: a mutable alias derived from an owner interior projection is both the nested-u32 assignment target and the unique same-alias argument of the same direct call.
+  - Nearest negative: `typed_ir_rejects_assignment_call_sibling_read_when_owner_is_mutably_borrowed`; same-owner sibling reads remain refused.
+  - Stop condition: generate a generic candidate only. Lines 1876-1884, real `get_next_kv_addr`, the complete function, ABI, and the FlashDB project remain out of scope. Fail closed if function-name matching or weaker noalias evidence would be required.
+
+  Project-independent no-clang AST lowering, Rust emission/runtime, and non-empty-body/comparison-drift negatives are complete. Status remains `candidate_context_only`, and the semantic count remains 33.
+
+- [ ] **P0-T23: source-backed semantic closure for `fdb_kvdb.c:1885`**
+
+  Generate the source-bound spec, fixture, C oracle, Rust replay, schema diff, negative diff, unsafe ledger, route/profile, and final verification for the P0-T22 candidate. Increment the semantic count only after every strict validator passes; keep the stop boundary fixed at line 1885.
 
 ### P0-B: Competition Host and OpenCode
 
@@ -213,7 +223,7 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 ### P0-C: Stage Closure
 
 - [ ] **P0-C1: historical evidence drift**. Fix the eight failures in run `20260711T061416Z` in artifact-ownership batches, separate from translator behavior changes.
-- [ ] **P0-C2: all-feature Clippy**. Clear the 17 historical feature-gated warnings from `cargo clippy --all-features --all-targets -- -D warnings`; new slices must add no warnings.
+- [ ] **P0-C2: all-feature Clippy**. Commit `81a772d1` cleared nine low-risk warnings; eight remain: two `large_enum_variant`, one `redundant_guards`, one `needless_lifetimes`, and four `too_many_arguments`. New slices must add no warnings.
 
 ## 4. Later Backlog
 
@@ -247,18 +257,20 @@ Still unproven are the target kernel, Rust/Cargo 1.96, target Node/npm, real Hua
 | P0-T19 | `:1871-:1873` reset/add/current-level continue | 30 -> 31 |
 | P0-T20 | Compose the `:1870-:1873` assignment-call condition and branch body | 31 -> 32 |
 | P0-T21 | Compose the `:1868-:1874` zero-start and assignment-call branches | 32 -> 33 |
+| P0-T22 | Select and implement the `:1885` interior-reborrow do-while tail candidate | 33 -> 33 (candidate only) |
 
 Validation run bindings:
 
 | Validation | Binding | Result |
 | --- | --- | --- |
+| P0-T22 translator candidate | current worktree, 2026-07-11 | library `228` passed; bounded `659` passed with `133` real-clang opt-in ignores; integer conversion `4` passed; coverage matrix passed |
 | P0-T21 translator candidate | commit `02067028`, 2026-07-11 | library `228` passed; bounded `657` passed with `133` real-clang opt-in ignores; integer conversion `4` passed |
 | P0-T20 Python core historical snapshot | 2026-07-11 stage snapshot | `293 passed, 6 skipped`, plus `90` subtests; proves only that revision |
 | Full regression | run `20260711T061416Z` | 26 of 34 passed; P0-T21 added no failure and the same eight historical evidence drifts failed; future runner defaults omit loop stress |
 | P0-T21 strict validator | evidence generated from commit `8a261787` | `semantic_pass=true`, `generated_draft_semantic_pass=true`, and all 12 semantic binding classes passed |
 | P0-T20 strict validator | P0-T20 evidence | `semantic_pass=true` and `generated_draft_semantic_pass=true` |
 | Accepted-evidence strict status | `libuv/ip4-addr` | verified-unsafe-baseline SHA drift; the ledger count is not a current strict pass |
-| All-feature Clippy | current historical baseline | 17 feature-gated warnings remain for P0-C2 |
+| All-feature Clippy | commit `81a772d1` plus current test cleanup | Eight warnings remain under `--all-features --all-targets`, all in the four P0-C2 categories listed above |
 
 ## 6. Architecture Boundaries
 

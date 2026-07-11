@@ -10,10 +10,10 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 
 | Item | Status |
 | --- | --- |
-| Translator-generated semantic pass | `32` named slices, derived from `validation/translator-coverage-matrix.json` |
+| Translator-generated semantic pass | `33` named slices, derived from `validation/translator-coverage-matrix.json` |
 | Accepted-evidence authoritative | `1`, reported separately from the translator numerator |
-| Latest completed stage | P0-T20: compose `fdb_kvdb.c:1870-1873` assignment-call, reset/add, and current-level `continue` |
-| Active translator task | P0-T21: compose the zero-start and next-address branches at `fdb_kvdb.c:1868-1874` |
+| Latest development stage | P0-T22: implement the generic `fdb_kvdb.c:1885` interior-reborrow do-while tail candidate without counting semantic acceptance |
+| Active translator task | P0-T23: build source-backed strict semantic evidence for the line-1885 candidate |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | Superpowers specs/plans, canonical roadmap, and harness evidence gates |

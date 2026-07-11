@@ -24,9 +24,9 @@ input.c
 | --- | ---: | --- |
 | `translator_generated_semantic_pass_count` | 33 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
-| 当前翻译主线 | P0-T22 | 在 P0-T21 严格收口后选择下一最小真实 source-backed gap |
+| 当前翻译主线 | P0-T23 | 为已选定的 `fdb_kvdb.c:1885` do-while tail candidate 建立 source-backed 语义证据 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近提交阶段 | P0-T21 | `:1868-:1874` zero-start 与 assignment-call 二分支已严格语义接受 |
+| 最近提交阶段 | P0-T22 | 已选择并实现 `:1885` interior-reborrow do-while tail 的通用 candidate；尚未计入语义通过 |
 | 当前严格回归 | `26/34` | run `20260711T061416Z`；8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -194,9 +194,19 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   | semantic evidence | 已完成 | C oracle、Rust replay、diff、negative、unsafe ledger 已生成并交叉绑定 |
   | strict acceptance | 已完成 | 第 7 节全部门禁通过，matrix 派生计数更新为 33 |
 
-- [ ] **P0-T22：下一切片决策门**
+- [x] **P0-T22：下一切片决策门**
 
-  仅在 P0-T21 收口后执行。输出必须固定包含 slice id、真实 source span、construct gap、最近邻负例和停止条件。优先扩展相邻控制流或另一个真实项目中的通用 construct family；不得预先承诺完整函数或完整项目翻译。
+  - slice id：`real-fdb-kv-iterate-kv-tail`。
+  - 真实 source span：固定 FlashDB commit 的 `src/fdb_kvdb.c:1885`，只绑定空 body do-while 尾部 assignment-call。
+  - construct gap：owner interior projection 派生的可变别名同时作为 nested-u32 赋值目标和同一 direct call 的唯一同别名实参。
+  - 最近邻负例：`typed_ir_rejects_assignment_call_sibling_read_when_owner_is_mutably_borrowed`；不得放宽 same-owner sibling read。
+  - 停止条件：只生成 generic candidate；不覆盖 `1876-1884`、真实 `get_next_kv_addr`、完整函数、ABI 或 FlashDB 项目。需要函数名硬编码或弱化 noalias 时立即 fail closed。
+
+  当前已完成 project-independent no-clang AST lowering、Rust emission/runtime 和非空 body/比较漂移负例；状态仍为 `candidate_context_only`，语义计数保持 33。
+
+- [ ] **P0-T23：`fdb_kvdb.c:1885` source-backed 语义闭环**
+
+  为 P0-T22 candidate 生成 source-bound spec、fixture、C oracle、Rust replay、schema diff、negative diff、unsafe ledger、route/profile 和 final verification。只有 strict validator 全部通过后才能增加语义计数；停止边界继续固定在 line 1885。
 
 ### P0-B：比赛主机与 OpenCode
 
@@ -215,7 +225,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 ### P0-C：阶段收口
 
 - [ ] **P0-C1：历史 evidence 漂移**。修复 run `20260711T061416Z` 的 8 个失败项，按 artifact 所有权分批处理，不与翻译层功能改动混交。
-- [ ] **P0-C2：全功能 Clippy**。清理 `cargo clippy --all-features --all-targets -- -D warnings` 的 17 个历史 feature-gated 告警；新切片不得增加告警。
+- [ ] **P0-C2：全功能 Clippy**。commit `81a772d1` 已清理 9 个低风险告警；当前剩余 8 个（2 个 `large_enum_variant`、1 个 `redundant_guards`、1 个 `needless_lifetimes`、4 个 `too_many_arguments`）。新切片不得增加告警。
 
 ## 4. 后续 Backlog
 
@@ -249,18 +259,20 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | P0-T19 | `:1871-:1873` reset/add/current-level continue | 30 -> 31 |
 | P0-T20 | `:1870-:1873` assignment-call condition 与分支体组合 | 31 -> 32 |
 | P0-T21 | `:1868-:1874` zero-start 与 assignment-call 二分支组合 | 32 -> 33 |
+| P0-T22 | 选择并实现 `:1885` interior-reborrow do-while tail candidate | 33 -> 33（candidate only） |
 
 验证运行绑定：
 
 | 验证项 | 绑定 | 结果 |
 | --- | --- | --- |
+| P0-T22 translator candidate | 当前工作树，2026-07-11 | library `228` 通过；bounded `659` 通过、`133` 个 real-clang opt-in 忽略；integer conversion `4` 通过；coverage matrix passed |
 | P0-T21 translator candidate | commit `02067028`，2026-07-11 | library `228` 通过；bounded `657` 通过、`133` 个 real-clang opt-in 忽略；integer conversion `4` 通过 |
 | P0-T20 Python core 历史快照 | 2026-07-11 阶段快照 | `293 passed, 6 skipped`，另有 `90` 个 subtests；只证明当时提交 |
 | 全量回归 | run `20260711T061416Z` | 34 项中 26 项通过；P0-T21 未新增失败，8 项仍为历史 evidence 漂移；后续 runner 默认取消循环压力测试 |
 | P0-T21 严格 validator | commit `8a261787` 生成的 evidence | `semantic_pass=true`、`generated_draft_semantic_pass=true`，12 类语义绑定检查通过 |
 | P0-T20 严格 validator | P0-T20 evidence | `semantic_pass=true`、`generated_draft_semantic_pass=true` |
 | accepted-evidence 严格状态 | `libuv/ip4-addr` | verified-unsafe-baseline SHA 漂移，ledger 计数不等于当前严格通过 |
-| 全功能 Clippy | 当前历史基线 | 17 个 feature-gated 告警待 P0-C2 清理 |
+| 全功能 Clippy | commit `81a772d1` 加当前测试清理 | `--all-features --all-targets` 剩余 8 个告警，均属于 P0-C2 已列出的 4 类 |
 
 ## 6. 架构边界
 
