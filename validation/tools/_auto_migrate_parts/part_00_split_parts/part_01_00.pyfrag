@@ -1,0 +1,292 @@
+    return_type = str(signature.get("return_type") or signature.get("returns") or "")
+    return_rust_type = None
+    unsupported_reasons: list[str] = []
+    if not signature:
+        unsupported_reasons.append("missing_signature")
+    if primitive_rust_type(return_type) is None:
+        unsupported_reasons.append("unsupported_return_type")
+    for param in parameters:
+        if primitive_rust_type(param["c_type"]) is None:
+            unsupported_reasons.append(f"unsupported_parameter_type:{param['name']}")
+    if not parameters:
+        unsupported_reasons.append("missing_parameters")
+    modeled_strlen = is_modeled_strlen_contract(name, return_type, parameters)
+    if modeled_strlen:
+        unsupported_reasons = []
+    accepted_named_slice = accepted_named_slice_evidence_for_callee(spec, item, signature, name)
+    if accepted_named_slice:
+        unsupported_reasons = []
+    scripted_fixture_contract = scripted_external_u32_call_bool_out_external_binding(
+        spec,
+        name,
+        return_type,
+        parameters,
+    )
+    if scripted_fixture_contract is not None:
+        unsupported_reasons = []
+        return_rust_type = "u32"
+        for param, rust_type in zip(parameters, ("u32", "u32", "usize"), strict=True):
+            param["rust_type"] = rust_type
+    scripted_sequence_fixture_contract = (
+        scripted_external_record_u32_sequence_do_while_state_external_binding(
+            spec,
+            name,
+            return_type,
+            parameters,
+        )
+    )
+    if scripted_sequence_fixture_contract is not None:
+        unsupported_reasons = []
+        scripted_sequence_callee = scripted_sequence_fixture_contract["external_callee"]
+        scripted_sequence_body = scripted_sequence_fixture_contract.get("body_callee")
+        if (
+            isinstance(scripted_sequence_body, dict)
+            and name == scripted_sequence_body["name"]
+        ):
+            scripted_sequence_callee = scripted_sequence_body
+            return_rust_type = "i32"
+        else:
+            return_rust_type = "u32"
+        entry_by_name = {
+            str(entry["parameter"]): entry
+            for entry in scripted_sequence_fixture_contract["entry_arguments"]
+        }
+        for param, observation in zip(
+            parameters,
+            scripted_sequence_callee["arguments"],
+            strict=True,
+        ):
+            param["rust_type"] = scripted_sequence_external_rust_type(
+                observation, entry_by_name
+            )
+    call_continue_fixture_contract = call_continue_external_binding(
+        spec, name, return_type, parameters
+    )
+    if call_continue_fixture_contract is not None:
+        unsupported_reasons = []
+        return_rust_type = "u32"
+        entry_by_name = {
+            str(item["parameter"]): item
+            for item in call_continue_fixture_contract["entry_arguments"]
+        }
+        for param, observation in zip(
+            parameters,
+            call_continue_fixture_contract["external_callee"]["arguments"],
+            strict=True,
+        ):
+            record_type = (
+                call_continue_fixture_contract["projection"]["alias_rust_type"]
+                if observation["mode"] == "owner_interior_alias"
+                else entry_by_name[str(observation["entry_parameter"])]["rust_type"]
+            )
+            param["rust_type"] = f"&mut {record_type}"
+    scripted_record_fixture_contract = (
+        scripted_external_record_u32_call_bool_state_external_binding(
+            spec,
+            name,
+            return_type,
+            parameters,
+        )
+    )
+    if scripted_record_fixture_contract is not None:
+        unsupported_reasons = []
+        return_rust_type = "u32"
+        entry_by_name = {
+            str(item["parameter"]): item
+            for item in scripted_record_fixture_contract["entry_arguments"]
+        }
+        for param, observation in zip(
+            parameters,
+            scripted_record_fixture_contract["external_callee"]["arguments"],
+            strict=True,
+        ):
+            record_type = entry_by_name[str(observation["entry_parameter"])]["rust_type"]
+            param["rust_type"] = f"&mut {record_type}"
+    declared_external_compile_context = is_declared_external_context_signature(
+        item,
+        signature,
+        name,
+        return_type,
+        parameters,
+    )
+    if declared_external_compile_context:
+        unsupported_reasons = []
+        return_rust_type = declared_external_context_rust_type(return_type, position="return")
+        for param in parameters:
+            rust_type = declared_external_context_rust_type(param["c_type"], position="param")
+            if rust_type is not None:
+                param["rust_type"] = rust_type
+    stub_kind = "compile_only"
+    stub_boundary = item.get("stub_boundary", "compile_only")
+    stub_generation = "generated_compile_only"
+    model_contract = ""
+    if modeled_strlen:
+        stub_boundary = "stdlib_readonly_string_model"
+        stub_generation = "not_emitted_modeled_stdlib"
+        model_contract = "strlen_readonly_nul_terminated"
+    if declared_external_compile_context:
+        stub_boundary = "declared_external_direct_callee_context_only"
+        stub_generation = "not_emitted_declared_signature_context"
+        model_contract = "declared_external_direct_callee_signature_context"
+    if scripted_fixture_contract is not None:
+        stub_boundary = "scripted_fixture_only_no_real_callee_semantics"
+        stub_generation = "generated_fixture_only_scripted_external"
+        model_contract = "scripted_external_u32_call_bool_out"
+    if scripted_record_fixture_contract is not None:
+        stub_boundary = "scripted_fixture_only_no_real_callee_semantics"
+        stub_generation = "generated_fixture_only_scripted_external"
+        model_contract = SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND
+    if (
+        scripted_sequence_fixture_contract is not None
+        and isinstance(scripted_sequence_fixture_contract.get("body_callee"), dict)
+    ):
+        stub_boundary = "scripted_fixture_only_no_real_callee_semantics"
+        stub_generation = "generated_fixture_only_scripted_external"
+        model_contract = SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND
+    if accepted_named_slice:
+        stub_kind = "accepted_named_slice_evidence"
+        stub_boundary = "accepted_named_slice_context_only"
+        stub_generation = "not_emitted_named_slice_evidence"
+        model_contract = "accepted_named_slice_evidence"
+    descriptor = {
+        "name": name,
+        "signature_ref": signature_ref,
+        "source_ref": item.get("source_ref") or signature.get("source_ref") or "",
+        "source_files": item.get("source_files") or source_files_for_external_callee(spec, name),
+        "header_files": item.get("header_files", []),
+        "definition_status": item.get("definition_status") or signature.get("definition_status") or "real_source_bound",
+        "stub_kind": stub_kind,
+        "stub_boundary": stub_boundary,
+        "stub_generation": stub_generation,
+        "model_contract": model_contract,
+        "semantics_verified": False,
+        "parameters": parameters,
+        "return_type": return_type,
+        "supported": not unsupported_reasons,
+        "unsupported_reasons": sorted(set(unsupported_reasons)),
+    }
+    replay_contract = external_callee_replay_contract(item, signature)
+    if replay_contract is not None:
+        descriptor["replay_contract"] = replay_contract
+    if return_rust_type is not None:
+        descriptor["return_rust_type"] = return_rust_type
+    if accepted_named_slice:
+        descriptor["accepted_named_slice_evidence"] = accepted_named_slice
+    return descriptor
+
+
+def external_callee_replay_contract(
+    item: dict[str, Any],
+    signature: dict[str, Any],
+) -> dict[str, Any] | None:
+    contract = item.get("replay_contract")
+    if not isinstance(contract, dict):
+        contract = signature.get("replay_contract")
+    if not isinstance(contract, dict):
+        return None
+    return dict(contract)
+
+
+def source_files_for_external_callee(spec: dict[str, Any], name: str) -> list[dict[str, Any]]:
+    files = []
+    for item in spec.get("c_boundary", {}).get("files", []):
+        role = str(item.get("role") or "")
+        path = item.get("path")
+        if path and (role == "external_direct_callee" or name in str(path)):
+            files.append({"path": path, "sha256": item.get("sha256", "")})
+    return files
+
+
+def external_direct_callee_context(
+    spec: dict[str, Any],
+    call_expressions: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    entry_name = entry_function_name(spec)
+    declared_map = declared_external_direct_callee_map(spec)
+    callee_names = sorted(
+        external_direct_callee_names(
+            spec,
+            call_expressions,
+            entry_name,
+            set(declared_map),
+        )
+    )
+    declared = []
+    blocked = []
+    for name in callee_names:
+        descriptor = declared_map.get(name)
+        if descriptor is None:
+            blocked.append(
+                {
+                    "name": name,
+                    "reason": "missing_declared_external_direct_callee",
+                    "stub_kind": "none",
+                    "semantics_verified": False,
+                }
+            )
+            continue
+        if not descriptor.get("supported"):
+            blocked.append(external_callee_block_from_descriptor(name, descriptor))
+            continue
+        declared.append(descriptor)
+
+    status = "not_applicable"
+    if blocked:
+        status = "blocked"
+    elif declared:
+        status = "recorded"
+    return {
+        "status": status,
+        "declarations": [declared_map[name] for name in sorted(declared_map)],
+        "declared": declared,
+        "blocked": blocked,
+        "declared_spec_count": len(declared_map),
+        "declared_spec_names": sorted(declared_map),
+        "declared_count": len(declared),
+        "blocked_count": len(blocked),
+    }
+
+
+def external_callee_block_from_descriptor(name: str, descriptor: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": name,
+        "reason": "unsupported_external_direct_callee_signature",
+        "signature_ref": descriptor.get("signature_ref", ""),
+        "source_ref": descriptor.get("source_ref", ""),
+        "definition_status": descriptor.get("definition_status", ""),
+        "unsupported_reasons": descriptor.get("unsupported_reasons", []),
+        "stub_kind": "none",
+        "semantics_verified": False,
+    }
+
+
+def external_direct_callee_names(
+    spec: dict[str, Any],
+    call_expressions: list[dict[str, Any]] | None,
+    entry_name: str,
+    declared_names: set[str] | None = None,
+) -> set[str]:
+    names = {
+        str(call.get("callee"))
+        for call in (call_expressions or [])
+        if call.get("callee") and str(call.get("callee")) != entry_name
+    }
+    declared_names = declared_names or set()
+    for dependency in spec.get("c_boundary", {}).get("direct_dependencies", []):
+        if dependency.get("kind") != "callee":
+            continue
+        name = str(dependency.get("name") or "")
+        if name and name != entry_name and name in declared_names:
+            names.add(name)
+    return names
+
+
+def external_context_input_ref(evidence_dir: Path, slice_id: str, context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "path": rel(evidence_dir / f"l3-{slice_id}-context-pack.json"),
+        "status": context["status"],
+        "declared_count": context["declared_count"],
+        "declared_spec_count": context["declared_spec_count"],
+        "declared_spec_names": context["declared_spec_names"],
+        "blocked_count": context["blocked_count"],
+    }

@@ -1,0 +1,314 @@
+
+
+def bind_external_callee_context(
+    call_expressions: list[dict[str, Any]],
+    context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    declared = {item["name"]: item for item in context.get("declared", [])}
+    blocked = {item["name"]: item for item in context.get("blocked", [])}
+    bound = []
+    for call in call_expressions:
+        enriched = dict(call)
+        callee = str(call.get("callee") or "")
+        if callee in declared:
+            descriptor = declared[callee]
+            enriched.update(
+                {
+                    "callee_scope": "external_direct_callee",
+                    "callee_signature_id": descriptor["signature_ref"],
+                    "callee_source_ref": descriptor.get("source_ref", ""),
+                    "definition_status": descriptor.get("definition_status", ""),
+                    "stub_status": "compile_only",
+                }
+            )
+        elif callee in blocked:
+            enriched.update(
+                {
+                    "callee_scope": "external_direct_callee",
+                    "stub_status": "blocked",
+                    "blocked_reason": blocked[callee].get("reason", ""),
+                }
+            )
+        bound.append(enriched)
+    return bound
+
+
+def call_edge_to_callee_binding(
+    call_expressions: list[dict[str, Any]],
+    context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    bindings = []
+    declared = {item["name"]: item for item in context.get("declared", [])}
+    for call in call_expressions:
+        callee = str(call.get("callee") or "")
+        if callee not in declared:
+            continue
+        descriptor = declared[callee]
+        stub_kind = str(descriptor.get("stub_kind") or "compile_only")
+        if stub_kind not in {"compile_only", "accepted_named_slice_evidence"}:
+            continue
+        bindings.append(
+            {
+                "callee": callee,
+                "signature_ref": descriptor["signature_ref"],
+                "source_expression": call.get("source_expression", ""),
+                "statement_context": call.get("statement_context", ""),
+                "stub_kind": stub_kind,
+                "semantics_verified": False,
+            }
+        )
+    return bindings
+
+
+def external_callee_sources(context: dict[str, Any]) -> list[dict[str, Any]]:
+    sources = []
+    for callee in context.get("declared", []):
+        for source in callee.get("source_files", []):
+            sources.append(
+                {
+                    "callee": callee["name"],
+                    "path": source.get("path", ""),
+                    "sha256": source.get("sha256", ""),
+                }
+            )
+    return sources
+
+
+def external_signature_bindings(context: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "callee": callee["name"],
+            "signature_ref": callee["signature_ref"],
+            "definition_status": callee.get("definition_status", ""),
+            "stub_kind": callee["stub_kind"],
+            "semantics_verified": False,
+        }
+        for callee in context.get("declared", [])
+    ]
+
+
+def external_stub_boundaries(context: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "callee": callee["name"],
+            "stub_kind": callee["stub_kind"],
+            "allowed_use": (
+                "named_slice_evidence_reference_only"
+                if callee.get("stub_kind") == "accepted_named_slice_evidence"
+                else "fixture_bound_rust_replay_only"
+                if callee.get("model_contract")
+                in {
+                    "scripted_external_u32_call_bool_out",
+                    SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND,
+                    SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND,
+                }
+                else "standalone_rust_check_only"
+            ),
+            "fixture_only": callee.get("model_contract")
+            in {
+                "scripted_external_u32_call_bool_out",
+                SCRIPTED_EXTERNAL_RECORD_U32_CALL_BOOL_STATE_KIND,
+                SCRIPTED_EXTERNAL_RECORD_U32_SEQUENCE_DO_WHILE_STATE_KIND,
+            },
+            "semantics_verified": False,
+        }
+        for callee in context.get("declared", [])
+    ]
+
+
+def external_scope_stub_kind(context: dict[str, Any]) -> str:
+    kinds = {
+        str(callee.get("stub_kind") or "compile_only")
+        for callee in context.get("declared", [])
+    }
+    if not kinds:
+        return "none"
+    if len(kinds) == 1:
+        return next(iter(kinds))
+    return "mixed_context"
+
+
+def external_callee_claim_scope(context: dict[str, Any]) -> dict[str, Any]:
+    if context["status"] == "recorded":
+        status = "compile_context_only"
+    else:
+        status = context["status"]
+    return {
+        "status": status,
+        "declared_spec_count": context["declared_spec_count"],
+        "declared_spec_names": context["declared_spec_names"],
+        "declared_count": context["declared_count"],
+        "blocked_count": context["blocked_count"],
+        "stub_kind": external_scope_stub_kind(context),
+        "semantics_verified": False,
+    }
+
+
+def rust_check_external_context(context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": context["status"],
+        "declared_spec_count": context["declared_spec_count"],
+        "declared_spec_names": context["declared_spec_names"],
+        "declared_count": context["declared_count"],
+        "blocked_count": context["blocked_count"],
+        "declared_callees": [
+            {
+                "name": callee["name"],
+                "signature_ref": callee["signature_ref"],
+                "stub_kind": callee["stub_kind"],
+                "binding_status": rust_check_binding_status(callee),
+                "semantics_verified": False,
+            }
+            for callee in context.get("declared", [])
+        ],
+        "blocked_callees": context.get("blocked", []),
+    }
+
+
+def load_plan_call_expressions(evidence_dir: Path, slice_id: str) -> list[dict[str, Any]]:
+    plan_path = evidence_dir / f"l3-{slice_id}-auto-translation-plan.json"
+    if not plan_path.exists():
+        return []
+    plan = read_json(plan_path)
+    return plan.get("translation_summary", {}).get("call_expressions", [])
+
+
+def rust_check_binding_status(callee: dict[str, Any]) -> str:
+    binding = callee.get("rust_check_binding")
+    if isinstance(binding, dict) and binding.get("status"):
+        return str(binding["status"])
+    if callee.get("stub_generation") == "generated_compile_only":
+        return "generated_compile_only"
+    if str(callee.get("stub_generation") or "").startswith("not_emitted_"):
+        return "not_emitted"
+    return "unknown"
+
+
+def mark_rust_check_binding(
+    callee: dict[str, Any],
+    status: str,
+    signature: str,
+    *,
+    allowed_use: str = "rustc_compile_only",
+) -> None:
+    callee["rust_check_binding"] = {
+        "status": status,
+        "allowed_use": allowed_use,
+        "signature": signature,
+        "semantics_verified": False,
+    }
+
+
+def rust_check_declared_callee_signature(callee: dict[str, Any]) -> str:
+    name = rust_identifier(callee["name"])
+    params = []
+    for index, param in enumerate(callee.get("parameters", [])):
+        param_name = rust_identifier(param.get("name") or f"arg{index + 1}")
+        rust_type = (
+            param.get("rust_type")
+            or primitive_rust_type(param.get("c_type", ""))
+            or "i32"
+        )
+        params.append(f"{param_name}: {rust_type}")
+    return_type = (
+        callee.get("return_rust_type")
+        or primitive_rust_type(callee.get("return_type", ""))
+        or "i32"
+    )
+    return f"fn {name}({', '.join(params)}) -> {return_type}"
+
+
+def rust_function_declared(text: str, name: str) -> bool:
+    escaped_name = re.escape(name)
+    return (
+        re.search(
+            rf"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?fn\s+{escaped_name}\s*\(",
+            text,
+        )
+        is not None
+    )
+
+
+def ignored_non_observable_void_replay_contract(
+    callee: dict[str, Any],
+    spec: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not isinstance(spec, dict):
+        return None
+    contract = callee.get("replay_contract")
+    if not isinstance(contract, dict):
+        return None
+    if contract.get("kind") != "ignored_non_observable_void":
+        return None
+    return_type = (
+        callee.get("return_rust_type")
+        or declared_external_context_rust_type(callee.get("return_type", ""), position="return")
+    )
+    if return_type != "()":
+        return None
+    contract_outputs = [str(item) for item in contract.get("observable_outputs") or []]
+    if not contract_outputs:
+        return None
+    observed_outputs = set(behavior_fields(spec))
+    if not set(contract_outputs).issubset(observed_outputs):
+        return None
+    return dict(contract)
+
+
+def rust_check_ignored_non_observable_void_stub(
+    callee: dict[str, Any],
+    text: str,
+    spec: dict[str, Any] | None = None,
+) -> str | None:
+    contract = ignored_non_observable_void_replay_contract(callee, spec)
+    if contract is None:
+        return None
+    name = rust_identifier(callee["name"])
+    signature = rust_check_declared_callee_signature(callee)
+    if rust_function_declared(text, name):
+        mark_rust_check_binding(
+            callee,
+            "already_present",
+            signature,
+            allowed_use="fixture_bound_rust_replay_only",
+        )
+        callee["rust_check_binding"]["replay_contract_kind"] = contract["kind"]
+        return None
+    param_names = [
+        rust_identifier(param.get("name") or f"arg{index + 1}")
+        for index, param in enumerate(callee.get("parameters", []))
+    ]
+    body_lines = []
+    if len(param_names) == 1:
+        body_lines.append(f"    let _ = {param_names[0]};")
+    elif param_names:
+        body_lines.append(f"    let _ = ({', '.join(param_names)});")
+    body_lines.append("    // ignored non-observable void external callee per fixture replay_contract")
+    mark_rust_check_binding(
+        callee,
+        "declared_ignored_non_observable_void",
+        signature,
+        allowed_use="fixture_bound_rust_replay_only",
+    )
+    callee["rust_check_binding"]["replay_contract_kind"] = contract["kind"]
+    return signature + " {\n" + "\n".join(body_lines) + "\n}"
+
+
+def flashdb_kv_set_fixture_model_allowed(spec: dict[str, Any] | None, name: str) -> bool:
+    return (
+        isinstance(spec, dict)
+        and spec.get("target_id") == "flashdb"
+        and spec.get("slice_id") == "real-fdb-kv-set"
+        and behavior_fields(spec) == ["return_code"]
+        and name in {"fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"}
+    )
+
+
+def flashdb_kv_del_fixture_model_allowed(spec: dict[str, Any] | None, name: str) -> bool:
+    return (
+        isinstance(spec, dict)
+        and spec.get("target_id") == "flashdb"
+        and spec.get("slice_id") == "real-fdb-kv-del"
+        and behavior_fields(spec) == ["return_code"]
+        and name in {"db_init_ok", "db_name", "db_lock", "del_kv", "db_unlock"}
+    )
