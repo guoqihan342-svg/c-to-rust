@@ -1,0 +1,319 @@
+
+
+def validate_hash_bound_artifact_ref(
+    value: Any,
+    *,
+    label: str,
+    report_path: Path,
+    repo_root: Path,
+) -> Path:
+    if not isinstance(value, dict):
+        raise SystemExit(f"{label} is required: {repo_relative(report_path, repo_root=repo_root)}")
+    path_value = value.get("path")
+    sha_value = value.get("sha256")
+    if not isinstance(path_value, str) or not isinstance(sha_value, str):
+        raise SystemExit(
+            f"{label}.path and {label}.sha256 are required: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    artifact_path = repo_path(Path(path_value), repo_root=repo_root)
+    if not artifact_path.is_file():
+        raise SystemExit(f"{label}.path does not exist: {path_value}")
+    if sha256_file(artifact_path) != sha_value:
+        raise SystemExit(
+            f"{label}.sha256 mismatch: {repo_relative(report_path, repo_root=repo_root)}"
+        )
+    return artifact_path
+
+
+def validate_opencode_preflight_marker_payload(
+    marker_path: Path,
+    *,
+    run_id: str,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    try:
+        payload = load_json(marker_path)
+    except Exception as error:  # noqa: BLE001 - convert malformed marker artifacts into fail-closed evidence.
+        return {
+            "status": "failed",
+            "reason": f"marker_json_invalid:{type(error).__name__}",
+        }
+    failed_fields: list[str] = []
+    if payload.get("report_kind") != "opencode-preflight-marker":
+        failed_fields.append("report_kind")
+    if payload.get("run_id") != run_id:
+        failed_fields.append("run_id")
+    if payload.get("status") != "written":
+        failed_fields.append("status")
+    return {
+        "status": "passed" if not failed_fields else "failed",
+        "failed_fields": failed_fields,
+        "path": repo_relative(marker_path, repo_root=repo_root),
+    }
+
+
+def write_opencode_preflight_marker(
+    *,
+    marker_path: Path,
+    run_id: str,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    marker_path = repo_path(marker_path, repo_root=repo_root)
+    marker = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "opencode-preflight-marker",
+        "run_id": run_id,
+        "status": "written",
+        "created_at": now_text(),
+    }
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(marker_path, marker)
+    return {
+        "status": "written",
+        "marker_path": repo_relative(marker_path, repo_root=repo_root),
+        "sha256": sha256_file(marker_path),
+    }
+
+
+_EFFECTIVE_INPUT_TRANSIENT_FIELDS = frozenset(
+    {
+        "attempt",
+        "attempt_number",
+        "created_at",
+        "duration_seconds",
+        "elapsed_seconds",
+        "expires_at",
+        "harness_attempt",
+        "harness_attempt_number",
+        "harness_repair_hint_id",
+        "harness_retry_of",
+        "heartbeat_at",
+        "hint_id",
+        "repair_round",
+        "repair_round_cap",
+        "report_path",
+        "retry_command",
+        "retry_of",
+        "timestamp",
+        "timestamps",
+        "updated_at",
+        "worker_report_path",
+    }
+)
+_FAILURE_TRANSIENT_FIELDS = frozenset(
+    {
+        "attempt",
+        "attempt_number",
+        "created_at",
+        "duration_seconds",
+        "elapsed_seconds",
+        "expires_at",
+        "heartbeat_at",
+        "hint_id",
+        "repair_round",
+        "repair_round_cap",
+        "retry_count",
+        "retry_of",
+        "timestamp",
+        "timestamps",
+        "updated_at",
+    }
+)
+_NO_PROGRESS_UNCERTAIN_ROOT_CAUSES = frozenset(
+    {
+        "final_gate_failed",
+        "missing-summary",
+        "missing_summary",
+        "unknown",
+        "worker_failed",
+        "worker_process_failed",
+    }
+)
+_NO_PROGRESS_TRANSIENT_ROOT_CAUSE_TOKENS = (
+    "contract",
+    "credential",
+    "database",
+    "environment",
+    "lock",
+    "missing",
+    "network",
+    "not_found",
+    "permission",
+    "preflight",
+    "rate_limit",
+    "resource_busy",
+    "sqlite",
+    "temporar",
+    "timeout",
+    "timed_out",
+    "toolchain",
+    "unavailable",
+)
+
+
+def canonical_fingerprint_sha256(value: Any) -> str:
+    return sha256_text(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+
+
+def normalize_effective_input_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): normalize_effective_input_value(item)
+            for key, item in sorted(value.items(), key=lambda entry: str(entry[0]))
+            if str(key) not in _EFFECTIVE_INPUT_TRANSIENT_FIELDS
+        }
+    if isinstance(value, (list, tuple)):
+        return [normalize_effective_input_value(item) for item in value]
+    if isinstance(value, str):
+        return value.replace("\r\n", "\n").replace("\r", "\n")
+    return value
+
+
+def effective_input_artifact(path: Path, *, repo_root: Path) -> dict[str, Any]:
+    checked_path = repo_path(path, repo_root=repo_root)
+    binding: dict[str, Any] = {"path": repo_relative(checked_path, repo_root=repo_root)}
+    if checked_path.is_file():
+        binding.update({"status": "present", "sha256": sha256_file(checked_path)})
+    else:
+        binding["status"] = "missing"
+    return binding
+
+
+def worker_effective_input_payload(
+    *,
+    request: dict[str, Any],
+    mode: str,
+    repair_trace: dict[str, Any] | None,
+    opencode_command: str,
+    opencode_model: str | None,
+    opencode_agent: str | None,
+    opencode_variant: str,
+    opencode_skip_permissions: bool,
+    opencode_allow_non_competition_model: bool,
+    opencode_credential_source: str,
+    opencode_preflight_report: Path | None,
+    repo_root: Path,
+) -> dict[str, Any]:
+    artifact_inputs: dict[str, Any] = {}
+    source_repo_root = request.get("source_repo_root")
+    source_file = request.get("source_file")
+    if isinstance(source_repo_root, str) and source_repo_root and isinstance(source_file, str) and source_file:
+        artifact_inputs["source"] = effective_input_artifact(
+            Path(source_repo_root) / source_file,
+            repo_root=repo_root,
+        )
+    slice_specs = request.get("slice_specs")
+    if isinstance(slice_specs, list):
+        artifact_inputs["slice_specs"] = [
+            effective_input_artifact(Path(value), repo_root=repo_root)
+            for value in slice_specs
+            if isinstance(value, str) and value
+        ]
+    compiler_command_source = request.get("compiler_command_source")
+    if isinstance(compiler_command_source, str) and compiler_command_source:
+        artifact_inputs["compiler_command_source"] = effective_input_artifact(
+            Path(compiler_command_source),
+            repo_root=repo_root,
+        )
+    if opencode_preflight_report is not None:
+        artifact_inputs["opencode_preflight_report"] = effective_input_artifact(
+            opencode_preflight_report,
+            repo_root=repo_root,
+        )
+
+    payload: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "mode": mode,
+        "request": normalize_effective_input_value(request),
+        "worker_command": portable_python_script_argv(
+            "scripts/c2rust-migrator.py",
+            "--phase",
+            "migrate",
+            "--input",
+            "<attempt-request>",
+        ),
+        "artifact_inputs": artifact_inputs,
+    }
+    if repair_trace is not None:
+        payload["repair_trace"] = normalize_effective_input_value(repair_trace)
+    if mode == "opencode":
+        payload["opencode_launch_policy"] = opencode_launch_policy(
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
+            opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+            opencode_credential_source=opencode_credential_source,
+        )
+    return normalize_effective_input_value(payload)
+
+
+def worker_effective_input_sha256(**kwargs: Any) -> str:
+    return canonical_fingerprint_sha256(worker_effective_input_payload(**kwargs))
+
+
+def normalize_failure_text(value: str) -> str:
+    text = value.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"repair:[^\s\"']+", "<repair-hint>", text)
+    text = re.sub(r"(?i)\b(attempt|retry|repair[ _-]?round)\s*(?:#|=|:)?\s*\d+\b", r"\1 <n>", text)
+    text = re.sub(r"(?i)(request-attempt-|attempt-)(\d+)", r"\1<n>", text)
+    text = re.sub(r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\b", "<timestamp>", text)
+    return "\n".join(line.rstrip() for line in text.split("\n")).strip()
+
+
+def normalize_failure_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): normalize_failure_value(item)
+            for key, item in sorted(value.items(), key=lambda entry: str(entry[0]))
+            if str(key) not in _FAILURE_TRANSIENT_FIELDS
+        }
+    if isinstance(value, (list, tuple)):
+        return [normalize_failure_value(item) for item in value]
+    if isinstance(value, str):
+        return normalize_failure_text(value)
+    return value
+
+
+def worker_failure_sha256(
+    *,
+    root_cause_key: str | None,
+    summary_status: str,
+    process_returncode: int,
+    diagnostics: dict[str, Any] | None,
+) -> str:
+    diagnostic_payload = diagnostics if isinstance(diagnostics, dict) else {}
+    payload = {
+        "root_cause_key": normalize_failure_text(root_cause_key or ""),
+        "status": normalize_failure_text(summary_status),
+        "returncode": int(process_returncode),
+        "primary_error": normalize_failure_value(diagnostic_payload.get("primary_error")),
+        "diagnostics": normalize_failure_value(diagnostic_payload),
+    }
+    return canonical_fingerprint_sha256(payload)
+
+
+def sha256_fingerprint(value: Any) -> str | None:
+    if isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value):
+        return value
+    return None
+
+
+def no_progress_failure_is_determined(attempt: dict[str, Any]) -> bool:
+    root_cause_key = attempt.get("root_cause_key")
+    if not isinstance(root_cause_key, str) or not root_cause_key.strip():
+        return False
+    normalized_root_cause = root_cause_key.strip().lower()
+    if normalized_root_cause in _NO_PROGRESS_UNCERTAIN_ROOT_CAUSES:
+        return False
+    if any(token in normalized_root_cause for token in _NO_PROGRESS_TRANSIENT_ROOT_CAUSE_TOKENS):
+        return False
+    diagnostics = attempt.get("diagnostics")
+    primary_error = diagnostics.get("primary_error") if isinstance(diagnostics, dict) else None
+    return (
+        isinstance(primary_error, dict)
+        and isinstance(primary_error.get("message"), str)
+        and bool(primary_error["message"].strip())
+    )

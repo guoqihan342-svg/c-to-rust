@@ -1,3 +1,94 @@
+
+
+def validate_translation_before_after_units_projection(
+    units: list[Any],
+    evidence_units: list[tuple[str, dict[str, Any]]],
+) -> None:
+    projected_by_unit_id: dict[str, dict[str, Any]] = {}
+    for projected in units:
+        if not isinstance(projected, dict):
+            raise SystemExit("workflow metrics artifact translation_before_after.units entries must be objects")
+        unit_id = projected.get("unit_id")
+        if not isinstance(unit_id, str) or not unit_id:
+            raise SystemExit("workflow metrics artifact translation_before_after.units entries require unit_id")
+        if unit_id in projected_by_unit_id:
+            raise SystemExit("workflow metrics artifact translation_before_after.units contains duplicate unit_id")
+        projected_by_unit_id[unit_id] = projected
+
+    for unit_id, evidence in evidence_units:
+        projected = projected_by_unit_id.get(unit_id)
+        if not isinstance(projected, dict):
+            raise SystemExit("workflow metrics artifact translation_before_after.units does not match per-unit evidence")
+        if projected.get("status") != evidence.get("status"):
+            raise SystemExit("workflow metrics artifact translation_before_after.units does not match per-unit evidence")
+        if projected.get("unsafe_reduction") != evidence.get("unsafe_reduction"):
+            raise SystemExit("workflow metrics artifact translation_before_after.units does not match per-unit evidence")
+
+
+def validate_per_unit_statuses(
+    metrics: dict[str, Any],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+) -> None:
+    for index, unit in enumerate(metrics["per_unit_statuses"]):
+        if not isinstance(unit, dict):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}] must be an object")
+        root_cause = unit.get("root_cause_key")
+        if root_cause is not None and (not isinstance(root_cause, str) or not root_cause):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].root_cause_key must be a non-empty string")
+        contract_verification = unit.get("opencode_contract_verification")
+        if contract_verification is not None:
+            if not isinstance(contract_verification, dict) or not isinstance(contract_verification.get("status"), str):
+                raise SystemExit(
+                    f"workflow metrics per_unit_statuses[{index}].opencode_contract_verification.status "
+                    "must be a string"
+                )
+        before_after = unit.get("translation_before_after")
+        if before_after is not None:
+            validate_translation_before_after_unit(
+                before_after,
+                unit=unit,
+                index=index,
+                summary_path=summary_path,
+                repo_root=repo_root,
+            )
+        if "repair_rounds" not in unit:
+            continue
+        repair_rounds = unit["repair_rounds"]
+        if not isinstance(repair_rounds, int) or repair_rounds < 1:
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].repair_rounds must be a positive integer")
+        if repair_rounds > REPAIR_ROUND_CAP:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_rounds must be between 1 and {REPAIR_ROUND_CAP}"
+            )
+        if not isinstance(unit.get("auto_recovered"), bool):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].auto_recovered must be boolean")
+        repair_history = unit.get("repair_history")
+        if not isinstance(repair_history, dict):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}] missing repair_history")
+        patch_events_ref = repair_history.get("patch_events_path")
+        patch_events_sha = repair_history.get("patch_events_sha256")
+        if not isinstance(patch_events_ref, str) or not is_repo_relative_posix_path(patch_events_ref):
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_history.patch_events_path "
+                "must be repo-relative POSIX"
+            )
+        if not isinstance(patch_events_sha, str) or len(patch_events_sha) != 64:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_history.patch_events_sha256 must be sha256"
+            )
+        patch_events_path = resolve_summary_artifact(
+            patch_events_ref,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        if patch_events_path is None:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_history.patch_events_path does not exist: "
+                f"{patch_events_ref}"
+            )
+        if sha256(patch_events_path) != patch_events_sha:
             raise SystemExit(
                 f"workflow metrics per_unit_statuses[{index}].repair_history.patch_events_sha256 does not match"
             )
@@ -296,433 +387,3 @@ def validate_c2rust_safety_before_after(
     actual_patch = artifact_paths["accepted_patch"].read_text(encoding="utf-8").replace("\r\n", "\n")
     if actual_patch != expected_patch:
         raise SystemExit(f"{prefix}.accepted_patch does not match deterministic baseline/final diff")
-
-
-def c2rust_crc32_unsafe_count(rust: str) -> int:
-    mutable_static = bool(re.search(r"(?m)^static mut crc32_table\s*:", rust))
-    raw_boundary = re.search(
-        r'pub unsafe extern "C" fn fdb_calc_crc32\s*\((?P<parameters>.*?)\)\s*->',
-        rust,
-        re.DOTALL,
-    )
-    raw_pointer_len = bool(
-        raw_boundary is not None
-        and "*const ::core::ffi::c_void" in raw_boundary.group("parameters")
-        and re.search(r"\bsize\s*:\s*size_t\b", raw_boundary.group("parameters"))
-    )
-    return int(mutable_static) + int(raw_pointer_len)
-
-
-def same_path_sha_ref(left: Any, right: Any) -> bool:
-    return (
-        isinstance(left, dict)
-        and isinstance(right, dict)
-        and left.get("path") == right.get("path")
-        and left.get("sha256") == right.get("sha256")
-    )
-
-
-def validate_c2rust_real_c_execution(
-    execution: Any,
-    *,
-    report_artifacts: dict[str, Any],
-    prefix: str,
-    unit: dict[str, Any],
-    summary_path: Path,
-    repo_root: Path,
-) -> None:
-    if not isinstance(execution, dict) or execution.get("status") != "passed" or execution.get("semantic_pass") is not True:
-        raise SystemExit(f"{prefix}.c_oracle_execution must be a passed real C execution")
-    compile_gate = execution.get("compile")
-    run_gate = execution.get("execution")
-    toolchain = execution.get("toolchain")
-    if (
-        not isinstance(compile_gate, dict)
-        or compile_gate.get("attempted") is not True
-        or compile_gate.get("returncode") != 0
-        or not isinstance(compile_gate.get("canonical_argv"), list)
-        or not compile_gate["canonical_argv"]
-        or not isinstance(compile_gate.get("actual_argv_sha256"), str)
-        or len(compile_gate["actual_argv_sha256"]) != 64
-        or not isinstance(compile_gate.get("executable_sha256"), str)
-        or len(compile_gate["executable_sha256"]) != 64
-    ):
-        raise SystemExit(f"{prefix}.c_oracle_execution.compile must bind a successful real compile")
-    if (
-        not isinstance(run_gate, dict)
-        or run_gate.get("attempted") is not True
-        or run_gate.get("returncode") != 0
-        or not isinstance(run_gate.get("actual_argv_sha256"), str)
-        or len(run_gate["actual_argv_sha256"]) != 64
-        or not isinstance(run_gate.get("matched_stdout_fragments"), list)
-        or not run_gate["matched_stdout_fragments"]
-        or run_gate.get("missing_stdout_fragments") != []
-    ):
-        raise SystemExit(f"{prefix}.c_oracle_execution.execution must bind a successful marker-complete run")
-    if (
-        not isinstance(toolchain, dict)
-        or toolchain.get("adapter") not in {"local", "wsl"}
-        or not isinstance(toolchain.get("compiler_name"), str)
-        or not isinstance(toolchain.get("compiler_version"), str)
-        or not toolchain["compiler_version"]
-    ):
-        raise SystemExit(f"{prefix}.c_oracle_execution.toolchain is incomplete")
-    execution_artifacts = execution.get("artifacts")
-    if not isinstance(execution_artifacts, dict):
-        raise SystemExit(f"{prefix}.c_oracle_execution.artifacts must be an object")
-    execution_paths: dict[str, Path] = {}
-    for key in ["c_compile_stdout", "c_compile_stderr", "c_replay_stdout", "c_replay_stderr"]:
-        if not same_path_sha_ref(execution_artifacts.get(key), report_artifacts.get(key)):
-            raise SystemExit(f"{prefix}.c_oracle_execution.artifacts.{key} must match top-level artifacts")
-        execution_paths[key] = validate_c2rust_safety_nested_ref(
-            execution_artifacts.get(key),
-            key=f"c_oracle_execution.artifacts.{key}",
-            prefix=prefix,
-            unit=unit,
-            summary_path=summary_path,
-            repo_root=repo_root,
-        )
-    c_stdout = execution_paths["c_replay_stdout"].read_text(encoding="utf-8")
-    if any(fragment not in c_stdout for fragment in run_gate["matched_stdout_fragments"]):
-        raise SystemExit(f"{prefix}.c_oracle_execution marker list does not match c_replay_stdout")
-    inputs = execution.get("inputs")
-    if not isinstance(inputs, dict):
-        raise SystemExit(f"{prefix}.c_oracle_execution.inputs must be an object")
-    for key in ["slice_spec", "harness"]:
-        validate_c2rust_safety_nested_ref(
-            inputs.get(key),
-            key=f"c_oracle_execution.inputs.{key}",
-            prefix=prefix,
-            unit=unit,
-            summary_path=summary_path,
-            repo_root=repo_root,
-        )
-    source_files = inputs.get("source_files")
-    if not isinstance(source_files, list) or len(source_files) < 2:
-        raise SystemExit(f"{prefix}.c_oracle_execution.inputs.source_files must bind real C sources")
-    for source_index, source_ref in enumerate(source_files):
-        validate_c2rust_safety_nested_ref(
-            source_ref,
-            key=f"c_oracle_execution.inputs.source_files[{source_index}]",
-            prefix=prefix,
-            unit=unit,
-            summary_path=summary_path,
-            repo_root=repo_root,
-        )
-
-
-def validate_c2rust_safety_nested_ref(
-    artifact: Any,
-    *,
-    key: str,
-    prefix: str,
-    unit: dict[str, Any],
-    summary_path: Path,
-    repo_root: Path,
-) -> Path:
-    if not isinstance(artifact, dict):
-        raise SystemExit(f"{prefix}.{key} must be an artifact ref")
-    path = artifact.get("path")
-    expected_sha = artifact.get("sha256")
-    if not isinstance(path, str) or not is_repo_relative_posix_path(path):
-        raise SystemExit(f"{prefix}.{key}.path must be repo-relative POSIX")
-    if not isinstance(expected_sha, str) or len(expected_sha) != 64:
-        raise SystemExit(f"{prefix}.{key}.sha256 must be sha256")
-    resolved = resolve_unit_artifact(path, unit=unit, summary_path=summary_path, repo_root=repo_root)
-    if resolved is None:
-        raise SystemExit(f"{prefix}.{key}.path does not exist: {path}")
-    if sha256(resolved) != expected_sha:
-        raise SystemExit(f"{prefix}.{key}.sha256 does not match")
-    return resolved
-
-
-def validate_root_unsafe_reduction_consistency(metrics: dict[str, Any]) -> None:
-    measured_units = []
-    for unit in metrics["per_unit_statuses"]:
-        if not isinstance(unit, dict):
-            continue
-        before_after = unit.get("translation_before_after")
-        if not isinstance(before_after, dict):
-            continue
-        unsafe_reduction = before_after.get("unsafe_reduction")
-        if isinstance(unsafe_reduction, dict) and unsafe_reduction.get("status") == "measured":
-            measured_units.append(unsafe_reduction)
-    if len(measured_units) != int(metrics["units_total"]):
-        return
-
-    baseline_total = 0
-    current_total = 0
-    for unsafe_reduction in measured_units:
-        baseline = nonnegative_count(unsafe_reduction.get("baseline_total_unsafe"))
-        current = nonnegative_count(unsafe_reduction.get("current_total_unsafe"))
-        reduced_by = nonnegative_count(unsafe_reduction.get("reduced_by"))
-        if baseline is None or current is None or reduced_by is None or baseline - current != reduced_by:
-            raise SystemExit("workflow metrics translation_before_after unsafe_reduction counts are inconsistent")
-        baseline_total += baseline
-        current_total += current
-
-    root = metrics.get("unsafe_reduction")
-    expected = {
-        "status": "measured",
-        "baseline_total_unsafe": baseline_total,
-        "current_total_unsafe": current_total,
-        "reduced_by": baseline_total - current_total,
-        "ratio": 0.0 if baseline_total == 0 else current_total / baseline_total,
-    }
-    if not isinstance(root, dict) or root.get("status") != "measured":
-        raise SystemExit("workflow metrics unsafe_reduction does not match translation_before_after units")
-    for field in ["baseline_total_unsafe", "current_total_unsafe", "reduced_by"]:
-        if root.get(field) != expected[field]:
-            raise SystemExit("workflow metrics unsafe_reduction does not match translation_before_after units")
-    ratio = root.get("ratio")
-    if not isinstance(ratio, (int, float)) or abs(float(ratio) - float(expected["ratio"])) > 1e-12:
-        raise SystemExit("workflow metrics unsafe_reduction does not match translation_before_after units")
-
-
-def validate_before_after_artifact_ref(
-    artifact: Any,
-    *,
-    key: str,
-    unit: dict[str, Any],
-    index: int,
-    summary_path: Path,
-    repo_root: Path,
-) -> Path:
-    if not isinstance(artifact, dict):
-        raise SystemExit(
-            f"workflow metrics per_unit_statuses[{index}].translation_before_after.{key} must be an object"
-        )
-    artifact_ref = artifact.get("path")
-    artifact_sha = artifact.get("sha256")
-    if not isinstance(artifact_ref, str) or not is_repo_relative_posix_path(artifact_ref):
-        raise SystemExit(
-            f"workflow metrics per_unit_statuses[{index}].translation_before_after.{key}.path "
-            "must be repo-relative POSIX"
-        )
-    if not isinstance(artifact_sha, str) or len(artifact_sha) != 64:
-        raise SystemExit(
-            f"workflow metrics per_unit_statuses[{index}].translation_before_after.{key}.sha256 must be sha256"
-        )
-    artifact_path = resolve_unit_artifact(
-        artifact_ref,
-        unit=unit,
-        summary_path=summary_path,
-        repo_root=repo_root,
-    )
-    if artifact_path is None:
-        raise SystemExit(
-            f"workflow metrics per_unit_statuses[{index}].translation_before_after.{key}.path "
-            f"does not exist: {artifact_ref}"
-        )
-    if sha256(artifact_path) != artifact_sha:
-        raise SystemExit(
-            f"workflow metrics per_unit_statuses[{index}].translation_before_after.{key}.sha256 does not match"
-        )
-    return artifact_path
-
-
-def validate_before_after_baseline_verification(artifact: dict[str, Any], artifact_path: Path, *, index: int) -> None:
-    prefix = f"workflow metrics per_unit_statuses[{index}].translation_before_after.baseline_verification"
-    if artifact.get("status") is not None and artifact.get("status") != "passed":
-        raise SystemExit(f"{prefix}.status must be passed")
-    if artifact.get("semantic_pass") is not None and artifact.get("semantic_pass") is not True:
-        raise SystemExit(f"{prefix}.semantic_pass must be true")
-    if artifact.get("semantic_claim_source") is not None and artifact.get("semantic_claim_source") != "verified_unsafe_baseline_gates":
-        raise SystemExit(f"{prefix}.semantic_claim_source must be verified_unsafe_baseline_gates")
-    if artifact.get("generated_draft_semantic_pass") is not None and artifact.get("generated_draft_semantic_pass") is not False:
-        raise SystemExit(f"{prefix}.generated_draft_semantic_pass must be false")
-    try:
-        payload = json.loads(artifact_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"{prefix} artifact must be JSON") from exc
-    if not isinstance(payload, dict):
-        raise SystemExit(f"{prefix} artifact must be an object")
-    if payload.get("status") != "passed":
-        raise SystemExit(f"{prefix}.status must be passed")
-    if payload.get("semantic_pass") is not True:
-        raise SystemExit(f"{prefix}.semantic_pass must be true")
-    if payload.get("semantic_claim_source") != "verified_unsafe_baseline_gates":
-        raise SystemExit(f"{prefix}.semantic_claim_source must be verified_unsafe_baseline_gates")
-    if payload.get("generated_draft_semantic_pass") is not False:
-        raise SystemExit(f"{prefix}.generated_draft_semantic_pass must be false")
-
-
-def resolve_unit_artifact(
-    value: str,
-    *,
-    unit: dict[str, Any],
-    summary_path: Path,
-    repo_root: Path,
-) -> Path | None:
-    candidates = [
-        repo_root / value,
-        summary_path.parent / value,
-        summary_path.parent.parent / value,
-    ]
-    worker_summary = unit.get("worker_summary_path")
-    if isinstance(worker_summary, str) and is_repo_relative_posix_path(worker_summary):
-        worker_summary_path = resolve_summary_artifact(worker_summary, summary_path=summary_path, repo_root=repo_root)
-        if worker_summary_path is not None:
-            candidates.extend([worker_summary_path.parent / value, worker_summary_path.parent.parent / value])
-    for candidate in candidates:
-        resolved = candidate.resolve()
-        try:
-            resolved.relative_to(repo_root.resolve())
-        except ValueError:
-            try:
-                resolved.relative_to(summary_path.parent.parent.resolve())
-            except ValueError:
-                continue
-        if resolved.exists():
-            return resolved
-    return None
-
-
-def validate_root_cause_counts(metrics: dict[str, Any]) -> None:
-    counts = metrics.get("root_cause_counts")
-    if not isinstance(counts, dict):
-        raise SystemExit("workflow metrics artifact root_cause_counts must be an object")
-    expected: dict[str, int] = {}
-    for unit in metrics["per_unit_statuses"]:
-        if not isinstance(unit, dict):
-            continue
-        root_cause = unit.get("root_cause_key")
-        if isinstance(root_cause, str) and root_cause:
-            expected[root_cause] = expected.get(root_cause, 0) + 1
-    actual: dict[str, int] = {}
-    for key, value in counts.items():
-        if not isinstance(key, str) or not key:
-            raise SystemExit("workflow metrics artifact root_cause_counts keys must be non-empty strings")
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            raise SystemExit(f"workflow metrics artifact root_cause_counts.{key} must be a non-negative integer")
-        actual[key] = value
-    if actual != expected:
-        raise SystemExit("workflow metrics artifact root_cause_counts does not match per_unit_statuses")
-
-
-def resolve_summary_artifact(value: str, *, summary_path: Path, repo_root: Path) -> Path | None:
-    candidates = [
-        repo_root / value,
-        summary_path.parent / value,
-        summary_path.parent.parent / value,
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return None
-
-
-def should_normalize_lf_for_hash(path: Path) -> bool:
-    return path.suffix.lower() in LF_STABLE_TEXT_SUFFIXES
-
-
-def lf_stable_file_bytes(path: Path) -> bytes:
-    data = path.read_bytes()
-    if not should_normalize_lf_for_hash(path):
-        return data
-    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
-
-
-def sha256(path: Path) -> str:
-    return hashlib.sha256(lf_stable_file_bytes(path)).hexdigest()
-
-
-def is_sha256(value: str) -> bool:
-    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
-
-
-def validate_final_gate(summary: dict[str, Any]) -> None:
-    status = summary["final_gate"]["status"]
-    semantic_pass = int(summary["slices"]["semantic_pass"])
-    if status == "passed" and semantic_pass < 1:
-        raise SystemExit("competition run summary final_gate passed requires slices.semantic_pass >= 1")
-    validator = summary["final_gate"]["validator"]
-    if status == "passed" and "--require-semantic-pass" not in validator:
-        raise SystemExit("competition run summary final_gate passed requires --require-semantic-pass validator")
-
-
-def validate_slice_counts(summary: dict[str, Any]) -> None:
-    slices = summary["slices"]
-    attempted = int(slices["attempted"])
-    terminal = int(slices["semantic_pass"]) + int(slices["refused"]) + int(slices["blocked"]) + int(slices["failed"])
-    if terminal > attempted:
-        raise SystemExit("competition run summary terminal slice counts exceed slices.attempted")
-    if int(slices["compiled"]) > attempted:
-        raise SystemExit("competition run summary slices.compiled exceeds slices.attempted")
-    if summary.get("schema_version", 1) == 1 and int(slices["compiled"]) > int(slices["typed_ir_generated"]):
-        raise SystemExit("competition run summary slices.compiled exceeds slices.typed_ir_generated")
-    if int(slices["typed_ir_generated"]) > attempted:
-        raise SystemExit("competition run summary slices.typed_ir_generated exceeds slices.attempted")
-
-
-def validate_workers(summary: dict[str, Any]) -> None:
-    workers = summary.get("workers")
-    if workers is None:
-        return
-    summaries = workers["summaries"]
-    if int(workers["count"]) != len(summaries):
-        raise SystemExit("competition run summary workers.count does not match workers.summaries length")
-    seen_paths: set[str] = set()
-    for index, worker in enumerate(summaries):
-        validate_worker_summary_path(worker["path"], index=index, seen_paths=seen_paths)
-        if worker["proof_class"] != summary["proof_class"]:
-            raise SystemExit(f"competition run summary workers.summaries[{index}].proof_class does not match summary")
-        slices = worker["slices"]
-        for key in ["attempted", "semantic_pass", "failed"]:
-            if int(worker[key]) != int(slices[key]):
-                raise SystemExit(f"competition run summary workers.summaries[{index}].{key} does not match slices.{key}")
-        for path_key in ["assignment_request", "source_repo_root", "source_file"]:
-            if path_key in worker and not is_repo_relative_posix_path(worker[path_key]):
-                raise SystemExit(
-                    f"competition run summary workers.summaries[{index}].{path_key} must be repo-relative POSIX"
-                )
-        for spec_index, slice_spec in enumerate(worker.get("slice_specs", [])):
-            if not is_repo_relative_posix_path(slice_spec):
-                raise SystemExit(
-                    f"competition run summary workers.summaries[{index}].slice_specs[{spec_index}] must be repo-relative POSIX"
-                )
-        if "source_sha256" in worker and not is_sha256(str(worker["source_sha256"])):
-            raise SystemExit(f"competition run summary workers.summaries[{index}].source_sha256 must be a sha256")
-        if worker["status"] != "passed" and summary["final_gate"]["status"] == "passed":
-            raise SystemExit("competition run summary final_gate passed with failed worker summary")
-
-
-def validate_worker_summary_path(value: str, *, index: int, seen_paths: set[str]) -> None:
-    if not isinstance(value, str) or not is_repo_relative_posix_path(value):
-        raise SystemExit(
-            f"competition run summary workers.summaries[{index}].worker summary path must be repo-relative POSIX"
-        )
-    parts = PurePosixPath(value).parts
-    worker_relative = (
-        len(parts) == 4
-        and parts[0] == "workers"
-        and parts[2] == "summary"
-        and parts[3] == "competition-run-summary.json"
-    )
-    nested_run_relative = (
-        len(parts) >= 5
-        and parts[-4] == "workers"
-        and parts[-2] == "summary"
-        and parts[-1] == "competition-run-summary.json"
-    )
-    if not worker_relative and not nested_run_relative:
-        raise SystemExit(
-            "competition run summary worker summary path must match "
-            "workers/<worker-id>/summary/competition-run-summary.json"
-        )
-    if value in seen_paths:
-        raise SystemExit(f"competition run summary duplicate worker summary path: {value}")
-    seen_paths.add(value)
-
-
-def nonnegative_count(value: Any) -> int | None:
-    if isinstance(value, bool):
-        return None
-    return value if isinstance(value, int) and value >= 0 else None
-
-
-def repo_relative(path: Path, repo_root: Path) -> str:
-    try:
-        return path.resolve().relative_to(repo_root.resolve()).as_posix()
-    except ValueError:
-        return path.as_posix()
