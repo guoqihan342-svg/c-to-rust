@@ -32,6 +32,42 @@
 
         self.assertIn("--slice-spec, --extract-spec, --worker-summary, or direct extraction argument group", str(raised.exception))
 
+    def test_run_step_unifies_cargo_mirror_path_and_python_import_environment(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-env-test-") as tmp:
+            tmp_path = Path(tmp)
+            repo_root = tmp_path / "repo"
+            repo_root.mkdir()
+            inherited_cargo_home = tmp_path / "inherited-cargo"
+            inherited_cargo_bin = inherited_cargo_home / "bin"
+            inherited_cargo_bin.mkdir(parents=True)
+            (inherited_cargo_bin / ("cargo.exe" if sys.platform == "win32" else "cargo")).touch()
+            captured: dict[str, object] = {}
+
+            def capture_runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                captured.update(kwargs)
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with mock.patch.dict(
+                module.os.environ,
+                {
+                    "PATH": str(tmp_path / "missing-bin"),
+                    "PYTHONPATH": str(tmp_path / "existing-python-path"),
+                    "CARGO_HOME": str(inherited_cargo_home),
+                },
+            ):
+                module.run_step(["python", "validator.py"], command_runner=capture_runner, repo_root=repo_root)
+
+            child_env = captured["env"]
+            self.assertIsInstance(child_env, dict)
+            self.assertEqual(
+                str(repo_root / "config" / "competition-env" / "cargo"),
+                child_env["CARGO_HOME"],
+            )
+            self.assertEqual(str(inherited_cargo_bin), child_env["PATH"].split(module.os.pathsep)[0])
+            self.assertEqual(str(repo_root.resolve()), child_env["PYTHONPATH"].split(module.os.pathsep)[0])
+            self.assertIn(str(tmp_path / "existing-python-path"), child_env["PYTHONPATH"].split(module.os.pathsep))
+
     def test_runner_archives_command_logs_with_exit_code_and_output(self) -> None:
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:

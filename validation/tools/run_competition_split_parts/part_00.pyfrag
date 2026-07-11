@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -542,10 +543,37 @@ def run_competition(
     )
 
 
+def competition_subprocess_env(repo_root: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    inherited_cargo_home = env.get("CARGO_HOME")
+    path_value = env.get("PATH", "")
+    if shutil.which("cargo", path=path_value) is None:
+        cargo_bin_candidates = []
+        if inherited_cargo_home:
+            cargo_bin_candidates.append(Path(inherited_cargo_home) / "bin")
+        cargo_bin_candidates.append(Path.home() / ".cargo" / "bin")
+        for cargo_bin in cargo_bin_candidates:
+            if any((cargo_bin / name).is_file() for name in ("cargo", "cargo.exe")):
+                path_value = os.pathsep.join([str(cargo_bin), path_value]) if path_value else str(cargo_bin)
+                break
+
+    root = str(repo_root.resolve())
+    python_path = env.get("PYTHONPATH", "")
+    python_entries = [entry for entry in python_path.split(os.pathsep) if entry]
+    if not any(os.path.normcase(entry) == os.path.normcase(root) for entry in python_entries):
+        python_entries.insert(0, root)
+
+    env["PATH"] = path_value
+    env["PYTHONPATH"] = os.pathsep.join(python_entries)
+    env["CARGO_HOME"] = str(repo_root / "config" / "competition-env" / "cargo")
+    return env
+
+
 def run_step(command: list[str], *, command_runner: CommandRunner, repo_root: Path) -> subprocess.CompletedProcess[str]:
     return command_runner(
         command,
         cwd=repo_root,
+        env=competition_subprocess_env(repo_root),
         text=True,
         encoding="utf-8",
         errors="replace",
