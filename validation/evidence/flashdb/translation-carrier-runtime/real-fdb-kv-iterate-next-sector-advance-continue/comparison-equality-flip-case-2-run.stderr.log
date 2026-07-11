@@ -1,0 +1,6 @@
+
+thread '__c2r_negative_comparison_equality_flip_case_2' (9229) panicked at <translation-carrier-negative>/partition.rs:123:5:
+assertion `left == right` failed: zero-miss add state drifted
+  left: 109
+ right: 100
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

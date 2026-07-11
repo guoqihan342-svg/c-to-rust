@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-next-sector-advance-continue",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_boundary": {
+    "files": ["src/fdb_kvdb.c"],
+    "functions": ["fdb_kv_iterate:next-sector-advance-continue@1870-1873"]
+  },
+  "compared_fields": [
+    "return_value",
+    "call_count",
+    "call_db_observed",
+    "call_sector_seed",
+    "call_alias_start",
+    "alias_start_after",
+    "owner_traversed_after"
+  ],
+  "case_count": 4,
+  "cases": [
+    {
+      "id": "sentinel-hit-ordinary",
+      "inputs": {
+        "db_observed_initial": 41,
+        "db_add_rhs": 7,
+        "sector_seed": 23,
+        "alias_start_initial": 99,
+        "owner_traversed_initial": 10,
+        "scripted_return": 4294967295
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "call_count": 1,
+        "call_db_observed": 41,
+        "call_sector_seed": 23,
+        "call_alias_start": 99,
+        "alias_start_after": 0,
+        "owner_traversed_after": 17
+      }
+    },
+    {
+      "id": "sentinel-hit-u32-wrap",
+      "inputs": {
+        "db_observed_initial": 4294967295,
+        "db_add_rhs": 5,
+        "sector_seed": 0,
+        "alias_start_initial": 1,
+        "owner_traversed_initial": 4294967294,
+        "scripted_return": 4294967295
+      },
+      "expected_outputs": {
+        "return_value": true,
+        "call_count": 1,
+        "call_db_observed": 4294967295,
+        "call_sector_seed": 0,
+        "call_alias_start": 1,
+        "alias_start_after": 0,
+        "owner_traversed_after": 3
+      }
+    },
+    {
+      "id": "zero-miss",
+      "inputs": {
+        "db_observed_initial": 17,
+        "db_add_rhs": 9,
+        "sector_seed": 31,
+        "alias_start_initial": 77,
+        "owner_traversed_initial": 100,
+        "scripted_return": 0
+      },
+      "expected_outputs": {
+        "return_value": false,
+        "call_count": 1,
+        "call_db_observed": 17,
+        "call_sector_seed": 31,
+        "call_alias_start": 77,
+        "alias_start_after": 0,
+        "owner_traversed_after": 100
+      }
+    },
+    {
+      "id": "ordinary-nonzero-miss",
+      "inputs": {
+        "db_observed_initial": 3,
+        "db_add_rhs": 11,
+        "sector_seed": 44,
+        "alias_start_initial": 88,
+        "owner_traversed_initial": 200,
+        "scripted_return": 7
+      },
+      "expected_outputs": {
+        "return_value": false,
+        "call_count": 1,
+        "call_db_observed": 3,
+        "call_sector_seed": 44,
+        "call_alias_start": 88,
+        "alias_start_after": 7,
+        "owner_traversed_after": 200
+      }
+    }
+  ]
+}

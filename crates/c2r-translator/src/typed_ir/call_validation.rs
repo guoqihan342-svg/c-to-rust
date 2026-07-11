@@ -64,7 +64,11 @@ fn validate_bounded_call_args(args: &[IrExpr], context: &EmitContext) -> Result<
             _ => None,
         })
         .collect::<Vec<_>>();
-    if mutable_record_borrows.len() > 1 {
+    let interior_reborrow_pair = match mutable_record_borrows.as_slice() {
+        [(_, left), (_, right)] => context.is_interior_reborrow_call_pair(left, right),
+        _ => false,
+    };
+    if mutable_record_borrows.len() > 1 && !interior_reborrow_pair {
         return Err(
             "one direct call cannot borrow multiple mutable record pointer parameters"
                 .to_string(),

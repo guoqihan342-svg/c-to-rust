@@ -1,0 +1,185 @@
+def require_call_continue_identity_shape(
+    spec: dict[str, Any], label: str, report: dict[str, Any]
+) -> None:
+    identity = report.get("evidence_identity")
+    bindings = identity.get("bindings") if isinstance(identity, dict) else None
+    if not isinstance(identity, dict) or not isinstance(bindings, dict):
+        raise SystemExit(f"--accept-existing-evidence requires {label}.evidence_identity.bindings")
+    expected = {
+        "schema_version": 2,
+        "target_id": required_str(spec, "target_id"),
+        "slice_id": required_str(spec, "slice_id"),
+        "source_commit": source_commit(spec),
+        "replay_contract_kind": CALL_CONTINUE_STATE_KIND,
+    }
+    for key, value in expected.items():
+        if identity.get(key) != value:
+            raise SystemExit(f"--accept-existing-evidence {label}.evidence_identity.{key} mismatch")
+    required_bindings = {
+        "slice_spec_sha256", "fixture_sha256", "real_source_sha256",
+        "source_fragment_sha256", "source_fragment_line_start", "source_fragment_line_end",
+        "carrier_source_sha256", "c_oracle_harness_sha256", "generated_rust_draft_sha256",
+        "generated_replay_test_sha256", "negative_mutation_manifest_sha256",
+    }
+    if set(bindings) != required_bindings:
+        raise SystemExit(f"--accept-existing-evidence {label}.evidence_identity bindings shape mismatch")
+    for key, value in bindings.items():
+        if key.endswith("sha256") and (
+            not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None
+        ):
+            raise SystemExit(f"--accept-existing-evidence {label}.{key} mismatch")
+    material = {key: value for key, value in identity.items() if key not in {"identity_sha256", "recomputed"}}
+    encoded = json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    if identity.get("recomputed") is not True or identity.get("identity_sha256") != hashlib.sha256(encoded).hexdigest():
+        raise SystemExit(f"--accept-existing-evidence {label}.evidence_identity digest mismatch")
+
+
+def require_call_continue_cross_report_identity(
+    spec: dict[str, Any], reports: dict[str, Any], slice_spec_path: Path | None
+) -> None:
+    labels = ("c_oracle", "rust_report", "diff", "negative_diff")
+    identities = [reports[label].get("evidence_identity") for label in labels]
+    if any(identity != identities[0] for identity in identities[1:]):
+        raise SystemExit("--accept-existing-evidence unified evidence identity mismatch")
+    identity = identities[0]
+    bindings = identity["bindings"]
+    spec_path = _accepted_spec_path(spec, slice_spec_path)
+    fixture = spec.get("fixture_contract", {})
+    fixture_path_value = fixture.get("path") or fixture.get("input")
+    fixture_file = required_repo_path(fixture_path_value, "fixture_contract.path")
+    source_root = Path(str(spec.get("source_root", "")))
+    if not source_root.is_absolute():
+        source_root = REPO_ROOT / source_root
+    source_file = source_root / required_str(spec, "source_file")
+    carrier = spec.get("translation_carrier", {})
+    fragment = carrier.get("real_source", {}).get("fragment", {})
+    start = fragment.get("line_start")
+    end = fragment.get("line_end")
+    if isinstance(start, bool) or not isinstance(start, int) or isinstance(end, bool) or not isinstance(end, int) or start < 1 or end < start:
+        raise SystemExit("--accept-existing-evidence source fragment line range mismatch")
+    source_text = source_file.read_text(encoding="utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
+    lines = source_text.splitlines(keepends=True)
+    if end > len(lines):
+        raise SystemExit("--accept-existing-evidence source fragment line range mismatch")
+    fragment_sha = hashlib.sha256("".join(lines[start - 1:end]).encode("utf-8")).hexdigest()
+    c_source = spec.get("c_source")
+    if not isinstance(c_source, str):
+        raise SystemExit("--accept-existing-evidence carrier source mismatch")
+    refs = reports["c_oracle"].get("provenance", {}).get("evidence_refs", {})
+    harness = _accepted_bound_ref(refs, "c_oracle_harness")
+    draft = _accepted_bound_ref(refs, "generated_rust_draft")
+    replay = _accepted_bound_ref(refs, "generated_replay_test")
+    expected = {
+        "slice_spec_sha256": sha256(spec_path),
+        "fixture_sha256": sha256(fixture_file),
+        "real_source_sha256": hashlib.sha256(source_file.read_bytes()).hexdigest(),
+        "source_fragment_sha256": fragment_sha,
+        "source_fragment_line_start": start,
+        "source_fragment_line_end": end,
+        "carrier_source_sha256": hashlib.sha256(c_source.encode("utf-8")).hexdigest(),
+        "c_oracle_harness_sha256": harness["sha256"],
+        "generated_rust_draft_sha256": draft["sha256"],
+        "generated_replay_test_sha256": replay["sha256"],
+    }
+    for key, value in expected.items():
+        if bindings.get(key) != value:
+            raise SystemExit(f"--accept-existing-evidence evidence_identity.bindings.{key} mismatch")
+    if fixture.get("hash") != expected["fixture_sha256"] or spec.get("fixture_hash") != expected["fixture_sha256"]:
+        raise SystemExit("--accept-existing-evidence fixture sha256 mismatch")
+    if spec.get("source_file_hashes", {}).get(spec["source_file"]) != expected["real_source_sha256"]:
+        raise SystemExit("--accept-existing-evidence real source sha256 mismatch")
+    if fragment.get("sha256") != fragment_sha or carrier.get("carrier_source_sha256") != expected["carrier_source_sha256"]:
+        raise SystemExit("--accept-existing-evidence source fragment or carrier mismatch")
+    negative = reports["negative_diff"]
+    from validation.tools._translation_carrier_reporter.call_continue_reports import mutation_manifest
+    from validation.tools._translation_carrier_reporter.errors import ReporterError
+
+    execution = negative.get("actual_mutation_execution")
+    try:
+        manifest = mutation_manifest(execution)
+    except ReporterError as exc:
+        raise SystemExit(f"--accept-existing-evidence negative mutation manifest mismatch: {exc}") from exc
+    if negative.get("mutation_manifest") != manifest or bindings.get("negative_mutation_manifest_sha256") != manifest["sha256"]:
+        raise SystemExit("--accept-existing-evidence negative mutation manifest identity mismatch")
+    _verify_call_continue_partitions(spec, fixture_file, negative, execution)
+    _verify_call_continue_mutations(execution, draft)
+
+
+def _accepted_spec_path(spec: dict[str, Any], supplied: Path | None) -> Path:
+    if supplied is not None:
+        path = supplied if supplied.is_absolute() else REPO_ROOT / supplied
+        if not path.is_file() or read_json(path) != spec:
+            raise SystemExit("--accept-existing-evidence slice spec path or payload mismatch")
+        return path
+    candidate = REPO_ROOT / "validation" / "slice-specs" / f"{spec.get('target_id')}-{spec.get('slice_id')}.json"
+    if not candidate.is_file() or read_json(candidate) != spec:
+        raise SystemExit("--accept-existing-evidence requires the exact slice spec path")
+    return candidate
+
+
+def _accepted_bound_ref(refs: Any, key: str) -> dict[str, Any]:
+    ref = refs.get(key) if isinstance(refs, dict) else None
+    if not isinstance(ref, dict):
+        raise SystemExit(f"--accept-existing-evidence requires {key} reference")
+    path = required_repo_path(ref.get("path"), key)
+    actual = sha256(path)
+    if ref.get("sha256") != actual:
+        raise SystemExit(f"--accept-existing-evidence {key} sha256 mismatch")
+    return {"path": path, "sha256": actual}
+
+
+def _verify_call_continue_mutations(execution: Any, draft: dict[str, Any]) -> None:
+    scenarios = execution.get("scenarios") if isinstance(execution, dict) else None
+    if not isinstance(scenarios, list) or len(scenarios) != 2:
+        raise SystemExit("--accept-existing-evidence negative mutation scenarios mismatch")
+    original = draft["path"].read_bytes()
+    expected_ids = ("comparison-equality-flip", "continue-noop")
+    for scenario, expected_id in zip(scenarios, expected_ids, strict=True):
+        mutation = scenario.get("mutation", {})
+        if scenario.get("scenario_id") != expected_id or mutation.get("mutation_count") != 1:
+            raise SystemExit("--accept-existing-evidence negative mutation scenario identity mismatch")
+        before = str(mutation.get("operator_from", "")).encode("ascii")
+        after = str(mutation.get("operator_to", "")).encode("ascii")
+        offset = mutation.get("byte_offset")
+        if not isinstance(offset, int) or len(before) != len(after) or original[offset:offset + len(before)] != before:
+            raise SystemExit("--accept-existing-evidence negative mutation shape mismatch")
+        mutated = original[:offset] + after + original[offset + len(before):]
+        original_ref = mutation.get("original_draft", {})
+        mutated_ref = mutation.get("mutated_draft", {})
+        mutated_path = required_repo_path(mutated_ref.get("path"), f"{expected_id} mutated draft")
+        if original_ref.get("sha256") != draft["sha256"] or mutated_ref.get("sha256") != hashlib.sha256(mutated).hexdigest() or mutated_path.read_bytes() != mutated:
+            raise SystemExit("--accept-existing-evidence negative mutation artifact mismatch")
+
+
+def _verify_call_continue_partitions(
+    spec: dict[str, Any], fixture_path: Path, negative: dict[str, Any], execution: dict[str, Any]
+) -> None:
+    contract = spec.get("replay_contract", {})
+    external = contract.get("external_callee", {})
+    comparison = contract.get("comparison", {})
+    result = contract.get("return", {})
+    scripted_field = external.get("return_fixture_field")
+    return_field = result.get("fixture_field")
+    sentinel = comparison.get("sentinel")
+    cases = read_json(fixture_path).get("cases")
+    if not isinstance(cases, list) or len(cases) < 4 or not isinstance(scripted_field, str) or not isinstance(return_field, str):
+        raise SystemExit("--accept-existing-evidence negative mutation fixture partition mismatch")
+    ids = [str(case.get("id")) for case in cases]
+    scripted_values = [case.get("inputs", case).get(scripted_field) for case in cases]
+    hit_ids = [case_id for case_id, value in zip(ids, scripted_values, strict=True) if value == sentinel]
+    zero_miss = [case_id for case_id, value in zip(ids, scripted_values, strict=True) if value == 0 and value != sentinel]
+    nonzero_miss = [case_id for case_id, value in zip(ids, scripted_values, strict=True) if value not in {0, sentinel}]
+    if len(hit_ids) < 2 or not zero_miss or not nonzero_miss:
+        raise SystemExit("--accept-existing-evidence negative mutation fixture partition mismatch")
+    for case, expected_hit in zip(cases, (case_id in hit_ids for case_id in ids), strict=True):
+        if case.get("expected_outputs", {}).get(return_field) is not expected_hit:
+            raise SystemExit("--accept-existing-evidence negative mutation fixture return mismatch")
+    scenarios = execution["scenarios"]
+    expected = ((ids, []), (hit_ids, [case_id for case_id in ids if case_id not in hit_ids]))
+    for scenario, (detected, passed) in zip(scenarios, expected, strict=True):
+        partition = scenario.get("partition_replay", {})
+        if scenario.get("expected_detected_case_ids") != detected or partition.get("detected_case_ids") != detected or partition.get("passed_case_ids") != passed:
+            raise SystemExit("--accept-existing-evidence negative mutation partition mismatch")
+    declared = negative.get("partition_detection", {})
+    if declared.get("comparison-equality-flip") != {"detected_case_ids": ids, "passed_case_ids": []} or declared.get("continue-noop") != {"detected_case_ids": hit_ids, "passed_case_ids": expected[1][1]}:
+        raise SystemExit("--accept-existing-evidence negative mutation report partition mismatch")

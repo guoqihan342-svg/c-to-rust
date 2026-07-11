@@ -93,6 +93,36 @@ fn assignment_call_comparison_contexts_admit_only_their_declared_operators() {
     );
 }
 
+#[test]
+fn false_empty_then_else_if_wrapper_flattens_without_clang() {
+    let ast = serde_json::json!({
+        "kind": "IfStmt",
+        "inner": [
+            {"kind": "IntegerLiteral", "value": "0", "type": {"qualType": "int"}},
+            {"kind": "CompoundStmt", "inner": []},
+            {
+                "kind": "IfStmt",
+                "inner": [
+                    {"kind": "IntegerLiteral", "value": "1", "type": {"qualType": "int"}},
+                    {"kind": "CompoundStmt", "inner": [{"kind": "ContinueStmt"}]}
+                ]
+            }
+        ]
+    });
+
+    let body = if_stmt_skeletons_from_ast(&ast).expect("flatten false wrapper");
+    let [ClangStmtSkeleton::If {
+        condition: ClangExprSkeleton::IntegerLiteral { value: 1, .. },
+        then_body,
+        else_body,
+    }] = body.as_slice()
+    else {
+        panic!("unexpected flattened body: {body:?}");
+    };
+    assert_eq!(then_body.as_slice(), [ClangStmtSkeleton::Continue]);
+    assert!(else_body.is_empty());
+}
+
 fn direct_int_call_ast(callee: &str) -> Value {
     serde_json::json!({
         "kind": "CallExpr",

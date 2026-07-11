@@ -1,0 +1,83 @@
+CALL_CONTINUE_STATE_KIND = (
+    "scripted_external_u32_call_interior_reset_add_while_continue_state"
+)
+
+
+def call_continue_state_replay_supported(
+    spec: dict[str, Any], fixture_binding: dict[str, Any] | None = None
+) -> bool:
+    return call_continue_state_replay_contract(spec, fixture_binding) is not None
+
+
+def call_continue_state_replay_contract(
+    spec: dict[str, Any], fixture_binding: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    raw = spec.get("replay_contract")
+    if not isinstance(raw, dict) or raw.get("kind") != CALL_CONTINUE_STATE_KIND:
+        return None
+    from validation.tools._translation_carrier_reporter.call_continue_contract import (
+        behavior_fields as call_continue_behavior_fields,
+        parse_contract,
+    )
+    from validation.tools._translation_carrier_reporter.call_continue_model import (
+        validate_cases,
+    )
+    from validation.tools._translation_carrier_reporter.errors import ReporterError
+
+    try:
+        contract = parse_contract(spec)
+        from validation.tools.call_continue_syntax import validate_c_call_continue_source
+
+        validate_c_call_continue_source(required_str(spec, "c_source"), contract)
+        if fixture_binding is not None:
+            cases = []
+            for binding in fixture_binding.get("case_bindings", []):
+                payload = oracle_fixture_input_payload(spec, binding)
+                cases.append(
+                    {
+                        "id": binding.get("id"),
+                        "inputs": payload.get("inputs", payload),
+                        "expected_outputs": {
+                            field: binding["expected_outputs"][field]
+                            for field in call_continue_behavior_fields(contract)
+                        },
+                    }
+                )
+            validate_cases(cases, contract)
+    except (ReporterError, ValueError) as exc:
+        raise ValueError(str(exc)) from exc
+    return contract
+
+
+def call_continue_fixture_state_model(contract: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "kind": CALL_CONTINUE_STATE_KIND,
+        "scope": "fixture_only",
+        "external_callee_semantics_verified": False,
+        "argument_modes": [
+            item["mode"] for item in contract["external_callee"]["arguments"]
+        ],
+        "operations": [
+            "direct_external_call_assignment",
+            "exact_u32_sentinel_compare",
+            "hit_alias_reset_zero",
+            "hit_owner_wrapping_add",
+            "current_level_continue",
+            "miss_false_return",
+        ],
+        "pointer_root_count": 2,
+        "noalias_required": [list(pair) for pair in contract["noalias_required"]],
+    }
+
+
+def call_continue_generated_rust_safety(
+    spec: dict[str, Any], draft_path: Path
+) -> dict[str, Any] | None:
+    contract = call_continue_state_replay_contract(spec)
+    if contract is None:
+        return None
+    from validation.tools.call_continue_syntax import validate_rust_call_continue_draft
+
+    return validate_rust_call_continue_draft(
+        draft_path.read_text(encoding="utf-8-sig"), contract
+    )

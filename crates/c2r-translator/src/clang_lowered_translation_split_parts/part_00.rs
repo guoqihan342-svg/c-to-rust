@@ -1162,6 +1162,11 @@ fn noalias_param_pairs_from_spec(spec: &SliceSpec) -> Vec<typed_ir::NoAliasParam
         .iter()
         .map(|item| item.name.as_str())
         .collect();
+    let declared_pointers: BTreeSet<&str> = inputs
+        .iter()
+        .chain(outputs.iter())
+        .copied()
+        .collect();
     spec.c_boundary
         .pointer_contract
         .noalias_required
@@ -1181,6 +1186,11 @@ fn noalias_param_pairs_from_spec(spec: &SliceSpec) -> Vec<typed_ir::NoAliasParam
                 Some(typed_ir::NoAliasParamPair {
                     readonly_param: right.to_string(),
                     mutable_param: left.to_string(),
+                })
+            } else if declared_pointers.contains(left) && declared_pointers.contains(right) {
+                Some(typed_ir::NoAliasParamPair {
+                    readonly_param: left.to_string(),
+                    mutable_param: right.to_string(),
                 })
             } else {
                 None

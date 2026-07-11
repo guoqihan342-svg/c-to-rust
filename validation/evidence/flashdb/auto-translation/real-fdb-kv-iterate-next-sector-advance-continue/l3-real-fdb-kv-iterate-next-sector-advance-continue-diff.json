@@ -1,0 +1,51 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-kv-iterate-next-sector-advance-continue-diff.json",
+    "sha256": "a25a016147ed728b074596765ec2ed2e7b37bf1148825f0a9613b5669e1d8f4d",
+    "status": "passed"
+  },
+  "accepted_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-c2rust-baseline-manifest.json",
+    "sha256": "b075dfd9f025f61a79885b9507762659ff4ec75737841aaffdda042b06f892fe",
+    "status": "skipped"
+  },
+  "compared_fields": [
+    "return_value",
+    "call_count",
+    "call_db_observed",
+    "call_sector_seed",
+    "call_alias_start",
+    "alias_start_after",
+    "owner_traversed_after"
+  ],
+  "diff_gate": "schema_aware_c_rust_diff",
+  "first_mismatch": null,
+  "required_inputs": {
+    "c_oracle_actual_status": "C_ORACLE_GENERATED",
+    "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_actual_status": "passed",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-route-decision.json",
+    "sha256": "33ce7276384f2d4f752bccd2e67ffecbae5d3fd0b0c5c3ddb7066dc0dce0d95f",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-kv-iterate-next-sector-advance-continue",
+  "status": "passed",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "f214e176f696f07abcdf63db3790b8951588980d11ba9e2f5d82caea10060c4d",
+    "status": "passed"
+  }
+}

@@ -1,0 +1,580 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-iterate-next-sector-advance-continue",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "case_count": 4,
+  "compared_fields": [
+    "return_value",
+    "call_count",
+    "call_db_observed",
+    "call_sector_seed",
+    "call_alias_start",
+    "alias_start_after",
+    "owner_traversed_after"
+  ],
+  "claim_boundary": {
+    "scope": "source_fragment_only",
+    "whole_function_semantics_verified": false,
+    "external_callee_semantics_verified": false,
+    "verified_behavior": "Three renamed entry arguments preserve mutable db, by-value local, and mutable owner; one direct fixture-only external call observes ordered root/local/owner-alias snapshots; exact u32 sentinel hits reset the alias, wrapping-add owner state, and continue, while misses return false.",
+    "external_callee": "get_next_kv_addr",
+    "argument_modes": [
+      "entry_root",
+      "entry_local_copy",
+      "owner_interior_alias"
+    ],
+    "noalias_required": [
+      [
+        "db",
+        "itr"
+      ]
+    ],
+    "excluded_semantics": [
+      "the real get_next_kv_addr implementation and side effects",
+      "the enclosing fdb_kv_iterate loops and all statements outside lines 1870-1873",
+      "real FlashDB record layout, ABI, storage, and sector lifecycle"
+    ]
+  },
+  "evidence_identity": {
+    "schema_version": 2,
+    "target_id": "flashdb",
+    "slice_id": "real-fdb-kv-iterate-next-sector-advance-continue",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "replay_contract_kind": "scripted_external_u32_call_interior_reset_add_while_continue_state",
+    "bindings": {
+      "slice_spec_sha256": "7184518ae3f1e055f6bb4e9f6a936837511bf36e0fb5f1ed0c0eeb5380138d71",
+      "fixture_sha256": "a81dffee77616387b5eddf2ce4437d34f8b788d6799dfc93df95f8b7673cd307",
+      "real_source_sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+      "source_fragment_sha256": "0ef93345da0afe4a13e4abffe74060e14b9b8d10e6096bd5ec4166306a3004f0",
+      "source_fragment_line_start": 1870,
+      "source_fragment_line_end": 1873,
+      "carrier_source_sha256": "5cee34d1945db00e70a2c4c8f46c4db8a0bb36b0140e0e3a5591c8e85b795071",
+      "c_oracle_harness_sha256": "9a80d8e56de543a5df3cbc1c42c2d6929dc33a1217adfea93d434e379f1f48d4",
+      "generated_rust_draft_sha256": "5b91a34aebb20bf7ce2f476f45bfda69277a0f77cd992456c7b1cba384141391",
+      "generated_replay_test_sha256": "5af2a998ae7b60d152eafba00ed53f5c85835b962ccc71c6929a6a37b49d5cfe",
+      "negative_mutation_manifest_sha256": "18eebccee6f7fd053ee1bd32c49e6e4cea6cfbc144faef0f9953e259152020fc"
+    },
+    "identity_sha256": "98ec3214c8c1c38446b54469627382a85e00ad46826e389ac13a77495c443982",
+    "recomputed": true
+  },
+  "status": "expected_failed",
+  "expected_failure": true,
+  "mutation_detected": true,
+  "mutation_manifest": {
+    "schema_version": 1,
+    "scenarios": [
+      {
+        "scenario_id": "comparison-equality-flip",
+        "operator_from": "==",
+        "operator_to": "!=",
+        "mutation_count": 1,
+        "byte_offset": 2435,
+        "original_draft_sha256": "5b91a34aebb20bf7ce2f476f45bfda69277a0f77cd992456c7b1cba384141391",
+        "mutated_draft_sha256": "79d34ed484597821be85791c53d930cb5c7463c2021805aa97a97c8f09a98771",
+        "expected_detected_case_ids": [
+          "sentinel-hit-ordinary",
+          "sentinel-hit-u32-wrap",
+          "zero-miss",
+          "ordinary-nonzero-miss"
+        ]
+      },
+      {
+        "scenario_id": "continue-noop",
+        "operator_from": "continue;",
+        "operator_to": "let _=();",
+        "mutation_count": 1,
+        "byte_offset": 2590,
+        "original_draft_sha256": "5b91a34aebb20bf7ce2f476f45bfda69277a0f77cd992456c7b1cba384141391",
+        "mutated_draft_sha256": "f2dae05c2827c7caf2219259598aaedf6b507db9d4b2740605fb95fa713818a8",
+        "expected_detected_case_ids": [
+          "sentinel-hit-ordinary",
+          "sentinel-hit-u32-wrap"
+        ]
+      }
+    ],
+    "sha256": "18eebccee6f7fd053ee1bd32c49e6e4cea6cfbc144faef0f9953e259152020fc",
+    "recomputed": true
+  },
+  "detected_case_ids": [
+    "sentinel-hit-ordinary",
+    "sentinel-hit-u32-wrap",
+    "zero-miss",
+    "ordinary-nonzero-miss"
+  ],
+  "partition_detection": {
+    "comparison-equality-flip": {
+      "detected_case_ids": [
+        "sentinel-hit-ordinary",
+        "sentinel-hit-u32-wrap",
+        "zero-miss",
+        "ordinary-nonzero-miss"
+      ],
+      "passed_case_ids": []
+    },
+    "continue-noop": {
+      "detected_case_ids": [
+        "sentinel-hit-ordinary",
+        "sentinel-hit-u32-wrap"
+      ],
+      "passed_case_ids": [
+        "zero-miss",
+        "ordinary-nonzero-miss"
+      ]
+    }
+  },
+  "actual_mutation_execution": {
+    "scenarios": [
+      {
+        "scenario_id": "comparison-equality-flip",
+        "mutation": {
+          "operator_from": "==",
+          "operator_to": "!=",
+          "mutation_count": 1,
+          "byte_offset": 2435,
+          "original_draft": {
+            "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-rust-draft.rs",
+            "sha256": "5b91a34aebb20bf7ce2f476f45bfda69277a0f77cd992456c7b1cba384141391"
+          },
+          "mutated_draft": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/mutated-comparison-equality-flip-rust-draft.rs",
+            "sha256": "79d34ed484597821be85791c53d930cb5c7463c2021805aa97a97c8f09a98771"
+          },
+          "mutated_sha256": "79d34ed484597821be85791c53d930cb5c7463c2021805aa97a97c8f09a98771"
+        },
+        "expected_detected_case_ids": [
+          "sentinel-hit-ordinary",
+          "sentinel-hit-u32-wrap",
+          "zero-miss",
+          "ordinary-nonzero-miss"
+        ],
+        "same_generated_replay_harness": {
+          "compile": {
+            "argv": [
+              "rustc",
+              "--edition=2021",
+              "--test",
+              "--error-format=json",
+              "-Aunused_assignments",
+              "<translation-carrier-negative>/same.rs",
+              "-o",
+              "<translation-carrier-negative>/same.exe"
+            ],
+            "returncode": 0,
+            "stdout": {
+              "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-same-compile.stdout.log",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "stderr": {
+              "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-same-compile.stderr.log",
+              "sha256": "c02e6a4e3bfe013c670e55b0fabe4f00ded84d15a2abeab7cb831f5210e27299"
+            }
+          },
+          "run": {
+            "argv": [
+              "<translation-carrier-negative>/same.exe",
+              "--nocapture"
+            ],
+            "returncode": 101,
+            "stdout": {
+              "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-same-run.stdout.log",
+              "sha256": "6ab615e9ae832afa0d294d77ceaeea4678aefca811eca9493c49e7cae1e9c9e1"
+            },
+            "stderr": {
+              "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-same-run.stderr.log",
+              "sha256": "9f36a9f52d5730340b4448343a213ece5503a284c96159e5105c27be62a6ce12"
+            }
+          },
+          "expected_run_failure": true
+        },
+        "partition_replay": {
+          "compile": {
+            "argv": [
+              "rustc",
+              "--edition=2021",
+              "--test",
+              "--error-format=json",
+              "-Aunused_assignments",
+              "<translation-carrier-negative>/partition.rs",
+              "-o",
+              "<translation-carrier-negative>/partition.exe"
+            ],
+            "returncode": 0,
+            "stdout": {
+              "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-partition-compile.stdout.log",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "stderr": {
+              "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-partition-compile.stderr.log",
+              "sha256": "894399d773a4a608fee51de9a0385451af00d0f4e306a2301af3bfb9c317a729"
+            }
+          },
+          "case_runs": [
+            {
+              "case_id": "sentinel-hit-ordinary",
+              "test_name": "__c2r_negative_comparison_equality_flip_case_0",
+              "detected": true,
+              "argv": [
+                "<translation-carrier-negative>/partition.exe",
+                "--exact",
+                "__c2r_negative_comparison_equality_flip_case_0",
+                "--nocapture"
+              ],
+              "returncode": 101,
+              "stdout": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-case-0-run.stdout.log",
+                "sha256": "fd0e6812809aa58ad8dec29d355ec3f4cd5a8cc7df30f35076d4e0da6d4ecfaf"
+              },
+              "stderr": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-case-0-run.stderr.log",
+                "sha256": "a66286737e979025ac8089360ab31ef2f3e5bde7df66ef84515e9e7673ed45be"
+              }
+            },
+            {
+              "case_id": "sentinel-hit-u32-wrap",
+              "test_name": "__c2r_negative_comparison_equality_flip_case_1",
+              "detected": true,
+              "argv": [
+                "<translation-carrier-negative>/partition.exe",
+                "--exact",
+                "__c2r_negative_comparison_equality_flip_case_1",
+                "--nocapture"
+              ],
+              "returncode": 101,
+              "stdout": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-case-1-run.stdout.log",
+                "sha256": "e9653f19ea774999b95369e48a830cd1d1e48f7edc1cf7c8a9751d2e7ab76a7e"
+              },
+              "stderr": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-case-1-run.stderr.log",
+                "sha256": "070691f60349c443d611bb3290e57e8b9b1336d30ee8df103c8fc028d8865064"
+              }
+            },
+            {
+              "case_id": "zero-miss",
+              "test_name": "__c2r_negative_comparison_equality_flip_case_2",
+              "detected": true,
+              "argv": [
+                "<translation-carrier-negative>/partition.exe",
+                "--exact",
+                "__c2r_negative_comparison_equality_flip_case_2",
+                "--nocapture"
+              ],
+              "returncode": 101,
+              "stdout": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-case-2-run.stdout.log",
+                "sha256": "fc108577623a849d4a83f2ba7ba3f569e12bc0b68efd778bad8312a4bf72c9ad"
+              },
+              "stderr": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-case-2-run.stderr.log",
+                "sha256": "1e554d9566f25e2cba9d327b6ebb1e75960906ada8cf6dd6fcf50e01ee77f1d4"
+              }
+            },
+            {
+              "case_id": "ordinary-nonzero-miss",
+              "test_name": "__c2r_negative_comparison_equality_flip_case_3",
+              "detected": true,
+              "argv": [
+                "<translation-carrier-negative>/partition.exe",
+                "--exact",
+                "__c2r_negative_comparison_equality_flip_case_3",
+                "--nocapture"
+              ],
+              "returncode": 101,
+              "stdout": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-case-3-run.stdout.log",
+                "sha256": "0cec25aa69d7feb68864a29c044f6827f99239515e5b64e457876132be966668"
+              },
+              "stderr": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/comparison-equality-flip-case-3-run.stderr.log",
+                "sha256": "bdc70a507614f325d89b57300318ff841c1161c6996e04b0ac9180f93a0282cc"
+              }
+            }
+          ],
+          "detected_case_ids": [
+            "sentinel-hit-ordinary",
+            "sentinel-hit-u32-wrap",
+            "zero-miss",
+            "ordinary-nonzero-miss"
+          ],
+          "passed_case_ids": []
+        }
+      },
+      {
+        "scenario_id": "continue-noop",
+        "mutation": {
+          "operator_from": "continue;",
+          "operator_to": "let _=();",
+          "mutation_count": 1,
+          "byte_offset": 2590,
+          "original_draft": {
+            "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-iterate-next-sector-advance-continue/l3-real-fdb-kv-iterate-next-sector-advance-continue-rust-draft.rs",
+            "sha256": "5b91a34aebb20bf7ce2f476f45bfda69277a0f77cd992456c7b1cba384141391"
+          },
+          "mutated_draft": {
+            "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/mutated-continue-noop-rust-draft.rs",
+            "sha256": "f2dae05c2827c7caf2219259598aaedf6b507db9d4b2740605fb95fa713818a8"
+          },
+          "mutated_sha256": "f2dae05c2827c7caf2219259598aaedf6b507db9d4b2740605fb95fa713818a8"
+        },
+        "expected_detected_case_ids": [
+          "sentinel-hit-ordinary",
+          "sentinel-hit-u32-wrap"
+        ],
+        "same_generated_replay_harness": {
+          "compile": {
+            "argv": [
+              "rustc",
+              "--edition=2021",
+              "--test",
+              "--error-format=json",
+              "-Aunused_assignments",
+              "<translation-carrier-negative>/same.rs",
+              "-o",
+              "<translation-carrier-negative>/same.exe"
+            ],
+            "returncode": 0,
+            "stdout": {
+              "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-same-compile.stdout.log",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "stderr": {
+              "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-same-compile.stderr.log",
+              "sha256": "52a2e211e7486ebfa7e16acf67b5271c4d8896bc45703108767c35c2f3dbe1af"
+            }
+          },
+          "run": {
+            "argv": [
+              "<translation-carrier-negative>/same.exe",
+              "--nocapture"
+            ],
+            "returncode": 101,
+            "stdout": {
+              "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-same-run.stdout.log",
+              "sha256": "6ab615e9ae832afa0d294d77ceaeea4678aefca811eca9493c49e7cae1e9c9e1"
+            },
+            "stderr": {
+              "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-same-run.stderr.log",
+              "sha256": "157e1c67d4c02d6bcaccb2567641250bd42b0a29f060fc34ad7b4fd73cf5d366"
+            }
+          },
+          "expected_run_failure": true
+        },
+        "partition_replay": {
+          "compile": {
+            "argv": [
+              "rustc",
+              "--edition=2021",
+              "--test",
+              "--error-format=json",
+              "-Aunused_assignments",
+              "<translation-carrier-negative>/partition.rs",
+              "-o",
+              "<translation-carrier-negative>/partition.exe"
+            ],
+            "returncode": 0,
+            "stdout": {
+              "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-partition-compile.stdout.log",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "stderr": {
+              "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-partition-compile.stderr.log",
+              "sha256": "9b7acdd0f9181b9036884ab74bf235ab9e9f3bfe859b9125423b36410dcad06e"
+            }
+          },
+          "case_runs": [
+            {
+              "case_id": "sentinel-hit-ordinary",
+              "test_name": "__c2r_negative_continue_noop_case_0",
+              "detected": true,
+              "argv": [
+                "<translation-carrier-negative>/partition.exe",
+                "--exact",
+                "__c2r_negative_continue_noop_case_0",
+                "--nocapture"
+              ],
+              "returncode": 101,
+              "stdout": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-case-0-run.stdout.log",
+                "sha256": "99a74cdf2bb084499609bc1955fc61b94ca53a821b691b30582079f249406c3a"
+              },
+              "stderr": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-case-0-run.stderr.log",
+                "sha256": "741174a2258e034fee692b86e02880fdf4ba9562e3463f13c357db580611c706"
+              }
+            },
+            {
+              "case_id": "sentinel-hit-u32-wrap",
+              "test_name": "__c2r_negative_continue_noop_case_1",
+              "detected": true,
+              "argv": [
+                "<translation-carrier-negative>/partition.exe",
+                "--exact",
+                "__c2r_negative_continue_noop_case_1",
+                "--nocapture"
+              ],
+              "returncode": 101,
+              "stdout": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-case-1-run.stdout.log",
+                "sha256": "f2e373c2b44082170c7ba5a3a4026bb94f8bc35db212242b55c053004fd96f71"
+              },
+              "stderr": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-case-1-run.stderr.log",
+                "sha256": "f1b0a01058ffc03ff515d1f448e49932f8c6e20e1347ae8b43b93b50a9f0d169"
+              }
+            },
+            {
+              "case_id": "zero-miss",
+              "test_name": "__c2r_negative_continue_noop_case_2",
+              "detected": false,
+              "argv": [
+                "<translation-carrier-negative>/partition.exe",
+                "--exact",
+                "__c2r_negative_continue_noop_case_2",
+                "--nocapture"
+              ],
+              "returncode": 0,
+              "stdout": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-case-2-run.stdout.log",
+                "sha256": "9308978e0e90fb90e1a54801f3e6f97ea43936f197488f39b84b84fbfa90c1bc"
+              },
+              "stderr": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-case-2-run.stderr.log",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              }
+            },
+            {
+              "case_id": "ordinary-nonzero-miss",
+              "test_name": "__c2r_negative_continue_noop_case_3",
+              "detected": false,
+              "argv": [
+                "<translation-carrier-negative>/partition.exe",
+                "--exact",
+                "__c2r_negative_continue_noop_case_3",
+                "--nocapture"
+              ],
+              "returncode": 0,
+              "stdout": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-case-3-run.stdout.log",
+                "sha256": "9f0b6b952e93304fa99730593fd0d8760f06fa269be1dfbd4eb812d9fcb4ee40"
+              },
+              "stderr": {
+                "path": "validation/evidence/flashdb/translation-carrier-runtime/real-fdb-kv-iterate-next-sector-advance-continue/continue-noop-case-3-run.stderr.log",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              }
+            }
+          ],
+          "detected_case_ids": [
+            "sentinel-hit-ordinary",
+            "sentinel-hit-u32-wrap"
+          ],
+          "passed_case_ids": [
+            "zero-miss",
+            "ordinary-nonzero-miss"
+          ]
+        }
+      }
+    ]
+  },
+  "first_mismatch": {
+    "scenario_id": "comparison-equality-flip",
+    "case_id": "sentinel-hit-ordinary",
+    "field": "return_value",
+    "accepted_value": true,
+    "mutated_value": false
+  },
+  "mismatches": [
+    {
+      "scenario_id": "comparison-equality-flip",
+      "case_id": "sentinel-hit-ordinary",
+      "field": "return_value",
+      "accepted_value": true,
+      "mutated_value": false
+    },
+    {
+      "scenario_id": "comparison-equality-flip",
+      "case_id": "sentinel-hit-ordinary",
+      "field": "alias_start_after",
+      "accepted_value": 0,
+      "mutated_value": 4294967295
+    },
+    {
+      "scenario_id": "comparison-equality-flip",
+      "case_id": "sentinel-hit-ordinary",
+      "field": "owner_traversed_after",
+      "accepted_value": 17,
+      "mutated_value": 10
+    },
+    {
+      "scenario_id": "comparison-equality-flip",
+      "case_id": "sentinel-hit-u32-wrap",
+      "field": "return_value",
+      "accepted_value": true,
+      "mutated_value": false
+    },
+    {
+      "scenario_id": "comparison-equality-flip",
+      "case_id": "sentinel-hit-u32-wrap",
+      "field": "alias_start_after",
+      "accepted_value": 0,
+      "mutated_value": 4294967295
+    },
+    {
+      "scenario_id": "comparison-equality-flip",
+      "case_id": "sentinel-hit-u32-wrap",
+      "field": "owner_traversed_after",
+      "accepted_value": 3,
+      "mutated_value": 4294967294
+    },
+    {
+      "scenario_id": "comparison-equality-flip",
+      "case_id": "zero-miss",
+      "field": "return_value",
+      "accepted_value": false,
+      "mutated_value": true
+    },
+    {
+      "scenario_id": "comparison-equality-flip",
+      "case_id": "zero-miss",
+      "field": "owner_traversed_after",
+      "accepted_value": 100,
+      "mutated_value": 109
+    },
+    {
+      "scenario_id": "comparison-equality-flip",
+      "case_id": "ordinary-nonzero-miss",
+      "field": "return_value",
+      "accepted_value": false,
+      "mutated_value": true
+    },
+    {
+      "scenario_id": "comparison-equality-flip",
+      "case_id": "ordinary-nonzero-miss",
+      "field": "alias_start_after",
+      "accepted_value": 7,
+      "mutated_value": 0
+    },
+    {
+      "scenario_id": "comparison-equality-flip",
+      "case_id": "ordinary-nonzero-miss",
+      "field": "owner_traversed_after",
+      "accepted_value": 200,
+      "mutated_value": 211
+    },
+    {
+      "scenario_id": "continue-noop",
+      "case_id": "sentinel-hit-ordinary",
+      "field": "return_value",
+      "accepted_value": true,
+      "mutated_value": false
+    },
+    {
+      "scenario_id": "continue-noop",
+      "case_id": "sentinel-hit-u32-wrap",
+      "field": "return_value",
+      "accepted_value": true,
+      "mutated_value": false
+    }
+  ]
+}

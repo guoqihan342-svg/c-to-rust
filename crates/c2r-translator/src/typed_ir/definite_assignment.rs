@@ -110,7 +110,11 @@ impl DefiniteAssignmentState {
         &mut self,
         key: &MutableRecordPointerFieldKey,
     ) -> Result<(), String> {
-        if !self.mutable_record_pointer_fields.contains(key) {
+        let initialized_call_root = self
+            .interior_reborrows
+            .values()
+            .any(|plan| plan.call_root.as_deref() == Some(key.base.as_str()));
+        if !self.mutable_record_pointer_fields.contains(key) && !initialized_call_root {
             return Err(format!(
                 "mutable record pointer field {}.{} is read before definite assignment",
                 key.base, key.field

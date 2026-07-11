@@ -202,11 +202,15 @@ fn is_exact_u32_constant(expr: &IrExpr) -> bool {
     }
     match expr {
         IrExpr::LitInt { .. } => true,
-        IrExpr::Cast {
-            implicit: true,
-            expr,
-            ..
-        } => matches!(expr.as_ref(), IrExpr::LitInt { .. }),
+        IrExpr::Cast { expr, .. } => match expr.as_ref() {
+            IrExpr::LitInt { .. } => true,
+            IrExpr::Unary {
+                op: IrUnOp::Neg,
+                operand,
+                ..
+            } => matches!(operand.as_ref(), IrExpr::LitInt { .. }),
+            _ => false,
+        },
         _ => false,
     }
 }

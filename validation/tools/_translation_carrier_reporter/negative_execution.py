@@ -19,6 +19,8 @@ from .sequence_model import (
 )
 from .source_binding import StaticContext
 from .state_replay_kinds import is_state_replay_kind
+from .call_continue_contract import KIND as CALL_CONTINUE_KIND
+from .call_continue_negative_execution import run_call_continue_negative_execution
 from .state_replay_negative import (
     mutation_spec as state_replay_mutation_spec,
     negative_partition_probe_source as state_replay_partition_probe_source,
@@ -43,6 +45,10 @@ def run_negative_execution(
     replay_test_path: Path,
     output_dir: Path,
 ) -> dict[str, Any]:
+    if context.contract.get("kind") == CALL_CONTINUE_KIND:
+        return run_call_continue_negative_execution(
+            context, draft_path, replay_test_path, output_dir
+        )
     rustc = shutil.which("rustc")
     if rustc is None:
         raise ReporterError("rustc is required for generated-draft negative replay")

@@ -37,6 +37,12 @@ from .reset_add_while_continue_reports import (
     build_report_claim as build_reset_add_report_claim,
     evidence_identity as build_reset_add_evidence_identity,
 )
+from .call_continue_contract import KIND as CALL_CONTINUE_KIND
+from .call_continue_reports import (
+    build_negative_report as build_call_continue_negative_report,
+    build_report_claim as build_call_continue_report_claim,
+    evidence_identity as build_call_continue_evidence_identity,
+)
 from .record_contract import KIND as RECORD_KIND
 from .sequence_contract import KIND as SEQUENCE_KIND
 from .sequence_model import mutated_observable_outputs, mutation_partition
@@ -102,7 +108,11 @@ def build_reports(
         "compared_fields": fields,
         "claim_boundary": claim,
     }
-    if context.contract.get("kind") == RESET_ADD_CONTINUE_KIND:
+    if context.contract.get("kind") == CALL_CONTINUE_KIND:
+        common["evidence_identity"] = build_call_continue_evidence_identity(
+            context, runtime, negative_execution
+        )
+    elif context.contract.get("kind") == RESET_ADD_CONTINUE_KIND:
         common["evidence_identity"] = build_reset_add_evidence_identity(context, runtime)
     negative = build_negative_report(context, common, negative_execution)
     c_oracle = {
@@ -146,6 +156,8 @@ def build_negative_report(
     common: dict[str, Any],
     execution: dict[str, Any],
 ) -> dict[str, Any]:
+    if context.contract.get("kind") == CALL_CONTINUE_KIND:
+        return build_call_continue_negative_report(context, common, execution)
     if context.contract.get("kind") == RESET_ADD_CONTINUE_KIND:
         return build_reset_add_negative_report(context, common, execution)
     if context.contract.get("kind") == INTERIOR_PROJECTION_KIND:
@@ -264,6 +276,8 @@ def build_sequence_negative_report(
 
 
 def report_claim(context: StaticContext) -> dict[str, Any]:
+    if context.contract.get("kind") == CALL_CONTINUE_KIND:
+        return build_call_continue_report_claim(context)
     if context.contract.get("kind") == RESET_ADD_CONTINUE_KIND:
         return build_reset_add_report_claim(context)
     if context.contract.get("kind") == INTERIOR_PROJECTION_KIND:

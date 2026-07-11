@@ -112,6 +112,9 @@ impl EmitContext {
         for plan in interior_reborrows.values() {
             mutable_record_pointer_write_params.insert(plan.owner.clone());
             mutable_record_pointer_write_params.insert(plan.alias.clone());
+            if let Some(call_root) = &plan.call_root {
+                mutable_record_pointer_write_params.insert(call_root.clone());
+            }
         }
         let readonly_record_pointer_array_index_params =
             collect_readonly_record_pointer_array_index_params(
@@ -232,6 +235,20 @@ impl EmitContext {
 
     fn interior_reborrow(&self, alias: &str) -> Option<&InteriorReborrowPlan> {
         self.interior_reborrows.get(alias)
+    }
+
+    fn is_interior_reborrow_call_pair(&self, left: &str, right: &str) -> bool {
+        self.interior_reborrows.values().any(|plan| {
+            plan.call_root.as_deref().is_some_and(|root| {
+                (left == plan.alias && right == root) || (right == plan.alias && left == root)
+            })
+        })
+    }
+
+    fn is_interior_reborrow_call_root(&self, name: &str) -> bool {
+        self.interior_reborrows
+            .values()
+            .any(|plan| plan.call_root.as_deref() == Some(name))
     }
 
     fn is_mutable_record_pointer_read_field(&self, name: &str, field: &str) -> bool {

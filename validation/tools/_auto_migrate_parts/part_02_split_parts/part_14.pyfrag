@@ -1,0 +1,50 @@
+def rust_replay_call_continue_state_cases_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> str:
+    contract = call_continue_state_replay_contract(spec, fixture_binding)
+    if contract is None:
+        return "    // TODO: bind call-continue fixture cases.\n"
+    external = contract["external_callee"]
+    fields = behavior_fields(spec)
+    blocks = [
+        "    // Fixture-only external stimulus; real callee semantics are not verified.\n"
+    ]
+    for binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, binding)
+        payload = payload.get("inputs", payload)
+        expected = binding["expected_outputs"]
+        case_id = str(binding.get("id") or "case")
+        locals_: dict[str, str] = {}
+        declarations: list[str] = []
+        arguments: list[str] = []
+        for entry in contract["entry_arguments"]:
+            parameter = safe_ident(str(entry["parameter"]))
+            local = f"actual_{safe_ident(case_id)}_{parameter}"
+            locals_[entry["parameter"]] = local
+            mutable = "mut " if entry["pass_mode"] == "mutable_ref" else ""
+            declarations.append(
+                f"        let {mutable}{local} = "
+                f"{scripted_record_rust_initializer(entry['initializer'], payload)};\n"
+            )
+            arguments.append(f"&mut {local}" if entry["pass_mode"] == "mutable_ref" else local)
+        owner = locals_[contract["owner_parameter"]]
+        assigned = owner + "." + ".".join(contract["assigned_state"]["owner_field_path"])
+        added = owner + "." + ".".join(contract["add_state"]["owner_field_path"])
+        snapshots = [expected[item["snapshot_output"]] for item in external["arguments"]]
+        blocks.extend(
+            [
+                "    {\n",
+                f"        let case_id = {rust_string_literal(case_id)};\n",
+                f"        __c2r_scripted_external_set_return({payload[external['return_fixture_field']]}u32);\n",
+                "        __c2r_scripted_external_reset_calls();\n",
+                *declarations,
+                f"        let actual_return = {safe_ident(required_str(spec, 'function_name'))}({', '.join(arguments)});\n",
+                f"        assert_eq!(actual_return, {str(expected[fields[0]]).lower()}, \"{{}} return drifted\", case_id);\n",
+                f"        assert_eq!(__c2r_scripted_external_call_count(), {expected[fields[1]]}usize, \"{{}} call count drifted\", case_id);\n",
+                f"        assert_eq!(__c2r_scripted_external_call_args(), ({snapshots[0]}u32, {snapshots[1]}u32, {snapshots[2]}u32), \"{{}} call snapshots drifted\", case_id);\n",
+                f"        assert_eq!({assigned}, {expected[fields[5]]}u32, \"{{}} assigned state drifted\", case_id);\n",
+                f"        assert_eq!({added}, {expected[fields[6]]}u32, \"{{}} add state drifted\", case_id);\n",
+                "    }\n",
+            ]
+        )
+    return "".join(blocks)

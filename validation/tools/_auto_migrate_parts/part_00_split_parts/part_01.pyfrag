@@ -50,6 +50,27 @@
             param["rust_type"] = scripted_sequence_external_rust_type(
                 observation, entry_by_name
             )
+    call_continue_fixture_contract = call_continue_external_binding(
+        spec, name, return_type, parameters
+    )
+    if call_continue_fixture_contract is not None:
+        unsupported_reasons = []
+        return_rust_type = "u32"
+        entry_by_name = {
+            str(item["parameter"]): item
+            for item in call_continue_fixture_contract["entry_arguments"]
+        }
+        for param, observation in zip(
+            parameters,
+            call_continue_fixture_contract["external_callee"]["arguments"],
+            strict=True,
+        ):
+            record_type = (
+                call_continue_fixture_contract["projection"]["alias_rust_type"]
+                if observation["mode"] == "owner_interior_alias"
+                else entry_by_name[str(observation["entry_parameter"])]["rust_type"]
+            )
+            param["rust_type"] = f"&mut {record_type}"
     scripted_record_fixture_contract = (
         scripted_external_record_u32_call_bool_state_external_binding(
             spec,
@@ -748,6 +769,16 @@ def inject_external_callee_stubs(
     text = draft_path.read_text(encoding="utf-8")
     stubs = []
     for callee in callees:
+        call_continue_stub = rust_check_call_continue_stub(callee, text, spec)
+        if call_continue_stub is not None:
+            stubs.append(call_continue_stub)
+            continue
+        call_continue_binding = callee.get("rust_check_binding")
+        if (
+            isinstance(call_continue_binding, dict)
+            and call_continue_binding.get("replay_contract_kind") == CALL_CONTINUE_STATE_KIND
+        ):
+            continue
         scripted_sequence_stub = (
             rust_check_scripted_external_record_u32_sequence_do_while_state_stub(
                 callee, text, spec

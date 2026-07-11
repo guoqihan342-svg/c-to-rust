@@ -1,0 +1,96 @@
+def c_oracle_call_continue_state_execution_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> dict[str, Any]:
+    contract = call_continue_state_replay_contract(spec, fixture_binding)
+    if contract is None:
+        return {"declarations": "", "statements": ""}
+    external = contract["external_callee"]
+    entries = {item["parameter"]: item for item in contract["entry_arguments"]}
+    projection = contract["projection"]
+    parameters: list[str] = []
+    captures: list[str] = []
+    globals_: list[str] = []
+    for index, argument in enumerate(external["arguments"]):
+        entry = entries[argument["entry_parameter"]]
+        rust_type = (
+            projection["alias_rust_type"]
+            if argument["mode"] == "owner_interior_alias"
+            else entry["rust_type"]
+        )
+        name = argument["callee_parameter"]
+        parameters.append(f"    struct {rust_type} *{name}")
+        path = ".".join(argument["snapshot_field_path"])
+        captures.append(f"    c2r_call_snapshot_{index} = {name}->{path};")
+        globals_.append(f"static uint32_t c2r_call_snapshot_{index} = 0u;")
+    definitions = f"""/* Fixture-only scripted external; real callee semantics are not verified. */
+static uint32_t c2r_call_return = 0u;
+static size_t c2r_call_count = 0u;
+{chr(10).join(globals_)}
+
+uint32_t {external['name']}(
+{',\n'.join(parameters)})
+{{
+    c2r_call_count += 1u;
+{chr(10).join(captures)}
+    return c2r_call_return;
+}}
+
+"""
+    statements: list[str] = []
+    fields = behavior_fields(spec)
+    for binding in fixture_binding["case_bindings"]:
+        payload = oracle_fixture_input_payload(spec, binding)
+        payload = payload.get("inputs", payload)
+        expected = binding["expected_outputs"]
+        case_id = str(binding.get("id") or "case")
+        ident = c_safe_ident(case_id)
+        locals_: dict[str, str] = {}
+        declarations: list[str] = []
+        arguments: list[str] = []
+        for entry in contract["entry_arguments"]:
+            local = f"actual_{ident}_{entry['parameter']}"
+            locals_[entry["parameter"]] = local
+            declarations.append(
+                f"  struct {entry['rust_type']} {local} = "
+                f"{scripted_record_c_initializer(entry['initializer'], payload)};\n"
+            )
+            arguments.append(f"&{local}" if entry["pass_mode"] == "mutable_ref" else local)
+        owner = locals_[contract["owner_parameter"]]
+        assigned = owner + "." + ".".join(contract["assigned_state"]["owner_field_path"])
+        added = owner + "." + ".".join(contract["add_state"]["owner_field_path"])
+        actual_return = f"actual_{ident}_return"
+        checks = [
+            (actual_return, "true" if expected[fields[0]] else "false", fields[0]),
+            ("c2r_call_count", f"{expected[fields[1]]}u", fields[1]),
+            *((f"c2r_call_snapshot_{index}", f"{expected[field]}u", field)
+              for index, field in enumerate(fields[2:5])),
+            (assigned, f"{expected[fields[5]]}u", fields[5]),
+            (added, f"{expected[fields[6]]}u", fields[6]),
+        ]
+        check_source = "".join(
+            f"  if ({actual} != {wanted}) {{\n"
+            f"    fprintf(stderr, {c_string_literal(case_id + ' ' + field + ' mismatch\\n')});\n"
+            "    return 1;\n"
+            "  }\n"
+            f"  puts({c_string_literal('fixture case ' + case_id + ' ' + field + ' matched')});\n"
+            for actual, wanted, field in checks
+        )
+        statements.append(
+            f"  c2r_call_return = {payload[external['return_fixture_field']]}u;\n"
+            "  c2r_call_count = 0u;\n"
+            + "".join(f"  c2r_call_snapshot_{index} = 0u;\n" for index in range(3))
+            + "".join(declarations)
+            + f"  bool {actual_return} = {required_str(spec, 'function_name')}({', '.join(arguments)});\n"
+            + check_source
+        )
+    return {
+        "declarations": "",
+        "definitions_after_target": definitions,
+        "statements": "".join(statements),
+        "fixture_external_stub": {
+            "kind": CALL_CONTINUE_STATE_KIND,
+            "scope": "fixture_only",
+            "semantics_verified": False,
+            "argument_modes": [item["mode"] for item in external["arguments"]],
+        },
+    }

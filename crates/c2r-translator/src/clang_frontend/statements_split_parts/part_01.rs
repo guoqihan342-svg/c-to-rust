@@ -149,13 +149,26 @@ fn if_stmt_skeletons_from_ast(
     let children = inner(stmt);
     let (condition, then_body, else_body) = if_stmt_parts_from_children(children)?;
     match if_assignment_call_comparison_from_ast(condition)? {
-        AssignmentCallComparisonNormalization::NotMatched => Ok(vec![
-            if_stmt_skeleton_from_parts(
-                condition_expr_skeleton_from_ast(condition)?,
-                then_body,
-                else_body,
-            )?,
-        ]),
+        AssignmentCallComparisonNormalization::NotMatched => {
+            let condition = condition_expr_skeleton_from_ast(condition)?;
+            let then_skeletons = stmt_body_skeleton_from_ast(then_body)?;
+            if matches!(condition, ClangExprSkeleton::IntegerLiteral { value: 0, .. })
+                && then_skeletons.is_empty()
+                && else_body.is_some_and(|body| {
+                    string_field(body, "kind").as_deref() == Some("IfStmt")
+                })
+            {
+                return if_stmt_skeletons_from_ast(else_body.expect("checked above"));
+            }
+            Ok(vec![ClangStmtSkeleton::If {
+                condition,
+                then_body: then_skeletons,
+                else_body: match else_body {
+                    Some(body) => stmt_body_skeleton_from_ast(body)?,
+                    None => Vec::new(),
+                },
+            }])
+        }
         AssignmentCallComparisonNormalization::Rejected(reason) => {
             Ok(vec![ClangStmtSkeleton::Unsupported { reason }])
         }

@@ -494,6 +494,7 @@
                   "enum": [
                     "if_condition_header",
                     "do_while_condition_tail",
+                    "conditional_block_prefix",
                     "expression_statement",
                     "return_statement"
                   ]

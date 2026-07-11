@@ -1,0 +1,117 @@
+def call_continue_external_binding(
+    spec: dict[str, Any], name: str, return_type: str, parameters: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    contract = call_continue_state_replay_contract(spec)
+    if contract is None or name != contract["external_callee"]["name"]:
+        return None
+    if normalize_c_type(return_type) != "uint32_t":
+        raise ValueError("call-continue external return type drifted")
+    arguments = contract["external_callee"]["arguments"]
+    if [item.get("name") for item in parameters] != [
+        item["callee_parameter"] for item in arguments
+    ]:
+        raise ValueError("call-continue external parameter order drifted")
+    entries = {item["parameter"]: item for item in contract["entry_arguments"]}
+    expected_types = []
+    for argument in arguments:
+        rust_type = (
+            contract["projection"]["alias_rust_type"]
+            if argument["mode"] == "owner_interior_alias"
+            else entries[argument["entry_parameter"]]["rust_type"]
+        )
+        expected_types.append(f"struct {rust_type} *")
+    if [normalize_c_type(str(item.get("c_type") or "")) for item in parameters] != [
+        normalize_c_type(item) for item in expected_types
+    ]:
+        raise ValueError("call-continue external parameter types drifted")
+    return contract
+
+
+def rust_check_call_continue_stub(
+    callee: dict[str, Any], text: str, spec: dict[str, Any] | None
+) -> str | None:
+    if not isinstance(spec, dict):
+        return None
+    contract = call_continue_state_replay_contract(spec)
+    if contract is None or callee.get("name") != contract["external_callee"]["name"]:
+        return None
+    signature = rust_check_declared_callee_signature(callee)
+    name = rust_identifier(str(callee["name"]))
+    helpers = (
+        "__c2r_scripted_external_set_return",
+        "__c2r_scripted_external_reset_calls",
+        "__c2r_scripted_external_call_count",
+        "__c2r_scripted_external_call_args",
+    )
+    presence = [helper in text for helper in helpers]
+    if any(presence):
+        if not all(presence) or not rust_function_declared(text, name):
+            raise ValueError("call-continue Rust fixture stub is incomplete")
+        mark_call_continue_binding(callee, signature, contract)
+        return None
+    if rust_function_declared(text, name):
+        raise ValueError("call-continue callee is defined without fixture controls")
+    mark_call_continue_binding(callee, signature, contract)
+    arguments = contract["external_callee"]["arguments"]
+    captures = "\n".join(
+        f"    __C2R_CALL_ARG{index}.with(|slot| slot.set("
+        f"{rust_identifier(item['callee_parameter'])}.{'.'.join(item['snapshot_field_path'])}));"
+        for index, item in enumerate(arguments)
+    )
+    return f"""// Fixture-only external replay state; real callee semantics are not verified.
+std::thread_local! {{
+    static __C2R_CALL_RETURN: std::cell::Cell<u32> = std::cell::Cell::new(0);
+    static __C2R_CALL_COUNT: std::cell::Cell<usize> = std::cell::Cell::new(0);
+    static __C2R_CALL_ARG0: std::cell::Cell<u32> = std::cell::Cell::new(0);
+    static __C2R_CALL_ARG1: std::cell::Cell<u32> = std::cell::Cell::new(0);
+    static __C2R_CALL_ARG2: std::cell::Cell<u32> = std::cell::Cell::new(0);
+}}
+
+fn __c2r_scripted_external_set_return(value: u32) {{
+    __C2R_CALL_RETURN.with(|slot| slot.set(value));
+}}
+
+fn __c2r_scripted_external_reset_calls() {{
+    __C2R_CALL_COUNT.with(|slot| slot.set(0));
+    __C2R_CALL_ARG0.with(|slot| slot.set(0));
+    __C2R_CALL_ARG1.with(|slot| slot.set(0));
+    __C2R_CALL_ARG2.with(|slot| slot.set(0));
+}}
+
+fn __c2r_scripted_external_call_count() -> usize {{
+    __C2R_CALL_COUNT.with(std::cell::Cell::get)
+}}
+
+fn __c2r_scripted_external_call_args() -> (u32, u32, u32) {{
+    (
+        __C2R_CALL_ARG0.with(std::cell::Cell::get),
+        __C2R_CALL_ARG1.with(std::cell::Cell::get),
+        __C2R_CALL_ARG2.with(std::cell::Cell::get),
+    )
+}}
+
+{signature} {{
+{captures}
+    __C2R_CALL_COUNT.with(|slot| slot.set(slot.get().checked_add(1).expect("fixture call count overflow")));
+    __C2R_CALL_RETURN.with(|slot| slot.get())
+}}"""
+
+
+def mark_call_continue_binding(
+    callee: dict[str, Any], signature: str, contract: dict[str, Any]
+) -> None:
+    mark_rust_check_binding(
+        callee,
+        "fixture_only_scripted_external",
+        signature,
+        allowed_use="fixture_bound_rust_replay_only",
+    )
+    callee["rust_check_binding"].update(
+        {
+            "fixture_only": True,
+            "replay_contract_kind": contract["kind"],
+            "argument_modes": [
+                item["mode"] for item in contract["external_callee"]["arguments"]
+            ],
+        }
+    )

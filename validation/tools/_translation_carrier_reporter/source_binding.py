@@ -21,6 +21,8 @@ from .field_scalar_add_source import validate_carrier_source as validate_field_s
 from .constant_state_contract import KIND as CONSTANT_STATE_KIND
 from .interior_projection_contract import KIND as INTERIOR_PROJECTION_KIND
 from .reset_add_while_continue_contract import KIND as RESET_ADD_CONTINUE_KIND
+from .call_continue_contract import KIND as CALL_CONTINUE_KIND
+from validation.tools.call_continue_syntax import validate_c_call_continue_source
 from validation.tools.interior_projection_syntax import validate_c_interior_projection_source
 from validation.tools.reset_add_while_continue_syntax import (
     validate_c_reset_add_while_continue_source,
@@ -146,7 +148,12 @@ def validate_carrier(
     excluded = claim.get("excluded_semantics")
     if not isinstance(excluded, list) or not excluded:
         raise ReporterError("translation carrier excluded semantics must be declared")
-    if contract.get("kind") == CONSTANT_STATE_KIND:
+    if contract.get("kind") == CALL_CONTINUE_KIND:
+        try:
+            validate_c_call_continue_source(c_source, contract)
+        except ValueError as exc:
+            raise ReporterError(str(exc)) from exc
+    elif contract.get("kind") == CONSTANT_STATE_KIND:
         validate_constant_state_carrier_source(c_source, contract)
     elif contract.get("kind") == RESET_ADD_CONTINUE_KIND:
         try:

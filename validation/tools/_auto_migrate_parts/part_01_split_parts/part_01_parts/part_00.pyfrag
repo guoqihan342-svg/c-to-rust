@@ -141,6 +141,8 @@ def oracle_fixture_execution_source(
     fixture_binding: dict[str, Any],
 ) -> dict[str, str]:
     signature = c_function_signature(spec)
+    if call_continue_state_replay_contract(spec, fixture_binding) is not None:
+        return c_oracle_call_continue_state_execution_source(spec, fixture_binding)
     if record_interior_projection_u32_reset_add_while_continue_state_replay_contract(
         spec, fixture_binding
     ) is not None:

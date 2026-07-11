@@ -144,7 +144,11 @@ def main() -> int:
     replay = generate_rust_replay_test_draft(spec, evidence_dir, args.slice_spec, route_decision)
     rust_check, patch = run_rust_check(evidence_dir, args.skip_rust_check, spec)
     route_decision = refresh_generated_rust_draft_binding(evidence_dir, f"l3-{slice_id}", route_decision)
-    accepted = resolve_accepted_evidence(spec) if args.accept_existing_evidence else None
+    accepted = (
+        resolve_accepted_evidence(spec, args.slice_spec)
+        if args.accept_existing_evidence
+        else None
+    )
     if accepted is not None:
         stabilize_colliding_accepted_unsafe_evidence(spec, evidence_dir, accepted)
         replay = run_generated_rust_replay(spec, evidence_dir, replay, rust_check)

@@ -372,7 +372,9 @@ def write_l3_candidate_supporting_evidence(
     )
 
 
-def resolve_accepted_evidence(spec: dict[str, Any]) -> dict[str, Any]:
+def resolve_accepted_evidence(
+    spec: dict[str, Any], slice_spec_path: Path | None = None
+) -> dict[str, Any]:
     fixture = spec.get("fixture_contract", {})
     c_oracle_path = required_repo_path(fixture.get("c_oracle"), "fixture_contract.c_oracle")
     rust_report_path = required_repo_path(fixture.get("rust_report"), "fixture_contract.rust_report")
@@ -410,6 +412,8 @@ def resolve_accepted_evidence(spec: dict[str, Any]) -> dict[str, Any]:
     require_accepted_report(spec, "rust_report", reports["rust_report"])
     require_accepted_report(spec, "diff", reports["diff"])
     require_accepted_report(spec, "unsafe_scan", reports["unsafe_scan"])
+    if spec.get("replay_contract", {}).get("kind") == CALL_CONTINUE_STATE_KIND:
+        require_call_continue_cross_report_identity(spec, reports, slice_spec_path)
     if reports["diff"].get("first_mismatch") is not None:
         raise SystemExit("--accept-existing-evidence requires schema diff with first_mismatch=null")
     if not mutation_detected(reports["negative_diff"]):

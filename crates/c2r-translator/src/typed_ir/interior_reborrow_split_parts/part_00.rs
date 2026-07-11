@@ -3,6 +3,7 @@ struct InteriorReborrowPlan {
     alias: String,
     owner: String,
     owner_path: Vec<String>,
+    call_root: Option<String>,
 }
 
 fn analyze_interior_reborrow(
@@ -30,17 +31,19 @@ fn analyze_interior_reborrow(
         interior_reborrow_decl_parts(decl).expect("candidate declaration");
     validate_interior_reborrow_types(function, alias_ty, owner, owner_ty, owner_field, field_ty)?;
 
-    let plan = InteriorReborrowPlan {
+    let mut plan = InteriorReborrowPlan {
         alias: alias.to_string(),
         owner: owner.to_string(),
         owner_path: vec![owner_field.to_string()],
+        call_root: None,
     };
-    if validate_bounded_alias_uses(&function.body, &plan)? != 1 {
-        return Err("interior reborrow alias requires exactly one bounded field write".to_string());
-    }
-
     match function.body.as_slice() {
         [_, write, observation] => {
+            if validate_bounded_alias_uses(&function.body, &plan)? != 1 {
+                return Err(
+                    "interior reborrow alias requires exactly one bounded field write".to_string(),
+                );
+            }
             validate_legacy_interior_reborrow_carrier(function, &plan, write, observation)?
         }
         [_, sentinel, loop_stmt, observation] => validate_run_once_interior_reborrow_carrier(
@@ -51,6 +54,17 @@ fn analyze_interior_reborrow(
             loop_stmt,
             observation,
         )?,
+        [_, setup, sentinel, loop_stmt, observation] => {
+            plan.call_root = Some(validate_assignment_call_interior_reborrow_carrier(
+                function,
+                policy,
+                &plan,
+                setup,
+                sentinel,
+                loop_stmt,
+                observation,
+            )?);
+        }
         _ => {
             return Err(
                 "interior reborrow requires a bounded linear or bool run-once carrier"
@@ -133,6 +147,9 @@ fn validate_run_once_interior_reborrow_carrier(
             "run-once interior reborrow requires bool return and exactly owner/source parameters"
                 .to_string(),
         );
+    }
+    if validate_bounded_alias_uses(&function.body, plan)? != 1 {
+        return Err("interior reborrow alias requires exactly one bounded field write".to_string());
     }
     let source = function
         .params

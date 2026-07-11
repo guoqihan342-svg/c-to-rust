@@ -24,6 +24,25 @@ class _ValidateAutoTranslationEvidenceTestsPart00:
             dependency_schema,
         )
 
+    def test_slice_spec_schema_accepts_conditional_block_prefix_fragment(self) -> None:
+        module = load_validator_module()
+        schema = module.load_json(REPO_ROOT / "validation/slice-spec-template/slice-spec.schema.json")
+        fragment_schema = schema["definitions"]["translationCarrier"]["properties"][
+            "real_source"
+        ]["properties"]["fragment"]
+
+        jsonschema.validate(
+            {
+                "kind": "conditional_block_prefix",
+                "line_start": 10,
+                "line_end": 13,
+                "sha256": "0" * 64,
+                "hash_mode": "normalized_line_span_with_newline",
+                "text": "} else if (condition) {\n  continue;\n",
+            },
+            fragment_schema,
+        )
+
     def _c2rust_compile_fixture(self, tmp_path: Path) -> tuple[dict, dict, Path]:
         output_file = tmp_path / "c2rust-baseline-output.rs"
         artifact_file = tmp_path / "c2rust-baseline-output.rlib"

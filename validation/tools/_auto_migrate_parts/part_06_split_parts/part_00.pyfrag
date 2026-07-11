@@ -90,14 +90,18 @@ def require_accepted_report(
 
 def accepted_evidence_identity_required(spec: dict[str, Any]) -> bool:
     contract = spec.get("replay_contract", {})
-    return isinstance(contract, dict) and contract.get("kind") == (
-        "record_interior_projection_u32_reset_add_while_continue_state"
-    )
+    return isinstance(contract, dict) and contract.get("kind") in {
+        "record_interior_projection_u32_reset_add_while_continue_state",
+        CALL_CONTINUE_STATE_KIND,
+    }
 
 
 def require_accepted_evidence_identity(
     spec: dict[str, Any], label: str, report: dict[str, Any]
 ) -> None:
+    if spec.get("replay_contract", {}).get("kind") == CALL_CONTINUE_STATE_KIND:
+        require_call_continue_identity_shape(spec, label, report)
+        return
     expected_top_level = {
         "target_id": required_str(spec, "target_id"),
         "slice_id": required_str(spec, "slice_id"),
