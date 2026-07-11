@@ -97,6 +97,23 @@
           "enum": [
             "config/competition-env/cargo/config.toml"
           ]
+        },
+        "runtime_status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "bypassed_for_local_cache"
+          ]
+        },
+        "runtime_source": {
+          "type": "string",
+          "enum": [
+            "competition_profile",
+            "C2R_LOCAL_CARGO_HOME"
+          ]
+        },
+        "offline": {
+          "type": "boolean"
         }
       }
     },

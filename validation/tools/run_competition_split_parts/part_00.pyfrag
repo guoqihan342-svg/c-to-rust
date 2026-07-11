@@ -35,6 +35,8 @@ AI_EXACT_EVIDENCE_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_ai_
 EXTRACT_SOURCE_SLICE = REPO_ROOT / "validation" / "tools" / "extract_source_slice.py"
 UNSAFE_BUDGET = REPO_ROOT / "validation" / "tools" / "unsafe_budget.py"
 COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
+LOCAL_CARGO_HOME_ENV = "C2R_LOCAL_CARGO_HOME"
+LOCAL_CARGO_OFFLINE_ENV = "C2R_LOCAL_CARGO_OFFLINE"
 COMPETITION_OPENCODE_COMMAND = "opencode"
 COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
@@ -463,11 +465,7 @@ def run_competition(
         "profile_id": profile_id(repo_root),
         "profile_sha256": sha256(PROFILE_PATH if repo_root == REPO_ROOT else repo_root / "config/competition-env/environment.json"),
         "clang_source": clang_source(repo_root),
-        "cargo_mirror_activation": {
-            "method": "CARGO_HOME",
-            "path": "config/competition-env/cargo",
-            "config_file": "config/competition-env/cargo/config.toml",
-        },
+        "cargo_mirror_activation": cargo_runtime_summary(repo_root),
         "elapsed_seconds": int(time.monotonic() - started),
         "translator_version": "0.1.0",
         "slices": {
@@ -563,10 +561,31 @@ def competition_subprocess_env(repo_root: Path) -> dict[str, str]:
     if not any(os.path.normcase(entry) == os.path.normcase(root) for entry in python_entries):
         python_entries.insert(0, root)
 
+    profile_cargo_home = repo_root / "config" / "competition-env" / "cargo"
+    local_cargo_home = env.get(LOCAL_CARGO_HOME_ENV)
+    use_local_cache = bool(local_cargo_home) and env.get(COMPETITION_EXACT_HOST_ENV) != "1"
+
     env["PATH"] = path_value
     env["PYTHONPATH"] = os.pathsep.join(python_entries)
-    env["CARGO_HOME"] = str(repo_root / "config" / "competition-env" / "cargo")
+    env["CARGO_HOME"] = str(local_cargo_home) if use_local_cache else str(profile_cargo_home)
+    if use_local_cache and env.get(LOCAL_CARGO_OFFLINE_ENV) == "1":
+        env["CARGO_NET_OFFLINE"] = "true"
     return env
+
+
+def cargo_runtime_summary(repo_root: Path) -> dict[str, Any]:
+    env = competition_subprocess_env(repo_root)
+    profile_cargo_home = (repo_root / "config" / "competition-env" / "cargo").resolve()
+    runtime_cargo_home = Path(env["CARGO_HOME"]).resolve()
+    profile_active = runtime_cargo_home == profile_cargo_home
+    return {
+        "method": "CARGO_HOME",
+        "path": "config/competition-env/cargo",
+        "config_file": "config/competition-env/cargo/config.toml",
+        "runtime_status": "active" if profile_active else "bypassed_for_local_cache",
+        "runtime_source": "competition_profile" if profile_active else LOCAL_CARGO_HOME_ENV,
+        "offline": env.get("CARGO_NET_OFFLINE") == "true",
+    }
 
 
 def run_step(command: list[str], *, command_runner: CommandRunner, repo_root: Path) -> subprocess.CompletedProcess[str]:

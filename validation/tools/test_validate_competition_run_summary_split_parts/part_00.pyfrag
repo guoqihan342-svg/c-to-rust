@@ -353,6 +353,25 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
         self.assertEqual(result["status"], "passed")
         self.assertEqual(result["proof_class"], "competition-exact")
 
+    def test_rejects_competition_exact_with_local_cargo_cache_runtime(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["proof_class"] = "competition-exact"
+        summary["cargo_mirror_activation"].update(
+            {
+                "runtime_status": "bypassed_for_local_cache",
+                "runtime_source": "C2R_LOCAL_CARGO_HOME",
+                "offline": True,
+            }
+        )
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            add_competition_exact_host_attestation(summary, summary_path)
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            with self.assertRaisesRegex(SystemExit, "requires the competition Cargo mirror runtime"):
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
     def test_rejects_competition_exact_when_host_attestation_agent_missing_or_wrong(self) -> None:
         module = load_validator_module()
         for missing_or_wrong in ("missing", "wrong"):

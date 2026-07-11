@@ -54,19 +54,41 @@
                     "PATH": str(tmp_path / "missing-bin"),
                     "PYTHONPATH": str(tmp_path / "existing-python-path"),
                     "CARGO_HOME": str(inherited_cargo_home),
+                    "C2R_LOCAL_CARGO_HOME": str(inherited_cargo_home),
+                    "C2R_LOCAL_CARGO_OFFLINE": "1",
                 },
             ):
                 module.run_step(["python", "validator.py"], command_runner=capture_runner, repo_root=repo_root)
+                runtime = module.cargo_runtime_summary(repo_root)
 
             child_env = captured["env"]
             self.assertIsInstance(child_env, dict)
             self.assertEqual(
-                str(repo_root / "config" / "competition-env" / "cargo"),
+                str(inherited_cargo_home),
                 child_env["CARGO_HOME"],
             )
             self.assertEqual(str(inherited_cargo_bin), child_env["PATH"].split(module.os.pathsep)[0])
             self.assertEqual(str(repo_root.resolve()), child_env["PYTHONPATH"].split(module.os.pathsep)[0])
             self.assertIn(str(tmp_path / "existing-python-path"), child_env["PYTHONPATH"].split(module.os.pathsep))
+            self.assertEqual("true", child_env["CARGO_NET_OFFLINE"])
+
+            self.assertEqual("bypassed_for_local_cache", runtime["runtime_status"])
+            self.assertEqual("C2R_LOCAL_CARGO_HOME", runtime["runtime_source"])
+            self.assertTrue(runtime["offline"])
+
+            with mock.patch.dict(
+                module.os.environ,
+                {
+                    "COMPETITION_EXACT_HOST": "1",
+                    "C2R_LOCAL_CARGO_HOME": str(inherited_cargo_home),
+                    "C2R_LOCAL_CARGO_OFFLINE": "1",
+                },
+            ):
+                exact_env = module.competition_subprocess_env(repo_root)
+            self.assertEqual(
+                str(repo_root / "config" / "competition-env" / "cargo"),
+                exact_env["CARGO_HOME"],
+            )
 
     def test_runner_archives_command_logs_with_exit_code_and_output(self) -> None:
         module = load_runner_module()

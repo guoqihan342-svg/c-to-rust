@@ -79,6 +79,7 @@ def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict
     validate_final_gate(summary)
     validate_slice_counts(summary)
     validate_workers(summary)
+    validate_cargo_runtime(summary)
     validate_competition_exact_host_attestation(summary, summary_path=summary_path, repo_root=repo_root)
 
     result = {
@@ -96,6 +97,19 @@ def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict
             for key in AI_METRIC_COUNT_FIELDS
         }
     return result
+
+
+def validate_cargo_runtime(summary: dict[str, Any]) -> None:
+    cargo_runtime = summary["cargo_mirror_activation"]
+    status = cargo_runtime.get("runtime_status")
+    source = cargo_runtime.get("runtime_source")
+    offline = cargo_runtime.get("offline")
+    supplied = [status is not None, source is not None, offline is not None]
+    if any(supplied) and not all(supplied):
+        raise SystemExit("cargo_mirror_activation runtime fields must be supplied together")
+    if summary["proof_class"] == "competition-exact" and all(supplied):
+        if status != "active" or source != "competition_profile":
+            raise SystemExit("competition-exact requires the competition Cargo mirror runtime")
 
 
 def validate_command_log(summary: dict[str, Any], *, summary_path: Path, repo_root: Path) -> None:
