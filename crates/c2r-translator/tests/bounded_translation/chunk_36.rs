@@ -7,6 +7,41 @@ fn guarded_stats_fixture() -> Value {
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+fn guarded_stats_u32_enum_fixture() -> Value {
+    let mut ast = guarded_stats_fixture();
+    let declarations = ast["inner"]
+        .as_array_mut()
+        .expect("translation unit declarations");
+    let record = declarations
+        .iter_mut()
+        .find(|node| node["kind"] == "RecordDecl" && node["name"] == "Sample")
+        .expect("Sample record");
+    let mode = record["inner"]
+        .as_array_mut()
+        .expect("Sample fields")
+        .iter_mut()
+        .find(|field| field["kind"] == "FieldDecl" && field["name"] == "mode")
+        .expect("mode field");
+    mode["type"]["qualType"] = Value::String("uint32_t".to_string());
+
+    let equality = &mut guarded_stats_condition_mut(&mut ast)["inner"][0];
+    equality["inner"][0]["type"]["qualType"] = Value::String("uint32_t".to_string());
+    equality["inner"][0]["inner"][0]["type"]["qualType"] =
+        Value::String("uint32_t".to_string());
+    equality["inner"][1] = serde_json::json!({
+        "kind": "ImplicitCastExpr",
+        "castKind": "IntegralCast",
+        "type": { "qualType": "uint32_t" },
+        "inner": [{
+            "kind": "IntegerLiteral",
+            "value": "7",
+            "type": { "qualType": "int" }
+        }]
+    });
+    ast
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 fn guarded_stats_abi() -> TargetAbiProfile {
     TargetAbiProfile {
         triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
@@ -123,6 +158,31 @@ assert_eq!((second_miss.visits, second_miss.first_total, second_miss.second_tota
 let mut wrapped = Totals { active: Sample { mode: 7i32, ready: true, first_units: 3u32, second_units: 1u32 }, visits: u32::MAX, first_total: usize::MAX - 1usize, second_total: usize::MAX };\n\
 assert!(update_totals(&mut wrapped));\n\
 assert_eq!((wrapped.visits, wrapped.first_total, wrapped.second_total), (0u32, 1usize, 0usize));",
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn guarded_stats_sequence_accepts_lossless_int_enum_to_u32_comparison() {
+    let ast = guarded_stats_u32_enum_fixture();
+    let abi = guarded_stats_abi();
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "update_totals",
+        Some(&abi),
+    )
+    .expect("lower guarded u32 enum fixture");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit guarded u32 enum fixture");
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(emitted.rust.contains("sample.mode == (7i32 as u32)"), "{}", emitted.rust);
+    assert_rust_snippet_runs(
+        "typed-ir-guarded-u32-enum",
+        &emitted.rust,
+        "let mut totals = Totals { active: Sample { mode: 7u32, ready: true, first_units: 3u32, second_units: 5u32 }, visits: 8u32, first_total: 11usize, second_total: 13usize };\n\
+assert!(update_totals(&mut totals));\n\
+assert_eq!((totals.visits, totals.first_total, totals.second_total), (9u32, 14usize, 18usize));",
     );
 }
 

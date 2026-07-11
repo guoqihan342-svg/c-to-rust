@@ -46,6 +46,47 @@
     }
 
     #[test]
+    fn slice_source_translation_unit_does_not_redeclare_source_enum_constants() {
+        let mut spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "guarded-enum".to_string(),
+            function_name: "probe".to_string(),
+            c_source: "enum state { CELL_EMPTY, CELL_READY = 7 }; int probe(void) { return CELL_READY; }"
+                .to_string(),
+            build_profile: test_profile(),
+            ..SliceSpec::default()
+        };
+        spec.c_boundary.direct_dependencies.push(CDirectDependency {
+            kind: "constant".to_string(),
+            name: "CELL_READY".to_string(),
+            value: Some(serde_json::json!(7)),
+            ..CDirectDependency::default()
+        });
+
+        let source = slice_source_translation_unit(&spec);
+
+        assert!(!source.contains("enum { CELL_READY = 7 };"), "{source}");
+        assert_eq!(source.matches("CELL_READY").count(), 2, "{source}");
+    }
+
+    #[test]
+    fn slice_source_translation_unit_does_not_redeclare_source_object_macros() {
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "object-macro".to_string(),
+            function_name: "probe".to_string(),
+            c_source: "#define CELL_READY 7\nint probe(void) { return CELL_READY; }".to_string(),
+            build_profile: test_profile(),
+            ..SliceSpec::default()
+        };
+
+        let source = slice_source_translation_unit(&spec);
+
+        assert!(!source.contains("enum { CELL_READY = 0 };"), "{source}");
+        assert_eq!(source.matches("CELL_READY").count(), 2, "{source}");
+    }
+
+    #[test]
     fn clang_lowered_ir_records_direct_call_expression_evidence() {
         let i32_ty = signed_ty("int", "int", 32);
         let function = IrFunction {

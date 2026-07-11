@@ -42,11 +42,14 @@ fn slice_source_typedefs(spec: &SliceSpec) -> String {
 fn slice_source_constants(spec: &SliceSpec) -> String {
     let mut constants: BTreeMap<String, String> = BTreeMap::new();
     let build_profile_defines = build_profile_define_names(spec);
+    let source_definitions = collect_defined_object_like_identifiers(&spec.c_source);
     for dependency in &spec.c_boundary.direct_dependencies {
         if dependency.kind != "constant" || dependency.name.trim().is_empty() {
             continue;
         }
-        if build_profile_defines.contains(&dependency.name) {
+        if build_profile_defines.contains(&dependency.name)
+            || source_definitions.contains(&dependency.name)
+        {
             continue;
         }
         if let Some(value) = dependency.value.as_ref().and_then(json_numeric_literal) {
@@ -54,7 +57,7 @@ fn slice_source_constants(spec: &SliceSpec) -> String {
         }
     }
     for name in collect_object_like_uppercase_identifiers(&spec.c_source) {
-        if build_profile_defines.contains(&name) {
+        if build_profile_defines.contains(&name) || source_definitions.contains(&name) {
             continue;
         }
         constants.entry(name).or_insert_with(|| "0".to_string());
@@ -64,6 +67,100 @@ fn slice_source_constants(spec: &SliceSpec) -> String {
         .into_iter()
         .map(|(name, value)| format!("enum {{ {name} = {value} }};\n"))
         .collect::<String>()
+}
+
+fn collect_defined_object_like_identifiers(source: &str) -> BTreeSet<String> {
+    let searchable_source = c_source_without_strings_and_comments(source);
+    let mut definitions = collect_object_like_macro_definitions(&searchable_source);
+    definitions.extend(collect_enum_constant_definitions(&searchable_source));
+    definitions
+}
+
+fn collect_object_like_macro_definitions(source: &str) -> BTreeSet<String> {
+    let mut definitions = BTreeSet::new();
+    for line in source.lines() {
+        let Some(rest) = line.trim_start().strip_prefix('#') else {
+            continue;
+        };
+        let rest = rest.trim_start();
+        let Some(rest) = rest.strip_prefix("define") else {
+            continue;
+        };
+        if rest.as_bytes().first().is_some_and(|byte| is_c_ident_continue(*byte)) {
+            continue;
+        }
+        let rest = rest.trim_start();
+        let name_len = rest.bytes().take_while(|byte| is_c_ident_continue(*byte)).count();
+        if name_len == 0 || rest.as_bytes().get(name_len) == Some(&b'(') {
+            continue;
+        }
+        definitions.insert(rest[..name_len].to_string());
+    }
+    definitions
+}
+
+fn collect_enum_constant_definitions(source: &str) -> BTreeSet<String> {
+    let bytes = source.as_bytes();
+    let mut definitions = BTreeSet::new();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if !is_identifier_at(source, index, "enum") {
+            index += 1;
+            continue;
+        }
+        index += "enum".len();
+        let Some(open_offset) = source[index..].find('{') else {
+            break;
+        };
+        index += open_offset + 1;
+        let mut brace_depth = 1usize;
+        let mut paren_depth = 0usize;
+        let mut expects_name = true;
+        while index < bytes.len() && brace_depth > 0 {
+            match bytes[index] {
+                b'{' => {
+                    brace_depth += 1;
+                    index += 1;
+                }
+                b'}' => {
+                    brace_depth -= 1;
+                    index += 1;
+                }
+                b'(' => {
+                    paren_depth += 1;
+                    index += 1;
+                }
+                b')' => {
+                    paren_depth = paren_depth.saturating_sub(1);
+                    index += 1;
+                }
+                b',' if brace_depth == 1 && paren_depth == 0 => {
+                    expects_name = true;
+                    index += 1;
+                }
+                byte if brace_depth == 1 && expects_name && is_c_ident_start(byte) => {
+                    let start = index;
+                    index += 1;
+                    while index < bytes.len() && is_c_ident_continue(bytes[index]) {
+                        index += 1;
+                    }
+                    definitions.insert(source[start..index].to_string());
+                    expects_name = false;
+                }
+                _ => index += 1,
+            }
+        }
+    }
+    definitions
+}
+
+fn is_identifier_at(source: &str, index: usize, expected: &str) -> bool {
+    let bytes = source.as_bytes();
+    let end = index.saturating_add(expected.len());
+    end <= bytes.len()
+        && &source[index..end] == expected
+        && (index == 0 || !is_c_ident_continue(bytes[index - 1]))
+        && (end == bytes.len() || !is_c_ident_continue(bytes[end]))
 }
 
 fn build_profile_define_names(spec: &SliceSpec) -> BTreeSet<String> {

@@ -393,6 +393,8 @@ def generated_draft_acceptance_binding(
 
     if accepted is None or accepted.get("status") != "accepted":
         blockers.append("accepted_evidence_binding_missing")
+    if route_refuses_candidate_generation(route_decision):
+        blockers.append("route_refused_candidate_generation")
     if not route_has_generated_rust_draft(route_decision):
         blockers.append("generated_rust_draft_missing")
     if not draft_path.exists():
@@ -440,6 +442,12 @@ def generated_draft_acceptance_binding(
             accepted_refs[key] = {"status": "missing"}
 
     passed = not blockers
+    if draft_path.exists():
+        draft_ref["status"] = (
+            "accepted_after_gates"
+            if passed
+            else generated_rust_draft_status(route_decision)
+        )
     return {
         "schema_version": 1,
         "status": "passed" if passed else "blocked",
@@ -475,10 +483,10 @@ def generated_draft_acceptance_binding(
 
 
 def generated_rust_draft_status(route_decision: dict[str, Any] | None) -> str:
-    if route_has_generated_rust_draft(route_decision):
-        return "candidate"
     if route_decision and route_refuses_candidate_generation(route_decision):
         return "blocked"
+    if route_has_generated_rust_draft(route_decision):
+        return "candidate"
     return "candidate"
 
 

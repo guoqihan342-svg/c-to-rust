@@ -303,9 +303,10 @@ pub struct Cell { pub mode: u32, pub verified: bool, pub alpha: u32, pub beta: u
 pub struct Tally { pub visits: u32, pub cell: Cell, pub bytes: usize, pub payload: usize }
 
 pub fn apply_guarded_stats(tally: &mut Tally) -> bool {
-    if tally.cell.mode == 7u32 && tally.cell.verified == true {
-        let alpha = tally.cell.alpha;
-        let beta = tally.cell.beta;
+    let view = &mut tally.cell;
+    if (view.mode == (7i32 as u32)) && ((view.verified as i32) == 1i32) {
+        let alpha = view.alpha;
+        let beta = view.beta;
         tally.visits = tally.visits.wrapping_add(1u32);
         tally.bytes = tally.bytes.wrapping_add(alpha as usize);
         tally.payload = tally.payload.wrapping_add(beta as usize);

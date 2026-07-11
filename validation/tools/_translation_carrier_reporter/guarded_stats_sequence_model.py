@@ -52,8 +52,8 @@ def validate_cases(cases: Any, contract: dict[str, Any]) -> list[dict[str, Any]]
                     value, f"{case_id}.{name}"
                 )
         expected = require_dict(case.get("expected_outputs"), f"{case_id}.expected_outputs")
-        if list(expected) != fields:
-            raise ReporterError(f"{case_id} expected output fields or order drifted")
+        if set(expected) != set(fields):
+            raise ReporterError(f"{case_id} expected output fields drifted")
         if type(expected[fields[0]]) is not bool:
             raise ReporterError(f"{case_id}.{fields[0]} must be bool")
         for field, rust_type in output_types.items():

@@ -300,7 +300,7 @@ fn collect_enum_constant_inventory_from_enum_decl(
     node: &Value,
     inventory: &mut EnumConstantInventory,
 ) {
-    let mut next_value = None;
+    let mut next_value = Some(0u64);
     for constant in inner(node)
         .iter()
         .filter(|child| string_field(child, "kind").as_deref() == Some("EnumConstantDecl"))

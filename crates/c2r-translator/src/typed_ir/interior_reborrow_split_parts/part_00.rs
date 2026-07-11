@@ -288,11 +288,15 @@ fn validate_guard_c_int_equality(
                 .to_string(),
         );
     };
-    if !is_c_int_type(read_ty)
-        || !matches!(rhs.as_ref(), IrExpr::LitInt { ty, .. } if is_c_int_type(ty))
-    {
+    let literal_matches = matches!(
+        rhs.as_ref(),
+        IrExpr::LitInt { ty, .. } if is_c_int_type(read_ty) && is_c_int_type(ty)
+    ) || (is_exact_u32_ir_type(read_ty)
+        && is_exact_u32_constant(rhs)
+        && static_integer_value(rhs).is_some_and(|value| u32::try_from(value).is_ok()));
+    if !literal_matches {
         return Err(
-            "guarded interior stats sequence first equality must compare C int with C int literal"
+            "guarded interior stats sequence first equality must compare C int or u32 with a losslessly converted non-negative literal"
                 .to_string(),
         );
     }

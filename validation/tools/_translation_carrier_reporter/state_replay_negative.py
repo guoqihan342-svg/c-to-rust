@@ -77,15 +77,16 @@ def mutation_spec(contract: dict[str, Any]) -> tuple[re.Pattern[bytes], bytes, b
             b"wrapping_sub",
         )
     if kind == GUARDED_STATS_SEQUENCE_KIND:
-        owner = str(contract["owner"]["parameter"]).encode("ascii")
+        alias = str(contract["alias"]["local"]).encode("ascii")
         path = [
             str(item).encode("ascii")
-            for item in contract["guard"]["predicates"][1]["lhs"]["owner_field_path"]
+            for item in contract["guard"]["predicates"][1]["lhs"]["alias_field_path"]
         ]
-        access = rb"\b" + re.escape(owner) + b"".join(
+        access = rb"\b" + re.escape(alias) + b"".join(
             rb"\s*\.\s*" + re.escape(item) for item in path
         )
-        return re.compile(access + rb"\s*(?P<value>==)(?!=)"), b"==", b"!="
+        promoted = rb"(?:\s+as\s+[A-Za-z_][A-Za-z0-9_]*\s*\))?"
+        return re.compile(access + promoted + rb"\s*(?P<value>==)(?!=)"), b"==", b"!="
     return None
 
 

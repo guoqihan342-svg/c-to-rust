@@ -504,7 +504,7 @@
     }
 
     #[test]
-    fn readonly_globals_from_ast_rejects_implicit_enum_constant_initializer() {
+    fn readonly_globals_from_ast_maps_implicit_enum_constant_initializer() {
         let ast = serde_json::json!({
             "kind": "TranslationUnitDecl",
             "inner": [
@@ -517,6 +517,28 @@
                             "id": "0x1001",
                             "kind": "EnumConstantDecl",
                             "name": "STATUS_PENDING",
+                            "type": { "qualType": "int" }
+                        },
+                        {
+                            "id": "0x1002",
+                            "kind": "EnumConstantDecl",
+                            "name": "STATUS_ACTIVE",
+                            "type": { "qualType": "int" },
+                            "inner": [{
+                                "kind": "ConstantExpr",
+                                "type": { "qualType": "int" },
+                                "value": "7",
+                                "inner": [{
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "7"
+                                }]
+                            }]
+                        },
+                        {
+                            "id": "0x1003",
+                            "kind": "EnumConstantDecl",
+                            "name": "STATUS_READY",
                             "type": { "qualType": "int" }
                         }
                     ]
@@ -536,9 +558,9 @@
                                     "kind": "DeclRefExpr",
                                     "type": { "qualType": "int" },
                                     "referencedDecl": {
-                                        "id": "0x1001",
+                                        "id": "0x1003",
                                         "kind": "EnumConstantDecl",
-                                        "name": "STATUS_PENDING"
+                                        "name": "STATUS_READY"
                                     }
                                 }
                             ]
@@ -550,8 +572,6 @@
 
         let globals = readonly_globals_from_ast(&ast).expect("readonly globals");
 
-        assert!(
-            globals.is_empty(),
-            "implicit enum global initializer must stay fail-closed: {globals:?}"
-        );
+        assert_eq!(globals.len(), 1);
+        assert_eq!(globals[0].init, IrGlobalInit::IntegerArray(vec![8]));
     }
