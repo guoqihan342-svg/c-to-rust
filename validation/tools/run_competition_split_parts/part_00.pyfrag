@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -24,6 +25,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from validation.tools._run_competition_ai_exact import load_ai_exact_router_status
+from validation.tools._run_competition_provider_circuit import ProviderCircuit
 
 
 PROFILE_PATH = REPO_ROOT / "config" / "competition-env" / "environment.json"
@@ -34,6 +36,8 @@ AI_EXACT_EVIDENCE_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_ai_
 EXTRACT_SOURCE_SLICE = REPO_ROOT / "validation" / "tools" / "extract_source_slice.py"
 UNSAFE_BUDGET = REPO_ROOT / "validation" / "tools" / "unsafe_budget.py"
 COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
+LOCAL_CARGO_HOME_ENV = "C2R_LOCAL_CARGO_HOME"
+LOCAL_CARGO_OFFLINE_ENV = "C2R_LOCAL_CARGO_OFFLINE"
 COMPETITION_OPENCODE_COMMAND = "opencode"
 COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
@@ -62,10 +66,18 @@ ExtractionSpecInput = Path | dict[str, Any]
 
 
 class CompetitionRunResult:
-    def __init__(self, *, exit_code: int, summary_path: Path, summary: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        *,
+        exit_code: int,
+        summary_path: Path,
+        summary: dict[str, Any],
+        summary_validated: bool,
+    ) -> None:
         self.exit_code = exit_code
         self.summary_path = summary_path
         self.summary = summary
+        self.summary_validated = summary_validated
 
 
 def main() -> int:
@@ -206,6 +218,7 @@ def run_competition(
     semantic_pass = 0
     refused = 0
     blocked = 0
+    provider_circuit = ProviderCircuit(threshold=2, shared_failure_kinds={"provider_timeout"})
     worker_statuses = load_worker_summary_statuses(
         worker_summaries,
         proof_class=proof_class,
@@ -272,6 +285,9 @@ def run_competition(
     for spec_path, spec in specs:
         target_id = required_str(spec, "target_id")
         slice_id = required_str(spec, "slice_id")
+        unit_id = f"{target_id}/{slice_id}"
+        if not reuse_accepted_evidence and not provider_circuit.request(unit_id):
+            continue
         unit_source = "extract-spec" if spec_path.resolve() in generated_slice_spec_paths else "slice-spec"
         slice_evidence_root = accepted_evidence_root if reuse_accepted_evidence else evidence_root
         ai_metric_descriptors.append(
@@ -317,6 +333,14 @@ def run_competition(
                 logs_dir=logs_dir,
                 out_root=out_root,
                 run_id=run_id,
+            )
+            provider_circuit.observe_manifest(
+                unit_id,
+                evidence_root
+                / target_id
+                / "auto-translation"
+                / slice_id
+                / f"l3-{slice_id}-ai-candidate-manifest.json",
             )
             if auto_result.returncode != 0:
                 slice_failures += 1
@@ -454,6 +478,10 @@ def run_competition(
     if unsafe_summary["status"] != "passed":
         gate_failures += 1
 
+    provider_circuit_summary = provider_circuit.summary()
+    if not reuse_accepted_evidence and provider_circuit_summary["status"] == "open":
+        gate_failures += 1
+
     status = "passed" if slice_failures == 0 and gate_failures == 0 and semantic_pass > 0 else "failed"
     summary = {
         "schema_version": 2,
@@ -462,16 +490,16 @@ def run_competition(
         "profile_id": profile_id(repo_root),
         "profile_sha256": sha256(PROFILE_PATH if repo_root == REPO_ROOT else repo_root / "config/competition-env/environment.json"),
         "clang_source": clang_source(repo_root),
-        "cargo_mirror_activation": {
-            "method": "CARGO_HOME",
-            "path": "config/competition-env/cargo",
-            "config_file": "config/competition-env/cargo/config.toml",
-        },
+        "cargo_mirror_activation": cargo_runtime_summary(repo_root),
         "elapsed_seconds": int(time.monotonic() - started),
         "translator_version": "0.1.0",
         "slices": {
-            "attempted": len(slice_specs)
-            + len(extraction_specs)
+            "attempted": extraction_failures
+            + (
+                len(all_slice_specs)
+                if reuse_accepted_evidence
+                else provider_circuit_summary["attempted_slice_specs"]
+            )
             + sum(worker["slices"]["attempted"] for worker in worker_statuses),
             "typed_ir_generated": typed_ir_generated,
             "compiled": compiled,
@@ -494,6 +522,8 @@ def run_competition(
             ),
         },
     }
+    if not reuse_accepted_evidence:
+        summary["provider_circuit_breaker"] = provider_circuit_summary
     if exact_host_attestation is not None:
         summary["competition_exact_host_attestation"] = exact_host_attestation
     if worker_statuses:
@@ -539,13 +569,60 @@ def run_competition(
         exit_code=0 if summary["final_gate"]["status"] == "passed" and slice_failures == 0 and gate_failures == 0 else 1,
         summary_path=summary_path,
         summary=summary,
+        summary_validated=summary_validation.returncode == 0,
     )
 
 
+def competition_subprocess_env(repo_root: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    inherited_cargo_home = env.get("CARGO_HOME")
+    path_value = env.get("PATH", "")
+    if shutil.which("cargo", path=path_value) is None:
+        cargo_bin_candidates = []
+        if inherited_cargo_home:
+            cargo_bin_candidates.append(Path(inherited_cargo_home) / "bin")
+        cargo_bin_candidates.append(Path.home() / ".cargo" / "bin")
+        for cargo_bin in cargo_bin_candidates:
+            if any((cargo_bin / name).is_file() for name in ("cargo", "cargo.exe")):
+                path_value = os.pathsep.join([str(cargo_bin), path_value]) if path_value else str(cargo_bin)
+                break
+
+    root = str(repo_root.resolve())
+    python_path = env.get("PYTHONPATH", "")
+    python_entries = [entry for entry in python_path.split(os.pathsep) if entry]
+    if not any(os.path.normcase(entry) == os.path.normcase(root) for entry in python_entries):
+        python_entries.insert(0, root)
+
+    profile_cargo_home = repo_root / "config" / "competition-env" / "cargo"
+    local_cargo_home = env.get(LOCAL_CARGO_HOME_ENV)
+    use_local_cache = bool(local_cargo_home) and env.get(COMPETITION_EXACT_HOST_ENV) != "1"
+
+    env["PATH"] = path_value
+    env["PYTHONPATH"] = os.pathsep.join(python_entries)
+    env["CARGO_HOME"] = str(local_cargo_home) if use_local_cache else str(profile_cargo_home)
+    if use_local_cache and env.get(LOCAL_CARGO_OFFLINE_ENV) == "1":
+        env["CARGO_NET_OFFLINE"] = "true"
+    return env
+
+
+def cargo_runtime_summary(repo_root: Path) -> dict[str, Any]:
+    env = competition_subprocess_env(repo_root)
+    profile_cargo_home = (repo_root / "config" / "competition-env" / "cargo").resolve()
+    runtime_cargo_home = Path(env["CARGO_HOME"]).resolve()
+    profile_active = runtime_cargo_home == profile_cargo_home
+    return {
+        "method": "CARGO_HOME",
+        "path": "config/competition-env/cargo",
+        "config_file": "config/competition-env/cargo/config.toml",
+        "runtime_status": "active" if profile_active else "bypassed_for_local_cache",
+        "runtime_source": "competition_profile" if profile_active else LOCAL_CARGO_HOME_ENV,
+        "offline": env.get("CARGO_NET_OFFLINE") == "true",
+    }
 def run_step(command: list[str], *, command_runner: CommandRunner, repo_root: Path) -> subprocess.CompletedProcess[str]:
     return command_runner(
         command,
         cwd=repo_root,
+        env=competition_subprocess_env(repo_root),
         text=True,
         encoding="utf-8",
         errors="replace",

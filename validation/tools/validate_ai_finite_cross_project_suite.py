@@ -325,6 +325,8 @@ def _preflight_project_source(source: dict[str, str], repo_root: Path) -> list[s
     status, error = _run_git(
         checkout,
         "status",
+        "-c",
+        "core.autocrlf=true",
         "status",
         "--porcelain=v1",
         "--untracked-files=no",

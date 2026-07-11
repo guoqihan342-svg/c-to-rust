@@ -69,33 +69,54 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
         final_status: str = "passed",
         returned_path: Path | None = None,
         returned_summary: dict[str, object] | None = None,
+        attempted: int | None = None,
+        circuit_skipped: int | None = None,
     ) -> SimpleNamespace:
         out_root = Path(kwargs["out_root"])
         summary_path = out_root / "summary" / "competition-run-summary.json"
         summary_path.parent.mkdir(parents=True, exist_ok=True)
-        index = int(out_root.name)
+        slice_count = len(kwargs["slice_specs"])
+        attempted_count = slice_count if attempted is None else attempted
         summary = {
             "schema_version": 2,
             "slices": {
-                "attempted": 1,
-                "typed_ir_generated": index,
-                "compiled": 1 if final_status == "passed" else 0,
-                "semantic_pass": 1 if final_status == "passed" else 0,
+                "attempted": attempted_count,
+                "typed_ir_generated": attempted_count,
+                "compiled": attempted_count if final_status == "passed" else 0,
+                "semantic_pass": attempted_count if final_status == "passed" else 0,
                 "refused": 0,
                 "blocked": 0,
-                "failed": 0 if final_status == "passed" else 1,
+                "failed": 0 if final_status == "passed" else attempted_count,
             },
             "ai_translation_metrics": {
                 "schema_version": 1,
-                "totals": {"model_invocations": index + 1, "translations_executed": 1},
+                "units_total": attempted_count,
+                "units": [{"unit_id": f"unit-{index}"} for index in range(attempted_count)],
+                "totals": {"model_invocations": attempted_count, "translations_executed": attempted_count},
             },
             "final_gate": {"status": final_status},
         }
+        if circuit_skipped is not None:
+            attempted_count = slice_count - circuit_skipped
+            summary["provider_circuit_breaker"] = {
+                "status": "open",
+                "threshold": 2,
+                "consecutive_failures": 2,
+                "failure_kind": "provider_timeout",
+                "requested_slice_specs": slice_count,
+                "attempted_slice_specs": attempted_count,
+                "skipped_slice_specs": circuit_skipped,
+                "observations": [
+                    {"unit_id": "project-0/slice-0", "failure_kind": "provider_timeout"},
+                    {"unit_id": "project-1/slice-1", "failure_kind": "provider_timeout"},
+                ],
+            }
         summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return SimpleNamespace(
             exit_code=exit_code,
             summary_path=returned_path or summary_path,
             summary=summary if returned_summary is None else returned_summary,
+            summary_validated=True,
         )
 
     def test_blocked_preflight_never_calls_competition_runner(self) -> None:
@@ -122,7 +143,7 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
         self.assertEqual([], calls)
         self.assertEqual(report, json.loads(report_path.read_text(encoding="utf-8")))
 
-    def test_each_slice_spec_is_passed_exactly_once_with_fresh_policy(self) -> None:
+    def test_suite_is_passed_once_with_each_slice_spec_and_fresh_policy(self) -> None:
         calls: list[dict[str, object]] = []
 
         def fake_runner(**kwargs: object) -> SimpleNamespace:
@@ -146,16 +167,16 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
 
         self.assertEqual(0, exit_code)
         self.assertEqual("passed", report["status"])
-        self.assertEqual(3, len(calls))
+        self.assertEqual(1, len(calls))
         self.assertEqual(
             [Path(item["slice_spec"]["path"]) for item in self.items],
-            [call["slice_specs"][0] for call in calls],
+            calls[0]["slice_specs"],
         )
-        self.assertTrue(all(len(call["slice_specs"]) == 1 for call in calls))
-        self.assertTrue(all(call["reuse_accepted_evidence"] is False for call in calls))
+        self.assertEqual(len(self.items), len(set(calls[0]["slice_specs"])))
+        self.assertIs(calls[0]["reuse_accepted_evidence"], False)
         self.assertEqual(
-            [(self.root / "out" / "runs" / f"{index:02d}").resolve() for index in range(3)],
-            [Path(call["out_root"]).resolve() for call in calls],
+            (self.root / "out" / "competition").resolve(),
+            Path(calls[0]["out_root"]).resolve(),
         )
         for call in calls:
             self.assertEqual("ci-approximation", call["proof_class"])
@@ -165,7 +186,9 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
             self.assertEqual("variant-x", call["ai_variant"])
             self.assertEqual(321, call["ai_timeout_seconds"])
             self.assertEqual("opencode-x", call["ai_opencode_command"])
-        self.assertTrue(all(run["outer_attempts"] == 1 for run in report["runs"]))
+        self.assertEqual(1, len(report["runs"]))
+        self.assertEqual(1, report["runs"][0]["outer_attempts"])
+        self.assertEqual(3, len(report["runs"][0]["suite_items"]))
 
     def test_dry_run_only_returns_sha_bound_plan_without_writes_or_success_claim(self) -> None:
         calls = []
@@ -196,17 +219,16 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
         self.assertFalse(out_root.exists())
         self.assertEqual([], calls)
 
-    def test_success_and_failure_copy_only_bound_competition_summary_values(self) -> None:
-        expected: list[dict[str, object]] = []
+    def test_failure_copies_only_bound_competition_summary_values(self) -> None:
+        expected: dict[str, object] = {}
 
         def fake_runner(**kwargs: object) -> SimpleNamespace:
-            index = int(Path(kwargs["out_root"]).name)
             result = self._fake_result(
                 kwargs,
-                exit_code=0 if index != 1 else 1,
-                final_status="passed" if index != 1 else "failed",
+                exit_code=1,
+                final_status="failed",
             )
-            expected.append(result.summary)
+            expected.update(result.summary)
             return result
 
         exit_code, report, report_path = module.run_suite(
@@ -219,17 +241,14 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
 
         self.assertEqual(1, exit_code)
         self.assertEqual("failed", report["status"])
-        self.assertEqual(["passed", "failed", "passed"], [run["status"] for run in report["runs"]])
-        self.assertEqual([summary["slices"] for summary in expected], [entry["value"] for entry in report["slices"]])
-        self.assertEqual(
-            [summary["ai_translation_metrics"] for summary in expected],
-            [entry["value"] for entry in report["ai_translation_metrics"]],
-        )
-        for run, summary in zip(report["runs"], expected):
-            self.assertEqual(summary["slices"], run["slices"])
-            self.assertEqual(summary["ai_translation_metrics"], run["ai_translation_metrics"])
-            bound = self.root / "out" / run["competition_summary"]["path"]
-            self.assertEqual(_sha256(bound), run["competition_summary"]["sha256"])
+        self.assertEqual(["failed"], [run["status"] for run in report["runs"]])
+        self.assertEqual([expected["slices"]], [entry["value"] for entry in report["slices"]])
+        self.assertEqual([expected["ai_translation_metrics"]], [entry["value"] for entry in report["ai_translation_metrics"]])
+        run = report["runs"][0]
+        self.assertEqual(expected["slices"], run["slices"])
+        self.assertEqual(expected["ai_translation_metrics"], run["ai_translation_metrics"])
+        bound = self.root / "out" / run["competition_summary"]["path"]
+        self.assertEqual(_sha256(bound), run["competition_summary"]["sha256"])
         self.assertEqual(report, json.loads(report_path.read_text(encoding="utf-8")))
 
     def test_suite_sha_drift_blocks_before_any_competition_call(self) -> None:
@@ -269,7 +288,7 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
         )
 
         self.assertEqual(1, exit_code)
-        self.assertTrue(all(run["error"] == "unexpected_competition_summary_path" for run in report["runs"]))
+        self.assertEqual("unexpected_competition_summary_path", report["runs"][0]["error"])
         self.assertEqual([], report["slices"])
         self.assertEqual([], report["ai_translation_metrics"])
 
@@ -286,8 +305,70 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
         )
 
         self.assertEqual(1, exit_code)
-        self.assertTrue(all(run["error"] == "competition_summary_result_mismatch" for run in report["runs"]))
+        self.assertEqual("competition_summary_result_mismatch", report["runs"][0]["error"])
         self.assertEqual([], report["slices"])
+
+    def test_unvalidated_competition_summary_fails_closed(self) -> None:
+        def fake_runner(**kwargs: object) -> SimpleNamespace:
+            result = self._fake_result(kwargs)
+            result.summary_validated = False
+            return result
+
+        exit_code, report, _ = module.run_suite(
+            suite=self.suite_path,
+            out_root=self.root / "out",
+            repo_root=self.root,
+            preflight_validator=self._ready_preflight,
+            competition_runner=fake_runner,
+        )
+
+        self.assertEqual(1, exit_code)
+        self.assertEqual("competition_summary_validation_failed", report["runs"][0]["error"])
+        self.assertEqual([], report["slices"])
+
+    def test_attempted_count_mismatch_fails_closed_without_semantic_copy(self) -> None:
+        def fake_runner(**kwargs: object) -> SimpleNamespace:
+            return self._fake_result(kwargs, attempted=2)
+
+        exit_code, report, _ = module.run_suite(
+            suite=self.suite_path,
+            out_root=self.root / "out",
+            repo_root=self.root,
+            preflight_validator=self._ready_preflight,
+            competition_runner=fake_runner,
+        )
+
+        self.assertEqual(1, exit_code)
+        self.assertEqual("competition_summary_attempted_count_mismatch", report["runs"][0]["error"])
+        self.assertEqual([], report["slices"])
+        self.assertEqual([], report["ai_translation_metrics"])
+
+    def test_provider_circuit_breaker_returns_bound_blocked_partial_report(self) -> None:
+        def fake_runner(**kwargs: object) -> SimpleNamespace:
+            return self._fake_result(
+                kwargs,
+                exit_code=1,
+                final_status="failed",
+                attempted=2,
+                circuit_skipped=1,
+            )
+
+        exit_code, report, report_path = module.run_suite(
+            suite=self.suite_path,
+            out_root=self.root / "out",
+            repo_root=self.root,
+            preflight_validator=self._ready_preflight,
+            competition_runner=fake_runner,
+        )
+
+        self.assertEqual(2, exit_code)
+        self.assertEqual("blocked", report["status"])
+        self.assertEqual("blocked", report["runs"][0]["status"])
+        self.assertEqual("provider_circuit_breaker_open", report["runs"][0]["error"])
+        self.assertEqual(1, report["runs"][0]["provider_circuit_breaker"]["skipped_slice_specs"])
+        self.assertEqual(1, len(report["slices"]))
+        self.assertEqual(1, len(report["ai_translation_metrics"]))
+        self.assertEqual(report, json.loads(report_path.read_text(encoding="utf-8")))
 
     def test_main_forwards_cli_ai_options(self) -> None:
         calls: list[dict[str, object]] = []
@@ -325,7 +406,7 @@ class RunAiFiniteCrossProjectSuiteTests(unittest.TestCase):
             )
 
         self.assertEqual(0, exit_code)
-        self.assertEqual(3, len(calls))
+        self.assertEqual(1, len(calls))
         self.assertTrue(all(call["proof_class"] == "wsl-local-simulation" for call in calls))
         self.assertTrue(all(call["run_id"] == "cli-run" for call in calls))
         self.assertTrue(all(call["ai_model"] == "cli-model" for call in calls))

@@ -12,6 +12,23 @@
     "zlib-ng",
     "libuv"
   ],
+  "project_sources": {
+    "flashdb": {
+      "repository": "https://gitcode.com/xwxf/FlashDB.git",
+      "root": "sources/FlashDB",
+      "commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe"
+    },
+    "zlib-ng": {
+      "repository": "https://github.com/zlib-ng/zlib-ng.git",
+      "root": "sources/zlib-ng",
+      "commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8"
+    },
+    "libuv": {
+      "repository": "https://github.com/libuv/libuv.git",
+      "root": "sources/libuv",
+      "commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3"
+    }
+  },
   "translation_policy": {
     "ai_primary": true,
     "project_name_is_routing_input": false,
@@ -95,31 +112,31 @@
       "fresh_executable": true
     },
     {
-      "id": "flashdb-real-fdb-blob-make",
+      "id": "flashdb-real-fdb-tsl-to-blob",
       "project_id": "flashdb",
-      "slice_id": "real-fdb-blob-make",
+      "slice_id": "real-fdb-tsl-to-blob",
       "provenance_kind": "real_upstream_source_slice",
-      "construct_family": "mutable-record-pointer-fields",
+      "construct_family": "timestamp-record-field-projection",
       "slice_spec": {
-        "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
-        "sha256": "b93b8f807f597a44ebc10fba7ea2d2f25631fea5614795b77c1c2c74ed8bde5b"
+        "path": "validation/slice-specs/flashdb-real-fdb-tsl-to-blob.json",
+        "sha256": "aad37f7e99fc551672b3194e110cb6cff0c8a6575c7da6dc774ddf04ae60e05d"
       },
       "source_binding": {
-        "root": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829",
-        "path": "src/fdb_utils.c",
-        "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-        "file_sha256": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0",
+        "root": "sources/FlashDB",
+        "path": "src/fdb_tsdb.c",
+        "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+        "file_sha256": "1d56d3820d627fdc468368d1c4a848231834b6dcb513a0c01ea94ac13c9d259b",
         "span": {
-          "line_start": 221,
-          "line_end": 227,
-          "byte_start": 8954,
-          "byte_end": 9117,
-          "sha256": "42934484da8b00d932a4d7a18d59f9656b7da8686cc3423f74745d15836e963e"
+          "line_start": 857,
+          "line_end": 864,
+          "byte_start": 30924,
+          "byte_end": 31123,
+          "sha256": "8ef7ff7e6efef00fa804a08a43e993e87ef4562edabfed4823047be1e3a588d3"
         }
       },
       "fixture": {
-        "path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
-        "sha256": "e945f799a0a0c50e28318d34ed0e5f9a217c64401360769fc5185e15ee27a85b"
+        "path": "validation/l2_slices/fixtures/real-fdb-tsl-to-blob.json",
+        "sha256": "2918e72208f7b2e0b169aeeb3c39067fc94927bd33ca5d9dc27e2f5c47a1a113"
       },
       "fresh_executable": true
     },
@@ -211,56 +228,68 @@
       "fresh_executable": true
     },
     {
-      "id": "flashdb-real-fdb-new-kv-alloc-compare",
+      "id": "flashdb-real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
       "project_id": "flashdb",
-      "slice_id": "real-fdb-new-kv-alloc-compare",
-      "provenance_kind": "real_project_synthetic_carrier",
-      "construct_family": "output-pointer-allocation-compare",
+      "slice_id": "real-fdb-kv-iterate-zero-start-next-sector-advance-continue",
+      "provenance_kind": "real_upstream_source_fragment",
+      "construct_family": "zero-start-assignment-call-continue",
       "slice_spec": {
-        "path": "validation/slice-specs/flashdb-real-fdb-new-kv-alloc-compare.json",
-        "sha256": "bacd46dcedfe950d479e27f39ac5de9198498577577d51ded7227fa9deacfbd7"
+        "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-zero-start-next-sector-advance-continue.json",
+        "sha256": "044551aeb677f49d89c10a1df4ec8c5e52e3d85d8aa2c419950e0d9aa7c1288d"
       },
       "source_binding": {
         "root": "sources/FlashDB",
         "path": "src/fdb_kvdb.c",
         "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
         "file_sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
-        "span": null
+        "span": {
+          "line_start": 1868,
+          "line_end": 1874,
+          "byte_start": 64756,
+          "byte_end": 65117,
+          "sha256": "5ecb3553be0af447e9cba4bc822c8e1da5ea7d9efd1fc9f7876d802b81224cf7"
+        }
       },
       "fixture": {
-        "path": "validation/l2_slices/fixtures/real-fdb-new-kv-alloc-compare.json",
-        "sha256": "2211d8b0f46bf70e5fd2f6f9e64c789b489e208a69ed4887a878a299251cb84a"
+        "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-zero-start-next-sector-advance-continue.json",
+        "sha256": "c2f96dbd88669f5ef4cb6d24748eb4b003cbaf1d70cc764096e3e5b37e41df1d"
       },
-      "fresh_executable": false
+      "fresh_executable": true
     },
     {
-      "id": "flashdb-real-fdb-kv-iterate-sector-advance-continue",
+      "id": "flashdb-real-fdb-kv-iterate-read-kv-body-call",
       "project_id": "flashdb",
-      "slice_id": "real-fdb-kv-iterate-sector-advance-continue",
-      "provenance_kind": "real_project_synthetic_carrier",
-      "construct_family": "loop-sector-advance-continue",
+      "slice_id": "real-fdb-kv-iterate-read-kv-body-call",
+      "provenance_kind": "real_upstream_source_fragment",
+      "construct_family": "ordered-direct-call-body",
       "slice_spec": {
-        "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-sector-advance-continue.json",
-        "sha256": "2f2090cef0dafeb1e7e4a99916f60b3615d346b4e352e97d37e07ab36a5a411b"
+        "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-read-kv-body-call.json",
+        "sha256": "dd97b6231453763831ff84032df84f472c3bef75f393532d3fb103bc12b84e85"
       },
       "source_binding": {
         "root": "sources/FlashDB",
         "path": "src/fdb_kvdb.c",
         "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
         "file_sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
-        "span": null
+        "span": {
+          "line_start": 1876,
+          "line_end": 1876,
+          "byte_start": 65138,
+          "byte_end": 65175,
+          "sha256": "10948836c8ce66dea9de8d52dd04882b110c70acdabd785634c9e6d2660f2940"
+        }
       },
       "fixture": {
-        "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-sector-advance-continue.json",
-        "sha256": "ccc414647158553180bade2ad9e7fe2f4f99a2cafaea415f4065c3ae4ef417cd"
+        "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-read-kv-body-call.json",
+        "sha256": "7938b42d3d60cdd0e6c39b6c2c83183c77579d460e2de7a4e153c9da2066784e"
       },
-      "fresh_executable": false
+      "fresh_executable": true
     },
     {
       "id": "flashdb-real-fdb-kv-iterate-interior-projection",
       "project_id": "flashdb",
       "slice_id": "real-fdb-kv-iterate-interior-projection",
-      "provenance_kind": "real_project_synthetic_carrier",
+      "provenance_kind": "real_upstream_source_fragment",
       "construct_family": "interior-pointer-owner-projection",
       "slice_spec": {
         "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-interior-projection.json",
@@ -271,58 +300,70 @@
         "path": "src/fdb_kvdb.c",
         "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
         "file_sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
-        "span": null
+        "span": {
+          "line_start": 1863,
+          "line_end": 1863,
+          "byte_start": 64514,
+          "byte_end": 64549,
+          "sha256": "894a72723c9dbb7918aecb97dea1426df5f40f49cd8a4e0d0d042e96c8fd41f2"
+        }
       },
       "fixture": {
         "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-interior-projection.json",
         "sha256": "0f6b4673062070085a57ff073e76a7d1e2696fbbe945e8f6c578fef1fb84d819"
       },
-      "fresh_executable": false
+      "fresh_executable": true
     },
     {
-      "id": "flashdb-real-fdb-kv-iterate-guarded-stats-sequence",
+      "id": "flashdb-real-fdb-kv-iterate-stats-sequence",
       "project_id": "flashdb",
-      "slice_id": "real-fdb-kv-iterate-guarded-stats-sequence",
-      "provenance_kind": "real_project_synthetic_carrier",
-      "construct_family": "guarded-stats-compound-update",
+      "slice_id": "real-fdb-kv-iterate-stats-sequence",
+      "provenance_kind": "real_upstream_source_fragment",
+      "construct_family": "ordered-owner-sibling-accumulation",
       "slice_spec": {
-        "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-guarded-stats-sequence.json",
-        "sha256": "31b3f63340cdce5942653e511c42c48baceb017a3a595778a5ba15329b206524"
+        "path": "validation/slice-specs/flashdb-real-fdb-kv-iterate-stats-sequence.json",
+        "sha256": "25a7e161b60e8fd1c265f105ce01427eb465950c9c736001bb201ac94cdd13ce"
       },
       "source_binding": {
         "root": "sources/FlashDB",
         "path": "src/fdb_kvdb.c",
         "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
         "file_sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
-        "span": null
+        "span": {
+          "line_start": 1880,
+          "line_end": 1883,
+          "byte_start": 65371,
+          "byte_end": 65581,
+          "sha256": "aba7c0c829fd906d10e5aa2f3c9d047631ff431d6a29b875ab64f15283cf78cb"
+        }
       },
       "fixture": {
-        "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-guarded-stats-sequence.json",
-        "sha256": "827e27f1ceb2340682c9134892c05b5790ecc53ee974862a31135a0cf7683c9f"
+        "path": "validation/l2_slices/fixtures/real-fdb-kv-iterate-stats-sequence.json",
+        "sha256": "166d43aa77081e5df340d1e4023599f9e86e1ed542f001b5ec873c4b028a2f1b"
       },
-      "fresh_executable": false
+      "fresh_executable": true
     },
     {
       "id": "zlib-adler32-step",
       "project_id": "zlib-ng",
       "slice_id": "adler32-step",
       "provenance_kind": "real_upstream_source_slice",
-      "construct_family": "scalar-wrapping-arithmetic",
+      "construct_family": "macro-dispatched-buffer-checksum",
       "slice_spec": {
         "path": "validation/slice-specs/zlib-adler32-step.json",
-        "sha256": "de7ffd6008c1630bef4824f664c32c45ea6bd8d55303d20d47ebcb8bfc5c774c"
+        "sha256": "67ca1d8e707bc5f6e2b9bafdc369f5c16025b471df79f0089dc54659dfa504e5"
       },
       "source_binding": {
-        "root": "<pinned-zlib-ng-root>",
+        "root": "sources/zlib-ng",
         "path": "adler32.c",
         "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
-        "file_sha256": "640b9db11570656f3ddc0917f8ba29fb2541766fdd1e966e95333072bf7a9086",
+        "file_sha256": "6dfae2e2ffae77be3c7cb3c2a9f914f3b316dd40abeb5d9bd9cbbb9f7e0d56b3",
         "span": {
-          "line_start": 1,
-          "line_end": 1,
-          "byte_start": 0,
-          "byte_end": 53,
-          "sha256": "640b9db11570656f3ddc0917f8ba29fb2541766fdd1e966e95333072bf7a9086"
+          "line_start": 17,
+          "line_end": 21,
+          "byte_start": 519,
+          "byte_end": 724,
+          "sha256": "54e8abf7b027d9db195a9e3e23426f061fce3e0b4a03536a9157788c4372771e"
         }
       },
       "fixture": {
@@ -335,24 +376,30 @@
       "id": "libuv-ip4-addr",
       "project_id": "libuv",
       "slice_id": "ip4-addr",
-      "provenance_kind": "real_project_unbound_slice",
+      "provenance_kind": "real_upstream_source_slice",
       "construct_family": "abi-record-external-network-call",
       "slice_spec": {
         "path": "validation/slice-specs/libuv-ip4-addr.json",
-        "sha256": "6811c89af3f3a25db9613ad575e0ea04a102ddd50430d7095c9ee6ad8c016efd"
+        "sha256": "fccace9cd1d9bb491487016fa863029401f7d00fc054c7e9135d6faa5b7e5c67"
       },
       "source_binding": {
-        "root": "<pinned-libuv-root>",
+        "root": "sources/libuv",
         "path": "src/uv-common.c",
         "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
-        "file_sha256": null,
-        "span": null
+        "file_sha256": "8be5802be4ab39842e549974431be18daddf102fb2f192236344cf8008ca8aea",
+        "span": {
+          "line_start": 255,
+          "line_end": 263,
+          "byte_start": 6126,
+          "byte_end": 6411,
+          "sha256": "8baccd064756d7910d9b0c69df6a4a6753b9818db8acdb30971e2f50f9660873"
+        }
       },
       "fixture": {
         "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
         "sha256": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea"
       },
-      "fresh_executable": false
+      "fresh_executable": true
     }
   ]
 }

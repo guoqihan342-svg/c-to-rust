@@ -4,8 +4,8 @@
   "slice_id": "adler32-step",
   "level": "L3",
   "status": "ready",
-  "function_name": "adler32_step",
-  "c_source": "uint32_t adler32_step(uint32_t s1) { return s1 + 1; }",
+  "function_name": "adler32_z",
+  "c_source": "uint32_t Z_EXPORT PREFIX(adler32_z)(uint32_t adler, const unsigned char *buf, size_t len) {\n    if (buf == NULL)\n        return ADLER32_INITIAL_VALUE;\n    return FUNCTABLE_CALL(adler32)(adler, buf, len);\n}",
   "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
   "fixture_hash": "zlib-adler32-fixture",
   "l1_evidence": {
@@ -14,45 +14,53 @@
     "accepted": true
   },
   "source": {
-    "source_root": "<pinned-zlib-ng-root>",
+    "source_root": "sources/zlib-ng",
     "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
     "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
     "source_file_hashes": {
-      "adler32.c": "640b9db11570656f3ddc0917f8ba29fb2541766fdd1e966e95333072bf7a9086"
+      "adler32.c": "6dfae2e2ffae77be3c7cb3c2a9f914f3b316dd40abeb5d9bd9cbbb9f7e0d56b3"
     }
   },
   "c_boundary": {
     "files": [
-      {"path": "adler32.c", "role": "source", "sha256": "640b9db11570656f3ddc0917f8ba29fb2541766fdd1e966e95333072bf7a9086"},
+      {"path": "adler32.c", "role": "source", "sha256": "6dfae2e2ffae77be3c7cb3c2a9f914f3b316dd40abeb5d9bd9cbbb9f7e0d56b3"},
       {"path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json", "role": "fixture"}
     ],
-    "functions": ["adler32_step"],
+    "functions": ["adler32_z"],
     "signatures": [
       {
-        "function": "adler32_step",
+        "function": "adler32_z",
         "return_type": "uint32_t",
         "parameters": [
-          {"name": "s1", "c_type": "uint32_t", "direction": "input"}
+          {"name": "adler", "c_type": "uint32_t", "direction": "input"},
+          {"name": "buf", "c_type": "const unsigned char *", "direction": "input"},
+          {"name": "len", "c_type": "size_t", "direction": "input"}
         ],
-        "c_source": "uint32_t adler32_step(uint32_t s1) { return s1 + 1; }",
+        "c_source": "uint32_t Z_EXPORT PREFIX(adler32_z)(uint32_t adler, const unsigned char *buf, size_t len) {\n    if (buf == NULL)\n        return ADLER32_INITIAL_VALUE;\n    return FUNCTABLE_CALL(adler32)(adler, buf, len);\n}",
         "source_span": {
           "file": "adler32.c",
-          "line_start": 1,
-          "line_end": 1,
-          "byte_start": 0,
-          "byte_end": 53,
-          "sha256": "640b9db11570656f3ddc0917f8ba29fb2541766fdd1e966e95333072bf7a9086"
+          "line_start": 17,
+          "line_end": 21,
+          "byte_start": 519,
+          "byte_end": 724,
+          "sha256": "54e8abf7b027d9db195a9e3e23426f061fce3e0b4a03536a9157788c4372771e"
         }
       }
     ],
     "direct_dependencies": [
-      {"kind": "type", "name": "uint32_t", "source": "stdint.h"}
+      {"kind": "type", "name": "uint32_t", "source": "stdint.h"},
+      {"kind": "type", "name": "size_t", "source": "stddef.h"},
+      {"kind": "macro", "name": "PREFIX", "source": "zbuild.h"},
+      {"kind": "macro", "name": "Z_EXPORT", "source": "zbuild.h"},
+      {"kind": "macro", "name": "ADLER32_INITIAL_VALUE", "source": "adler32_p.h"},
+      {"kind": "macro", "name": "FUNCTABLE_CALL", "source": "functable.h"},
+      {"kind": "callee", "name": "adler32", "source": "functable.h"}
     ]
   },
   "build_profile": {
     "profile_id": "zlib-adler32-step-linux-gnu",
     "compiler_command_source": "validation/evidence/zlib-ng/l1-native-build.json",
-    "include_paths": ["<pinned-zlib-ng-root>"],
+    "include_paths": ["sources/zlib-ng"],
     "defines": [],
     "target": {
       "triple_or_abi": "x86_64-unknown-linux-gnu",
@@ -61,10 +69,10 @@
       "long_width": 64,
       "pointer_width": 64
     },
-    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/zlib_adler32_step_ast.json",
+    "clang_ast_fixture": null,
     "preprocessing_mode": "manual_flags",
     "tool_versions": {
-      "clang": "NOT_REQUIRED_FOR_MVP",
+      "clang": "required_for_fresh_execution",
       "rustc": "captured_at_validation"
     },
     "clang_type_extraction": {
@@ -80,7 +88,7 @@
       {
         "id": "empty",
         "input_ref": "cases[0]",
-        "inputs": {"s1": 0},
+        "inputs": {"seed": null, "input_hex": ""},
         "expected_outputs": {"value": 1},
         "expected_ref": "validation/evidence/l2-slices/zlib-adler32-oracle.json"
       }
@@ -95,7 +103,7 @@
     "crate": "validation/l2_slices",
     "module": "validation/l2_slices/src/zlib_adler32.rs",
     "public_api": [
-      {"name": "adler32_step", "visibility": "public", "boundary_kind": "safe_wrapper"}
+      {"name": "adler32", "visibility": "public", "boundary_kind": "safe_wrapper"}
     ],
     "raw_pointer_policy": "internal_only",
     "unsafe_policy": {
@@ -110,19 +118,19 @@
     "accepted_evidence_authoritative": true,
     "accepted_metadata_differences": [],
     "non_goals": [
-      "This is a pure-value translator regression slice and does not claim full adler32_z coverage.",
-      "No pointer/buffer ownership proof."
+      "The source span covers the public adler32_z wrapper, not the FUNCTABLE checksum implementation.",
+      "The committed corpus exercises buffer inputs but does not prove arbitrary pointer alias safety."
     ],
     "must_not_claim": [
       "full zlib-ng migration",
-      "full adler32_z coverage",
-      "buffer ownership proof"
+      "FUNCTABLE checksum implementation migration",
+      "arbitrary buffer ownership proof"
     ]
   },
   "accepted_metadata_differences": [],
   "non_goals": [
-    "This is a pure-value translator regression slice and does not claim full adler32_z coverage.",
-    "No pointer/buffer ownership proof."
+    "The source span covers the public adler32_z wrapper, not the FUNCTABLE checksum implementation.",
+    "The committed corpus exercises buffer inputs but does not prove arbitrary pointer alias safety."
   ],
   "cache_invalidation_keys": [
     "source.source_commit",
