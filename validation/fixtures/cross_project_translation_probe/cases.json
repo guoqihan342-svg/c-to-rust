@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "source_file": "validation/fixtures/cross_project_translation_probe/probe_fixtures.c",
+  "cases": [
+    {
+      "id": "utility-scalar-add",
+      "project": "utility-core",
+      "syntax_family": "scalar_arithmetic",
+      "naming_variant": "add_one",
+      "function_name": "add_one",
+      "c_source": "int add_one(int value) { return value + 1; }",
+      "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/add_one_ast.json",
+      "expected_classification": "success"
+    },
+    {
+      "id": "utility-while-countdown",
+      "project": "utility-core",
+      "syntax_family": "structured_loop",
+      "naming_variant": "while_countdown_positive",
+      "function_name": "while_countdown_positive",
+      "c_source": "int while_countdown_positive(int value) { while (value > 0) { value = value - 1; } return value; }",
+      "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/while_countdown_positive_ast.json",
+      "expected_classification": "success"
+    },
+    {
+      "id": "buffer-pointer-copy",
+      "project": "buffer-kit",
+      "syntax_family": "pointer_arithmetic",
+      "naming_variant": "copy_i32_ptr_arith",
+      "function_name": "copy_i32_ptr_arith",
+      "c_source": "int copy_i32_ptr_arith(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }",
+      "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/copy_i32_ptr_arith_ast.json",
+      "expected_classification": "refusal"
+    },
+    {
+      "id": "recursive-call-chain",
+      "project": "algorithm-kit",
+      "syntax_family": "direct_call_expression",
+      "naming_variant": "call_expression_chain",
+      "function_name": "call_expression_chain",
+      "c_source": "int call_expression_chain(int value) { if (value <= 0) { return -value; } int first = call_expression_chain(value - 1); value = call_expression_chain(first - 1); return call_expression_chain(value - 1); }",
+      "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/call_expression_chain_ast.json",
+      "expected_classification": "success"
+    },
+    {
+      "id": "enum-status-add",
+      "project": "protocol-kit",
+      "syntax_family": "enum_constant",
+      "naming_variant": "add_status",
+      "function_name": "add_status",
+      "c_source": "enum status { STATUS_OK = 7, STATUS_PENDING }; int add_status(int value) { return value + STATUS_OK; }",
+      "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/enum_constant_ast.json",
+      "expected_classification": "success"
+    },
+    {
+      "id": "sparse-table-lookup",
+      "project": "catalog-kit",
+      "syntax_family": "designated_array_initializer",
+      "naming_variant": "sparse_designated_array_lookup",
+      "function_name": "sparse_designated_array_lookup",
+      "c_source": "static const int table[4] = { [2] = 7 }; int sparse_designated_array_lookup(int index) { return table[index]; }",
+      "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/sparse_designated_array_lookup_ast.json",
+      "expected_classification": "success"
+    },
+    {
+      "id": "scalar-division-remainder",
+      "project": "numeric-kit",
+      "syntax_family": "division_remainder",
+      "naming_variant": "scalar_div_rem_contract",
+      "function_name": "scalar_div_rem_contract",
+      "c_source": "int scalar_div_rem_contract(int value) { return (value / 3) + (value % 5); }",
+      "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/scalar_div_rem_contract_ast.json",
+      "expected_classification": "success"
+    },
+    {
+      "id": "signed-right-shift",
+      "project": "bit-kit",
+      "syntax_family": "signed_shift",
+      "naming_variant": "signed_rshift_contract",
+      "function_name": "signed_rshift_contract",
+      "c_source": "int signed_rshift_contract(int value, int count) { return value >> count; }",
+      "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/signed_rshift_contract_ast.json",
+      "expected_classification": "refusal"
+    },
+    {
+      "id": "callback-indirect-call",
+      "project": "callback-kit",
+      "syntax_family": "function_pointer_call",
+      "naming_variant": "call_fn",
+      "function_name": "call_fn",
+      "c_source": "int call_fn(int (*fp)(int), int value) { return fp(value); }",
+      "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/function_pointer_call_ast.json",
+      "expected_classification": "refusal"
+    },
+    {
+      "id": "postincrement-loop",
+      "project": "control-kit",
+      "syntax_family": "do_while_postincrement",
+      "naming_variant": "bad_do_while_same_variable_sibling",
+      "function_name": "bad_do_while_same_variable_sibling",
+      "c_source": "int bad_do_while_same_variable_sibling(int value) { do { } while (value++ == value); return value; }",
+      "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/do_while_scalar_incdec_refusals_ast.json",
+      "expected_classification": "refusal"
+    }
+  ]
+}
