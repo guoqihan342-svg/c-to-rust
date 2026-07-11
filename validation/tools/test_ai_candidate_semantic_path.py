@@ -73,6 +73,10 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
             self.assertTrue(manifest["candidates"][0]["applied"])
             self.assertFalse(manifest["candidates"][0]["semantic_pass"])
             self.assertFalse(profile["generated_draft_semantic_pass"])
+            self.assertEqual(
+                auto_manifest["ai_exact_validation"]["path"],
+                "l3-add-one-ai-router.json",
+            )
             self.assertTrue(auto_manifest["ai_exact_validation"]["semantic_pass"])
             self.assertEqual(router["selected_candidate_id"], "opencode-glm51-1")
             self.assertTrue(router["semantic_pass"])

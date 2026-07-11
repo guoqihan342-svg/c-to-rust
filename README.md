@@ -136,11 +136,11 @@ flowchart LR
     C["3. Slice spec\nboundary + fixture + build profile"]
     D["4. Context pack\ntypes + calls + globals + hashes"]
     E["5. Worker assignment\nworker id + isolated out-root"]
-    F["6. Candidate generation\ntyped IR / C2Rust / OpenCode"]
-    G["7. Rust candidate\ncompile status + provenance"]
-    H["8. Executed evidence\nC oracle + Rust replay"]
-    I["9. Differential gates\ndiff + negative diff + unsafe"]
-    J{"10. Final gate"}
+    F["6. AI-primary inventory\nOpenCode + typed IR + C2Rust"]
+    G["7. Fresh exact proof\ncandidate SHA + current-run oracle"]
+    H["8. Executed gates\nrustc + Rust replay + schema diff"]
+    I["9. Safety gates\nnegative + unsafe + alias + ABI"]
+    J{"10. Gate-only router"}
     K["accepted\ndeclared slice only"]
     L["refused\nunsupported construct"]
     M["blocked\nmissing environment/evidence"]
@@ -149,7 +149,9 @@ flowchart LR
     P["13. Judge publication\nbundle + notes + public packet"]
 
     A --> B --> C --> D --> E --> F --> G --> H --> I --> J
-    J -->|"all gates pass"| K
+    J -->|"AI passes"| K
+    J -->|"AI fails; exact deterministic passes"| K
+    J -->|"repairable; all zero-token candidates failed"| F
     J -->|"known unsupported"| L
     J -->|"missing proof/tool"| M
     K --> N
@@ -188,7 +190,7 @@ sequenceDiagram
     end
 ```
 
-默认 repair cap 是 5 轮。进程返回码、LLM 文本和 repair history 只能说明执行过程；只有重新通过共同门禁的 candidate 才能 accepted。
+默认 repair cap 是 3 轮，比赛合同硬上限是 5 轮。生产路径先验证零 token 的 deterministic fallback，全部失败后才调用 repair 模型。进程返回码、LLM 文本和 repair history 只能说明执行过程；只有重新通过同一组 fresh exact gates 的 candidate 才能被 router 选择。
 
 ## 关键组件
 
@@ -198,6 +200,8 @@ sequenceDiagram
 | `crates/c2r-translator/` | clang AST、typed IR、通用 Rust emitter、fail-closed reason | Rust candidate、lowering report |
 | `auto_migrate.py` | 编排候选生成、oracle/replay 草稿、route/profile 和 evidence | `validation/evidence/<target>/auto-translation/...` |
 | `validate_auto_translation_evidence.py` | schema、hash、identity、semantic gate 交叉校验 | strict validation result |
+| `validate_ai_exact_evidence.py` | 重开 fresh oracle、candidate gate-index、router 和 canonical SHA | AI exact strict result |
+| `validate_ai_finite_cross_project_suite.py` | 校验最多 20 项、至少 3 个真实项目/10 类构造的固定套件输入完备性 | ready/blocked preflight，不产生成功率 |
 | `opencode_agent_harness.py` | run/plan/worker/retry/evaluate、SQLite ledger、隔离和恢复 | worker reports、context pack、agent index、merge plan |
 | `run_competition.py` | 汇总 slice/worker，执行环境、unsafe、summary gates | competition summary、workflow metrics |
 | `judge_demo.py` | 构建 before/after 安全化展品 | before-after exhibit、judge evidence index |
@@ -211,7 +215,11 @@ sequenceDiagram
 | Raw C2Rust | 广覆盖 unsafe baseline | 否 |
 | C2Rust + repair | 安全化 before/after candidate | 否 |
 | OpenCode / LLM | 候选生成和最小修复 | 否 |
-| C oracle + Rust replay + diff gates | 声明边界内的可执行等价证据 | 是 |
+| Fresh C oracle + exact replay/diff/safety/final gates | 声明边界内、绑定当前 candidate SHA 的可执行等价证据 | 是 |
+
+AI exact 路径禁止同时传入 `--accept-existing-evidence`。历史 accepted reports 可以复验历史切片，但不能给新 AI candidate 补写 SHA 或 semantic status。
+
+跨项目稳定性使用 `validation/ai-finite-cross-project-suite.json` 的固定集合。preflight 阶段不调用模型、不执行翻译；缺 checkout、source span/hash 或 fresh runner 时必须保留为 `blocked`，不能过滤难例或用 synthetic carrier 冒充真实项目成功。
 
 Named slice 增加 semantic numerator 必须同时满足：
 

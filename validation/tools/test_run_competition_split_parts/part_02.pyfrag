@@ -60,7 +60,7 @@
                 [
                     "environment-check",
                     "auto-migrate-store-add-one",
-                    "validate-evidence-store-add-one",
+                    "validate-ai-exact-store-add-one",
                     "unsafe-budget",
                     "validate-competition-summary",
                 ],

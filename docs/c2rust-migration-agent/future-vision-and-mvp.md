@@ -276,21 +276,23 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   完成证据：ContextPack v2 已按职责拆为 source、compile database、compile args、security 和 deterministic artifact 模块；支持显式外部 source root、仓库内相对 source root、真实 span/source SHA、compile command 选择、include/define/ABI 摘要、128 KB 总上限和 32 KB 单 artifact 上限。路径/符号链接逃逸、hash 漂移、密钥及宿主路径均 fail-closed。
 
-- [ ] **P0-A8：验证驱动的有界 AI repair loop**
+- [x] **P0-A8：验证驱动的有界 AI repair loop**
 
   每轮只把结构化失败事实反馈给模型：rustc diagnostics、C/Rust schema diff、negative mutation、unsafe/ABI/alias gate。默认最多 3 轮，比赛合同硬上限 5 轮；输入与失败 hash 均未变化时立即停止。每轮保留 candidate、patch、诊断和 hash，不允许模型修改 oracle、expected output、validator 或门禁配置。
 
-  当前进度：有界 repair coordinator、单候选/单文件 patch 合同、每轮 SHA 证据、LF 规范化、输入+失败不变停止、provider/validator fail-closed 和 `auto_migrate` rustc 失败触发已完成。repair 成功后会重新绑定最终 candidate SHA，再进入共同语义门禁；C oracle/schema diff/negative/unsafe/ABI/alias 的结构化失败自动反馈仍待接入，因此本项保持未完成。
+  完成证据：有界 repair coordinator、单候选/单文件 patch 合同、每轮 SHA 证据、LF 规范化、输入+失败不变停止和 provider/validator fail-closed 已完成。fresh C oracle proof 会重新核验 harness、fixture、source span、flags 和 ABI；exact validator 对当前 candidate SHA 依次执行 rustc、replay、schema diff、negative mutation、unsafe/ledger、alias、ABI 和 final gate，并把十类有界失败事实反馈给同一 repair 状态机。`--ai-first-candidate` 已与 `--accept-existing-evidence` 互斥，旧 accepted reports 不能为新 AI candidate 背书。独立 `validate_ai_exact_evidence.py --require-semantic-pass` 会重开 auto manifest、router、candidate evidence、gate index 和 canonical draft 的 SHA 绑定；competition runner 只在该严格验证与 router 状态同时通过时计入 compile/semantic pass。2026-07-12 的全新 demo/add-one 证据检查 16 个工件并返回 `semantic_pass=true`。
 
 - [ ] **P0-A9：AI-primary 多候选路由**
 
   比赛翻译路径优先生成 GLM-5.1 candidate；typed IR、raw C2Rust、C2Rust+repair 作为确定性候选、提示上下文或 AI 失败后的替代候选。router 只能依据可重算 gate 结果排序，不能依据项目名、函数名、slice id 或模型自评。任何候选都必须经过相同 compile/oracle/replay/diff/negative/unsafe/final gates。
 
-  当前进度：新翻译的 competition runner 已默认传递 `--ai-first-candidate`，competition-exact 禁止替换 OpenCode/GLM/agent/variant；精确 AI draft 可通过 compile、generated replay、accepted C oracle、schema diff、negative mutation、unsafe 和 final gate 晋级，且 deterministic draft 保留为独立 hash-bound 备用候选。`ai_translation_metrics` 已从 manifest/route/profile/final 和 repair report 重算 invocation/generated/applied/selected/rustc/semantic/blocked/refused/repair 指标。基于 gate 排序并在 AI 失败后自动选择 typed IR/C2Rust 的完整 router 仍未完成。
+  当前进度：新翻译的 competition runner 已默认传递 `--ai-first-candidate`，competition-exact 禁止替换 OpenCode/GLM/agent/variant。纯 router 核心限制最多 4 个候选，按 artifact SHA 去重，固定调度 `opencode-ai -> typed-ir -> c2rust-repair -> c2rust-baseline`，且只有八类 candidate-bound gates 全部通过才允许选择。实际 `auto_migrate` 已完成 AI 首验、typed-IR exact fallback 和“所有零 token 候选失败后再 repair AI”的流程；fallback 不产生 repair report，也不增加 provider invocation。competition summary 已从 SHA 绑定的 router evidence 重算 candidate input、去重、来源选择、deterministic fallback 和 no-selection 指标，独立 strict validator 也已接入。当前只剩 raw C2Rust/C2Rust+repair artifact 的同门禁物化，因此本项保持未完成。
 
 - [ ] **P0-A10：有限跨项目稳定性验收**
 
   建立不超过 20 个 case 的固定集合：至少覆盖 3 个真实 C 项目和 10 个不同 construct family。阶段验收只运行一次有限集合，不执行 1,000/10,000 轮或循环压力测试。发布 AI invocation、candidate generation、rustc compile、semantic acceptance、refused/blocked、repair rounds 和 route selection 指标；成功率不得用重复同类切片放大。
+
+  当前进度：`validation/ai-finite-cross-project-suite.json` 已固定 12 个 case、3 个真实项目和 12 个唯一 construct family，validator 强制 `max_items=20`、至少 3 个项目/10 类构造、项目名不得参与路由，且重复 family 不能放大覆盖率。当前 preflight 为 `ready=0/blocked=12`：FlashDB checkout 不在当前 worktree；zlib-ng/libuv 的 pinned source root 不存在；4 个 FlashDB synthetic carrier 缺真实 source span，libuv 还缺 source hash/span。该结果只表示输入完备性，`model_invocations=0`、`translations_executed=0`、`translation_coverage_numerator=0`，不得发布跨项目成功率。下一步是取得三个 pinned checkout、补齐真实绑定后仅运行一次有限集合。
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 

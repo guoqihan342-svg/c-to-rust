@@ -334,7 +334,7 @@ def main() -> int:
             manifest = pipeline["manifest"]
         router_path = exact_stage["router_path"]
         manifest["ai_exact_validation"] = {
-            "path": rel(router_path),
+            "path": router_path.name,
             "sha256": sha256(router_path),
             "status": "passed" if exact_stage["router"].get("semantic_pass") else "failed",
             "semantic_pass": exact_stage["router"].get("semantic_pass") is True,

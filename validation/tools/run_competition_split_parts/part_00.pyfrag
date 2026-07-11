@@ -19,12 +19,18 @@ import sys
 import time
 from typing import Any, Callable
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from validation.tools._run_competition_ai_exact import load_ai_exact_router_status
+
+
 PROFILE_PATH = REPO_ROOT / "config" / "competition-env" / "environment.json"
 SUMMARY_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_competition_run_summary.py"
 AUTO_MIGRATE = REPO_ROOT / "validation" / "tools" / "auto_migrate.py"
 AUTO_EVIDENCE_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_auto_translation_evidence.py"
+AI_EXACT_EVIDENCE_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_ai_exact_evidence.py"
 EXTRACT_SOURCE_SLICE = REPO_ROOT / "validation" / "tools" / "extract_source_slice.py"
 UNSAFE_BUDGET = REPO_ROOT / "validation" / "tools" / "unsafe_budget.py"
 COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
@@ -330,9 +336,45 @@ def run_competition(
                 continue
 
         final = load_final_verification(slice_evidence_root, target_id, slice_id)
-        compiled_unit = final.get("rust_check_status") == "passed"
-        semantic_unit = final.get("semantic_pass") is True
-        final_status = str(final.get("status", "failed"))
+        validation_result = None
+        if reuse_accepted_evidence:
+            compiled_unit = final.get("rust_check_status") == "passed"
+            semantic_unit = final.get("semantic_pass") is True
+            final_status = str(final.get("status", "failed"))
+        else:
+            validation_result = run_logged_step(
+                f"validate-ai-exact-{slice_id}",
+                [
+                    sys.executable,
+                    rel_script(AI_EXACT_EVIDENCE_VALIDATOR, repo_root),
+                    "--target-id",
+                    target_id,
+                    "--slice-id",
+                    slice_id,
+                    "--evidence-root",
+                    rel_path(slice_evidence_root, repo_root),
+                    "--require-semantic-pass",
+                ],
+                command_runner=command_runner,
+                repo_root=repo_root,
+                logs_dir=logs_dir,
+                out_root=out_root,
+                run_id=run_id,
+            )
+            exact_status = load_ai_exact_router_status(slice_evidence_root, target_id, slice_id)
+            exact_verified = validation_result.returncode == 0
+            compiled_unit = exact_verified and exact_status["compiled"]
+            semantic_unit = exact_verified and exact_status["semantic_pass"]
+            legacy_terminal = str(final.get("status", "failed"))
+            final_status = (
+                "blocked"
+                if not exact_verified
+                else "passed"
+                if semantic_unit
+                else legacy_terminal
+                if legacy_terminal in {"refused", "blocked"}
+                else "failed"
+            )
         if compiled_unit:
             compiled += 1
         if semantic_unit:
@@ -374,27 +416,28 @@ def run_competition(
             )
         )
 
-        validation_result = run_logged_step(
-            f"validate-evidence-{slice_id}",
-            [
-                sys.executable,
-                rel_script(AUTO_EVIDENCE_VALIDATOR, repo_root),
-                "--target-id",
-                target_id,
-                "--slice-id",
-                slice_id,
-                "--slice-spec",
-                rel_path(spec_path, repo_root),
-                "--evidence-root",
-                rel_path(slice_evidence_root, repo_root),
-                "--require-semantic-pass",
-            ],
-            command_runner=command_runner,
-            repo_root=repo_root,
-            logs_dir=logs_dir,
-            out_root=out_root,
-            run_id=run_id,
-        )
+        if validation_result is None:
+            validation_result = run_logged_step(
+                f"validate-evidence-{slice_id}",
+                [
+                    sys.executable,
+                    rel_script(AUTO_EVIDENCE_VALIDATOR, repo_root),
+                    "--target-id",
+                    target_id,
+                    "--slice-id",
+                    slice_id,
+                    "--slice-spec",
+                    rel_path(spec_path, repo_root),
+                    "--evidence-root",
+                    rel_path(slice_evidence_root, repo_root),
+                    "--require-semantic-pass",
+                ],
+                command_runner=command_runner,
+                repo_root=repo_root,
+                logs_dir=logs_dir,
+                out_root=out_root,
+                run_id=run_id,
+            )
         if validation_result.returncode != 0:
             gate_failures += 1
 
@@ -445,7 +488,10 @@ def run_competition(
         ],
         "final_gate": {
             "status": status,
-            "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+            "validator": (
+                "validate_auto_translation_evidence.py --require-semantic-pass "
+                "or validate_ai_exact_evidence.py --require-semantic-pass"
+            ),
         },
     }
     if exact_host_attestation is not None:

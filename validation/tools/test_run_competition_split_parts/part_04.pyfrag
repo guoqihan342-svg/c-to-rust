@@ -98,7 +98,7 @@
             out_root = tmp_path / "competition-out"
             spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
             write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
-            fake_runner = FakeCommandRunner(fail_commands_containing={"validate_auto_translation_evidence.py"})
+            fake_runner = FakeCommandRunner(fail_commands_containing={"validate_ai_exact_evidence.py"})
 
             result = module.run_competition(
                 slice_specs=[spec_path],
@@ -112,9 +112,9 @@
             self.assertEqual(result.exit_code, 1)
             summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["slices"]["attempted"], 1)
-            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 0)
             self.assertEqual(summary["slices"]["refused"], 0)
-            self.assertEqual(summary["slices"]["blocked"], 0)
+            self.assertEqual(summary["slices"]["blocked"], 1)
             self.assertEqual(summary["slices"]["failed"], 0)
             self.assertEqual(summary["final_gate"]["status"], "failed")
 

@@ -119,6 +119,37 @@ def write_final_verification(
         ),
         encoding="utf-8",
     )
+    accepted_gates = [
+        "compile",
+        "oracle",
+        "replay",
+        "schema_diff",
+        "negative_diff",
+        "unsafe",
+        "alias_abi",
+        "final_verification",
+    ]
+    router = {
+        "schema_version": 1,
+        "selected_candidate_id": "opencode-glm51-1" if semantic_pass else None,
+        "semantic_pass": semantic_pass,
+        "candidate_set": (
+            [
+                {
+                    "candidate_id": "opencode-glm51-1",
+                    "source": "opencode-ai",
+                    "decision": "selected",
+                    "accepted_gates": accepted_gates,
+                }
+            ]
+            if semantic_pass
+            else []
+        ),
+    }
+    (evidence_dir / f"l3-{slice_id}-ai-router.json").write_text(
+        json.dumps(router),
+        encoding="utf-8",
+    )
 
 
 def write_patch_events(evidence_root: Path, target_id: str, slice_id: str, events: list[dict]) -> None:
@@ -450,7 +481,7 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertTrue(any("config/competition-env/env.sh" in text for text in command_texts))
             self.assertTrue(any("toolchain-check.sh" in text for text in command_texts))
             self.assertTrue(any("auto_migrate.py" in text and "--competition-clang-lane" in text for text in command_texts))
-            self.assertTrue(any("validate_auto_translation_evidence.py" in text for text in command_texts))
+            self.assertTrue(any("validate_ai_exact_evidence.py" in text for text in command_texts))
             self.assertTrue(any("unsafe_budget.py" in text for text in command_texts))
             self.assertTrue(any("validate_competition_run_summary.py" in text for text in command_texts))
 
