@@ -158,20 +158,16 @@ def rust_check_has_harness_only_external_bindings(rust_check: dict[str, Any]) ->
 
 
 def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) -> bool:
-    declarative_call_plan_ready = build_replay_call_plan(spec, REPO_ROOT).get("status") == "bound"
+    call_plan_status = build_replay_call_plan(spec, REPO_ROOT).get("status")
+    if call_plan_status == "blocked":
+        return False
+    declarative_call_plan_ready = call_plan_status == "bound"
     if (
         behavior_fields(spec) != ["return_code"]
         and not declarative_call_plan_ready
         and not call_continue_state_replay_supported(spec)
         and not record_interior_projection_u32_reset_add_while_continue_state_replay_supported(spec)
-        and not record_interior_projection_u32_constant_state_replay_supported(spec)
-        and not record_u32_field_scalar_wrapping_add_state_replay_supported(spec)
-        and not record_u32_field_postfix_increment_state_replay_supported(spec)
-        and not record_u32_field_constant_state_replay_supported(spec)
-        and not record_u32_field_wrapping_add_state_replay_supported(spec)
         and not record_owner_interior_u32_to_usize_wrapping_add_state_replay_supported(spec)
-        and not record_owner_interior_stats_sequence_state_replay_supported(spec)
-        and not record_owner_interior_guarded_stats_sequence_state_replay_supported(spec)
         and not scripted_external_record_u32_sequence_do_while_state_replay_supported(spec)
         and not scripted_external_record_u32_call_bool_state_replay_supported(spec)
         and not scripted_external_u32_call_bool_out_replay_supported(spec)

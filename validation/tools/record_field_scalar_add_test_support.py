@@ -135,6 +135,10 @@ def build_field_scalar_add_spec(*, path_prefix: str = "") -> tuple[dict[str, Any
             "direct_dependencies": [],
             "pointer_contract": {"aliasing_proven": True, "noalias_required": []},
         },
+        "rust_boundary": {
+            "public_api": [{"name": "assign_field_scalar_sum"}],
+            "raw_pointer_policy": "internal_only",
+        },
         "build_profile": {
             "compiler": "cc", "include_paths": [], "defines": [], "oracle_harness_includes": []
         },

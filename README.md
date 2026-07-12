@@ -16,8 +16,8 @@
 | --- | --- |
 | Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
-| 最近开发阶段 | P0-A18b2a：readonly byte-slice 与 CRC32 已迁入 ReplayCallPlan，支持 inline fixture 和 JSON byte array |
-| 当前翻译任务 | P0-A18b2b：用 plan v2 的 bindings/borrow/observations 迁移 record-state；随后处理 scripted external/call-continue |
+| 最近开发阶段 | P0-A18b2b1：plan v2 已迁移 7 个 record-state renderer，并拆成 38 行门面与 3 个小片段 |
+| 当前翻译任务 | P0-A18b2b2：迁移剩余 2 个 record-state 与 4 个 scripted external/call-continue；随后清理 A18b2c 的 13 个简单 legacy renderer |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |

@@ -1,0 +1,218 @@
+def _validate_fixture_cases(
+    fixture: dict[str, Any],
+    bindings: list[dict[str, Any]],
+    parameters: list[dict[str, Any]],
+    assertions: list[dict[str, Any]],
+    *,
+    expected_return: tuple[str, bool],
+    state_fixture: str,
+    expected_state: int | None,
+) -> None:
+    if not isinstance(fixture.get("cases"), list) or not fixture["cases"]:
+        raise ValueError("record constant-state fixture cases are required")
+    input_fields = {
+        field["value"]["field"]
+        for binding in bindings
+        for field in _leaf_fields(binding["initializer"])
+    }
+    input_fields.update(
+        item["source"]["field"]
+        for item in parameters
+        if item["source"]["kind"] == "fixture_field"
+    )
+    output_fields = {item["fixture_field"] for item in assertions}
+    for case in fixture["cases"]:
+        inputs = case.get("inputs")
+        outputs = case.get("expected")
+        if not isinstance(inputs, dict) or not isinstance(outputs, dict):
+            raise ValueError("record constant-state fixture case is incomplete")
+        if any(not _is_u32(inputs.get(field)) for field in input_fields):
+            raise ValueError("record constant-state fixture input must be u32")
+        if set(outputs) != output_fields:
+            raise ValueError("record constant-state expected outputs drifted")
+        state_value = outputs.get(state_fixture)
+        if (
+            outputs.get(expected_return[0]) is not expected_return[1]
+            or not _is_u32(state_value)
+            or (expected_state is not None and state_value != expected_state)
+        ):
+            raise ValueError("record-state expected output types drifted")
+
+
+def _validate_stats_fixture_cases(
+    fixture: dict[str, Any],
+    binding: dict[str, Any],
+    assertions: list[dict[str, Any]],
+    *,
+    require_true_return: bool,
+) -> None:
+    cases = fixture.get("cases")
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("record stats fixture cases are required")
+    input_contracts = [
+        (field["value"]["field"], field["value"]["encoding"])
+        for field in _leaf_fields(binding["initializer"])
+    ]
+    output_contracts = {
+        item["fixture_field"]: item["encoding"] for item in assertions
+    }
+    return_field = assertions[0]["fixture_field"]
+    for case in cases:
+        inputs = case.get("inputs")
+        outputs = case.get("expected")
+        if not isinstance(inputs, dict) or not isinstance(outputs, dict):
+            raise ValueError("record stats fixture case is incomplete")
+        if any(not _value_matches(inputs.get(field), encoding) for field, encoding in input_contracts):
+            raise ValueError("record stats fixture input type drifted")
+        if set(outputs) != set(output_contracts) or any(
+            not _value_matches(outputs.get(field), encoding)
+            for field, encoding in output_contracts.items()
+        ):
+            raise ValueError("record stats expected output type drifted")
+        if require_true_return and outputs.get(return_field) is not True:
+            raise ValueError("record stats return value drifted")
+
+
+def _leaf_fields(initializer: dict[str, Any]) -> list[dict[str, Any]]:
+    result = []
+    for field in initializer["fields"]:
+        if field["value"]["kind"] == "struct":
+            result.extend(_leaf_fields(field["value"]))
+        else:
+            result.append(field)
+    return result
+
+
+def _validate_fixture_identity(value: Any) -> None:
+    if not isinstance(value, dict) or not isinstance(value.get("case_count"), int) or value["case_count"] < 1:
+        raise ValueError("ReplayCallPlan v2 fixture binding is invalid")
+    if not isinstance(value.get("path"), str) or not re.fullmatch(r"[0-9a-f]{64}", str(value.get("sha256") or "")):
+        raise ValueError("ReplayCallPlan v2 fixture identity is invalid")
+    case_ids = value.get("case_ids")
+    if not isinstance(case_ids, list) or len(case_ids) != value["case_count"] or len(case_ids) != len(set(case_ids)):
+        raise ValueError("ReplayCallPlan v2 fixture cases are invalid")
+    if any(not isinstance(item, str) or not item for item in case_ids):
+        raise ValueError("ReplayCallPlan v2 fixture case id is invalid")
+
+
+def _initializer_literal(initializer: dict[str, Any], inputs: dict[str, Any]) -> str:
+    fields = []
+    for field in initializer["fields"]:
+        value = field["value"]
+        literal = (
+            _initializer_literal(value, inputs)
+            if value["kind"] == "struct"
+            else _encoded_literal(inputs.get(value["field"]), value["encoding"])
+        )
+        fields.append(f"{field['name']}: {literal}")
+    return f"{initializer['rust_type']} {{ " + ", ".join(fields) + " }"
+
+
+def _binding_argument(
+    source: dict[str, Any], names: dict[str, str], inputs: dict[str, Any]
+) -> str:
+    if source["kind"] == "binding_borrow_mut":
+        return "&mut " + names[source["binding"]]
+    if source["kind"] == "binding_value":
+        return names[source["binding"]]
+    if source["kind"] == "fixture_field":
+        return _encoded_literal(inputs.get(source["field"]), source["encoding"])
+    raise ValueError("ReplayCallPlan v2 argument source is unsupported")
+
+
+def _actual_expression(actual: str, names: dict[str, str]) -> str:
+    if actual == "return":
+        return "actual_return"
+    parts = actual.split(".")
+    return names[parts[1]] + "." + ".".join(parts[2:])
+
+
+def _encoded_literal(value: Any, encoding: str) -> str:
+    if encoding == "u32" and _is_u32(value):
+        return f"{value}u32"
+    if encoding == "usize" and _is_usize(value):
+        return f"{value}usize"
+    if encoding == "bool" and isinstance(value, bool):
+        return "true" if value else "false"
+    raise ValueError(f"value does not match ReplayCallPlan v2 encoding {encoding}")
+
+
+def _normalize_pairs(value: Any, label: str) -> list[list[str]]:
+    if not isinstance(value, list):
+        raise ValueError(f"{label} must be an array")
+    result = []
+    for item in value:
+        if not isinstance(item, list) or len(item) != 2:
+            raise ValueError(f"{label} pair is invalid")
+        left = _identifier(item[0], label)
+        right = _identifier(item[1], label)
+        pair = sorted([left, right])
+        if pair[0] == pair[1]:
+            raise ValueError(f"{label} pair must be distinct")
+        result.append(pair)
+    result.sort()
+    if len(result) != len({tuple(item) for item in result}):
+        raise ValueError(f"{label} pairs must be unique")
+    return result
+
+
+def _field_path(value: Any, label: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{label} is required")
+    return tuple(_identifier(item, label) for item in value)
+
+
+def _identifier(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not IDENTIFIER_RE.fullmatch(value):
+        raise ValueError(f"{label} identifier is invalid")
+    return value
+
+
+def _rust_type(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value or not RUST_TYPE_RE.fullmatch(value):
+        raise ValueError(f"Rust {label} is invalid")
+    return value
+
+
+def _normalize_c_type(value: Any) -> str:
+    return " ".join(str(value or "").replace(" *", "*").split())
+
+
+def _safe_ident(value: str) -> str:
+    result = re.sub(r"[^A-Za-z0-9_]", "_", value)
+    return result if result and not result[0].isdigit() else f"case_{result}"
+
+
+def _is_u32(value: Any) -> bool:
+    return not isinstance(value, bool) and isinstance(value, int) and 0 <= value <= 2**32 - 1
+
+
+def _is_usize(value: Any) -> bool:
+    return not isinstance(value, bool) and isinstance(value, int) and 0 <= value <= 2**64 - 1
+
+
+def _value_matches(value: Any, encoding: str) -> bool:
+    if encoding == "u32":
+        return _is_u32(value)
+    if encoding == "usize":
+        return _is_usize(value)
+    if encoding == "bool":
+        return isinstance(value, bool)
+    return False
+
+
+def _plan_sha256(plan: dict[str, Any]) -> str:
+    payload = {key: value for key, value in plan.items() if key != "plan_sha256"}
+    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(encoded).hexdigest()
+
+
+__all__ = [
+    "build_record_interior_u32_constant_state_plan",
+    "build_record_owner_stats_sequence_plan",
+    "build_record_u32_constant_state_plan",
+    "render_replay_call_plan_v2",
+    "validate_replay_call_plan_v2",
+]

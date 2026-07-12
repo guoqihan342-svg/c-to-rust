@@ -12,8 +12,8 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | --- | --- |
 | Translator-generated semantic pass | `38` named slices, derived from `validation/translator-coverage-matrix.json` |
 | Accepted-evidence authoritative | `1`, reported separately from the translator numerator |
-| Latest development stage | P0-A18b2a: readonly byte-slice and CRC32 paths now use ReplayCallPlan with inline fixtures and JSON byte arrays |
-| Active translator task | P0-A18b2b: add plan-v2 bindings/borrows/observations for record state, then scripted external/call-continue paths |
+| Latest development stage | P0-A18b2b1: plan v2 has migrated seven record-state renderers and is split into a 38-line facade plus three small parts |
+| Active translator task | P0-A18b2b2: migrate two remaining record-state and four scripted external/call-continue paths, then clear 13 simple legacy renderers under A18b2c |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | Superpowers specs/plans, canonical roadmap, and harness evidence gates |

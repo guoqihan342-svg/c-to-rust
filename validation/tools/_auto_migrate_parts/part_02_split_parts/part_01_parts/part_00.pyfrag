@@ -11,6 +11,10 @@ def write_rust_replay_test_draft_source(
         fixture_cases_source = render_declarative_replay_cases(spec, call_plan, REPO_ROOT)
         plan_marker = replay_call_plan_marker(call_plan)
         api_name = call_plan["api_name"]
+    elif call_plan.get("status") == "blocked":
+        fixture_cases_source = "    // ReplayCallPlan blocked; legacy replay fallback is disabled.\n"
+        plan_marker = ""
+        api_name = function_name
     else:
         fixture_cases_source = rust_replay_fixture_cases_source(
             spec,
@@ -129,44 +133,10 @@ def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict
         return rust_replay_record_interior_projection_u32_reset_add_while_continue_state_cases_source(
             spec, fixture_binding
         )
-    if record_interior_projection_u32_constant_state_replay_supported(
-        spec, fixture_binding
-    ):
-        return rust_replay_record_interior_projection_u32_constant_state_cases_source(
-            spec, fixture_binding
-        )
-    if record_u32_field_scalar_wrapping_add_state_replay_supported(spec, fixture_binding):
-        return rust_replay_record_u32_field_scalar_wrapping_add_state_cases_source(
-            spec, fixture_binding
-        )
-    if record_u32_field_postfix_increment_state_replay_supported(spec, fixture_binding):
-        return rust_replay_record_u32_field_postfix_increment_state_cases_source(
-            spec, fixture_binding
-        )
-    if record_u32_field_constant_state_replay_supported(spec, fixture_binding):
-        return rust_replay_record_u32_field_constant_state_cases_source(
-            spec, fixture_binding
-        )
-    if record_u32_field_wrapping_add_state_replay_supported(spec, fixture_binding):
-        return rust_replay_record_u32_field_wrapping_add_state_cases_source(
-            spec, fixture_binding
-        )
     if record_owner_interior_u32_to_usize_wrapping_add_state_replay_supported(
         spec, fixture_binding
     ):
         return rust_replay_record_owner_interior_u32_to_usize_wrapping_add_state_cases_source(
-            spec, fixture_binding
-        )
-    if record_owner_interior_stats_sequence_state_replay_supported(
-        spec, fixture_binding
-    ):
-        return rust_replay_record_owner_interior_stats_sequence_state_cases_source(
-            spec, fixture_binding
-        )
-    if record_owner_interior_guarded_stats_sequence_state_replay_supported(
-        spec, fixture_binding
-    ):
-        return rust_replay_record_owner_interior_guarded_stats_sequence_state_cases_source(
             spec, fixture_binding
         )
     if scripted_external_record_u32_sequence_do_while_state_replay_supported(

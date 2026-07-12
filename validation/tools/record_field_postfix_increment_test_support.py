@@ -90,6 +90,10 @@ def build_postfix_increment_spec(*, path_prefix: str = "") -> tuple[dict[str, An
             "direct_dependencies": [],
             "pointer_contract": {"aliasing_proven": True, "noalias_required": []},
         },
+        "rust_boundary": {
+            "public_api": [{"name": "bump_counter"}],
+            "raw_pointer_policy": "internal_only",
+        },
         "build_profile": {
             "compiler": "cc", "include_paths": [], "defines": [],
             "oracle_harness_includes": [],

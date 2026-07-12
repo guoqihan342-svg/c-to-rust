@@ -28,12 +28,61 @@ def build_replay_call_plan(spec: dict[str, Any], repo_root: Path) -> dict[str, A
     if not isinstance(contract, dict):
         return {"schema_version": 1, "status": "unavailable"}
     contract_kind = contract.get("kind")
-    if contract_kind not in {"declarative_call_plan", "readonly_byte_slice_bool_return"}:
+    if contract_kind not in {
+        "declarative_call_plan",
+        "readonly_byte_slice_bool_return",
+        "record_u32_field_constant_state",
+        "record_u32_field_wrapping_add_state",
+        "record_u32_field_scalar_wrapping_add_state",
+        "record_u32_field_postfix_increment_state",
+        "record_interior_projection_u32_constant_state",
+        "record_owner_interior_stats_sequence_state",
+        "record_owner_interior_guarded_stats_sequence_state",
+    }:
         return {"schema_version": 1, "status": "unavailable"}
     try:
+        resolved_root = repo_root.resolve()
+        if contract_kind in {
+            "record_u32_field_constant_state",
+            "record_u32_field_wrapping_add_state",
+            "record_u32_field_scalar_wrapping_add_state",
+            "record_u32_field_postfix_increment_state",
+        }:
+            from validation.tools.replay_call_plan_v2 import (
+                build_record_u32_constant_state_plan,
+            )
+
+            return build_record_u32_constant_state_plan(
+                spec,
+                contract,
+                _fixture_binding(spec, resolved_root),
+            )
+        if contract_kind == "record_interior_projection_u32_constant_state":
+            from validation.tools.replay_call_plan_v2 import (
+                build_record_interior_u32_constant_state_plan,
+            )
+
+            return build_record_interior_u32_constant_state_plan(
+                spec,
+                contract,
+                _fixture_binding(spec, resolved_root),
+            )
+        if contract_kind in {
+            "record_owner_interior_stats_sequence_state",
+            "record_owner_interior_guarded_stats_sequence_state",
+        }:
+            from validation.tools.replay_call_plan_v2 import (
+                build_record_owner_stats_sequence_plan,
+            )
+
+            return build_record_owner_stats_sequence_plan(
+                spec,
+                contract,
+                _fixture_binding(spec, resolved_root),
+            )
         if contract_kind == "readonly_byte_slice_bool_return":
             contract = _readonly_byte_slice_bool_contract(contract)
-        return _build_bound_plan(spec, contract, repo_root.resolve())
+        return _build_bound_plan(spec, contract, resolved_root)
     except ValueError as exc:
         return {
             "schema_version": 1,
@@ -204,6 +253,10 @@ def render_declarative_replay_cases(
     fixture = _fixture_binding(spec, repo_root.resolve())
     if fixture["sha256"] != plan["fixture"]["sha256"]:
         raise ValueError("replay fixture binding drifted")
+    if plan.get("schema_version") == 2:
+        from validation.tools.replay_call_plan_v2 import render_replay_call_plan_v2
+
+        return render_replay_call_plan_v2(plan, fixture["cases"])
     lines: list[str] = []
     for index, case in enumerate(fixture["cases"]):
         variable = f"actual_{_safe_ident(case['id'])}_{index}"
@@ -240,6 +293,11 @@ def replay_call_plan_marker(plan: dict[str, Any]) -> str:
 
 
 def validate_replay_call_plan(plan: dict[str, Any]) -> None:
+    if isinstance(plan, dict) and plan.get("schema_version") == 2:
+        from validation.tools.replay_call_plan_v2 import validate_replay_call_plan_v2
+
+        validate_replay_call_plan_v2(plan)
+        return
     if not isinstance(plan, dict) or plan.get("schema_version") != 1 or plan.get("status") != "bound":
         raise ValueError("ReplayCallPlan must be a bound schema v1 object")
     _identifier(plan.get("source_function_name"), "source function")
@@ -346,14 +404,18 @@ def _fixture_binding(spec: dict[str, Any], repo_root: Path) -> dict[str, Any]:
     declared_cases = fixture_contract.get("cases")
     if not isinstance(declared_cases, list) or not declared_cases:
         raise ValueError("fixture_contract cases are required")
-    inline_cases = all(
+    explicit_cases = all(
         isinstance(item, dict)
-        and item.get("input_ref") == "inline"
         and isinstance(item.get("inputs"), dict)
         and isinstance(item.get("expected_outputs"), dict)
         for item in declared_cases
     )
     fixture_ref = fixture_contract.get("path") or fixture_contract.get("input")
+    inline_cases = explicit_cases and all(
+        item.get("input_ref") == "inline" for item in declared_cases
+    )
+    if explicit_cases and not inline_cases:
+        inline_cases = not _resolve_json_ref_path(fixture_ref, repo_root).is_file()
     if inline_cases:
         path = None
         payload = None
@@ -380,15 +442,19 @@ def _fixture_binding(spec: dict[str, Any], repo_root: Path) -> dict[str, Any]:
             raise ValueError("fixture case must be an object")
         case_id = str(raw_case.get("id") or f"case-{index}")
         input_ref = str(raw_case.get("input_ref") or f"cases[{index}]")
-        case_index = index if input_ref == "inline" else _case_ref_index(input_ref)
+        case_index, input_section = (
+            (index, None) if input_ref == "inline" else _case_ref_selector(input_ref)
+        )
         input_payload = raw_case.get("inputs")
         if not isinstance(input_payload, dict):
-            input_payload = _case_payload(payload, case_index)
+            input_payload = _case_payload(payload, case_index, input_section)
         expected = raw_case.get("expected_outputs")
         if not isinstance(expected, dict) or not expected:
             expected_ref = raw_case.get("expected_ref") or fixture_ref
             _, expected_payload, _ = _read_json_ref(expected_ref, repo_root)
             expected = _case_payload(expected_payload, case_index)
+            if isinstance(expected.get("expected_outputs"), dict):
+                expected = expected["expected_outputs"]
         if not isinstance(input_payload, dict) or not isinstance(expected, dict):
             raise ValueError(f"fixture case {case_id} cannot be resolved")
         cases.append({"id": case_id, "inputs": input_payload, "expected": expected})
@@ -400,6 +466,19 @@ def _fixture_binding(spec: dict[str, Any], repo_root: Path) -> dict[str, Any]:
 
 
 def _read_json_ref(value: Any, repo_root: Path) -> tuple[Path, Any, bytes]:
+    resolved = _resolve_json_ref_path(value, repo_root)
+    if not resolved.is_file():
+        raise ValueError("fixture reference is missing")
+    data = resolved.read_bytes()
+    if len(data) > MAX_FIXTURE_BYTES:
+        raise ValueError("fixture reference is too large")
+    try:
+        return resolved, json.loads(data.decode("utf-8-sig")), data
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("fixture reference is not valid UTF-8 JSON") from exc
+
+
+def _resolve_json_ref_path(value: Any, repo_root: Path) -> Path:
     if not isinstance(value, str) or not value or value == "inline":
         raise ValueError("fixture reference must be a repository-relative JSON path")
     path = Path(value.split("#", 1)[0])
@@ -422,29 +501,27 @@ def _read_json_ref(value: Any, repo_root: Path) -> tuple[Path, Any, bytes]:
         resolved.relative_to(repo_root)
     except ValueError as exc:
         raise ValueError("fixture reference escapes repository root") from exc
-    if not resolved.is_file():
-        raise ValueError("fixture reference is missing")
-    data = resolved.read_bytes()
-    if len(data) > MAX_FIXTURE_BYTES:
-        raise ValueError("fixture reference is too large")
-    try:
-        return resolved, json.loads(data.decode("utf-8-sig")), data
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError("fixture reference is not valid UTF-8 JSON") from exc
+    return resolved
 
 
-def _case_ref_index(value: str) -> int:
-    match = re.fullmatch(r"cases\[(\d+)\]", value)
+def _case_ref_selector(value: str) -> tuple[int, str | None]:
+    match = re.fullmatch(r"cases\[(\d+)\](?:\.(inputs|expected_outputs))?", value)
     if not match:
-        raise ValueError("fixture input_ref must use cases[n]")
-    return int(match.group(1))
+        raise ValueError("fixture input_ref must use cases[n] with an optional bounded section")
+    return int(match.group(1)), match.group(2)
 
 
-def _case_payload(payload: Any, index: int) -> dict[str, Any]:
+def _case_payload(payload: Any, index: int, section: str | None = None) -> dict[str, Any]:
     cases = payload.get("cases") if isinstance(payload, dict) else payload
     if not isinstance(cases, list) or index >= len(cases) or not isinstance(cases[index], dict):
         raise ValueError("fixture case reference is out of range")
-    return cases[index]
+    case = cases[index]
+    if section is None:
+        return case
+    selected = case.get(section)
+    if not isinstance(selected, dict):
+        raise ValueError("fixture case section is missing")
+    return selected
 
 
 def _normalize_source(value: Any) -> dict[str, Any]:

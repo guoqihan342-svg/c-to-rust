@@ -117,6 +117,10 @@ def build_field_add_spec(*, path_prefix: str = "") -> tuple[dict[str, Any], dict
                 "noalias_required": [["reservoir", "meter"]],
             },
         },
+        "rust_boundary": {
+            "public_api": [{"name": "merge_quota"}],
+            "raw_pointer_policy": "internal_only",
+        },
         "build_profile": {
             "compiler": "cc",
             "include_paths": [],

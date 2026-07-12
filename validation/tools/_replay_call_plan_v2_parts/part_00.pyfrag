@@ -1,0 +1,375 @@
+def build_record_u32_constant_state_plan(
+    spec: dict[str, Any],
+    contract: dict[str, Any],
+    fixture: dict[str, Any],
+) -> dict[str, Any]:
+    contract_kind = contract.get("kind")
+    if contract_kind not in ENTRY_RECORD_STATE_KINDS:
+        raise ValueError("record-state replay contract kind is unsupported")
+    if contract.get("schema_version") != 1:
+        raise ValueError("record-state replay contract schema_version must be 1")
+    source_function_name = _identifier(spec.get("function_name"), "source function")
+    signature = _matching_signature(spec, source_function_name)
+    api_name = _public_api_name(spec)
+    entries = contract.get("entry_arguments")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("record constant-state entry arguments are required")
+
+    c_parameters = signature.get("parameters")
+    if not isinstance(c_parameters, list) or len(c_parameters) != len(entries):
+        raise ValueError("record constant-state C parameter count drifted")
+    bindings: list[dict[str, Any]] = []
+    parameters: list[dict[str, Any]] = []
+    mappings: list[dict[str, Any]] = []
+    supporting_types: dict[str, dict[str, Any]] = {}
+    for position, (entry, c_parameter) in enumerate(zip(entries, c_parameters, strict=True)):
+        if not isinstance(entry, dict) or not isinstance(c_parameter, dict):
+            raise ValueError("record constant-state entry must be an object")
+        name = _identifier(entry.get("parameter"), "record entry parameter")
+        rust_type = _identifier(entry.get("rust_type"), "record entry Rust type")
+        c_name = _identifier(c_parameter.get("name"), "C parameter")
+        pass_mode = entry.get("pass_mode")
+        if name != c_name or pass_mode not in {"mutable_ref", "value"}:
+            raise ValueError("record-state parameter mapping drifted")
+        if entry.get("direction") != c_parameter.get("direction") or entry.get("direction") not in {
+            "input",
+            "inout",
+        }:
+            raise ValueError("record constant-state parameter direction drifted")
+        if _normalize_c_type(entry.get("c_type")) != _normalize_c_type(c_parameter.get("c_type")):
+            raise ValueError("record constant-state C parameter type drifted")
+        initializer_contract = entry.get("initializer")
+        if isinstance(initializer_contract, dict):
+            initializer = _normalize_initializer(initializer_contract, supporting_types)
+            if initializer["rust_type"] != rust_type:
+                raise ValueError("record-state initializer type drifted")
+            mutable = pass_mode == "mutable_ref"
+            source = {
+                "kind": "binding_borrow_mut" if mutable else "binding_value",
+                "binding": name,
+            }
+            bindings.append(
+                {
+                    "name": name,
+                    "rust_type": rust_type,
+                    "mutable": mutable,
+                    "initializer": initializer,
+                }
+            )
+            parameter_rust_type = f"&mut {rust_type}" if mutable else rust_type
+        else:
+            fixture_field = _identifier(entry.get("fixture_field"), "scalar fixture field")
+            if pass_mode != "value" or rust_type != "u32":
+                raise ValueError("record-state scalar entry is unsupported")
+            source = {"kind": "fixture_field", "field": fixture_field, "encoding": "u32"}
+            parameter_rust_type = rust_type
+        parameters.append(
+            {
+                "position": position,
+                "name": name,
+                "rust_type": parameter_rust_type,
+                "c_parameter": name,
+                "length_retained": False,
+                "source": source,
+            }
+        )
+        mappings.append(
+            {
+                "position": position,
+                "c_parameter": name,
+                "c_type": str(c_parameter.get("c_type") or ""),
+                "direction": str(c_parameter.get("direction") or ""),
+                "rust_parameter": name,
+                "rust_type": parameter_rust_type,
+            }
+        )
+
+    noalias = _normalize_pairs(contract.get("noalias_required"), "noalias_required")
+    mutable_bindings = [item for item in bindings if item["mutable"]]
+    required_pairs = [
+        sorted([mutable_bindings[left]["name"], mutable_bindings[right]["name"]])
+        for left in range(len(mutable_bindings))
+        for right in range(left + 1, len(mutable_bindings))
+    ]
+    required_pairs.sort()
+    if noalias != required_pairs:
+        raise ValueError("record constant-state noalias binding set drifted")
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract")
+    if not isinstance(pointer_contract, dict) or pointer_contract.get("aliasing_proven") is not True:
+        raise ValueError("record constant-state pointer proof is required")
+    if _normalize_pairs(pointer_contract.get("noalias_required"), "pointer noalias_required") != noalias:
+        raise ValueError("record constant-state pointer noalias proof drifted")
+
+    result = contract.get("return")
+    state = contract.get("state_output")
+    update = contract.get("state_update")
+    if not isinstance(result, dict) or not isinstance(state, dict) or not isinstance(update, dict):
+        raise ValueError("record constant-state outputs are required")
+    if result.get("rust_type") != "bool" or not isinstance(result.get("value"), bool):
+        raise ValueError("record constant-state return must be bool")
+    if contract_kind == "record_u32_field_constant_state":
+        if update != {"operation": "constant_assign", "rust_type": "u32", "value": 0}:
+            raise ValueError("record constant-state update must assign u32 zero")
+    elif contract_kind == "record_u32_field_postfix_increment_state":
+        if update != {"operation": "wrapping_add", "increment": 1}:
+            raise ValueError("record postfix state update must increment by one")
+    elif update.get("operation") != "wrapping_add":
+        raise ValueError("record wrapping state update must declare wrapping_add")
+    state_binding = _identifier(state.get("parameter"), "state binding")
+    state_path = _field_path(state.get("field_path"), "state field path")
+    state_fixture = _identifier(state.get("fixture_field"), "state fixture field")
+    if state.get("rust_type") != "u32" or state_binding not in {item["name"] for item in bindings}:
+        raise ValueError("record constant-state state binding drifted")
+    binding = next(item for item in bindings if item["name"] == state_binding)
+    if state_path not in _initializer_paths(binding["initializer"]):
+        raise ValueError("record constant-state state path is not initialized")
+    return_fixture = _identifier(result.get("fixture_field"), "return fixture field")
+    assertions = [
+        {
+            "actual": "return",
+            "fixture_field": return_fixture,
+            "rust_type": "bool",
+            "encoding": "bool",
+        },
+        {
+            "actual": "binding." + state_binding + "." + ".".join(state_path),
+            "fixture_field": state_fixture,
+            "rust_type": "u32",
+            "encoding": "u32",
+        },
+    ]
+    observable_outputs = spec.get("fixture_contract", {}).get("observable_outputs")
+    if observable_outputs != [return_fixture, state_fixture]:
+        raise ValueError("record constant-state observable output mapping drifted")
+    _validate_fixture_cases(
+        fixture,
+        bindings,
+        parameters,
+        assertions,
+        expected_return=(return_fixture, result["value"]),
+        state_fixture=state_fixture,
+        expected_state=update["value"] if contract_kind == "record_u32_field_constant_state" else None,
+    )
+
+    plan: dict[str, Any] = {
+        "schema_version": 2,
+        "status": "bound",
+        "source_function_name": source_function_name,
+        "api_name": api_name,
+        "visibility": "pub",
+        "abi": "Rust",
+        "unsafe": False,
+        "parameters": parameters,
+        "c_parameter_mappings": mappings,
+        "omitted_c_parameters": [],
+        "length_parameters_retained": [],
+        "return_type": "bool",
+        "supporting_types": list(supporting_types.values()),
+        "bindings": bindings,
+        "distinct_mutable_bindings": noalias,
+        "call_args": [
+            {
+                "position": item["position"],
+                "parameter": item["name"],
+                "source": item["source"],
+            }
+            for item in parameters
+        ],
+        "assertions": assertions,
+        "fixture": {
+            "path": fixture["path"],
+            "sha256": fixture["sha256"],
+            "case_count": len(fixture["cases"]),
+            "case_ids": [item["id"] for item in fixture["cases"]],
+        },
+    }
+    plan["plan_sha256"] = _plan_sha256(plan)
+    validate_replay_call_plan_v2(plan)
+    return plan
+
+def build_record_interior_u32_constant_state_plan(
+    spec: dict[str, Any],
+    contract: dict[str, Any],
+    fixture: dict[str, Any],
+) -> dict[str, Any]:
+    if contract.get("schema_version") != 1:
+        raise ValueError("record interior replay contract schema_version must be 1")
+    owner = contract.get("owner")
+    alias = contract.get("alias")
+    state = contract.get("state_output")
+    constant = contract.get("constant_assign")
+    if not all(isinstance(item, dict) for item in (owner, alias, state, constant)):
+        raise ValueError("record interior replay contract is incomplete")
+    projection_path = _field_path(contract.get("projection_path"), "projection path")
+    owner_path = _field_path(state.get("owner_field_path"), "owner state path")
+    alias_path = _field_path(state.get("alias_field_path"), "alias state path")
+    if owner_path[: len(projection_path)] != projection_path or owner_path[len(projection_path) :] != alias_path:
+        raise ValueError("record interior projection paths drifted")
+    if alias.get("rust_type") != _initializer_type_at_path(owner.get("initializer"), projection_path):
+        raise ValueError("record interior alias type drifted")
+    if constant != {"rust_type": "u32", "value": 0} or state.get("rust_type") != "u32":
+        raise ValueError("record interior constant state must assign u32 zero")
+    synthetic = {
+        "schema_version": 1,
+        "kind": "record_u32_field_constant_state",
+        "entry_arguments": [owner],
+        "state_output": {
+            "parameter": owner.get("parameter"),
+            "field_path": list(owner_path),
+            "fixture_field": state.get("fixture_field"),
+            "rust_type": "u32",
+        },
+        "state_update": {"operation": "constant_assign", "rust_type": "u32", "value": 0},
+        "return": contract.get("return"),
+        "noalias_required": contract.get("noalias_required"),
+    }
+    return build_record_u32_constant_state_plan(spec, synthetic, fixture)
+
+
+def build_record_owner_stats_sequence_plan(
+    spec: dict[str, Any],
+    contract: dict[str, Any],
+    fixture: dict[str, Any],
+) -> dict[str, Any]:
+    contract_kind = contract.get("kind")
+    if contract_kind not in {
+        "record_owner_interior_stats_sequence_state",
+        "record_owner_interior_guarded_stats_sequence_state",
+    }:
+        raise ValueError("record stats replay contract kind is unsupported")
+    if contract.get("schema_version") != 1:
+        raise ValueError("record stats replay contract schema_version must be 1")
+    owner = contract.get("owner")
+    alias = contract.get("alias")
+    result = contract.get("return")
+    updates = contract.get("updates")
+    if not isinstance(owner, dict) or not isinstance(alias, dict) or not isinstance(result, dict):
+        raise ValueError("record stats replay contract is incomplete")
+    if not isinstance(updates, list) or not updates:
+        raise ValueError("record stats replay updates are required")
+    projection_path = _field_path(contract.get("projection_path"), "stats projection path")
+    if alias.get("rust_type") != _initializer_type_at_path(owner.get("initializer"), projection_path):
+        raise ValueError("record stats alias type drifted")
+    if result.get("rust_type") != "bool" or not isinstance(result.get("value"), bool):
+        raise ValueError("record stats return contract is invalid")
+
+    source_function_name = _identifier(spec.get("function_name"), "source function")
+    signature = _matching_signature(spec, source_function_name)
+    c_parameters = signature.get("parameters")
+    if not isinstance(c_parameters, list) or len(c_parameters) != 1:
+        raise ValueError("record stats requires one C owner parameter")
+    c_parameter = c_parameters[0]
+    owner_name = _identifier(owner.get("parameter"), "owner parameter")
+    owner_type = _identifier(owner.get("rust_type"), "owner Rust type")
+    if (
+        c_parameter.get("name") != owner_name
+        or owner.get("pass_mode") != "mutable_ref"
+        or owner.get("direction") != c_parameter.get("direction")
+        or _normalize_c_type(owner.get("c_type")) != _normalize_c_type(c_parameter.get("c_type"))
+    ):
+        raise ValueError("record stats owner parameter drifted")
+    supporting_types: dict[str, dict[str, Any]] = {}
+    initializer = _normalize_initializer(owner.get("initializer"), supporting_types)
+    if initializer["rust_type"] != owner_type:
+        raise ValueError("record stats owner initializer type drifted")
+    binding = {
+        "name": owner_name,
+        "rust_type": owner_type,
+        "mutable": True,
+        "initializer": initializer,
+    }
+    source = {"kind": "binding_borrow_mut", "binding": owner_name}
+    parameter = {
+        "position": 0,
+        "name": owner_name,
+        "rust_type": f"&mut {owner_type}",
+        "c_parameter": owner_name,
+        "length_retained": False,
+        "source": source,
+    }
+    noalias = _normalize_pairs(contract.get("noalias_required"), "noalias_required")
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract")
+    if noalias or not isinstance(pointer_contract, dict) or pointer_contract.get("aliasing_proven") is not True:
+        raise ValueError("record stats single-owner alias proof drifted")
+    if _normalize_pairs(pointer_contract.get("noalias_required"), "pointer noalias_required"):
+        raise ValueError("record stats pointer noalias proof drifted")
+
+    assertions = [
+        {
+            "actual": "return",
+            "fixture_field": _identifier(result.get("fixture_field"), "return fixture field"),
+            "rust_type": "bool",
+            "encoding": "bool",
+        }
+    ]
+    initialized_paths = _initializer_paths(initializer)
+    for index, update in enumerate(updates):
+        if not isinstance(update, dict) or update.get("operation") not in {
+            "postfix_increment",
+            "wrapping_add",
+        }:
+            raise ValueError(f"record stats update {index} is unsupported")
+        target = update.get("target")
+        if not isinstance(target, dict):
+            raise ValueError(f"record stats update {index} target is missing")
+        path = _field_path(target.get("owner_field_path"), "stats target path")
+        rust_type = target.get("rust_type")
+        if path not in initialized_paths or rust_type not in {"u32", "usize"}:
+            raise ValueError(f"record stats update {index} target drifted")
+        assertions.append(
+            {
+                "actual": "binding." + owner_name + "." + ".".join(path),
+                "fixture_field": _identifier(
+                    target.get("fixture_field"), "stats target fixture field"
+                ),
+                "rust_type": rust_type,
+                "encoding": rust_type,
+            }
+        )
+    observable_outputs = spec.get("fixture_contract", {}).get("observable_outputs")
+    if observable_outputs != [item["fixture_field"] for item in assertions]:
+        raise ValueError("record stats observable output mapping drifted")
+    _validate_stats_fixture_cases(
+        fixture,
+        binding,
+        assertions,
+        require_true_return=contract_kind == "record_owner_interior_stats_sequence_state",
+    )
+
+    mapping = {
+        "position": 0,
+        "c_parameter": owner_name,
+        "c_type": str(c_parameter.get("c_type") or ""),
+        "direction": str(c_parameter.get("direction") or ""),
+        "rust_parameter": owner_name,
+        "rust_type": f"&mut {owner_type}",
+    }
+    plan: dict[str, Any] = {
+        "schema_version": 2,
+        "status": "bound",
+        "source_function_name": source_function_name,
+        "api_name": _public_api_name(spec),
+        "visibility": "pub",
+        "abi": "Rust",
+        "unsafe": False,
+        "parameters": [parameter],
+        "c_parameter_mappings": [mapping],
+        "omitted_c_parameters": [],
+        "length_parameters_retained": [],
+        "return_type": "bool",
+        "supporting_types": list(supporting_types.values()),
+        "bindings": [binding],
+        "distinct_mutable_bindings": [],
+        "call_args": [{"position": 0, "parameter": owner_name, "source": source}],
+        "assertions": assertions,
+        "fixture": {
+            "path": fixture["path"],
+            "sha256": fixture["sha256"],
+            "case_count": len(fixture["cases"]),
+            "case_ids": [item["id"] for item in fixture["cases"]],
+        },
+    }
+    plan["plan_sha256"] = _plan_sha256(plan)
+    validate_replay_call_plan_v2(plan)
+    return plan
+
