@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpenCode session export identity projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source", "session_export_sha256", "full_export_persisted", "identity"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "source": {"const": "opencode-session-export-identity-projection"},
+    "session_export_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "full_export_persisted": {"const": false},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_id", "provider_id", "model_id", "agent", "variant", "opencode_version"],
+      "properties": {
+        "session_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "provider_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "model_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "agent": {"type": "string", "minLength": 1, "maxLength": 128},
+        "variant": {"type": "string", "minLength": 1, "maxLength": 64},
+        "opencode_version": {"type": "string", "minLength": 1, "maxLength": 64}
+      }
+    }
+  }
+}

@@ -12,7 +12,7 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | --- | --- |
 | Translator-generated semantic pass | `38` named slices, derived from `validation/translator-coverage-matrix.json` |
 | Accepted-evidence authoritative | `1`, reported separately from the translator numerator |
-| Latest development stage | P0-A15: add direct-callee AI context and make prompt scope recomputable |
+| Latest development stage | P0-A16: isolate competition/auxiliary model identities and add tool-free candidate validation |
 | Active translator task | P0-A10: run the fixed 12-case cross-project suite once with real GLM-5.1 after resource recovery |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
@@ -42,11 +42,13 @@ SQLite and agent conversation are not semantic evidence. Only on-disk artifacts 
 
 ## AI-first Translation Contract
 
-AI is the competition translation primary, not a fallback invoked only after deterministic translation fails. Every new slice first receives a hash-bound ContextPack, then OpenCode `zai/glm-5.1` + `c2rust-migrator` + `max` emits one primary Rust candidate. Typed IR and C2Rust remain zero-token alternatives, failure controls, and repair bases. They cannot silently claim that AI ran or bypass the common gates.
+AI is the competition translation primary, not a fallback invoked only after deterministic translation fails. Every new slice first receives a hash-bound ContextPack, then OpenCode `zai/glm-5.1` + `c2rust-candidate` + `max` emits one primary Rust candidate. Typed IR and C2Rust remain zero-token alternatives, failure controls, and repair bases. They cannot silently claim that AI ran or bypass the common gates.
 
 ContextPack v3 gives the model only bounded facts: the real source span, compile arguments and response files, type/CFG/pointer excerpts, failure summaries, ABI and pointer policy, plus direct-callee signatures, definition status, source bindings, stub boundaries, and call contracts. Sensitive fields, quoted secret assignments, host absolute paths, and path escapes are redacted; a required callee boundary that is truncated or over budget is refused with zero provider calls.
 
-AI candidate manifest v5 derives `prompt_scope` from the actual ContextPack instead of a fixed template. The fresh-run summary validator reopens the hash-bound ContextPack, byte-recomputes the actual prompt, and independently recomputes scope. Version downgrade, prompt/ContextPack drift, or a claim for a missing type map, CFG, pointer graph, root cause, or caller/callee fact fails validation. This improves model input quality and evidence accuracy, but AI output remains `semantic_gate=false`; only the common gates can accept it.
+AI candidate manifest v7 derives `prompt_scope` from the actual ContextPack and binds provider, logical/resolved model, `competition_eligible`, and `evaluation_scope` to both generator and candidate. Every real provider call also binds a minimal invocation receipt and a separate session-export identity projection. They retain only provider/model/agent/variant/version, session id, prompt/response SHAs, and the SHA of the full in-memory export; the full session, prompt, host directory, and credentials are not persisted. Both artifacts use dedicated `additionalProperties=false` schemas. The fresh-run summary validator reopens these hash-bound artifacts and independently recomputes identity, prompt, scope, and invocation count. `competition-exact` also reopens the same live OpenCode session and checks the full export SHA, actual identity, attached prompt path and ContextPack prefix, and assistant response. The competition lane accepts only `zai/glm-5.1`. When GLM balance is unavailable, DeepSeek V4 Flash or another model may be selected explicitly for `auxiliary-local-validation`, but it cannot close competition tasks or enter the competition success numerator. AI output always remains `semantic_gate=false`; only common gates can accept it.
+
+Candidate generation uses the tool-free `c2rust-candidate` agent, and any nested OpenCode `tool` or `tool_use` event fails closed. Worker/preflight execution retains `c2rust-migrator`, so candidate and command-execution agents are no longer conflated. Competition probing uses logical model `GLM-5.1`, while candidate CLI calls use resolved id `zai/glm-5.1`. The parser accepts strict JSON or explanatory text containing exactly one complete JSON fence; multiple or incomplete fences, extra tool access, and unbounded fields remain rejected. OpenCode 1.17.18 uses the `opencode-file-attachment-v2` order: fixed short message first and `--file=<prompt>` second, preventing `--file` from consuming the message as another file.
 
 ## Harness Architecture
 
@@ -76,7 +78,7 @@ flowchart TB
         CONTEXT["Bounded AI ContextPack\nsource + compile + callee facts"]
         TRANSLATOR["c2r-translator\nclang AST -> typed IR -> Rust"]
         C2RUST["C2Rust baseline / repair"]
-        OPENCODE["OpenCode worker\nGLM-5.1 + c2rust-migrator + max"]
+        OPENCODE["OpenCode candidate\nGLM-5.1 competition / auxiliary model"]
     end
 
     subgraph Proof["Proof plane"]
@@ -219,7 +221,7 @@ The default repair cap is five rounds. Process exit status, model text, and repa
 | OpenCode / LLM | Candidate generation and bounded repair | No |
 | C oracle + Rust replay + diff gates | Executable equivalence within the declared boundary | Yes |
 
-The AI exact path cannot be combined with accepted-evidence reuse. Candidate and repair prompts are SHA-bound files passed through OpenCode `--file` with a fixed short message, so the full ContextPack and failure facts do not enter process argv.
+The AI exact path cannot be combined with accepted-evidence reuse. Candidate and repair prompts are SHA-bound files passed with the `opencode-file-attachment-v2` ordering: the fixed short message precedes `--file=<prompt-path>`, so the full ContextPack and failure facts do not enter process argv. A passing auxiliary-model run remains local evaluation evidence rather than competition evidence.
 
 The AI candidate cache is disabled by default and is enabled only through the standalone generator's `--cache-root` or `auto_migrate`/competition runner's `--ai-candidate-cache-root`. Its content key binds the ContextPack payload SHA, prompt schema version, actual prompt SHA, resolved model, agent name, repository-local agent-definition SHA, variant, and parse contract version. It publishes only successful responses whose `entry.json`, `response.jsonl`, and `candidate.rs` can be reopened, reparsed, and verified by SHA. Same-key requests use single-flight plus locked first-writer-wins directory publication; a corrupt entry is quarantined and rebuilt by one real call. Provider failures, timeouts, refusals, and malformed responses are never cached. A hit records `provider_invocations=0`, `cache.status=hit`, and metrics `cache_hits=1`; later repair calls remain separate invocations. The summary validator independently reopens the copied cache entry, raw response, and initial candidate. A cache hit reuses candidate input only, still traverses every common gate, and remains `semantic_gate=false`. The competition runner accepts only repository-local cache roots so host paths cannot enter replay commands.
 

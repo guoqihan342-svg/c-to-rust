@@ -121,7 +121,7 @@ def main() -> int:
         help="Generate a hash-bound OpenCode/GLM-5.1 candidate after deterministic discovery and route the exact applied draft through the common validation gates.",
     )
     parser.add_argument("--ai-model", default="zai/glm-5.1")
-    parser.add_argument("--ai-agent", default="c2rust-migrator")
+    parser.add_argument("--ai-agent", default="c2rust-candidate")
     parser.add_argument("--ai-variant", default="max")
     parser.add_argument("--ai-opencode-command", default="opencode")
     parser.add_argument("--ai-source-root", type=Path)

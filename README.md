@@ -16,7 +16,7 @@
 | --- | --- |
 | Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
-| 最近开发阶段 | P0-A15：补齐 AI 直接被调函数上下文，并使 prompt scope 可复算 |
+| 最近开发阶段 | P0-A16：建立 GLM/辅助模型身份隔离与无工具候选验证通道 |
 | 当前翻译任务 | P0-A10：资源恢复后对固定 12 项跨项目套件做一次真实 GLM-5.1 完整验收 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
@@ -48,11 +48,13 @@ SQLite 不是语义事实源，Agent 对话也不是 evidence。语义结论只�
 
 ## AI-first 翻译合同
 
-本项目以 AI 作为比赛翻译主通道，而不是在确定性翻译失败后才调用 AI。每个新切片先构造 hash-bound ContextPack，再由 OpenCode `zai/glm-5.1` + `c2rust-migrator` + `max` 生成单一 Rust 主候选。typed IR 和 C2Rust 继续保留，用于零 token 替代、失败对照和 repair base；它们不能静默冒充 AI 已运行，也不能绕过共同验证门禁。
+本项目以 AI 作为比赛翻译主通道，而不是在确定性翻译失败后才调用 AI。每个新切片先构造 hash-bound ContextPack，再由 OpenCode `zai/glm-5.1` + `c2rust-candidate` + `max` 生成单一 Rust 主候选。typed IR 和 C2Rust 继续保留，用于零 token 替代、失败对照和 repair base；它们不能静默冒充 AI 已运行，也不能绕过共同验证门禁。
 
 ContextPack v3 只向模型提供有界事实：真实 source span、编译参数与 response files、类型/CFG/指针摘要、失败摘要、ABI/指针策略，以及直接被调函数的签名、定义状态、source binding、stub boundary 和调用合同。敏感字段、带引号密钥赋值、宿主绝对路径和路径逃逸会被清理；必需的 callee boundary 超限或截断时会在 provider 启动前零调用拒绝。
 
-AI candidate manifest v5 的 `prompt_scope` 不再使用固定模板，而是由实际 ContextPack 计算。fresh-run summary validator 会重开 hash-bound ContextPack，逐字节复算实际 prompt，并独立复算 scope；版本降级、prompt/ContextPack 漂移或宣称看过不存在的 type map、CFG、pointer graph、root cause、caller/callee facts 都会验收失败。该合同提高模型输入质量和证据准确性，但 AI 输出仍保持 `semantic_gate=false`，最终接受只由共同门禁决定。
+AI candidate manifest v7 的 `prompt_scope` 由实际 ContextPack 计算，并把 provider、logical/resolved model、`competition_eligible` 和 `evaluation_scope` 绑定到 generator 与 candidate。每次真实 provider 调用还绑定最小 invocation receipt 和独立的 session-export identity projection：只保留 provider/model/agent/variant/version、session id、prompt/response SHA 与内存中完整 export 的 SHA，不保存完整 session、prompt、宿主目录或凭据；两类工件都有 `additionalProperties=false` 的专用 schema。fresh-run summary validator 会重开这些 hash-bound 工件并独立复算身份、prompt、scope 与调用计数；`competition-exact` 还会实时重开同一 OpenCode session，核对完整 export SHA、实际身份、附件 prompt 路径及 ContextPack 前缀、assistant response。比赛主通道只认 `zai/glm-5.1`；GLM 余额不足时可显式使用 DeepSeek V4 Flash 等模型做 `auxiliary-local-validation`，但不能关闭比赛待办或进入比赛成功率分子。AI 输出始终保持 `semantic_gate=false`，最终接受只由共同门禁决定。
+
+候选生成使用无工具 `c2rust-candidate` agent，OpenCode 事件中出现任何层级的 `tool`/`tool_use` 都会 fail closed；worker/preflight 仍使用执行命令所需的 `c2rust-migrator`，两类 agent 不再混用。比赛探针使用逻辑模型名 `GLM-5.1`，candidate CLI 使用 resolved id `zai/glm-5.1`。解析器接受严格 JSON，或带少量说明但只有一个完整 JSON 围栏的响应；多围栏、不完整围栏、额外工具访问和不受限字段仍会拒绝。OpenCode 1.17.18 的文件参数按“固定短消息在前，`--file=<prompt>` 在后”的 `opencode-file-attachment-v2` 合同传输，避免 `--file` 把消息误解析为第二个文件。
 
 ## Harness 架构图
 
@@ -82,7 +84,7 @@ flowchart TB
         CONTEXT["Bounded AI ContextPack\nsource + compile + callee facts"]
         TRANSLATOR["c2r-translator\nclang AST -> typed IR -> Rust"]
         C2RUST["C2Rust baseline / repair"]
-        OPENCODE["OpenCode worker\nGLM-5.1 + c2rust-migrator + max"]
+        OPENCODE["OpenCode candidate\nGLM-5.1 competition / auxiliary model"]
     end
 
     subgraph Proof["证明平面"]
@@ -229,7 +231,7 @@ sequenceDiagram
 
 AI exact 路径禁止同时传入 `--accept-existing-evidence`。历史 accepted reports 可以复验历史切片，但不能给新 AI candidate 补写 SHA 或 semantic status。
 
-跨项目稳定性使用 `validation/ai-finite-cross-project-suite.json` 的固定集合。`validate_ai_finite_cross_project_suite --require-all-ready` 会离线核验三条 pinned checkout 的 Git identity、真实 source/span、spec 和 fixture；preflight 不调用模型、不执行翻译。AI candidate producer 还会在进程启动前检查 ContextPack source span；missing、越界、hash 漂移、超限或编码不支持时写入 `context_not_provider_ready`，并明确记录 `provider_invocations=0`。fragment wrapper 只有在 carrier source、真实 upstream fragment、声明文本与 `verbatim_once` 嵌入全部通过 SHA/行段复核后才是 `inline_translation_carrier_bound`，且不会扩大 whole-function 语义声明。candidate 与 repair prompt 均先写入 hash-bound 文件，再通过 OpenCode `--file` 和固定短消息传入；完整 ContextPack、候选和失败事实不再进入进程 argv，manifest/report 记录 `opencode-file-attachment-v1` transport。`run_ai_finite_cross_project_suite` 把整套 spec 一次交给同一个 competition runner，禁止历史 accepted evidence 和外层重试；底层 summary validator 未通过时，上层不得复制指标。余额不足、鉴权失败或 provider 无法启动会在首次失败后熔断；timeout 仍需连续两次，不同 kind 会重置计数。未启动项只记为 skipped，不伪造 AI unit。OpenCode 非零退出或超时后的日志诊断绑定首选日志及调用前偏移，首次创建日志时从偏移 0 读取，并且只输出固定错误哨兵，禁止把原始日志或密钥写入证据。缺输入或 fresh runner 时必须保留为 `blocked`，不能过滤难例或用 synthetic carrier 冒充真实项目成功。输入 ready 或本地 Cargo cache 旁路也不能代替一次完整的 AI-primary/fresh-exact 比赛验收。
+跨项目稳定性使用 `validation/ai-finite-cross-project-suite.json` 的固定集合。`validate_ai_finite_cross_project_suite --require-all-ready` 会离线核验三条 pinned checkout 的 Git identity、真实 source/span、spec 和 fixture；preflight 不调用模型、不执行翻译。AI candidate producer 还会在进程启动前检查 ContextPack source span；missing、越界、hash 漂移、超限或编码不支持时写入 `context_not_provider_ready`，并明确记录 `provider_invocations=0`。fragment wrapper 只有在 carrier source、真实 upstream fragment、声明文本与 `verbatim_once` 嵌入全部通过 SHA/行段复核后才是 `inline_translation_carrier_bound`，且不会扩大 whole-function 语义声明。candidate 与 repair prompt 均先写入 hash-bound 文件，再通过 OpenCode `opencode-file-attachment-v2` 传入：固定短消息位于 `--file=<prompt-path>` 之前；完整 ContextPack、候选和失败事实不进入进程 argv。`run_ai_finite_cross-project_suite` 把整套 spec 一次交给同一个 competition runner，禁止历史 accepted evidence 和外层重试；底层 summary validator 未通过时，上层不得复制指标。余额不足、鉴权失败或 provider 无法启动会在首次失败后熔断；timeout 仍需连续两次，不同 kind 会重置计数。未启动项只记为 skipped，不伪造 AI unit。OpenCode 非零退出或超时后的日志诊断绑定首选日志及调用前偏移，首次创建日志时从偏移 0 读取，并且只输出固定错误哨兵，禁止把原始日志或密钥写入证据。缺输入或 fresh runner 时必须保留为 `blocked`，不能过滤难例或用 synthetic carrier 冒充真实项目成功。输入 ready、辅助模型通过或本地 Cargo cache 旁路都不能代替一次完整的 AI-primary/fresh-exact 比赛验收。
 
 AI candidate cache 默认禁用，只能通过独立生成器的 `--cache-root`、`auto_migrate`/competition runner 的 `--ai-candidate-cache-root` 显式启用。内容寻址 key 绑定 ContextPack payload SHA、prompt schema version、实际 prompt SHA、resolved model、agent 名称、repo 内 agent 定义 SHA、variant 和 parse contract version；只发布能够重新解析且 `entry.json`、`response.jsonl`、`candidate.rs` SHA 一致的成功结果。并发同 key 采用 single-flight 与锁内 first-writer-wins 原子目录发布，损坏 entry 会隔离后由一次真实调用重建；provider failure、timeout、拒绝和非法响应不进入缓存。命中记录 `provider_invocations=0`、`cache.status=hit` 和 metrics `cache_hits=1`；后续 repair 调用单独计入 `invocations`。summary validator 会重开本次 evidence 中的 cache entry、原始响应和初始 candidate 并复算 key。缓存命中只复用候选，仍执行完整 common gates，且始终保持 `semantic_gate=false`。competition runner 只接受 repo 内缓存目录，避免宿主绝对路径进入可重放命令。
 

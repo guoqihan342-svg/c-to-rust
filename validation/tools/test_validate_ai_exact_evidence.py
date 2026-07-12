@@ -90,6 +90,13 @@ class Fixture:
             "source": "opencode-ai",
             "artifact_sha256": ai["sha"],
             "gate_results": ai["router_gates"],
+            "provider": "zai",
+            "logical_model": "GLM-5.1",
+            "resolved_model": "zai/glm-5.1",
+            "competition_eligible": True,
+            "evaluation_scope": "competition-primary",
+            "agent": "c2rust-migrator",
+            "variant": "max",
         }]
         evidence = {"ai": ai["ref"]}
         selected_bytes = ai["bytes"]
@@ -228,14 +235,17 @@ class Fixture:
         self.repair_report = self.directory / "l3-add-one-c2rust-repair-report.json"
         status = "candidate_ready_for_common_validation"
         write_json(self.repair_report, {
-            "schema_version": 2,
+            "schema_version": 3,
             "artifact_label": "c2rust-repair",
             "input_source": "c2rust-baseline",
             "status": status,
             "generator": {
                 "tool": "opencode",
+                "provider": "zai",
                 "logical_model": "GLM-5.1",
                 "resolved_model": "zai/glm-5.1",
+                "competition_eligible": True,
+                "evaluation_scope": "competition-primary",
                 "agent": "c2rust-migrator",
                 "variant": "max",
                 "prompt_transport": prompt_transport_contract(),
@@ -416,6 +426,7 @@ class ValidateAiExactEvidenceTests(unittest.TestCase):
             "path_escape",
             "semantic_pass",
             "prompt_transport",
+            "generator_identity",
         ):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
                 fixture = Fixture(Path(tmp), repair=True)
@@ -437,6 +448,17 @@ class ValidateAiExactEvidenceTests(unittest.TestCase):
                         repair_report["rounds"][0]["bindings"]["prompt"]["path"] = "../prompt.txt"
                     elif case == "prompt_transport":
                         repair_report["generator"]["prompt_transport"]["message_sha256"] = "0" * 64
+                    elif case == "generator_identity":
+                        repair_report["generator"].update(
+                            {
+                                "provider": "opencode",
+                                "logical_model": "DeepSeek-V4-Flash",
+                                "resolved_model": "opencode/deepseek-v4-flash-free",
+                                "competition_eligible": False,
+                                "evaluation_scope": "auxiliary-local-validation",
+                                "agent": "c2rust-candidate",
+                            }
+                        )
                     else:
                         repair_report["claim_boundary"]["semantic_pass"] = True
                     write_json(fixture.repair_report, repair_report)

@@ -32,6 +32,8 @@ def opencode_models_stdout_lists_required_model(stdout: str) -> bool:
         candidate = token.strip().strip("'\"`[](){}")
         if candidate == COMPETITION_OPENCODE_MODEL:
             return True
+        if candidate == COMPETITION_OPENCODE_CANDIDATE_MODEL:
+            return True
         if "/" in candidate and candidate.rsplit("/", 1)[-1] == COMPETITION_OPENCODE_MODEL:
             return True
     return False

@@ -42,6 +42,10 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
                     str(out_root),
                     "--emit-clang-lowering-report",
                     "--ai-first-candidate",
+                    "--ai-model",
+                    "opencode/deepseek-v4-flash-free",
+                    "--ai-agent",
+                    "c2rust-candidate",
                     "--ai-opencode-command",
                     provider_command,
                 ],
@@ -68,9 +72,16 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
                 (evidence_dir / "l3-add-one-ai-router.json").read_text(encoding="utf-8")
             )
 
-            self.assertEqual(route["candidate_generation"]["selected_candidate_id"], "opencode-glm51-1")
+            candidate_id = "opencode-deepseek-v4-flash-1"
+            self.assertEqual(route["candidate_generation"]["selected_candidate_id"], candidate_id)
             self.assertEqual(route["translator"]["kind"], "agent")
+            self.assertFalse(manifest["generator"]["competition_eligible"])
+            self.assertEqual(
+                manifest["generator"]["evaluation_scope"],
+                "auxiliary-local-validation",
+            )
             self.assertTrue(manifest["candidates"][0]["applied"])
+            self.assertEqual(manifest["candidates"][0]["candidate_id"], candidate_id)
             self.assertFalse(manifest["candidates"][0]["semantic_pass"])
             self.assertFalse(profile["generated_draft_semantic_pass"])
             self.assertEqual(
@@ -78,8 +89,13 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
                 "l3-add-one-ai-router.json",
             )
             self.assertTrue(auto_manifest["ai_exact_validation"]["semantic_pass"])
-            self.assertEqual(router["selected_candidate_id"], "opencode-glm51-1")
+            self.assertEqual(router["selected_candidate_id"], candidate_id)
             self.assertTrue(router["semantic_pass"])
+            routed_ai = router["candidate_set"][0]
+            self.assertEqual("opencode/deepseek-v4-flash-free", routed_ai["resolved_model"])
+            self.assertFalse(routed_ai["competition_eligible"])
+            self.assertEqual("auxiliary-local-validation", routed_ai["evaluation_scope"])
+            self.assertEqual("c2rust-candidate", routed_ai["agent"])
             typed_ir = route["candidate_generation"]["typed_ir"]
             self.assertEqual(typed_ir["output_ref"]["status"], "candidate_context_only")
             self.assertNotEqual(

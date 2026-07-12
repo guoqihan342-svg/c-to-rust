@@ -22,8 +22,6 @@ def resolve_ai_runtime(
     runtime = runtime if isinstance(runtime, dict) else {}
 
     profile_model = first_nonempty(runtime, "candidate_model", "resolved_model")
-    if profile_model is None and proof_class == "competition-exact":
-        profile_model = first_nonempty(runtime, "required_model")
     values = {
         "opencode_command": resolved_runtime_value(
             opencode_command,
@@ -33,12 +31,12 @@ def resolve_ai_runtime(
         "model": resolved_runtime_value(
             model,
             profile_model,
-            COMPETITION_OPENCODE_MODEL if proof_class == "competition-exact" else "zai/glm-5.1",
+            COMPETITION_OPENCODE_CANDIDATE_MODEL,
         ),
         "agent": resolved_runtime_value(
             agent,
-            first_nonempty(runtime, "candidate_agent", "required_agent"),
-            COMPETITION_OPENCODE_AGENT,
+            first_nonempty(runtime, "candidate_agent"),
+            COMPETITION_OPENCODE_CANDIDATE_AGENT,
         ),
         "variant": resolved_runtime_value(
             variant,
@@ -64,8 +62,8 @@ def resolve_ai_runtime(
     if proof_class == "competition-exact":
         required = {
             "opencode_command": COMPETITION_OPENCODE_COMMAND,
-            "model": COMPETITION_OPENCODE_MODEL,
-            "agent": COMPETITION_OPENCODE_AGENT,
+            "model": COMPETITION_OPENCODE_CANDIDATE_MODEL,
+            "agent": COMPETITION_OPENCODE_CANDIDATE_AGENT,
             "variant": COMPETITION_OPENCODE_VARIANT,
         }
         mismatches = [key for key, value in required.items() if effective[key] != value]

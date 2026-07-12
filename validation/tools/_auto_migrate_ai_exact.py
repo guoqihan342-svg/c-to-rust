@@ -262,7 +262,15 @@ def run_ai_exact_stage(
                     replay_runner=replay_runner,
                 )
 
-    candidates = [_router_candidate("opencode-glm51-1", "opencode-ai", ai_result)]
+    ai_candidate_id = _manifest_candidate_id(ai_manifest)
+    candidates = [
+        _router_candidate(
+            ai_candidate_id,
+            "opencode-ai",
+            ai_result,
+            metadata=_manifest_generator_metadata(ai_manifest),
+        )
+    ]
     if deterministic_result is not None:
         candidates.append(
             _router_candidate("typed-ir:clang-lowered", "typed-ir", deterministic_result)
@@ -393,13 +401,56 @@ def next_attempt_dir(root: Path, label: str, candidate_sha: str) -> Path:
     raise ValueError("AI exact validation attempt limit exceeded")
 
 
-def _router_candidate(candidate_id: str, source: str, result: Mapping[str, Any]) -> dict[str, Any]:
-    return {
+def _router_candidate(
+    candidate_id: str,
+    source: str,
+    result: Mapping[str, Any],
+    *,
+    metadata: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    candidate = {
         "candidate_id": candidate_id,
         "source": source,
         "artifact_sha256": result["candidate_sha256"],
         "gate_results": result["router_gate_results"],
     }
+    if metadata is not None:
+        candidate.update(metadata)
+    return candidate
+
+
+def _manifest_candidate_id(manifest: Mapping[str, Any]) -> str:
+    selected_id = manifest.get("selected_candidate_id")
+    candidates = manifest.get("candidates")
+    if (
+        not isinstance(selected_id, str)
+        or not selected_id
+        or not isinstance(candidates, list)
+        or len(candidates) != 1
+        or not isinstance(candidates[0], Mapping)
+        or candidates[0].get("candidate_id") != selected_id
+    ):
+        raise ValueError("AI candidate manifest selected_candidate_id must bind its only candidate")
+    return selected_id
+
+
+def _manifest_generator_metadata(manifest: Mapping[str, Any]) -> dict[str, Any]:
+    generator = manifest.get("generator")
+    if not isinstance(generator, Mapping):
+        raise ValueError("AI candidate manifest requires generator identity")
+    fields = (
+        "provider",
+        "logical_model",
+        "resolved_model",
+        "competition_eligible",
+        "evaluation_scope",
+        "agent",
+        "variant",
+    )
+    metadata = {field: generator.get(field) for field in fields}
+    if any(value is None for value in metadata.values()):
+        raise ValueError("AI candidate manifest generator identity is incomplete")
+    return metadata
 
 
 def _passed_gate_count(result: Mapping[str, Any]) -> int:
