@@ -1455,6 +1455,7 @@
         "profile-bound sizeof integer type lowering",
         "profile-bound sizeof complete fixed-size integer array type lowering",
         "profile-bound sizeof expression argType lowering",
+        "unique sizeof expression operand type recovery when clang omits argType",
         "profile-bound sizeof pointer type lowering",
         "profile-bound _Alignof integer type lowering",
         "profile-bound _Alignof typedef-backed size_t lowering from clang-proven desugared/canonical spelling",
@@ -1685,6 +1686,10 @@
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
+          "name": "sizeof_expression_operand_derives_type_without_arg_type",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_04_split_parts/part_00.rs"
+        },
+        {
           "name": "sizeof_pointer_type_lowers_from_target_pointer_width_profile",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
@@ -1804,9 +1809,9 @@
           "fail_closed_reason": "sizeof array result must fit the target size_t width before lowering"
         },
         {
-          "name": "sizeof_expression_operand_stays_fail_closed_without_arg_type",
-          "path": "crates/c2r-translator/src/clang_frontend.rs",
-          "fail_closed_reason": "sizeof expression operands require clang argType.qualType metadata before typed IR lowering"
+          "name": "sizeof_expression_operand_without_type_stays_fail_closed",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_04_split_parts/part_00.rs",
+          "fail_closed_reason": "sizeof expression fallback requires exactly one operand carrying type.qualType; missing or ambiguous operand types remain refused"
         },
         {
           "name": "sizeof_pointer_type_stays_fail_closed_without_pointer_width_profile",

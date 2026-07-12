@@ -26,9 +26,9 @@ input.c + compile context
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 + A18c8a targeted 2/4 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑，定向 4 项中 2 项新增 exact pass，均明确不具备比赛资格 |
-| 当前翻译主线 | P0-A18c / P0-A10 | A18c8a/A18c8b/A18c8b1/A18c8c 已关闭；下一步分别处理 zlib 函数表间接调用与 libuv 记录布局 `sizeof` 的 translator 缺口 |
+| 当前翻译主线 | P0-A18c / P0-A10 | A18c8a/A18c8b/A18c8b1/A18c8c/A18c8d 已关闭；下一步加入 hash-bound 记录布局证据，再处理 zlib 函数表间接调用 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A18c8c3 | 通用 C call plan 已支持声明式输出 pointee、记录字段/BE16/对象字节投影和严格实际值协议；真实 libuv 12 条记录匹配，但 translator 仍在 `sizeof(*addr)` 布局证明处拒绝 |
+| 最近开发阶段 | P0-A18c8d | clang 缺少 `sizeof(expression).argType` 时会从唯一 typed operand 恢复类型；真实 libuv blocker 已从 operand 缺失推进为明确的 record-layout provenance 缺失 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -437,6 +437,8 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
         - [x] **P0-A18c8c3：声明式输出参数与记录投影**。独立 `c_oracle_contract` 只接受安全 header basename、零初始化单层 struct pointee、`address_of`、return、标量映射、字段、BE16 与固定长度对象字节枚举；不接受原始 C 表达式或项目/函数 adapter。output binding 必须精确闭合 omitted C 参数，观测顺序必须与 ReplayCallPlan assertion 和 fixture observable 完全一致，C call-plan SHA 绑定 replay plan、有效 fixture、目标 ABI 与完整合同。
         - renderer 为指针/`int`/`CHAR_BIT` 和每个观测字段生成 `_Static_assert`，header 必须唯一对应 `c_boundary.files(role=header)`；完整重命名 target/slice/function/output parameter 后仍走同一路径。实现已拆为 70 行 façade、direct renderer、output renderer、output schema 和 output protocol 小模块，均低于 400 行。
         - WSL competition-like libuv `runs-02` 实际编译/运行返回 0，`loopback`/`invalid` 两个 case 的 return/status/family/host-port/port-bytes/address-bytes 共 12 条严格记录全部匹配，invalid/unexpected 均为 0，完整 schema validator 通过。该闭环只完成 fresh C oracle harness；translator 仍在 `sizeof(*addr)` 记录布局处 fail closed，`semantic_pass=false`，不增加翻译成功分子。
+      - [x] **P0-A18c8d：`sizeof(expression)` operand type 恢复**。真实 clang JSON 对表达式形式不提供 `argType`；frontend 现在仅在 `inner` 精确包含一个且该 operand 携带 `type.qualType` 时恢复类型。显式 `argType` 路径不变，缺失 type 或多 operand 继续 `unsupported_sizeof_operand`。WSL libuv `runs-03` 已从旧 operand blocker 推进到 `unsupported_sizeof_type: sizeof(struct sockaddr_in) requires explicit C layout/ABI provenance`，fresh C oracle 仍为 12 条严格记录匹配；该阶段不生成 Rust，不增加成功分子。
+      - [ ] **P0-A18c8e：hash-bound 记录布局 provenance**。从编译器验证的记录 size/alignment 与目标 ABI 生成可复算布局证据，只允许 `sizeof` 消费完全匹配的记录类型；缺失、重复、目标冲突或 hash 漂移必须拒绝，禁止按 `sockaddr_in`/libuv 身份写死大小。
 
       前序失败证据：同配置 `kv_set` router `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0` 的 rustc/unsafe/oracle 通过，但候选把外部 callee 结果实现为 `-1`，与 oracle 的 `7` 不一致。三项 WSL worktree 运行均报告 `repo_commit=UNKNOWN0`，因此只属于本地 hash-bound AI 路由证据。
 

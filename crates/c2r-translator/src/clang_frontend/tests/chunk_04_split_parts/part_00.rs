@@ -359,7 +359,19 @@
     }
 
     #[test]
-    fn sizeof_expression_operand_stays_fail_closed_without_arg_type() {
+    fn sizeof_expression_operand_derives_type_without_arg_type() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+            ..TargetAbiProfile::default()
+        };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
             "type": {"qualType": "size_t"},
@@ -377,14 +389,32 @@
             ]
         });
 
-        let error =
-            expr_skeleton_from_ast(&expr).expect_err("sizeof expression operand must fail closed");
+        let mut skeleton = expr_skeleton_from_ast(&expr)
+            .expect("sizeof expression should derive the unique operand type");
+        bind_target_abi_to_expr(&mut skeleton, &abi);
+        let ir = lower_expr(&skeleton).expect("derived int operand type should lower");
+
+        let IrExpr::LitInt { value, .. } = ir else {
+            panic!("expected derived sizeof(value) to lower to LitInt, got {ir:?}");
+        };
+        assert_eq!(value, 4);
+    }
+
+    #[test]
+    fn sizeof_expression_operand_without_type_stays_fail_closed() {
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "inner": [{"kind": "DeclRefExpr"}]
+        });
+
+        let error = expr_skeleton_from_ast(&expr)
+            .expect_err("sizeof expression without operand type must fail closed");
 
         assert_eq!(error.kind, "unsupported_sizeof_operand");
-        assert!(
-            error.message.contains("expression operand"),
-            "unexpected error: {error:?}"
-        );
+        assert!(error.message.contains("missing type.qualType"));
     }
 
     #[test]

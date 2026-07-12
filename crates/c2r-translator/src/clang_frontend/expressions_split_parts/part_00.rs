@@ -653,18 +653,29 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
             reason: format!("{name} requires explicit alignment/lowering support"),
         });
     }
-    let arg_type_object = expr.get("argType").ok_or_else(|| ClangFrontendError {
-        kind: if expr.get("inner").is_some() {
-            format!("unsupported_{name}_operand")
-        } else {
-            "invalid_unary_expr_or_type_trait_expr".to_string()
-        },
-        message: if expr.get("inner").is_some() {
-            format!("{name} expression operand requires clang argType.qualType before typed IR lowering")
-        } else {
-            format!("{name} type operand is missing argType.qualType")
-        },
-    })?;
+    let arg_type_object = if let Some(arg_type) = expr.get("argType") {
+        arg_type
+    } else if let Some(inner) = expr.get("inner").and_then(Value::as_array) {
+        let [operand] = inner.as_slice() else {
+            return Err(ClangFrontendError {
+                kind: format!("unsupported_{name}_operand"),
+                message: format!(
+                    "{name} expression requires exactly one typed clang operand before typed IR lowering"
+                ),
+            });
+        };
+        operand.get("type").ok_or_else(|| ClangFrontendError {
+            kind: format!("unsupported_{name}_operand"),
+            message: format!(
+                "{name} expression operand is missing type.qualType before typed IR lowering"
+            ),
+        })?
+    } else {
+        return Err(ClangFrontendError {
+            kind: "invalid_unary_expr_or_type_trait_expr".to_string(),
+            message: format!("{name} type operand is missing argType.qualType"),
+        });
+    };
     if clang_type_candidate_spellings(arg_type_object)
         .iter()
         .any(|spelling| is_enum_qual_type_spelling(spelling))
