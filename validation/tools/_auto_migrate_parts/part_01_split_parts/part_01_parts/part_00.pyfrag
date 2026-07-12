@@ -226,6 +226,8 @@ def oracle_fixture_execution_source(
                 ],
                 "case_count": declarative["case_count"],
                 "compared_fields": declarative["compared_fields"],
+                "output_protocol": declarative["output_protocol"],
+                "protocol_record_count": len(declarative["protocol_records"]),
             },
         }
     if c_oracle_signature_supports_fdb_blob_make_call(spec, signature):

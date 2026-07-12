@@ -193,7 +193,8 @@
         "scalar and byte-buffer fixture codecs",
         "derived encoded length",
         "direct C return observation",
-        "hash-bound harness regeneration"
+        "hash-bound harness regeneration",
+        "strict canonical JSON actual-value output protocol"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -214,6 +215,10 @@
             {
               "name": "fresh-oracle call-plan drift refusal",
               "path": "validation/tools/test_ai_fresh_oracle.py"
+            },
+            {
+              "name": "strict output missing duplicate extra reorder value SHA and JSON refusals",
+              "path": "validation/tools/test_c_oracle_output_protocol.py"
             }
           ]
         },
@@ -239,6 +244,10 @@
             {
               "name": "strict auto-translation call-plan harness validation",
               "path": "validation/tools/_validate_auto_translation_evidence_parts/part_00_split_parts/part_00.pyfrag"
+            },
+            {
+              "name": "persisted stdout strict gate recomputation",
+              "path": "validation/tools/test_c_oracle_output_protocol.py"
             }
           ]
         }
@@ -251,6 +260,10 @@
         {
           "name": "complete target slice and function rename keeps generic rendering",
           "path": "validation/tools/test_c_oracle_call_plan.py"
+        },
+        {
+          "name": "canonical actual-value records match exact case order and plan SHA",
+          "path": "validation/tools/test_c_oracle_output_protocol.py"
         }
       ],
       "negative_cases": [

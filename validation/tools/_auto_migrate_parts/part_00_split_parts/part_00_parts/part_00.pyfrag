@@ -41,6 +41,7 @@ from validation.tools.replay_call_plan import (
     replay_call_plan_marker,
 )
 from validation.tools.c_oracle_call_plan import render_c_oracle_call_plan
+from validation.tools.c_oracle_output_protocol import c_oracle_call_plan_output_gate
 TRANSLATOR_MANIFEST = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.toml"
 TRANSLATOR_LOCK = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.lock"
 COMPETITION_ENVIRONMENT_PROFILE = REPO_ROOT / "config" / "competition-env" / "environment.json"

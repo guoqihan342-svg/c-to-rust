@@ -424,6 +424,31 @@ def _compile_binding(
     for duplicate in (execution.get("output_gate"), payload.get("output_gate")):
         if duplicate is not None and duplicate != gate:
             failures.append(_failure("output_gate_conflict", "Duplicate output gate payloads are inconsistent."))
+    try:
+        from validation.tools.c_oracle_output_protocol import (
+            validate_c_oracle_call_plan_output_gate,
+        )
+
+        harness_contract = payload.get("harness_contract")
+        call_plan_contract = (
+            harness_contract.get("c_oracle_call_plan", {"status": "not_used"})
+            if isinstance(harness_contract, Mapping)
+            else {"status": "not_used"}
+        )
+        validate_c_oracle_call_plan_output_gate(
+            dict(spec),
+            call_plan_contract,
+            run,
+            root,
+            payload.get("fixture_binding"),
+        )
+    except (OSError, UnicodeError, ValueError) as error:
+        failures.append(
+            _failure(
+                "c_oracle_output_protocol_mismatch",
+                f"Fresh harness output protocol proof failed: {error}",
+            )
+        )
 
     flags = {
         "argv": _compile_flags(argv, harness, command),

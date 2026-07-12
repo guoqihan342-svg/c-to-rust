@@ -315,6 +315,12 @@ def c_oracle_harness_output_gate(
     fixture_binding: dict[str, Any] | None,
     harness_execution: dict[str, Any],
 ) -> dict[str, Any]:
+    if spec is not None and fixture_binding is not None:
+        declarative = render_c_oracle_call_plan(spec, REPO_ROOT)
+        if declarative.get("status") == "generated":
+            return c_oracle_call_plan_output_gate(
+                declarative, fixture_binding, harness_execution
+            )
     expected_fragments = c_oracle_expected_stdout_fragments(spec, fixture_binding)
     base = {
         "schema_version": 1,

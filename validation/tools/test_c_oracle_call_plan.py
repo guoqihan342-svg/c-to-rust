@@ -32,7 +32,9 @@ class COracleCallPlanTests(unittest.TestCase):
             "adler32_z(((uint32_t)1ULL), case_empty_0_buf, ((size_t)0ULL))",
             rendered["statements"],
         )
-        self.assertIn("fixture case ascii value matched", rendered["statements"])
+        self.assertIn("C2R_C_ORACLE_JSON", rendered["statements"])
+        self.assertEqual("c2r_c_oracle_json_v1", rendered["output_protocol"])
+        self.assertEqual(2, len(rendered["protocol_records"]))
         self.assertRegex(rendered["replay_call_plan_sha256"], r"^[0-9a-f]{64}$")
 
     def test_auto_migrate_dispatches_zlib_through_generic_call_plan(self) -> None:
@@ -71,6 +73,8 @@ class COracleCallPlanTests(unittest.TestCase):
             "replay_call_plan_sha256": rendered["replay_call_plan_sha256"],
             "case_count": rendered["case_count"],
             "compared_fields": rendered["compared_fields"],
+            "output_protocol": rendered["output_protocol"],
+            "protocol_record_count": len(rendered["protocol_records"]),
         }
         harness = (
             rendered["declarations"]
@@ -132,6 +136,16 @@ class COracleCallPlanTests(unittest.TestCase):
         self.assertEqual("generated", rendered["status"])
         self.assertIn("case_same_id_0_buf", rendered["declarations"])
         self.assertIn("case_same_id_1_buf", rendered["declarations"])
+
+    def test_protocol_printf_escapes_percent_in_case_id(self) -> None:
+        spec = self.load_spec("zlib-adler32-step.json")
+        spec["fixture_contract"]["cases"][0]["id"] = "percent%case"
+
+        rendered = render_c_oracle_call_plan(spec, REPO_ROOT)
+
+        self.assertEqual("generated", rendered["status"])
+        self.assertIn('percent%%case', rendered["statements"])
+        self.assertIn('percent%case', rendered["protocol_records"][0])
 
     def test_unsafe_c_string_and_oversized_buffer_fail_closed(self) -> None:
         spec = self.load_spec("zlib-adler32-step.json")

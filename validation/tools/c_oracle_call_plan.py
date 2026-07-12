@@ -5,6 +5,10 @@ from pathlib import Path
 import re
 from typing import Any
 
+from validation.tools.c_oracle_output_protocol import (
+    PROTOCOL_ID,
+    protocol_printf_statement,
+)
 from validation.tools.replay_call_plan import build_replay_call_plan
 from validation.tools.replay_call_plan_fixture import _fixture_binding
 
@@ -30,6 +34,7 @@ MAX_CASE_ID_BYTES = 128
 MAX_STRING_BYTES = 64 * 1024
 MAX_BUFFER_BYTES = 1024 * 1024
 MAX_RENDERED_BYTES = 2 * 1024 * 1024
+MAX_PROTOCOL_BYTES = 3000
 
 
 def render_c_oracle_call_plan(spec: dict[str, Any], repo_root: Path) -> dict[str, Any]:
@@ -71,6 +76,8 @@ def validate_c_oracle_call_plan_harness(
         "replay_call_plan_sha256": rendered["replay_call_plan_sha256"],
         "case_count": rendered["case_count"],
         "compared_fields": rendered["compared_fields"],
+        "output_protocol": rendered["output_protocol"],
+        "protocol_record_count": len(rendered["protocol_records"]),
     }
     if contract != expected_contract:
         raise ValueError("C oracle call-plan contract drifted")
@@ -133,6 +140,7 @@ def _render_bound_plan(
         f"/* COracleCallPlan-SHA256: {plan['plan_sha256']} */\n"
     ]
     statements: list[str] = []
+    protocol_records: list[str] = []
     for index, case in enumerate(cases):
         case_id = str(case.get("id") or f"case-{index}")
         _require_printable_ascii(case_id, "fixture case id", MAX_CASE_ID_BYTES)
@@ -164,6 +172,15 @@ def _render_bound_plan(
             pointer_width,
         )
         actual = f"actual_{case_ident}_{index}"
+        protocol_statement, expected_record = protocol_printf_statement(
+            plan["plan_sha256"],
+            index,
+            case_id,
+            field,
+            str(assertion.get("encoding") or ""),
+            expected[field],
+            actual,
+        )
         statements.extend(
             [
                 f"  {return_type} {actual} = {function_name}({', '.join(arguments)});\n",
@@ -173,15 +190,16 @@ def _render_bound_plan(
                 + ");\n",
                 "    return 1;\n",
                 "  }\n",
-                "  puts("
-                + _c_string_literal(f"fixture case {case_id} {field} matched")
-                + ");\n",
+                protocol_statement,
             ]
         )
+        protocol_records.append(expected_record)
     declaration_text = "".join(declarations) + "\n"
     statement_text = "".join(statements)
     if len((declaration_text + statement_text).encode("utf-8")) > MAX_RENDERED_BYTES:
         raise ValueError("C oracle call-plan source exceeds the rendering limit")
+    if len(("\n".join(protocol_records) + "\n").encode("utf-8")) > MAX_PROTOCOL_BYTES:
+        raise ValueError("C oracle call-plan output protocol exceeds the capture limit")
     return {
         "status": "generated",
         "declarations": declaration_text,
@@ -190,6 +208,8 @@ def _render_bound_plan(
         "replay_call_plan_sha256": plan["plan_sha256"],
         "case_count": len(cases),
         "compared_fields": [assertion["fixture_field"]],
+        "output_protocol": PROTOCOL_ID,
+        "protocol_records": protocol_records,
     }
 
 
