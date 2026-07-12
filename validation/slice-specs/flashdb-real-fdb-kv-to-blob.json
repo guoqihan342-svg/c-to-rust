@@ -144,6 +144,24 @@
           "blob"
         ]
       ],
+      "actual_argument_noalias_proof": {
+        "parameter_pair": [
+          "kv",
+          "blob"
+        ],
+        "actual_arguments": [
+          {
+            "parameter": "kv",
+            "object": "address of the fixture-local struct fdb_kv object"
+          },
+          {
+            "parameter": "blob",
+            "object": "address of the distinct fixture-local struct fdb_blob object"
+          }
+        ],
+        "construction": "Each fixture case constructs distinct local struct fdb_kv and struct fdb_blob objects before calling fdb_kv_to_blob.",
+        "proven": true
+      },
       "alias_contract": {
         "decision": "requires_noalias_contract",
         "proven": true,
@@ -252,7 +270,92 @@
   },
   "replay_contract": {
     "schema_version": 1,
-    "kind": "record_projection_identity_return"
+    "kind": "record_pointer_identity_return",
+    "input": {
+      "parameter": "kv",
+      "fixture_root": ["kv"],
+      "rust_type": "FdbKv",
+      "fields": [
+        {
+          "fixture_path": ["addr.start"],
+          "rust_field_path": ["addr", "start"],
+          "rust_type_path": ["FdbKvAddr"],
+          "fixture_scalar_type": "u32",
+          "rust_scalar_type": "u32",
+          "conversion": "identity"
+        },
+        {
+          "fixture_path": ["addr.value"],
+          "rust_field_path": ["addr", "value"],
+          "rust_type_path": ["FdbKvAddr"],
+          "fixture_scalar_type": "u32",
+          "rust_scalar_type": "u32",
+          "conversion": "identity"
+        },
+        {
+          "fixture_path": ["value_len"],
+          "rust_field_path": ["value_len"],
+          "rust_type_path": [],
+          "fixture_scalar_type": "usize",
+          "rust_scalar_type": "usize",
+          "conversion": "identity"
+        }
+      ],
+      "defaults": []
+    },
+    "output": {
+      "parameter": "blob",
+      "fixture_root": ["initial_blob_saved"],
+      "rust_type": "FdbBlob",
+      "fields": [
+        {
+          "initial_fixture_path": ["meta_addr"],
+          "expected_output": "blob.saved.meta_addr",
+          "rust_field_path": ["saved", "meta_addr"],
+          "rust_type_path": ["FdbBlobSaved"],
+          "fixture_scalar_type": "u32",
+          "rust_scalar_type": "u32",
+          "conversion": "identity"
+        },
+        {
+          "initial_fixture_path": ["addr"],
+          "expected_output": "blob.saved.addr",
+          "rust_field_path": ["saved", "addr"],
+          "rust_type_path": ["FdbBlobSaved"],
+          "fixture_scalar_type": "u32",
+          "rust_scalar_type": "u32",
+          "conversion": "identity"
+        },
+        {
+          "initial_fixture_path": ["len"],
+          "expected_output": "blob.saved.len",
+          "rust_field_path": ["saved", "len"],
+          "rust_type_path": ["FdbBlobSaved"],
+          "fixture_scalar_type": "usize",
+          "rust_scalar_type": "usize",
+          "conversion": "identity"
+        }
+      ],
+      "defaults": [
+        {
+          "rust_field_path": ["buf"],
+          "rust_type_path": [],
+          "rust_scalar_type": "raw_mut_ptr",
+          "value": {"kind": "null_mut"}
+        },
+        {
+          "rust_field_path": ["size"],
+          "rust_type_path": [],
+          "rust_scalar_type": "usize",
+          "value": {"kind": "zero"}
+        }
+      ]
+    },
+    "return": {
+      "kind": "identity",
+      "parameter_ref": "output"
+    },
+    "noalias_refs": [["input", "output"]]
   },
   "rust_boundary": {
     "crate": "validation/l2_slices",

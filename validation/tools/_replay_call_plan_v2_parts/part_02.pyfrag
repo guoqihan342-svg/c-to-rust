@@ -13,6 +13,7 @@ def _validate_fixture_cases(
         field["value"]["field"]
         for binding in bindings
         for field in _leaf_fields(binding["initializer"])
+        if field["value"]["kind"] == "fixture_field"
     }
     input_fields.update(
         item["source"]["field"]
@@ -53,6 +54,7 @@ def _validate_stats_fixture_cases(
     input_contracts = [
         (field["value"]["field"], field["value"]["encoding"])
         for field in _leaf_fields(binding["initializer"])
+        if field["value"]["kind"] == "fixture_field"
     ]
     output_contracts = {
         item["fixture_field"]: item["encoding"] for item in assertions
@@ -111,16 +113,37 @@ def _initializer_literal(initializer: dict[str, Any], inputs: dict[str, Any]) ->
         ):
             raise ValueError("ReplayCallPlan v2 vector length fixture is out of bounds")
         return f"vec![{value}; {concrete_length}usize]"
+    if initializer["kind"] == "constant_scalar":
+        return _encoded_literal(initializer["value"], initializer["encoding"])
+    if initializer["kind"] == "null_pointer":
+        return (
+            "core::ptr::null_mut()"
+            if initializer["mutability"] == "mutable"
+            else "core::ptr::null()"
+        )
     fields = []
     for field in initializer["fields"]:
         value = field["value"]
         literal = (
-            _initializer_literal(value, inputs)
-            if value["kind"] == "struct"
-            else _encoded_literal(inputs.get(value["field"]), value["encoding"])
+            _encoded_literal(_fixture_initializer_value(value, inputs), value["encoding"])
+            if value["kind"] == "fixture_field"
+            else _initializer_literal(value, inputs)
         )
         fields.append(f"{field['name']}: {literal}")
     return f"{initializer['rust_type']} {{ " + ", ".join(fields) + " }"
+
+
+def _fixture_initializer_value(reference: dict[str, Any], inputs: dict[str, Any]) -> Any:
+    if "field" in reference:
+        if reference["field"] not in inputs:
+            raise ValueError("ReplayCallPlan v2 fixture initializer field is missing")
+        return inputs[reference["field"]]
+    current: Any = inputs
+    for segment in reference["path"]:
+        if not isinstance(current, dict) or segment not in current:
+            raise ValueError("ReplayCallPlan v2 fixture initializer path is missing")
+        current = current[segment]
+    return current
 
 
 def _binding_argument(
@@ -335,8 +358,27 @@ def _identifier(value: Any, label: str) -> str:
     return value
 
 
+def _fixture_key(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not FIXTURE_KEY_RE.fullmatch(value):
+        raise ValueError(f"{label} is invalid")
+    return value
+
+
+def _fixture_path(value: Any, label: str) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{label} is invalid")
+    return [_fixture_key(item, label) for item in value]
+
+
 def _rust_type(value: Any, label: str) -> str:
-    if not isinstance(value, str) or not value or not RUST_TYPE_RE.fullmatch(value):
+    if (
+        not isinstance(value, str)
+        or not value
+        or (
+            value not in NULL_POINTER_RUST_TYPES.values()
+            and not RUST_TYPE_RE.fullmatch(value)
+        )
+    ):
         raise ValueError(f"Rust {label} is invalid")
     return value
 

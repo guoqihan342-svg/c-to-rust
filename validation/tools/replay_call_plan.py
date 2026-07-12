@@ -61,6 +61,7 @@ def build_replay_call_plan(spec: dict[str, Any], repo_root: Path) -> dict[str, A
         "record_u32_field_wrapping_add_state",
         "record_u32_field_scalar_wrapping_add_state",
         "record_u32_field_postfix_increment_state",
+        "record_pointer_identity_return",
         "record_interior_projection_u32_constant_state",
         "record_owner_interior_stats_sequence_state",
         "record_owner_interior_guarded_stats_sequence_state",
@@ -74,6 +75,16 @@ def build_replay_call_plan(spec: dict[str, Any], repo_root: Path) -> dict[str, A
         return {"schema_version": 1, "status": "unavailable"}
     try:
         resolved_root = repo_root.resolve()
+        if contract_kind == "record_pointer_identity_return":
+            from validation.tools.replay_call_plan_record_identity import (
+                build_record_pointer_identity_plan,
+            )
+
+            return build_record_pointer_identity_plan(
+                spec,
+                contract,
+                _fixture_binding(spec, resolved_root),
+            )
         if contract_kind in {
             "scripted_external_u32_call_bool_out",
             "scripted_external_record_u32_call_bool_state",

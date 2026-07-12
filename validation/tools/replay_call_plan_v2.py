@@ -8,8 +8,14 @@ from typing import Any
 
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+FIXTURE_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
 RUST_TYPE_RE = re.compile(r"^[A-Za-z0-9_&'\[\]<>:(),; ]+$")
 MAX_DYNAMIC_I32_ITEMS = 4096
+SCALAR_INITIALIZER_ENCODINGS = frozenset({"u32", "i32", "usize", "bool"})
+NULL_POINTER_RUST_TYPES = {
+    "shared": "*const core::ffi::c_void",
+    "mutable": "*mut core::ffi::c_void",
+}
 ACTUAL_RE = re.compile(
     r"^(?:return(?:\.[A-Za-z_][A-Za-z0-9_]*)*|"
     r"binding\.[A-Za-z_][A-Za-z0-9_]*(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+))*)$"
@@ -30,6 +36,7 @@ for _PART_NAME in (
     "part_02.pyfrag",
     "part_03.pyfrag",
     "part_04.pyfrag",
+    "part_05_identity.pyfrag",
 ):
     _PART_PATH = _PARTS_DIR / _PART_NAME
     exec(

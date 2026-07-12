@@ -1,0 +1,112 @@
+def _supporting_types_from_bindings(
+    bindings: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    types: dict[str, dict[str, Any]] = {}
+
+    def visit(initializer: dict[str, Any]) -> None:
+        if initializer["kind"] != "struct":
+            return
+        for field in initializer["fields"]:
+            visit(field["value"])
+        contract = {
+            "kind": "struct",
+            "name": initializer["rust_type"],
+            "visibility": "pub",
+            "fields": [
+                {
+                    "name": field["name"],
+                    "rust_type": field["value"].get(
+                        "rust_type", field["value"].get("encoding")
+                    ),
+                }
+                for field in initializer["fields"]
+            ],
+        }
+        previous = types.get(contract["name"])
+        if previous is not None and previous != contract:
+            raise ValueError("ReplayCallPlan v2 initializer type definitions conflict")
+        types[contract["name"]] = contract
+
+    for binding in bindings:
+        visit(binding["initializer"])
+    return list(types.values())
+
+
+def _normalize_identity_assertions(
+    value: Any,
+    bindings: dict[str, dict[str, Any]],
+    return_type: str,
+) -> list[dict[str, str]]:
+    if not isinstance(value, list) or len(value) != 1:
+        raise ValueError("ReplayCallPlan v2 requires exactly one identity assertion")
+    item = value[0]
+    if not isinstance(item, dict) or item.get("kind") != "reference_identity":
+        raise ValueError("ReplayCallPlan v2 identity assertion is invalid")
+    if item.get("actual") != "return" or item.get("mutability") not in {
+        "mutable",
+        "shared",
+    }:
+        raise ValueError("ReplayCallPlan v2 identity assertion contract is invalid")
+    binding_name = _identifier(item.get("expected_binding"), "identity binding")
+    binding = bindings.get(binding_name)
+    if binding is None:
+        raise ValueError("ReplayCallPlan v2 identity binding is missing")
+    mutable = item["mutability"] == "mutable"
+    if binding["mutable"] is not mutable:
+        raise ValueError("ReplayCallPlan v2 identity binding mutability is invalid")
+    expected_return_type = (
+        f"&mut {binding['rust_type']}" if mutable else f"&{binding['rust_type']}"
+    )
+    if return_type != expected_return_type:
+        raise ValueError("ReplayCallPlan v2 identity return type is invalid")
+    return [
+        {
+            "kind": "reference_identity",
+            "actual": "return",
+            "expected_binding": binding_name,
+            "mutability": item["mutability"],
+            "fixture_field": _identifier(
+                item.get("fixture_field"), "identity fixture field"
+            ),
+        }
+    ]
+
+
+def _validate_identity_borrow(
+    identity: dict[str, str],
+    parameters: list[dict[str, Any]],
+    return_type: str,
+) -> None:
+    source_kind = (
+        "binding_borrow_mut"
+        if identity["mutability"] == "mutable"
+        else "binding_borrow"
+    )
+    expected_type = next(
+        (
+            item["rust_type"]
+            for item in parameters
+            if item["source"].get("binding") == identity["expected_binding"]
+            and item["source"]["kind"] == source_kind
+        ),
+        None,
+    )
+    binding_parameters = [
+        item
+        for item in parameters
+        if item["source"].get("binding") == identity["expected_binding"]
+    ]
+    if len(binding_parameters) != 1 or expected_type is None:
+        raise ValueError("ReplayCallPlan v2 identity borrow is invalid")
+    if expected_type != return_type:
+        raise ValueError("ReplayCallPlan v2 identity borrow type is invalid")
+
+
+def _identity_fixture_expected(identity: dict[str, str], case: dict[str, Any]) -> str:
+    expected = case.get("expected")
+    if (
+        not isinstance(expected, dict)
+        or expected.get(identity["fixture_field"]) is not True
+    ):
+        raise ValueError("ReplayCallPlan v2 identity fixture must be true")
+    return "true"

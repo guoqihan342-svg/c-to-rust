@@ -125,6 +125,11 @@ def generate_rust_replay_test_draft(
 
 
 def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    call_plan = build_replay_call_plan(spec, REPO_ROOT)
+    if call_plan.get("status") == "bound":
+        return render_declarative_replay_cases(spec, call_plan, REPO_ROOT)
+    if call_plan.get("status") == "blocked":
+        return ""
     if call_continue_state_replay_supported(spec, fixture_binding):
         return rust_replay_call_continue_state_cases_source(spec, fixture_binding)
     if scripted_external_record_u32_sequence_do_while_state_replay_supported(
@@ -225,12 +230,10 @@ def fdb_blob_make_replay_supported(spec: dict[str, Any]) -> bool:
 
 
 def fdb_kv_to_blob_replay_supported(spec: dict[str, Any]) -> bool:
-    return replay_contract_kind(spec) == "record_projection_identity_return" and behavior_fields(spec) == [
-        "return_same_blob",
-        "blob.saved.meta_addr",
-        "blob.saved.addr",
-        "blob.saved.len",
-    ]
+    return (
+        replay_contract_kind(spec) == "record_pointer_identity_return"
+        and build_replay_call_plan(spec, REPO_ROOT).get("status") == "bound"
+    )
 
 
 def fdb_kv_set_replay_supported(spec: dict[str, Any]) -> bool:

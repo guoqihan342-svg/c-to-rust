@@ -7,7 +7,7 @@ def validate_replay_call_plan_v2(plan: dict[str, Any]) -> None:
         raise ValueError("ReplayCallPlan v2 visibility is invalid")
     if plan.get("abi") not in {"Rust", "C"} or not isinstance(plan.get("unsafe"), bool):
         raise ValueError("ReplayCallPlan v2 ABI or unsafe policy is invalid")
-    _rust_type(plan.get("return_type"), "return type")
+    return_type = _rust_type(plan.get("return_type"), "return type")
     bindings = _normalize_bindings(plan.get("bindings"))
     if bindings != plan.get("bindings"):
         raise ValueError("ReplayCallPlan v2 bindings are not canonical")
@@ -50,6 +50,16 @@ def validate_replay_call_plan_v2(plan: dict[str, Any]) -> None:
         for item in parameters
     ]:
         raise ValueError("ReplayCallPlan v2 call arguments drifted")
+    identity_assertions = plan.get("identity_assertions")
+    if identity_assertions is not None:
+        normalized_identity_assertions = _normalize_identity_assertions(
+            identity_assertions, binding_by_name, return_type
+        )
+        if normalized_identity_assertions != identity_assertions:
+            raise ValueError("ReplayCallPlan v2 identity assertions are not canonical")
+        _validate_identity_borrow(
+            normalized_identity_assertions[0], parameters, return_type
+        )
     _validate_mappings(plan.get("c_parameter_mappings"), parameters)
     if plan.get("omitted_c_parameters") != []:
         raise ValueError("ReplayCallPlan v2 omitted C parameters are unsupported")
@@ -84,6 +94,8 @@ def validate_replay_call_plan_v2(plan: dict[str, Any]) -> None:
     assertions = _normalize_assertions(plan.get("assertions"), binding_by_name)
     if assertions != plan.get("assertions"):
         raise ValueError("ReplayCallPlan v2 assertions are not canonical")
+    if supporting_types != _supporting_types_from_bindings(bindings):
+        raise ValueError("ReplayCallPlan v2 supporting types drifted from initializers")
     _validate_fixture_identity(plan.get("fixture"))
     if not re.fullmatch(r"[0-9a-f]{64}", str(plan.get("plan_sha256") or "")):
         raise ValueError("ReplayCallPlan v2 sha256 is invalid")
@@ -118,6 +130,25 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
             mutable = "mut " if binding["mutable"] else ""
             literal = _initializer_literal(binding["initializer"], inputs)
             lines.append(f"        let {mutable}{local_name}: {binding['rust_type']} = {literal};\n")
+        identity = (plan.get("identity_assertions") or [None])[0]
+        expected_identity_pointer = None
+        if isinstance(identity, dict):
+            binding_name = identity["expected_binding"]
+            binding = next(item for item in plan["bindings"] if item["name"] == binding_name)
+            expected_identity_pointer = f"expected_identity_{case_ident}_{index}"
+            pointer_type = (
+                f"*mut {binding['rust_type']}"
+                if identity["mutability"] == "mutable"
+                else f"*const {binding['rust_type']}"
+            )
+            pointer_constructor = (
+                f"core::ptr::from_mut(&mut {local_names[binding_name]})"
+                if identity["mutability"] == "mutable"
+                else f"core::ptr::from_ref(&{local_names[binding_name]})"
+            )
+            lines.append(
+                f"        let {expected_identity_pointer}: {pointer_type} = {pointer_constructor};\n"
+            )
         arguments = [
             _binding_argument(item["source"], local_names, inputs)
             for item in plan["parameters"]
@@ -126,6 +157,20 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
         if plan["unsafe"]:
             call = f"unsafe {{ {call} }}"
         lines.append(f"        let actual_return: {plan['return_type']} = {call};\n")
+        if isinstance(identity, dict):
+            expected = _identity_fixture_expected(identity, case)
+            actual_identity = f"actual_identity_{case_ident}_{index}"
+            actual_pointer = (
+                "core::ptr::from_mut(actual_return)"
+                if identity["mutability"] == "mutable"
+                else "core::ptr::from_ref(actual_return)"
+            )
+            lines.append(
+                f"        let {actual_identity}: bool = core::ptr::eq({actual_pointer}, {expected_identity_pointer});\n"
+            )
+            lines.append(
+                f"        assert_eq!({actual_identity}, {expected}, \"{{}} {identity['fixture_field']} drifted\", case_id);\n"
+            )
         for assertion_index, assertion in enumerate(plan["assertions"]):
             actual = _actual_expression(assertion["actual"], local_names)
             observed = f"observed_{case_ident}_{index}_{assertion_index}"
@@ -277,8 +322,12 @@ def _normalize_bindings(value: Any) -> list[dict[str, Any]]:
             raise ValueError("ReplayCallPlan v2 binding is invalid")
         rust_type = _rust_type(item.get("rust_type"), "binding type")
         initializer = _normalize_plan_initializer(item.get("initializer"), types)
-        if initializer["kind"] == "vec_repeat" and rust_type != "Vec<i32>":
-            raise ValueError("ReplayCallPlan v2 vector binding type is invalid")
+        if initializer["kind"] in {"constant_scalar", "null_pointer"}:
+            raise ValueError("ReplayCallPlan v2 initializer leaf cannot be a binding root")
+        if rust_type != initializer["rust_type"]:
+            if initializer["kind"] == "vec_repeat":
+                raise ValueError("ReplayCallPlan v2 vector binding type is invalid")
+            raise ValueError("ReplayCallPlan v2 binding initializer type is invalid")
         result.append(
             {
                 "name": _identifier(item.get("name"), "binding"),
@@ -339,6 +388,32 @@ def _normalize_plan_initializer(value: Any, types: dict[str, dict[str, Any]]) ->
             },
             "value": value["value"],
         }
+    if value.get("kind") == "constant_scalar":
+        encoding = value.get("encoding")
+        rust_type = value.get("rust_type")
+        scalar = value.get("value")
+        if (
+            encoding not in SCALAR_INITIALIZER_ENCODINGS
+            or rust_type != encoding
+            or not _value_matches(scalar, encoding)
+        ):
+            raise ValueError("ReplayCallPlan v2 constant scalar initializer is invalid")
+        return {
+            "kind": "constant_scalar",
+            "rust_type": rust_type,
+            "encoding": encoding,
+            "value": scalar,
+        }
+    if value.get("kind") == "null_pointer":
+        mutability = value.get("mutability")
+        rust_type = value.get("rust_type")
+        if NULL_POINTER_RUST_TYPES.get(mutability) != rust_type:
+            raise ValueError("ReplayCallPlan v2 null pointer initializer is invalid")
+        return {
+            "kind": "null_pointer",
+            "rust_type": rust_type,
+            "mutability": mutability,
+        }
     if value.get("kind") != "struct":
         raise ValueError("ReplayCallPlan v2 initializer kind is unsupported")
     rust_type = _identifier(value.get("rust_type"), "initializer type")
@@ -352,7 +427,11 @@ def _normalize_plan_initializer(value: Any, types: dict[str, dict[str, Any]]) ->
             raise ValueError("ReplayCallPlan v2 initializer field is invalid")
         name = _identifier(item.get("name"), "initializer field")
         child = item.get("value")
-        if isinstance(child, dict) and child.get("kind") == "struct":
+        if isinstance(child, dict) and child.get("kind") in {
+            "struct",
+            "constant_scalar",
+            "null_pointer",
+        }:
             child_value = _normalize_plan_initializer(child, types)
             child_type = child_value["rust_type"]
         elif isinstance(child, dict) and child.get("kind") == "fixture_field":
@@ -360,9 +439,20 @@ def _normalize_plan_initializer(value: Any, types: dict[str, dict[str, Any]]) ->
                 raise ValueError("ReplayCallPlan v2 fixture initializer encoding is invalid")
             child_value = {
                 "kind": "fixture_field",
-                "field": _identifier(child.get("field"), "fixture initializer field"),
                 "encoding": child["encoding"],
             }
+            has_field = "field" in child
+            has_path = "path" in child
+            if has_field == has_path:
+                raise ValueError("ReplayCallPlan v2 fixture initializer reference is invalid")
+            if has_field:
+                child_value["field"] = _fixture_key(
+                    child.get("field"), "fixture initializer field"
+                )
+            else:
+                child_value["path"] = _fixture_path(
+                    child.get("path"), "fixture initializer path"
+                )
             child_type = child["encoding"]
         else:
             raise ValueError("ReplayCallPlan v2 initializer value is invalid")
@@ -472,7 +562,7 @@ def _normalize_assertions(value: Any, bindings: dict[str, dict[str, Any]]) -> li
         if actual.startswith("binding.") and len(actual.split(".")) == 2:
             if encoding != "i32_vec" or rust_type != "Vec<i32>":
                 raise ValueError("ReplayCallPlan v2 whole binding assertion type is invalid")
-        fixture_field = _identifier(item.get("fixture_field"), "assertion fixture field")
+        fixture_field = _fixture_key(item.get("fixture_field"), "assertion fixture field")
         if fixture_field in fields:
             raise ValueError("ReplayCallPlan v2 assertion fixture fields must be unique")
         result.append(
