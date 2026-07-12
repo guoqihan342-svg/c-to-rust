@@ -27,6 +27,7 @@ FAILURE_STATUS_MARKERS = (
     "reject",
     "unsupported",
 )
+SUCCESS_STATUS_MARKERS = ("ok", "pass", "ready", "success")
 
 
 def prompt_scope_for_context(context_pack: dict[str, Any]) -> list[str]:
@@ -90,6 +91,20 @@ def has_direct_caller_callee_facts(c_boundary: Any) -> bool:
 def failure_summary_has_facts(value: Any) -> bool:
     if not isinstance(value, list):
         return False
+    status_values = [
+        str(item.get("value", "")).lower()
+        for item in value
+        if isinstance(item, dict) and str(item.get("path", "")).lower().endswith(".status")
+    ]
+    if any(
+        any(marker in status for marker in FAILURE_STATUS_MARKERS)
+        for status in status_values
+    ):
+        return True
+    successful = bool(status_values) and all(
+        any(marker in status for marker in SUCCESS_STATUS_MARKERS)
+        for status in status_values
+    )
     for item in value:
         if not isinstance(item, dict) or not value_has_facts(
             item.get("value"), scalar_is_fact=True
@@ -97,9 +112,8 @@ def failure_summary_has_facts(value: Any) -> bool:
             continue
         path = str(item.get("path", "")).lower()
         if path.endswith(".status"):
-            status = str(item["value"]).lower()
-            if any(marker in status for marker in FAILURE_STATUS_MARKERS):
-                return True
+            continue
+        if successful and path.rsplit(".", 1)[-1] in {"diagnostic", "diagnostics"}:
             continue
         return True
     return False
