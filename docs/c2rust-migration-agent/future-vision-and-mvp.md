@@ -270,7 +270,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | ---: | --- | --- |
 | 1 | P0-A11 provider admission 与零调用证据 | 已完成；后续只修回归 |
 | 2 | P0-A12 文件化 prompt transport | 已完成；后续只修 transport/CLI 兼容回归 |
-| 3 | P0-A13 内容寻址 AI candidate cache | 只复用 hash/策略完全一致且可重开的成功响应；失败不得缓存 |
+| 3 | P0-A13 内容寻址 AI candidate cache | 已完成；后续只修 cache binding/schema/validator 回归 |
 | 4 | P0-A14 受限展开编译 response file | 在 source root 内按深度、文件数和总字节上限补齐真实编译参数 |
 | 5 | P0-A10 固定套件真实验收 | 资源恢复后只运行一次完整套件并发布可复核指标 |
 | 6 | P0-A6 / P0-H9 比赛主机复验 | 有效资源包和 competition-exact host 可用；不得用模拟结果代替 |
@@ -281,7 +281,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   OpenCode `zai/glm-5.1` 读取 hash-bound ContextPack，输出单一结构化 Rust candidate；记录 provider、logical/resolved model、variant、prompt、输入、原始响应、解析结果和候选 SHA-256。模型输出、聊天文本和文件写入本身都保持 `semantic_gate=false`。无凭据、超时、响应格式错误或候选缺失必须结构化 blocked，不得静默回退后冒充 AI 已运行。
 
-  当前进度：候选生成器、schema-v3 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、source-span provider readiness、余额/鉴权/启动/超时分类和 `auto_migrate --ai-first-candidate` 已实现。missing、越界、hash 漂移、超限或编码不支持的 source span 会在启动 OpenCode 前结构化为 `context_not_provider_ready`，并记录 `provider_invocations=0`；summary validator 会重开 hash-bound ContextPack 独立复算 preflight 与调用计数。LF/CRLF 等价由 full-source 流式 hash 和 span hash 共同校验；fragment wrapper 还必须通过 carrier、containing-function、真实 upstream fragment 的 SHA/text/claim 合同和 `verbatim_once` 嵌入校验，才标记为 `inline_translation_carrier_bound`，且仍不声明 whole-function 语义。在保留三条 pinned checkout 的 P0-A10 输入工作树中，固定 12 项在 Windows/WSL 均为 provider-ready 12/12；普通新 worktree 未物化这些 ignored checkout 时不具备该前置条件。WSL 能列出并实际启动 `zai/glm-5.1`。OpenCode 会把 provider 错误写入受限日志后继续内部重试，旧 harness 因外层 30/180 秒先到而把空响应记为 `provider_timeout`；2026-07-12 新增的日志偏移诊断覆盖非零退出、超时和首次创建日志，只提取固定哨兵、不保存原始日志或密钥。单次真实调用已把根因还原为 `provider_insufficient_balance`。因此尚无真实 GLM candidate，本项保持未完成。模型可见、进程已启动和确定性 fallback 通过都不能替代候选证据。
+  当前进度：候选生成器、schema-v4 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、source-span provider readiness、余额/鉴权/启动/超时分类和 `auto_migrate --ai-first-candidate` 已实现。missing、越界、hash 漂移、超限或编码不支持的 source span 会在启动 OpenCode 前结构化为 `context_not_provider_ready`，并记录 `provider_invocations=0`；summary validator 会重开 hash-bound ContextPack 独立复算 preflight 与调用计数。LF/CRLF 等价由 full-source 流式 hash 和 span hash 共同校验；fragment wrapper 还必须通过 carrier、containing-function、真实 upstream fragment 的 SHA/text/claim 合同和 `verbatim_once` 嵌入校验，才标记为 `inline_translation_carrier_bound`，且仍不声明 whole-function 语义。在保留三条 pinned checkout 的 P0-A10 输入工作树中，固定 12 项在 Windows/WSL 均为 provider-ready 12/12；普通新 worktree 未物化这些 ignored checkout 时不具备该前置条件。WSL 能列出并实际启动 `zai/glm-5.1`。OpenCode 会把 provider 错误写入受限日志后继续内部重试，旧 harness 因外层 30/180 秒先到而把空响应记为 `provider_timeout`；2026-07-12 新增的日志偏移诊断覆盖非零退出、超时和首次创建日志，只提取固定哨兵、不保存原始日志或密钥。单次真实调用已把根因还原为 `provider_insufficient_balance`。因此尚无真实 GLM candidate，本项保持未完成。模型可见、进程已启动和确定性 fallback 通过都不能替代候选证据。
 
 - [x] **P0-A7：项目级 ContextPack 与编译上下文闭环**
 
@@ -321,9 +321,11 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   完成证据：candidate 和 bounded repair 共用 `opencode-file-attachment-v1`，argv 只保留 `--file=<prompt-path>` 与固定短消息；完整 prompt 仍以 SHA 绑定文件保留。schema-v3 manifest 与 schema-v2 repair report 记录 file option/style、固定消息 SHA 和 `inline_prompt_in_argv=false`；summary 与 exact-evidence validator 均独立拒绝 transport 漂移。Windows/WSL 各 167 项 AI candidate、repair、router、exact evidence 和 competition summary 回归通过；WSL 显式使用 `/root/.cargo/bin` 比赛工具链 PATH。
 
-- [ ] **P0-A13：内容寻址 AI candidate cache**
+- [x] **P0-A13：内容寻址 AI candidate cache**
 
-  cache key 只由 ContextPack payload hash、prompt schema/version、resolved model、agent、variant 和解析合同组成。只缓存成功解析且 candidate/raw-response 均可按 SHA 重开的结果；provider failure、超时、拒绝和未通过解析的响应不得缓存。命中后仍需走完整 common gates，记录 `cache_hit` 与零次新增 provider 调用，且保持 `semantic_gate=false`；任何绑定漂移都删除命中资格并重新调用模型。
+  cache key 由 ContextPack payload hash、prompt schema/version、实际 prompt hash、resolved model、agent 名称、repo 内 agent 定义 hash、variant 和解析合同组成。只缓存成功解析且 candidate/raw-response 均可按 SHA 重开的结果；provider failure、超时、拒绝和未通过解析的响应不得缓存。命中后仍需走完整 common gates，记录 `cache_hit` 与零次新增 provider 调用，且保持 `semantic_gate=false`；任何绑定漂移都删除命中资格并重新调用模型。
+
+  完成证据：缓存仅通过 `--cache-root` 或 `--ai-candidate-cache-root` 显式启用，competition runner 只接受 repo 内目录。schema-v4 manifest 绑定八项内容 key，并把命中的 `entry.json` 复制为本次 path/SHA evidence；summary validator 重开 entry、raw response 和初始 candidate，重新解析响应并复算 key。并发同 key 先用 single-flight 二次查缓存，再在跨进程发布锁内通过唯一 staging 目录和 first-writer-wins rename 发布；损坏 entry 会隔离并由一次真实 provider 调用重建。失败、超时、拒绝和解析失败均不缓存。命中记录初始 `provider_invocations=0` 和 metrics-v2 `cache_hits=1`，后续 repair rounds 仍独立计入总调用；common gates 与 `semantic_gate=false` 不变。Windows 124 项合同测试全部通过；WSL 同组 124 项中 123 项通过、1 项 Windows 锁专用用例按平台跳过。
 
 - [ ] **P0-A14：受限展开编译 response file**
 

@@ -207,6 +207,10 @@ The default repair cap is five rounds. Process exit status, model text, and repa
 | OpenCode / LLM | Candidate generation and bounded repair | No |
 | C oracle + Rust replay + diff gates | Executable equivalence within the declared boundary | Yes |
 
+The AI exact path cannot be combined with accepted-evidence reuse. Candidate and repair prompts are SHA-bound files passed through OpenCode `--file` with a fixed short message, so the full ContextPack and failure facts do not enter process argv.
+
+The AI candidate cache is disabled by default and is enabled only through the standalone generator's `--cache-root` or `auto_migrate`/competition runner's `--ai-candidate-cache-root`. Its content key binds the ContextPack payload SHA, prompt schema version, actual prompt SHA, resolved model, agent name, repository-local agent-definition SHA, variant, and parse contract version. It publishes only successful responses whose `entry.json`, `response.jsonl`, and `candidate.rs` can be reopened, reparsed, and verified by SHA. Same-key requests use single-flight plus locked first-writer-wins directory publication; a corrupt entry is quarantined and rebuilt by one real call. Provider failures, timeouts, refusals, and malformed responses are never cached. A hit records `provider_invocations=0`, `cache.status=hit`, and metrics `cache_hits=1`; later repair calls remain separate invocations. The summary validator independently reopens the copied cache entry, raw response, and initial candidate. A cache hit reuses candidate input only, still traverses every common gate, and remains `semantic_gate=false`. The competition runner accepts only repository-local cache roots so host paths cannot enter replay commands.
+
 A named slice may increase the semantic numerator only when source/fixture/candidate hashes agree, C and Rust execute, schema diff and a discriminating negative mutation pass, unsafe/route/profile/final-verification artifacts are cross-bound, and the strict validator passes with `--require-semantic-pass`.
 
 ## Worker Isolation and State
