@@ -99,6 +99,12 @@ def _validate_fixture_identity(value: Any) -> None:
 
 
 def _initializer_literal(initializer: dict[str, Any], inputs: dict[str, Any]) -> str:
+    if initializer["kind"] == "owned_string":
+        return _owned_string_literal(initializer, inputs)
+    if initializer["kind"] == "fixture_enum_constant":
+        return _fixture_enum_constant_literal(initializer, inputs)
+    if initializer["kind"] == "nullable_byte_buffer":
+        return _nullable_byte_buffer_literal(initializer, inputs)
     if initializer["kind"] == "array_repeat":
         value = _encoded_literal(initializer["value"], initializer["element_type"])
         return f"[{value}; {initializer['length']}]"
@@ -149,6 +155,8 @@ def _fixture_initializer_value(reference: dict[str, Any], inputs: dict[str, Any]
 def _binding_argument(
     source: dict[str, Any], names: dict[str, str], inputs: dict[str, Any]
 ) -> str:
+    if source["kind"] == "nullable_byte_buffer_const_ptr":
+        return _nullable_buffer_pointer_expression(source, names, inputs)
     if source["kind"] == "binding_borrow_mut":
         return "&mut " + names[source["binding"]]
     if source["kind"] == "binding_borrow":
@@ -156,7 +164,9 @@ def _binding_argument(
     if source["kind"] == "binding_value":
         return names[source["binding"]]
     if source["kind"] == "fixture_field":
-        return _encoded_literal(inputs.get(source["field"]), source["encoding"])
+        if source["encoding"] in {"string_ref", "optional_string_ref"}:
+            return _string_argument_literal(source, inputs)
+        return _encoded_literal(_argument_fixture_value(source, inputs), source["encoding"])
     raise ValueError("ReplayCallPlan v2 argument source is unsupported")
 
 

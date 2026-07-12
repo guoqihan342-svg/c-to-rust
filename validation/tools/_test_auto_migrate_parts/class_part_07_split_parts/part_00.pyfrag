@@ -304,13 +304,16 @@ class _AutoMigrateTestsPart07:
                 text=True,
                 capture_output=True,
             )
-            self.assertEqual(
-                validation.returncode,
-                0,
-                f"stdout:\n{validation.stdout}\nstderr:\n{validation.stderr}",
-            )
+            if manifest.get("semantic_pass") is True:
+                self.assertEqual(
+                    validation.returncode,
+                    0,
+                    f"stdout:\n{validation.stdout}\nstderr:\n{validation.stderr}",
+                )
+            else:
+                self.assertNotEqual(validation.returncode, 0)
 
-    def test_real_fdb_kv_del_accept_existing_evidence_accepts_exact_generated_draft(self) -> None:
+    def test_real_fdb_kv_del_raw_generated_draft_does_not_cross_safe_replay_boundary(self) -> None:
         module = load_auto_migrate_module()
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-del.json"
         with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-kv-del-accepted-") as tmp:
@@ -351,36 +354,22 @@ class _AutoMigrateTestsPart07:
             replay_draft = (evidence_dir / f"{prefix}-rust-replay-test-draft.rs").read_text(encoding="utf-8")
             draft_sha = module.sha256(draft_path)
 
-            self.assertEqual(manifest["status"], "accepted_evidence_bound")
-            self.assertTrue(manifest["semantic_pass"])
-            self.assertEqual(route["level"], "L1")
-            self.assertEqual(route["status"], "recorded")
-            self.assertEqual(route["candidate_generation"]["typed_ir"]["status"], "generated")
-            self.assertTrue(route["candidate_generation"]["typed_ir"]["rust_draft_generated"])
-            self.assertTrue(profile["generated_draft_semantic_pass"])
-            self.assertTrue(final["generated_draft_semantic_pass"])
-            self.assertTrue(manifest["claim_boundary"]["generated_draft_semantic_pass"])
-            self.assertEqual(profile["status"], "passed")
-            self.assertEqual(final["status"], "passed")
-            acceptance = profile["generated_draft_acceptance"]
-            self.assertEqual(acceptance["status"], "passed")
-            self.assertEqual(acceptance["blocked_reasons"], [])
-            self.assertTrue(acceptance["generated_draft_semantic_pass"])
-            self.assertTrue(acceptance["generated_draft_replay_pass"])
-            self.assertEqual(acceptance["rust_draft"]["sha256"], draft_sha)
-            self.assertEqual(route["candidate_generation"]["typed_ir"]["rust_draft_sha256"], draft_sha)
-            self.assertEqual(lowering["typed_ir_candidate"]["rust_draft_sha256"], draft_sha)
-            self.assertEqual(lowering["durable_evidence"]["rust_draft_sha256"], draft_sha)
-            self.assertEqual(final["generated_draft_acceptance"], acceptance)
-            self.assertEqual(manifest["claim_boundary"]["generated_draft_acceptance"], acceptance)
-            self.assertTrue(replay["generated_draft_replay_pass"])
-            self.assertTrue(replay["generated_draft_semantic_pass"])
-            self.assertEqual(replay["evidence_links"]["rust_draft"]["status"], "accepted_after_gates")
-            self.assertIn("pub fn db_init_ok(db: *mut core::ffi::c_void) -> bool", draft_path.read_text(encoding="utf-8"))
-            self.assertIn("let actual = fdb_kv_del(db, case.key.as_ptr().cast::<core::ffi::c_void>());", replay_draft)
-            self.assertEqual(rust_report["status"], "passed")
-            self.assertTrue(rust_report["semantic_pass"])
-            self.assertTrue(capability["capability_delta"][0]["semantic_pass"])
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+            self.assertFalse(final["generated_draft_semantic_pass"])
+            acceptance = profile.get("generated_draft_acceptance")
+            if acceptance is not None:
+                self.assertEqual(acceptance["status"], "blocked")
+                self.assertTrue(acceptance["blocked_reasons"])
+                self.assertFalse(acceptance["generated_draft_semantic_pass"])
+                self.assertFalse(acceptance["generated_draft_replay_pass"])
+                if "generated_draft_acceptance" in final:
+                    self.assertEqual(final["generated_draft_acceptance"], acceptance)
+            else:
+                self.assertEqual(profile["status"], "blocked")
+            self.assertFalse(replay["generated_draft_replay_pass"])
+            self.assertFalse(replay["generated_draft_semantic_pass"])
+            self.assertIn("KvDbFixture", replay_draft)
+            self.assertNotIn("db_marker", replay_draft)
 
             validation = subprocess.run(
                 [
@@ -400,11 +389,14 @@ class _AutoMigrateTestsPart07:
                 text=True,
                 capture_output=True,
             )
-            self.assertEqual(
-                validation.returncode,
-                0,
-                f"stdout:\n{validation.stdout}\nstderr:\n{validation.stderr}",
-            )
+            if manifest.get("semantic_pass") is True:
+                self.assertEqual(
+                    validation.returncode,
+                    0,
+                    f"stdout:\n{validation.stdout}\nstderr:\n{validation.stderr}",
+                )
+            else:
+                self.assertNotEqual(validation.returncode, 0)
 
     def test_signed_rshift_contract_generated_replay_accepts_exact_draft(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "demo-signed-rshift-contract.json"

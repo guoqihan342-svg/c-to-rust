@@ -60,6 +60,28 @@ def validate_replay_call_plan_v2(plan: dict[str, Any]) -> None:
         _validate_identity_borrow(
             normalized_identity_assertions[0], parameters, return_type
         )
+    pointer_identity_assertions = plan.get("pointer_identity_assertions")
+    normalized_pointer_identity_assertions = None
+    if pointer_identity_assertions is not None:
+        normalized_pointer_identity_assertions = _normalize_pointer_identity_assertions(
+            pointer_identity_assertions, binding_by_name, parameters
+        )
+        if normalized_pointer_identity_assertions != pointer_identity_assertions:
+            raise ValueError("ReplayCallPlan v2 pointer identity assertions are not canonical")
+    buffer_length_relations = plan.get("buffer_length_relations")
+    normalized_buffer_length_relations = None
+    if buffer_length_relations is not None:
+        normalized_buffer_length_relations = _normalize_buffer_length_relations(
+            buffer_length_relations, binding_by_name, parameters
+        )
+        if normalized_buffer_length_relations != buffer_length_relations:
+            raise ValueError("ReplayCallPlan v2 buffer length relations are not canonical")
+    _validate_buffer_capability_closure(
+        bindings,
+        parameters,
+        normalized_pointer_identity_assertions,
+        normalized_buffer_length_relations,
+    )
     _validate_mappings(plan.get("c_parameter_mappings"), parameters)
     if plan.get("omitted_c_parameters") != []:
         raise ValueError("ReplayCallPlan v2 omitted C parameters are unsupported")
@@ -130,6 +152,26 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
             mutable = "mut " if binding["mutable"] else ""
             literal = _initializer_literal(binding["initializer"], inputs)
             lines.append(f"        let {mutable}{local_name}: {binding['rust_type']} = {literal};\n")
+        expected_buffer_pointers: dict[int, str] = {}
+        for pointer_index, assertion in enumerate(plan.get("pointer_identity_assertions", [])):
+            parameter = next(
+                item for item in plan["parameters"]
+                if item["name"] == assertion["expected_parameter"]
+            )
+            pointer_name = f"expected_pointer_identity_{case_ident}_{index}_{pointer_index}"
+            pointer_expression = _nullable_buffer_pointer_expression(
+                parameter["source"], local_names, inputs
+            )
+            lines.append(
+                f"        let {pointer_name}: *const core::ffi::c_void = {pointer_expression};\n"
+            )
+            expected_buffer_pointers[pointer_index] = pointer_name
+        for relation in plan.get("buffer_length_relations", []):
+            lines.append(
+                _render_buffer_length_relation(
+                    relation, plan["parameters"], local_names, inputs, case["id"]
+                )
+            )
         identity = (plan.get("identity_assertions") or [None])[0]
         expected_identity_pointer = None
         if isinstance(identity, dict):
@@ -170,6 +212,22 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
             )
             lines.append(
                 f"        assert_eq!({actual_identity}, {expected}, \"{{}} {identity['fixture_field']} drifted\", case_id);\n"
+            )
+        for pointer_index, assertion in enumerate(plan.get("pointer_identity_assertions", [])):
+            expected = case.get("expected")
+            if (
+                not isinstance(expected, dict)
+                or expected.get(assertion["fixture_field"]) != assertion["expected_parameter"]
+            ):
+                raise ValueError("ReplayCallPlan v2 pointer identity fixture drifted")
+            actual = _actual_expression(assertion["actual"], local_names)
+            observed = f"observed_pointer_identity_{case_ident}_{index}_{pointer_index}"
+            lines.append(
+                f"        let {observed}: bool = core::ptr::eq(({actual}).cast_const(), "
+                f"{expected_buffer_pointers[pointer_index]});\n"
+            )
+            lines.append(
+                f"        assert_eq!({observed}, true, \"{{}} {assertion['fixture_field']} drifted\", case_id);\n"
             )
         for assertion_index, assertion in enumerate(plan["assertions"]):
             actual = _actual_expression(assertion["actual"], local_names)
@@ -322,7 +380,12 @@ def _normalize_bindings(value: Any) -> list[dict[str, Any]]:
             raise ValueError("ReplayCallPlan v2 binding is invalid")
         rust_type = _rust_type(item.get("rust_type"), "binding type")
         initializer = _normalize_plan_initializer(item.get("initializer"), types)
-        if initializer["kind"] in {"constant_scalar", "null_pointer"}:
+        if initializer["kind"] in {
+            "constant_scalar",
+            "null_pointer",
+            "owned_string",
+            "fixture_enum_constant",
+        }:
             raise ValueError("ReplayCallPlan v2 initializer leaf cannot be a binding root")
         if rust_type != initializer["rust_type"]:
             if initializer["kind"] == "vec_repeat":
@@ -344,6 +407,12 @@ def _normalize_bindings(value: Any) -> list[dict[str, Any]]:
 def _normalize_plan_initializer(value: Any, types: dict[str, dict[str, Any]]) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("ReplayCallPlan v2 initializer must be an object")
+    if value.get("kind") == "owned_string":
+        return _normalize_owned_string_initializer(value)
+    if value.get("kind") == "fixture_enum_constant":
+        return _normalize_fixture_enum_constant_initializer(value)
+    if value.get("kind") == "nullable_byte_buffer":
+        return _normalize_nullable_byte_buffer_initializer(value)
     if value.get("kind") == "array_repeat":
         length = value.get("length")
         scalar = value.get("value")
@@ -431,6 +500,8 @@ def _normalize_plan_initializer(value: Any, types: dict[str, dict[str, Any]]) ->
             "struct",
             "constant_scalar",
             "null_pointer",
+            "owned_string",
+            "fixture_enum_constant",
         }:
             child_value = _normalize_plan_initializer(child, types)
             child_type = child_value["rust_type"]
@@ -499,6 +570,13 @@ def _normalize_binding_source(value: Any, bindings: dict[str, dict[str, Any]]) -
     if not isinstance(value, dict):
         raise ValueError("ReplayCallPlan v2 argument source is unsupported")
     kind = value.get("kind")
+    if kind == "fixture_field" and value.get("encoding") in {
+        "string_ref",
+        "optional_string_ref",
+    }:
+        return _normalize_string_argument_source(value)
+    if kind == "nullable_byte_buffer_const_ptr":
+        return _normalize_buffer_pointer_source(value, bindings)
     if kind in {"binding_borrow", "binding_borrow_mut", "binding_value"}:
         binding = _identifier(value.get("binding"), "argument binding")
         if binding not in bindings:
@@ -515,11 +593,19 @@ def _normalize_binding_source(value: Any, bindings: dict[str, dict[str, Any]]) -
         "bool",
         "i32_slice",
     }:
-        return {
+        result = {
             "kind": "fixture_field",
-            "field": _identifier(value.get("field"), "argument fixture field"),
             "encoding": value["encoding"],
         }
+        has_field = "field" in value
+        has_path = "path" in value
+        if has_field == has_path:
+            raise ValueError("ReplayCallPlan v2 argument fixture reference is invalid")
+        if has_field:
+            result["field"] = _identifier(value.get("field"), "argument fixture field")
+        else:
+            result["path"] = _fixture_path(value.get("path"), "argument fixture path")
+        return result
     raise ValueError("ReplayCallPlan v2 argument source is unsupported")
 
 

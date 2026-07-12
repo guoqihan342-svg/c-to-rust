@@ -1,0 +1,237 @@
+def _normalize_nullable_byte_buffer_initializer(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("ReplayCallPlan v2 nullable byte buffer initializer is invalid")
+    maximum = value.get("maximum")
+    if (
+        value.get("kind") != "nullable_byte_buffer"
+        or value.get("rust_type") != "Vec<u8>"
+        or value.get("nullability") != "fixture_nullable"
+        or not isinstance(maximum, int)
+        or isinstance(maximum, bool)
+        or not 1 <= maximum <= MAX_NULLABLE_BYTE_BUFFER_ITEMS
+    ):
+        raise ValueError("ReplayCallPlan v2 nullable byte buffer initializer is invalid")
+    return {
+        "kind": "nullable_byte_buffer",
+        "rust_type": "Vec<u8>",
+        "fixture_path": _fixture_path(
+            value.get("fixture_path"), "nullable byte buffer fixture path"
+        ),
+        "nullability": "fixture_nullable",
+        "maximum": maximum,
+    }
+
+
+def _normalize_buffer_pointer_source(
+    value: Any, bindings: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or value.get("kind") != "nullable_byte_buffer_const_ptr":
+        raise ValueError("ReplayCallPlan v2 buffer pointer source is invalid")
+    binding_name = _identifier(value.get("binding"), "buffer pointer binding")
+    binding = bindings.get(binding_name)
+    if (
+        binding is None
+        or binding["mutable"] is not False
+        or binding["initializer"].get("kind") != "nullable_byte_buffer"
+    ):
+        raise ValueError("ReplayCallPlan v2 buffer pointer binding is invalid")
+    fixture_path = _fixture_path(
+        value.get("fixture_path"), "buffer pointer fixture path"
+    )
+    if fixture_path != binding["initializer"]["fixture_path"]:
+        raise ValueError("ReplayCallPlan v2 buffer pointer fixture path drifted")
+    return {
+        "kind": "nullable_byte_buffer_const_ptr",
+        "binding": binding_name,
+        "fixture_path": fixture_path,
+    }
+
+
+def _normalize_pointer_identity_assertions(
+    value: Any,
+    bindings: dict[str, dict[str, Any]],
+    parameters: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    if not isinstance(value, list) or len(value) != 1:
+        raise ValueError("ReplayCallPlan v2 requires exactly one pointer identity assertion")
+    item = value[0]
+    if not isinstance(item, dict) or item.get("kind") != "raw_pointer_identity":
+        raise ValueError("ReplayCallPlan v2 pointer identity assertion is invalid")
+    actual = str(item.get("actual") or "")
+    if not ACTUAL_RE.fullmatch(actual) or not actual.startswith("binding."):
+        raise ValueError("ReplayCallPlan v2 pointer identity actual is invalid")
+    parts = actual.split(".")
+    actual_binding = bindings.get(parts[1])
+    if actual_binding is None or _initializer_leaf_rust_type(
+        actual_binding["initializer"], parts[2:]
+    ) != "*mut core::ffi::c_void":
+        raise ValueError("ReplayCallPlan v2 pointer identity actual type is invalid")
+    expected_binding = _identifier(
+        item.get("expected_binding"), "pointer identity binding"
+    )
+    expected_parameter = _identifier(
+        item.get("expected_parameter"), "pointer identity parameter"
+    )
+    matches = [
+        parameter
+        for parameter in parameters
+        if parameter["name"] == expected_parameter
+        and parameter["rust_type"] == "*const core::ffi::c_void"
+        and parameter["source"].get("kind") == "nullable_byte_buffer_const_ptr"
+        and parameter["source"].get("binding") == expected_binding
+    ]
+    if len(matches) != 1:
+        raise ValueError("ReplayCallPlan v2 pointer identity projection is invalid")
+    return [{
+        "kind": "raw_pointer_identity",
+        "actual": actual,
+        "expected_binding": expected_binding,
+        "expected_parameter": expected_parameter,
+        "fixture_field": _fixture_key(
+            item.get("fixture_field"), "pointer identity fixture field"
+        ),
+    }]
+
+
+def _normalize_buffer_length_relations(
+    value: Any,
+    bindings: dict[str, dict[str, Any]],
+    parameters: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    if not isinstance(value, list) or len(value) != 1:
+        raise ValueError("ReplayCallPlan v2 requires exactly one buffer length relation")
+    item = value[0]
+    if not isinstance(item, dict) or item.get("kind") != "retained_length_within_nullable_buffer":
+        raise ValueError("ReplayCallPlan v2 buffer length relation is invalid")
+    binding_name = _identifier(item.get("buffer_binding"), "buffer length binding")
+    binding = bindings.get(binding_name)
+    if binding is None or binding["initializer"].get("kind") != "nullable_byte_buffer":
+        raise ValueError("ReplayCallPlan v2 buffer length binding is invalid")
+    parameter_name = _identifier(item.get("length_parameter"), "buffer length parameter")
+    matches = [
+        parameter for parameter in parameters
+        if parameter["name"] == parameter_name
+        and parameter["rust_type"] == "usize"
+        and parameter["length_retained"] is True
+        and parameter["source"].get("kind") == "fixture_field"
+        and parameter["source"].get("encoding") == "usize"
+    ]
+    if len(matches) != 1:
+        raise ValueError("ReplayCallPlan v2 retained buffer length parameter is invalid")
+    return [{
+        "kind": "retained_length_within_nullable_buffer",
+        "buffer_binding": binding_name,
+        "length_parameter": parameter_name,
+    }]
+
+
+def _validate_buffer_capability_closure(
+    bindings: list[dict[str, Any]],
+    parameters: list[dict[str, Any]],
+    pointer_assertions: list[dict[str, str]] | None,
+    length_relations: list[dict[str, str]] | None,
+) -> None:
+    buffer_names = {
+        item["name"] for item in bindings
+        if item["initializer"].get("kind") == "nullable_byte_buffer"
+    }
+    if not buffer_names:
+        if pointer_assertions is not None or length_relations is not None:
+            raise ValueError("ReplayCallPlan v2 buffer capability has no storage binding")
+        return
+    projected = {
+        item["source"]["binding"] for item in parameters
+        if item["source"].get("kind") == "nullable_byte_buffer_const_ptr"
+    }
+    asserted = {item["expected_binding"] for item in pointer_assertions or []}
+    related = {item["buffer_binding"] for item in length_relations or []}
+    if buffer_names != projected or buffer_names != asserted or buffer_names != related:
+        raise ValueError("ReplayCallPlan v2 nullable byte buffer capability is not closed")
+
+
+def _nullable_byte_buffer_literal(initializer: dict[str, Any], inputs: dict[str, Any]) -> str:
+    value = _fixture_value_at_path(inputs, initializer["fixture_path"])
+    if value is None:
+        return "vec![]"
+    if not _is_byte_buffer_value(value, initializer["maximum"]):
+        raise ValueError("ReplayCallPlan v2 nullable byte buffer fixture is invalid")
+    return "vec![" + ", ".join(f"{item}u8" for item in value) + "]"
+
+
+def _nullable_buffer_pointer_expression(
+    source: dict[str, Any], names: dict[str, str], inputs: dict[str, Any]
+) -> str:
+    value = _fixture_value_at_path(inputs, source["fixture_path"])
+    if value is None:
+        return "core::ptr::null::<core::ffi::c_void>()"
+    binding_name = source["binding"]
+    if not isinstance(value, list):
+        raise ValueError("ReplayCallPlan v2 nullable byte buffer fixture is invalid")
+    return f"{names[binding_name]}.as_ptr().cast::<core::ffi::c_void>()"
+
+
+def _render_buffer_length_relation(
+    relation: dict[str, str],
+    parameters: list[dict[str, Any]],
+    names: dict[str, str],
+    inputs: dict[str, Any],
+    case_id: str,
+) -> str:
+    binding_name = relation["buffer_binding"]
+    buffer_parameter = next(
+        item for item in parameters
+        if item["source"].get("kind") == "nullable_byte_buffer_const_ptr"
+        and item["source"].get("binding") == binding_name
+    )
+    length_parameter = next(
+        item for item in parameters if item["name"] == relation["length_parameter"]
+    )
+    buffer_value = _fixture_value_at_path(inputs, buffer_parameter["source"]["fixture_path"])
+    length_value = _argument_fixture_value(length_parameter["source"], inputs)
+    if not _is_usize(length_value):
+        raise ValueError("ReplayCallPlan v2 retained buffer length fixture is invalid")
+    if buffer_value is None:
+        return ""
+    if not isinstance(buffer_value, list) or length_value > len(buffer_value):
+        raise ValueError("ReplayCallPlan v2 retained length exceeds nullable buffer")
+    return (
+        f"        assert!({names[binding_name]}.len() >= {length_value}usize, "
+        f"\"{{}} retained buffer length drifted\", {json.dumps(case_id)});\n"
+    )
+
+
+def _initializer_leaf_rust_type(initializer: dict[str, Any], path: list[str]) -> str | None:
+    current = initializer
+    for index, segment in enumerate(path):
+        if current.get("kind") != "struct":
+            return None
+        field = next((item for item in current["fields"] if item["name"] == segment), None)
+        if field is None:
+            return None
+        current = field["value"]
+        if index == len(path) - 1:
+            return current.get("rust_type", current.get("encoding"))
+    return None
+
+
+def _fixture_value_at_path(value: Any, path: list[str]) -> Any:
+    current = value
+    for segment in path:
+        if not isinstance(current, dict) or segment not in current:
+            raise ValueError("ReplayCallPlan v2 fixture path is missing")
+        current = current[segment]
+    return current
+
+
+def _argument_fixture_value(source: dict[str, Any], inputs: dict[str, Any]) -> Any:
+    if "field" in source:
+        return inputs.get(source["field"])
+    return _fixture_value_at_path(inputs, source["path"])
+
+
+def _is_byte_buffer_value(value: Any, maximum: int) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) <= maximum
+        and all(isinstance(item, int) and not isinstance(item, bool) and 0 <= item <= 255 for item in value)
+    )

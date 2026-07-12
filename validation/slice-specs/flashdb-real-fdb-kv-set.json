@@ -352,7 +352,50 @@
   },
   "replay_contract": {
     "schema_version": 1,
-    "kind": "opaque_context_key_value_return_code"
+    "kind": "opaque_context_return_code",
+    "context": {
+      "parameter": "db",
+      "c_type": "fdb_kvdb_t",
+      "rust_type": "KvDbFixture",
+      "state": {
+        "fixture_field": "db_state",
+        "required_value": "uninitialized_named",
+        "rust_field": "init_ok",
+        "rust_type": "bool",
+        "constant": false
+      },
+      "name": {
+        "fixture_field": "db_name",
+        "rust_field": "name",
+        "rust_type": "String",
+        "initializer": "owned_string"
+      },
+      "source": "binding_borrow"
+    },
+    "inputs": [
+      {
+        "parameter": "key",
+        "c_type": "const char *",
+        "rust_type": "&str",
+        "fixture_field": "key",
+        "codec": "string_ref",
+        "nullable": false
+      },
+      {
+        "parameter": "value",
+        "c_type": "const char *",
+        "rust_type": "Option<&str>",
+        "fixture_field": "value",
+        "codec": "optional_string_ref",
+        "nullable": true
+      }
+    ],
+    "return": {
+      "c_type": "fdb_err_t",
+      "rust_type": "i32",
+      "fixture_field": "return_code",
+      "codec": "i32"
+    }
   },
   "rust_boundary": {
     "crate": "validation/l2_slices",

@@ -1,0 +1,157 @@
+def _record(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("record buffer record definition is required")
+    _exact_keys(value, RECORD_KEYS, "record buffer record definition")
+    fields = value.get("fields")
+    defaults = value.get("defaults")
+    if not isinstance(fields, list) or not fields or not isinstance(defaults, list):
+        raise ValueError("record buffer record fields/defaults are required")
+    normalized_fields = []
+    for raw in fields:
+        if not isinstance(raw, dict):
+            raise ValueError("record buffer scalar field is invalid")
+        _exact_keys(raw, FIELD_KEYS, "record buffer scalar field")
+        fixture_type = raw.get("fixture_scalar_type")
+        rust_type = raw.get("rust_scalar_type")
+        if raw.get("conversion") != "identity" or fixture_type != rust_type or rust_type not in {"u32", "usize"}:
+            raise ValueError("record buffer scalar conversion is unsupported")
+        normalized_fields.append({
+            "initial_fixture_path": _fixture_path(raw.get("initial_fixture_path"), False),
+            "expected_output": _fixture_key(raw.get("expected_output"), "record output"),
+            "expected_from_ref": raw.get("expected_from_ref"),
+            "rust_field_path": _rust_path(raw.get("rust_field_path")),
+            "rust_type_path": _rust_type_path(raw.get("rust_type_path")),
+            "fixture_scalar_type": fixture_type,
+            "rust_scalar_type": rust_type,
+            "conversion": "identity",
+        })
+    normalized_defaults = []
+    for raw in defaults:
+        if not isinstance(raw, dict):
+            raise ValueError("record buffer default is invalid")
+        _exact_keys(raw, DEFAULT_KEYS, "record buffer default")
+        if raw.get("rust_scalar_type") != "raw_mut_ptr" or raw.get("value") != {"kind": "null_mut"}:
+            raise ValueError("record buffer default must be a closed mutable null pointer")
+        normalized_defaults.append({
+            "rust_field_path": _rust_path(raw.get("rust_field_path")),
+            "rust_type_path": _rust_type_path(raw.get("rust_type_path")),
+            "rust_scalar_type": "raw_mut_ptr",
+            "value": {"kind": "null_mut"},
+        })
+    for item in [*normalized_fields, *normalized_defaults]:
+        if len(item["rust_type_path"]) != len(item["rust_field_path"]) - 1:
+            raise ValueError("record buffer Rust type path length drifted")
+    paths = [tuple(item["rust_field_path"]) for item in [*normalized_fields, *normalized_defaults]]
+    if len(paths) != len(set(paths)):
+        raise ValueError("record buffer Rust field paths are duplicated")
+    return {
+        "parameter": _ident(value.get("parameter"), "record parameter"),
+        "fixture_root": _fixture_path(value.get("fixture_root"), True),
+        "rust_type": _ident(value.get("rust_type"), "record Rust type"),
+        "fields": normalized_fields,
+        "defaults": normalized_defaults,
+    }
+
+
+def _buffer(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("record buffer byte buffer definition is required")
+    _exact_keys(value, {"parameter", "fixture_path", "maximum_bytes", "nullability", "pointer_rust_type"}, "record buffer byte buffer definition")
+    maximum = value.get("maximum_bytes")
+    if value.get("nullability") != "fixture_nullable" or value.get("pointer_rust_type") != "*const core::ffi::c_void" or not isinstance(maximum, int) or isinstance(maximum, bool) or not 1 <= maximum <= 4096:
+        raise ValueError("record buffer byte buffer definition is unsupported")
+    return {
+        "parameter": _ident(value.get("parameter"), "buffer parameter"),
+        "fixture_path": _fixture_path(value.get("fixture_path"), False),
+        "maximum_bytes": maximum,
+        "nullability": "fixture_nullable",
+        "pointer_rust_type": "*const core::ffi::c_void",
+    }
+
+
+def _length(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("record buffer length definition is required")
+    _exact_keys(value, {"parameter", "fixture_path", "rust_type", "retained", "relation"}, "record buffer length definition")
+    if value.get("rust_type") != "usize" or value.get("retained") is not True or value.get("relation") != {"kind": "within_buffer_when_nonnull", "buffer_ref": "buffer"}:
+        raise ValueError("record buffer retained length definition is unsupported")
+    return {
+        "parameter": _ident(value.get("parameter"), "length parameter"),
+        "fixture_path": _fixture_path(value.get("fixture_path"), False),
+        "rust_type": "usize",
+        "retained": True,
+        "relation": dict(value["relation"]),
+    }
+
+
+def _pointer_identity(value: Any, record: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("record buffer pointer identity definition is required")
+    _exact_keys(value, {"record_field_path", "record_type_path", "record_pointer_type", "buffer_ref", "expected_output"}, "record buffer pointer identity definition")
+    result = {
+        "record_field_path": _rust_path(value.get("record_field_path")),
+        "record_type_path": _rust_type_path(value.get("record_type_path")),
+        "record_pointer_type": value.get("record_pointer_type"),
+        "buffer_ref": value.get("buffer_ref"),
+        "expected_output": _fixture_key(value.get("expected_output"), "pointer output"),
+    }
+    if result["record_pointer_type"] != "raw_mut_ptr" or len(result["record_type_path"]) != len(result["record_field_path"]) - 1:
+        raise ValueError("record buffer pointer identity type is unsupported")
+    matching = [item for item in record["defaults"] if item["rust_field_path"] == result["record_field_path"] and item["rust_type_path"] == result["record_type_path"]]
+    if len(matching) != 1:
+        raise ValueError("record buffer pointer identity field is not closed by a null default")
+    return result
+
+
+def _record_binding(record: dict[str, Any], supporting: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    tree: dict[str, Any] = {"rust_type": record["rust_type"], "children": {}}
+    for field in record["fields"]:
+        source = {
+            "kind": "fixture_field",
+            "path": [*record["fixture_root"], *field["initial_fixture_path"]],
+            "encoding": field["rust_scalar_type"],
+        }
+        _insert_tree(tree, field["rust_field_path"], field["rust_type_path"], source)
+    for default in record["defaults"]:
+        source = {
+            "kind": "null_pointer",
+            "rust_type": "*mut core::ffi::c_void",
+            "mutability": "mutable",
+        }
+        _insert_tree(tree, default["rust_field_path"], default["rust_type_path"], source)
+    return {
+        "name": record["parameter"],
+        "rust_type": record["rust_type"],
+        "mutable": True,
+        "initializer": _tree_initializer(tree, supporting),
+    }
+
+
+def _insert_tree(tree: dict[str, Any], path: list[str], types: list[str], source: dict[str, Any]) -> None:
+    node = tree
+    for index, name in enumerate(path):
+        if index == len(path) - 1:
+            if name in node["children"]:
+                raise ValueError("record buffer initializer path is duplicated")
+            node["children"][name] = {"leaf": source, "rust_type": source.get("rust_type", source.get("encoding"))}
+            return
+        child = node["children"].setdefault(name, {"rust_type": types[index], "children": {}})
+        if child.get("rust_type") != types[index] or "children" not in child:
+            raise ValueError("record buffer initializer type path drifted")
+        node = child
+
+
+def _tree_initializer(node: dict[str, Any], supporting: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    fields = []
+    type_fields = []
+    for name, child in node["children"].items():
+        value = child["leaf"] if "leaf" in child else _tree_initializer(child, supporting)
+        fields.append({"name": name, "value": value})
+        type_fields.append({"name": name, "rust_type": child["rust_type"]})
+    if not fields:
+        raise ValueError("record buffer initializer record is empty")
+    definition = {"kind": "struct", "name": node["rust_type"], "visibility": "pub", "fields": type_fields}
+    if node["rust_type"] in supporting and supporting[node["rust_type"]] != definition:
+        raise ValueError("record buffer supporting type definitions conflict")
+    supporting[node["rust_type"]] = definition
+    return {"kind": "struct", "rust_type": node["rust_type"], "fields": fields}

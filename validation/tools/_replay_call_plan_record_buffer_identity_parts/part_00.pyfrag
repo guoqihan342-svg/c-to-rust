@@ -1,0 +1,208 @@
+def supports_record_buffer_identity_plan(spec: dict[str, Any]) -> bool:
+    contract = spec.get("replay_contract") if isinstance(spec, dict) else None
+    if not isinstance(contract, dict) or contract.get("kind") != "record_buffer_length_identity_return":
+        return False
+    try:
+        _parse_contract(spec, contract)
+    except ValueError:
+        return False
+    return True
+
+
+def build_record_buffer_identity_plan(
+    spec: dict[str, Any], contract: dict[str, Any], fixture: dict[str, Any]
+) -> dict[str, Any]:
+    if contract != spec.get("replay_contract"):
+        raise ValueError("record buffer identity contract drifted from the slice spec")
+    model = _parse_contract(spec, contract)
+    _validate_fixture(spec, fixture, model)
+
+    supporting: dict[str, dict[str, Any]] = {}
+    record_binding = _record_binding(model["record"], supporting)
+    buffer = model["buffer"]
+    buffer_binding = {
+        "name": buffer["parameter"],
+        "rust_type": "Vec<u8>",
+        "mutable": False,
+        "initializer": {
+            "kind": "nullable_byte_buffer",
+            "rust_type": "Vec<u8>",
+            "fixture_path": buffer["fixture_path"],
+            "nullability": "fixture_nullable",
+            "maximum": buffer["maximum_bytes"],
+        },
+    }
+    bindings = [record_binding, buffer_binding]
+    parameters = []
+    mappings = []
+    for position, c_parameter in enumerate(model["signature_parameters"]):
+        name = c_parameter["name"]
+        if name == model["record"]["parameter"]:
+            rust_type = f"&mut {model['record']['rust_type']}"
+            source = {"kind": "binding_borrow_mut", "binding": name}
+            retained = False
+        elif name == buffer["parameter"]:
+            rust_type = "*const core::ffi::c_void"
+            source = {
+                "kind": "nullable_byte_buffer_const_ptr",
+                "binding": name,
+                "fixture_path": buffer["fixture_path"],
+            }
+            retained = False
+        else:
+            rust_type = "usize"
+            source = {
+                "kind": "fixture_field",
+                "path": model["length"]["fixture_path"],
+                "encoding": "usize",
+            }
+            retained = True
+        parameter = {
+            "position": position,
+            "name": name,
+            "rust_type": rust_type,
+            "c_parameter": name,
+            "length_retained": retained,
+            "source": source,
+        }
+        parameters.append(parameter)
+        mappings.append({
+            "position": position,
+            "c_parameter": name,
+            "c_type": str(c_parameter.get("c_type") or ""),
+            "direction": str(c_parameter.get("direction") or ""),
+            "rust_parameter": name,
+            "rust_type": rust_type,
+        })
+
+    record_name = model["record"]["parameter"]
+    assertions = [{
+        "actual": f"binding.{record_name}." + ".".join(field["rust_field_path"]),
+        "fixture_field": field["expected_output"],
+        "rust_type": field["rust_scalar_type"],
+        "encoding": field["rust_scalar_type"],
+    } for field in model["record"]["fields"]]
+    pointer = model["pointer_identity"]
+    plan: dict[str, Any] = {
+        "schema_version": 2,
+        "status": "bound",
+        "source_function_name": model["function_name"],
+        "api_name": model["api_name"],
+        "visibility": "pub",
+        "abi": "Rust",
+        "unsafe": False,
+        "parameters": parameters,
+        "c_parameter_mappings": mappings,
+        "omitted_c_parameters": [],
+        "length_parameters_retained": [model["length"]["parameter"]],
+        "return_type": f"&mut {model['record']['rust_type']}",
+        "supporting_types": list(supporting.values()),
+        "bindings": bindings,
+        "distinct_mutable_bindings": [],
+        "call_args": [
+            {"position": item["position"], "parameter": item["name"], "source": item["source"]}
+            for item in parameters
+        ],
+        "assertions": assertions,
+        "identity_assertions": [{
+            "kind": "reference_identity",
+            "actual": "return",
+            "expected_binding": record_name,
+            "mutability": "mutable",
+            "fixture_field": f"return_same_{record_name}",
+        }],
+        "pointer_identity_assertions": [{
+            "kind": "raw_pointer_identity",
+            "actual": f"binding.{record_name}." + ".".join(pointer["record_field_path"]),
+            "expected_binding": buffer["parameter"],
+            "expected_parameter": buffer["parameter"],
+            "fixture_field": pointer["expected_output"],
+        }],
+        "buffer_length_relations": [{
+            "kind": "retained_length_within_nullable_buffer",
+            "buffer_binding": buffer["parameter"],
+            "length_parameter": model["length"]["parameter"],
+        }],
+        "fixture": {
+            "path": fixture["path"],
+            "sha256": fixture["sha256"],
+            "case_count": len(fixture["cases"]),
+            "case_ids": [item["id"] for item in fixture["cases"]],
+        },
+    }
+    _validate_plan_coverage(plan, model)
+    plan["plan_sha256"] = _plan_sha256(plan)
+    validate_replay_call_plan_v2(plan)
+    return plan
+
+
+def _parse_contract(spec: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    _exact_keys(contract, {
+        "schema_version", "kind", "record", "buffer", "length",
+        "pointer_identity", "return", "noalias_refs",
+    }, "record buffer identity contract")
+    if contract.get("schema_version") != 1 or contract.get("kind") != "record_buffer_length_identity_return":
+        raise ValueError("record buffer identity contract version or kind is unsupported")
+    if contract.get("return") != {"kind": "identity", "parameter_ref": "record"}:
+        raise ValueError("record buffer identity return must bind the record")
+    if contract.get("noalias_refs") != []:
+        raise ValueError("record buffer identity noalias refs must be empty")
+    record = _record(contract.get("record"))
+    buffer = _buffer(contract.get("buffer"))
+    length = _length(contract.get("length"))
+    pointer = _pointer_identity(contract.get("pointer_identity"), record)
+    if len({record["parameter"], buffer["parameter"], length["parameter"]}) != 3:
+        raise ValueError("record buffer identity parameters must be distinct")
+    if any(field["expected_from_ref"] != "length" for field in record["fields"]):
+        raise ValueError("record buffer scalar outputs must bind the retained length")
+    if pointer["buffer_ref"] != "buffer":
+        raise ValueError("record pointer identity must bind the buffer role")
+
+    function_name = _ident(spec.get("function_name"), "source function")
+    signature = _matching_signature(spec, function_name)
+    raw_parameters = signature.get("parameters")
+    if not isinstance(raw_parameters, list) or len(raw_parameters) != 3:
+        raise ValueError("record buffer identity signature must contain three parameters")
+    parameters = []
+    for raw in raw_parameters:
+        if not isinstance(raw, dict):
+            raise ValueError("record buffer identity C parameter is invalid")
+        item = dict(raw)
+        item["name"] = _ident(raw.get("name"), "C parameter")
+        parameters.append(item)
+    names = [item["name"] for item in parameters]
+    expected = {record["parameter"], buffer["parameter"], length["parameter"]}
+    if len(set(names)) != 3 or set(names) != expected:
+        raise ValueError("record buffer contract parameters do not close the C signature")
+    by_name = {item["name"]: item for item in parameters}
+    if by_name[record["parameter"]].get("direction") not in {"output", "inout"}:
+        raise ValueError("record buffer record direction drifted")
+    if by_name[buffer["parameter"]].get("direction") != "input" or by_name[length["parameter"]].get("direction") != "input":
+        raise ValueError("record buffer input directions drifted")
+    if _c_type(signature.get("return_type")) != _c_type(by_name[record["parameter"]].get("c_type")):
+        raise ValueError("record buffer return type drifted")
+    _validate_pointer_contract(spec, record, buffer, length)
+    _validate_c_source(signature, record, buffer, length, pointer)
+
+    identity_field = f"return_same_{record['parameter']}"
+    observable = spec.get("fixture_contract", {}).get("observable_outputs")
+    expected_observable = {
+        identity_field,
+        pointer["expected_output"],
+        *(field["expected_output"] for field in record["fields"]),
+    }
+    if not isinstance(observable, list) or len(observable) != len(set(observable)) or set(observable) != expected_observable:
+        raise ValueError("record buffer observable outputs are not closed")
+    behavior = spec.get("fixture_contract", {}).get("behavior_fields")
+    if behavior is not None and behavior != observable:
+        raise ValueError("record buffer behavior fields drifted")
+    return {
+        "function_name": function_name,
+        "api_name": _public_api(spec),
+        "signature_parameters": parameters,
+        "record": record,
+        "buffer": buffer,
+        "length": length,
+        "pointer_identity": pointer,
+        "observable": observable,
+    }

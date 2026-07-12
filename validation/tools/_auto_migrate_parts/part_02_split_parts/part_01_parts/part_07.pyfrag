@@ -165,22 +165,6 @@ def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) ->
     if (
         behavior_fields(spec) != ["return_code"]
         and not declarative_call_plan_ready
-        and not call_continue_state_replay_supported(spec)
-        and not scripted_external_record_u32_sequence_do_while_state_replay_supported(spec)
-        and not scripted_external_record_u32_call_bool_state_replay_supported(spec)
-        and not scripted_external_u32_call_bool_out_replay_supported(spec)
-        and not readonly_byte_slice_bool_return_replay_supported(spec)
-        and not fdb_blob_make_replay_supported(spec)
-        and not fdb_kv_to_blob_replay_supported(spec)
-        and not record_pointer_identity_return_replay_supported(spec)
-        and not pure_uint32_value_replay_supported(spec)
-        and not signed_i32_return_value_replay_supported(spec)
-        and not single_i32_return_value_replay_supported(spec)
-        and not single_u64_return_value_replay_supported(spec)
-        and not single_i32_out0_report_replay_supported(spec)
-        and not i32_slice_output_report_replay_supported(spec)
-        and not i32_input_buffer_out0_sum_report_replay_supported(spec)
-        and not single_i32_call_metadata_replay_supported(spec)
     ):
         return False
     slice_id = required_str(spec, "slice_id")

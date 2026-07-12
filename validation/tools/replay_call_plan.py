@@ -62,6 +62,8 @@ def build_replay_call_plan(spec: dict[str, Any], repo_root: Path) -> dict[str, A
         "record_u32_field_scalar_wrapping_add_state",
         "record_u32_field_postfix_increment_state",
         "record_pointer_identity_return",
+        "record_buffer_length_identity_return",
+        "opaque_context_return_code",
         "record_interior_projection_u32_constant_state",
         "record_owner_interior_stats_sequence_state",
         "record_owner_interior_guarded_stats_sequence_state",
@@ -81,6 +83,26 @@ def build_replay_call_plan(spec: dict[str, Any], repo_root: Path) -> dict[str, A
             )
 
             return build_record_pointer_identity_plan(
+                spec,
+                contract,
+                _fixture_binding(spec, resolved_root),
+            )
+        if contract_kind == "record_buffer_length_identity_return":
+            from validation.tools.replay_call_plan_record_buffer_identity import (
+                build_record_buffer_identity_plan,
+            )
+
+            return build_record_buffer_identity_plan(
+                spec,
+                contract,
+                _fixture_binding(spec, resolved_root),
+            )
+        if contract_kind == "opaque_context_return_code":
+            from validation.tools.replay_call_plan_opaque_context import (
+                build_opaque_context_plan,
+            )
+
+            return build_opaque_context_plan(
                 spec,
                 contract,
                 _fixture_binding(spec, resolved_root),

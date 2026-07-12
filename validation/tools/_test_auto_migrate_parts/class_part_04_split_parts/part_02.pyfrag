@@ -62,13 +62,39 @@
                     }
                 ],
                 "pointer_contract": {
+                    "input_buffers": [
+                        {
+                            "name": "source",
+                            "read_effects": ["source->window.offset", "source->count"],
+                        }
+                    ],
+                    "output_pointers": [
+                        {
+                            "name": "target",
+                            "write_effects": ["target->header.position", "target->count"],
+                        }
+                    ],
                     "noalias_required": [["source", "target"]],
                     "aliasing_proven": True,
+                    "actual_argument_noalias_proof": {
+                        "parameter_pair": ["source", "target"],
+                        "actual_arguments": [
+                            {"parameter": "source", "object": "distinct fixture source object"},
+                            {"parameter": "target", "object": "distinct fixture target object"},
+                        ],
+                        "construction": "Each case constructs distinct source and target records.",
+                        "proven": True,
+                    },
                     "alias_contract": {
                         "requires_noalias": True,
                         "proven": True,
                     },
                 },
+            },
+            "rust_boundary": {
+                "public_api": [
+                    {"name": "transfer_window", "visibility": "public"},
+                ],
             },
             "replay_contract": {
                 "schema_version": 1,
@@ -189,15 +215,13 @@ pub fn transfer_window<'a>(source: &SourcePacket, target: &'a mut TargetPacket) 
             replay_source = (
                 evidence_dir / "l3-transfer-window-contract-rust-replay-test-draft.rs"
             ).read_text(encoding="utf-8")
-            self.assertIn("let source = SourcePacket", replay_source)
-            self.assertIn("window: SourceWindow { offset: case.input_0 }", replay_source)
-            self.assertIn(
-                'usize::try_from(case.input_1).expect("record replay u32_to_usize contract")',
-                replay_source,
-            )
+            self.assertIn("ReplayCallPlan-SHA256", replay_source)
+            self.assertIn("SourcePacket {", replay_source)
+            self.assertIn("window: SourceWindow { offset: 7u32 }", replay_source)
+            self.assertIn("count: 9usize", replay_source)
             self.assertIn("marker: 0u32", replay_source)
-            self.assertIn("transfer_window(&source, &mut target)", replay_source)
-            self.assertIn("target.header.position", replay_source)
+            self.assertIn("transfer_window(&actual_moves_window_0_source, &mut actual_moves_window_0_target)", replay_source)
+            self.assertIn("actual_moves_window_0_target.header.position", replay_source)
             self.assertNotIn("fdb_", replay_source)
             self.assertEqual(replay["status"], "passed")
             self.assertTrue(replay["generated_draft_replay_pass"])

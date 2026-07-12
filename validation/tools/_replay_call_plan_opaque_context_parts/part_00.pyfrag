@@ -1,0 +1,196 @@
+def supports_opaque_context_plan(spec: dict[str, Any]) -> bool:
+    contract = spec.get("replay_contract") if isinstance(spec, dict) else None
+    if not isinstance(contract, dict) or contract.get("kind") != "opaque_context_return_code":
+        return False
+    try:
+        _parse_contract(spec, contract)
+    except ValueError:
+        return False
+    return True
+
+
+def build_opaque_context_plan(
+    spec: dict[str, Any],
+    contract: dict[str, Any],
+    fixture: dict[str, Any],
+) -> dict[str, Any]:
+    if contract != spec.get("replay_contract"):
+        raise ValueError("opaque-context replay contract drifted from the slice spec")
+    model = _parse_contract(spec, contract)
+    _validate_fixture(spec, fixture, model)
+
+    context = model["context"]
+    context_binding = {
+        "name": context["parameter"],
+        "rust_type": context["rust_type"],
+        "mutable": False,
+        "initializer": {
+            "kind": "struct",
+            "rust_type": context["rust_type"],
+            "fields": [
+                {
+                    "name": context["state"]["rust_field"],
+                    "value": {
+                        "kind": "fixture_enum_constant",
+                        "rust_type": "bool",
+                        "encoding": "bool",
+                        "field": context["state"]["fixture_field"],
+                        "required_value": context["state"]["required_value"],
+                        "value": False,
+                    },
+                },
+                {
+                    "name": context["name"]["rust_field"],
+                    "value": {
+                        "kind": "owned_string",
+                        "rust_type": "String",
+                        "field": context["name"]["fixture_field"],
+                        "encoding": "string",
+                    },
+                },
+            ],
+        },
+    }
+
+    parameters: list[dict[str, Any]] = []
+    mappings: list[dict[str, Any]] = []
+    context_source = {"kind": "binding_borrow", "binding": context["parameter"]}
+    inputs_by_parameter = {item["parameter"]: item for item in model["inputs"]}
+    for position, c_parameter in enumerate(model["signature_parameters"]):
+        name = c_parameter["name"]
+        if name == context["parameter"]:
+            rust_type = f"&{context['rust_type']}"
+            source = context_source
+        else:
+            item = inputs_by_parameter[name]
+            rust_type = item["rust_type"]
+            source = {
+                "kind": "fixture_field",
+                "field": item["fixture_field"],
+                "encoding": item["codec"],
+            }
+        parameter = {
+            "position": position,
+            "name": name,
+            "rust_type": rust_type,
+            "c_parameter": name,
+            "length_retained": False,
+            "source": source,
+        }
+        parameters.append(parameter)
+        mappings.append(
+            {
+                "position": position,
+                "c_parameter": name,
+                "c_type": c_parameter["c_type"],
+                "direction": c_parameter["direction"],
+                "rust_parameter": name,
+                "rust_type": rust_type,
+            }
+        )
+
+    return_contract = model["return"]
+    plan: dict[str, Any] = {
+        "schema_version": 2,
+        "status": "bound",
+        "source_function_name": model["function_name"],
+        "api_name": model["api_name"],
+        "visibility": "pub",
+        "abi": "Rust",
+        "unsafe": False,
+        "parameters": parameters,
+        "c_parameter_mappings": mappings,
+        "omitted_c_parameters": [],
+        "length_parameters_retained": [],
+        "return_type": "i32",
+        "supporting_types": [
+            {
+                "kind": "struct",
+                "name": context["rust_type"],
+                "visibility": "pub",
+                "fields": [
+                    {"name": context["state"]["rust_field"], "rust_type": "bool"},
+                    {"name": context["name"]["rust_field"], "rust_type": "String"},
+                ],
+            }
+        ],
+        "bindings": [context_binding],
+        "distinct_mutable_bindings": [],
+        "call_args": [
+            {"position": item["position"], "parameter": item["name"], "source": item["source"]}
+            for item in parameters
+        ],
+        "assertions": [
+            {
+                "actual": "return",
+                "fixture_field": return_contract["fixture_field"],
+                "rust_type": "i32",
+                "encoding": "i32",
+            }
+        ],
+        "fixture": {
+            "path": fixture["path"],
+            "sha256": fixture["sha256"],
+            "case_count": len(fixture["cases"]),
+            "case_ids": [item["id"] for item in fixture["cases"]],
+        },
+    }
+    _validate_produced_plan(plan, model)
+    plan["plan_sha256"] = _plan_sha256(plan)
+    return plan
+
+
+def _parse_contract(spec: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    _exact_keys(
+        contract,
+        {"schema_version", "kind", "context", "inputs", "return"},
+        "opaque-context contract",
+    )
+    if contract.get("schema_version") != 1:
+        raise ValueError("opaque-context contract schema_version must be 1")
+    if contract.get("kind") != "opaque_context_return_code":
+        raise ValueError("opaque-context contract kind is unsupported")
+
+    context = _parse_context(contract.get("context"))
+    inputs = _parse_inputs(contract.get("inputs"))
+    return_contract = _parse_return(contract.get("return"))
+    input_fields = [item["fixture_field"] for item in inputs]
+    context_fields = [
+        context["state"]["fixture_field"],
+        context["name"]["fixture_field"],
+    ]
+    if len(set([*context_fields, *input_fields])) != len(context_fields) + len(input_fields):
+        raise ValueError("opaque-context input fixture fields must be distinct")
+    function_name = _ident(spec.get("function_name"), "source function")
+    signature = _matching_signature(spec, function_name)
+    signature_parameters = _signature_parameters(signature)
+    expected_parameters = [context["parameter"], *(item["parameter"] for item in inputs)]
+    if [item["name"] for item in signature_parameters] != expected_parameters:
+        raise ValueError("opaque-context parameter mappings do not close the C signature")
+    if any(item["direction"] != "input" for item in signature_parameters):
+        raise ValueError("opaque-context C parameters must all be inputs")
+
+    declared_types = [context["c_type"], *(item["c_type"] for item in inputs)]
+    for parameter, declared_type in zip(signature_parameters, declared_types, strict=True):
+        if _c_type(parameter["c_type"]) != _c_type(declared_type):
+            raise ValueError("opaque-context C parameter type drifted")
+    if any(_c_type(item["c_type"]) != "const char*" for item in inputs):
+        raise ValueError("opaque-context string inputs must map const char pointers")
+    if _c_type(signature.get("return_type")) != _c_type(return_contract["c_type"]):
+        raise ValueError("opaque-context C return type drifted")
+
+    observable = spec.get("fixture_contract", {}).get("observable_outputs")
+    if observable != [return_contract["fixture_field"]]:
+        raise ValueError("opaque-context observable output is not closed")
+    behavior = spec.get("fixture_contract", {}).get("behavior_fields")
+    if behavior is not None and behavior != observable:
+        raise ValueError("opaque-context behavior fields drifted from observable outputs")
+
+    return {
+        "function_name": function_name,
+        "api_name": _public_api(spec),
+        "signature_parameters": signature_parameters,
+        "context": context,
+        "inputs": inputs,
+        "return": return_contract,
+    }

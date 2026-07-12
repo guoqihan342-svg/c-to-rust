@@ -1,0 +1,222 @@
+def _parse_context(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("opaque-context context contract is required")
+    _exact_keys(value, CONTEXT_KEYS, "opaque-context context")
+    state = value.get("state")
+    name = value.get("name")
+    if not isinstance(state, dict) or not isinstance(name, dict):
+        raise ValueError("opaque-context fixture model is incomplete")
+    _exact_keys(state, STATE_KEYS, "opaque-context state")
+    _exact_keys(name, NAME_KEYS, "opaque-context name")
+    if (
+        state.get("required_value") != "uninitialized_named"
+        or state.get("rust_type") != "bool"
+        or state.get("constant") is not False
+    ):
+        raise ValueError("opaque-context state must close uninitialized_named to false")
+    if name.get("rust_type") != "String" or name.get("initializer") != "owned_string":
+        raise ValueError("opaque-context name must use the owned_string initializer")
+    if value.get("source") != "binding_borrow":
+        raise ValueError("opaque-context source must be a safe shared binding borrow")
+    rust_type = _ident(value.get("rust_type"), "context Rust type")
+    state_field = _ident(state.get("rust_field"), "context state Rust field")
+    name_field = _ident(name.get("rust_field"), "context name Rust field")
+    if state_field == name_field:
+        raise ValueError("opaque-context record fields must be distinct")
+    c_type = _nonempty_text(value.get("c_type"), "context C type")
+    if _c_type(c_type) == "const char*":
+        raise ValueError("opaque-context handle cannot be a string pointer")
+    return {
+        "parameter": _ident(value.get("parameter"), "context parameter"),
+        "c_type": c_type,
+        "rust_type": rust_type,
+        "state": {
+            "fixture_field": _ident(state.get("fixture_field"), "state fixture field"),
+            "required_value": "uninitialized_named",
+            "rust_field": state_field,
+            "rust_type": "bool",
+            "constant": False,
+        },
+        "name": {
+            "fixture_field": _ident(name.get("fixture_field"), "name fixture field"),
+            "rust_field": name_field,
+            "rust_type": "String",
+            "initializer": "owned_string",
+        },
+        "source": "binding_borrow",
+    }
+
+
+def _parse_inputs(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or not 1 <= len(value) <= 8:
+        raise ValueError("opaque-context string inputs are required")
+    result = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("opaque-context string input is invalid")
+        _exact_keys(item, INPUT_KEYS, "opaque-context string input")
+        codec = item.get("codec")
+        if codec not in STRING_CODECS:
+            raise ValueError("opaque-context string codec is unsupported")
+        rust_type, nullable = STRING_CODECS[codec]
+        if item.get("rust_type") != rust_type or item.get("nullable") is not nullable:
+            raise ValueError("opaque-context string nullability or Rust type drifted")
+        result.append(
+            {
+                "parameter": _ident(item.get("parameter"), "string parameter"),
+                "c_type": _nonempty_text(item.get("c_type"), "string C type"),
+                "rust_type": rust_type,
+                "fixture_field": _ident(item.get("fixture_field"), "string fixture field"),
+                "codec": codec,
+                "nullable": nullable,
+            }
+        )
+    parameters = [item["parameter"] for item in result]
+    fields = [item["fixture_field"] for item in result]
+    if len(parameters) != len(set(parameters)) or len(fields) != len(set(fields)):
+        raise ValueError("opaque-context string mappings must be unique")
+    return result
+
+
+def _parse_return(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("opaque-context return contract is required")
+    _exact_keys(value, RETURN_KEYS, "opaque-context return")
+    if value.get("rust_type") != "i32" or value.get("codec") != "i32":
+        raise ValueError("opaque-context return must be an i32 return code")
+    return {
+        "c_type": _nonempty_text(value.get("c_type"), "return C type"),
+        "rust_type": "i32",
+        "fixture_field": _ident(value.get("fixture_field"), "return fixture field"),
+        "codec": "i32",
+    }
+
+
+def _validate_fixture(spec: dict[str, Any], fixture: dict[str, Any], model: dict[str, Any]) -> None:
+    if not isinstance(fixture, dict):
+        raise ValueError("opaque-context fixture binding is required")
+    if not isinstance(fixture.get("path"), str) or not fixture["path"]:
+        raise ValueError("opaque-context fixture path is invalid")
+    if not SHA256_RE.fullmatch(str(fixture.get("sha256") or "")):
+        raise ValueError("opaque-context fixture sha256 is invalid")
+    cases = fixture.get("cases")
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("opaque-context fixture cases are required")
+    case_ids = [item.get("id") if isinstance(item, dict) else None for item in cases]
+    if any(not isinstance(item, str) or not item for item in case_ids) or len(set(case_ids)) != len(case_ids):
+        raise ValueError("opaque-context fixture case ids are invalid")
+    declared = spec.get("fixture_contract", {}).get("cases")
+    if not isinstance(declared, list) or [item.get("id") for item in declared] != case_ids:
+        raise ValueError("opaque-context fixture case ids drifted")
+
+    context = model["context"]
+    output_field = model["return"]["fixture_field"]
+    for index, case in enumerate(cases):
+        if set(case) != {"id", "inputs", "expected"}:
+            raise ValueError("opaque-context fixture case binding shape drifted")
+        inputs = case["inputs"]
+        expected = case["expected"]
+        if not isinstance(inputs, dict) or not isinstance(expected, dict):
+            raise ValueError("opaque-context fixture case payload is incomplete")
+        if inputs.get(context["state"]["fixture_field"]) != "uninitialized_named":
+            raise ValueError("opaque-context fixture state is unsupported")
+        _string_value(inputs.get(context["name"]["fixture_field"]), nullable=False)
+        for item in model["inputs"]:
+            _string_value(inputs.get(item["fixture_field"]), nullable=item["nullable"])
+        if set(expected) != {output_field} or not _is_i32(expected.get(output_field)):
+            raise ValueError("opaque-context expected return code drifted")
+        declared_expected = declared[index].get("expected_outputs")
+        if declared_expected != expected:
+            raise ValueError("opaque-context declared fixture outputs drifted")
+
+
+def _validate_produced_plan(plan: dict[str, Any], model: dict[str, Any]) -> None:
+    if [item["name"] for item in plan["parameters"]] != [
+        item["name"] for item in model["signature_parameters"]
+    ]:
+        raise ValueError("opaque-context plan reordered C parameters")
+    if [item["c_parameter"] for item in plan["c_parameter_mappings"]] != [
+        item["name"] for item in model["signature_parameters"]
+    ]:
+        raise ValueError("opaque-context plan C parameter mapping drifted")
+    expected_sources = ["binding_borrow", *(item["codec"] for item in model["inputs"])]
+    actual_sources = [
+        item["source"]["kind"] if index == 0 else item["source"]["encoding"]
+        for index, item in enumerate(plan["parameters"])
+    ]
+    if actual_sources != expected_sources:
+        raise ValueError("opaque-context plan codec mapping drifted")
+    if plan["assertions"][0]["fixture_field"] != model["return"]["fixture_field"]:
+        raise ValueError("opaque-context plan return assertion drifted")
+
+
+def _signature_parameters(signature: dict[str, Any]) -> list[dict[str, str]]:
+    raw = signature.get("parameters")
+    if not isinstance(raw, list) or len(raw) < 2:
+        raise ValueError("opaque-context C signature requires context and string inputs")
+    result = []
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ValueError("opaque-context C parameter is invalid")
+        result.append(
+            {
+                "name": _ident(item.get("name"), "C parameter"),
+                "c_type": _nonempty_text(item.get("c_type"), "C parameter type"),
+                "direction": _nonempty_text(item.get("direction"), "C parameter direction"),
+            }
+        )
+    if len({item["name"] for item in result}) != len(result):
+        raise ValueError("opaque-context C parameters must be unique")
+    return result
+
+
+def _matching_signature(spec: dict[str, Any], function_name: str) -> dict[str, Any]:
+    matches = [
+        item for item in spec.get("c_boundary", {}).get("signatures") or []
+        if isinstance(item, dict) and item.get("function") == function_name
+    ]
+    if len(matches) != 1:
+        raise ValueError("opaque-context requires exactly one matching C signature")
+    return matches[0]
+
+
+def _public_api(spec: dict[str, Any]) -> str:
+    entries = [
+        item for item in spec.get("rust_boundary", {}).get("public_api") or []
+        if isinstance(item, dict)
+    ]
+    if len(entries) != 1 or entries[0].get("visibility") != "public":
+        raise ValueError("opaque-context requires exactly one public safe Rust API")
+    return _ident(entries[0].get("name"), "Rust API")
+
+
+def _string_value(value: Any, *, nullable: bool) -> None:
+    if value is None and nullable:
+        return
+    if not isinstance(value, str) or "\x00" in value:
+        raise ValueError("opaque-context fixture string nullability or type drifted")
+
+
+def _is_i32(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and -(2**31) <= value <= 2**31 - 1
+
+
+def _ident(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not IDENTIFIER_RE.fullmatch(value) or value in RUST_KEYWORDS:
+        raise ValueError(f"opaque-context {label} is not a safe identifier")
+    return value
+
+
+def _nonempty_text(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value.strip() or "\x00" in value:
+        raise ValueError(f"opaque-context {label} is invalid")
+    return value.strip()
+
+
+def _c_type(value: Any) -> str:
+    return " ".join(str(value or "").replace(" *", "*").split())
+
+
+def _exact_keys(value: dict[str, Any], expected: set[str], label: str) -> None:
+    if set(value) != expected:
+        raise ValueError(f"{label} shape drifted")

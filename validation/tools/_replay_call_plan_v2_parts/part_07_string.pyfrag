@@ -1,0 +1,77 @@
+def _normalize_owned_string_initializer(value: Any) -> dict[str, Any]:
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"kind", "rust_type", "field", "encoding"}
+        or value.get("kind") != "owned_string"
+        or value.get("rust_type") != "String"
+        or value.get("encoding") != "string"
+    ):
+        raise ValueError("ReplayCallPlan v2 owned string initializer is invalid")
+    return {
+        "kind": "owned_string",
+        "rust_type": "String",
+        "field": _fixture_key(value.get("field"), "owned string fixture field"),
+        "encoding": "string",
+    }
+
+
+def _normalize_fixture_enum_constant_initializer(value: Any) -> dict[str, Any]:
+    if (
+        not isinstance(value, dict)
+        or set(value)
+        != {"kind", "rust_type", "encoding", "field", "required_value", "value"}
+        or value.get("kind") != "fixture_enum_constant"
+        or value.get("rust_type") != "bool"
+        or value.get("encoding") != "bool"
+        or value.get("required_value") != "uninitialized_named"
+        or value.get("value") is not False
+    ):
+        raise ValueError("ReplayCallPlan v2 fixture enum constant initializer is invalid")
+    return {
+        "kind": "fixture_enum_constant",
+        "rust_type": "bool",
+        "encoding": "bool",
+        "field": _fixture_key(value.get("field"), "fixture enum field"),
+        "required_value": "uninitialized_named",
+        "value": False,
+    }
+
+
+def _normalize_string_argument_source(value: Any) -> dict[str, Any]:
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"kind", "field", "encoding"}
+        or value.get("kind") != "fixture_field"
+        or value.get("encoding") not in {"string_ref", "optional_string_ref"}
+    ):
+        raise ValueError("ReplayCallPlan v2 string argument source is invalid")
+    return {
+        "kind": "fixture_field",
+        "field": _fixture_key(value.get("field"), "string argument fixture field"),
+        "encoding": value["encoding"],
+    }
+
+
+def _owned_string_literal(initializer: dict[str, Any], inputs: dict[str, Any]) -> str:
+    value = inputs.get(initializer["field"])
+    if not isinstance(value, str) or "\x00" in value:
+        raise ValueError("ReplayCallPlan v2 owned string fixture is invalid")
+    return f"{json.dumps(value, ensure_ascii=True)}.to_owned()"
+
+
+def _fixture_enum_constant_literal(
+    initializer: dict[str, Any], inputs: dict[str, Any]
+) -> str:
+    if inputs.get(initializer["field"]) != initializer["required_value"]:
+        raise ValueError("ReplayCallPlan v2 fixture enum value drifted")
+    return "false"
+
+
+def _string_argument_literal(source: dict[str, Any], inputs: dict[str, Any]) -> str:
+    value = inputs.get(source["field"])
+    if source["encoding"] == "optional_string_ref" and value is None:
+        return "None"
+    if not isinstance(value, str) or "\x00" in value:
+        raise ValueError("ReplayCallPlan v2 string argument fixture is invalid")
+    literal = json.dumps(value, ensure_ascii=True)
+    return f"Some({literal})" if source["encoding"] == "optional_string_ref" else literal

@@ -167,7 +167,7 @@ pub fn printable_prefix(value: &[u8], len: usize) -> bool {
         replay = module.rust_replay_fixture_cases_source(spec, fixture_binding)
 
         self.assertIn("static uint8_t printable_value[] = { 32u, 65u, 126u };", oracle["declarations"])
-        self.assertIn("value: &[32u8, 65u8, 126u8]", replay)
+        self.assertIn("printable_prefix(&[32u8, 65u8, 126u8], 3usize)", replay)
 
         spec["fixture_contract"]["cases"][0]["inputs"]["value_hex"] = "0xz1"
         with self.assertRaisesRegex(ValueError, "non-hex"):

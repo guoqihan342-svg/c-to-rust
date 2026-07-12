@@ -234,7 +234,55 @@
   },
   "replay_contract": {
     "schema_version": 1,
-    "kind": "record_buffer_length_identity_return"
+    "kind": "record_buffer_length_identity_return",
+    "record": {
+      "parameter": "blob",
+      "fixture_root": [],
+      "rust_type": "FdbBlob",
+      "fields": [
+        {
+          "initial_fixture_path": ["initial_blob_size"],
+          "expected_output": "blob.size",
+          "expected_from_ref": "length",
+          "rust_field_path": ["size"],
+          "rust_type_path": [],
+          "fixture_scalar_type": "usize",
+          "rust_scalar_type": "usize",
+          "conversion": "identity"
+        }
+      ],
+      "defaults": [
+        {
+          "rust_field_path": ["buf"],
+          "rust_type_path": [],
+          "rust_scalar_type": "raw_mut_ptr",
+          "value": {"kind": "null_mut"}
+        }
+      ]
+    },
+    "buffer": {
+      "parameter": "value_buf",
+      "fixture_path": ["value_buf"],
+      "maximum_bytes": 4096,
+      "nullability": "fixture_nullable",
+      "pointer_rust_type": "*const core::ffi::c_void"
+    },
+    "length": {
+      "parameter": "buf_len",
+      "fixture_path": ["buf_len"],
+      "rust_type": "usize",
+      "retained": true,
+      "relation": {"kind": "within_buffer_when_nonnull", "buffer_ref": "buffer"}
+    },
+    "pointer_identity": {
+      "record_field_path": ["buf"],
+      "record_type_path": [],
+      "record_pointer_type": "raw_mut_ptr",
+      "buffer_ref": "buffer",
+      "expected_output": "blob.buf"
+    },
+    "return": {"kind": "identity", "parameter_ref": "record"},
+    "noalias_refs": []
   },
   "rust_boundary": {
     "crate": "validation/l2_slices",

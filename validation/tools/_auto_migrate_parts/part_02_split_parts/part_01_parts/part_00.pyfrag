@@ -130,49 +130,7 @@ def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict
         return render_declarative_replay_cases(spec, call_plan, REPO_ROOT)
     if call_plan.get("status") == "blocked":
         return ""
-    if call_continue_state_replay_supported(spec, fixture_binding):
-        return rust_replay_call_continue_state_cases_source(spec, fixture_binding)
-    if scripted_external_record_u32_sequence_do_while_state_replay_supported(
-        spec, fixture_binding
-    ):
-        return rust_replay_scripted_external_record_u32_sequence_do_while_state_cases_source(
-            spec, fixture_binding
-        )
-    if scripted_external_record_u32_call_bool_state_replay_supported(spec, fixture_binding):
-        return rust_replay_scripted_external_record_u32_call_bool_state_cases_source(
-            spec, fixture_binding
-        )
-    if scripted_external_u32_call_bool_out_replay_supported(spec, fixture_binding):
-        return rust_replay_scripted_external_u32_call_bool_out_cases_source(spec, fixture_binding)
-    if fdb_kv_del_replay_supported(spec):
-        return rust_replay_fdb_kv_del_cases_source(spec, fixture_binding)
-    if fdb_kv_set_replay_supported(spec):
-        return rust_replay_fdb_kv_set_cases_source(spec, fixture_binding)
     if behavior_fields(spec) != ["return_code"]:
-        if readonly_byte_slice_bool_return_replay_supported(spec, fixture_binding):
-            return rust_replay_readonly_byte_slice_bool_return_cases_source(spec, fixture_binding)
-        if fdb_blob_make_replay_supported(spec):
-            return rust_replay_fdb_blob_make_cases_source(spec, fixture_binding)
-        if fdb_kv_to_blob_replay_supported(spec):
-            return rust_replay_fdb_kv_to_blob_cases_source(spec, fixture_binding)
-        if record_pointer_identity_return_replay_supported(spec, fixture_binding):
-            return rust_replay_record_pointer_identity_return_cases_source(spec, fixture_binding)
-        if pure_uint32_value_replay_supported(spec):
-            return rust_replay_pure_uint32_value_cases_source(spec, fixture_binding)
-        if signed_i32_return_value_replay_supported(spec):
-            return rust_replay_signed_i32_return_value_cases_source(spec, fixture_binding)
-        if single_i32_return_value_replay_supported(spec):
-            return rust_replay_single_i32_return_value_cases_source(spec, fixture_binding)
-        if single_u64_return_value_replay_supported(spec):
-            return rust_replay_single_u64_return_value_cases_source(spec, fixture_binding)
-        if single_i32_out0_report_replay_supported(spec):
-            return rust_replay_single_i32_out0_report_cases_source(spec, fixture_binding)
-        if i32_slice_output_report_replay_supported(spec):
-            return rust_replay_i32_slice_output_report_cases_source(spec, fixture_binding)
-        if i32_input_buffer_out0_sum_report_replay_supported(spec):
-            return rust_replay_i32_input_buffer_out0_sum_report_cases_source(spec, fixture_binding)
-        if single_i32_call_metadata_replay_supported(spec):
-            return rust_replay_single_i32_call_metadata_cases_source(spec, fixture_binding)
         return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
 
     function_name = safe_ident(required_str(spec, "function_name"))
@@ -237,15 +195,17 @@ def fdb_kv_to_blob_replay_supported(spec: dict[str, Any]) -> bool:
 
 
 def fdb_kv_set_replay_supported(spec: dict[str, Any]) -> bool:
-    return replay_contract_kind(spec) == "opaque_context_key_value_return_code" and behavior_fields(spec) == [
-        "return_code",
-    ]
+    return (
+        replay_contract_kind(spec) == "opaque_context_return_code"
+        and build_replay_call_plan(spec, REPO_ROOT).get("status") == "bound"
+    )
 
 
 def fdb_kv_del_replay_supported(spec: dict[str, Any]) -> bool:
-    return replay_contract_kind(spec) == "opaque_context_key_return_code" and behavior_fields(spec) == [
-        "return_code",
-    ]
+    return (
+        replay_contract_kind(spec) == "opaque_context_return_code"
+        and build_replay_call_plan(spec, REPO_ROOT).get("status") == "bound"
+    )
 
 
 def replay_contract_kind(spec: dict[str, Any]) -> str | None:
