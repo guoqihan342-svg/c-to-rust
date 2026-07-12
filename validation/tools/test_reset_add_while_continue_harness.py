@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 import re
 import unittest
 from types import SimpleNamespace
@@ -17,6 +18,10 @@ from validation.tools._translation_carrier_reporter.reset_add_while_continue_rep
 from validation.tools._translation_carrier_reporter.state_replay_negative import mutation_spec
 from validation.tools.reset_add_while_continue_syntax import (
     validate_rust_reset_add_while_continue_draft,
+)
+from validation.tools.replay_call_plan import (
+    build_replay_call_plan,
+    render_declarative_replay_cases,
 )
 
 
@@ -36,10 +41,13 @@ class ResetAddWhileContinueHarnessTests(unittest.TestCase):
         oracle = auto_migrate.oracle_fixture_execution_source(self.spec, fixture)
         self.assertIn("actual_plain_owner.current.meta.phase", oracle["statements"])
         self.assertIn("actual_plain_owner.total", oracle["statements"])
-        replay = auto_migrate.rust_replay_fixture_cases_source(self.spec, fixture)
-        self.assertIn("advance_window(&actual_plain_source, &mut actual_plain_owner)", replay)
-        self.assertIn("actual_plain_owner.current.meta.phase", replay)
-        self.assertIn("actual_plain_owner.total", replay)
+        plan = build_replay_call_plan(self.spec, Path.cwd())
+        replay = render_declarative_replay_cases(self.spec, plan, Path.cwd())
+        self.assertIn(
+            "advance_window(&actual_plain_0_source, &mut actual_plain_0_owner)", replay
+        )
+        self.assertIn("actual_plain_0_owner.current.meta.phase", replay)
+        self.assertIn("actual_plain_0_owner.total", replay)
 
         safety = validate_rust_reset_add_while_continue_draft(renamed_rust(), reporter_contract)
         self.assertEqual(safety["projection_mode"], "safe_mutable_reference")
@@ -196,6 +204,7 @@ static bool advance_window(const struct Metrics *source, struct Owner *owner)
             {"name": "source", "c_type": "const struct Metrics *", "direction": "input"},
             {"name": "owner", "c_type": "struct Owner *", "direction": "inout"},
         ]}], "pointer_contract": {"aliasing_proven": True, "noalias_required": [["source", "owner"]]}},
+        "rust_boundary": {"public_api": [{"name": "advance_window"}]},
     }, cases
 
 

@@ -24,7 +24,7 @@ class ReplayCallPlanV2Tests(unittest.TestCase):
         ("flashdb-real-fdb-kv-iterate-kv-reset.json", ["binding_borrow_mut"]),
         (
             "flashdb-real-fdb-kv-iterate-traversed-len.json",
-            ["binding_borrow_mut", "binding_borrow_mut"],
+            ["binding_borrow", "binding_borrow_mut"],
         ),
         (
             "flashdb-real-fdb-kv-iterate-sector-start.json",
@@ -42,6 +42,14 @@ class ReplayCallPlanV2Tests(unittest.TestCase):
         (
             "flashdb-real-fdb-kv-iterate-guarded-stats-sequence.json",
             ["binding_borrow_mut"],
+        ),
+        (
+            "flashdb-real-fdb-kv-iterate-obj-bytes.json",
+            ["binding_borrow_mut"],
+        ),
+        (
+            "flashdb-real-fdb-kv-iterate-sector-advance-continue.json",
+            ["binding_borrow", "binding_borrow_mut"],
         ),
     )
 
@@ -114,6 +122,7 @@ class ReplayCallPlanV2Tests(unittest.TestCase):
         for filename in (
             "flashdb-real-fdb-kv-iterate-kv-reset.json",
             "flashdb-real-fdb-kv-iterate-sector-start.json",
+            "flashdb-real-fdb-kv-iterate-traversed-len.json",
         ):
             with self.subTest(filename=filename):
                 spec_path = REPO_ROOT / "validation" / "slice-specs" / filename

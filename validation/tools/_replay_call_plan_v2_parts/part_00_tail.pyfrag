@@ -1,0 +1,140 @@
+def build_record_owner_usize_wrapping_add_plan(
+    spec: dict[str, Any],
+    contract: dict[str, Any],
+    fixture: dict[str, Any],
+) -> dict[str, Any]:
+    if contract.get("schema_version") != 1:
+        raise ValueError("record owner usize replay contract schema_version must be 1")
+    owner = contract.get("owner")
+    alias = contract.get("alias")
+    state = contract.get("state_output")
+    rhs = contract.get("rhs")
+    widening = contract.get("widening")
+    if not all(isinstance(item, dict) for item in (owner, alias, state, rhs, widening)):
+        raise ValueError("record owner usize replay contract is incomplete")
+    projection_path = _field_path(contract.get("projection_path"), "owner usize projection path")
+    if alias.get("rust_type") != _initializer_type_at_path(owner.get("initializer"), projection_path):
+        raise ValueError("record owner usize alias type drifted")
+    rhs_owner_path = _field_path(rhs.get("owner_field_path"), "owner usize rhs path")
+    rhs_alias_path = _field_path(rhs.get("alias_field_path"), "owner usize alias rhs path")
+    if rhs_owner_path[: len(projection_path)] != projection_path or rhs_owner_path[len(projection_path) :] != rhs_alias_path:
+        raise ValueError("record owner usize rhs projection drifted")
+    if widening.get("conversion") != "u32_to_usize" or widening.get("lossless") is not True:
+        raise ValueError("record owner usize widening contract drifted")
+    if state.get("rust_type") != "usize" or contract.get("state_update") != {
+        "operation": "wrapping_add"
+    }:
+        raise ValueError("record owner usize state contract drifted")
+    synthetic = {
+        "schema_version": 1,
+        "kind": "record_owner_interior_stats_sequence_state",
+        "owner": owner,
+        "projection_path": list(projection_path),
+        "alias": alias,
+        "updates": [
+            {
+                "operation": "wrapping_add",
+                "target": state,
+                "source": rhs,
+                "widening": widening,
+            }
+        ],
+        "return": contract.get("return"),
+        "noalias_required": contract.get("noalias_required"),
+    }
+    return build_record_owner_stats_sequence_plan(spec, synthetic, fixture)
+
+
+def build_record_reset_add_while_continue_plan(
+    spec: dict[str, Any],
+    contract: dict[str, Any],
+    fixture: dict[str, Any],
+) -> dict[str, Any]:
+    if contract.get("schema_version") != 1:
+        raise ValueError("record reset-add replay contract schema_version must be 1")
+    entries = contract.get("entry_arguments")
+    projection = contract.get("projection")
+    reset = contract.get("reset_state")
+    add = contract.get("add_state")
+    control = contract.get("control_flow")
+    if not isinstance(entries, list) or not all(
+        isinstance(item, dict) for item in (projection, reset, add, control)
+    ):
+        raise ValueError("record reset-add replay contract is incomplete")
+    owner_name = _identifier(contract.get("owner_parameter"), "reset-add owner")
+    owner = next(
+        (item for item in entries if isinstance(item, dict) and item.get("parameter") == owner_name),
+        None,
+    )
+    if owner is None:
+        raise ValueError("record reset-add owner entry is missing")
+    projection_path = _field_path(projection.get("path"), "reset-add projection path")
+    if projection.get("alias_rust_type") != _initializer_type_at_path(
+        owner.get("initializer"), projection_path
+    ):
+        raise ValueError("record reset-add alias type drifted")
+    reset_owner_path = _field_path(reset.get("owner_field_path"), "reset owner path")
+    reset_alias_path = _field_path(reset.get("alias_field_path"), "reset alias path")
+    if (
+        reset_owner_path[: len(projection_path)] != projection_path
+        or reset_owner_path[len(projection_path) :] != reset_alias_path
+        or reset.get("rust_type") != "u32"
+        or reset.get("value") != 0
+    ):
+        raise ValueError("record reset-add reset state drifted")
+    add_owner_path = _field_path(add.get("owner_field_path"), "add owner path")
+    rhs = add.get("rhs")
+    if not isinstance(rhs, dict) or add.get("operation") != "wrapping_add":
+        raise ValueError("record reset-add add state drifted")
+    rhs_parameter = _identifier(rhs.get("parameter"), "reset-add rhs parameter")
+    rhs_entry = next(
+        (item for item in entries if isinstance(item, dict) and item.get("parameter") == rhs_parameter),
+        None,
+    )
+    rhs_path = _field_path(rhs.get("field_path"), "reset-add rhs path")
+    if (
+        rhs_entry is None
+        or rhs_path not in _legacy_initializer_paths(rhs_entry.get("initializer"))
+        or add.get("rust_type") != "u32"
+    ):
+        raise ValueError("record reset-add rhs binding drifted")
+    expected_control = {
+        "kind": "single_iteration_while_continue",
+        "sentinel_local": control.get("sentinel_local"),
+        "initial_value": True,
+        "body_first_assignment": False,
+        "continue_target": "current_while",
+        "unreachable_return": False,
+        "terminal_return": True,
+    }
+    if control != expected_control or not IDENTIFIER_RE.fullmatch(str(control.get("sentinel_local") or "")):
+        raise ValueError("record reset-add control-flow contract drifted")
+    synthetic = {
+        "schema_version": 1,
+        "kind": "record_u32_field_wrapping_add_state",
+        "entry_arguments": entries,
+        "rhs": rhs,
+        "state_output": {
+            "parameter": owner_name,
+            "field_path": list(add_owner_path),
+            "fixture_field": add.get("fixture_field"),
+            "rust_type": "u32",
+        },
+        "state_update": {"operation": "wrapping_add"},
+        "return": contract.get("return"),
+        "noalias_required": contract.get("noalias_required"),
+    }
+    return build_record_u32_constant_state_plan(
+        spec,
+        synthetic,
+        fixture,
+        state_outputs=[
+            {
+                "parameter": owner_name,
+                "field_path": list(reset_owner_path),
+                "fixture_field": reset.get("fixture_field"),
+                "rust_type": "u32",
+            },
+            synthetic["state_output"],
+        ],
+    )

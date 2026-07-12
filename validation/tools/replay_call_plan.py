@@ -38,6 +38,8 @@ def build_replay_call_plan(spec: dict[str, Any], repo_root: Path) -> dict[str, A
         "record_interior_projection_u32_constant_state",
         "record_owner_interior_stats_sequence_state",
         "record_owner_interior_guarded_stats_sequence_state",
+        "record_owner_interior_u32_to_usize_wrapping_add_state",
+        "record_interior_projection_u32_reset_add_while_continue_state",
     }:
         return {"schema_version": 1, "status": "unavailable"}
     try:
@@ -57,12 +59,32 @@ def build_replay_call_plan(spec: dict[str, Any], repo_root: Path) -> dict[str, A
                 contract,
                 _fixture_binding(spec, resolved_root),
             )
+        if contract_kind == "record_owner_interior_u32_to_usize_wrapping_add_state":
+            from validation.tools.replay_call_plan_v2 import (
+                build_record_owner_usize_wrapping_add_plan,
+            )
+
+            return build_record_owner_usize_wrapping_add_plan(
+                spec,
+                contract,
+                _fixture_binding(spec, resolved_root),
+            )
         if contract_kind == "record_interior_projection_u32_constant_state":
             from validation.tools.replay_call_plan_v2 import (
                 build_record_interior_u32_constant_state_plan,
             )
 
             return build_record_interior_u32_constant_state_plan(
+                spec,
+                contract,
+                _fixture_binding(spec, resolved_root),
+            )
+        if contract_kind == "record_interior_projection_u32_reset_add_while_continue_state":
+            from validation.tools.replay_call_plan_v2 import (
+                build_record_reset_add_while_continue_plan,
+            )
+
+            return build_record_reset_add_while_continue_plan(
                 spec,
                 contract,
                 _fixture_binding(spec, resolved_root),
@@ -411,8 +433,9 @@ def _fixture_binding(spec: dict[str, Any], repo_root: Path) -> dict[str, Any]:
         for item in declared_cases
     )
     fixture_ref = fixture_contract.get("path") or fixture_contract.get("input")
-    inline_cases = explicit_cases and all(
-        item.get("input_ref") == "inline" for item in declared_cases
+    inline_cases = explicit_cases and (
+        fixture_ref is None
+        or all(item.get("input_ref") == "inline" for item in declared_cases)
     )
     if explicit_cases and not inline_cases:
         inline_cases = not _resolve_json_ref_path(fixture_ref, repo_root).is_file()

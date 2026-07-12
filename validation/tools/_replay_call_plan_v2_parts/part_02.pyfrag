@@ -5,8 +5,7 @@ def _validate_fixture_cases(
     assertions: list[dict[str, Any]],
     *,
     expected_return: tuple[str, bool],
-    state_fixture: str,
-    expected_state: int | None,
+    expected_states: dict[str, int],
 ) -> None:
     if not isinstance(fixture.get("cases"), list) or not fixture["cases"]:
         raise ValueError("record constant-state fixture cases are required")
@@ -30,11 +29,13 @@ def _validate_fixture_cases(
             raise ValueError("record constant-state fixture input must be u32")
         if set(outputs) != output_fields:
             raise ValueError("record constant-state expected outputs drifted")
-        state_value = outputs.get(state_fixture)
         if (
             outputs.get(expected_return[0]) is not expected_return[1]
-            or not _is_u32(state_value)
-            or (expected_state is not None and state_value != expected_state)
+            or any(
+                not _is_u32(outputs.get(item["fixture_field"]))
+                for item in assertions[1:]
+            )
+            or any(outputs.get(field) != value for field, value in expected_states.items())
         ):
             raise ValueError("record-state expected output types drifted")
 
@@ -113,6 +114,8 @@ def _binding_argument(
 ) -> str:
     if source["kind"] == "binding_borrow_mut":
         return "&mut " + names[source["binding"]]
+    if source["kind"] == "binding_borrow":
+        return "&" + names[source["binding"]]
     if source["kind"] == "binding_value":
         return names[source["binding"]]
     if source["kind"] == "fixture_field":
@@ -212,6 +215,8 @@ def _plan_sha256(plan: dict[str, Any]) -> str:
 __all__ = [
     "build_record_interior_u32_constant_state_plan",
     "build_record_owner_stats_sequence_plan",
+    "build_record_owner_usize_wrapping_add_plan",
+    "build_record_reset_add_while_continue_plan",
     "build_record_u32_constant_state_plan",
     "render_replay_call_plan_v2",
     "validate_replay_call_plan_v2",

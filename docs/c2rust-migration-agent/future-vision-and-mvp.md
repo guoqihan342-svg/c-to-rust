@@ -370,7 +370,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
       - [x] **P0-A18b2a：byte-slice/CRC 计划化**。`readonly_byte_slice_bool_return` 通过合同 kind 规范化为同一 plan，不按函数名分派；`fdb_calc_crc32` 声明通用参数/fixture 映射。plan 新增 canonical inline fixture SHA 与 `u8_array` codec，`fdb_is_str`/CRC32 均生成 typed direct call。141 项聚焦测试通过，固定套件预检保持 12/12 ready、0 次模型调用。
       - [ ] **P0-A18b2b：record/external plan v2**。迁移盘点出的 9 个 record-state 与 4 个 scripted external/call-continue renderer。
         - [x] **P0-A18b2b1：record plan v2 核心**。受限 `bindings`、`binding_value/borrow_mut`、递归 record initializer、`binding_path` observations、`u32/usize/bool` typed codec 和 mutable-root noalias 闭包已接入 ContextPack/schema/fresh binding。constant、field add、field+scalar add、postfix increment、interior projection、stats sequence、guarded stats 共 7 个 renderer 已退出 legacy 分发；v2 实现拆成 38 行门面与 377/347/218 行片段。
-        - [ ] **P0-A18b2b2：剩余 state/external**。先迁移 owner-interior usize add 与 reset-add-while-continue 两个 record renderer，再加入 scripted callee/probe/sequence，迁移 4 个 external/call-continue renderer。
+        - [ ] **P0-A18b2b2：剩余 state/external**。
+          - [x] **P0-A18b2b2a：record-state 9/9**。owner-interior u32→usize add 复用 typed owner observation；reset-add-while-continue 复用多 `binding_path` observation。`direction=input` 的 record 参数生成 `binding_borrow`/`&T`，`inout` 才生成 `binding_borrow_mut`/`&mut T`，noalias 仍覆盖所有并存借用根。
+          - [ ] **P0-A18b2b2b：scripted external 4/4**。加入受限 scripted callee stimulus、call count/args 与 event sequence probe，迁移 external/call-continue renderer。
       - [ ] **P0-A18b2c：简单 legacy renderer 清零**。盘点还存在 13 个 scalar return、mutable out report、record/pointer identity、opaque context 等直接调用 renderer；全部改为 plan producer 后删除 legacy fallback 与 readiness OR 列表。
   - [ ] **P0-A18c：有限跨项目验收**。固定 12 项必须全部可生成真实 replay call，首轮 rustc API mismatch 相比 A17 明显下降，并继续只按 exact gates 统计质量信号。
 

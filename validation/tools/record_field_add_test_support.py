@@ -175,7 +175,7 @@ pub struct Reservoir { pub fill: u32, pub tag: u32 }
 #[derive(Clone, Copy)]
 pub struct Meter { pub quantum: u32 }
 
-pub fn merge_quota(reservoir: &mut Reservoir, meter: &mut Meter) -> bool {
+pub fn merge_quota(reservoir: &mut Reservoir, meter: &Meter) -> bool {
     reservoir.fill = reservoir.fill.wrapping_add(meter.quantum);
     true
 }

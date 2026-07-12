@@ -268,7 +268,7 @@
           "additionalProperties": false,
           "required": ["kind", "binding"],
           "properties": {
-            "kind": {"enum": ["binding_borrow_mut", "binding_value"]},
+            "kind": {"enum": ["binding_borrow", "binding_borrow_mut", "binding_value"]},
             "binding": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
           }
         }

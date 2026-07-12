@@ -166,8 +166,6 @@ def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) ->
         behavior_fields(spec) != ["return_code"]
         and not declarative_call_plan_ready
         and not call_continue_state_replay_supported(spec)
-        and not record_interior_projection_u32_reset_add_while_continue_state_replay_supported(spec)
-        and not record_owner_interior_u32_to_usize_wrapping_add_state_replay_supported(spec)
         and not scripted_external_record_u32_sequence_do_while_state_replay_supported(spec)
         and not scripted_external_record_u32_call_bool_state_replay_supported(spec)
         and not scripted_external_u32_call_bool_out_replay_supported(spec)

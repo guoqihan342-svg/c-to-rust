@@ -2,6 +2,8 @@ def build_record_u32_constant_state_plan(
     spec: dict[str, Any],
     contract: dict[str, Any],
     fixture: dict[str, Any],
+    *,
+    state_outputs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     contract_kind = contract.get("kind")
     if contract_kind not in ENTRY_RECORD_STATE_KINDS:
@@ -43,9 +45,15 @@ def build_record_u32_constant_state_plan(
             initializer = _normalize_initializer(initializer_contract, supporting_types)
             if initializer["rust_type"] != rust_type:
                 raise ValueError("record-state initializer type drifted")
-            mutable = pass_mode == "mutable_ref"
+            mutable = pass_mode == "mutable_ref" and entry.get("direction") == "inout"
             source = {
-                "kind": "binding_borrow_mut" if mutable else "binding_value",
+                "kind": (
+                    "binding_borrow_mut"
+                    if mutable
+                    else "binding_borrow"
+                    if pass_mode == "mutable_ref"
+                    else "binding_value"
+                ),
                 "binding": name,
             }
             bindings.append(
@@ -56,7 +64,13 @@ def build_record_u32_constant_state_plan(
                     "initializer": initializer,
                 }
             )
-            parameter_rust_type = f"&mut {rust_type}" if mutable else rust_type
+            parameter_rust_type = (
+                f"&mut {rust_type}"
+                if mutable
+                else f"&{rust_type}"
+                if pass_mode == "mutable_ref"
+                else rust_type
+            )
         else:
             fixture_field = _identifier(entry.get("fixture_field"), "scalar fixture field")
             if pass_mode != "value" or rust_type != "u32":
@@ -85,11 +99,15 @@ def build_record_u32_constant_state_plan(
         )
 
     noalias = _normalize_pairs(contract.get("noalias_required"), "noalias_required")
-    mutable_bindings = [item for item in bindings if item["mutable"]]
+    borrowed_names = [
+        item["source"]["binding"]
+        for item in parameters
+        if item["source"]["kind"] in {"binding_borrow", "binding_borrow_mut"}
+    ]
     required_pairs = [
-        sorted([mutable_bindings[left]["name"], mutable_bindings[right]["name"]])
-        for left in range(len(mutable_bindings))
-        for right in range(left + 1, len(mutable_bindings))
+        sorted([borrowed_names[left], borrowed_names[right]])
+        for left in range(len(borrowed_names))
+        for right in range(left + 1, len(borrowed_names))
     ]
     required_pairs.sort()
     if noalias != required_pairs:
@@ -115,14 +133,6 @@ def build_record_u32_constant_state_plan(
             raise ValueError("record postfix state update must increment by one")
     elif update.get("operation") != "wrapping_add":
         raise ValueError("record wrapping state update must declare wrapping_add")
-    state_binding = _identifier(state.get("parameter"), "state binding")
-    state_path = _field_path(state.get("field_path"), "state field path")
-    state_fixture = _identifier(state.get("fixture_field"), "state fixture field")
-    if state.get("rust_type") != "u32" or state_binding not in {item["name"] for item in bindings}:
-        raise ValueError("record constant-state state binding drifted")
-    binding = next(item for item in bindings if item["name"] == state_binding)
-    if state_path not in _initializer_paths(binding["initializer"]):
-        raise ValueError("record constant-state state path is not initialized")
     return_fixture = _identifier(result.get("fixture_field"), "return fixture field")
     assertions = [
         {
@@ -131,15 +141,33 @@ def build_record_u32_constant_state_plan(
             "rust_type": "bool",
             "encoding": "bool",
         },
-        {
-            "actual": "binding." + state_binding + "." + ".".join(state_path),
-            "fixture_field": state_fixture,
-            "rust_type": "u32",
-            "encoding": "u32",
-        },
     ]
+    normalized_states = state_outputs if state_outputs is not None else [state]
+    if not isinstance(normalized_states, list) or not normalized_states:
+        raise ValueError("record-state outputs are required")
+    for state_output in normalized_states:
+        if not isinstance(state_output, dict):
+            raise ValueError("record-state output must be an object")
+        state_binding = _identifier(state_output.get("parameter"), "state binding")
+        state_path = _field_path(state_output.get("field_path"), "state field path")
+        state_fixture = _identifier(state_output.get("fixture_field"), "state fixture field")
+        if state_output.get("rust_type") != "u32" or state_binding not in {
+            item["name"] for item in bindings
+        }:
+            raise ValueError("record-state binding drifted")
+        binding = next(item for item in bindings if item["name"] == state_binding)
+        if state_path not in _initializer_paths(binding["initializer"]):
+            raise ValueError("record-state path is not initialized")
+        assertions.append(
+            {
+                "actual": "binding." + state_binding + "." + ".".join(state_path),
+                "fixture_field": state_fixture,
+                "rust_type": "u32",
+                "encoding": "u32",
+            }
+        )
     observable_outputs = spec.get("fixture_contract", {}).get("observable_outputs")
-    if observable_outputs != [return_fixture, state_fixture]:
+    if observable_outputs != [item["fixture_field"] for item in assertions]:
         raise ValueError("record constant-state observable output mapping drifted")
     _validate_fixture_cases(
         fixture,
@@ -147,8 +175,11 @@ def build_record_u32_constant_state_plan(
         parameters,
         assertions,
         expected_return=(return_fixture, result["value"]),
-        state_fixture=state_fixture,
-        expected_state=update["value"] if contract_kind == "record_u32_field_constant_state" else None,
+        expected_states=(
+            {assertions[1]["fixture_field"]: update["value"]}
+            if contract_kind == "record_u32_field_constant_state"
+            else {}
+        ),
     )
 
     plan: dict[str, Any] = {
@@ -186,7 +217,6 @@ def build_record_u32_constant_state_plan(
     plan["plan_sha256"] = _plan_sha256(plan)
     validate_replay_call_plan_v2(plan)
     return plan
-
 def build_record_interior_u32_constant_state_plan(
     spec: dict[str, Any],
     contract: dict[str, Any],

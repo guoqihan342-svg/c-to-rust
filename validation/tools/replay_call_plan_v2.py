@@ -22,7 +22,12 @@ ENTRY_RECORD_STATE_KINDS = {
 
 
 _PARTS_DIR = Path(__file__).with_name("_replay_call_plan_v2_parts")
-for _PART_NAME in ("part_00.pyfrag", "part_01.pyfrag", "part_02.pyfrag"):
+for _PART_NAME in (
+    "part_00.pyfrag",
+    "part_00_tail.pyfrag",
+    "part_01.pyfrag",
+    "part_02.pyfrag",
+):
     _PART_PATH = _PARTS_DIR / _PART_NAME
     exec(
         compile(

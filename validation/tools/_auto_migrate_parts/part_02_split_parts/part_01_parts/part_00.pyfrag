@@ -127,18 +127,6 @@ def generate_rust_replay_test_draft(
 def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
     if call_continue_state_replay_supported(spec, fixture_binding):
         return rust_replay_call_continue_state_cases_source(spec, fixture_binding)
-    if record_interior_projection_u32_reset_add_while_continue_state_replay_supported(
-        spec, fixture_binding
-    ):
-        return rust_replay_record_interior_projection_u32_reset_add_while_continue_state_cases_source(
-            spec, fixture_binding
-        )
-    if record_owner_interior_u32_to_usize_wrapping_add_state_replay_supported(
-        spec, fixture_binding
-    ):
-        return rust_replay_record_owner_interior_u32_to_usize_wrapping_add_state_cases_source(
-            spec, fixture_binding
-        )
     if scripted_external_record_u32_sequence_do_while_state_replay_supported(
         spec, fixture_binding
     ):

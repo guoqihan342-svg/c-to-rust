@@ -192,6 +192,24 @@ def _initializer_type_at_path(value: Any, path: tuple[str, ...]) -> str:
     return _initializer_type_at_path(field["record"], path[1:])
 
 
+def _legacy_initializer_paths(
+    value: Any, prefix: tuple[str, ...] = ()
+) -> set[tuple[str, ...]]:
+    if not isinstance(value, dict) or not isinstance(value.get("fields"), list):
+        raise ValueError("record initializer fields are missing")
+    result: set[tuple[str, ...]] = set()
+    for field in value["fields"]:
+        if not isinstance(field, dict):
+            raise ValueError("record initializer field is invalid")
+        name = _identifier(field.get("name"), "record initializer field")
+        path = (*prefix, name)
+        if isinstance(field.get("record"), dict):
+            result.update(_legacy_initializer_paths(field["record"], path))
+        else:
+            result.add(path)
+    return result
+
+
 def _normalize_bindings(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list) or not value:
         raise ValueError("ReplayCallPlan v2 bindings are required")
@@ -284,13 +302,13 @@ def _normalize_binding_source(value: Any, bindings: dict[str, dict[str, Any]]) -
     if not isinstance(value, dict):
         raise ValueError("ReplayCallPlan v2 argument source is unsupported")
     kind = value.get("kind")
-    if kind in {"binding_borrow_mut", "binding_value"}:
+    if kind in {"binding_borrow", "binding_borrow_mut", "binding_value"}:
         binding = _identifier(value.get("binding"), "argument binding")
         if binding not in bindings:
             raise ValueError("ReplayCallPlan v2 binding source is invalid")
         if kind == "binding_borrow_mut" and bindings[binding]["mutable"] is not True:
             raise ValueError("ReplayCallPlan v2 mutable binding source is invalid")
-        if kind == "binding_value" and bindings[binding]["mutable"] is not False:
+        if kind in {"binding_borrow", "binding_value"} and bindings[binding]["mutable"] is not False:
             raise ValueError("ReplayCallPlan v2 value binding source is invalid")
         return {"kind": kind, "binding": binding}
     if kind == "fixture_field" and value.get("encoding") == "u32":
