@@ -16,6 +16,7 @@ from validation.tools import validate_competition_run_summary as summary_validat
 from validation.tools import validate_auto_translation_evidence as evidence_validator
 from validation.tools._ai_candidate_harness_parts import provider
 from validation.tools._ai_candidate_harness_parts import prompt_transport
+from validation.tools._ai_candidate_harness_parts import provider_runtime
 
 
 def minimal_spec(source_root: str) -> dict[str, object]:
@@ -113,9 +114,59 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assertFalse(manifest["claim_boundary"]["semantic_gate"])
             self.assertFalse(manifest["candidates"][0]["semantic_pass"])
             self.assert_manifest_schema(manifest)
+            missing_receipt = json.loads(json.dumps(manifest))
+            missing_receipt["bindings"].pop("invocation_receipt")
+            schema_path = (
+                Path(__file__).resolve().parents[1]
+                / "auto-translation-template"
+                / "ai-candidate-manifest.schema.json"
+            )
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.Draft7Validator(schema).validate(missing_receipt)
+            missing_receipt_validation = summary_validator.validate_fresh_ai_manifest(
+                missing_receipt,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-candidate",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertIn(
+                "ai_invocation_receipt_binding_invalid",
+                missing_receipt_validation["reasons"],
+            )
             self.assertIn("--model", observed_argv)
             self.assertIn("zai/glm-5.1", observed_argv)
-            self.assertEqual(5, manifest["schema_version"])
+            self.assertEqual(7, manifest["schema_version"])
+            receipt_ref = manifest["bindings"]["invocation_receipt"]
+            receipt_path = out_dir / receipt_ref["path"]
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt_schema_path = (
+                Path(__file__).resolve().parents[1]
+                / "auto-translation-template"
+                / "ai-invocation-receipt.schema.json"
+            )
+            receipt_schema = json.loads(receipt_schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft7Validator(receipt_schema).validate(receipt)
+            sensitive_receipt = json.loads(json.dumps(receipt))
+            sensitive_receipt["api_key"] = "must-not-be-accepted"
+            sensitive_receipt["messages"] = [{"content": "full session"}]
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.Draft7Validator(receipt_schema).validate(sensitive_receipt)
+            self.assertEqual("runner-contract", receipt["source"])
+            self.assertEqual("zai", receipt["provider_id"])
+            self.assertEqual("glm-5.1", receipt["model_id"])
+            self.assertEqual("c2rust-candidate", receipt["agent"])
+            self.assertEqual(
+                prompt_transport.prompt_transport_contract(),
+                receipt["prompt_transport"],
+            )
+            self.assertTrue(manifest["generator"]["competition_eligible"])
+            self.assertEqual("competition-primary", manifest["generator"]["evaluation_scope"])
             self.assertEqual(
                 ["slice_spec", "source_spans"],
                 manifest["candidates"][0]["prompt_scope"],
@@ -128,7 +179,8 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assertEqual(1, len(file_args))
             attached_prompt = Path(file_args[0].split("=", 1)[1])
             self.assertEqual(out_dir / "l3-generic-scale-ai-prompt.txt", attached_prompt)
-            self.assertEqual(prompt_transport.PROMPT_FILE_MESSAGE, observed_argv[-1])
+            self.assertEqual(prompt_transport.PROMPT_FILE_MESSAGE, observed_argv[-2])
+            self.assertEqual(file_args[0], observed_argv[-1])
             self.assertNotIn("Task mode: generate-candidate", observed_argv)
             self.assertLess(sum(len(arg.encode("utf-8")) for arg in observed_argv), 2_048)
             self.assertGreater(attached_prompt.stat().st_size, 16_000)
@@ -158,7 +210,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
                 manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
                 policy={
                     "model": "zai/glm-5.1",
-                    "agent": "c2rust-migrator",
+                    "agent": "c2rust-candidate",
                     "variant": "max",
                 },
                 summary_path=root / "competition-run-summary.json",
@@ -180,7 +232,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
                 manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
                 policy={
                     "model": "zai/glm-5.1",
-                    "agent": "c2rust-migrator",
+                    "agent": "c2rust-candidate",
                     "variant": "max",
                 },
                 summary_path=root / "competition-run-summary.json",
@@ -198,7 +250,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
                 manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
                 policy={
                     "model": "zai/glm-5.1",
-                    "agent": "c2rust-migrator",
+                    "agent": "c2rust-candidate",
                     "variant": "max",
                 },
                 summary_path=root / "competition-run-summary.json",
@@ -236,7 +288,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
                 manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
                 policy={
                     "model": "zai/glm-5.1",
-                    "agent": "c2rust-migrator",
+                    "agent": "c2rust-candidate",
                     "variant": "max",
                 },
                 summary_path=root / "competition-run-summary.json",
@@ -255,7 +307,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
                 manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
                 policy={
                     "model": "zai/glm-5.1",
-                    "agent": "c2rust-migrator",
+                    "agent": "c2rust-candidate",
                     "variant": "max",
                 },
                 summary_path=root / "competition-run-summary.json",
@@ -276,7 +328,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
                 manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
                 policy={
                     "model": "zai/glm-5.1",
-                    "agent": "c2rust-migrator",
+                    "agent": "c2rust-candidate",
                     "variant": "max",
                 },
                 summary_path=root / "competition-run-summary.json",
@@ -481,7 +533,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
                 manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
                 policy={
                     "model": "zai/glm-5.1",
-                    "agent": "c2rust-migrator",
+                    "agent": "c2rust-candidate",
                     "variant": "max",
                 },
                 summary_path=root / "competition-run-summary.json",
@@ -497,7 +549,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
                 manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
                 policy={
                     "model": "zai/glm-5.1",
-                    "agent": "c2rust-migrator",
+                    "agent": "c2rust-candidate",
                     "variant": "max",
                 },
                 summary_path=root / "competition-run-summary.json",
@@ -702,6 +754,71 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assertEqual(0, execution.returncode)
             self.assertEqual("", execution.stderr)
             self.assertIsNone(provider.classify_provider_failure(execution))
+
+    def test_subprocess_runner_exports_minimal_session_identity_receipt(self) -> None:
+        session_id = "ses_test_identity"
+        stdout = json.dumps(
+            {
+                "type": "message.part.updated",
+                "sessionID": session_id,
+                "part": {"type": "text", "text": "candidate"},
+            }
+        )
+        export_payload = {
+            "info": {
+                "id": session_id,
+                "agent": "c2rust-candidate",
+                "version": "1.17.18",
+                "model": {
+                    "providerID": "opencode",
+                    "id": "deepseek-v4-flash-free",
+                    "variant": "max",
+                },
+            },
+            "messages": [{"sensitive": "must-not-enter-receipt"}],
+        }
+        calls: list[list[str]] = []
+
+        def fake_run(argv: list[str], **_kwargs: object) -> object:
+            calls.append(list(argv))
+            if "export" in argv:
+                return subprocess.CompletedProcess(
+                    argv,
+                    0,
+                    stdout=json.dumps(export_payload),
+                    stderr="",
+                )
+            return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+        argv = [
+            "opencode",
+            "run",
+            "--model",
+            "opencode/deepseek-v4-flash-free",
+            "--agent",
+            "c2rust-candidate",
+            "prompt",
+        ]
+        with mock.patch.object(provider_runtime.subprocess, "run", side_effect=fake_run):
+            execution = provider_runtime.subprocess_runner(argv, 30)
+
+        self.assertEqual(
+            ["opencode", "export", session_id],
+            calls[1],
+        )
+        self.assertEqual("opencode-session-export", execution.identity_receipt["source"])
+        self.assertEqual(session_id, execution.identity_receipt["session_id"])
+        self.assertEqual("opencode", execution.identity_receipt["provider_id"])
+        self.assertEqual("deepseek-v4-flash-free", execution.identity_receipt["model_id"])
+        self.assertEqual("c2rust-candidate", execution.identity_receipt["agent"])
+        self.assertEqual("max", execution.identity_receipt["variant"])
+        self.assertEqual("1.17.18", execution.identity_receipt["opencode_version"])
+        self.assertRegex(
+            execution.identity_receipt["session_export_sha256"],
+            r"^[0-9a-f]{64}$",
+        )
+        self.assertNotIn("messages", execution.identity_receipt)
+        self.assertNotIn("sensitive", json.dumps(execution.identity_receipt))
 
     def test_subprocess_runner_sanitizes_provider_launch_failure(self) -> None:
         argv = [

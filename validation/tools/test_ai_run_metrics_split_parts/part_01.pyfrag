@@ -217,8 +217,18 @@ class AiRunMetricsTests(unittest.TestCase):
             runner.resolve_ai_runtime(
                 repo_root=REPO_ROOT,
                 proof_class="competition-exact",
-                model="zai/glm-5.1",
+                model="opencode/deepseek-v4-flash-free",
                 agent=None,
+                variant=None,
+                timeout_seconds=None,
+                opencode_command=None,
+            )
+        with self.assertRaises(SystemExit):
+            runner.resolve_ai_runtime(
+                repo_root=REPO_ROOT,
+                proof_class="competition-exact",
+                model=None,
+                agent="c2rust-migrator",
                 variant=None,
                 timeout_seconds=None,
                 opencode_command=None,

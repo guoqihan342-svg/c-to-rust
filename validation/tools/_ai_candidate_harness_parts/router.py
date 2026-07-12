@@ -41,6 +41,15 @@ IGNORED_RANKING_FIELDS = (
     "model",
     "self_score",
 )
+MODEL_IDENTITY_FIELDS = (
+    "provider",
+    "logical_model",
+    "resolved_model",
+    "competition_eligible",
+    "evaluation_scope",
+    "agent",
+    "variant",
+)
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -230,13 +239,27 @@ def _normalize_candidate(candidate: Any) -> dict[str, Any]:
     if not isinstance(gate_results, dict):
         gate_results = {}
     normalized_source = source if source in ALLOWED_SOURCES else "rejected"
-    return {
+    normalized = {
         "candidate_id": candidate_id,
         "source": normalized_source,
         "artifact_sha256": artifact_sha if artifact_sha_valid else None,
         "gate_results": gate_results,
         "rejection_facts": rejection_facts,
     }
+    if normalized_source == "opencode-ai":
+        missing_identity = [field for field in MODEL_IDENTITY_FIELDS if field not in candidate]
+        if missing_identity:
+            normalized["rejection_facts"].append(
+                {
+                    "gate": "model_identity",
+                    "reason": "missing_model_identity_fields",
+                    "fields": missing_identity,
+                }
+            )
+        for field in MODEL_IDENTITY_FIELDS:
+            if field in candidate:
+                normalized[field] = candidate[field]
+    return normalized
 
 
 def _evaluate_gates(candidate: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:

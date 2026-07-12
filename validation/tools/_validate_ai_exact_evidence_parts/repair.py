@@ -12,6 +12,16 @@ from .io import EvidenceStore, fail, reject_accepted_proof, require_sha, sha256_
 
 REQUIRED_ROUND_BINDINGS = ("failure_facts", "prompt")
 OPTIONAL_ROUND_BINDINGS = ("raw_response", "repair_artifact", "candidate", "validation_result")
+GENERATOR_IDENTITY_FIELDS = (
+    "tool",
+    "provider",
+    "logical_model",
+    "resolved_model",
+    "competition_eligible",
+    "evaluation_scope",
+    "agent",
+    "variant",
+)
 REPAIR_SOURCE = "c2rust-repair"
 REPAIR_EVIDENCE_KEY = "c2rust_repair"
 
@@ -51,7 +61,15 @@ def validate_c2rust_repair_audit(store: EvidenceStore, router: dict[str, Any]) -
     if report_path.parent != store.root or report_ref.get("status") != report.get("status"):
         fail("c2rust_repair_report_binding", "repair report reference drifted", path="router")
     reject_accepted_proof(report, "router.c2rust_repair.repair_report")
-    _validate_report_shape(report, base_sha=base_sha)
+    ai_candidate = _one_source(candidates, "opencode-ai") or _one_source(
+        duplicates,
+        "opencode-ai",
+    )
+    _validate_report_shape(
+        report,
+        base_sha=base_sha,
+        expected_generator=_router_generator_identity(ai_candidate),
+    )
     rounds = report.get("rounds")
     if not isinstance(rounds, list) or len(rounds) != repair_rounds:
         fail("c2rust_repair_round_count", "repair report rounds differ from audit", path="router")
@@ -97,8 +115,13 @@ def validate_c2rust_repair_audit(store: EvidenceStore, router: dict[str, Any]) -
     return repair_rounds
 
 
-def _validate_report_shape(report: dict[str, Any], *, base_sha: str) -> None:
-    if report.get("schema_version") != 2 or report.get("artifact_label") != REPAIR_SOURCE:
+def _validate_report_shape(
+    report: dict[str, Any],
+    *,
+    base_sha: str,
+    expected_generator: dict[str, Any] | None,
+) -> None:
+    if report.get("schema_version") != 3 or report.get("artifact_label") != REPAIR_SOURCE:
         fail("c2rust_repair_report_identity", "repair report identity drifted", path="router")
     generator = report.get("generator")
     if (
@@ -108,6 +131,14 @@ def _validate_report_shape(report: dict[str, Any], *, base_sha: str) -> None:
         fail(
             "c2rust_repair_prompt_transport",
             "repair prompt transport drifted",
+            path="router",
+        )
+    if expected_generator is None or any(
+        generator.get(key) != value for key, value in expected_generator.items()
+    ):
+        fail(
+            "c2rust_repair_generator_identity",
+            "repair generator identity differs from the routed AI generator",
             path="router",
         )
     if report.get("input_source") != "c2rust-baseline":
@@ -122,6 +153,24 @@ def _validate_report_shape(report: dict[str, Any], *, base_sha: str) -> None:
     initial = report.get("initial_candidate")
     if not isinstance(initial, dict) or initial.get("sha256") != base_sha:
         fail("c2rust_repair_base_candidate", "repair report baseline SHA drifted", path="router")
+
+
+def _router_generator_identity(candidate: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(candidate, dict):
+        return None
+    identity = {
+        "tool": "opencode",
+        "provider": candidate.get("provider"),
+        "logical_model": candidate.get("logical_model"),
+        "resolved_model": candidate.get("resolved_model"),
+        "competition_eligible": candidate.get("competition_eligible"),
+        "evaluation_scope": candidate.get("evaluation_scope"),
+        "agent": candidate.get("agent"),
+        "variant": candidate.get("variant"),
+    }
+    if any(value is None for value in identity.values()):
+        return None
+    return identity
 
 
 def _validate_round(store: EvidenceStore, report_path: Path, record: Any, expected_round: int) -> None:

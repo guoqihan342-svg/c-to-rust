@@ -20,6 +20,7 @@ from validation.tools._ai_candidate_harness_parts.prompt_transport import (
     prompt_transport_contract,
 )
 from validation.tools._ai_candidate_harness_parts.provider import render_prompt
+from validation.tools._ai_candidate_harness_parts.provider_receipt import invocation_contract
 from validation.tools._ai_candidate_harness_parts.router import REQUIRED_GATES, route_candidates
 
 
@@ -153,7 +154,7 @@ def write_generated_ai_chain(
     selected_source = router_source if router_source is not None else ("opencode-ai" if common_acceptance else None)
 
     def router_candidate(candidate_id: str, source: str, artifact_sha: str, passed: bool) -> dict:
-        return {
+        candidate = {
             "candidate_id": candidate_id,
             "source": source,
             "artifact_sha256": artifact_sha,
@@ -165,6 +166,19 @@ def write_generated_ai_chain(
                 for gate in REQUIRED_GATES
             },
         }
+        if source == "opencode-ai":
+            candidate.update(
+                {
+                    "provider": "zai",
+                    "logical_model": "GLM-5.1",
+                    "resolved_model": "zai/glm-5.1",
+                    "competition_eligible": True,
+                    "evaluation_scope": "competition-primary",
+                    "agent": "c2rust-migrator",
+                    "variant": "max",
+                }
+            )
+        return candidate
 
     router_inputs = [router_candidate("opencode-glm51-1", "opencode-ai", candidate_sha, selected_source == "opencode-ai")]
     deterministic_path = None
@@ -223,14 +237,17 @@ def write_generated_ai_chain(
         write_json(
             report_path,
             {
-                "schema_version": 2,
+                "schema_version": 3,
                 "artifact_label": "c2rust-repair",
                 "input_source": "c2rust-baseline",
                 "status": report_status,
                 "generator": {
                     "tool": "opencode",
+                    "provider": "zai",
                     "logical_model": "GLM-5.1",
                     "resolved_model": "zai/glm-5.1",
+                    "competition_eligible": True,
+                    "evaluation_scope": "competition-primary",
                     "agent": "c2rust-migrator",
                     "variant": "max",
                     "prompt_transport": prompt_transport_contract(),
@@ -291,8 +308,33 @@ def write_generated_ai_chain(
 
     manifest_path = base / f"l3-{slice_id}-ai-candidate-manifest.json"
     candidate_id = "opencode-glm51-1"
+    receipt_path = base / f"l3-{slice_id}-ai-invocation-receipt.json"
+    if not cache_hit:
+        write_json(
+            receipt_path,
+            {
+                "schema_version": 1,
+                "source": "runner-contract",
+                "session_id": "unavailable",
+                "provider_id": "zai",
+                "model_id": "glm-5.1",
+                "resolved_model": "zai/glm-5.1",
+                "agent": "c2rust-migrator",
+                "variant": "max",
+                "opencode_version": "unattested",
+                "prompt_sha256": runner.sha256(prompt),
+                "raw_response_sha256": runner.sha256(response),
+                "session_ids": [],
+                "prompt_transport": prompt_transport_contract(),
+                "invocation_contract": invocation_contract(
+                    resolved_model="zai/glm-5.1",
+                    agent="c2rust-migrator",
+                    variant="max",
+                ),
+            },
+        )
     manifest = {
-        "schema_version": 5,
+        "schema_version": 7,
         "target_id": target_id,
         "slice_id": slice_id,
         "status": "generated",
@@ -307,6 +349,8 @@ def write_generated_ai_chain(
             "provider": "zai",
             "logical_model": "GLM-5.1",
             "resolved_model": "zai/glm-5.1",
+            "competition_eligible": True,
+            "evaluation_scope": "competition-primary",
             "agent": "c2rust-migrator",
             "variant": "max",
             "prompt_transport": prompt_transport_contract(),
@@ -334,6 +378,8 @@ def write_generated_ai_chain(
                 "provider_label": "zai",
                 "model_label": "GLM-5.1",
                 "resolved_model": "zai/glm-5.1",
+                "competition_eligible": True,
+                "evaluation_scope": "competition-primary",
                 "prompt_scope": ["slice_spec", "source_spans"],
                 "input_artifact_hashes": {
                     "context_pack": runner.sha256(context),
@@ -348,6 +394,11 @@ def write_generated_ai_chain(
             }
         ],
     }
+    if not cache_hit:
+        manifest["bindings"]["invocation_receipt"] = {
+            "path": receipt_path.name,
+            "sha256": runner.sha256(receipt_path),
+        }
     if cache_hit:
         key_payload = cache_key_payload(
             runner.sha256(context),

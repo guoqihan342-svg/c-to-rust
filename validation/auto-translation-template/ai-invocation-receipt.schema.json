@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI invocation receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "source", "session_id", "provider_id", "model_id",
+    "resolved_model", "agent", "variant", "opencode_version", "prompt_sha256",
+    "raw_response_sha256", "session_ids", "prompt_transport", "invocation_contract"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "source": {"enum": ["opencode-session-export", "runner-contract"]},
+    "session_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "provider_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "model_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "resolved_model": {"type": "string", "minLength": 3, "maxLength": 385},
+    "agent": {"type": "string", "minLength": 1, "maxLength": 128},
+    "variant": {"type": "string", "minLength": 1, "maxLength": 64},
+    "opencode_version": {"type": "string", "minLength": 1, "maxLength": 64},
+    "prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "raw_response_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "session_ids": {
+      "type": "array", "maxItems": 1, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 256}
+    },
+    "prompt_transport": {"$ref": "#/definitions/promptTransport"},
+    "invocation_contract": {"$ref": "#/definitions/invocationContract"},
+    "session_export_identity": {"$ref": "#/definitions/artifactRef"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"source": {"const": "opencode-session-export"}}},
+      "then": {"required": ["session_export_identity"]},
+      "else": {"not": {"required": ["session_export_identity"]}}
+    }
+  ],
+  "definitions": {
+    "artifactRef": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 512},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "promptTransport": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "file_option", "file_option_style", "message_position", "message_sha256", "inline_prompt_in_argv"],
+      "properties": {
+        "kind": {"const": "opencode-file-attachment-v2"},
+        "file_option": {"const": "--file"},
+        "file_option_style": {"const": "equals"},
+        "message_position": {"const": "before_file_option"},
+        "message_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "inline_prompt_in_argv": {"const": false}
+      }
+    },
+    "invocationContract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tool", "subcommand", "pure", "format", "print_logs", "log_level", "resolved_model", "agent", "variant", "prompt_transport"],
+      "properties": {
+        "tool": {"const": "opencode"},
+        "subcommand": {"const": "run"},
+        "pure": {"const": true},
+        "format": {"const": "json"},
+        "print_logs": {"const": true},
+        "log_level": {"const": "ERROR"},
+        "resolved_model": {"type": "string", "minLength": 3, "maxLength": 385},
+        "agent": {"type": "string", "minLength": 1, "maxLength": 128},
+        "variant": {"type": "string", "minLength": 1, "maxLength": 64},
+        "prompt_transport": {"$ref": "#/definitions/promptTransport"}
+      }
+    }
+  }
+}

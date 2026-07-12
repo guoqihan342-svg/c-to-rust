@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from validation.tools._ai_candidate_harness_parts.router import (
+    MODEL_IDENTITY_FIELDS,
     REQUIRED_GATES,
     build_selection_policy,
     route_candidates,
@@ -94,6 +95,11 @@ def validate_router(store: EvidenceStore, router: dict[str, Any]) -> dict[str, A
                 "source": source,
                 "artifact_sha256": artifact_sha,
                 "gate_results": summary["router_gate_results"],
+                **{
+                    field: candidate[field]
+                    for field in MODEL_IDENTITY_FIELDS
+                    if field in candidate
+                },
             }
         )
     if set(evidence) != expected_ref_keys:

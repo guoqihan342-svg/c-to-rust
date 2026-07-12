@@ -152,9 +152,17 @@ class AiCandidateCacheTests(unittest.TestCase):
 
     def test_prompt_and_parse_contract_versions_change_the_key(self) -> None:
         baseline = candidate_cache.cache_key_sha256(self.key_payload())
-        with mock.patch.object(candidate_cache, "PROMPT_SCHEMA_VERSION", 2):
+        with mock.patch.object(
+            candidate_cache,
+            "PROMPT_SCHEMA_VERSION",
+            candidate_cache.PROMPT_SCHEMA_VERSION + 1,
+        ):
             prompt_version_key = candidate_cache.cache_key_sha256(self.key_payload())
-        with mock.patch.object(candidate_cache, "PARSE_CONTRACT_VERSION", 2):
+        with mock.patch.object(
+            candidate_cache,
+            "PARSE_CONTRACT_VERSION",
+            candidate_cache.PARSE_CONTRACT_VERSION + 1,
+        ):
             parse_version_key = candidate_cache.cache_key_sha256(self.key_payload())
 
         self.assertNotEqual(baseline, prompt_version_key)
@@ -228,12 +236,14 @@ class AiCandidateCacheTests(unittest.TestCase):
             first = ai_candidate_harness.generate_candidate(
                 context_pack(),
                 out_dir=root / "first",
+                agent="c2rust-migrator",
                 cache_root=cache_root,
                 runner=runner,
             )
             second = ai_candidate_harness.generate_candidate(
                 context_pack(),
                 out_dir=root / "second",
+                agent="c2rust-migrator",
                 cache_root=cache_root,
                 runner=lambda _argv, _timeout: self.fail("cache hit invoked provider"),
             )
@@ -409,6 +419,7 @@ class AiCandidateCacheTests(unittest.TestCase):
             third = ai_candidate_harness.generate_candidate(
                 context_pack(),
                 out_dir=root / "third",
+                agent="c2rust-migrator",
                 cache_root=cache_root,
                 runner=runner,
             )
@@ -420,6 +431,7 @@ class AiCandidateCacheTests(unittest.TestCase):
             fourth = ai_candidate_harness.generate_candidate(
                 context_pack(),
                 out_dir=root / "fourth",
+                agent="c2rust-migrator",
                 cache_root=cache_root,
                 runner=lambda _argv, _timeout: self.fail("recovered cache invoked provider"),
             )

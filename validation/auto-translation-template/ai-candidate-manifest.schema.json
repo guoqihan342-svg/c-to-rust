@@ -73,7 +73,7 @@
               "allOf": [
                 {"$ref": "#/definitions/candidate"},
                 {
-                  "required": ["kind", "resolved_model", "artifact", "semantic_pass"],
+                  "required": ["kind", "provider_label", "model_label", "resolved_model", "competition_eligible", "evaluation_scope", "artifact", "semantic_pass"],
                   "properties": {
                     "kind": {"const": "opencode-ai"},
                     "semantic_pass": {"const": false}
@@ -140,6 +140,7 @@
       "then": {
         "required": ["provider_preflight"],
         "properties": {
+          "bindings": {"required": ["invocation_receipt"]},
           "provider_preflight": {
             "properties": {"status": {"const": "ready"}}
           },
@@ -184,12 +185,14 @@
     "generator": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tool", "provider", "logical_model", "resolved_model", "agent", "variant"],
+      "required": ["tool", "provider", "logical_model", "resolved_model", "competition_eligible", "evaluation_scope", "agent", "variant"],
       "properties": {
         "tool": {"const": "opencode"},
         "provider": {"type": "string", "minLength": 1},
-        "logical_model": {"const": "GLM-5.1"},
+        "logical_model": {"type": "string", "minLength": 1},
         "resolved_model": {"type": "string", "minLength": 1},
+        "competition_eligible": {"type": "boolean"},
+        "evaluation_scope": {"enum": ["competition-primary", "auxiliary-local-validation"]},
         "agent": {"type": "string", "minLength": 1},
         "variant": {"type": "string", "minLength": 1},
         "prompt_transport": {"$ref": "#/definitions/promptTransport"}
@@ -198,11 +201,12 @@
     "promptTransport": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "file_option", "file_option_style", "message_sha256", "inline_prompt_in_argv"],
+      "required": ["kind", "file_option", "file_option_style", "message_position", "message_sha256", "inline_prompt_in_argv"],
       "properties": {
-        "kind": {"const": "opencode-file-attachment-v1"},
+        "kind": {"const": "opencode-file-attachment-v2"},
         "file_option": {"const": "--file"},
         "file_option_style": {"const": "equals"},
+        "message_position": {"const": "before_file_option"},
         "message_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "inline_prompt_in_argv": {"const": false}
       }
@@ -318,7 +322,8 @@
       "properties": {
         "context_pack": {"$ref": "#/definitions/artifactRef"},
         "prompt": {"$ref": "#/definitions/artifactRef"},
-        "raw_response": {"$ref": "#/definitions/artifactRef"}
+        "raw_response": {"$ref": "#/definitions/artifactRef"},
+        "invocation_receipt": {"$ref": "#/definitions/artifactRef"}
       }
     },
     "claimBoundary": {
@@ -350,6 +355,8 @@
         "provider_label": {"type": "string"},
         "model_label": {"type": "string"},
         "resolved_model": {"type": "string"},
+        "competition_eligible": {"type": "boolean"},
+        "evaluation_scope": {"enum": ["competition-primary", "auxiliary-local-validation"]},
         "prompt_scope": {"type": "array", "items": {"enum": ["slice_spec", "root_cause_summary", "source_spans", "type_map_excerpt", "cfg_excerpt", "pointer_graph_excerpt", "direct_caller_callee_facts", "verification_delta", "two_hop_expansion"]}},
         "two_hop_expansion_justification": {"type": "string"},
         "input_artifact_hashes": {"type": "object", "additionalProperties": {"type": "string"}},

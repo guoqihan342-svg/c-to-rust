@@ -79,7 +79,7 @@ def validate_fresh_ai_manifest(
     if (
         not isinstance(schema_version, int)
         or isinstance(schema_version, bool)
-        or schema_version < 5
+        or schema_version < 7
     ):
         reasons.append("ai_manifest_schema_version_stale_for_fresh_run")
     try:
@@ -87,10 +87,19 @@ def validate_fresh_ai_manifest(
     except (OSError, UnicodeError, json.JSONDecodeError, jsonschema.ValidationError, jsonschema.SchemaError):
         reasons.append("ai_manifest_schema_invalid")
     generator = manifest.get("generator")
+    try:
+        expected_identity = resolve_model_identity(policy["model"])
+    except (KeyError, ValueError):
+        expected_identity = None
     expected_generator = {
         "tool": "opencode",
-        "logical_model": COMPETITION_OPENCODE_MODEL,
+        "provider": expected_identity.provider_label if expected_identity is not None else None,
+        "logical_model": expected_identity.logical_model if expected_identity is not None else None,
         "resolved_model": policy["model"],
+        "competition_eligible": (
+            expected_identity.competition_eligible if expected_identity is not None else None
+        ),
+        "evaluation_scope": expected_identity.evaluation_scope if expected_identity is not None else None,
         "agent": policy["agent"],
         "variant": policy["variant"],
     }
@@ -222,6 +231,17 @@ def validate_fresh_ai_manifest(
             ref = bindings.get(key) if isinstance(bindings, dict) else None
             if not nested_ai_ref_is_hash_bound(ref, owner_path=manifest_path, summary_path=summary_path, repo_root=repo_root):
                 reasons.append(f"ai_manifest_{key}_binding_invalid")
+        if provider_invocations == 1:
+            reasons.extend(
+                validate_ai_invocation_receipt(
+                    bindings.get("invocation_receipt") if isinstance(bindings, dict) else None,
+                    bindings=bindings,
+                    manifest_path=manifest_path,
+                    summary_path=summary_path,
+                    repo_root=repo_root,
+                    policy=policy,
+                )
+            )
         if validate_provider_accounting and isinstance(bindings, dict):
             context_ref = bindings.get("context_pack")
             context_path = (
@@ -378,6 +398,31 @@ def validate_fresh_ai_manifest(
     if status == "generated" and len(rust_candidates) != 1:
         reasons.append("generated_ai_manifest_requires_one_rust_draft")
     candidate = rust_candidates[0] if len(rust_candidates) == 1 else None
+    expected_candidate_identity = (
+        {
+            "candidate_id": expected_identity.candidate_id,
+            "provider_label": expected_identity.provider_label,
+            "model_label": expected_identity.logical_model,
+            "resolved_model": expected_identity.resolved_model,
+            "competition_eligible": expected_identity.competition_eligible,
+            "evaluation_scope": expected_identity.evaluation_scope,
+        }
+        if expected_identity is not None
+        else None
+    )
+    if candidate is not None and (
+        expected_candidate_identity is None
+        or any(
+            candidate.get(key) != value
+            for key, value in expected_candidate_identity.items()
+        )
+    ):
+        reasons.append("ai_candidate_model_identity_mismatch")
+    if candidate is not None and (
+        candidate.get("competition_eligible") is not True
+        or candidate.get("evaluation_scope") != "competition-primary"
+    ):
+        reasons.append("ai_candidate_not_competition_eligible")
     if (
         status == "generated"
         and isinstance(schema_version, int)
@@ -454,6 +499,7 @@ def validate_fresh_ai_manifest(
             summary_path=summary_path,
             repo_root=repo_root,
             candidate=candidate if bound_repair is not None else None,
+            expected_generator=manifest.get("generator"),
             require_transport=(
                 isinstance(manifest.get("schema_version"), int)
                 and not isinstance(manifest.get("schema_version"), bool)
@@ -471,6 +517,293 @@ def validate_fresh_ai_manifest(
     }
 
 
+def validate_ai_invocation_receipt(
+    ref: Any,
+    *,
+    bindings: dict[str, Any] | None,
+    manifest_path: Path,
+    summary_path: Path,
+    repo_root: Path,
+    policy: dict[str, Any],
+) -> list[str]:
+    reasons: list[str] = []
+    if not nested_ai_ref_is_hash_bound(
+        ref,
+        owner_path=manifest_path,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    ):
+        return ["ai_invocation_receipt_binding_invalid"]
+    receipt_path = resolve_nested_ai_artifact(
+        ref["path"],
+        owner_path=manifest_path,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    try:
+        receipt = load_json(receipt_path) if receipt_path is not None else None
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        receipt = None
+    if not isinstance(receipt, dict):
+        return ["ai_invocation_receipt_unreadable"]
+    try:
+        jsonschema.Draft7Validator(
+            load_json(AI_INVOCATION_RECEIPT_SCHEMA_PATH)
+        ).validate(receipt)
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        jsonschema.ValidationError,
+        jsonschema.SchemaError,
+    ):
+        return ["ai_invocation_receipt_schema_invalid"]
+    prompt_ref = bindings.get("prompt") if isinstance(bindings, dict) else None
+    response_ref = bindings.get("raw_response") if isinstance(bindings, dict) else None
+    prompt_path = (
+        resolve_nested_ai_artifact(
+            prompt_ref.get("path"),
+            owner_path=manifest_path,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        if isinstance(prompt_ref, dict) and isinstance(prompt_ref.get("path"), str)
+        else None
+    )
+    response_path = (
+        resolve_nested_ai_artifact(
+            response_ref.get("path"),
+            owner_path=manifest_path,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        if isinstance(response_ref, dict) and isinstance(response_ref.get("path"), str)
+        else None
+    )
+    try:
+        response_text = response_path.read_text(encoding="utf-8") if response_path is not None else ""
+    except (OSError, UnicodeError):
+        response_text = ""
+    observed_sessions = session_ids_from_jsonl(response_text)
+    expected_model = policy.get("model")
+    provider_id, separator, model_id = (
+        expected_model.partition("/") if isinstance(expected_model, str) else ("", "", "")
+    )
+    expected = {
+        "schema_version": 1,
+        "provider_id": provider_id if separator else None,
+        "model_id": model_id if separator else None,
+        "resolved_model": expected_model,
+        "agent": policy.get("agent"),
+        "variant": policy.get("variant"),
+        "prompt_sha256": prompt_ref.get("sha256") if isinstance(prompt_ref, dict) else None,
+        "raw_response_sha256": response_ref.get("sha256") if isinstance(response_ref, dict) else None,
+        "session_id": observed_sessions[0] if len(observed_sessions) == 1 else "unavailable",
+        "session_ids": observed_sessions,
+        "prompt_transport": prompt_transport_contract(),
+        "invocation_contract": invocation_contract(
+            resolved_model=expected_model,
+            agent=policy.get("agent"),
+            variant=policy.get("variant"),
+        ),
+    }
+    if any(receipt.get(key) != value for key, value in expected.items()):
+        reasons.append("ai_invocation_receipt_identity_mismatch")
+    source = receipt.get("source")
+    if source not in {"opencode-session-export", "runner-contract"}:
+        reasons.append("ai_invocation_receipt_source_invalid")
+    session_id = receipt.get("session_id")
+    if len(observed_sessions) > 1 or (observed_sessions and session_id not in observed_sessions):
+        reasons.append("ai_invocation_receipt_session_mismatch")
+    if source == "opencode-session-export" and (
+        len(observed_sessions) != 1
+        or receipt.get("opencode_version") in {None, "", "unattested"}
+    ):
+        reasons.append("ai_invocation_receipt_session_export_invalid")
+    elif source == "runner-contract" and receipt.get("opencode_version") != "unattested":
+        reasons.append("ai_invocation_receipt_runner_contract_invalid")
+    export_evidence = validate_session_export_identity(
+        receipt.get("session_export_identity"),
+        receipt=receipt,
+        receipt_path=receipt_path,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    if source == "opencode-session-export" and export_evidence is None:
+        reasons.append("ai_invocation_receipt_session_export_identity_invalid")
+    proof_class = None
+    try:
+        proof_class = load_json(summary_path).get("proof_class") if summary_path.is_file() else None
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        pass
+    if proof_class == "competition-exact" and (
+        source != "opencode-session-export"
+        or len(observed_sessions) != 1
+        or receipt.get("opencode_version") in {None, "", "unattested"}
+    ):
+        reasons.append("ai_invocation_receipt_not_provider_attested")
+    elif proof_class == "competition-exact" and not validate_live_opencode_session_identity(
+        receipt,
+        opencode_command=policy.get("opencode_command", "opencode"),
+        expected_export_sha256=(
+            export_evidence.get("session_export_sha256")
+            if isinstance(export_evidence, dict)
+            else None
+        ),
+        prompt_path=prompt_path,
+        response_text=response_text,
+    ):
+        reasons.append("ai_invocation_receipt_live_session_mismatch")
+    return reasons
+
+
+def validate_session_export_identity(
+    ref: Any,
+    *,
+    receipt: dict[str, Any],
+    receipt_path: Path,
+    summary_path: Path,
+    repo_root: Path,
+) -> dict[str, Any] | None:
+    if receipt.get("source") != "opencode-session-export":
+        return {} if ref is None else None
+    if not nested_ai_ref_is_hash_bound(
+        ref,
+        owner_path=receipt_path,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    ):
+        return None
+    path = resolve_nested_ai_artifact(
+        ref["path"],
+        owner_path=receipt_path,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    try:
+        evidence = load_json(path) if path is not None else None
+        jsonschema.Draft7Validator(
+            load_json(AI_SESSION_EXPORT_IDENTITY_SCHEMA_PATH)
+        ).validate(evidence)
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        jsonschema.ValidationError,
+        jsonschema.SchemaError,
+    ):
+        return None
+    identity = evidence.get("identity") if isinstance(evidence, dict) else None
+    return evidence if isinstance(identity, dict) and all(
+        identity.get(key) == receipt.get(key)
+        for key in (
+            "session_id",
+            "provider_id",
+            "model_id",
+            "agent",
+            "variant",
+            "opencode_version",
+        )
+    ) else None
+
+
+def validate_live_opencode_session_identity(
+    receipt: dict[str, Any],
+    *,
+    opencode_command: Any,
+    expected_export_sha256: Any,
+    prompt_path: Path | None,
+    response_text: str,
+) -> bool:
+    if (
+        opencode_command != "opencode"
+        or not isinstance(expected_export_sha256, str)
+        or prompt_path is None
+    ):
+        return False
+    try:
+        completed = subprocess.run(
+            ["opencode", "export", receipt["session_id"]],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+        payload = json.loads(completed.stdout) if completed.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return False
+    if hashlib.sha256(completed.stdout.encode("utf-8")).hexdigest() != expected_export_sha256:
+        return False
+    identity = parse_session_identity_export(payload, receipt["session_id"])
+    if identity is None or not all(
+        identity.get(key) == receipt.get(key)
+        for key in (
+            "session_id",
+            "provider_id",
+            "model_id",
+            "agent",
+            "variant",
+            "opencode_version",
+        )
+    ):
+        return False
+    messages = payload.get("messages") if isinstance(payload, dict) else None
+    if not isinstance(messages, list):
+        return False
+    assistant_fragments: list[str] = []
+    user_texts: list[str] = []
+    file_urls: list[str] = []
+    for message in messages:
+        info = message.get("info") if isinstance(message, dict) else None
+        parts = message.get("parts") if isinstance(message, dict) else None
+        role = info.get("role") if isinstance(info, dict) else None
+        if not isinstance(parts, list):
+            continue
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            if (
+                role == "assistant"
+                and part.get("type") == "text"
+                and isinstance(part.get("text"), str)
+            ):
+                assistant_fragments.append(part["text"])
+            elif (
+                role == "user"
+                and part.get("type") == "text"
+                and isinstance(part.get("text"), str)
+            ):
+                user_texts.append(part["text"])
+            elif (
+                role == "user"
+                and part.get("type") == "file"
+                and isinstance(part.get("url"), str)
+            ):
+                file_urls.append(part["url"])
+    if "".join(assistant_fragments) != assistant_text_from_jsonl(response_text):
+        return False
+    joined_user_text = "\n".join(user_texts)
+    if PROMPT_FILE_MESSAGE not in joined_user_text or len(file_urls) != 1:
+        return False
+    try:
+        prompt_lines = prompt_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return False
+    for line in prompt_lines[:3]:
+        fragment = line[:512]
+        if fragment and fragment not in joined_user_text:
+            return False
+    parsed_url = urlparse(file_urls[0])
+    if parsed_url.scheme != "file" or parsed_url.netloc not in {"", "localhost"}:
+        return False
+    file_path = unquote(parsed_url.path)
+    if re.match(r"^/[A-Za-z]:/", file_path):
+        file_path = file_path[1:]
+    return Path(file_path).resolve() == prompt_path.resolve()
+
+
 def validate_bound_ai_repair_report(
     ref: Any,
     *,
@@ -479,6 +812,7 @@ def validate_bound_ai_repair_report(
     repo_root: Path,
     candidate: dict[str, Any] | None,
     require_transport: bool,
+    expected_generator: Any = None,
 ) -> tuple[int, list[str]]:
     reasons: list[str] = []
     if manifest_path is None or not nested_ai_ref_is_hash_bound(
@@ -499,13 +833,28 @@ def validate_bound_ai_repair_report(
     report = load_json(report_path)
     if require_transport:
         generator = report.get("generator")
-        if report.get("schema_version") != 2:
+        if report.get("schema_version") != 3:
             reasons.append("ai_repair_report_schema_version_invalid")
         if (
             not isinstance(generator, dict)
             or generator.get("prompt_transport") != prompt_transport_contract()
         ):
             reasons.append("ai_repair_report_prompt_transport_invalid")
+        generator_keys = (
+            "tool",
+            "provider",
+            "logical_model",
+            "resolved_model",
+            "competition_eligible",
+            "evaluation_scope",
+            "agent",
+            "variant",
+        )
+        if isinstance(expected_generator, dict) and (
+            not isinstance(generator, dict)
+            or any(generator.get(key) != expected_generator.get(key) for key in generator_keys)
+        ):
+            reasons.append("ai_repair_report_generator_mismatch")
     if ref.get("status") != report.get("status") or ref.get("semantic_pass") is not False:
         reasons.append("ai_repair_report_status_or_claim_drift")
     boundary = report.get("claim_boundary")

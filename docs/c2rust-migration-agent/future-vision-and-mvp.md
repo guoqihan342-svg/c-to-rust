@@ -25,10 +25,10 @@ input.c + compile context
 | --- | ---: | --- |
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
-| 当前 AI 候选状态 | `0 generated` | 已审计的 40 份 AI manifest 均为 `not_used`；现有 OpenCode worker 只转发确定性命令，尚未生成 Rust candidate |
+| 当前 AI 候选状态 | `GLM 0 / auxiliary verified` | 比赛 GLM 仍因余额不足没有 candidate；DeepSeek V4 Flash 已在 WSL 本地无工具通道生成候选并通过 8 类 exact gates，但明确不具备比赛资格 |
 | 当前翻译主线 | P0-A6..A10 | 建立 AI-first candidate、ContextPack、多候选路由和有限跨项目验收；不再以单个 FlashDB 行号扩展作为主线 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-T31 | `:1880-1883` ordered stats sequence 已完成 source-backed 严格验收，计数更新为 38 |
+| 最近开发阶段 | P0-A16 | 模型身份、辅助验证范围、无工具 agent、动态 candidate id 与 OpenCode 1.17.18 transport 已收口 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -273,8 +273,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 3 | P0-A13 内容寻址 AI candidate cache | 已完成；后续只修 cache binding/schema/validator 回归 |
 | 4 | P0-A14 受限展开编译 response file | 已完成；后续只修 dialect/schema/binding 回归 |
 | 5 | P0-A15 可复算 AI caller/callee 上下文 | 已完成；后续只修 ContextPack/prompt-scope/validator 回归 |
-| 6 | P0-A10 固定套件真实验收 | 资源恢复后只运行一次完整套件并发布可复核指标 |
-| 7 | P0-A6 / P0-H9 比赛主机复验 | 有效资源包和 competition-exact host 可用；不得用模拟结果代替 |
+| 6 | P0-A16 透明辅助模型验证 | 已完成；辅助模型只能产生本地评估证据，不能冒充 GLM |
+| 7 | P0-A10 固定套件真实验收 | GLM 资源恢复后只运行一次完整套件并发布可复核指标 |
+| 8 | P0-A6 / P0-H9 比赛主机复验 | 有效资源包和 competition-exact host 可用；不得用模拟结果代替 |
 
 任何阶段都先运行一次有限构造集合，再按失败频率扩展 translator/ContextPack；禁止继续按 FlashDB 行号堆规则，也禁止为了等待外部资源停止可独立完成的 harness 工作。
 
@@ -282,7 +283,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   OpenCode `zai/glm-5.1` 读取 hash-bound ContextPack，输出单一结构化 Rust candidate；记录 provider、logical/resolved model、variant、prompt、输入、原始响应、解析结果和候选 SHA-256。模型输出、聊天文本和文件写入本身都保持 `semantic_gate=false`。无凭据、超时、响应格式错误或候选缺失必须结构化 blocked，不得静默回退后冒充 AI 已运行。
 
-  当前进度：候选生成器、schema-v5 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、source-span provider readiness、余额/鉴权/启动/超时分类和 `auto_migrate --ai-first-candidate` 已实现。missing、越界、hash 漂移、超限或编码不支持的 source span 会在启动 OpenCode 前结构化为 `context_not_provider_ready`，并记录 `provider_invocations=0`；summary validator 会重开 hash-bound ContextPack 独立复算 preflight 与调用计数。LF/CRLF 等价由 full-source 流式 hash 和 span hash 共同校验；fragment wrapper 还必须通过 carrier、containing-function、真实 upstream fragment 的 SHA/text/claim 合同和 `verbatim_once` 嵌入校验，才标记为 `inline_translation_carrier_bound`，且仍不声明 whole-function 语义。在保留三条 pinned checkout 的 P0-A10 输入工作树中，固定 12 项在 Windows/WSL 均为 provider-ready 12/12；普通新 worktree 未物化这些 ignored checkout 时不具备该前置条件。WSL 能列出并实际启动 `zai/glm-5.1`。OpenCode 会把 provider 错误写入受限日志后继续内部重试，旧 harness 因外层 30/180 秒先到而把空响应记为 `provider_timeout`；2026-07-12 新增的日志偏移诊断覆盖非零退出、超时和首次创建日志，只提取固定哨兵、不保存原始日志或密钥。单次真实调用已把根因还原为 `provider_insufficient_balance`。因此尚无真实 GLM candidate，本项保持未完成。模型可见、进程已启动和确定性 fallback 通过都不能替代候选证据。
+  当前进度：候选生成器、schema-v7 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、source-span provider readiness、余额/鉴权/启动/超时分类和 `auto_migrate --ai-first-candidate` 已实现。missing、越界、hash 漂移、超限或编码不支持的 source span 会在启动 OpenCode 前结构化为 `context_not_provider_ready`，并记录 `provider_invocations=0`；summary validator 会重开 hash-bound ContextPack 独立复算 preflight 与调用计数。LF/CRLF 等价由 full-source 流式 hash 和 span hash 共同校验；fragment wrapper 还必须通过 carrier、containing-function、真实 upstream fragment 的 SHA/text/claim 合同和 `verbatim_once` 嵌入校验，才标记为 `inline_translation_carrier_bound`，且仍不声明 whole-function 语义。在保留三条 pinned checkout 的 P0-A10 输入工作树中，固定 12 项在 Windows/WSL 均为 provider-ready 12/12；普通新 worktree 未物化这些 ignored checkout 时不具备该前置条件。WSL 能列出并实际启动 `zai/glm-5.1`。OpenCode 会把 provider 错误写入受限日志后继续内部重试，旧 harness 因外层 30/180 秒先到而把空响应记为 `provider_timeout`；2026-07-12 新增的日志偏移诊断覆盖非零退出、超时和首次创建日志，只提取固定哨兵、不保存原始日志或密钥。单次真实调用已把根因还原为 `provider_insufficient_balance`。DeepSeek 辅助通道通过不能替代该证据，因此尚无真实 GLM candidate，本项保持未完成。
 
 - [x] **P0-A7：项目级 ContextPack 与编译上下文闭环**
 
@@ -320,7 +321,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   candidate 与 repair prompt 先写入 repo-scoped、hash-bound 文件，再使用 OpenCode 的文件输入参数和固定短消息启动，避免 Windows/WSL argv 长度差异。manifest 必须记录 transport、prompt path/hash 和实际命令策略；日志与公开工件不得复制完整 prompt、密钥或宿主路径。完成条件是大 ContextPack/repair candidate 不再进入 argv，现有解析、超时、诊断和严格门禁行为保持不变。
 
-  完成证据：candidate 和 bounded repair 共用 `opencode-file-attachment-v1`，argv 只保留 `--file=<prompt-path>` 与固定短消息；完整 prompt 仍以 SHA 绑定文件保留。schema-v3 manifest 与 schema-v2 repair report 记录 file option/style、固定消息 SHA 和 `inline_prompt_in_argv=false`；summary 与 exact-evidence validator 均独立拒绝 transport 漂移。Windows/WSL 各 167 项 AI candidate、repair、router、exact evidence 和 competition summary 回归通过；WSL 显式使用 `/root/.cargo/bin` 比赛工具链 PATH。
+  完成证据：candidate 和 bounded repair 共用 `opencode-file-attachment-v2`，argv 固定为短消息在前、`--file=<prompt-path>` 在后，修复 OpenCode 1.17.18 把短消息吞作第二个文件的问题；完整 prompt 仍以 SHA 绑定文件保留。schema-v7 manifest 与 schema-v3 repair report 记录 file option/style、消息位置、固定消息 SHA 和 `inline_prompt_in_argv=false`；summary 与 exact-evidence validator 均独立拒绝 transport 漂移。
 
 - [x] **P0-A13：内容寻址 AI candidate cache**
 
@@ -338,7 +339,13 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   ContextPack 必须把直接被调函数的签名、定义状态、source binding、stub boundary 和调用表达式合同作为有界事实交给 AI；不能只给 caller 源码后要求模型猜测跨函数语义。candidate manifest 的 `prompt_scope` 必须从实际 ContextPack 计算，不能固定宣称模型看过不存在的 type map、CFG、pointer graph、root cause 或 caller/callee facts。
 
-  完成证据：ContextPack v3 的 16 KiB C boundary 现包含经统一敏感字段/宿主路径清理的 `external_direct_callees` 与 `call_expression_contract`；普通字符串、嵌入 JSON 和转义 JSON 中的带引号 secret assignment 也会清理。独立 `context_scope.py` 只按实际非空 loaded excerpt、真实失败状态和具名直接 callee facts 生成稳定 scope，成功状态下的信息性 diagnostics 不计为 root cause；普通生成与 cache-hit 共用该规则。必需 callee boundary 在单边界或 128 KiB 总 ContextPack 预算中被压缩/截断时，provider admission 都以 `required_callee_context_incomplete` 零调用拒绝。schema-v5 manifest 记录 scope，fresh-run summary validator 强制 v5、重开 hash-bound ContextPack、逐字节复算 prompt 并拒绝 scope 漂移或版本降级；v1-v4 只保留 schema/accepted-evidence 归档读取能力，不能作为 fresh run 自选降级。该项不含项目名、函数名或 fixture 特判，不提升 semantic numerator。Windows/WSL 同组各 156 项全部通过，均仅跳过 1 项平台专用用例。
+  完成证据：ContextPack v3 的 16 KiB C boundary 现包含经统一敏感字段/宿主路径清理的 `external_direct_callees` 与 `call_expression_contract`；普通字符串、嵌入 JSON 和转义 JSON 中的带引号 secret assignment 也会清理。独立 `context_scope.py` 只按实际非空 loaded excerpt、真实失败状态和具名直接 callee facts 生成稳定 scope，成功状态下的信息性 diagnostics 不计为 root cause；普通生成与 cache-hit 共用该规则。必需 callee boundary 在单边界或 128 KiB 总 ContextPack 预算中被压缩/截断时，provider admission 都以 `required_callee_context_incomplete` 零调用拒绝。当前 schema-v7 manifest 记录 scope、模型身份与 invocation receipt，fresh-run summary validator 强制 v7、重开 hash-bound ContextPack、逐字节复算 prompt 并拒绝 scope、身份、receipt 或版本漂移；旧版本只保留 schema/accepted-evidence 归档读取能力，不能作为 fresh run 自选降级。该项不含项目名、函数名或 fixture 特判，不提升 semantic numerator。
+
+- [x] **P0-A16：透明辅助模型验证与无工具候选边界**
+
+  GLM 余额不足时允许显式选择替代模型做本地候选质量验证，但模型身份必须从 resolved model 派生并贯穿 generator、candidate、repair、router 和 summary；只有 `zai/glm-5.1` 是 `competition-primary`。任何替代模型都必须标记 `competition_eligible=false`、`evaluation_scope=auxiliary-local-validation`，不能关闭 P0-A6/A10/H9、进入比赛指标或伪装为 `opencode-glm51-1`。
+
+  完成证据：新增统一 model identity 与动态 candidate id，competition summary 从 resolved model 独立派生并交叉核验 generator/candidate 身份，exact router 也会绑定 selected id、唯一 manifest candidate 和完整模型范围；C2Rust repair generator 必须与本次 routed AI generator 一致。候选和 repair 共用受限响应合同：默认使用权限 `*=deny` 的 `c2rust-candidate` agent，未知 repo-local agent 在 provider 启动前拒绝；worker/preflight 继续使用 `c2rust-migrator`，比赛探针逻辑名 `GLM-5.1` 与 candidate resolved id `zai/glm-5.1` 也已分离，`opencode models` 同时接受这两个精确 token 并拒绝近似名。解析器递归审计原始 JSONL，任何层级的 `tool`/`tool_use` 直接拒绝。严格 JSON 和唯一完整 JSON 围栏可解析，多围栏/不完整围栏 fail closed，解析合同提升到 v3。provider 已拆为 474 行 orchestration、218 行 response parsing、282 行 runtime diagnostics 和 121 行 receipt 构造。schema-v7 为每次 provider 调用绑定最小 receipt 与独立 session-export identity projection；两者都有 `additionalProperties=false` 的专用 schema，只保留身份、prompt/response SHA 和内存中完整 export 的 SHA，不落盘完整 session。competition-exact 会实时重开同一 OpenCode session，并同时核对 export SHA、实际身份、附件 prompt 路径与 ContextPack 前缀、assistant response，不能用无关 GLM session 替换 DeepSeek response。WSL OpenCode 1.17.18 在未传 `--ai-agent` 时使用 `opencode/deepseek-v4-flash-free` 真实生成 `opencode-deepseek-v4-flash-1`，候选通过 rustc 与 compile/oracle/replay/schema-diff/negative-diff/unsafe/alias-ABI/final-verification 八类 exact gates；router 保留完整辅助身份且 `semantic_pass=true`，但总 auto manifest 和候选仍保持非比赛 `semantic_pass=false`。Windows 与 WSL 同组各 203 项回归通过，均跳过 1 项平台专用用例。
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 

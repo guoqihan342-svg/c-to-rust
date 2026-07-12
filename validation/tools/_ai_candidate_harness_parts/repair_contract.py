@@ -6,13 +6,16 @@ from typing import Any
 
 from .context import canonical_json_bytes, sha256_bytes
 from .context_security import HOST_PATH_PATTERN
-from .provider import assistant_text_from_jsonl
+from .provider_response import (
+    assistant_text_from_jsonl,
+    extract_single_json_text,
+    normalize_assumptions,
+    reject_tool_events,
+)
 
 
 MAX_FAILURE_FACTS_BYTES = 64_000
 MAX_REPAIR_RESPONSE_BYTES = 512_000
-MAX_ASSUMPTIONS = 32
-MAX_ASSUMPTION_BYTES = 1_024
 FAILURE_FACT_KEYS = frozenset({"gate", "kind", "message", "location", "expected", "actual", "details"})
 SENSITIVE_DETAIL_KEYS = ("api_key", "apikey", "password", "secret", "credential", "access_token", "refresh_token")
 
@@ -90,7 +93,8 @@ def validation_result_sha256(payload: dict[str, Any]) -> str:
 def parse_repair_response(stdout: str) -> dict[str, Any]:
     if len(stdout.encode("utf-8")) > MAX_REPAIR_RESPONSE_BYTES:
         raise ValueError(f"repair response exceeds {MAX_REPAIR_RESPONSE_BYTES} bytes")
-    text = assistant_text_from_jsonl(stdout).strip()
+    reject_tool_events(stdout)
+    text = extract_single_json_text(assistant_text_from_jsonl(stdout))
     if not text:
         raise ValueError("OpenCode repair response contained no assistant text")
     try:
@@ -103,13 +107,7 @@ def parse_repair_response(stdout: str) -> dict[str, Any]:
         raise ValueError("repair response requires only schema_version, repair, and assumptions")
     if payload.get("schema_version") != 1:
         raise ValueError("repair response schema_version must be 1")
-    assumptions = payload.get("assumptions")
-    if not isinstance(assumptions, list) or not all(isinstance(item, str) for item in assumptions):
-        raise ValueError("repair response assumptions must be a string array")
-    if len(assumptions) > MAX_ASSUMPTIONS or any(
-        len(item.encode("utf-8")) > MAX_ASSUMPTION_BYTES for item in assumptions
-    ):
-        raise ValueError("repair response assumptions exceed bounded count or item size")
+    payload["assumptions"] = normalize_assumptions(payload.get("assumptions"))
     repair = payload.get("repair")
     if not isinstance(repair, dict):
         raise ValueError("repair response requires one repair object")

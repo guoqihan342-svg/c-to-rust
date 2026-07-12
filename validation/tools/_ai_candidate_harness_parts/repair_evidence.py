@@ -5,7 +5,7 @@ from typing import Any
 
 from .context import atomic_write_json, canonical_json_bytes, sha256_bytes, sha256_path
 from .prompt_transport import prompt_transport_contract
-from .provider import LOGICAL_MODEL
+from .model_identity import resolve_model_identity
 
 
 DEFAULT_MAX_REPAIR_ROUNDS = 3
@@ -27,8 +27,9 @@ def report_base(
     artifact_label: str,
     input_source: str,
 ) -> dict[str, Any]:
+    identity = resolve_model_identity(resolved_model)
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "target_id": target_id,
         "slice_id": slice_id,
         "artifact_label": artifact_label,
@@ -44,8 +45,11 @@ def report_base(
         },
         "generator": {
             "tool": "opencode",
-            "logical_model": LOGICAL_MODEL,
+            "provider": identity.provider_label,
+            "logical_model": identity.logical_model,
             "resolved_model": resolved_model,
+            "competition_eligible": identity.competition_eligible,
+            "evaluation_scope": identity.evaluation_scope,
             "agent": agent,
             "variant": variant,
             "prompt_transport": prompt_transport_contract(),

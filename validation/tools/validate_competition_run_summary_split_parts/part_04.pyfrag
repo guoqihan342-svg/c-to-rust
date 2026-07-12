@@ -24,8 +24,8 @@ def validate_ai_execution_policy_shape(policy: dict[str, Any], *, summary: dict[
     if exact:
         expected = {
             "opencode_command": COMPETITION_OPENCODE_COMMAND,
-            "model": COMPETITION_OPENCODE_MODEL,
-            "agent": COMPETITION_OPENCODE_AGENT,
+            "model": COMPETITION_OPENCODE_CANDIDATE_MODEL,
+            "agent": COMPETITION_OPENCODE_CANDIDATE_AGENT,
             "variant": COMPETITION_OPENCODE_VARIANT,
         }
         if any(policy.get(key) != value for key, value in expected.items()):

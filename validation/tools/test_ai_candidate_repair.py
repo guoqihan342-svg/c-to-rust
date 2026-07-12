@@ -68,6 +68,35 @@ def sha256(path: Path) -> str:
 
 
 class AiCandidateRepairTests(unittest.TestCase):
+    def test_repair_parser_accepts_one_json_fence_and_rejects_tool_events(self) -> None:
+        payload = {
+            "schema_version": 1,
+            "repair": {
+                "kind": "candidate",
+                "language": "rust",
+                "source": "pub fn add_one(value: i32) -> i32 { value.wrapping_add(1) }",
+            },
+            "assumptions": [{"description": "C int maps to i32"}],
+        }
+        fenced = json.dumps(
+            {
+                "type": "message.part.updated",
+                "part": {
+                    "type": "text",
+                    "text": f"repair follows\n```json\n{json.dumps(payload)}\n```",
+                },
+            }
+        )
+
+        parsed = ai_candidate_harness.parse_repair_response(fenced)
+
+        self.assertEqual(["C int maps to i32"], parsed["assumptions"])
+        tool_event = json.dumps(
+            {"type": "tool_use", "part": {"type": "tool", "tool": "read"}}
+        )
+        with self.assertRaisesRegex(ValueError, "forbidden tool"):
+            ai_candidate_harness.parse_repair_response(tool_event + "\n" + fenced)
+
     def test_candidate_repair_is_hash_bound_and_never_semantic_acceptance(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ai-repair-candidate-") as tmp:
             root = Path(tmp)
@@ -102,7 +131,7 @@ class AiCandidateRepairTests(unittest.TestCase):
             self.assertEqual(report["input_source"], "opencode-ai")
             self.assertEqual(report["policy"]["effective_max_rounds"], 3)
             self.assertEqual(report["policy"]["hard_max_rounds"], 5)
-            self.assertEqual(2, report["schema_version"])
+            self.assertEqual(3, report["schema_version"])
             self.assertEqual(
                 prompt_transport.prompt_transport_contract(),
                 report["generator"]["prompt_transport"],
@@ -114,7 +143,8 @@ class AiCandidateRepairTests(unittest.TestCase):
             file_args = [arg for arg in observed_argv if arg.startswith("--file=")]
             self.assertEqual(1, len(file_args))
             attached_prompt = Path(file_args[0].split("=", 1)[1])
-            self.assertEqual(prompt_transport.PROMPT_FILE_MESSAGE, observed_argv[-1])
+            self.assertEqual(prompt_transport.PROMPT_FILE_MESSAGE, observed_argv[-2])
+            self.assertEqual(file_args[0], observed_argv[-1])
             self.assertNotIn("Task mode: generate-candidate", observed_argv)
             self.assertLess(sum(len(arg.encode("utf-8")) for arg in observed_argv), 2_048)
             self.assertGreater(attached_prompt.stat().st_size, 16_000)
@@ -149,6 +179,21 @@ class AiCandidateRepairTests(unittest.TestCase):
                 require_transport=True,
             )
             self.assertIn("ai_repair_report_prompt_transport_invalid", reasons)
+
+            tampered_report["generator"] = None
+            report_path.write_text(json.dumps(tampered_report), encoding="utf-8")
+            ref["sha256"] = sha256(report_path)
+            _rounds, reasons = summary_validator.validate_bound_ai_repair_report(
+                ref,
+                manifest_path=out_dir / "l3-generic-add-one-ai-candidate-manifest.json",
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+                candidate=None,
+                expected_generator={"tool": "opencode"},
+                require_transport=True,
+            )
+            self.assertIn("ai_repair_report_prompt_transport_invalid", reasons)
+            self.assertIn("ai_repair_report_generator_mismatch", reasons)
 
     def test_c2rust_artifact_label_isolated_and_unknown_labels_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="c2rust-repair-label-") as tmp:

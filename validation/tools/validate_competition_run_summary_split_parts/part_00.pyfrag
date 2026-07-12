@@ -9,7 +9,9 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
+import subprocess
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 import jsonschema
 
@@ -20,13 +22,23 @@ from validation.tools._ai_candidate_harness_parts.candidate_cache import (
     validate_cache_entry,
 )
 from validation.tools._ai_candidate_harness_parts.context_scope import prompt_scope_for_context
+from validation.tools._ai_candidate_harness_parts.model_identity import resolve_model_identity
 from validation.tools._ai_candidate_harness_parts.provider import parse_candidate_response, render_prompt
+from validation.tools._ai_candidate_harness_parts.provider_receipt import invocation_contract
+from validation.tools._ai_candidate_harness_parts.provider_response import (
+    assistant_text_from_jsonl,
+    session_ids_from_jsonl,
+)
+from validation.tools._ai_candidate_harness_parts.provider_runtime import (
+    parse_session_identity_export,
+)
 from validation.tools._ai_candidate_harness_parts.provider_readiness import (
     BLOCKED_SOURCE_SPAN_STATUSES,
     READY_SOURCE_SPAN_STATUSES,
     evaluate_provider_readiness,
 )
 from validation.tools._ai_candidate_harness_parts.prompt_transport import (
+    PROMPT_FILE_MESSAGE,
     prompt_transport_contract,
 )
 
@@ -38,6 +50,15 @@ AI_CANDIDATE_MANIFEST_SCHEMA_PATH = (
 )
 AI_CONTEXT_PACK_SCHEMA_PATH = (
     REPO_ROOT / "validation" / "auto-translation-template" / "ai-context-pack.schema.json"
+)
+AI_INVOCATION_RECEIPT_SCHEMA_PATH = (
+    REPO_ROOT / "validation" / "auto-translation-template" / "ai-invocation-receipt.schema.json"
+)
+AI_SESSION_EXPORT_IDENTITY_SCHEMA_PATH = (
+    REPO_ROOT
+    / "validation"
+    / "auto-translation-template"
+    / "ai-session-export-identity.schema.json"
 )
 REQUIRED_ARTIFACT_ROOTS = {
     "target/competition-out/evidence",
@@ -63,7 +84,9 @@ LF_STABLE_TEXT_SUFFIXES = {
 }
 COMPETITION_OPENCODE_COMMAND = "opencode"
 COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
+COMPETITION_OPENCODE_CANDIDATE_AGENT = "c2rust-candidate"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
+COMPETITION_OPENCODE_CANDIDATE_MODEL = "zai/glm-5.1"
 COMPETITION_OPENCODE_VARIANT = "max"
 REPAIR_ROUND_CAP = 5
 PROVIDER_CIRCUIT_FAILURE_THRESHOLDS = {
@@ -361,6 +384,8 @@ def opencode_models_stdout_lists_required_model(stdout: str) -> bool:
     for token in re.split(r"[\s,;]+", stdout):
         candidate = token.strip().strip("'\"`[](){}")
         if candidate == COMPETITION_OPENCODE_MODEL:
+            return True
+        if candidate == COMPETITION_OPENCODE_CANDIDATE_MODEL:
             return True
         if "/" in candidate and candidate.rsplit("/", 1)[-1] == COMPETITION_OPENCODE_MODEL:
             return True

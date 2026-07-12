@@ -14,13 +14,26 @@ def passing_gates(candidate_sha: str) -> dict[str, dict[str, str]]:
 
 
 def candidate(candidate_id: str, source: str, candidate_sha: str, **metadata: object) -> dict[str, object]:
-    return {
+    value = {
         "candidate_id": candidate_id,
         "source": source,
         "artifact": {"sha256": candidate_sha},
         "gate_results": passing_gates(candidate_sha),
         **metadata,
     }
+    if source == "opencode-ai":
+        value.update(
+            {
+                "provider": "zai",
+                "logical_model": "GLM-5.1",
+                "resolved_model": "zai/glm-5.1",
+                "competition_eligible": True,
+                "evaluation_scope": "competition-primary",
+                "agent": "c2rust-candidate",
+                "variant": "max",
+            }
+        )
+    return value
 
 
 class AiCandidateRouterTests(unittest.TestCase):
