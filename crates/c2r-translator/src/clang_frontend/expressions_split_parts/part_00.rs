@@ -692,13 +692,14 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
         });
     }
     let arg_type = type_from_ast_type_object(arg_type_object, None)?;
-    if !matches!(
+    let supported_type = matches!(
         arg_type.kind,
         ClangTypeKind::Integer { .. }
             | ClangTypeKind::Array { .. }
             | ClangTypeKind::Pointer { .. }
             | ClangTypeKind::Unsupported { .. }
-    ) {
+    ) || (name == "sizeof" && matches!(arg_type.kind, ClangTypeKind::Record { .. }));
+    if !supported_type {
         return Err(ClangFrontendError {
             kind: format!("unsupported_{name}_type"),
             message: format!(
@@ -716,6 +717,11 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
             alignment_type_spellings: clang_type_candidate_spellings(arg_type_object),
         })
     } else {
-        Ok(ClangExprSkeleton::SizeOfType { arg_type, ty })
+        Ok(ClangExprSkeleton::SizeOfType {
+            arg_type,
+            ty,
+            record_layout: None,
+            target_abi: None,
+        })
     }
 }

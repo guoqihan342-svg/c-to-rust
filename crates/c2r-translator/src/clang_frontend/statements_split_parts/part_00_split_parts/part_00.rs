@@ -188,7 +188,7 @@ fn for_init_comma_assignment_rhs_rejection_reason(value: &ClangExprSkeleton) -> 
         | ClangExprSkeleton::IntegerLiteral { ty, .. } => {
             for_init_comma_integer_type_rejection_reason(ty)
         }
-        ClangExprSkeleton::SizeOfType { arg_type, ty }
+        ClangExprSkeleton::SizeOfType { arg_type, ty, .. }
         | ClangExprSkeleton::AlignOfType { arg_type, ty, .. } => {
             for_init_comma_integer_type_rejection_reason(ty).or_else(|| {
                 clang_type_contains_pointer(arg_type).then(|| {

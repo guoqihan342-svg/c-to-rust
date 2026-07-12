@@ -15,4 +15,5 @@ mod tests {
     include!("tests/ast_utils_source_span.rs");
     include!("tests/verified_parse_arguments.rs");
     include!("tests/null_pointer_bitcast.rs");
+    include!("tests/record_layout.rs");
 }

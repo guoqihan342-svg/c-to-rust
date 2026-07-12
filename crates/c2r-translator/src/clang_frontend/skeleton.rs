@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{ClangEnvironment, ClangFrontendError};
 use crate::typed_ir::{IrFunction, IrGlobal};
+use crate::TargetAbiProfile;
 
 #[cfg(feature = "typed-ir")]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -119,6 +120,8 @@ pub enum ClangExprSkeleton {
     SizeOfType {
         arg_type: ClangTypeSkeleton,
         ty: ClangTypeSkeleton,
+        record_layout: Option<ClangRecordLayoutBinding>,
+        target_abi: Option<TargetAbiProfile>,
     },
     AlignOfType {
         arg_type: ClangTypeSkeleton,
@@ -255,6 +258,44 @@ pub struct ClangLoweringReport {
     pub errors: Vec<ClangFrontendError>,
     pub function_ir: Option<IrFunction>,
     pub globals: Vec<IrGlobal>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub record_layout_evidence: Option<ClangRecordLayoutEvidence>,
+}
+
+#[cfg(feature = "typed-ir")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ClangRecordLayout {
+    pub record_type: String,
+    pub size_bytes: u64,
+    pub align_bytes: u64,
+}
+
+#[cfg(feature = "typed-ir")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ClangRecordLayoutEvidence {
+    pub status: String,
+    pub dump_sha256: Option<String>,
+    pub diagnostics_sha256: Option<String>,
+    pub compile_arguments_sha256: Option<String>,
+    pub compile_database_sha256: Option<String>,
+    pub target_abi: Option<TargetAbiProfile>,
+    pub arguments: Vec<String>,
+    pub used_layouts: Vec<ClangRecordLayoutBinding>,
+    pub ambiguous_records: Vec<String>,
+    pub error: Option<String>,
+}
+
+#[cfg(feature = "typed-ir")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ClangRecordLayoutBinding {
+    pub record_type: String,
+    pub size_bytes: u64,
+    pub align_bytes: u64,
+    pub dump_sha256: String,
+    pub diagnostics_sha256: String,
+    pub compile_arguments_sha256: String,
+    pub compile_database_sha256: String,
+    pub target_abi: TargetAbiProfile,
 }
 
 #[cfg(feature = "typed-ir")]

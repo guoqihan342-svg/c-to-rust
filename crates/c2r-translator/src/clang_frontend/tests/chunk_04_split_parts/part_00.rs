@@ -471,7 +471,18 @@
             "argType": {"qualType": "struct point"}
         });
 
-        let error = expr_skeleton_from_ast(&expr).expect_err("record sizeof must fail closed");
+        let mut skeleton =
+            expr_skeleton_from_ast(&expr).expect("record sizeof must survive until layout binding");
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            int_width: 32,
+            char_width: 8,
+            long_width: 64,
+            pointer_width: 64,
+            ..TargetAbiProfile::default()
+        };
+        bind_target_abi_to_expr(&mut skeleton, &abi);
+        let error = lower_expr(&skeleton).expect_err("record sizeof must fail without layout");
 
         assert!(
             error.message.contains("sizeof") && error.message.contains("layout"),

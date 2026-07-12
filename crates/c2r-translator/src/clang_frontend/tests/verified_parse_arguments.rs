@@ -71,11 +71,11 @@ fn hash_bound_command_uses_declared_closure_includes_and_preserves_semantic_flag
         function_source_span: None,
     };
 
-    let (arguments, diagnostic) =
+    let context =
         verified_parse_arguments(&parse_spec).expect("resolve verified parse arguments");
 
     assert_eq!(
-        arguments,
+        context.arguments,
         [
             "-DDB_VALUE=3",
             "-std=c11",
@@ -84,8 +84,19 @@ fn hash_bound_command_uses_declared_closure_includes_and_preserves_semantic_flag
             "-DBOUND_VALUE=4",
         ]
     );
-    assert!(diagnostic
+    assert!(context.diagnostic
         .as_deref()
         .is_some_and(|value| value.contains("hash-bound compile database replay selected")));
-    assert!(arguments.iter().all(|value| !value.contains("target/stale")));
+    assert!(context
+        .arguments
+        .iter()
+        .all(|value| !value.contains("target/stale")));
+    assert_eq!(
+        context.compile_database_sha256,
+        parse_spec
+            .compile_commands
+            .as_ref()
+            .and_then(CompileDatabaseRef::sha256)
+            .map(str::to_string)
+    );
 }

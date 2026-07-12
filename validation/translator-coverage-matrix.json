@@ -6780,6 +6780,101 @@
           "fail_closed_reason": "auto-migration must route switch/goto slices to L4 refusal, record unsupported_control_flow and relooper-required evidence, and keep generated Rust artifacts blocked"
         }
       ]
+    },
+    {
+      "id": "clang-record-layout-sizeof-provenance",
+      "status": "partial",
+      "scope_limitations": [
+        "covers named complete struct layout consumed by sizeof only",
+        "does not admit union layout, anonymous records, packed/bitfield field lowering, or _Alignof(record)",
+        "the persisted dump SHA binds one run; cross-run drift requires an externally supplied expected dump SHA",
+        "candidate context only until a named slice completes C oracle, Rust replay, diff, negative diff, unsafe ledger, and final verification"
+      ],
+      "ir_constructs": [
+        "hash-bound clang record-layout dump",
+        "named struct size and alignment binding",
+        "compile-database SHA binding",
+        "shared compile-arguments SHA binding",
+        "complete target-ABI binding",
+        "sizeof(record) literal lowering"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "clang record-layout parser and argument isolation tests",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/record_layout.rs"
+            }
+          ]
+        },
+        "handwritten_ir": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "record layout binding lowers sizeof to a bound literal",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/record_layout.rs"
+            }
+          ]
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "record layout parser rejects duplicate named records and binding rejects target drift",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/record_layout.rs"
+            },
+            {
+              "name": "persisted record-layout provenance drift validator tests",
+              "path": "validation/tools/test_record_layout_evidence.py"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "gap",
+          "reason": "the focused test reaches target-bound typed IR only; the real libuv unit is still blocked before Rust emission"
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "the real libuv run advances to the next memset pointer-conversion blocker and emits no accepted Rust replay"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "record-layout provenance is available only from the hash-bound clang real-TU path"
+        },
+        "route_evidence": {
+          "status": "covered",
+          "scope_note": "the lowering report is hash-bound by route evidence and the full auto-translation validator reopens its internal layout bindings; the current WSL run remains local simulation and semantic false",
+          "evidence": [
+            {
+              "name": "record-layout evidence validator",
+              "path": "validation/tools/record_layout_evidence.py"
+            }
+          ]
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "record_layout_binding_lowers_record_sizeof_to_bound_literal",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/record_layout.rs"
+        },
+        {
+          "name": "test_accepts_consistent_hash_bound_layout",
+          "path": "validation/tools/test_record_layout_evidence.py"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "record_layout_dump_parser_removes_duplicate_named_records",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/record_layout.rs",
+          "fail_closed_reason": "duplicate named records cannot supply a unique sizeof layout"
+        },
+        {
+          "name": "record layout provenance validator drift cases",
+          "path": "validation/tools/test_record_layout_evidence.py",
+          "fail_closed_reason": "compile-database, target ABI, per-layout hash, duplicate, and ambiguous-record drift must be rejected"
+        }
+      ]
     }
   ]
 }

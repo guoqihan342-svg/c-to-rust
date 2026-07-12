@@ -285,6 +285,8 @@ use types::*;
 
 include!("clang_frontend/parse_spec_impl.rs");
 include!("clang_frontend/ast_dump.rs");
+include!("clang_frontend/record_layout.rs");
+include!("clang_frontend/record_layout_binding.rs");
 include!("clang_frontend/interior_reborrow.rs");
 include!("clang_frontend/record_scalar_add.rs");
 include!("clang_frontend/record_scalar_add_validation.rs");

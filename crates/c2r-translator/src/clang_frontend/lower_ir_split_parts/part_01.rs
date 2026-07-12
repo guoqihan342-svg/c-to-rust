@@ -209,6 +209,54 @@ fn sizeof_type_bytes(ty: &ClangTypeSkeleton) -> Result<u64, ClangFrontendError> 
 }
 
 #[cfg(feature = "typed-ir")]
+fn record_layout_size_bytes(
+    ty: &ClangTypeSkeleton,
+    target_abi: Option<&TargetAbiProfile>,
+    layout: &ClangRecordLayoutBinding,
+) -> Result<u64, ClangFrontendError> {
+    let ClangTypeKind::Record { name } = &ty.kind else {
+        return Err(ClangFrontendError {
+            kind: "invalid_record_layout_binding".to_string(),
+            message: format!(
+                "record layout {} cannot bind non-record sizeof({})",
+                layout.record_type, ty.spelled
+            ),
+        });
+    };
+    let expected = format!("struct {name}");
+    let valid_hash = |value: &str| {
+        value.len() == 64
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    };
+    if layout.record_type != expected
+        || layout.size_bytes == 0
+        || layout.align_bytes == 0
+        || !layout.align_bytes.is_power_of_two()
+        || layout.size_bytes % layout.align_bytes != 0
+        || !valid_hash(&layout.dump_sha256)
+        || !valid_hash(&layout.diagnostics_sha256)
+        || !valid_hash(&layout.compile_arguments_sha256)
+        || !valid_hash(&layout.compile_database_sha256)
+        || target_abi != Some(&layout.target_abi)
+        || layout.target_abi.triple_or_abi.trim().is_empty()
+        || layout.target_abi.char_width != 8
+        || layout.target_abi.int_width == 0
+        || layout.target_abi.pointer_width == 0
+    {
+        return Err(ClangFrontendError {
+            kind: "invalid_record_layout_binding".to_string(),
+            message: format!(
+                "sizeof({}) record-layout provenance is incomplete or mismatched",
+                ty.spelled
+            ),
+        });
+    }
+    Ok(layout.size_bytes)
+}
+
+#[cfg(feature = "typed-ir")]
 fn alignof_type_bytes(
     ty: &ClangTypeSkeleton,
     alignment_bits: Option<u16>,

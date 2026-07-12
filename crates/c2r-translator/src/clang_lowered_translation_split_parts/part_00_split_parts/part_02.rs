@@ -90,6 +90,7 @@ fn lower_parse_spec_from_ast_fixture_report(
             errors: Vec::new(),
             function_ir: Some(lowered.function_ir),
             globals: lowered.globals,
+            record_layout_evidence: None,
         },
         Err(error) => clang_frontend::ClangLoweringReport {
             status: "blocked".to_string(),
@@ -106,6 +107,7 @@ fn lower_parse_spec_from_ast_fixture_report(
             errors: vec![error],
             function_ir: None,
             globals: Vec::new(),
+            record_layout_evidence: None,
         },
     }
 }

@@ -261,8 +261,13 @@ pub(super) fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: 
         ClangExprSkeleton::FunctionToPointerDecay { expr, .. } => {
             bind_target_abi_to_expr(expr, target_abi);
         }
-        ClangExprSkeleton::SizeOfType { arg_type, .. } => {
+        ClangExprSkeleton::SizeOfType {
+            arg_type,
+            target_abi: bound_target_abi,
+            ..
+        } => {
             bind_target_abi_to_type(arg_type, target_abi);
+            *bound_target_abi = Some(target_abi.clone());
         }
         ClangExprSkeleton::AlignOfType {
             arg_type,

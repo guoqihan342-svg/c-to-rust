@@ -2,8 +2,8 @@ use super::{
     compound_assignment_target_is_direct_index, compound_assignment_target_is_direct_record_field,
     compound_assignment_target_type, index_compound_assignment_value_rejection_reason,
     record_field_compound_assignment_value_rejection_reason, ClangBinaryOperator,
-    ClangExprSkeleton, ClangFrontendError, ClangIncDecOperator, ClangStmtSkeleton, ClangTypeKind,
-    ClangTypeSkeleton, ClangUnaryOperator,
+    ClangExprSkeleton, ClangFrontendError, ClangIncDecOperator, ClangRecordLayoutBinding,
+    ClangStmtSkeleton, ClangTypeKind, ClangTypeSkeleton, ClangUnaryOperator, TargetAbiProfile,
 };
 use crate::typed_ir::{IrBinOp, IrExpr, IrIncDecOp, IrStmt, IrType, IrTypeKind, IrUnOp};
 
@@ -266,8 +266,18 @@ pub(super) fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFronte
             ty: lower_type(ty)?,
             source_span: None,
         }),
-        ClangExprSkeleton::SizeOfType { arg_type, ty } => {
-            let value = sizeof_type_bytes(arg_type)?;
+        ClangExprSkeleton::SizeOfType {
+            arg_type,
+            ty,
+            record_layout,
+            target_abi,
+        } => {
+            let value = match record_layout {
+                Some(layout) => {
+                    record_layout_size_bytes(arg_type, target_abi.as_ref(), layout)?
+                }
+                None => sizeof_type_bytes(arg_type)?,
+            };
             validate_sizeof_result_fits_type(value, ty)?;
             Ok(IrExpr::LitInt {
                 value,

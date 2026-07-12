@@ -25,6 +25,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from validation.tools import validate_judge_entrypoints as judge_validator
+from validation.tools.record_layout_evidence import validate_record_layout_evidence
 L4_REFUSED_FORBIDDEN_ARTIFACT_STATUSES = {
     "accepted_after_gates",
     "accepted_evidence_bound",
@@ -434,6 +435,13 @@ def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str, slice_
         load_json(evidence_dir / f"{prefix}-cfg.json"),
         rel(evidence_dir / f"{prefix}-cfg.json"),
     )
+    clang_report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+    if clang_report_path.exists():
+        validate_record_layout_evidence(
+            slice_spec,
+            load_json(clang_report_path),
+            REPO_ROOT,
+        )
     validate_typed_ir_candidate_binding(evidence_dir, prefix, route, profile)
 
     cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"

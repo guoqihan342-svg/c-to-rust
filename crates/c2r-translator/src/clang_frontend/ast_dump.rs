@@ -65,9 +65,9 @@ pub fn lower_function_from_clang_parse_spec_report(
     parse_spec: &ClangParseSpec,
 ) -> ClangLoweringReport {
     let source_file = parse_spec.source_root.join(&parse_spec.source_file);
-    let (extra_arguments, compile_database_diagnostic) =
+    let verified_context =
         match verified_parse_arguments(parse_spec) {
-            Ok(arguments) => arguments,
+            Ok(context) => context,
             Err(error) => {
                 return report_from_lowering_result(
                     Some(normalized_report_path(&source_file)),
@@ -79,7 +79,8 @@ pub fn lower_function_from_clang_parse_spec_report(
                 );
             }
         };
-    let arguments = clang_ast_dump_arguments_with_extra(&source_file, &extra_arguments);
+    let arguments =
+        clang_ast_dump_arguments_with_extra(&source_file, &verified_context.arguments);
     let Some((clang_path, _clang_source)) = resolve_clang_path(environment) else {
         return ClangLoweringReport {
             status: "unavailable".to_string(),
@@ -98,10 +99,33 @@ pub fn lower_function_from_clang_parse_spec_report(
             }],
             function_ir: None,
             globals: Vec::new(),
+            record_layout_evidence: None,
         };
     };
 
     let mut resolved_function_name = None;
+    let layout_dump = match (
+        verified_context.compile_database_sha256.as_deref(),
+        parse_spec.target_abi.as_ref(),
+    ) {
+        (Some(compile_database_sha256), Some(target_abi)) => {
+            shared_compile_arguments_sha256(&arguments).and_then(|arguments_sha256| {
+                clang_record_layout_dump(
+                    &clang_path,
+                    &arguments,
+                    &arguments_sha256,
+                    compile_database_sha256,
+                    target_abi,
+                )
+            })
+        }
+        _ => Err(ClangFrontendError {
+            kind: "record_layout_provenance_unavailable".to_string(),
+            message: "record-layout lowering requires hash-bound compile database and target ABI"
+                .to_string(),
+        }),
+    };
+    let mut used_record_layouts = Vec::new();
     let mut report = report_from_lowering_result(
         Some(normalized_report_path(&source_file)),
         parse_spec.function_name.clone(),
@@ -118,16 +142,23 @@ pub fn lower_function_from_clang_parse_spec_report(
                 None => parse_spec.function_name.clone(),
             };
             resolved_function_name = Some(selected_name.clone());
-            let mut lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+            let mut lowered =
+                lower_function_and_globals_from_clang_ast_json_value_with_context(
                 &ast,
                 &selected_name,
                 parse_spec.target_abi.as_ref(),
+                layout_dump.as_ref().ok(),
+                &mut used_record_layouts,
             )?;
             lowered.function_ir.name.clone_from(&parse_spec.function_name);
             Ok(lowered)
         }),
     );
-    if let Some(diagnostic) = compile_database_diagnostic {
+    report.record_layout_evidence = Some(record_layout_evidence(
+        layout_dump,
+        used_record_layouts,
+    ));
+    if let Some(diagnostic) = verified_context.diagnostic {
         report.diagnostics.insert(0, diagnostic);
     }
     if let Some(selected_name) = resolved_function_name
@@ -166,6 +197,7 @@ pub fn lower_function_from_clang_ast_dump_report(
             }],
             function_ir: None,
             globals: Vec::new(),
+            record_layout_evidence: None,
         };
     };
 
@@ -250,11 +282,22 @@ fn clang_ast_dump_arguments_with_extra(
 }
 
 #[cfg(feature = "typed-ir")]
+struct VerifiedClangContext {
+    arguments: Vec<String>,
+    diagnostic: Option<String>,
+    compile_database_sha256: Option<String>,
+}
+
+#[cfg(feature = "typed-ir")]
 fn verified_parse_arguments(
     parse_spec: &ClangParseSpec,
-) -> Result<(Vec<String>, Option<String>), ClangFrontendError> {
+) -> Result<VerifiedClangContext, ClangFrontendError> {
     let Some(command) = parse_spec.resolved_compile_command()? else {
-        return Ok((parse_spec.clang_arguments(), None));
+        return Ok(VerifiedClangContext {
+            arguments: parse_spec.clang_arguments(),
+            diagnostic: None,
+            compile_database_sha256: None,
+        });
     };
     let mut arguments = without_captured_include_paths(&command.arguments)?;
     for include_path in parse_spec.resolved_include_paths() {
@@ -269,9 +312,9 @@ fn verified_parse_arguments(
             arguments.push(argument);
         }
     }
-    Ok((
+    Ok(VerifiedClangContext {
         arguments,
-        Some(format!(
+        diagnostic: Some(format!(
             "hash-bound compile database replay selected: path={}, sha256={}",
             parse_spec
                 .compile_commands
@@ -280,7 +323,8 @@ fn verified_parse_arguments(
                 .unwrap_or_default(),
             command.database_sha256,
         )),
-    ))
+        compile_database_sha256: Some(command.database_sha256),
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -338,6 +382,7 @@ fn report_from_lowering_result(
             errors: Vec::new(),
             function_ir: Some(lowered.function_ir),
             globals: lowered.globals,
+            record_layout_evidence: None,
         },
         Err(error) => ClangLoweringReport {
             status: lowering_status_for_error(&error).to_string(),
@@ -351,6 +396,7 @@ fn report_from_lowering_result(
             errors: vec![error],
             function_ir: None,
             globals: Vec::new(),
+            record_layout_evidence: None,
         },
     }
 }

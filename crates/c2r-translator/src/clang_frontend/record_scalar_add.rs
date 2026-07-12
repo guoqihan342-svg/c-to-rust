@@ -12,6 +12,24 @@ pub fn lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
     function_name: &str,
     target_abi: Option<&TargetAbiProfile>,
 ) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
+    let mut used_record_layouts = Vec::new();
+    lower_function_and_globals_from_clang_ast_json_value_with_context(
+        ast,
+        function_name,
+        target_abi,
+        None,
+        &mut used_record_layouts,
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn lower_function_and_globals_from_clang_ast_json_value_with_context(
+    ast: &Value,
+    function_name: &str,
+    target_abi: Option<&TargetAbiProfile>,
+    record_layout_dump: Option<&RecordLayoutDump>,
+    used_record_layouts: &mut Vec<ClangRecordLayoutBinding>,
+) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
     let record_inventory = record_inventory_from_ast_with_target_abi(ast, target_abi);
     let enum_constant_inventory = enum_constant_inventory_from_ast(ast);
     let enum_type_inventory = enum_type_inventory_from_ast(ast, target_abi);
@@ -20,6 +38,10 @@ pub fn lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
         kind: "missing_function_decl".to_string(),
         message: format!("clang AST JSON does not contain FunctionDecl named {function_name}"),
     })?;
+    if let Some(record_layout_dump) = record_layout_dump {
+        *used_record_layouts =
+            record_layout_bindings_from_function_ast(function, record_layout_dump);
+    }
     validate_interior_reborrow_typedef_provenance(ast, function, target_abi)?;
     let mut function = function.clone();
     rewrite_enum_constant_decl_refs_to_integer_literals(&mut function, &enum_constant_inventory)?;
@@ -28,6 +50,12 @@ pub fn lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
     rewrite_supported_enum_types_in_function_skeleton(&mut skeleton, &enum_type_inventory)?;
     if let Some(target_abi) = target_abi {
         bind_target_abi_to_function_skeleton(&mut skeleton, target_abi);
+    }
+    if let Some(record_layout_dump) = record_layout_dump {
+        let bound = bind_record_layouts_to_function_skeleton(&mut skeleton, record_layout_dump);
+        if !bound.is_empty() {
+            *used_record_layouts = bound;
+        }
     }
     let mut function_ir = lower_function_skeleton(&skeleton)?;
     attach_record_inventory_to_function(&mut function_ir, &record_inventory);

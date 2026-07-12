@@ -164,6 +164,7 @@ fn lower_parse_spec_from_slice_source_report(
             }],
             function_ir: None,
             globals: Vec::new(),
+            record_layout_evidence: None,
         };
     }
 
