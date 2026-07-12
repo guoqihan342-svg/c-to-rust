@@ -131,9 +131,8 @@ def _binding(
             }
         else:
             source = {
-                "kind": "null_pointer",
-                "rust_type": POINTER_RUST_TYPES[scalar_type],
-                "mutability": "mutable" if scalar_type == "raw_mut_ptr" else "shared",
+                "kind": "optional_non_null_none",
+                "rust_type": SAFE_NULL_POINTER_RUST_TYPE,
             }
         _insert_tree(tree, default["rust_field_path"], default["rust_type_path"], source)
     initializer = _tree_initializer(tree, supporting_types)
@@ -194,5 +193,4 @@ def _source_rust_type(source: dict[str, Any]) -> str:
     if source["kind"] == "fixture_field":
         return source["encoding"]
     return source["rust_type"]
-
 

@@ -32,10 +32,7 @@ OUTPUT_FIELD_KEYS = {
     "fixture_scalar_type", "rust_scalar_type", "conversion",
 }
 DEFAULT_KEYS = {"rust_field_path", "rust_type_path", "rust_scalar_type", "value"}
-POINTER_RUST_TYPES = {
-    "raw_const_ptr": "*const core::ffi::c_void",
-    "raw_mut_ptr": "*mut core::ffi::c_void",
-}
+SAFE_NULL_POINTER_RUST_TYPE = "Option<core::ptr::NonNull<core::ffi::c_void>>"
 
 
 _PARTS_DIR = _Path(__file__).with_name("_replay_call_plan_record_identity_parts")

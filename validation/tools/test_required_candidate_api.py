@@ -47,6 +47,11 @@ class RequiredCandidateApiTests(unittest.TestCase):
         self.assertIn("pub struct FdbTslAddr", contract["supporting_types_source"])
         self.assertIn("pub log: u32", contract["supporting_types_source"])
         self.assertIn("pub struct FdbBlob", contract["supporting_types_source"])
+        self.assertIn(
+            "pub buf: Option<core::ptr::NonNull<core::ffi::c_void>>",
+            contract["supporting_types_source"],
+        )
+        self.assertNotIn("*mut core::ffi::c_void", contract["supporting_types_source"])
         self.assertEqual(
             {
                 "mode": "self_contained",

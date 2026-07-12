@@ -59,8 +59,11 @@ class RecordPointerIdentityPlanTests(unittest.TestCase):
         leaves = self.initializer_leaves(output["initializer"])
         self.assertEqual("usize", leaves[("saved", "len")]["encoding"])
         self.assertEqual("constant_scalar", leaves[("size",)]["kind"])
-        self.assertEqual("null_pointer", leaves[("buf",)]["kind"])
-        self.assertEqual("mutable", leaves[("buf",)]["mutability"])
+        self.assertEqual("optional_non_null_none", leaves[("buf",)]["kind"])
+        self.assertEqual(
+            "Option<core::ptr::NonNull<core::ffi::c_void>>",
+            leaves[("buf",)]["rust_type"],
+        )
         self.assertEqual(3, plan["fixture"]["case_count"])
         self.assertEqual(64, len(plan["plan_sha256"]))
 
@@ -80,6 +83,8 @@ class RecordPointerIdentityPlanTests(unittest.TestCase):
         self.assertEqual("fdb_kv_to_blob", plan["api_name"])
         self.assertEqual([["blob", "kv"]], plan["distinct_mutable_bindings"])
         self.assertIn("fdb_kv_to_blob(", source)
+        self.assertIn("buf: None", source)
+        self.assertNotIn("*mut core::ffi::c_void", source)
         self.assertNotIn("record_projection_identity_return", source)
 
     def test_neutral_inline_contract_survives_complete_symbol_and_field_rename(self) -> None:

@@ -383,6 +383,7 @@ def _normalize_bindings(value: Any) -> list[dict[str, Any]]:
         if initializer["kind"] in {
             "constant_scalar",
             "null_pointer",
+            "optional_non_null_none",
             "owned_string",
             "fixture_enum_constant",
         }:
@@ -483,6 +484,17 @@ def _normalize_plan_initializer(value: Any, types: dict[str, dict[str, Any]]) ->
             "rust_type": rust_type,
             "mutability": mutability,
         }
+    if value.get("kind") == "optional_non_null_none":
+        rust_type = value.get("rust_type")
+        if (
+            set(value) != {"kind", "rust_type"}
+            or rust_type != "Option<core::ptr::NonNull<core::ffi::c_void>>"
+        ):
+            raise ValueError("ReplayCallPlan v2 optional non-null initializer is invalid")
+        return {
+            "kind": "optional_non_null_none",
+            "rust_type": rust_type,
+        }
     if value.get("kind") != "struct":
         raise ValueError("ReplayCallPlan v2 initializer kind is unsupported")
     rust_type = _identifier(value.get("rust_type"), "initializer type")
@@ -500,6 +512,7 @@ def _normalize_plan_initializer(value: Any, types: dict[str, dict[str, Any]]) ->
             "struct",
             "constant_scalar",
             "null_pointer",
+            "optional_non_null_none",
             "owned_string",
             "fixture_enum_constant",
         }:

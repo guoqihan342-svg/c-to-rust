@@ -634,6 +634,17 @@
         }
       ]
     },
+    "replayOptionalNonNullNoneInitializer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "rust_type"],
+      "properties": {
+        "kind": {"const": "optional_non_null_none"},
+        "rust_type": {
+          "const": "Option<core::ptr::NonNull<core::ffi::c_void>>"
+        }
+      }
+    },
     "replayOwnedStringInitializer": {
       "type": "object",
       "additionalProperties": false,
@@ -798,6 +809,7 @@
                   {"$ref": "#/definitions/replayStructInitializer"},
                   {"$ref": "#/definitions/replayConstantScalarInitializer"},
                   {"$ref": "#/definitions/replayNullPointerInitializer"},
+                  {"$ref": "#/definitions/replayOptionalNonNullNoneInitializer"},
                   {"$ref": "#/definitions/replayOwnedStringInitializer"},
                   {"$ref": "#/definitions/replayFixtureEnumConstantInitializer"},
                   {

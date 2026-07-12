@@ -12,7 +12,7 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | --- | --- |
 | Translator-generated semantic pass | `38` named slices, derived from `validation/translator-coverage-matrix.json` |
 | Accepted-evidence authoritative | `1`, reported separately from the translator numerator |
-| Latest development stage | P0-A18c3: add a closed self-contained source contract to the required API |
+| Latest development stage | P0-A18c4: use a safe proxy type for unobserved null-pointer defaults |
 | Active translator task | P0-A18c: re-evaluate AI exact and first-round API match rates on the fixed cross-project suite |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
@@ -230,6 +230,8 @@ When GLM balance is unavailable, `run_ai_auxiliary_cross_project_suite` provides
 The latest WSL auxiliary run, `ai-auxiliary-p0-a18c1-deepseek-wsl-20260712-204206`, used the fixed 12 items and `opencode/deepseek-v4-flash-free`: 12/12 preflight ready, 12 initial plus 4 response-proven repair calls, 16 provider invocations total. It produced 11 candidates, 2 exact passes, 9 exact failures, no contract failure, 1 execution failure, and no provider block. The exact passes remain `real-fdb-calc-crc32` and `real-fdb-is-str`, so exact success did not improve. Relative to the previous run, candidates increased 8 to 11, contract failures fell 2 to 0, provider blocks fell 1 to 0, total calls fell 18 to 16, and first-round rustc API mismatches under a valid target contract fell 3 to 1. `tsl_to_blob` and `kv_set` now compile, while `kv_to_blob` still does not. The execution failure was a zero-start AI draft violating the safe owner-interior alias contract before that exception was structured; P0-A18c2 now records such rejection as a fail-closed replay failure. Report SHA-256 is `512641d1ece1d6dcf8b5bc20af3208da467a1c5284931d3c2a32bdb5cf8551c1`. This remains `wsl-local-simulation` with both public numerators fixed at zero.
 
 P0-A18c1 fixes that accounting and removes low-information calls. Fixture-only compile stubs exist only during checking, after which the canonical AI draft is restored byte-for-byte. Repair prompts request only a complete self-contained Rust candidate. AI repair is skipped with a recorded reason when the fresh C oracle did not pass, the target contract is absent, or no structured candidate failure exists. The auxiliary timeout defaults to 300 seconds. The implementation passes 161 focused Windows tests; the P0-A18c2 structured safety-refusal path passes 4/4 on both Windows and WSL. The fixed suite still has only two exact passes, so P0-A18c remains open.
+
+The P0-A18c3 zero-repair targeted DeepSeek run for `kv_to_blob` proves the closed source contract works: one initial call emitted every supporting struct and passed both rustc and generated replay. The router SHA-256 is `0c5f8f7130f4b6b8c163f1007af130cc6016f48234a54e6dde4485a8a7b31316`. Its only remaining blocker was `alias_proof_missing`, caused by an unobserved compiler-owned proxy field whose contract required only a null default but still used `*mut c_void`. P0-A18c4 maps only such record-default fields to `Option<NonNull<c_void>> = None`; fields that participate in buffer, length, or pointer-identity semantics keep their original contracts.
 
 ```bash
 python3 -B -m validation.tools.run_ai_auxiliary_cross_project_suite \

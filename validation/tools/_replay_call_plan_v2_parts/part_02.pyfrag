@@ -127,6 +127,8 @@ def _initializer_literal(initializer: dict[str, Any], inputs: dict[str, Any]) ->
             if initializer["mutability"] == "mutable"
             else "core::ptr::null()"
         )
+    if initializer["kind"] == "optional_non_null_none":
+        return "None"
     fields = []
     for field in initializer["fields"]:
         value = field["value"]
