@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 class ReplayCallPlanScalarTests(unittest.TestCase):
     SCALAR_SPECS = (
         "demo-add-one.json",
+        "demo-call-expression.json",
         "demo-enum-constant.json",
         "demo-implicit-integer-noop-cast.json",
         "demo-scalar-div-rem-contract.json",
@@ -106,6 +107,47 @@ class ReplayCallPlanScalarTests(unittest.TestCase):
                 plan = build_replay_call_plan(self.load_spec(filename), REPO_ROOT)
                 jsonschema.Draft7Validator(plan_schema).validate(plan)
 
+    def test_call_metadata_contract_binds_contexts_calls_and_input_mapping(self) -> None:
+        spec = self.load_spec("demo-call-expression.json")
+
+        plan = build_replay_call_plan(spec, REPO_ROOT)
+        source = render_declarative_replay_cases(spec, plan, REPO_ROOT)
+
+        self.assertEqual("bound", plan["status"])
+        self.assertEqual("input_value", plan["parameters"][0]["source"]["field"])
+        self.assertEqual(
+            ["string", "usize", "string_vec", "string_vec"],
+            [item["encoding"] for item in plan["fixture_assertions"]],
+        )
+        self.assertIn("call_expression_chain(-2i32)", source)
+        self.assertNotIn("struct FixtureCase", source)
+
+    def test_call_metadata_match_survives_complete_rename(self) -> None:
+        spec = self.renamed_call_metadata_spec()
+
+        plan = build_replay_call_plan(spec, REPO_ROOT)
+        source = render_declarative_replay_cases(spec, plan, REPO_ROOT)
+
+        self.assertEqual("renamed_recursive_api", plan["api_name"])
+        self.assertEqual("fixture_seed", plan["parameters"][0]["source"]["field"])
+        self.assertIn("renamed_recursive_api(-2i32)", source)
+        self.assertNotIn("call_expression_chain(", source)
+
+    def test_call_metadata_mapping_and_fixture_drift_fail_closed(self) -> None:
+        mapping_drift = self.renamed_call_metadata_spec()
+        mapping_drift["c_boundary"]["call_expression_contract"]["input_fixture_fields"] = {
+            "wrong": "fixture_seed"
+        }
+        self.assertEqual("unavailable", build_replay_call_plan(mapping_drift, REPO_ROOT)["status"])
+
+        fixture_drift = self.renamed_call_metadata_spec()
+        fixture_drift["fixture_contract"]["cases"][0]["expected_outputs"]["source_calls"] = [
+            "different"
+        ]
+        blocked = build_replay_call_plan(fixture_drift, REPO_ROOT)
+        self.assertEqual("blocked", blocked["status"])
+        self.assertIn("metadata field source_calls drifted", blocked["reason"])
+
     @staticmethod
     def load_spec(filename: str) -> dict:
         return json.loads(
@@ -113,6 +155,41 @@ class ReplayCallPlanScalarTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )
+
+    @classmethod
+    def renamed_call_metadata_spec(cls) -> dict:
+        spec = cls.load_spec("demo-call-expression.json")
+        old_name = spec["function_name"]
+        new_name = "renamed_recursive_source"
+        spec["function_name"] = new_name
+        signature = spec["c_boundary"]["signatures"][0]
+        signature["function"] = new_name
+        signature["parameters"][0]["name"] = "seed"
+        spec["rust_boundary"]["public_api"][0]["name"] = "renamed_recursive_api"
+        contract = spec["c_boundary"]["call_expression_contract"]
+        contract["input_fixture_fields"] = {"seed": "fixture_seed"}
+        contract["source_calls"] = [
+            item.replace(old_name, new_name) for item in contract["source_calls"]
+        ]
+        expected = {
+            "return_value": 2,
+            "status": "ok",
+            "call_expression_count": len(contract["contexts"]),
+            "call_expression_contexts": list(contract["contexts"]),
+            "source_calls": list(contract["source_calls"]),
+        }
+        spec["fixture_contract"] = {
+            "cases": [
+                {
+                    "id": "negative-two",
+                    "input_ref": "inline",
+                    "inputs": {"fixture_seed": -2},
+                    "expected_outputs": expected,
+                }
+            ],
+            "observable_outputs": list(expected),
+        }
+        return spec
 
 
 if __name__ == "__main__":

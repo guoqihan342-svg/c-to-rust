@@ -18,6 +18,7 @@ ALLOWED_ENCODINGS = {
     "u16",
     "bool",
     "string",
+    "string_vec",
     "hex_bytes",
     "u8_array",
 }
@@ -749,7 +750,7 @@ def _normalize_fixture_assertions(value: Any) -> list[dict[str, Any]]:
             raise ValueError("fixture assertion must be an object")
         field = _identifier(raw.get("fixture_field"), "fixture assertion field")
         encoding = raw.get("encoding")
-        if field in fields or encoding not in {"u32", "u64", "i32", "usize", "bool", "string"}:
+        if field in fields or encoding not in {"u32", "u64", "i32", "usize", "bool", "string", "string_vec"}:
             raise ValueError("fixture assertion field or encoding is invalid")
         _encoded_literal(raw.get("expected"), encoding)
         result.append(
@@ -852,6 +853,10 @@ def _encoded_literal(value: Any, encoding: str) -> str:
         return "true" if value else "false"
     if encoding == "string" and isinstance(value, str):
         return json.dumps(value, ensure_ascii=True)
+    if encoding == "string_vec" and isinstance(value, list) and len(value) <= 64:
+        if not all(isinstance(item, str) for item in value):
+            raise ValueError("string_vec fixture field is invalid")
+        return "&[" + ", ".join(json.dumps(item, ensure_ascii=True) for item in value) + "]"
     if encoding == "hex_bytes":
         return "&[" + ", ".join(f"{item}u8" for item in _decode_hex(value)) + "]"
     if encoding == "u8_array" and isinstance(value, list):

@@ -548,9 +548,18 @@ class _AutoMigrateTestsPart07:
             self.assertTrue(replay["generated_draft_replay_pass"])
             self.assertTrue(replay["generated_draft_semantic_pass"])
             self.assertEqual(replay["evidence_links"]["rust_draft"]["status"], "accepted_after_gates")
-            self.assertIn("let actual = call_expression_chain(case.input_value);", replay_draft)
-            self.assertIn('assert_eq!(actual, case.return_value, "{} return_value drifted", case.id);', replay_draft)
-            self.assertIn('assert_eq!(case.status, "ok", "{} fixture status drifted", case.id);', replay_draft)
+            self.assertIn("// ReplayCallPlan-SHA256:", replay_draft)
+            self.assertIn("let actual_negative_two_0: i32 = call_expression_chain(-2i32);", replay_draft)
+            self.assertIn(
+                'assert_eq!(observed_negative_two_0_0, 2i32, "negative-two return_value drifted");',
+                replay_draft,
+            )
+            self.assertIn(
+                'assert_eq!(&["declaration_initializer", "assignment", "return"], &["declaration_initializer", "assignment", "return"], "negative-two call_expression_contexts metadata drifted");',
+                replay_draft,
+            )
+            self.assertIn("negative-two source_calls metadata drifted", replay_draft)
+            self.assertNotIn("struct FixtureCase", replay_draft)
             self.assertEqual(rust_report["status"], "passed")
             self.assertTrue(rust_report["semantic_pass"])
             self.assertTrue(capability["capability_delta"][0]["semantic_pass"])

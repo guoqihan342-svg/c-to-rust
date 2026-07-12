@@ -82,6 +82,14 @@
         "assignment",
         "return"
       ],
+      "source_calls": [
+        "int first = call_expression_chain(value - 1)",
+        "value = call_expression_chain(first - 1)",
+        "return call_expression_chain(value - 1)"
+      ],
+      "input_fixture_fields": {
+        "value": "input_value"
+      },
       "unsupported": [
         "function_pointer_call",
         "member_call",
