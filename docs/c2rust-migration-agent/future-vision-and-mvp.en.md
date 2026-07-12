@@ -269,7 +269,7 @@ Close work in executable dependency order so external model or checkout blockers
 | 1 | P0-A11 provider admission and zero-call evidence | Complete; only regression fixes remain |
 | 2 | P0-A12 file-based prompt transport | Complete; only transport/CLI compatibility regressions remain |
 | 3 | P0-A13 content-addressed AI candidate cache | Complete; only cache binding/schema/validator regressions remain |
-| 4 | P0-A14 bounded compile response-file expansion | Recover real compile arguments within source-root, depth, file-count, and byte limits |
+| 4 | P0-A14 bounded compile response-file expansion | Complete; only dialect/schema/binding regressions remain |
 | 5 | P0-A10 fixed-suite real acceptance | Run the complete suite once after resource recovery and publish reproducible metrics |
 | 6 | P0-A6 / P0-H9 competition-host replay | A valid resource package and competition-exact host are available; simulation cannot substitute |
 
@@ -285,7 +285,7 @@ Each stage runs the finite construct set once, then expands translator/ContextPa
 
   Build minimal context from the real source root/span, effective includes, `compile_commands.json` or manual flags, macros, target ABI, dependency declarations, Clang AST/diagnostics, typed-IR/C2Rust baselines, and validation failures. Relative/absolute paths, generated headers, and build directories must resolve. Secrets, host absolute paths, and unrelated large files must not enter publishable artifacts.
 
-  Completion evidence: ContextPack v2 is split by responsibility into source, compile database, compile arguments, security, and deterministic-artifact modules. It supports an explicit external source root, a repository-relative source root, real span/source SHA bindings, compile-command selection, include/define/ABI summaries, a 128 KB total cap, and a 32 KB per-artifact cap. Path or symlink escape, hash drift, secrets, and host paths fail closed.
+  Completion evidence: ContextPack v3 is split by responsibility into source, compile database, compile arguments, response files, security, and deterministic-artifact modules. It supports an explicit external source root, a repository-relative source root, real span/source SHA bindings, compile-command selection, include/define/ABI summaries, a 128 KB total cap, and a 32 KB per-artifact cap. Path or symlink escape, hash drift, secrets, and host paths fail closed.
 
 - [x] **P0-A8: validation-driven bounded AI repair loop**
 
@@ -325,9 +325,11 @@ Each stage runs the finite construct set once, then expands translator/ContextPa
 
   Completion evidence: caching is enabled only through explicit `--cache-root` or `--ai-candidate-cache-root`, and the competition runner accepts only repository-local roots. The schema-v4 manifest binds the eight-part content key and copies a hit's `entry.json` into current path/SHA evidence; the summary validator reopens the entry, raw response, and initial candidate, reparses the response, and recomputes the key. Same-key requests first use single-flight and recheck the cache, then publish under a cross-process lock through a unique staging directory and first-writer-wins rename; a corrupt entry is quarantined and rebuilt by one real provider call. Failures, timeouts, refusals, and parse failures are never cached. A hit records initial `provider_invocations=0` and metrics-v2 `cache_hits=1`, while later repair rounds still count as invocations; common gates and `semantic_gate=false` remain unchanged. All 124 contract tests pass on Windows; WSL passes 123 of the same 124 and platform-skips the Windows-lock-specific case.
 
-- [ ] **P0-A14: bounded compile response-file expansion**
+- [x] **P0-A14: bounded compile response-file expansion**
 
   Expand only relative `@file` inputs inside the source root, with recursion-depth, file-count, per-file/total-byte, and cycle limits; bind every response file by logical path and SHA. Parse failure, path escape, or budget overflow must fail closed instead of silently dropping include, define, target-ABI, or other arguments. Validate this against different real C projects without project, function, or fixture special cases.
+
+  Completion evidence: ContextPack v3 and its independent schema enable only `gnu-v1` for clang/gcc/cc families; MSVC and unknown dialects fail closed. Relative paths may normalize `..` while remaining inside the root; real escape, absolute/drive/UNC paths, cycles, links, invalid UTF-8/NUL/quoting, depth over 4, more than 16 expansions, files over 64 KiB, totals over 256 KiB, or more than 4096 arguments block before provider invocation. Successful expansion recovers defines, includes, and target ABI, records original/expanded argv SHAs, and binds every file's logical path/SHA/size/depth in both the selected entry and ContextPack inputs. Response changes invalidate the ContextPack, prompt, and AI cache key. Windows and WSL each run 149 tests and pass 148: Windows skips only unavailable symlink creation, while WSL skips only the Windows-lock-specific case.
 
 - [x] **P0-A1: OpenCode no-progress retry suppression**
 

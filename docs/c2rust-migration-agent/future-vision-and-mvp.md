@@ -271,7 +271,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 1 | P0-A11 provider admission 与零调用证据 | 已完成；后续只修回归 |
 | 2 | P0-A12 文件化 prompt transport | 已完成；后续只修 transport/CLI 兼容回归 |
 | 3 | P0-A13 内容寻址 AI candidate cache | 已完成；后续只修 cache binding/schema/validator 回归 |
-| 4 | P0-A14 受限展开编译 response file | 在 source root 内按深度、文件数和总字节上限补齐真实编译参数 |
+| 4 | P0-A14 受限展开编译 response file | 已完成；后续只修 dialect/schema/binding 回归 |
 | 5 | P0-A10 固定套件真实验收 | 资源恢复后只运行一次完整套件并发布可复核指标 |
 | 6 | P0-A6 / P0-H9 比赛主机复验 | 有效资源包和 competition-exact host 可用；不得用模拟结果代替 |
 
@@ -287,7 +287,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   从真实 source root、source span、有效 `#include`、`compile_commands.json`/手工 flags、宏、target ABI、依赖声明、Clang AST/诊断、typed-IR/C2Rust 基线和验证失败中生成最小上下文。相对/绝对路径、生成头文件和构建目录必须可解析；禁止密钥、宿主绝对路径和无关大文件进入可发布 artifact。
 
-  完成证据：ContextPack v2 已按职责拆为 source、compile database、compile args、security 和 deterministic artifact 模块；支持显式外部 source root、仓库内相对 source root、真实 span/source SHA、compile command 选择、include/define/ABI 摘要、128 KB 总上限和 32 KB 单 artifact 上限。路径/符号链接逃逸、hash 漂移、密钥及宿主路径均 fail-closed。
+  完成证据：ContextPack v3 已按职责拆为 source、compile database、compile args、response files、security 和 deterministic artifact 模块；支持显式外部 source root、仓库内相对 source root、真实 span/source SHA、compile command 选择、include/define/ABI 摘要、128 KB 总上限和 32 KB 单 artifact 上限。路径/符号链接逃逸、hash 漂移、密钥及宿主路径均 fail-closed。
 
 - [x] **P0-A8：验证驱动的有界 AI repair loop**
 
@@ -327,9 +327,11 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   完成证据：缓存仅通过 `--cache-root` 或 `--ai-candidate-cache-root` 显式启用，competition runner 只接受 repo 内目录。schema-v4 manifest 绑定八项内容 key，并把命中的 `entry.json` 复制为本次 path/SHA evidence；summary validator 重开 entry、raw response 和初始 candidate，重新解析响应并复算 key。并发同 key 先用 single-flight 二次查缓存，再在跨进程发布锁内通过唯一 staging 目录和 first-writer-wins rename 发布；损坏 entry 会隔离并由一次真实 provider 调用重建。失败、超时、拒绝和解析失败均不缓存。命中记录初始 `provider_invocations=0` 和 metrics-v2 `cache_hits=1`，后续 repair rounds 仍独立计入总调用；common gates 与 `semantic_gate=false` 不变。Windows 124 项合同测试全部通过；WSL 同组 124 项中 123 项通过、1 项 Windows 锁专用用例按平台跳过。
 
-- [ ] **P0-A14：受限展开编译 response file**
+- [x] **P0-A14：受限展开编译 response file**
 
   仅展开 source root 内的相对 `@file`，限制递归深度、文件数、单文件/总字节并检测环；每个 response file 记录 repo/logical path 与 SHA。解析失败、路径逃逸或预算超限必须 fail-closed，不能静默丢失 include、define、target ABI 等参数。完成后用不同真实 C 项目验证，不新增项目名、函数名或 fixture 特判。
+
+  完成证据：ContextPack v3 与独立 schema 只为 clang/gcc/cc 系列启用 `gnu-v1`，MSVC/未知 dialect fail-closed。相对路径允许 root 内规范化 `..`，真实逃逸、absolute/drive/UNC、cycle、link、非法 UTF-8/NUL/引号、深度 4、展开 16 次、单文件 64 KiB、总计 256 KiB 或 4096 参数超限都会在 provider 前结构化阻断。成功展开会恢复 define/include/target ABI，记录 original/expanded argv SHA，并把每个文件的 logical path/SHA/size/depth 同时绑定到 selected entry 与 ContextPack inputs；response 变化会失效 ContextPack、prompt 和 AI cache key。Windows/WSL 同组各 149 项、148 项通过：Windows 仅跳过无权限 symlink 创建用例，WSL 仅跳过 Windows 锁专用用例。
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 
