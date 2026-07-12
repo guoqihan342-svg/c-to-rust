@@ -41,6 +41,19 @@ def validate_compile_command_draft(
 ) -> None:
     if not isinstance(compile_command, dict):
         raise SystemExit(f"oracle harness compile command draft missing from {oracle_path}")
+    from validation.tools.native_build_closure import resolve_native_build_closure_or_block
+
+    native_build = resolve_native_build_closure_or_block(
+        slice_spec,
+        REPO_ROOT,
+        oracle_path.parent,
+        harness_path,
+    )
+    if native_build is not None:
+        if compile_command != native_build:
+            raise SystemExit(f"oracle harness native build closure drift in {oracle_path}")
+        return
+
     source_root = compile_source_root(slice_spec)
     expected_includes = [
         resolve_source_root_path(source_root, path)

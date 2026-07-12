@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "build_config": {
+    "generator": "Ninja",
+    "build_type": "Release",
+    "build_target": "uv_a",
+    "configure_defines": [
+      "LIBUV_BUILD_SHARED=OFF",
+      "LIBUV_BUILD_TESTS=OFF",
+      "BUILD_TESTING=OFF",
+      "CMAKE_EXPORT_COMPILE_COMMANDS=ON"
+    ]
+  },
+  "target_abi": {
+    "triple": "x86_64-unknown-linux-gnu",
+    "endianness": "little",
+    "pointer_width": 64
+  },
+  "toolchain": {
+    "cc": "GNU 13.3.0",
+    "cmake": "3.28.3"
+  },
+  "source_root": {
+    "path": "sources/libuv",
+    "sha256": "2f95cabe1854b8e905507098263c8938f2aafcaa7eefc501f7aab12c49b54819"
+  },
+  "compile_database": {
+    "path": "validation/native-build-closures/libuv-ip4-addr/compile_commands.json",
+    "sha256": "f81a760815fb8618d3856e9f376a89d0e9c76234d3af0dd9e7840d8319f40638"
+  },
+  "defines": [
+    "_GNU_SOURCE"
+  ],
+  "source_include_dirs": [
+    {
+      "path": "sources/libuv/include",
+      "sha256": "d1dcf164ae864c19b488f44b2e0f66ce1a6eac729b99617e75a3f8f623a86505"
+    },
+    {
+      "path": "sources/libuv/src",
+      "sha256": "4a353e6507ee17fa1119a6ff93fed2e8aa7a202a5681f3c56fcedfb961dcb6a6"
+    }
+  ],
+  "generated_include_dirs": [],
+  "link_artifacts": [
+    {
+      "path": "validation/native-build-closures/libuv-ip4-addr/libuv.a",
+      "sha256": "67afe398071990bdd78f4a3a70c64a5c4ad43f784bb29f18a130cc0b4bbdd340"
+    }
+  ],
+  "system_link_args": [
+    "-lpthread",
+    "-ldl",
+    "-lrt",
+    "-lm"
+  ],
+  "symbol_bindings": [
+    {
+      "source_symbol": "uv_ip4_addr",
+      "linked_symbol": "uv_ip4_addr",
+      "artifact": {
+        "path": "validation/native-build-closures/libuv-ip4-addr/libuv.a",
+        "sha256": "67afe398071990bdd78f4a3a70c64a5c4ad43f784bb29f18a130cc0b4bbdd340"
+      }
+    }
+  ]
+}

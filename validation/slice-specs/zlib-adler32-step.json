@@ -60,6 +60,14 @@
   "build_profile": {
     "profile_id": "zlib-adler32-step-linux-gnu",
     "compiler_command_source": "validation/evidence/zlib-ng/l1-native-build.json",
+    "oracle_build": {
+      "schema_version": 1,
+      "mode": "linked_artifacts_v1",
+      "closure_manifest": {
+        "path": "validation/native-build-closures/zlib-ng-adler32-step/closure.json",
+        "sha256": "0939c0e62fb538a76977ff64f626ba3c1ccbf3ec5c31bd3a749401e60794282a"
+      }
+    },
     "include_paths": ["sources/zlib-ng"],
     "defines": [],
     "target": {

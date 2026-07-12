@@ -8,6 +8,10 @@ import tempfile
 import unittest
 
 from validation.tools import ai_candidate_harness
+from validation.tools.native_build_closure import (
+    resolve_native_build_closure,
+    sha256_path as native_sha256_path,
+)
 
 
 def sha256(path: Path) -> str:
@@ -145,6 +149,77 @@ class AiFreshOracleTests(unittest.TestCase):
             self.assertEqual(len(result["reuse_key_sha256"]), 64)
             self.assertNotIn("semantic_pass", result)
             self.assertNotIn(str(root), json.dumps(result, sort_keys=True))
+
+    def test_native_build_closure_is_reopened_and_bound_into_reuse_identity(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fresh-oracle-native-closure-") as tmp:
+            root = Path(tmp)
+            spec, payload, harness = self.make_case(root)
+            build = root / "build"
+            build.mkdir(exist_ok=True)
+            compile_database = build / "compile_commands.json"
+            compile_database.write_text("[]\n", encoding="utf-8")
+            library = build / "libnative.a"
+            library.write_bytes(b"native archive")
+            source_root = root / "project"
+            include_dir = source_root / "include"
+
+            def ref(path: Path) -> dict[str, str]:
+                return {
+                    "path": path.relative_to(root).as_posix(),
+                    "sha256": native_sha256_path(path),
+                }
+
+            manifest = {
+                "schema_version": 1,
+                "build_config": {
+                    "generator": "Ninja",
+                    "build_type": "Release",
+                    "build_target": "native",
+                    "configure_defines": ["FEATURE=2"],
+                },
+                "target_abi": {
+                    "triple": "x86_64-unknown-linux-gnu",
+                    "endianness": "little",
+                    "pointer_width": 64,
+                },
+                "toolchain": {"cc": "test-cc", "cmake": "test-cmake"},
+                "source_root": ref(source_root),
+                "compile_database": ref(compile_database),
+                "defines": ["FEATURE=2"],
+                "source_include_dirs": [ref(include_dir)],
+                "generated_include_dirs": [],
+                "link_artifacts": [ref(library)],
+                "system_link_args": ["-lm"],
+                "symbol_bindings": [
+                    {
+                        "source_symbol": "transform",
+                        "linked_symbol": "transform",
+                        "artifact": ref(library),
+                    }
+                ],
+            }
+            manifest_path = build / "closure.json"
+            manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+            spec["build_profile"]["oracle_build"] = {
+                "schema_version": 1,
+                "mode": "linked_artifacts_v1",
+                "closure_manifest": ref(manifest_path),
+            }
+            command = resolve_native_build_closure(spec, root, harness.parent, harness)
+            payload["compile_command_draft"] = command
+            payload["compile_execution"]["argv"] = command["argv"]
+            payload["compile_execution"]["execution_argv"] = [
+                "/usr/bin/cc",
+                *command["argv"][1:],
+            ]
+
+            passed = self.prove(root, spec, payload, harness)
+            library.write_bytes(b"drifted archive")
+            drifted = self.prove(root, spec, payload, harness)
+
+            self.assertEqual(passed["status"], "passed")
+            self.assertNotIn(str(root), json.dumps(passed, sort_keys=True))
+            self.assertIn("native_build_closure_mismatch", self.kinds(drifted))
 
     def test_crlf_checkout_matches_lf_source_bindings_without_hiding_content_drift(self) -> None:
         with tempfile.TemporaryDirectory(prefix="fresh-oracle-crlf-") as tmp:

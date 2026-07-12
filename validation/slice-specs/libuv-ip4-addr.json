@@ -58,6 +58,14 @@
   "build_profile": {
     "profile_id": "libuv-ip4-addr-linux-gnu",
     "compiler_command_source": "validation/evidence/libuv/l1-native-build.json",
+    "oracle_build": {
+      "schema_version": 1,
+      "mode": "linked_artifacts_v1",
+      "closure_manifest": {
+        "path": "validation/native-build-closures/libuv-ip4-addr/closure.json",
+        "sha256": "9e379f3017ba3ea6302247d2220cd4fe36f05622b44190314c310af9afc23bd8"
+      }
+    },
     "include_paths": ["sources/libuv/include"],
     "defines": ["_GNU_SOURCE", "AF_INET=2"],
     "target": {

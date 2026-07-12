@@ -326,7 +326,29 @@ def _compile_binding(
     if harness is not None and harness.name not in argv:
         failures.append(_failure("harness_not_compiled", "Compile command does not reference the fresh harness."))
     profile = _mapping(spec.get("build_profile"))
-    defines = [str(item) for item in profile.get("defines", [])] if isinstance(profile.get("defines", []), list) else []
+    from validation.tools.native_build_closure import resolve_native_build_closure_or_block
+
+    native_build = None
+    if harness is not None:
+        native_build = resolve_native_build_closure_or_block(
+            spec,
+            root,
+            harness.parent,
+            harness,
+        )
+    if native_build is not None and dict(command) != native_build:
+        failures.append(
+            _failure(
+                "native_build_closure_mismatch",
+                "Compile command does not match the hash-bound native build closure.",
+            )
+        )
+    define_source = native_build if native_build is not None else profile
+    defines = (
+        [str(item) for item in define_source.get("defines", [])]
+        if isinstance(define_source.get("defines", []), list)
+        else []
+    )
     if command.get("defines") != defines or any(f"-D{item}" not in argv for item in defines):
         failures.append(_failure("build_profile_mismatch", "Compile defines do not match the build profile."))
     if command.get("status") != "draft_not_executed":
@@ -381,10 +403,35 @@ def _compile_binding(
         "argv": _compile_flags(argv, harness, command),
         "compiler_command_source": profile.get("compiler_command_source"),
         "defines": defines,
-        "include_paths": profile.get("include_paths", []),
-        "link_source_files": profile.get("link_source_files", []),
+        "include_paths": (
+            native_build.get("resolved_include_paths", [])
+            if native_build is not None
+            else profile.get("include_paths", [])
+        ),
+        "link_source_files": (
+            native_build.get("link_source_files", [])
+            if native_build is not None
+            else profile.get("link_source_files", [])
+        ),
         "preprocessing_mode": profile.get("preprocessing_mode"),
     }
+    if native_build is not None:
+        flags["native_build_closure"] = {
+            key: native_build.get(key)
+            for key in (
+                "closure_manifest",
+                "source_root_ref",
+                "compile_database",
+                "build_config",
+                "target_abi",
+                "toolchain",
+                "source_include_dirs",
+                "generated_include_dirs",
+                "link_artifacts",
+                "system_link_args",
+                "symbol_bindings",
+            )
+        }
     execution_identity = {
         "actual_argv_sha256": _hash_json(sanitize_value(actual_argv, [str(root)])),
         "harness_argv_sha256": _hash_json(sanitize_value(run_argv, [str(root)])),

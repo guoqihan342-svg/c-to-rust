@@ -26,9 +26,9 @@ input.c + compile context
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 + A18c8a targeted 2/4 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑，定向 4 项中 2 项新增 exact pass，均明确不具备比赛资格 |
-| 当前翻译主线 | P0-A18c / P0-A10 | A18c8a 已关闭；下一步实现 A18c8b 原生构建闭包，并保留两个 scripted replay 模型稳定性缺口，不按项目名或样例分派 |
+| 当前翻译主线 | P0-A18c / P0-A10 | A18c8a/A18c8b 已关闭；下一步实现 A18c8c 通用可执行 C oracle call plan，并保留两个 scripted replay 模型稳定性缺口 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A18c8a | hash-bound ordered typed-IR behavior digest、scripted callee lexical-scope 合同和投影 fail-closed 边界已收口 |
+| 最近开发阶段 | P0-A18c8b | repo-owned compile DB/generated include/static library/link/symbol/ABI closure 已收口，`c_boundary.files` 与链接闭包已分离 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -182,7 +182,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 顺序 | 待办 | 状态 | 本轮完成判据 |
 | ---: | --- | --- | --- |
 | 1 | P0-A18c7 跨项目 AI 输入与证据合同闭包 | 完成 | Windows/WSL 125 项回归通过；固定 12 项生成 12 个候选、0 contract failure、6 exact pass |
-| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | A18c8a 已完成；下一项通用补齐 2 个真实项目 C oracle 构建合同，并继续由 AI/确定性 fallback/验证层处理两个 scripted 模型失败 |
+| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | A18c8a/A18c8b 已完成；下一项让通用 C oracle call plan 真正执行 fixture 调用与输出比较，并继续由 AI/确定性 fallback/验证层处理两个 scripted 模型失败 |
 | 3 | P0-A10 AI golden set | 待开始 | 以多项目、陌生标识符和最近邻负例扩充能力集，禁止按测试用例修补 |
 | 4 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
 | 5 | P0-C 阶段收口 | 待开始 | 修复历史 evidence 漂移并清理 all-feature Clippy 剩余项 |
@@ -419,7 +419,13 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
         - artifact bounding 为完整 clang excerpt 预留元数据外预算，修复 6.3 KiB 有序投影被通用限深器改写后 SHA 失配的问题。Windows/WSL 聚焦门均为 131/131，`git diff --check` 通过。
         - `wsl-local-simulation` 的 4 项 DeepSeek 0-repair 定向运行全部 provider-ready 且各调用 1 次；interior projection 与 stats sequence 从旧 replay failure 转为八类 gate 全绿，独立验证器各重开 16 个工件后 `semantic_pass=true`。router SHA-256 分别为 `1d40a293cd63acee5a8eab1c72c155a879bf932ec5bbe68da9e15e965c394e31`、`7bfbc41e2803d72415c4035ab5068eb4b6bbe02eec5966b1e845556e941b2ae1`。
         - zero-start 与 read-kv-body-call 的初始候选及各 1 轮修复仍未 exact：DeepSeek 继续改写 nested loop/return/sentinel 或 required API mutability。该事实不回灌 fixture 值、不增加轮次，也不冒充固定 12 项成功率；默认流水线仍由通用 typed-IR fallback 与 exact gates 兜底，父项保持未完成。
-      - [ ] **P0-A18c8b：真实项目 fresh C oracle 构建闭包**。优先消费绑定的 compile database、generated include 和构建产物/链接合同；缺失时 fail closed，不按 zlib/libuv 名称添加语义桩或测试专用链接参数。
+      - [x] **P0-A18c8b：真实项目 fresh C oracle 构建闭包**。优先消费绑定的 compile database、generated include 和构建产物/链接合同；缺失时 fail closed，不按 zlib/libuv 名称添加语义桩或测试专用链接参数。
+        - 新增 `linked_artifacts_v1` resolver 与独立 manifest schema，只按 schema/mode/字段工作，不读取 target/project/function/slice/name 选择逻辑。closure 绑定 source tree、规范化 compile DB、source/generated include 目录树、静态库、系统链接参数、source/link symbol、CMake 配置、toolchain 和 target ABI；路径必须 repo-relative，父路径、绝对路径、symlink、缺失和 SHA 漂移均拒绝。
+        - producer 与 validator 从同一 closure 重建有序 argv；closure 无效时 producer 写 `native_build_closure_invalid`、零 argv 和结构化诊断。slice spec/build profile 与 ContextPack 声明 closure manifest path/SHA；fresh oracle 会重新解析 closure，并把 compile DB/include/library/link/symbol/config/toolchain/ABI 身份计入 flags/reuse key。translator 暂不伪装为已回放 compile DB：当前 Rust 前端尚未实现 compile-command entry 选择与参数清洗。
+        - repo-owned 最小闭包位于 `validation/native-build-closures/`：zlib-ng 使用 `ZLIB_COMPAT=OFF` 的 `libz-ng.a`，显式绑定 `adler32_z -> zng_adler32_z` 与 generated headers；libuv 使用 `libuv.a` 及 `-lpthread -ldl -lrt -lm`。两份 compile DB 已去除宿主绝对路径，静态库 SHA 与实际 `nm` 符号一致。
+        - WSL `runs-05` 中两项均为 `compile_succeeded_not_oracle`、return code 0、harness `exited_zero_not_oracle`，oracle compile contract 重算通过；libuv 完整 auto-translation schema validator 通过。fresh proof 仅剩 `oracle_output_mismatch/oracle_output_unproven`，不再有 header/link/build-profile/closure mismatch。Windows/WSL 聚焦合同测试均为 61/61，固定 12 项离线 preflight 12/12 ready、0 模型调用。
+        - zlib 的完整 auto-translation schema validator 仍受真实宏源码 CFG 为空阻塞：旧的 `adler32_step` AST fixture 已移除，不能恢复合成样例冒充真实 `adler32_z`。该项属于通用 preprocessing/compile-context translator 缺口，不影响本项已经证明的原生构建闭包，但在通用解析收口前不得声称 zlib 翻译通过。
+      - [ ] **P0-A18c8c：通用可执行 C oracle call plan**。从 C 签名、fixture codec、observable outputs 与 ABI 生成数据驱动的 harness 调用、输入初始化、返回/结构字段编码和 stdout 比较；禁止按项目/函数名选择 adapter。只有执行 fixture target call 且 output gate 全匹配后，fresh oracle 才能进入 AI repair/exact 路径。
 
       前序失败证据：同配置 `kv_set` router `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0` 的 rustc/unsafe/oracle 通过，但候选把外部 callee 结果实现为 `-1`，与 oracle 的 `7` 不一致。三项 WSL worktree 运行均报告 `repo_commit=UNKNOWN0`，因此只属于本地 hash-bound AI 路由证据。
 

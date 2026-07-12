@@ -255,4 +255,16 @@ def declared_compile_context(
     }
     if redacted:
         result["redacted_define_count"] = redacted
+    oracle_build = profile.get("oracle_build")
+    if isinstance(oracle_build, dict):
+        closure_manifest = oracle_build.get("closure_manifest")
+        if isinstance(closure_manifest, dict):
+            result["oracle_build"] = {
+                "schema_version": oracle_build.get("schema_version"),
+                "mode": oracle_build.get("mode"),
+                "closure_manifest": {
+                    "path": redact_text(str(closure_manifest.get("path", "")), known_roots),
+                    "sha256": closure_manifest.get("sha256"),
+                },
+            }
     return result

@@ -81,6 +81,14 @@ class AiContextPackTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="context-pack-project-") as tmp:
             root = Path(tmp)
             source_root, function, spec = self.make_project(root)
+            spec["build_profile"]["oracle_build"] = {
+                "schema_version": 1,
+                "mode": "linked_artifacts_v1",
+                "closure_manifest": {
+                    "path": "validation/native-build-closures/unit/closure.json",
+                    "sha256": "a" * 64,
+                },
+            }
             secret = "synthetic-secret-for-redaction-test"
             self.write_compile_database(
                 source_root,
@@ -116,6 +124,13 @@ class AiContextPackTests(unittest.TestCase):
             self.assertEqual(context["source"]["span"]["content"].encode(), function)
             self.assertEqual(context["source"]["input"]["sha256"], sha256((source_root / "src/unit.c").read_bytes()))
             self.assertEqual(context["compile_context"]["status"], "selected")
+            self.assertEqual(
+                context["compile_context"]["declared"]["oracle_build"]["closure_manifest"],
+                {
+                    "path": "validation/native-build-closures/unit/closure.json",
+                    "sha256": "a" * 64,
+                },
+            )
             self.assertEqual(
                 context["c_boundary"]["payload"]["signatures"][0]["return_type"],
                 "version.1",

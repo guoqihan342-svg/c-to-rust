@@ -76,6 +76,17 @@ def c_string_literal(value: str) -> str:
 
 
 def c_oracle_compile_command(spec: dict[str, Any], harness_path: Path, evidence_dir: Path) -> dict[str, Any]:
+    from validation.tools.native_build_closure import resolve_native_build_closure_or_block
+
+    native_build = resolve_native_build_closure_or_block(
+        spec,
+        REPO_ROOT,
+        evidence_dir,
+        harness_path,
+    )
+    if native_build is not None:
+        return native_build
+
     source_root = compile_source_root(spec)
     resolved_include_paths = [
         resolve_source_root_path(source_root, path)

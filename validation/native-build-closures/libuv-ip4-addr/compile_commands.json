@@ -1,0 +1,212 @@
+[
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/fs-poll.c.o -c sources/libuv/src/fs-poll.c",
+    "directory": ".",
+    "file": "sources/libuv/src/fs-poll.c",
+    "output": "CMakeFiles/uv_a.dir/src/fs-poll.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/idna.c.o -c sources/libuv/src/idna.c",
+    "directory": ".",
+    "file": "sources/libuv/src/idna.c",
+    "output": "CMakeFiles/uv_a.dir/src/idna.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/inet.c.o -c sources/libuv/src/inet.c",
+    "directory": ".",
+    "file": "sources/libuv/src/inet.c",
+    "output": "CMakeFiles/uv_a.dir/src/inet.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/random.c.o -c sources/libuv/src/random.c",
+    "directory": ".",
+    "file": "sources/libuv/src/random.c",
+    "output": "CMakeFiles/uv_a.dir/src/random.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/strscpy.c.o -c sources/libuv/src/strscpy.c",
+    "directory": ".",
+    "file": "sources/libuv/src/strscpy.c",
+    "output": "CMakeFiles/uv_a.dir/src/strscpy.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/strtok.c.o -c sources/libuv/src/strtok.c",
+    "directory": ".",
+    "file": "sources/libuv/src/strtok.c",
+    "output": "CMakeFiles/uv_a.dir/src/strtok.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/thread-common.c.o -c sources/libuv/src/thread-common.c",
+    "directory": ".",
+    "file": "sources/libuv/src/thread-common.c",
+    "output": "CMakeFiles/uv_a.dir/src/thread-common.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/threadpool.c.o -c sources/libuv/src/threadpool.c",
+    "directory": ".",
+    "file": "sources/libuv/src/threadpool.c",
+    "output": "CMakeFiles/uv_a.dir/src/threadpool.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/timer.c.o -c sources/libuv/src/timer.c",
+    "directory": ".",
+    "file": "sources/libuv/src/timer.c",
+    "output": "CMakeFiles/uv_a.dir/src/timer.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/uv-common.c.o -c sources/libuv/src/uv-common.c",
+    "directory": ".",
+    "file": "sources/libuv/src/uv-common.c",
+    "output": "CMakeFiles/uv_a.dir/src/uv-common.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/uv-data-getter-setters.c.o -c sources/libuv/src/uv-data-getter-setters.c",
+    "directory": ".",
+    "file": "sources/libuv/src/uv-data-getter-setters.c",
+    "output": "CMakeFiles/uv_a.dir/src/uv-data-getter-setters.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/version.c.o -c sources/libuv/src/version.c",
+    "directory": ".",
+    "file": "sources/libuv/src/version.c",
+    "output": "CMakeFiles/uv_a.dir/src/version.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/async.c.o -c sources/libuv/src/unix/async.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/async.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/async.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/core.c.o -c sources/libuv/src/unix/core.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/core.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/core.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/dl.c.o -c sources/libuv/src/unix/dl.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/dl.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/dl.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/fs.c.o -c sources/libuv/src/unix/fs.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/fs.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/fs.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/getaddrinfo.c.o -c sources/libuv/src/unix/getaddrinfo.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/getaddrinfo.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/getaddrinfo.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/getnameinfo.c.o -c sources/libuv/src/unix/getnameinfo.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/getnameinfo.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/getnameinfo.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/loop-watcher.c.o -c sources/libuv/src/unix/loop-watcher.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/loop-watcher.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/loop-watcher.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/loop.c.o -c sources/libuv/src/unix/loop.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/loop.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/loop.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/pipe.c.o -c sources/libuv/src/unix/pipe.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/pipe.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/pipe.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/poll.c.o -c sources/libuv/src/unix/poll.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/poll.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/poll.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/process.c.o -c sources/libuv/src/unix/process.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/process.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/process.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/random-devurandom.c.o -c sources/libuv/src/unix/random-devurandom.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/random-devurandom.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/random-devurandom.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/signal.c.o -c sources/libuv/src/unix/signal.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/signal.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/signal.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/stream.c.o -c sources/libuv/src/unix/stream.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/stream.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/stream.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/tcp.c.o -c sources/libuv/src/unix/tcp.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/tcp.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/tcp.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/thread.c.o -c sources/libuv/src/unix/thread.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/thread.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/thread.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/tty.c.o -c sources/libuv/src/unix/tty.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/tty.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/tty.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/udp.c.o -c sources/libuv/src/unix/udp.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/udp.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/udp.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/proctitle.c.o -c sources/libuv/src/unix/proctitle.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/proctitle.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/proctitle.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/linux.c.o -c sources/libuv/src/unix/linux.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/linux.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/linux.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/procfs-exepath.c.o -c sources/libuv/src/unix/procfs-exepath.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/procfs-exepath.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/procfs-exepath.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/random-getrandom.c.o -c sources/libuv/src/unix/random-getrandom.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/random-getrandom.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/random-getrandom.c.o"
+  },
+  {
+    "command": "/usr/bin/cc -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_POSIX_C_SOURCE=200112 -Isources/libuv/include -Isources/libuv/src -O3 -DNDEBUG -std=gnu11 -fvisibility=hidden -Wstrict-prototypes -Wextra -Wall -Wno-unused-parameter -fno-strict-aliasing -o CMakeFiles/uv_a.dir/src/unix/random-sysctl-linux.c.o -c sources/libuv/src/unix/random-sysctl-linux.c",
+    "directory": ".",
+    "file": "sources/libuv/src/unix/random-sysctl-linux.c",
+    "output": "CMakeFiles/uv_a.dir/src/unix/random-sysctl-linux.c.o"
+  }
+]

@@ -351,7 +351,7 @@
       "construct_family": "macro-dispatched-buffer-checksum",
       "slice_spec": {
         "path": "validation/slice-specs/zlib-adler32-step.json",
-        "sha256": "f7e7217a5a1368726c259c22171dc723ede81fa3e92a07bd5340d16c6a03b944"
+        "sha256": "834d7f5e0f4bd841e8f2dcc60669168f2179844a982a7e8ee31257c419597e28"
       },
       "source_binding": {
         "root": "sources/zlib-ng",
@@ -380,7 +380,7 @@
       "construct_family": "abi-record-external-network-call",
       "slice_spec": {
         "path": "validation/slice-specs/libuv-ip4-addr.json",
-        "sha256": "eb07173dd13444fafcdecba515916beab45573fd0ebf331f3a4e438d7ee2c639"
+        "sha256": "da98a537e0f13d6cca5b677240f67a8ffef34f6beb14ad3a28445ad2b5c07eca"
       },
       "source_binding": {
         "root": "sources/libuv",

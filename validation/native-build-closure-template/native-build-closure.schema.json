@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.invalid/c2rust/native-build-closure.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "build_config",
+    "target_abi",
+    "toolchain",
+    "source_root",
+    "compile_database",
+    "defines",
+    "source_include_dirs",
+    "generated_include_dirs",
+    "link_artifacts",
+    "system_link_args",
+    "symbol_bindings"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "build_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generator", "build_type", "build_target", "configure_defines"],
+      "properties": {
+        "generator": {"type": "string", "minLength": 1},
+        "build_type": {"type": "string", "minLength": 1},
+        "build_target": {"type": "string", "minLength": 1},
+        "configure_defines": {"$ref": "#/definitions/stringList"}
+      }
+    },
+    "target_abi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["triple", "endianness", "pointer_width"],
+      "properties": {
+        "triple": {"type": "string", "minLength": 1},
+        "endianness": {"enum": ["little", "big"]},
+        "pointer_width": {"type": "integer", "minimum": 1}
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "source_root": {"$ref": "#/definitions/artifactRef"},
+    "compile_database": {"$ref": "#/definitions/artifactRef"},
+    "defines": {"$ref": "#/definitions/stringList"},
+    "source_include_dirs": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/artifactRef"}
+    },
+    "generated_include_dirs": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/artifactRef"}
+    },
+    "link_artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/definitions/artifactRef"}
+    },
+    "system_link_args": {"$ref": "#/definitions/stringList"},
+    "symbol_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_symbol", "linked_symbol", "artifact"],
+        "properties": {
+          "source_symbol": {"type": "string", "minLength": 1},
+          "linked_symbol": {"type": "string", "minLength": 1},
+          "artifact": {"$ref": "#/definitions/artifactRef"}
+        }
+      }
+    }
+  },
+  "definitions": {
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?![A-Za-z]:)(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "stringList": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}
