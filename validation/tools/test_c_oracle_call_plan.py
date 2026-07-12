@@ -99,13 +99,17 @@ class COracleCallPlanTests(unittest.TestCase):
                 spec, contract, spoofed, REPO_ROOT
             )
 
-    def test_omitted_parameter_and_record_return_stay_unavailable(self) -> None:
+    def test_declared_output_parameter_and_record_projection_generate(self) -> None:
         rendered = render_c_oracle_call_plan(
             self.load_spec("libuv-ip4-addr.json"), REPO_ROOT
         )
 
-        self.assertEqual("unavailable", rendered["status"])
-        self.assertIn("every C parameter", rendered["reason"])
+        self.assertEqual("generated", rendered["status"])
+        self.assertEqual(2, rendered["case_count"])
+        self.assertEqual(12, len(rendered["protocol_records"]))
+        self.assertIn("uv_ip4_addr(", rendered["statements"])
+        self.assertIn("&case_loopback_0_addr_out", rendered["statements"])
+        self.assertRegex(rendered["c_oracle_call_plan_sha256"], r"^[0-9a-f]{64}$")
 
     def test_type_drift_and_fixture_metadata_stay_unavailable(self) -> None:
         type_drift = self.load_spec("zlib-adler32-step.json")
@@ -159,7 +163,7 @@ class COracleCallPlanTests(unittest.TestCase):
         signature_parameter["c_type"] = "const char *"
         spec["fixture_contract"]["cases"][0]["inputs"]["input_hex"] = "bad\u0000text"
         with patch(
-            "validation.tools.c_oracle_call_plan.build_replay_call_plan",
+            "validation.tools.c_oracle_call_plan_direct.build_replay_call_plan",
             return_value=plan,
         ):
             rendered = render_c_oracle_call_plan(spec, REPO_ROOT)
@@ -183,7 +187,7 @@ class COracleCallPlanTests(unittest.TestCase):
         spec["fixture_contract"]["cases"][0]["inputs"]["seed"] = 2**32
 
         with patch(
-            "validation.tools.c_oracle_call_plan.build_replay_call_plan",
+            "validation.tools.c_oracle_call_plan_direct.build_replay_call_plan",
             return_value=plan,
         ):
             rendered = render_c_oracle_call_plan(spec, REPO_ROOT)
@@ -196,7 +200,7 @@ class COracleCallPlanTests(unittest.TestCase):
         plan = build_replay_call_plan(spec, REPO_ROOT)
         plan["parameters"][1]["c_parameter"] = "adler"
         with patch(
-            "validation.tools.c_oracle_call_plan.build_replay_call_plan",
+            "validation.tools.c_oracle_call_plan_direct.build_replay_call_plan",
             return_value=plan,
         ):
             rendered = render_c_oracle_call_plan(spec, REPO_ROOT)
@@ -206,7 +210,7 @@ class COracleCallPlanTests(unittest.TestCase):
         plan = build_replay_call_plan(spec, REPO_ROOT)
         plan["parameters"][0]["source"]["kind"] = "guessed_value"
         with patch(
-            "validation.tools.c_oracle_call_plan.build_replay_call_plan",
+            "validation.tools.c_oracle_call_plan_direct.build_replay_call_plan",
             return_value=plan,
         ):
             rendered = render_c_oracle_call_plan(spec, REPO_ROOT)

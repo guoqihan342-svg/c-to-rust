@@ -280,6 +280,91 @@
       ]
     },
     {
+      "id": "generic-c-oracle-output-binding-call-plan",
+      "status": "covered",
+      "ir_constructs": [
+        "declarative C output pointee binding",
+        "zero-initialized struct storage",
+        "signature-ordered address-of argument",
+        "return and mapped-status observations",
+        "record scalar field projection",
+        "BE16 projection",
+        "fixed object-byte lowercase-hex projection",
+        "ABI and field-width static assertions",
+        "C call-plan SHA binding"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "not_applicable",
+          "reason": "this capability renders a verified C-oracle harness contract rather than replaying a clang fixture"
+        },
+        "handwritten_ir": {
+          "status": "not_applicable",
+          "reason": "the output-binding plan is declarative harness data and not handwritten typed IR"
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "output binding closure header source width and transform refusals",
+              "path": "validation/tools/test_c_oracle_call_plan_output.py"
+            },
+            {
+              "name": "strict output record mutation refusals",
+              "path": "validation/tools/test_c_oracle_output_protocol.py"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "gap",
+          "reason": "the real libuv C harness executes but the generated Rust candidate remains blocked at unproven record-layout sizeof"
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "fresh C-oracle execution is schema-valid with semantic_pass=false and does not replace Rust replay or C/Rust diff acceptance"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "the C-oracle output-binding renderer does not select translator legacy fallback"
+        },
+        "route_evidence": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "libuv declarative C-oracle contract",
+              "path": "validation/slice-specs/libuv-ip4-addr.json"
+            },
+            {
+              "name": "call-plan source and persisted-output recomputation validators",
+              "path": "validation/tools/_validate_auto_translation_evidence_parts/part_00_split_parts/part_00.pyfrag"
+            }
+          ]
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "libuv output contract renders six observations for two bounded cases",
+          "path": "validation/tools/test_c_oracle_call_plan_output.py"
+        },
+        {
+          "name": "complete project slice function and output-parameter rename remains generic",
+          "path": "validation/tools/test_c_oracle_call_plan_output.py"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "missing or non-writable output binding fails closed",
+          "path": "validation/tools/test_c_oracle_call_plan_output.py",
+          "fail_closed_reason": "output bindings must exactly close omitted writable single-struct-pointer C parameters"
+        },
+        {
+          "name": "raw expression unknown transform unsafe header and width drift fail closed",
+          "path": "validation/tools/test_c_oracle_call_plan_output.py",
+          "fail_closed_reason": "only bounded enums safe declared headers identifier field paths and encoding-consistent widths are accepted"
+        }
+      ]
+    },
+    {
       "id": "handwritten-ir-readonly-global-crc32",
       "status": "covered",
       "ir_constructs": [

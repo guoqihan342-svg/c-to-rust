@@ -171,6 +171,82 @@
       {"actual": "return.addr_bytes_hex", "fixture_field": "addr_bytes_hex", "rust_type": "String", "encoding": "string"}
     ]
   },
+  "c_oracle_contract": {
+    "schema_version": 1,
+    "kind": "direct_call_with_output_bindings",
+    "abi": {
+      "target_ref": "build_profile.target",
+      "char_bits": 8
+    },
+    "headers": ["uv.h"],
+    "output_bindings": [
+      {
+        "id": "addr_out",
+        "c_parameter": "addr",
+        "initializer": "zero",
+        "pass_mode": "address_of"
+      }
+    ],
+    "observations": [
+      {
+        "fixture_field": "return_code",
+        "encoding": "i32",
+        "source": {"kind": "return"}
+      },
+      {
+        "fixture_field": "status",
+        "encoding": "string",
+        "source": {
+          "kind": "map_scalar",
+          "value": {"kind": "return"},
+          "cases": [{"equals": 0, "value": "ok"}],
+          "default": "invalid"
+        }
+      },
+      {
+        "fixture_field": "family",
+        "encoding": "u16",
+        "source": {
+          "kind": "field",
+          "binding": "addr_out",
+          "path": ["sin_family"],
+          "width_bytes": 2
+        }
+      },
+      {
+        "fixture_field": "port_host",
+        "encoding": "u16",
+        "source": {
+          "kind": "be_u16",
+          "binding": "addr_out",
+          "path": ["sin_port"],
+          "width_bytes": 2
+        }
+      },
+      {
+        "fixture_field": "port_bytes_hex",
+        "encoding": "hex_bytes",
+        "source": {
+          "kind": "object_bytes",
+          "binding": "addr_out",
+          "path": ["sin_port"],
+          "byte_count": 2,
+          "format": "lower_hex"
+        }
+      },
+      {
+        "fixture_field": "addr_bytes_hex",
+        "encoding": "hex_bytes",
+        "source": {
+          "kind": "object_bytes",
+          "binding": "addr_out",
+          "path": ["sin_addr", "s_addr"],
+          "byte_count": 4,
+          "format": "lower_hex"
+        }
+      }
+    ]
+  },
   "rust_boundary": {
     "crate": "validation/l2_slices",
     "module": "validation/l2_slices/src/libuv_ip4_addr.rs",
@@ -214,6 +290,7 @@
     "source.repo_commit",
     "fixture_contract.hash",
     "replay_contract",
+    "c_oracle_contract",
     "build_profile.profile_id",
     "rust_boundary.module",
     "translator_version"

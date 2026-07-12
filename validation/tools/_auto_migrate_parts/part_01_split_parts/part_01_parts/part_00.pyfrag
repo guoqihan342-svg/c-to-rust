@@ -228,6 +228,15 @@ def oracle_fixture_execution_source(
                 "compared_fields": declarative["compared_fields"],
                 "output_protocol": declarative["output_protocol"],
                 "protocol_record_count": len(declarative["protocol_records"]),
+                **(
+                    {
+                        "c_oracle_call_plan_sha256": declarative[
+                            "c_oracle_call_plan_sha256"
+                        ]
+                    }
+                    if "c_oracle_call_plan_sha256" in declarative
+                    else {}
+                ),
             },
         }
     if c_oracle_signature_supports_fdb_blob_make_call(spec, signature):

@@ -180,6 +180,8 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
         "#include <stddef.h>\n"
         "#include <stdbool.h>\n"
         "#include <stdio.h>\n"
+        "#include <limits.h>\n"
+        "#include <string.h>\n"
         f"{oracle_harness_include_lines}\n"
         f"/* slice: {spec.get('target_id')}/{slice_id} */\n"
         f"/* function: {function_name} */\n"

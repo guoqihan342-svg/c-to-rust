@@ -48,7 +48,13 @@ def protocol_printf_statement(
     expected_value: Any,
     actual_expression: str,
 ) -> tuple[str, str]:
-    if encoding == "bool":
+    if encoding in {"string", "hex_bytes"}:
+        if not isinstance(expected_value, str):
+            raise ValueError("string protocol value is invalid")
+        value = expected_value
+        placeholder = "%s"
+        argument = actual_expression
+    elif encoding == "bool":
         if not isinstance(expected_value, bool):
             raise ValueError("bool protocol value is invalid")
         value = "true" if expected_value else "false"
@@ -99,7 +105,9 @@ def c_oracle_call_plan_output_gate(
         "gate": "c_oracle_harness_output",
         "protocol": PROTOCOL_ID,
         "semantic_pass": False,
-        "plan_sha256": rendered.get("replay_call_plan_sha256"),
+        "plan_sha256": rendered.get(
+            "c_oracle_call_plan_sha256", rendered.get("replay_call_plan_sha256")
+        ),
         "compared_fields": list(rendered.get("compared_fields") or []),
         "fixture_expected_output_status": str(
             fixture_binding.get("expected_output_status", "missing_or_empty")
