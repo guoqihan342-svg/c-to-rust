@@ -510,6 +510,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 - [ ] **P0-C1：历史 evidence 漂移**。修复 run `20260711T-finite-p0-t31` 再确认的 8 个失败项，按 artifact 所有权分批处理，不与翻译层功能改动混交。
 - [ ] **P0-C2：全功能 Clippy**。commit `81a772d1` 已清理 9 个低风险告警；当前剩余 8 个（2 个 `large_enum_variant`、1 个 `redundant_guards`、1 个 `needless_lifetimes`、4 个 `too_many_arguments`）。新切片不得增加告警。
+- [x] **P0-C3：第一方 Rust 大文件拆分闭环**。`crates/c2r-translator`、`flashDB_rust` 和 `validation/l2_slices` 中所有 Git 跟踪的第一方 `.rs` 文件经格式化后均不超过 400 行；拆分只发生在完整 item/test 边界，单个超限报告函数已提取独立 helper，测试源码自检会递归覆盖拆分叶子。唯一豁免是 `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/` 下两份 733/704 行的 hash-bound C2Rust 历史证据快照，禁止为满足行数门禁改写证据内容。
 
 ## 4. 后续 Backlog
 

@@ -508,6 +508,7 @@ Each stage runs the finite construct set once, then expands translator/ContextPa
 
 - [ ] **P0-C1: historical evidence drift**. Fix the eight failures reconfirmed by run `20260711T-finite-p0-t31` in artifact-ownership batches, separate from translator behavior changes.
 - [ ] **P0-C2: all-feature Clippy**. Commit `81a772d1` cleared nine low-risk warnings; eight remain: two `large_enum_variant`, one `redundant_guards`, one `needless_lifetimes`, and four `too_many_arguments`. New slices must add no warnings.
+- [x] **P0-C3: first-party Rust large-file split closure**. Every Git-tracked first-party `.rs` file under `crates/c2r-translator`, `flashDB_rust`, and `validation/l2_slices` is at most 400 lines after formatting. Splits occur only at complete item/test boundaries, the single oversized report function was extracted into a dedicated helper, and the test-source self-check recursively covers split leaves. The only exceptions are the 733/704-line hash-bound historical C2Rust evidence snapshots under `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/`; evidence content must not be rewritten merely to satisfy the line limit.
 
 ## 4. Later Backlog
 

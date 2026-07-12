@@ -1,0 +1,293 @@
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_readonly_pointer_add_deref_result_type_mismatch() {
+    let i32_ty = ir_i32();
+    let u8_ty = ir_u8();
+    let usize_ty = ir_usize();
+    let const_u8_ty = ir_const(u8_ty);
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let ptr_plus_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        ir_var("i", usize_ty.clone()),
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_deref_result_type".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_deref(ptr_plus_index, i32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("deref result type mismatch must fail closed");
+
+    assert!(error
+        .reason
+        .contains("deref result type i32 does not match pointer element type u8"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_local_fixed_array_index_assignment() {
+    let u32_ty = ir_u32();
+    let usize_ty = ir_usize();
+    let table_ty = ir_array(u32_ty.clone(), 3);
+    let table_var = || ir_var("table", table_ty.clone());
+    let index_var = || ir_var("i", usize_ty.clone());
+    let ir = IrFunction {
+        name: "replace_local_table_slot".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "table".to_string(),
+                ty: table_ty.clone(),
+                init: Some(IrExpr::ArrayLiteral {
+                    elements: vec![
+                        ir_lit(1, "1U", u32_ty.clone()),
+                        ir_lit(2, "2U", u32_ty.clone()),
+                        ir_lit(3, "3U", u32_ty.clone()),
+                    ],
+                    ty: table_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(table_var()),
+                    index: Box::new(index_var()),
+                    ty: u32_ty.clone(),
+                    source_span: None,
+                },
+                value: ir_var("value", u32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Index {
+                    base: Box::new(table_var()),
+                    index: Box::new(index_var()),
+                    ty: u32_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit local fixed array index assignment");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("let mut table: [u32; 3] = [1u32, 2u32, 3u32];"));
+    assert!(rust.contains("table[i as usize] = value;"));
+    assert!(rust.contains("return table[i as usize];"));
+    assert_rust_snippet_compiles("typed-ir-local-fixed-array-index-assignment", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_readonly_global_array_index_assignment() {
+    let u32_ty = ir_u32();
+    let usize_ty = ir_usize();
+    let global = ir_u32_global_array("table", 3, vec![1, 2, 3]);
+    let ir = IrFunction {
+        name: "write_global_table".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "i".to_string(),
+            ty: usize_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(ir_var("table", global.ty.clone())),
+                    index: Box::new(ir_var("i", usize_ty)),
+                    ty: u32_ty.clone(),
+                    source_span: None,
+                },
+                value: ir_lit(0, "0U", u32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0U", u32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir_with_globals(&ir, &[global])
+        .expect_err("readonly global array assignment must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("assign index base table"));
+    assert!(error.reason.contains("readonly global"));
+}
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_const_pointer_index_assignment() {
+    let u32_ty = ir_u32();
+    let usize_ty = ir_usize();
+    let const_u32_ptr = ir_pointer(
+        "const uint32_t *",
+        "const unsigned int *",
+        ir_const(u32_ty.clone()),
+        false,
+    );
+    let ir = IrFunction {
+        name: "write_const_pointer_slot".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "table".to_string(),
+                ty: const_u32_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(ir_var("table", const_u32_ptr)),
+                    index: Box::new(ir_var("i", usize_ty)),
+                    ty: u32_ty.clone(),
+                    source_span: None,
+                },
+                value: ir_lit(0, "0U", u32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0U", u32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("const pointer index assignment must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("assign index base table"));
+    assert!(error.reason.contains("unsupported type"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_mutable_pointer_deref_assignment_as_mut_slice_zero_index() {
+    let i32_ty = ir_i32();
+    let mutable_i32_ptr = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "store_first".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_i32_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: ir_deref(ir_var("out", mutable_i32_ptr), i32_ty.clone()),
+                value: ir_var("value", i32_ty),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: None,
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit mutable pointer deref assignment");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn store_first(mut out: &mut [i32], value: i32)"));
+    assert!(rust.contains("out[0usize] = value;"));
+    assert_rust_snippet_compiles("typed-ir-mutable-pointer-deref-assignment", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_mutable_pointer_deref_read_after_write() {
+    let i32_ty = ir_i32();
+    let mutable_i32_ptr = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "store_and_read_first".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_i32_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: ir_deref(ir_var("out", mutable_i32_ptr.clone()), i32_ty.clone()),
+                value: ir_var("value", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_deref(ir_var("out", mutable_i32_ptr), i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit mutable pointer deref read after write");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn store_and_read_first(mut out: &mut [i32], value: i32) -> i32"));
+    assert!(rust.contains("out[0usize] = value;"));
+    assert!(rust.contains("return out[0usize];"));
+    assert_rust_snippet_compiles("typed-ir-mutable-pointer-deref-read-after-write", rust);
+}
