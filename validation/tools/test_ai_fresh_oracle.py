@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from validation.tools import ai_candidate_harness
 from validation.tools.native_build_closure import (
@@ -149,6 +150,24 @@ class AiFreshOracleTests(unittest.TestCase):
             self.assertEqual(len(result["reuse_key_sha256"]), 64)
             self.assertNotIn("semantic_pass", result)
             self.assertNotIn(str(root), json.dumps(result, sort_keys=True))
+
+    def test_fresh_proof_rejects_c_oracle_call_plan_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fresh-oracle-call-plan-") as tmp:
+            root = Path(tmp)
+            spec, payload, harness = self.make_case(root)
+            payload["harness_contract"]["c_oracle_call_plan"] = {
+                "status": "generated"
+            }
+
+            with patch(
+                "validation.tools.c_oracle_call_plan."
+                "validate_c_oracle_call_plan_harness",
+                side_effect=ValueError("target invocation drifted"),
+            ):
+                result = self.prove(root, spec, payload, harness)
+
+            self.assertEqual("failed", result["status"])
+            self.assertIn("c_oracle_call_plan_mismatch", self.kinds(result))
 
     def test_native_build_closure_is_reopened_and_bound_into_reuse_identity(self) -> None:
         with tempfile.TemporaryDirectory(prefix="fresh-oracle-native-closure-") as tmp:

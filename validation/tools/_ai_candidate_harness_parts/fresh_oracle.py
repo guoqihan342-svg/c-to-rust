@@ -49,6 +49,32 @@ def prove_fresh_oracle(
     else:
         _verify_ref(artifact_base, harness_ref, harness, harness_sha, "harness", failures)
 
+    if harness is not None and harness.is_file():
+        from validation.tools.c_oracle_call_plan import (
+            validate_c_oracle_call_plan_harness,
+        )
+
+        harness_contract = oracle_payload.get("harness_contract")
+        call_plan_contract = (
+            harness_contract.get("c_oracle_call_plan", {"status": "not_used"})
+            if isinstance(harness_contract, Mapping)
+            else {"status": "not_used"}
+        )
+        try:
+            validate_c_oracle_call_plan_harness(
+                dict(spec),
+                call_plan_contract,
+                harness.read_text(encoding="utf-8"),
+                root,
+            )
+        except (OSError, UnicodeError, ValueError) as error:
+            failures.append(
+                _failure(
+                    "c_oracle_call_plan_mismatch",
+                    f"Fresh harness call-plan proof failed: {error}",
+                )
+            )
+
     if oracle_payload.get("status") != "DRAFT_GENERATED" or oracle_payload.get("semantic_pass") is not False:
         failures.append(
             _failure(

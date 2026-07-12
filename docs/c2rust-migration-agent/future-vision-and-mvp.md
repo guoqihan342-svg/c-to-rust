@@ -26,9 +26,9 @@ input.c + compile context
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 + A18c8a targeted 2/4 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑，定向 4 项中 2 项新增 exact pass，均明确不具备比赛资格 |
-| 当前翻译主线 | P0-A18c / P0-A10 | A18c8a/A18c8b/A18c8b1 已关闭；下一步实现 A18c8c 通用可执行 C oracle call plan，并分别处理函数表间接调用与记录布局 `sizeof` 缺口 |
+| 当前翻译主线 | P0-A18c / P0-A10 | A18c8a/A18c8b/A18c8b1/A18c8c1 已关闭；下一步扩展 A18c8c 的输出参数/记录字段投影，并分别处理函数表间接调用与记录布局 `sizeof` 缺口 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A18c8b1 | translator 已回放 hash-bound compile DB、真实 TU 与宏展开函数定位；当前真实项目在未证明的间接调用/记录布局处明确拒绝 |
+| 最近开发阶段 | P0-A18c8c1 | harness 已从 ReplayCallPlan 通用生成直接返回值 C 调用并重新验证完整调用源码；记录输出参数仍 fail closed，且尚未形成 C/Rust 语义通过 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -182,7 +182,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 顺序 | 待办 | 状态 | 本轮完成判据 |
 | ---: | --- | --- | --- |
 | 1 | P0-A18c7 跨项目 AI 输入与证据合同闭包 | 完成 | Windows/WSL 125 项回归通过；固定 12 项生成 12 个候选、0 contract failure、6 exact pass |
-| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | A18c8a/A18c8b/A18c8b1 已完成；下一项让通用 C oracle call plan 真正执行 fixture 调用与输出比较，并继续由 AI/确定性 fallback/验证层处理剩余语义缺口 |
+| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | A18c8a/A18c8b/A18c8b1/A18c8c1 已完成；下一项扩展通用 C oracle call plan 的输出参数、记录字段投影与严格结构化输出，并继续由 AI/确定性 fallback/验证层处理剩余语义缺口 |
 | 3 | P0-A10 AI golden set | 待开始 | 以多项目、陌生标识符和最近邻负例扩充能力集，禁止按测试用例修补 |
 | 4 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
 | 5 | P0-C 阶段收口 | 待开始 | 修复历史 evidence 漂移并清理 all-feature Clippy 剩余项 |
@@ -429,6 +429,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
         - 函数选择同时绑定文件、行、字节区间与规范化片段 SHA；宏改名可解析到展开后的 `FunctionDecl`，输出仍恢复逻辑函数名。LF 规范化偏移会映射到 CRLF 原始偏移，解决 Windows/WSL 工作树与比赛 Linux checkout 的差异；非 NULL 指针 `BitCast` 仍拒绝，只有已证明的 NULL 可安全重定型。
         - WSL `runs-07` 对 zlib-ng 和 libuv 均绑定 commit `0a7831c1`、clang 18.1.3 与各自 compile-DB SHA，原生 oracle harness 均为 `compile_succeeded_not_oracle`/`exited_zero_not_oracle`，两套完整 schema validator 通过。zlib 在运行时函数表成员调用处拒绝，libuv 在缺少记录布局证明的 `sizeof(*addr)` 处拒绝；两项均为 `semantic_pass=false`，未增加成功率分子。Rust lib 253/253、聚焦 Python 50/50 通过。
       - [ ] **P0-A18c8c：通用可执行 C oracle call plan**。从 C 签名、fixture codec、observable outputs 与 ABI 生成数据驱动的 harness 调用、输入初始化、返回/结构字段编码和 stdout 比较；禁止按项目/函数名选择 adapter。只有执行 fixture target call 且 output gate 全匹配后，fresh oracle 才能进入 AI repair/exact 路径。
+        - [x] **P0-A18c8c1：直接返回值调用计划**。ReplayCallPlan v1 的标量、字符串、十六进制/字节数组、派生长度与 `null_default` 可通用渲染为 C fixture 存储、按签名排序的实参、一次真实 target 调用及直接返回值比较；renderer 不读取项目、slice、函数或 fixture 身份来选择 adapter。case 数、ID、字符串、缓冲区和生成源码均有 fail-closed 上限，规范化后相同的 case ID 仍生成不冲突的变量。
+        - validator 与 fresh-oracle 会从 hash-bound spec 重新生成 call plan，严格核对 plan SHA、声明和完整调用/断言语句；仅保留 marker 或伪造 matched 文本无法通过。WSL competition-like `runs-02` 中 zlib-ng 两个 fixture 均执行 `adler32_z`，编译与运行返回码均为 0，output gate 匹配且完整 schema validator 通过。
+        - 该阶段仍为 `semantic_pass=false`、translation coverage numerator 不增加。当前 libuv 因省略的 C 输出参数和未声明的记录字段 C 投影明确拒绝；输出参数初始化、记录字段/字节序投影、严格结构化 output protocol 与 C/Rust diff 仍属于 A18c8c 后续项。
 
       前序失败证据：同配置 `kv_set` router `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0` 的 rustc/unsafe/oracle 通过，但候选把外部 callee 结果实现为 `-1`，与 oracle 的 `7` 不一致。三项 WSL worktree 运行均报告 `repo_commit=UNKNOWN0`，因此只属于本地 hash-bound AI 路由证据。
 

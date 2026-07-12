@@ -217,3 +217,6 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
             "fixture": fixture_binding,
             "source_files": source_files,
             "fixture_external_stub": fixture_execution.get("fixture_external_stub"),
+            "c_oracle_call_plan": fixture_execution.get(
+                "call_plan", {"status": "not_used"}
+            ),

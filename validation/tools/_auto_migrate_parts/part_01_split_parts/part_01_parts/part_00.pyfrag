@@ -211,6 +211,23 @@ def oracle_fixture_execution_source(
         return c_oracle_scripted_external_u32_call_bool_out_execution_source(spec, fixture_binding)
     if readonly_byte_slice_bool_return_replay_contract(spec, fixture_binding) is not None:
         return c_oracle_readonly_byte_slice_bool_return_execution_source(spec, fixture_binding)
+    declarative = render_c_oracle_call_plan(spec, REPO_ROOT)
+    if declarative.get("status") == "generated":
+        return {
+            "declarations": str(declarative["declarations"]),
+            "statements": str(declarative["statements"]),
+            "definitions_after_target": str(
+                declarative.get("definitions_after_target") or ""
+            ),
+            "call_plan": {
+                "status": "generated",
+                "replay_call_plan_sha256": declarative[
+                    "replay_call_plan_sha256"
+                ],
+                "case_count": declarative["case_count"],
+                "compared_fields": declarative["compared_fields"],
+            },
+        }
     if c_oracle_signature_supports_fdb_blob_make_call(spec, signature):
         return c_oracle_fdb_blob_make_execution_source(spec, fixture_binding)
     if c_oracle_signature_supports_fdb_kv_del_call(spec, signature):

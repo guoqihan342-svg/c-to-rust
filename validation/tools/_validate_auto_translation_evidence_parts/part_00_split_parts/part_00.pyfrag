@@ -508,6 +508,21 @@ def validate_oracle_harness_contract(evidence_dir: Path, prefix: str, slice_spec
     validate_compile_execution(oracle.get("compile_execution"), compile_command, oracle, oracle_path)
 
     harness_text = harness_path.read_text(encoding="utf-8")
+    from validation.tools.c_oracle_call_plan import (
+        validate_c_oracle_call_plan_harness,
+    )
+
+    try:
+        validate_c_oracle_call_plan_harness(
+            slice_spec,
+            contract.get("c_oracle_call_plan", {"status": "not_used"}),
+            harness_text,
+            REPO_ROOT,
+        )
+    except ValueError as error:
+        raise SystemExit(
+            f"oracle harness C call-plan drift in {oracle_path}: {error}"
+        ) from error
     if c_oracle_embeds_slice_source(slice_spec):
         embedded_source = c_oracle_embedded_slice_source(slice_spec)
         if embedded_source is None or embedded_source.strip() not in harness_text:

@@ -185,6 +185,88 @@
       ]
     },
     {
+      "id": "generic-c-oracle-direct-return-call-plan",
+      "status": "partial",
+      "ir_constructs": [
+        "ReplayCallPlan v1 bound parameters",
+        "signature-ordered C argument rendering",
+        "scalar and byte-buffer fixture codecs",
+        "derived encoded length",
+        "direct C return observation",
+        "hash-bound harness regeneration"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "not_applicable",
+          "reason": "this capability renders a bound replay call plan into a C oracle harness after frontend planning"
+        },
+        "handwritten_ir": {
+          "status": "not_applicable",
+          "reason": "the C oracle renderer consumes declarative call-plan and fixture contracts rather than handwritten typed IR"
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "call-plan type, metadata, omitted-parameter, source-drift, and size-bound refusals",
+              "path": "validation/tools/test_c_oracle_call_plan.py"
+            },
+            {
+              "name": "fresh-oracle call-plan drift refusal",
+              "path": "validation/tools/test_ai_fresh_oracle.py"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "gap",
+          "reason": "this stage executes only the C side and does not accept or execute a generated Rust candidate"
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "the WSL direct-return harness run remains semantic_pass=false and does not provide Rust replay or C/Rust diff acceptance"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "the call-plan renderer is a harness producer and does not select the translator legacy fallback"
+        },
+        "route_evidence": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "auto-migrate generic call-plan dispatch test",
+              "path": "validation/tools/test_c_oracle_call_plan.py"
+            },
+            {
+              "name": "strict auto-translation call-plan harness validation",
+              "path": "validation/tools/_validate_auto_translation_evidence_parts/part_00_split_parts/part_00.pyfrag"
+            }
+          ]
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "zlib scalar hex nullable length plan renders without identity dispatch",
+          "path": "validation/tools/test_c_oracle_call_plan.py"
+        },
+        {
+          "name": "complete target slice and function rename keeps generic rendering",
+          "path": "validation/tools/test_c_oracle_call_plan.py"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "record output with omitted C parameter remains unavailable",
+          "path": "validation/tools/test_c_oracle_call_plan.py",
+          "fail_closed_reason": "the renderer cannot infer C output storage or record projections from Rust return fields"
+        },
+        {
+          "name": "marker-only harness cannot satisfy regenerated invocation proof",
+          "path": "validation/tools/test_c_oracle_call_plan.py",
+          "fail_closed_reason": "fresh evidence must contain the exact regenerated target invocation and assertions"
+        }
+      ]
+    },
+    {
       "id": "handwritten-ir-readonly-global-crc32",
       "status": "covered",
       "ir_constructs": [
