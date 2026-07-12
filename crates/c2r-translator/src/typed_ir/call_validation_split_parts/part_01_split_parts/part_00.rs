@@ -231,7 +231,7 @@ fn validate_mutable_void_pointer_address_call_arg<'a>(
             record_pointer_member_path_key(&path)
         )
     })?;
-    if !types_match_ignoring_spelling(source_pointee, path.ty) {
+    if !fixed_width_integer_types_match(source_pointee, path.ty) {
         return Err(format!(
             "mutable void pointer address source pointee {} does not match field type {}",
             type_label(source_pointee),
@@ -255,6 +255,23 @@ fn validate_mutable_void_pointer_address_call_arg<'a>(
         ));
     }
     Ok(path.root_name)
+}
+
+fn fixed_width_integer_types_match(lhs: &IrType, rhs: &IrType) -> bool {
+    lhs.is_const == rhs.is_const
+        && matches!(
+            (&lhs.kind, &rhs.kind),
+            (
+                IrTypeKind::Integer {
+                    signed: lhs_signed,
+                    width: lhs_width,
+                },
+                IrTypeKind::Integer {
+                    signed: rhs_signed,
+                    width: rhs_width,
+                },
+            ) if lhs_signed == rhs_signed && lhs_width == rhs_width
+        )
 }
 
 fn mutable_void_pointer_address_root(expr: &IrExpr) -> Option<&str> {

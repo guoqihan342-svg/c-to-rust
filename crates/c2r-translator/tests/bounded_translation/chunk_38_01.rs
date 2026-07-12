@@ -85,6 +85,72 @@ fn mutable_void_pointer_address_function(
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_accepts_equivalent_fixed_width_integer_typedef_for_mutable_void_address() {
+    let typedef_u32 = IrType {
+        spelled: "project_word_t".to_string(),
+        canonical: "project_word_t".to_string(),
+        kind: IrTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+        is_const: false,
+        width_bits: Some(32),
+        source_span: None,
+    };
+    let field_u32 = ir_u32();
+    let nested_ty = ir_record_with_fields("PayloadCell", vec![("word", field_u32.clone())]);
+    let root_ty = ir_record_with_fields("PayloadEnvelope", vec![("cell", nested_ty.clone())]);
+    let root_pointer = ir_pointer(
+        "struct PayloadEnvelope *",
+        "struct PayloadEnvelope *",
+        root_ty,
+        false,
+    );
+    let source_pointer = ir_pointer(
+        "project_word_t *",
+        "project_word_t *",
+        typedef_u32,
+        false,
+    );
+    let mutable_void_pointer = ir_pointer("void *", "void *", ir_void(), false);
+    let arg = mutable_void_pointer_address_ir(
+        "output",
+        root_pointer.clone(),
+        "cell",
+        nested_ty,
+        "word",
+        field_u32,
+        source_pointer,
+        mutable_void_pointer,
+    );
+
+    let emitted = emit_rust_from_ir(&mutable_void_pointer_address_function(
+        root_pointer,
+        arg,
+        None,
+    ))
+    .expect("equivalent fixed-width integer typedef must preserve the safe adapter candidate");
+    let rust = format!(
+        "fn write_output_word(output: &mut u32) -> i32 {{ *output = 0x5060_7080; 7 }}\n{}",
+        emitted.rust
+    );
+    assert!(
+        rust.contains("write_output_word(&mut output.cell.word)"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-mutable-void-address-equivalent-integer-typedef",
+        &rust,
+        r#"
+    let mut output = PayloadEnvelope { cell: PayloadCell { word: 0 } };
+    assert_eq!(route_output_word(&mut output), 7);
+    assert_eq!(output.cell.word, 0x5060_7080);
+"#,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_forged_or_aliasing_mutable_void_pointer_scalar_addresses() {
     let u32_ty = ir_u32();
     let nested_ty = ir_record_with_fields("OutputCell", vec![("word", u32_ty.clone())]);
@@ -133,6 +199,7 @@ fn typed_ir_rejects_forged_or_aliasing_mutable_void_pointer_scalar_addresses() {
         source_span: None,
     };
     let mismatched_source = ir_pointer("uint16_t *", "uint16_t *", u16_ty, false);
+    let signed_source = ir_pointer("int32_t *", "int *", ir_i32(), false);
     let const_void_pointer = ir_pointer("const void *", "const void *", ir_const(ir_void()), false);
     let incomplete_root = ir_record("IncompleteOutputEnvelope");
     let incomplete_pointer = ir_pointer(
@@ -154,6 +221,22 @@ fn typed_ir_rejects_forged_or_aliasing_mutable_void_pointer_scalar_addresses() {
                 "word",
                 u32_ty.clone(),
                 mismatched_source,
+                mutable_void_pointer.clone(),
+            ),
+            None,
+            "does not match field type",
+        ),
+        (
+            "source-signedness-mismatch",
+            complete_pointer.clone(),
+            mutable_void_pointer_address_ir(
+                "output",
+                complete_pointer.clone(),
+                "cell",
+                nested_ty.clone(),
+                "word",
+                u32_ty.clone(),
+                signed_source,
                 mutable_void_pointer.clone(),
             ),
             None,

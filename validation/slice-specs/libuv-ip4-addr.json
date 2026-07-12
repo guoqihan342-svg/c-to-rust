@@ -53,7 +53,39 @@
       {"kind": "type", "name": "struct sockaddr_in", "source": "include/uv.h"},
       {"kind": "callee", "name": "uv_inet_pton", "source": "src/uv-common.c"},
       {"kind": "macro", "name": "AF_INET", "source": "platform headers"}
-    ]
+    ],
+    "pointer_contract": {
+      "input_buffers": [
+        {
+          "name": "ip",
+          "c_type": "const char *",
+          "length_companion": "nul_terminated",
+          "read_effects": ["uv_inet_pton reads the ip string"],
+          "nullability": "non_null",
+          "ownership_role": "borrowed",
+          "mutability": "read_only",
+          "lifetime_owner": "caller",
+          "translation_rule_id": "bounded-input-buffer-read"
+        }
+      ],
+      "output_pointers": [
+        {
+          "name": "addr",
+          "c_type": "struct sockaddr_in *",
+          "length_companion": "sizeof(struct sockaddr_in)",
+          "write_effects": ["uv_ip4_addr writes the sockaddr_in output"],
+          "nullability": "non_null",
+          "ownership_role": "out_param",
+          "mutability": "write_only",
+          "lifetime_owner": "caller",
+          "translation_rule_id": "safe-wrapper-for-pointer-out-param"
+        }
+      ],
+      "inout_pointers": [],
+      "aliasing_proven": false,
+      "read_read_alias_allowed": [],
+      "noalias_required": [["ip", "addr"]]
+    }
   },
   "build_profile": {
     "profile_id": "libuv-ip4-addr-linux-gnu",

@@ -7094,7 +7094,8 @@
         "requires a direct FunctionDecl and a mutable void pointer parameter at the exact argument position",
         "emits a temporary Rust mutable reference only for a compile-checked safe adapter contract; it does not synthesize or trust a raw extern binding",
         "direct local or scalar-parameter addresses, raw extern no-escape proof, and post-call field initialization are not modeled",
-        "the real libuv function reaches complete typed IR but multiple pointer parameters still fail the existing record-write alias-proof gate",
+        "multiple active pointer parameters require a complete slice-spec noalias precondition or source restrict proof against every mutable record root; this is not inferred from project identity or differing C types",
+        "the real libuv function now emits a Rust candidate under its explicit ip-to-addr noalias precondition, but two external direct callees remain undeclared and no semantic gates have accepted the draft",
         "no named-slice C/Rust replay, diff, unsafe ledger, or semantic acceptance is claimed"
       ],
       "ir_constructs": [
@@ -7122,7 +7123,7 @@
           "status": "covered",
           "evidence": [
             {
-              "name": "forged source/target, incomplete inventory, and sibling alias refusals",
+              "name": "same-width typedef acceptance plus forged source/target, signedness/width, inventory, and sibling alias checks",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_38_01.rs"
             }
           ]
@@ -7138,7 +7139,7 @@
         },
         "runtime_emitted_rust": {
           "status": "covered",
-          "scope_note": "two neutral safe-adapter candidates compile and run; this is candidate-context unit evidence only",
+          "scope_note": "three neutral safe-adapter candidates compile and run, including a typedef-spelled source pointer matched to an equivalent fixed-width field; this is candidate-context unit evidence only",
           "evidence": [
             {
               "name": "renamed nested record scalar address safe-adapter runtime checks",
@@ -7148,7 +7149,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "the WSL libuv probe reaches typed IR but emits no Rust draft, replay, or schema-aware diff because multi-pointer alias proof fails"
+          "reason": "the WSL libuv probe emits a Rust draft, but external callee declarations, rustc/replay, schema-aware diff, negative diff, and final verification remain incomplete"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -7156,13 +7157,17 @@
         },
         "route_evidence": {
           "status": "gap",
-          "reason": "the A18c8h WSL probe is an unpublished local-simulation diagnostic under target and remains semantic false"
+          "reason": "the A18c8h2 WSL probe records a GenericTypedIr L1 candidate under target; it is unpublished local-simulation evidence with semantic_pass=false"
         }
       },
       "positive_cases": [
         {
           "name": "clang_ast_preserves_renamed_mutable_void_pointer_scalar_address_provenance",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_38_00.rs"
+        },
+        {
+          "name": "typed_ir_accepts_equivalent_fixed_width_integer_typedef_for_mutable_void_address",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_38_01.rs"
         }
       ],
       "negative_cases": [
@@ -7174,7 +7179,7 @@
         {
           "name": "typed_ir_rejects_forged_or_aliasing_mutable_void_pointer_scalar_addresses",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_38_01.rs",
-          "fail_closed_reason": "source/field type drift, const targets, incomplete record inventories, and sibling reads of the same mutable root remain unsupported"
+          "fail_closed_reason": "source/field signedness or width drift, const targets, incomplete record inventories, and sibling reads of the same mutable root remain unsupported"
         }
       ]
     }
