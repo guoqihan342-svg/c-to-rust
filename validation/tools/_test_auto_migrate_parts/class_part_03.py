@@ -8,6 +8,7 @@ _C2R_SPLIT_PART_NAMES = (
     "part_00.pyfrag",
     "part_01.pyfrag",
     "part_02.pyfrag",
+    "part_03.pyfrag",
 )
 _C2R_SPLIT_SOURCE = "".join(
     (_C2R_SPLIT_PARTS_DIR / _C2R_SPLIT_PART_NAME).read_text(encoding="utf-8")

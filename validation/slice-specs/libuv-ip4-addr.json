@@ -18,17 +18,18 @@
     "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
     "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
     "source_file_hashes": {
-      "src/uv-common.c": "8be5802be4ab39842e549974431be18daddf102fb2f192236344cf8008ca8aea"
+      "src/uv-common.c": "8be5802be4ab39842e549974431be18daddf102fb2f192236344cf8008ca8aea",
+      "src/inet.c": "71b08670424d9e7d062a75f5554da606c2340f2dd55c3df5f4cd7f132a6b727d"
     }
   },
   "c_boundary": {
     "files": [
       {"path": "include/uv.h", "role": "header"},
       {"path": "src/uv-common.c", "role": "source", "sha256": "8be5802be4ab39842e549974431be18daddf102fb2f192236344cf8008ca8aea"},
-      {"path": "src/inet.c", "role": "source"},
+      {"path": "src/inet.c", "role": "source", "sha256": "71b08670424d9e7d062a75f5554da606c2340f2dd55c3df5f4cd7f132a6b727d"},
       {"path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json", "role": "fixture"}
     ],
-    "functions": ["uv_ip4_addr"],
+    "functions": ["uv_ip4_addr", "__bswap_16", "uv_inet_pton"],
     "signatures": [
       {
         "function": "uv_ip4_addr",
@@ -47,12 +48,66 @@
           "byte_end": 6411,
           "sha256": "8baccd064756d7910d9b0c69df6a4a6753b9818db8acdb30971e2f50f9660873"
         }
+      },
+      {
+        "id": "sig-bswap-u16",
+        "role": "external_direct_callee",
+        "function": "__bswap_16",
+        "return_type": "unsigned short",
+        "parameters": [
+          {"name": "value", "c_type": "unsigned short", "direction": "input"}
+        ],
+        "definition_status": "declared_external_direct_callee",
+        "source_ref": "compiler-header:bits/byteswap.h#__bswap_16",
+        "signature_sha256": "unsigned-short-bswap-unsigned-short"
+      },
+      {
+        "id": "sig-uv-inet-pton",
+        "role": "external_direct_callee",
+        "function": "uv_inet_pton",
+        "return_type": "int",
+        "parameters": [
+          {"name": "af", "c_type": "int", "direction": "input"},
+          {"name": "src", "c_type": "const char *", "direction": "input"},
+          {"name": "dst", "c_type": "void *", "direction": "output"}
+        ],
+        "definition_status": "real_source_bound",
+        "source_ref": "src/inet.c#uv_inet_pton",
+        "signature_sha256": "int-uv-inet-pton-int-const-char-pointer-void-pointer"
       }
     ],
     "direct_dependencies": [
       {"kind": "type", "name": "struct sockaddr_in", "source": "include/uv.h"},
-      {"kind": "callee", "name": "uv_inet_pton", "source": "src/uv-common.c"},
+      {"kind": "callee", "name": "__bswap_16", "source": "compiler-header:bits/byteswap.h"},
+      {"kind": "callee", "name": "uv_inet_pton", "source": "src/inet.c"},
       {"kind": "macro", "name": "AF_INET", "source": "platform headers"}
+    ],
+    "external_direct_callees": [
+      {
+        "name": "__bswap_16",
+        "signature_ref": "sig-bswap-u16",
+        "definition_status": "declared_external_direct_callee",
+        "source_ref": "compiler-header:bits/byteswap.h#__bswap_16",
+        "source_files": [
+          {"path": "src/uv-common.c", "sha256": "8be5802be4ab39842e549974431be18daddf102fb2f192236344cf8008ca8aea"}
+        ],
+        "header_files": ["bits/byteswap.h"],
+        "call_sites": ["assignment"],
+        "observable_effects": ["return_value"],
+        "stub_boundary": "compile_only"
+      },
+      {
+        "name": "uv_inet_pton",
+        "signature_ref": "sig-uv-inet-pton",
+        "definition_status": "real_source_bound",
+        "source_ref": "src/inet.c#uv_inet_pton",
+        "source_files": [
+          {"path": "src/inet.c", "sha256": "71b08670424d9e7d062a75f5554da606c2340f2dd55c3df5f4cd7f132a6b727d"}
+        ],
+        "call_sites": ["return"],
+        "observable_effects": ["return_value", "dst_write"],
+        "stub_boundary": "compile_only"
+      }
     ],
     "pointer_contract": {
       "input_buffers": [
@@ -297,17 +352,26 @@
   "claim_boundary": {
     "accepted_evidence_authoritative": true,
     "accepted_metadata_differences": [],
+    "external_callee_scope": {
+      "status": "compile_context_only",
+      "declared_count": 2,
+      "blocked_count": 0,
+      "stub_kind": "compile_only",
+      "semantics_verified": false
+    },
     "non_goals": [
       "No full libuv migration claim.",
       "No IPv6 or event-loop behavior.",
       "No null pointer execution.",
-      "No whole-program alias proof."
+      "No whole-program alias proof.",
+      "No external callee semantic equivalence proof."
     ],
     "must_not_claim": [
       "full libuv migration",
       "event-loop migration",
       "IPv6 behavior",
-      "whole-program alias safety"
+      "whole-program alias safety",
+      "external callee semantic equivalence"
     ]
   },
   "accepted_metadata_differences": [],
@@ -315,7 +379,8 @@
     "No full libuv migration claim.",
     "No IPv6 or event-loop behavior.",
     "No null pointer execution.",
-    "No whole-program alias proof."
+    "No whole-program alias proof.",
+    "No external callee semantic equivalence proof."
   ],
   "cache_invalidation_keys": [
     "source.source_commit",

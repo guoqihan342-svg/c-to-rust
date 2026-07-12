@@ -26,9 +26,9 @@ input.c + compile context
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 + A18c8a targeted 2/4 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑，定向 4 项中 2 项新增 exact pass，均明确不具备比赛资格 |
-| 当前翻译主线 | P0-A18c / P0-A10 | A18c8h2 已让真实 libuv 在显式 noalias 前置合同下生成 Rust candidate；下一步补齐两个 external direct callee 合同，再处理直接局部标量与 zlib 函数表间接调用 |
+| 当前翻译主线 | P0-A18c / P0-A10 | A18c8h3 已让真实 libuv candidate 在两个 external direct callee 的 compile-only 合同下通过 rustc；下一步补齐可执行 callee 语义/no-escape，再处理直接局部标量与 zlib 函数表间接调用 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A18c8h2 | slice spec 的完整 `ip -> addr` noalias 前置条件关闭多指针门禁，A18h 校验按 const/signedness/width 接受等价整数 typedef；真实 clang 18.1.3 TU 已生成无 `unsafe` Rust candidate，当前阻塞是 `__bswap_16` 与 `uv_inet_pton` 未声明 external callee |
+| 最近开发阶段 | P0-A18c8h3 | `__bswap_16` 与 `uv_inet_pton` 已由 hash-bound slice spec 声明；通用 compile-only 指针桩只擦除 pointee、保留 const/mut 方向并显式报告非语义适配。WSL clang 18.1.3 TU 的无 `unsafe` candidate 已通过 rustc，replay 仍按合同跳过且 `semantic_pass=false` |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -182,7 +182,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 顺序 | 待办 | 状态 | 本轮完成判据 |
 | ---: | --- | --- | --- |
 | 1 | P0-A18c7 跨项目 AI 输入与证据合同闭包 | 完成 | Windows/WSL 125 项回归通过；固定 12 项生成 12 个候选、0 contract failure、6 exact pass |
-| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | A18c8h2 已在显式 noalias 前置合同下关闭真实多指针门禁并生成 candidate；A18h 仍需 external callee、直接局部标量、原始 extern 边界和写后初始化证明，然后处理函数表间接调用缺口 |
+| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | A18c8h3 已让真实 candidate 在 external-callee compile context 下通过 rustc；A18h 仍需可执行 callee 语义/no-escape、直接局部标量、原始 extern 边界和写后初始化证明，然后处理函数表间接调用缺口 |
 | 3 | P0-A10 AI golden set | 待开始 | 以多项目、陌生标识符和最近邻负例扩充能力集，禁止按测试用例修补 |
 | 4 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
 | 5 | P0-C 阶段收口 | 待开始 | 修复历史 evidence 漂移并清理 all-feature Clippy 剩余项 |
@@ -450,8 +450,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
       - [ ] **P0-A18c8h：通用可变标量地址到 `void *` 调用参数**。仅对可证明为完整整数标量 lvalue 的直接/记录字段地址、直接外部函数调用和明确的 mutable `void *` 参数建模临时可变借用；要求别名、存活期、对齐、宽度、调用签名和写后读取路径可验证。const、nullable、位域、packed/volatile/atomic、指针算术、跨调用逃逸和重叠可变借用继续拒绝，禁止按 `in_addr_t`、libuv 或固定 callee 名称放行。
         - [x] **P0-A18c8h1：记录指针字段地址的安全适配器候选**。前端保留专用 `MutableVoidPointerAddress` provenance，仅接受一个直接 mutable 记录指针根、首跳 `->` 后仅 `.` 的完整记录字段路径、固定宽度整数终点、源整数指针同宽同符号、直接 `FunctionDecl` 和对应位置的 mutable `void *` 形参。typed IR 再验证完整字段 inventory、根所有权、非 nullable、同调用重叠借用和源/目标类型，并只向可编译的安全适配器发射 `&mut root.path`；普通 `AddrOf` 或手写数值相等节点不能进入该路径。原始 `*mut c_void` extern 绑定不会被伪装成安全接口，缺少适配器时由 rustc/链接门禁继续 fail closed。
         - [x] **P0-A18c8h2：显式 noalias 前置合同与等价整数 typedef**。旧 libuv slice spec 已补齐通用 `pointer_contract`，声明 `ip` 只读输入、`addr` 可变输出及完整 `ip -> addr` noalias 前置条件，同时保持 `aliasing_proven=false` 和“无全程序别名证明”边界；translator 不从项目名、函数名或不同 C 类型推断 noalias。A18h 专用校验现在仅在 const 属性、signedness 和 width 全相同时接受 typedef/基础整数的不同 spelling，signed-32 与 width-16 漂移继续拒绝。
-        - WSL clang 18.1.3 使用同一份 hash-bound libuv compile database 和 `x86_64-unknown-linux-gnu` ABI 复跑后，已生成 `GenericTypedIr` Rust candidate：`ip` 保持 raw read pointer，`addr` 为 `&mut SockaddrIn`，内部目标为 `&mut addr.sin_addr.s_addr`，源码不含 `unsafe`。该 probe 仅位于 `target/a18c8h-probe-04`，`semantic_pass=false`；`__bswap_16` 与 `uv_inet_pton` 尚未声明，rustc/replay/diff/negative/final verification 均未通过，成功计数不变。
-        - A18h 父项保持未完成：external callee/no-escape、直接局部/参数标量地址、原始 extern 边界和调用写后字段初始化仍需独立收敛。const、nullable、可变参数、间接调用、signedness/width 漂移、不完整记录和同根兄弟读取已有 fail-closed 回归测试。
+        - [x] **P0-A18c8h3：外部直接调用 compile context 与指针适配**。libuv slice spec 以真实 C 签名声明 `__bswap_16` 和 `uv_inet_pton`，`inet.c` 绑定规范化 SHA；system-header inline 只绑定调用点与 header 来源，不冒充源码实现。通用 rustc-only 桩对每个 C 指针参数使用独立泛型 pointee，保留 `const`/mutable 方向，并在报告中写入 `compile_only_pointer_pointee_erasure`。该适配只用于 `rustc_compile_only`，fixture/replay 专用模型仍保留精确签名。
+        - WSL clang 18.1.3、同一 hash-bound libuv compile database 和 `x86_64-unknown-linux-gnu` ABI 的 `target/a18c8h-probe-07` 已生成 `GenericTypedIr` candidate，两个 callee 均为 `generated_compile_only`，`blocked_count=0`、stub contract 通过且 `rust_check.status=passed`。replay 明确以 `compile_only_external_bindings_not_executable` 跳过，C oracle 本轮也由 `--skip-c-oracle` 跳过，因此 `semantic_pass=false`、成功计数仍为 38。
+        - A18h 父项保持未完成：可执行 external-callee 语义/no-escape、直接局部/参数标量地址、原始 extern 边界和调用写后字段初始化仍需独立收敛。const、nullable、可变参数、间接调用、signedness/width 漂移、不完整记录和同根兄弟读取已有 fail-closed 回归测试。
 
       前序失败证据：同配置 `kv_set` router `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0` 的 rustc/unsafe/oracle 通过，但候选把外部 callee 结果实现为 `-1`，与 oracle 的 `7` 不一致。三项 WSL worktree 运行均报告 `repo_commit=UNKNOWN0`，因此只属于本地 hash-bound AI 路由证据。
 

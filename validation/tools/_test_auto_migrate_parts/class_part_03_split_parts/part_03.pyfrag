@@ -1,0 +1,78 @@
+    def test_compile_only_pointer_stub_erases_pointee_without_semantic_claim(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "schema_version": 1,
+            "target_id": "neutral",
+            "slice_id": "pointer-adapter",
+            "level": "L3",
+            "function_name": "translate_packet",
+            "fixture_hash": "pointer-adapter-fixture",
+            "c_boundary": {
+                "direct_dependencies": [
+                    {"kind": "callee", "name": "exchange_bytes"},
+                ],
+                "external_direct_callees": [
+                    {
+                        "name": "exchange_bytes",
+                        "signature_ref": "sig-exchange-bytes",
+                        "definition_status": "real_source_bound",
+                        "stub_boundary": "compile_only",
+                    }
+                ],
+                "signatures": [
+                    {
+                        "id": "sig-exchange-bytes",
+                        "role": "external_direct_callee",
+                        "function": "exchange_bytes",
+                        "return_type": "int",
+                        "definition_status": "real_source_bound",
+                        "parameters": [
+                            {"name": "source", "c_type": "const unsigned char *"},
+                            {"name": "destination", "c_type": "void *"},
+                        ],
+                    }
+                ],
+            },
+        }
+        draft = """\
+pub struct PacketEnvelope { pub status: u32 }
+pub fn translate_packet(source: *const core::ffi::c_void, output: &mut PacketEnvelope) -> i32 {
+    exchange_bytes(source, &mut output.status)
+}
+"""
+        misleading_type_name_signature = module.rust_check_declared_callee_signature(
+            {
+                "name": "inspect_packet",
+                "return_type": "int",
+                "parameters": [
+                    {"name": "packet", "c_type": "struct construction_packet *"},
+                ],
+            },
+            erase_pointer_pointees=True,
+        )
+        self.assertIn("packet: *mut C2rPointee1", misleading_type_name_signature)
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-pointer-erased-stub-") as tmp:
+            draft_path = Path(tmp) / "draft.rs"
+            draft_path.write_text(draft, encoding="utf-8")
+            context = module.external_direct_callee_context(spec, None)
+
+            changed = module.inject_external_callee_stubs(draft_path, context, spec)
+            rust_check = module.rust_check_once(draft_path)
+
+            self.assertTrue(changed)
+            self.assertEqual(rust_check["returncode"], 0, rust_check["stderr"])
+            updated = draft_path.read_text(encoding="utf-8")
+            self.assertIn(
+                "fn exchange_bytes<C2rPointee1, C2rPointee2>(source: *const C2rPointee1, destination: *mut C2rPointee2) -> i32",
+                updated,
+            )
+            bindings = module.rust_check_external_binding_report(context)["bindings"]
+            self.assertEqual(len(bindings), 1)
+            self.assertEqual(bindings[0]["allowed_use"], "rustc_compile_only")
+            self.assertEqual(
+                bindings[0]["adapter_kind"],
+                "compile_only_pointer_pointee_erasure",
+            )
+            self.assertFalse(bindings[0]["semantics_verified"])
+            self.assertFalse(module.inject_external_callee_stubs(draft_path, context, spec))
+            self.assertEqual(updated.count("fn exchange_bytes<"), 1)

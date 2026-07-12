@@ -199,30 +199,45 @@ def mark_rust_check_binding(
     }
 
 
-def rust_check_declared_callee_signature(callee: dict[str, Any]) -> str:
+def rust_check_declared_callee_signature(
+    callee: dict[str, Any], *, erase_pointer_pointees: bool = False
+) -> str:
     name = rust_identifier(callee["name"])
     params = []
+    pointer_generics = []
     for index, param in enumerate(callee.get("parameters", [])):
         param_name = rust_identifier(param.get("name") or f"arg{index + 1}")
-        rust_type = (
-            param.get("rust_type")
-            or primitive_rust_type(param.get("c_type", ""))
-            or "i32"
-        )
+        c_type = param.get("c_type", "")
+        compact_type = compact_c_type(c_type)
+        if erase_pointer_pointees and compact_type.endswith("*"):
+            generic = f"C2rPointee{index + 1}"
+            pointer_generics.append(generic)
+            pointee_tokens = re.findall(
+                r"[A-Za-z_][A-Za-z0-9_]*", str(c_type).rsplit("*", 1)[0]
+            )
+            pointer_kind = "*const" if "const" in pointee_tokens else "*mut"
+            rust_type = f"{pointer_kind} {generic}"
+        else:
+            rust_type = param.get("rust_type") or primitive_rust_type(c_type) or "i32"
         params.append(f"{param_name}: {rust_type}")
+    if erase_pointer_pointees and pointer_generics:
+        callee["rust_check_adapter_kind"] = "compile_only_pointer_pointee_erasure"
+    elif erase_pointer_pointees:
+        callee.pop("rust_check_adapter_kind", None)
     return_type = (
         callee.get("return_rust_type")
         or primitive_rust_type(callee.get("return_type", ""))
         or "i32"
     )
-    return f"fn {name}({', '.join(params)}) -> {return_type}"
+    generic_clause = f"<{', '.join(pointer_generics)}>" if pointer_generics else ""
+    return f"fn {name}{generic_clause}({', '.join(params)}) -> {return_type}"
 
 
 def rust_function_declared(text: str, name: str) -> bool:
     escaped_name = re.escape(name)
     return (
         re.search(
-            rf"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?fn\s+{escaped_name}\s*\(",
+            rf"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?fn\s+{escaped_name}(?:\s*<[^>\n]+>)?\s*\(",
             text,
         )
         is not None

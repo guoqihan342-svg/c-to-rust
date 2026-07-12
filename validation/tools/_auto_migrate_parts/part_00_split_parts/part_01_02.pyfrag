@@ -16,6 +16,8 @@ def rust_check_external_binding_report(context: dict[str, Any]) -> dict[str, Any
             binding["replay_contract_kind"] = callee["rust_check_binding"]["replay_contract_kind"]
         if callee["rust_check_binding"].get("fixture_only") is True:
             binding["fixture_only"] = True
+        if callee.get("rust_check_adapter_kind"):
+            binding["adapter_kind"] = callee["rust_check_adapter_kind"]
         bindings.append(binding)
     allowed_uses = {str(item["allowed_use"]) for item in bindings}
     return {
@@ -101,7 +103,9 @@ def inject_external_callee_stubs(
         if noop_stub is not None:
             stubs.append(noop_stub)
             continue
-        signature = rust_check_declared_callee_signature(callee)
+        signature = rust_check_declared_callee_signature(
+            callee, erase_pointer_pointees=True
+        )
         name = rust_identifier(callee["name"])
         if rust_function_declared(text, name):
             mark_rust_check_binding(callee, "already_present", signature)

@@ -220,7 +220,7 @@ pub fn fdb_kv_del(db: *mut core::ffi::c_void, _key: *const core::ffi::c_void) ->
             self.assertEqual(rust_check["returncode"], 0, rust_check["stderr"])
             updated = draft_path.read_text(encoding="utf-8")
             self.assertIn(
-                "fn FDB_INFO(fmt: *const core::ffi::c_char, name: *const core::ffi::c_char) -> ()",
+                "fn FDB_INFO<C2rPointee1, C2rPointee2>(fmt: *const C2rPointee1, name: *const C2rPointee2) -> ()",
                 updated,
             )
             bindings = {
@@ -229,6 +229,10 @@ pub fn fdb_kv_del(db: *mut core::ffi::c_void, _key: *const core::ffi::c_void) ->
             }
             self.assertEqual(bindings["FDB_INFO"]["status"], "generated_compile_only")
             self.assertEqual(bindings["FDB_INFO"]["allowed_use"], "rustc_compile_only")
+            self.assertEqual(
+                bindings["FDB_INFO"]["adapter_kind"],
+                "compile_only_pointer_pointee_erasure",
+            )
             self.assertFalse(bindings["FDB_INFO"]["semantics_verified"])
 
     def test_mixed_generated_compile_only_external_binding_skips_replay(self) -> None:
@@ -412,7 +416,10 @@ pub fn delete_key(crc: u32, buf: &'static [u8], size: usize) -> u32 {
             self.assertTrue(changed)
             self.assertEqual(rust_check["returncode"], 0, rust_check["stderr"])
             draft = draft_path.read_text(encoding="utf-8")
-            self.assertIn("fn LOG_INFO(message: *const core::ffi::c_char) -> ()", draft)
+            self.assertIn(
+                "fn LOG_INFO(message: *const core::ffi::c_char) -> ()",
+                draft,
+            )
             self.assertIn("ignored non-observable void external callee", draft)
             bindings = {
                 item["name"]: item
