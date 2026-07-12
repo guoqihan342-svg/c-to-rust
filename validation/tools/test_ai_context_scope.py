@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from validation.tools import ai_candidate_harness
 from validation.tools._ai_candidate_harness_parts.context_scope import prompt_scope_for_context
@@ -36,7 +37,10 @@ class AiContextScopeTests(unittest.TestCase):
                 },
                 "unit-pointer-graph.json": {
                     "status": "loaded",
-                    "failure_summary": [{"path": "$.status", "value": "ok"}],
+                    "failure_summary": [
+                        {"path": "$.status", "value": "ok"},
+                        {"path": "$.diagnostics", "value": ["informational note"]},
+                    ],
                 },
                 "unit-blocked-repairs.json": {
                     "status": "loaded",
@@ -102,7 +106,9 @@ class AiContextScopeTests(unittest.TestCase):
                                     "api_key": "must-not-leak",
                                     "notes": (
                                         'api_key="quoted-secret"; '
-                                        "password: 'single-quoted-secret'"
+                                        "password: 'single-quoted-secret'; "
+                                        '{"api_key":"json-secret"}; '
+                                        r'{\"token\":\"escaped-json-secret\"}'
                                     ),
                                 }
                             ]
@@ -118,6 +124,8 @@ class AiContextScopeTests(unittest.TestCase):
             self.assertNotIn("must-not-leak", encoded)
             self.assertNotIn("quoted-secret", encoded)
             self.assertNotIn("single-quoted-secret", encoded)
+            self.assertNotIn("json-secret", encoded)
+            self.assertNotIn("escaped-json-secret", encoded)
             self.assertNotIn("C:/private/project", encoded)
             self.assertIn("direct_caller_callee_facts", prompt_scope_for_context(context))
 
@@ -173,6 +181,53 @@ class AiContextScopeTests(unittest.TestCase):
             )
             self.assertEqual("blocked", manifest["status"])
             self.assertEqual(0, manifest["provider_invocations"])
+
+    def test_total_context_budget_omission_blocks_required_callee(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-callee-total-budget-") as tmp:
+            root = Path(tmp)
+            spec_path = root / "slice.json"
+            spec_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "target_id": "generic",
+                        "slice_id": "total-budget-callee",
+                        "function_name": "caller",
+                        "c_source": "int caller(int x) { return helper(x); }",
+                        "c_boundary": {
+                            "external_direct_callees": [
+                                {
+                                    "name": "helper",
+                                    "definition_status": "real_source_bound",
+                                }
+                            ],
+                            "signatures": [
+                                {"function": "helper", "c_source": "x" * 3_500}
+                            ],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch(
+                "validation.tools._ai_candidate_harness_parts.context.MAX_CONTEXT_BYTES",
+                5_000,
+            ):
+                context = ai_candidate_harness.build_context_pack(spec_path)
+
+            self.assertEqual(
+                "omitted_for_context_budget",
+                context["c_boundary"]["payload"]["status"],
+            )
+            self.assertIn(
+                "external_direct_callees",
+                context["c_boundary"]["missing_required_callee_sections"],
+            )
+            self.assertEqual(
+                "required_callee_context_incomplete",
+                evaluate_provider_readiness(context)["context_boundary_status"],
+            )
 
 
 if __name__ == "__main__":

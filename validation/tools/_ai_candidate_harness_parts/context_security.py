@@ -8,6 +8,10 @@ from typing import Any, Iterable
 
 
 SENSITIVE_KEY_PARTS = ("api_key", "apikey", "credential", "password", "secret", "token")
+QUOTED_SECRET_ASSIGNMENT_PATTERN = re.compile(
+    r"(?i)(?:\\?[\"'])(api[_-]?key|access[_-]?key|credential|password|secret|token)"
+    r"(?:\\?[\"'])(\s*:\s*)(?:\\?[\"'])[^\"'\r\n]*(?:\\?[\"'])"
+)
 SECRET_ASSIGNMENT_PATTERN = re.compile(
     r"(?i)\b(api[_-]?key|access[_-]?key|credential|password|secret|token)\b"
     r"(\s*[:=]\s*)(?:\"[^\"\r\n]*\"|'[^'\r\n]*'|[^\s,;\]\}\"']+)"
@@ -71,6 +75,10 @@ def redact_text(value: str, known_roots: Iterable[str] = ()) -> str:
         variants = {root, root.replace("\\", "/"), root.replace("/", "\\")}
         for variant in sorted(variants, key=len, reverse=True):
             sanitized = re.sub(re.escape(variant), "<source-root>", sanitized, flags=re.IGNORECASE)
+    sanitized = QUOTED_SECRET_ASSIGNMENT_PATTERN.sub(
+        lambda match: f"{match.group(1)}{match.group(2)}<redacted>",
+        sanitized,
+    )
     sanitized = SECRET_ASSIGNMENT_PATTERN.sub(
         lambda match: f"{match.group(1)}{match.group(2)}<redacted>",
         sanitized,

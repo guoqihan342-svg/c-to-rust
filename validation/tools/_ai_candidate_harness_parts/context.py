@@ -245,6 +245,11 @@ def enforce_context_budget(context: dict[str, Any]) -> None:
         if isinstance(boundary, dict):
             boundary["payload"] = {"status": "omitted_for_context_budget"}
             boundary["truncated"] = True
+            if key == "c_boundary" and boundary.get("required_callee_sections"):
+                missing = set(boundary.get("missing_required_callee_sections", []))
+                missing.update(boundary["required_callee_sections"])
+                missing.add("c_boundary_truncated")
+                boundary["missing_required_callee_sections"] = sorted(missing)
     if len(canonical_json_bytes(context)) > MAX_CONTEXT_BYTES - 256:
         raise ValueError(f"AI ContextPack exceeds {MAX_CONTEXT_BYTES} bytes")
 
