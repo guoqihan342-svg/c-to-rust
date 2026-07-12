@@ -2,20 +2,33 @@ use std::collections::{BTreeMap, VecDeque};
 
 use serde_json::Value;
 
+#[cfg(test)]
+use super::type_alias_inventory_from_ast;
 use super::{
     clang_type_candidate_spellings, inner, is_simple_c_identifier, lower_type, string_field,
-    type_from_ast_type_object,
+    type_from_ast_type_object, type_from_ast_type_object_with_aliases, ClangTypeKind,
+    TypeAliasInventory,
 };
 use crate::typed_ir::{IrExpr, IrFunction, IrRecordField, IrStmt, IrType, IrTypeKind};
 use crate::TargetAbiProfile;
 
-#[cfg(feature = "typed-ir")]
+#[cfg(all(feature = "typed-ir", test))]
 pub(super) fn record_inventory_from_ast_with_target_abi(
     ast: &Value,
     target_abi: Option<&TargetAbiProfile>,
 ) -> BTreeMap<String, Vec<IrRecordField>> {
+    let aliases = type_alias_inventory_from_ast(ast, target_abi);
+    record_inventory_from_ast_with_aliases(ast, target_abi, &aliases)
+}
+
+#[cfg(feature = "typed-ir")]
+pub(super) fn record_inventory_from_ast_with_aliases(
+    ast: &Value,
+    target_abi: Option<&TargetAbiProfile>,
+    aliases: &TypeAliasInventory,
+) -> BTreeMap<String, Vec<IrRecordField>> {
     let mut records = BTreeMap::new();
-    collect_record_inventory_from_ast(ast, target_abi, &mut records);
+    collect_record_inventory_from_ast(ast, target_abi, aliases, &mut records);
     let mut resolved = BTreeMap::new();
     for name in records.keys() {
         let mut stack = Vec::new();
@@ -74,9 +87,11 @@ fn resolve_complete_record_type(
 fn collect_record_inventory_from_ast(
     node: &Value,
     target_abi: Option<&TargetAbiProfile>,
+    aliases: &TypeAliasInventory,
     records: &mut BTreeMap<String, Option<Vec<IrRecordField>>>,
 ) {
-    if let Some((name, fields)) = record_inventory_entry_from_record_decl(node, target_abi) {
+    if let Some((name, fields)) = record_inventory_entry_from_record_decl(node, target_abi, aliases)
+    {
         match records.entry(name) {
             std::collections::btree_map::Entry::Vacant(entry) => {
                 entry.insert(fields);
@@ -92,7 +107,7 @@ fn collect_record_inventory_from_ast(
         }
     }
     for child in inner(node) {
-        collect_record_inventory_from_ast(child, target_abi, records);
+        collect_record_inventory_from_ast(child, target_abi, aliases, records);
     }
 }
 
@@ -100,6 +115,7 @@ fn collect_record_inventory_from_ast(
 fn record_inventory_entry_from_record_decl(
     node: &Value,
     target_abi: Option<&TargetAbiProfile>,
+    aliases: &TypeAliasInventory,
 ) -> Option<(String, Option<Vec<IrRecordField>>)> {
     if string_field(node, "kind").as_deref() != Some("RecordDecl")
         || string_field(node, "tagUsed").as_deref() != Some("struct")
@@ -124,7 +140,7 @@ fn record_inventory_entry_from_record_decl(
     for child in inner(node) {
         match string_field(child, "kind").as_deref() {
             Some("FieldDecl") => {
-                if let Some(field) = record_field_from_field_decl(child, target_abi) {
+                if let Some(field) = record_field_from_field_decl(child, target_abi, aliases) {
                     fields.push(field);
                     continue;
                 };
@@ -139,7 +155,8 @@ fn record_inventory_entry_from_record_decl(
                 fields.push(field);
             }
             Some("RecordDecl") => {
-                let Some(fields) = anonymous_record_fields_from_record_decl(child, target_abi)
+                let Some(fields) =
+                    anonymous_record_fields_from_record_decl(child, target_abi, aliases)
                 else {
                     return Some((name, None));
                 };
@@ -158,6 +175,7 @@ fn record_inventory_entry_from_record_decl(
 fn anonymous_record_fields_from_record_decl(
     node: &Value,
     target_abi: Option<&TargetAbiProfile>,
+    aliases: &TypeAliasInventory,
 ) -> Option<Vec<IrRecordField>> {
     if string_field(node, "kind").as_deref() != Some("RecordDecl")
         || string_field(node, "tagUsed").as_deref() != Some("struct")
@@ -178,7 +196,7 @@ fn anonymous_record_fields_from_record_decl(
     for child in inner(node) {
         match string_field(child, "kind").as_deref() {
             Some("FieldDecl") => {
-                let field = record_field_from_field_decl(child, target_abi)?;
+                let field = record_field_from_field_decl(child, target_abi, aliases)?;
                 fields.push(field);
             }
             Some("RecordDecl") => return None,
@@ -226,6 +244,7 @@ fn record_field_from_anonymous_record_field_decl(
 fn record_field_from_field_decl(
     field: &Value,
     target_abi: Option<&TargetAbiProfile>,
+    aliases: &TypeAliasInventory,
 ) -> Option<IrRecordField> {
     if field.get("isBitfield").and_then(Value::as_bool) == Some(true) {
         return None;
@@ -248,7 +267,11 @@ fn record_field_from_field_decl(
     {
         return None;
     }
-    let clang_ty = type_from_ast_type_object(type_object, target_abi).ok()?;
+    let direct = type_from_ast_type_object(type_object, target_abi).ok();
+    let clang_ty = match direct {
+        Some(ty) if !matches!(ty.kind, ClangTypeKind::Unsupported { .. }) => ty,
+        _ => type_from_ast_type_object_with_aliases(type_object, target_abi, aliases).ok()?,
+    };
     let ty = lower_type(&clang_ty).ok()?;
     if !matches!(ty.kind, IrTypeKind::Integer { .. })
         && !is_opaque_void_pointer_ir_type(&ty)

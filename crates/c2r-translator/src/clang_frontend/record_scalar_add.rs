@@ -30,10 +30,11 @@ fn lower_function_and_globals_from_clang_ast_json_value_with_context(
     record_layout_dump: Option<&RecordLayoutDump>,
     used_record_layouts: &mut Vec<ClangRecordLayoutBinding>,
 ) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
-    let record_inventory = record_inventory_from_ast_with_target_abi(ast, target_abi);
+    let type_alias_inventory = type_alias_inventory_from_ast(ast, target_abi);
+    let record_inventory =
+        record_inventory_from_ast_with_aliases(ast, target_abi, &type_alias_inventory);
     let enum_constant_inventory = enum_constant_inventory_from_ast(ast);
     let enum_type_inventory = enum_type_inventory_from_ast(ast, target_abi);
-    let type_alias_inventory = type_alias_inventory_from_ast(ast, target_abi);
     let function = find_function_decl(ast, function_name).ok_or_else(|| ClangFrontendError {
         kind: "missing_function_decl".to_string(),
         message: format!("clang AST JSON does not contain FunctionDecl named {function_name}"),
@@ -44,6 +45,7 @@ fn lower_function_and_globals_from_clang_ast_json_value_with_context(
     }
     validate_interior_reborrow_typedef_provenance(ast, function, target_abi)?;
     let mut function = function.clone();
+    bind_type_aliases_to_ast_type_objects(&mut function, target_abi, &type_alias_inventory)?;
     rewrite_enum_constant_decl_refs_to_integer_literals(&mut function, &enum_constant_inventory)?;
     let mut skeleton =
         function_skeleton_from_ast_with_aliases(&function, &type_alias_inventory, target_abi)?;

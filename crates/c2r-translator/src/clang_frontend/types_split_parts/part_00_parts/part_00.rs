@@ -97,15 +97,20 @@ where
         });
     }
 
-    let mut first_unsupported = None;
+    let mut source_unsupported = None;
+    let mut canonical_unsupported = None;
     let mut first_error = None;
     for candidate in candidates {
         match parse(&candidate) {
             Ok(ty) if !matches!(ty.kind, ClangTypeKind::Unsupported { .. }) => return Ok(ty),
             Ok(ty) => {
-                if first_unsupported.is_none() {
-                    first_unsupported = Some(ty);
+                if source_unsupported.is_none() {
+                    source_unsupported = Some(ty.clone());
                 }
+                // Clang orders these from source spelling to desugared/canonical
+                // spelling. Preserve the deepest spelling so a later ABI-binding
+                // pass can resolve target-dependent canonical integer types.
+                canonical_unsupported = Some(ty);
             }
             Err(error) => {
                 if first_error.is_none() {
@@ -115,7 +120,10 @@ where
         }
     }
 
-    if let Some(ty) = first_unsupported {
+    if let Some(ty) = source_unsupported
+        .filter(|ty| is_target_dependent_integer_spelling(&ty.spelled))
+        .or(canonical_unsupported)
+    {
         Ok(ty)
     } else if let Some(error) = first_error {
         Err(error)
@@ -209,12 +217,54 @@ pub(super) fn type_from_ast_type_object_with_aliases(
     aliases: &TypeAliasInventory,
 ) -> Result<ClangTypeSkeleton, ClangFrontendError> {
     validate_fixed_width_typedef_desugaring(type_object, target_abi)?;
+    validate_type_alias_desugaring(type_object, target_abi, aliases)?;
     type_from_ast_type_object_with_parser(
         type_object,
         |qual_type| type_from_qual_type_with_aliases(qual_type, target_abi, aliases),
         "invalid_clang_type",
         "clang type object is missing qualType",
     )
+}
+
+#[cfg(feature = "typed-ir")]
+fn validate_type_alias_desugaring(
+    type_object: &Value,
+    target_abi: Option<&TargetAbiProfile>,
+    aliases: &TypeAliasInventory,
+) -> Result<(), ClangFrontendError> {
+    let Some(alias_name) = string_field(type_object, "qualType")
+        .map(|value| value.trim().to_string())
+        .filter(|value| is_simple_c_identifier(value))
+    else {
+        return Ok(());
+    };
+    let Some(Ok(alias_ty)) = aliases.by_name.get(&alias_name) else {
+        return Ok(());
+    };
+
+    for field in ["desugaredQualType", "canonicalQualType"] {
+        let Some(spelling) = string_field(type_object, field) else {
+            continue;
+        };
+        let spelling = spelling.trim();
+        if spelling == alias_name {
+            continue;
+        }
+        let parsed = type_from_qual_type_with_target_abi(spelling, target_abi)?;
+        if matches!(parsed.kind, ClangTypeKind::Unsupported { .. }) {
+            continue;
+        }
+        if parsed.kind != alias_ty.kind {
+            return Err(ClangFrontendError {
+                kind: "typedef_desugaring_mismatch".to_string(),
+                message: format!(
+                    "typedef {alias_name} resolves to {} but {field} resolves to {}",
+                    alias_ty.canonical, parsed.canonical
+                ),
+            });
+        }
+    }
+    Ok(())
 }
 
 #[cfg(feature = "typed-ir")]

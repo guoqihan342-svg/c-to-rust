@@ -6938,7 +6938,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "the real libuv unit advances to unsupported typedef sa_family_t before a Rust candidate or C/Rust diff is produced"
+          "reason": "the real libuv unit now advances past record memset and typedef recovery to mutable scalar-address void-pointer lowering before a Rust candidate or C/Rust diff is produced"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -6973,6 +6973,98 @@
           "name": "record memset frontend bound-size refusals",
           "path": "crates/c2r-translator/src/clang_frontend/tests/record_layout.rs",
           "fail_closed_reason": "destination record, sizeof record, and layout binding must be the same unique record with current target ABI provenance"
+        }
+      ]
+    },
+    {
+      "id": "generic-typedef-canonical-desugared-recovery",
+      "status": "partial",
+      "scope_limitations": [
+        "covers direct translation-unit typedef aliases and clang type objects with source, desugared, or canonical spellings",
+        "late ABI binding supports the already modeled integer and record type subset only",
+        "record fields may recover an omitted desugared spelling only from a unique non-implicit TypedefDecl",
+        "does not admit unions, bitfields, packed volatile or atomic fields, unresolved alias chains, or platform widths absent from the target ABI",
+        "the real libuv run advances to mutable scalar-address void-pointer lowering before Rust emission, so no named-slice semantic acceptance is claimed"
+      ],
+      "ir_constructs": [
+        "clang qualType candidate ordering",
+        "desugaredQualType",
+        "canonicalQualType",
+        "translation-unit TypedefDecl inventory",
+        "late target-ABI integer binding",
+        "function-body AST alias binding",
+        "named record field alias binding",
+        "anonymous record field alias binding",
+        "typedef desugaring conflict refusal"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "canonical fallback and renamed record typedef fixtures",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/record_typedef_fields.rs"
+            },
+            {
+              "name": "function body typedef fixture without node desugaring",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/typedef_body.rs"
+            }
+          ]
+        },
+        "handwritten_ir": {
+          "status": "not_applicable",
+          "reason": "typedef recovery occurs in clang AST and skeleton construction before typed IR exists"
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "typedef/desugared conflict and unknown field typedef refusals",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/record_typedef_fields.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "gap",
+          "reason": "focused fixtures prove type and typed-IR lowering, while the real libuv function remains blocked before Rust emission"
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "the WSL translator probe emits no libuv Rust candidate or C/Rust replay/diff evidence"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "the capability consumes clang type-object and translation-unit typedef evidence"
+        },
+        "route_evidence": {
+          "status": "gap",
+          "reason": "the A18c8g WSL probe is an unpublished local-simulation artifact under target/ and remains semantic false"
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "type_object_keeps_desugared_integer_for_late_abi_binding",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/record_typedef_fields.rs"
+        },
+        {
+          "name": "record_inventory_uses_renamed_typedef_without_field_desugaring",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/record_typedef_fields.rs"
+        },
+        {
+          "name": "function_body_uses_translation_unit_typedef_without_node_desugaring",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/typedef_body.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "typedef_and_desugared_type_conflict_stays_fail_closed",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/record_typedef_fields.rs",
+          "fail_closed_reason": "translation-unit alias kind and explicit desugared or canonical kind must agree"
+        },
+        {
+          "name": "unknown_record_field_typedef_remains_incomplete",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/record_typedef_fields.rs",
+          "fail_closed_reason": "an unknown field alias cannot make a record inventory complete"
         }
       ]
     }
