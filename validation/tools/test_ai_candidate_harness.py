@@ -115,7 +115,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assert_manifest_schema(manifest)
             self.assertIn("--model", observed_argv)
             self.assertIn("zai/glm-5.1", observed_argv)
-            self.assertEqual(3, manifest["schema_version"])
+            self.assertEqual(4, manifest["schema_version"])
             self.assertEqual(
                 prompt_transport.prompt_transport_contract(),
                 manifest["generator"]["prompt_transport"],

@@ -125,6 +125,7 @@ def main() -> int:
     parser.add_argument("--ai-variant", default="max")
     parser.add_argument("--ai-opencode-command", default="opencode")
     parser.add_argument("--ai-source-root", type=Path)
+    parser.add_argument("--ai-candidate-cache-root", type=Path)
     parser.add_argument("--ai-timeout-seconds", type=int, default=180)
     parser.add_argument("--ai-repair-rounds", type=int, default=3)
     parser.add_argument(
@@ -186,6 +187,7 @@ def main() -> int:
             agent=args.ai_agent,
             variant=args.ai_variant,
             timeout_seconds=args.ai_timeout_seconds,
+            cache_root=args.ai_candidate_cache_root,
         )
         canonical_draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
         if ai_manifest.get("status") == "generated" and canonical_draft_path.is_file():

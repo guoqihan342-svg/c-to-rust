@@ -283,7 +283,14 @@ def run_ai_exact_stage(
                 c2rust_baseline_result,
             )
         )
-    router = route_candidates(candidates, provider_invocations=1)
+    provider_invocations = ai_manifest.get("provider_invocations")
+    if (
+        isinstance(provider_invocations, bool)
+        or not isinstance(provider_invocations, int)
+        or provider_invocations not in {0, 1}
+    ):
+        raise ValueError("AI candidate manifest provider_invocations must be 0 or 1")
+    router = route_candidates(candidates, provider_invocations=provider_invocations)
     _sync_duplicate_audit(router, source="c2rust-baseline", audit=baseline_audit)
     if c2rust_repair_audit is not None:
         _sync_duplicate_audit(router, source="c2rust-repair", audit=c2rust_repair_audit)

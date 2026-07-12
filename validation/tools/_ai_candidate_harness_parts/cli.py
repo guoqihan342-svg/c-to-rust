@@ -19,6 +19,7 @@ def main() -> int:
     parser.add_argument("--agent", default=DEFAULT_AGENT)
     parser.add_argument("--variant", default=DEFAULT_VARIANT)
     parser.add_argument("--timeout-seconds", type=int, default=180)
+    parser.add_argument("--cache-root", type=Path)
     args = parser.parse_args()
     if args.timeout_seconds < 1 or args.timeout_seconds > 600:
         parser.error("--timeout-seconds must be between 1 and 600")
@@ -36,6 +37,7 @@ def main() -> int:
         agent=args.agent,
         variant=args.variant,
         timeout_seconds=args.timeout_seconds,
+        cache_root=args.cache_root,
     )
     print(json.dumps(manifest, indent=2, sort_keys=True))
     return 0 if manifest["status"] == "generated" else 2

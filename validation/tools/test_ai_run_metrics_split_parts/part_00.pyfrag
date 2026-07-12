@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -10,6 +11,14 @@ import jsonschema
 
 from validation.tools import run_competition as runner
 from validation.tools import validate_competition_run_summary as validator
+from validation.tools._ai_candidate_harness_parts.candidate_cache import (
+    agent_definition_sha256,
+    cache_key_payload,
+    cache_key_sha256,
+)
+from validation.tools._ai_candidate_harness_parts.prompt_transport import (
+    prompt_transport_contract,
+)
 from validation.tools._ai_candidate_harness_parts.router import REQUIRED_GATES, route_candidates
 
 
@@ -83,6 +92,7 @@ def write_generated_ai_chain(
     common_acceptance: bool = False,
     router_source: str | None = None,
     duplicate_source: str | None = None,
+    cache_hit: bool = False,
 ) -> tuple[dict, dict]:
     target_id = "portable-project"
     slice_id = "sum-values"
@@ -94,10 +104,40 @@ def write_generated_ai_chain(
     response = base / f"l3-{slice_id}-ai-response.jsonl"
     candidate_path = base / f"l3-{slice_id}-ai-rust-candidate.rs"
     draft = base / f"l3-{slice_id}-rust-draft.rs"
-    write_json(context, {"target_id": target_id, "slice_id": slice_id})
+    c_source = "int sum_values(int a, int b) { return a + b; }"
+    write_json(
+        context,
+        {
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "source_root": {"status": "unavailable"},
+            "source": {
+                "span": {
+                    "status": "inline_slice_spec",
+                    "sha256": hashlib.sha256(c_source.encode("utf-8")).hexdigest(),
+                    "content": c_source,
+                }
+            },
+        },
+    )
     write_text(prompt, "translate this bounded slice")
-    write_text(response, '{"type":"text","text":"candidate"}\n')
-    candidate_sha = write_text(candidate_path, "pub fn sum_values(a: i32, b: i32) -> i32 { a + b }\n")
+    candidate_source = "pub fn sum_values(a: i32, b: i32) -> i32 { a + b }\n"
+    response_payload = {
+        "schema_version": 1,
+        "candidate": {"language": "rust", "source": candidate_source},
+        "assumptions": [],
+    }
+    write_text(
+        response,
+        json.dumps(
+            {
+                "type": "message.part.updated",
+                "part": {"type": "text", "text": json.dumps(response_payload)},
+            }
+        )
+        + "\n",
+    )
+    candidate_sha = write_text(candidate_path, candidate_source)
     write_text(draft, candidate_path.read_text(encoding="utf-8"))
     selected_source = router_source if router_source is not None else ("opencode-ai" if common_acceptance else None)
 
@@ -128,7 +168,10 @@ def write_generated_ai_chain(
         write_text(draft, deterministic_path.read_text(encoding="utf-8"))
     if duplicate_source is not None:
         router_inputs.append(router_candidate(f"{duplicate_source}:duplicate", duplicate_source, candidate_sha, False))
-    router_payload = route_candidates(router_inputs, provider_invocations=1)
+    router_payload = route_candidates(
+        router_inputs,
+        provider_invocations=0 if cache_hit else 1,
+    )
     evidence_keys = {
         "opencode-ai": "ai",
         "typed-ir": "typed_ir",
@@ -169,10 +212,18 @@ def write_generated_ai_chain(
         write_json(
             report_path,
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "artifact_label": "c2rust-repair",
                 "input_source": "c2rust-baseline",
                 "status": report_status,
+                "generator": {
+                    "tool": "opencode",
+                    "logical_model": "GLM-5.1",
+                    "resolved_model": "zai/glm-5.1",
+                    "agent": "c2rust-migrator",
+                    "variant": "max",
+                    "prompt_transport": prompt_transport_contract(),
+                },
                 "initial_candidate": {
                     "name": baseline_path.name,
                     "sha256": runner.sha256(baseline_path),
@@ -230,11 +281,16 @@ def write_generated_ai_chain(
     manifest_path = base / f"l3-{slice_id}-ai-candidate-manifest.json"
     candidate_id = "opencode-glm51-1"
     manifest = {
-        "schema_version": 2,
+        "schema_version": 4,
         "target_id": target_id,
         "slice_id": slice_id,
         "status": "generated",
         "ai_required_for_default_pipeline": True,
+        "provider_invocations": 0 if cache_hit else 1,
+        "provider_preflight": {
+            "status": "ready",
+            "source_span_status": "inline_slice_spec",
+        },
         "generator": {
             "tool": "opencode",
             "provider": "zai",
@@ -242,27 +298,94 @@ def write_generated_ai_chain(
             "resolved_model": "zai/glm-5.1",
             "agent": "c2rust-migrator",
             "variant": "max",
+            "prompt_transport": prompt_transport_contract(),
         },
         "bindings": {
-            "context_pack": nested_ref(context),
-            "prompt": nested_ref(prompt),
-            "raw_response": nested_ref(response),
+            "context_pack": {"path": context.name, "sha256": runner.sha256(context)},
+            "prompt": {"path": prompt.name, "sha256": runner.sha256(prompt)},
+            "raw_response": {"path": response.name, "sha256": runner.sha256(response)},
         },
+        "claim_boundary": {
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "candidate_requires_common_validation": True,
+        },
+        "cache_invalidation_keys": [
+            f"context_pack:{runner.sha256(context)}",
+            f"prompt:{runner.sha256(prompt)}",
+            f"raw_response:{runner.sha256(response)}",
+        ],
         "candidates": [
             {
                 "candidate_id": candidate_id,
                 "purpose": "rust_draft",
                 "kind": "opencode-ai",
-                "artifact": nested_ref(candidate_path),
+                "provider_label": "zai",
+                "model_label": "GLM-5.1",
+                "resolved_model": "zai/glm-5.1",
+                "prompt_scope": ["slice_spec", "source_spans"],
+                "input_artifact_hashes": {
+                    "context_pack": runner.sha256(context),
+                    "prompt": runner.sha256(prompt),
+                },
+                "artifact": {"path": candidate_path.name, "sha256": candidate_sha},
                 "output_hash": candidate_sha,
                 "applied": selected_source not in {"typed-ir", "c2rust-repair", "c2rust-baseline"},
                 "semantic_pass": False,
+                "accepted_by_gates": [],
+                "rejected_by_gates": [],
             }
         ],
     }
+    if cache_hit:
+        key_payload = cache_key_payload(
+            runner.sha256(context),
+            prompt_sha256=runner.sha256(prompt),
+            resolved_model="zai/glm-5.1",
+            agent="c2rust-migrator",
+            agent_definition_sha256=agent_definition_sha256(
+                "c2rust-migrator",
+                REPO_ROOT,
+            ),
+            variant="max",
+        )
+        key = cache_key_sha256(key_payload)
+        cache_entry_path = base / f"l3-{slice_id}-ai-cache-entry.json"
+        write_json(
+            cache_entry_path,
+            {
+                "schema_version": 1,
+                "key_sha256": key,
+                "key": key_payload,
+                "raw_response": {
+                    "sha256": runner.sha256(response),
+                    "size_bytes": response.stat().st_size,
+                },
+                "candidate": {
+                    "sha256": candidate_sha,
+                    "size_bytes": candidate_path.stat().st_size,
+                },
+            },
+        )
+        manifest["cache"] = {
+            "status": "hit",
+            "key_sha256": key,
+            "entry_sha256": runner.sha256(cache_entry_path),
+            "entry": {
+                "path": cache_entry_path.name,
+                "sha256": runner.sha256(cache_entry_path),
+            },
+            "raw_response_sha256": runner.sha256(response),
+            "candidate_sha256": candidate_sha,
+        }
+    else:
+        manifest["cache"] = {"status": "disabled"}
     if selected_source not in {"typed-ir", "c2rust-repair", "c2rust-baseline"}:
         manifest["selected_candidate_id"] = candidate_id
-        manifest["candidates"][0]["applied_artifact"] = nested_ref(draft)
+        manifest["candidates"][0]["applied_artifact"] = {
+            "path": draft.name,
+            "sha256": runner.sha256(draft),
+        }
         manifest["candidates"][0]["rust_draft_sha256"] = candidate_sha
     write_json(manifest_path, manifest)
 

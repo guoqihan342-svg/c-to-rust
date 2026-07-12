@@ -282,7 +282,7 @@ def build_ai_translation_metrics(
         raise SystemExit("direct AI metric execution mode does not match runner mode")
 
     skeleton = {
-        "schema_version": 1,
+        "schema_version": 2,
         "counting_boundary": {
             "unit": "slice",
             "funnel": "cumulative_verified_stages",

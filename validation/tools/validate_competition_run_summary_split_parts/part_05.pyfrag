@@ -74,6 +74,10 @@ def validate_fresh_ai_manifest(
     repo_root: Path,
 ) -> dict[str, Any]:
     reasons: list[str] = []
+    try:
+        jsonschema.Draft7Validator(load_json(AI_CANDIDATE_MANIFEST_SCHEMA_PATH)).validate(manifest)
+    except (OSError, UnicodeError, json.JSONDecodeError, jsonschema.ValidationError, jsonschema.SchemaError):
+        reasons.append("ai_manifest_schema_invalid")
     generator = manifest.get("generator")
     expected_generator = {
         "tool": "opencode",
@@ -95,6 +99,22 @@ def validate_fresh_ai_manifest(
     status = manifest.get("status")
     if status not in {"generated", "blocked"}:
         reasons.append("ai_first_manifest_not_invoked")
+    schema_version = manifest.get("schema_version")
+    cache_required = (
+        isinstance(schema_version, int)
+        and not isinstance(schema_version, bool)
+        and schema_version >= 4
+        and status in {"generated", "blocked"}
+    )
+    cache = manifest.get("cache")
+    cache_status = cache.get("status") if isinstance(cache, dict) else None
+    expected_cache_payload = None
+    expected_cache_key = None
+    cache_entry_payload = None
+    cache_response_bytes = None
+    if cache_required and cache_status not in {"disabled", "not_checked", "miss", "hit"}:
+        reasons.append("ai_manifest_cache_evidence_invalid")
+    cache_hit = cache_required and cache_status == "hit"
     provider_accounting_required = (
         isinstance(manifest.get("schema_version"), int)
         and not isinstance(manifest.get("schema_version"), bool)
@@ -149,14 +169,21 @@ def validate_fresh_ai_manifest(
             reasons.append("ai_manifest_provider_preflight_source_status_mismatch")
         if provider_invocations == 0:
             failure = manifest.get("failure")
-            if (
-                status != "blocked"
-                or preflight_status != "blocked"
-                or not isinstance(failure, dict)
-                or failure.get("kind") != "context_not_provider_ready"
-            ):
+            blocked_without_call = (
+                status == "blocked"
+                and preflight_status == "blocked"
+                and isinstance(failure, dict)
+                and failure.get("kind") == "context_not_provider_ready"
+                and not cache_hit
+            )
+            generated_from_cache = (
+                status == "generated"
+                and preflight_status == "ready"
+                and cache_hit
+            )
+            if not (blocked_without_call or generated_from_cache):
                 reasons.append("ai_manifest_zero_invocation_preflight_invalid")
-        elif preflight_status != "ready":
+        elif preflight_status != "ready" or cache_hit:
             reasons.append("ai_manifest_invoked_preflight_not_ready")
     if manifest_path is None:
         reasons.append("ai_manifest_path_missing")
@@ -188,9 +215,90 @@ def validate_fresh_ai_manifest(
                 recomputed_preflight = evaluate_provider_readiness(context_payload)
                 if provider_preflight != recomputed_preflight:
                     reasons.append("ai_manifest_provider_preflight_context_mismatch")
-                recomputed_invocations = int(recomputed_preflight["status"] == "ready")
+                recomputed_invocations = int(
+                    recomputed_preflight["status"] == "ready" and not cache_hit
+                )
                 if provider_invocations != recomputed_invocations:
                     reasons.append("ai_manifest_provider_invocations_context_mismatch")
+            if cache_required and cache_status in {"hit", "miss"}:
+                try:
+                    expected_cache_payload = cache_key_payload(
+                        context_ref.get("sha256") if isinstance(context_ref, dict) else None,
+                        prompt_sha256=(
+                            bindings.get("prompt", {}).get("sha256")
+                            if isinstance(bindings.get("prompt"), dict)
+                            else None
+                        ),
+                        resolved_model=policy["model"],
+                        agent=policy["agent"],
+                        agent_definition_sha256=agent_definition_sha256(
+                            policy["agent"],
+                            REPO_ROOT,
+                        ),
+                        variant=policy["variant"],
+                    )
+                    expected_cache_key = cache_key_sha256(expected_cache_payload)
+                except (TypeError, ValueError):
+                    expected_cache_payload = None
+                    expected_cache_key = None
+                if not isinstance(cache, dict) or cache.get("key_sha256") != expected_cache_key:
+                    reasons.append("ai_manifest_cache_key_mismatch")
+                raw_response_ref = bindings.get("raw_response")
+                if cache_hit and (
+                    not isinstance(raw_response_ref, dict)
+                    or cache.get("raw_response_sha256") != raw_response_ref.get("sha256")
+                ):
+                    reasons.append("ai_manifest_cache_response_binding_mismatch")
+                if cache_hit:
+                    entry_ref = cache.get("entry") if isinstance(cache, dict) else None
+                    if not nested_ai_ref_is_hash_bound(
+                        entry_ref,
+                        owner_path=manifest_path,
+                        summary_path=summary_path,
+                        repo_root=repo_root,
+                    ):
+                        reasons.append("ai_manifest_cache_entry_binding_invalid")
+                    elif entry_ref.get("sha256") != cache.get("entry_sha256"):
+                        reasons.append("ai_manifest_cache_entry_sha_mismatch")
+                    else:
+                        entry_path = resolve_nested_ai_artifact(
+                            entry_ref.get("path"),
+                            owner_path=manifest_path,
+                            summary_path=summary_path,
+                            repo_root=repo_root,
+                        )
+                        try:
+                            cache_entry_payload = load_json(entry_path)
+                        except (OSError, UnicodeError, json.JSONDecodeError):
+                            cache_entry_payload = None
+                            reasons.append("ai_manifest_cache_entry_unreadable")
+                    raw_response_path = (
+                        resolve_nested_ai_artifact(
+                            raw_response_ref.get("path"),
+                            owner_path=manifest_path,
+                            summary_path=summary_path,
+                            repo_root=repo_root,
+                        )
+                        if isinstance(raw_response_ref, dict)
+                        and isinstance(raw_response_ref.get("path"), str)
+                        else None
+                    )
+                    try:
+                        cache_response_bytes = raw_response_path.read_bytes() if raw_response_path is not None else None
+                        reparsed = parse_candidate_response(cache_response_bytes.decode("utf-8")) if cache_response_bytes is not None else None
+                    except (OSError, UnicodeError, ValueError):
+                        reparsed = None
+                    reparsed_source = (
+                        reparsed.get("candidate", {}).get("source")
+                        if isinstance(reparsed, dict)
+                        else None
+                    )
+                    if (
+                        not isinstance(reparsed_source, str)
+                        or hashlib.sha256(reparsed_source.encode("utf-8")).hexdigest()
+                        != cache.get("candidate_sha256")
+                    ):
+                        reasons.append("ai_manifest_cache_response_reparse_mismatch")
     candidates = manifest.get("candidates")
     if not isinstance(candidates, list):
         reasons.append("ai_manifest_candidates_invalid")
@@ -202,6 +310,40 @@ def validate_fresh_ai_manifest(
     if status == "generated" and len(rust_candidates) != 1:
         reasons.append("generated_ai_manifest_requires_one_rust_draft")
     candidate = rust_candidates[0] if len(rust_candidates) == 1 else None
+    if cache_hit:
+        artifact = candidate.get("artifact") if isinstance(candidate, dict) else None
+        initial_artifact = candidate.get("initial_artifact") if isinstance(candidate, dict) else None
+        cache_artifact = initial_artifact if isinstance(initial_artifact, dict) else artifact
+        if (
+            not isinstance(cache, dict)
+            or not isinstance(cache_artifact, dict)
+            or cache.get("candidate_sha256") != cache_artifact.get("sha256")
+        ):
+            reasons.append("ai_manifest_cache_candidate_binding_mismatch")
+        elif (
+            manifest_path is not None
+            and expected_cache_payload is not None
+            and expected_cache_key is not None
+            and cache_entry_payload is not None
+            and cache_response_bytes is not None
+        ):
+            candidate_path = resolve_nested_ai_artifact(
+                cache_artifact.get("path"),
+                owner_path=manifest_path,
+                summary_path=summary_path,
+                repo_root=repo_root,
+            )
+            try:
+                candidate_bytes = candidate_path.read_bytes()
+                validate_cache_entry(
+                    cache_entry_payload,
+                    expected_cache_payload,
+                    expected_cache_key,
+                    cache_response_bytes,
+                    candidate_bytes,
+                )
+            except (OSError, UnicodeError, TypeError, ValueError):
+                reasons.append("ai_manifest_cache_entry_content_mismatch")
     if candidate is not None and manifest_path is not None:
         validate_ai_candidate_artifacts(candidate, manifest_path, summary_path, repo_root, reasons)
     valid_repairs = 0
@@ -242,12 +384,11 @@ def validate_fresh_ai_manifest(
         )
         valid_repairs += repair_rounds
         reasons.extend(repair_reasons)
-    if provider_invocations == 0 and valid_repairs:
-        reasons.append("ai_manifest_zero_invocation_cannot_have_repairs")
     return {
         "candidate": candidate,
         "repair_rounds": valid_repairs,
         "invocations": provider_invocations + valid_repairs if status in {"generated", "blocked"} else 0,
+        "cache_hits": int(cache_hit and status == "generated"),
         "reasons": sorted(set(reasons)),
     }
 
