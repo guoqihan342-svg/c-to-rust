@@ -65,6 +65,13 @@ def validate_replay_call_plan_v2(plan: dict[str, Any]) -> None:
         normalized_runtime = _normalize_scripted_runtime(scripted_runtime)
         if normalized_runtime != scripted_runtime:
             raise ValueError("ReplayCallPlan v2 scripted runtime is not canonical")
+    fixture_assertions = plan.get("fixture_assertions")
+    if fixture_assertions is not None:
+        normalized_fixture_assertions = _normalize_v2_fixture_assertions(
+            fixture_assertions
+        )
+        if normalized_fixture_assertions != fixture_assertions:
+            raise ValueError("ReplayCallPlan v2 fixture assertions are not canonical")
 
     assertions = _normalize_assertions(plan.get("assertions"), binding_by_name)
     if assertions != plan.get("assertions"):
@@ -118,6 +125,14 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
             lines.append(f"        let {observed}: {assertion['rust_type']} = {actual};\n")
             lines.append(
                 f"        assert_eq!({observed}, {expected}, \"{{}} {assertion['fixture_field']} drifted\", case_id);\n"
+            )
+        for assertion in plan.get("fixture_assertions", []):
+            actual = _encoded_literal(
+                case["expected"][assertion["fixture_field"]], assertion["encoding"]
+            )
+            expected = _encoded_literal(assertion["expected"], assertion["encoding"])
+            lines.append(
+                f"        assert_eq!({actual}, {expected}, \"{{}} {assertion['fixture_field']} metadata drifted\", case_id);\n"
             )
         if isinstance(runtime, dict):
             for probe_index, probe in enumerate(runtime["probes"]):
@@ -267,17 +282,17 @@ def _normalize_plan_initializer(value: Any, types: dict[str, dict[str, Any]]) ->
         length = value.get("length")
         scalar = value.get("value")
         if (
-            value.get("element_type") != "u32"
+            value.get("element_type") not in {"u32", "i32"}
             or not isinstance(length, int)
             or not 1 <= length <= 32
-            or not _is_u32(scalar)
-            or value.get("rust_type") != f"[u32; {length}]"
+            or not _value_matches(scalar, value.get("element_type"))
+            or value.get("rust_type") != f"[{value.get('element_type')}; {length}]"
         ):
             raise ValueError("ReplayCallPlan v2 array initializer is invalid")
         return {
             "kind": "array_repeat",
             "rust_type": value["rust_type"],
-            "element_type": "u32",
+            "element_type": value["element_type"],
             "length": length,
             "value": scalar,
         }
@@ -360,7 +375,7 @@ def _normalize_binding_source(value: Any, bindings: dict[str, dict[str, Any]]) -
         if kind in {"binding_borrow", "binding_value"} and bindings[binding]["mutable"] is not False:
             raise ValueError("ReplayCallPlan v2 value binding source is invalid")
         return {"kind": kind, "binding": binding}
-    if kind == "fixture_field" and value.get("encoding") in {"u32", "usize", "bool"}:
+    if kind == "fixture_field" and value.get("encoding") in {"u32", "i32", "usize", "bool"}:
         return {
             "kind": "fixture_field",
             "field": _identifier(value.get("field"), "argument fixture field"),
@@ -389,6 +404,7 @@ def _normalize_assertions(value: Any, bindings: dict[str, dict[str, Any]]) -> li
     if not isinstance(value, list) or not value:
         raise ValueError("ReplayCallPlan v2 assertions are required")
     result = []
+    fields: set[str] = set()
     for item in value:
         if not isinstance(item, dict) or not ACTUAL_RE.fullmatch(str(item.get("actual") or "")):
             raise ValueError("ReplayCallPlan v2 assertion actual is invalid")
@@ -399,14 +415,18 @@ def _normalize_assertions(value: Any, bindings: dict[str, dict[str, Any]]) -> li
             if binding is None or not _binding_observation_exists(binding["initializer"], parts[2:]):
                 raise ValueError("ReplayCallPlan v2 assertion binding path is invalid")
         encoding = item.get("encoding")
-        if encoding not in {"u32", "usize", "bool"}:
+        if encoding not in {"u32", "i32", "usize", "bool"}:
             raise ValueError("ReplayCallPlan v2 assertion encoding is unsupported")
+        fixture_field = _identifier(item.get("fixture_field"), "assertion fixture field")
+        if fixture_field in fields:
+            raise ValueError("ReplayCallPlan v2 assertion fixture fields must be unique")
         result.append(
             {
                 "actual": actual,
-                "fixture_field": _identifier(item.get("fixture_field"), "assertion fixture field"),
+                "fixture_field": fixture_field,
                 "rust_type": _rust_type(item.get("rust_type"), "assertion type"),
                 "encoding": encoding,
             }
         )
+        fields.add(fixture_field)
     return result

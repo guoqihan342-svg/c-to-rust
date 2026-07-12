@@ -139,11 +139,43 @@ def _actual_expression(actual: str, names: dict[str, str]) -> str:
 def _encoded_literal(value: Any, encoding: str) -> str:
     if encoding == "u32" and _is_u32(value):
         return f"{value}u32"
+    if encoding == "i32" and _is_i32(value):
+        return f"{value}i32"
     if encoding == "usize" and _is_usize(value):
         return f"{value}usize"
     if encoding == "bool" and isinstance(value, bool):
         return "true" if value else "false"
+    if encoding == "string" and isinstance(value, str):
+        return json.dumps(value, ensure_ascii=True)
     raise ValueError(f"value does not match ReplayCallPlan v2 encoding {encoding}")
+
+
+def _normalize_v2_fixture_assertions(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or not value:
+        raise ValueError("ReplayCallPlan v2 fixture assertions are required")
+    result: list[dict[str, Any]] = []
+    fields: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("ReplayCallPlan v2 fixture assertion is invalid")
+        fixture_field = _identifier(
+            item.get("fixture_field"), "fixture assertion field"
+        )
+        encoding = item.get("encoding")
+        if encoding not in {"u32", "i32", "usize", "bool", "string"}:
+            raise ValueError("ReplayCallPlan v2 fixture assertion encoding is unsupported")
+        if fixture_field in fields:
+            raise ValueError("ReplayCallPlan v2 fixture assertion fields must be unique")
+        _encoded_literal(item.get("expected"), encoding)
+        result.append(
+            {
+                "fixture_field": fixture_field,
+                "encoding": encoding,
+                "expected": item.get("expected"),
+            }
+        )
+        fields.add(fixture_field)
+    return result
 
 
 def _normalize_pairs(value: Any, label: str) -> list[list[str]]:
@@ -196,6 +228,10 @@ def _is_u32(value: Any) -> bool:
     return not isinstance(value, bool) and isinstance(value, int) and 0 <= value <= 2**32 - 1
 
 
+def _is_i32(value: Any) -> bool:
+    return not isinstance(value, bool) and isinstance(value, int) and -(2**31) <= value <= 2**31 - 1
+
+
 def _is_usize(value: Any) -> bool:
     return not isinstance(value, bool) and isinstance(value, int) and 0 <= value <= 2**64 - 1
 
@@ -203,10 +239,14 @@ def _is_usize(value: Any) -> bool:
 def _value_matches(value: Any, encoding: str) -> bool:
     if encoding == "u32":
         return _is_u32(value)
+    if encoding == "i32":
+        return _is_i32(value)
     if encoding == "usize":
         return _is_usize(value)
     if encoding == "bool":
         return isinstance(value, bool)
+    if encoding == "string":
+        return isinstance(value, str)
     return False
 
 

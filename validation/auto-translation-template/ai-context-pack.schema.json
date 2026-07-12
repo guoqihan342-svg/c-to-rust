@@ -369,10 +369,10 @@
       "required": ["kind", "rust_type", "element_type", "length", "value"],
       "properties": {
         "kind": {"const": "array_repeat"},
-        "rust_type": {"type": "string", "pattern": "^\\[u32; [1-9][0-9]*\\]$"},
-        "element_type": {"const": "u32"},
+        "rust_type": {"type": "string", "pattern": "^\\[(?:u32|i32); [1-9][0-9]*\\]$"},
+        "element_type": {"enum": ["u32", "i32"]},
         "length": {"type": "integer", "minimum": 1, "maximum": 32},
-        "value": {"type": "integer", "minimum": 0, "maximum": 4294967295}
+        "value": {"type": "integer", "minimum": -2147483648, "maximum": 4294967295}
       }
     },
     "replayStructInitializer": {

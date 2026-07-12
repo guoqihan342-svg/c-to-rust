@@ -633,10 +633,15 @@ class _AutoMigrateTestsPart07:
             self.assertTrue(replay["generated_draft_replay_pass"])
             self.assertTrue(replay["generated_draft_semantic_pass"])
             self.assertEqual(replay["evidence_links"]["rust_draft"]["status"], "accepted_after_gates")
-            self.assertIn("let mut out = [0i32; 1];", replay_draft)
-            self.assertIn("let actual = store_add_one(case.value, &mut out);", replay_draft)
-            self.assertIn('assert_eq!(actual, case.return_code, "{} return_code drifted", case.id);', replay_draft)
-            self.assertIn('assert_eq!(out[0], case.out0, "{} out0 drifted", case.id);', replay_draft)
+            self.assertIn("// ReplayCallPlan-SHA256:", replay_draft)
+            self.assertIn("let mut actual_int_min_0_out: [i32; 1] = [0i32; 1];", replay_draft)
+            self.assertIn(
+                "store_add_one(-2147483648i32, &mut actual_int_min_0_out)",
+                replay_draft,
+            )
+            self.assertIn('assert_eq!(observed_int_min_0_0, 0i32, "{} return_code drifted", case_id);', replay_draft)
+            self.assertIn('assert_eq!(observed_int_min_0_1, -2147483647i32, "{} out0 drifted", case_id);', replay_draft)
+            self.assertNotIn("struct FixtureCase", replay_draft)
             self.assertEqual(rust_report["status"], "passed")
             self.assertTrue(rust_report["semantic_pass"])
             self.assertTrue(capability["capability_delta"][0]["semantic_pass"])
