@@ -12,6 +12,29 @@ from validation.tools.replay_call_plan_v2 import (
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
+def supports_implicit_i32_output_plan(spec: dict[str, Any]) -> bool:
+    from validation.tools.replay_call_plan_slice_out import (
+        supports_implicit_i32_slice_output_plan,
+    )
+
+    return supports_implicit_single_i32_output_plan(spec) or supports_implicit_i32_slice_output_plan(spec)
+
+
+def build_implicit_i32_output_plan(
+    spec: dict[str, Any], fixture: dict[str, Any]
+) -> dict[str, Any]:
+    if supports_implicit_single_i32_output_plan(spec):
+        return build_implicit_single_i32_output_plan(spec, fixture)
+    from validation.tools.replay_call_plan_slice_out import (
+        build_implicit_i32_slice_output_plan,
+        supports_implicit_i32_slice_output_plan,
+    )
+
+    if supports_implicit_i32_slice_output_plan(spec):
+        return build_implicit_i32_slice_output_plan(spec, fixture)
+    raise ValueError("implicit i32 output replay shape is unsupported")
+
+
 def supports_implicit_single_i32_output_plan(spec: dict[str, Any]) -> bool:
     try:
         function_name = _identifier(spec.get("function_name"), "source function")
@@ -227,6 +250,8 @@ def _identifier(value: Any, label: str) -> str:
 
 
 __all__ = [
+    "build_implicit_i32_output_plan",
     "build_implicit_single_i32_output_plan",
+    "supports_implicit_i32_output_plan",
     "supports_implicit_single_i32_output_plan",
 ]

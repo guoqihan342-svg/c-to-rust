@@ -222,6 +222,11 @@
           "minItems": 1,
           "items": {"$ref": "#/definitions/replayFixtureAssertion"}
         },
+        "fixture_relations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/replayFixtureRelation"}
+        },
         "scripted_runtime": {"$ref": "#/definitions/replayScriptedRuntime"},
         "fixture": {
           "type": "object",
@@ -265,7 +270,7 @@
           "properties": {
             "kind": {"enum": ["fixture_field", "encoded_length"]},
             "field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
-            "encoding": {"enum": ["u32", "u64", "i32", "usize", "u16", "bool", "string", "hex_bytes", "u8_array", "hex"]},
+            "encoding": {"enum": ["u32", "u64", "i32", "usize", "u16", "bool", "string", "hex_bytes", "u8_array", "hex", "i32_slice"]},
             "null_default": {"type": ["integer", "string", "boolean", "null"]}
           }
         },
@@ -308,10 +313,10 @@
       "additionalProperties": false,
       "required": ["actual", "fixture_field", "rust_type", "encoding"],
       "properties": {
-        "actual": {"type": "string", "pattern": "^(?:return(?:\\.[A-Za-z_][A-Za-z0-9_]*)*|binding\\.[A-Za-z_][A-Za-z0-9_]*(?:\\.(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+))+)$"},
+        "actual": {"type": "string", "pattern": "^(?:return(?:\\.[A-Za-z_][A-Za-z0-9_]*)*|binding\\.[A-Za-z_][A-Za-z0-9_]*(?:\\.(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+))*)$"},
         "fixture_field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
         "rust_type": {"type": "string", "minLength": 1},
-        "encoding": {"enum": ["u32", "u64", "i32", "usize", "u16", "bool", "string"]}
+        "encoding": {"enum": ["u32", "u64", "i32", "usize", "u16", "bool", "string", "i32_vec"]}
       }
     },
     "replayFixtureAssertion": {
@@ -358,7 +363,8 @@
         "initializer": {
           "oneOf": [
             {"$ref": "#/definitions/replayStructInitializer"},
-            {"$ref": "#/definitions/replayArrayInitializer"}
+            {"$ref": "#/definitions/replayArrayInitializer"},
+            {"$ref": "#/definitions/replayVecInitializer"}
           ]
         }
       }
@@ -374,6 +380,147 @@
         "length": {"type": "integer", "minimum": 1, "maximum": 32},
         "value": {"type": "integer", "minimum": -2147483648, "maximum": 4294967295}
       }
+    },
+    "replayVecInitializer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "rust_type", "element_type", "length", "value"],
+      "properties": {
+        "kind": {"const": "vec_repeat"},
+        "rust_type": {"const": "Vec<i32>"},
+        "element_type": {"const": "i32"},
+        "length": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "field", "encoding", "maximum"],
+          "properties": {
+            "kind": {"const": "fixture_field"},
+            "field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+            "encoding": {"const": "i32"},
+            "maximum": {"type": "integer", "minimum": 1, "maximum": 4096}
+          }
+        },
+        "value": {"type": "integer", "minimum": -2147483648, "maximum": 2147483647}
+      }
+    },
+    "replayI32FixtureReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section", "field", "encoding"],
+      "properties": {
+        "section": {"enum": ["inputs", "expected"]},
+        "field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "encoding": {"const": "i32"}
+      }
+    },
+    "replayI32VecFixtureReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section", "field", "encoding"],
+      "properties": {
+        "section": {"enum": ["inputs", "expected"]},
+        "field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "encoding": {"const": "i32_vec"}
+      }
+    },
+    "replayNumericFixtureReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section", "field", "encoding"],
+      "properties": {
+        "section": {"enum": ["inputs", "expected"]},
+        "field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "encoding": {"enum": ["i32", "usize"]}
+      }
+    },
+    "replayStringFixtureReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section", "field", "encoding"],
+      "properties": {
+        "section": {"enum": ["inputs", "expected"]},
+        "field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "encoding": {"const": "string"}
+      }
+    },
+    "replayUsizeFixtureReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section", "field", "encoding"],
+      "properties": {
+        "section": {"enum": ["inputs", "expected"]},
+        "field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "encoding": {"const": "usize"}
+      }
+    },
+    "replayEqualFixtureRelation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "left", "right"],
+          "properties": {
+            "kind": {"const": "equal"},
+            "left": {"$ref": "#/definitions/replayI32FixtureReference"},
+            "right": {"$ref": "#/definitions/replayI32FixtureReference"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "left", "right"],
+          "properties": {
+            "kind": {"const": "equal"},
+            "left": {"$ref": "#/definitions/replayI32VecFixtureReference"},
+            "right": {"$ref": "#/definitions/replayI32VecFixtureReference"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "left", "right"],
+          "properties": {
+            "kind": {"const": "equal"},
+            "left": {"$ref": "#/definitions/replayStringFixtureReference"},
+            "right": {"$ref": "#/definitions/replayStringFixtureReference"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "left", "right"],
+          "properties": {
+            "kind": {"const": "equal"},
+            "left": {"$ref": "#/definitions/replayUsizeFixtureReference"},
+            "right": {"$ref": "#/definitions/replayUsizeFixtureReference"}
+          }
+        }
+      ]
+    },
+    "replayFixtureRelation": {
+      "oneOf": [
+        {"$ref": "#/definitions/replayEqualFixtureRelation"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "collection", "length"],
+          "properties": {
+            "kind": {"const": "length_equals"},
+            "collection": {"$ref": "#/definitions/replayI32VecFixtureReference"},
+            "length": {"$ref": "#/definitions/replayNumericFixtureReference"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "left", "right"],
+          "properties": {
+            "kind": {"const": "numeric_equal"},
+            "left": {"$ref": "#/definitions/replayNumericFixtureReference"},
+            "right": {"$ref": "#/definitions/replayNumericFixtureReference"}
+          }
+        }
+      ]
     },
     "replayStructInitializer": {
       "type": "object",

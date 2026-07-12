@@ -141,12 +141,20 @@
             self.assertTrue(replay["generated_draft_replay_pass"])
             self.assertTrue(replay["generated_draft_semantic_pass"])
             self.assertEqual(replay["evidence_links"]["rust_draft"]["status"], "accepted_after_gates")
-            self.assertIn("let mut out = vec![0i32; case.out_values.len()];", replay_draft)
+            self.assertIn("// ReplayCallPlan-SHA256:", replay_draft)
             self.assertIn(
-                "let actual = copy_i32_ptr_arith(case.values, case.len, &mut out);",
+                "let mut actual_empty_0_out: Vec<i32> = vec![0i32; 0usize];",
                 replay_draft,
             )
-            self.assertIn('assert_eq!(out.as_slice(), case.out_values, "{} out_values drifted", case.id);', replay_draft)
+            self.assertIn(
+                "copy_i32_ptr_arith(&[-5i32, 2i32, -3i32, 6i32], 4i32, &mut actual_mixed_negative_2_out)",
+                replay_draft,
+            )
+            self.assertIn(
+                'assert_eq!(observed_mixed_negative_2_1, vec![-5i32, 2i32, -3i32, 6i32], "{} out_values drifted", case_id);',
+                replay_draft,
+            )
+            self.assertNotIn("struct FixtureCase", replay_draft)
             self.assertEqual(rust_report["status"], "passed")
             self.assertTrue(rust_report["semantic_pass"])
             self.assertTrue(capability["capability_delta"][0]["semantic_pass"])

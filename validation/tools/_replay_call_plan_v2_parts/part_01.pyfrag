@@ -28,11 +28,14 @@ def validate_replay_call_plan_v2(plan: dict[str, Any]) -> None:
             raise ValueError("ReplayCallPlan v2 parameter order is invalid")
         name = _identifier(item.get("name"), "Rust parameter")
         source = _normalize_binding_source(item.get("source"), binding_by_name)
+        rust_type = _rust_type(item.get("rust_type"), "parameter type")
+        if source.get("encoding") == "i32_slice" and rust_type != "&[i32]":
+            raise ValueError("ReplayCallPlan v2 i32 slice parameter type is invalid")
         normalized_parameters.append(
             {
                 "position": position,
                 "name": name,
-                "rust_type": _rust_type(item.get("rust_type"), "parameter type"),
+                "rust_type": rust_type,
                 "c_parameter": _identifier(item.get("c_parameter"), "C parameter"),
                 "length_retained": item.get("length_retained"),
                 "source": source,
@@ -72,6 +75,11 @@ def validate_replay_call_plan_v2(plan: dict[str, Any]) -> None:
         )
         if normalized_fixture_assertions != fixture_assertions:
             raise ValueError("ReplayCallPlan v2 fixture assertions are not canonical")
+    fixture_relations = plan.get("fixture_relations")
+    if fixture_relations is not None:
+        normalized_fixture_relations = _normalize_fixture_relations(fixture_relations)
+        if normalized_fixture_relations != fixture_relations:
+            raise ValueError("ReplayCallPlan v2 fixture relations are not canonical")
 
     assertions = _normalize_assertions(plan.get("assertions"), binding_by_name)
     if assertions != plan.get("assertions"):
@@ -133,6 +141,11 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
             expected = _encoded_literal(assertion["expected"], assertion["encoding"])
             lines.append(
                 f"        assert_eq!({actual}, {expected}, \"{{}} {assertion['fixture_field']} metadata drifted\", case_id);\n"
+            )
+        for relation in plan.get("fixture_relations", []):
+            left, right = _fixture_relation_literals(relation, case)
+            lines.append(
+                f"        assert_eq!({left}, {right}, \"{{}} fixture relation {relation['kind']} drifted\", case_id);\n"
             )
         if isinstance(runtime, dict):
             for probe_index, probe in enumerate(runtime["probes"]):
@@ -262,12 +275,16 @@ def _normalize_bindings(value: Any) -> list[dict[str, Any]]:
     for item in value:
         if not isinstance(item, dict):
             raise ValueError("ReplayCallPlan v2 binding is invalid")
+        rust_type = _rust_type(item.get("rust_type"), "binding type")
+        initializer = _normalize_plan_initializer(item.get("initializer"), types)
+        if initializer["kind"] == "vec_repeat" and rust_type != "Vec<i32>":
+            raise ValueError("ReplayCallPlan v2 vector binding type is invalid")
         result.append(
             {
                 "name": _identifier(item.get("name"), "binding"),
-                "rust_type": _rust_type(item.get("rust_type"), "binding type"),
+                "rust_type": rust_type,
                 "mutable": item.get("mutable"),
-                "initializer": _normalize_plan_initializer(item.get("initializer"), types),
+                "initializer": initializer,
             }
         )
         if not isinstance(item.get("mutable"), bool):
@@ -295,6 +312,32 @@ def _normalize_plan_initializer(value: Any, types: dict[str, dict[str, Any]]) ->
             "element_type": value["element_type"],
             "length": length,
             "value": scalar,
+        }
+    if value.get("kind") == "vec_repeat":
+        length = value.get("length")
+        if (
+            value.get("rust_type") != "Vec<i32>"
+            or value.get("element_type") != "i32"
+            or not _is_i32(value.get("value"))
+            or not isinstance(length, dict)
+            or length.get("kind") != "fixture_field"
+            or length.get("encoding") != "i32"
+            or not isinstance(length.get("maximum"), int)
+            or isinstance(length.get("maximum"), bool)
+            or not 1 <= length["maximum"] <= 4096
+        ):
+            raise ValueError("ReplayCallPlan v2 vector initializer is invalid")
+        return {
+            "kind": "vec_repeat",
+            "rust_type": "Vec<i32>",
+            "element_type": "i32",
+            "length": {
+                "kind": "fixture_field",
+                "field": _identifier(length.get("field"), "vector length fixture field"),
+                "encoding": "i32",
+                "maximum": length["maximum"],
+            },
+            "value": value["value"],
         }
     if value.get("kind") != "struct":
         raise ValueError("ReplayCallPlan v2 initializer kind is unsupported")
@@ -375,7 +418,13 @@ def _normalize_binding_source(value: Any, bindings: dict[str, dict[str, Any]]) -
         if kind in {"binding_borrow", "binding_value"} and bindings[binding]["mutable"] is not False:
             raise ValueError("ReplayCallPlan v2 value binding source is invalid")
         return {"kind": kind, "binding": binding}
-    if kind == "fixture_field" and value.get("encoding") in {"u32", "i32", "usize", "bool"}:
+    if kind == "fixture_field" and value.get("encoding") in {
+        "u32",
+        "i32",
+        "usize",
+        "bool",
+        "i32_slice",
+    }:
         return {
             "kind": "fixture_field",
             "field": _identifier(value.get("field"), "argument fixture field"),
@@ -415,8 +464,14 @@ def _normalize_assertions(value: Any, bindings: dict[str, dict[str, Any]]) -> li
             if binding is None or not _binding_observation_exists(binding["initializer"], parts[2:]):
                 raise ValueError("ReplayCallPlan v2 assertion binding path is invalid")
         encoding = item.get("encoding")
-        if encoding not in {"u32", "i32", "usize", "bool"}:
+        if encoding not in {"u32", "i32", "usize", "bool", "i32_vec"}:
             raise ValueError("ReplayCallPlan v2 assertion encoding is unsupported")
+        rust_type = _rust_type(item.get("rust_type"), "assertion type")
+        if encoding == "i32_vec" and rust_type != "Vec<i32>":
+            raise ValueError("ReplayCallPlan v2 i32 vector assertion type is invalid")
+        if actual.startswith("binding.") and len(actual.split(".")) == 2:
+            if encoding != "i32_vec" or rust_type != "Vec<i32>":
+                raise ValueError("ReplayCallPlan v2 whole binding assertion type is invalid")
         fixture_field = _identifier(item.get("fixture_field"), "assertion fixture field")
         if fixture_field in fields:
             raise ValueError("ReplayCallPlan v2 assertion fixture fields must be unique")
@@ -424,7 +479,7 @@ def _normalize_assertions(value: Any, bindings: dict[str, dict[str, Any]]) -> li
             {
                 "actual": actual,
                 "fixture_field": fixture_field,
-                "rust_type": _rust_type(item.get("rust_type"), "assertion type"),
+                "rust_type": rust_type,
                 "encoding": encoding,
             }
         )

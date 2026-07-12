@@ -9,9 +9,10 @@ from typing import Any
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 RUST_TYPE_RE = re.compile(r"^[A-Za-z0-9_&'\[\]<>:(),; ]+$")
+MAX_DYNAMIC_I32_ITEMS = 4096
 ACTUAL_RE = re.compile(
     r"^(?:return(?:\.[A-Za-z_][A-Za-z0-9_]*)*|"
-    r"binding\.[A-Za-z_][A-Za-z0-9_]*(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+))+)$"
+    r"binding\.[A-Za-z_][A-Za-z0-9_]*(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+))*)$"
 )
 ENTRY_RECORD_STATE_KINDS = {
     "record_u32_field_constant_state",

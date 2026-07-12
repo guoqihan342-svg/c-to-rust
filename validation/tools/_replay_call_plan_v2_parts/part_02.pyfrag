@@ -100,6 +100,17 @@ def _initializer_literal(initializer: dict[str, Any], inputs: dict[str, Any]) ->
     if initializer["kind"] == "array_repeat":
         value = _encoded_literal(initializer["value"], initializer["element_type"])
         return f"[{value}; {initializer['length']}]"
+    if initializer["kind"] == "vec_repeat":
+        value = _encoded_literal(initializer["value"], "i32")
+        length = initializer["length"]
+        concrete_length = inputs.get(length["field"])
+        if (
+            not _is_i32(concrete_length)
+            or concrete_length < 0
+            or concrete_length > length["maximum"]
+        ):
+            raise ValueError("ReplayCallPlan v2 vector length fixture is out of bounds")
+        return f"vec![{value}; {concrete_length}usize]"
     fields = []
     for field in initializer["fields"]:
         value = field["value"]
@@ -147,7 +158,122 @@ def _encoded_literal(value: Any, encoding: str) -> str:
         return "true" if value else "false"
     if encoding == "string" and isinstance(value, str):
         return json.dumps(value, ensure_ascii=True)
+    if (
+        encoding in {"i32_slice", "i32_vec"}
+        and isinstance(value, list)
+        and len(value) <= MAX_DYNAMIC_I32_ITEMS
+        and all(_is_i32(item) for item in value)
+    ):
+        values = ", ".join(_encoded_literal(item, "i32") for item in value)
+        if encoding == "i32_vec" and not value:
+            return "vec![0i32; 0usize]"
+        return ("&[" if encoding == "i32_slice" else "vec![") + values + "]"
     raise ValueError(f"value does not match ReplayCallPlan v2 encoding {encoding}")
+
+
+def _normalize_fixture_relations(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or not value:
+        raise ValueError("ReplayCallPlan v2 fixture relations are required")
+    result: list[dict[str, Any]] = []
+    semantic_keys: set[tuple[Any, ...]] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("ReplayCallPlan v2 fixture relation is invalid")
+        kind = item.get("kind")
+        if kind == "equal":
+            left = _normalize_fixture_ref(item.get("left"), {"i32", "i32_vec", "string", "usize"})
+            right = _normalize_fixture_ref(item.get("right"), {"i32", "i32_vec", "string", "usize"})
+            if left["encoding"] != right["encoding"]:
+                raise ValueError("ReplayCallPlan v2 equal relation encodings drifted")
+            normalized = {"kind": kind, "left": left, "right": right}
+            refs = sorted((_fixture_ref_key(left), _fixture_ref_key(right)))
+            semantic_key = (kind, *refs)
+        elif kind == "length_equals":
+            collection = _normalize_fixture_ref(item.get("collection"), {"i32_vec"})
+            length = _normalize_fixture_ref(item.get("length"), {"i32", "usize"})
+            normalized = {"kind": kind, "collection": collection, "length": length}
+            semantic_key = (kind, _fixture_ref_key(collection), _fixture_ref_key(length))
+        elif kind == "numeric_equal":
+            left = _normalize_fixture_ref(item.get("left"), {"i32", "usize"})
+            right = _normalize_fixture_ref(item.get("right"), {"i32", "usize"})
+            normalized = {"kind": kind, "left": left, "right": right}
+            refs = sorted((_fixture_ref_key(left), _fixture_ref_key(right)))
+            semantic_key = (kind, *refs)
+        else:
+            raise ValueError("ReplayCallPlan v2 fixture relation kind is unsupported")
+        relation_refs = [
+            ref
+            for key, ref in normalized.items()
+            if key != "kind" and isinstance(ref, dict)
+        ]
+        if len({_fixture_ref_location(ref) for ref in relation_refs}) != len(relation_refs):
+            raise ValueError("ReplayCallPlan v2 fixture relation fields must be distinct")
+        if semantic_key in semantic_keys:
+            raise ValueError("ReplayCallPlan v2 fixture relations must be unique")
+        semantic_keys.add(semantic_key)
+        result.append(normalized)
+    return result
+
+
+def _normalize_fixture_ref(value: Any, encodings: set[str]) -> dict[str, str]:
+    if not isinstance(value, dict) or value.get("section") not in {"inputs", "expected"}:
+        raise ValueError("ReplayCallPlan v2 fixture relation reference is invalid")
+    if value.get("encoding") not in encodings:
+        raise ValueError("ReplayCallPlan v2 fixture relation encoding is invalid")
+    return {
+        "section": value["section"],
+        "field": _identifier(value.get("field"), "fixture relation field"),
+        "encoding": value["encoding"],
+    }
+
+
+def _fixture_ref_key(value: dict[str, str]) -> tuple[str, str, str]:
+    return value["section"], value["field"], value["encoding"]
+
+
+def _fixture_ref_location(value: dict[str, str]) -> tuple[str, str]:
+    return value["section"], value["field"]
+
+
+def _fixture_ref_value(reference: dict[str, str], case: dict[str, Any]) -> Any:
+    section = _case_input_values(case) if reference["section"] == "inputs" else case.get("expected")
+    if not isinstance(section, dict) or reference["field"] not in section:
+        raise ValueError("ReplayCallPlan v2 fixture relation field is missing")
+    value = section[reference["field"]]
+    if not _value_matches(value, reference["encoding"]):
+        raise ValueError("ReplayCallPlan v2 fixture relation value drifted")
+    return value
+
+
+def _fixture_relation_literals(
+    relation: dict[str, Any], case: dict[str, Any]
+) -> tuple[str, str]:
+    kind = relation["kind"]
+    if kind == "length_equals":
+        collection = _fixture_ref_value(relation["collection"], case)
+        length = _fixture_ref_value(relation["length"], case)
+        if relation["length"]["encoding"] == "i32" and length < 0:
+            raise ValueError("ReplayCallPlan v2 fixture relation i32 length must be non-negative")
+        if len(collection) != length:
+            raise ValueError("ReplayCallPlan v2 fixture relation drifted")
+        collection_literal = _encoded_literal(collection, "i32_vec")
+        return f"{collection_literal}.len()", f"{length}usize"
+    left = _fixture_ref_value(relation["left"], case)
+    right = _fixture_ref_value(relation["right"], case)
+    if kind == "numeric_equal":
+        if (
+            relation["left"]["encoding"] == "i32" and left < 0
+        ) or (
+            relation["right"]["encoding"] == "i32" and right < 0
+        ):
+            raise ValueError("ReplayCallPlan v2 numeric relation i32 must be non-negative")
+        if left != right:
+            raise ValueError("ReplayCallPlan v2 fixture relation drifted")
+        return f"{left}usize", f"{right}usize"
+    if left != right:
+        raise ValueError("ReplayCallPlan v2 fixture relation drifted")
+    encoding = relation["left"]["encoding"]
+    return _encoded_literal(left, encoding), _encoded_literal(right, encoding)
 
 
 def _normalize_v2_fixture_assertions(value: Any) -> list[dict[str, Any]]:
@@ -247,6 +373,12 @@ def _value_matches(value: Any, encoding: str) -> bool:
         return isinstance(value, bool)
     if encoding == "string":
         return isinstance(value, str)
+    if encoding in {"i32_slice", "i32_vec"}:
+        return (
+            isinstance(value, list)
+            and len(value) <= MAX_DYNAMIC_I32_ITEMS
+            and all(_is_i32(item) for item in value)
+        )
     return False
 
 

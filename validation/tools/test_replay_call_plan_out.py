@@ -81,6 +81,59 @@ class ReplayCallPlanOutTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "encoding string"):
             validate_replay_call_plan(tampered)
 
+    def test_real_i32_slice_output_spec_binds_dynamic_plan(self) -> None:
+        spec = self.load_slice_spec()
+
+        plan = build_replay_call_plan(spec, REPO_ROOT)
+
+        self.assertEqual(2, plan["schema_version"])
+        self.assertEqual("bound", plan["status"])
+        self.assertEqual(
+            ["fixture_field", "fixture_field", "binding_borrow_mut"],
+            [item["source"]["kind"] for item in plan["parameters"]],
+        )
+        self.assertEqual("vec_repeat", plan["bindings"][0]["initializer"]["kind"])
+        self.assertEqual("binding.out", plan["assertions"][1]["actual"])
+        self.assertEqual("i32_vec", plan["assertions"][1]["encoding"])
+        self.assertEqual(5, len(plan["fixture_relations"]))
+
+        source = render_declarative_replay_cases(spec, plan, REPO_ROOT)
+        self.assertIn("let mut actual_empty_0_out: Vec<i32> = vec![0i32; 0usize];", source)
+        self.assertIn("copy_i32_ptr_arith(&[], 0i32, &mut actual_empty_0_out)", source)
+        self.assertIn("vec![-5i32, 2i32, -3i32, 6i32]", source)
+        self.assertNotIn("struct FixtureCase", source)
+
+    def test_slice_output_match_survives_symbol_and_observable_rename(self) -> None:
+        spec = self.inline_renamed_slice_spec()
+
+        plan = build_replay_call_plan(spec, REPO_ROOT)
+        source = render_declarative_replay_cases(spec, plan, REPO_ROOT)
+
+        self.assertEqual("apply_buffer", plan["api_name"])
+        self.assertEqual("binding.destination", plan["assertions"][1]["actual"])
+        self.assertEqual("result_items", plan["assertions"][1]["fixture_field"])
+        self.assertIn("apply_buffer(&[3i32, -2i32], 2i32, &mut actual_nominal_0_destination)", source)
+        self.assertNotIn("copy_i32_ptr_arith", source)
+
+    def test_slice_output_fixture_drift_fails_closed(self) -> None:
+        length_drift = self.inline_renamed_slice_spec()
+        length_drift["fixture_contract"]["cases"][0]["expected_outputs"]["result_items"] = [3]
+        self.assertEqual("blocked", build_replay_call_plan(length_drift, REPO_ROOT)["status"])
+
+        negative_length = self.inline_renamed_slice_spec()
+        case = negative_length["fixture_contract"]["cases"][0]
+        case["inputs"]["count"] = -1
+        case["expected_outputs"]["count"] = -1
+        case["expected_outputs"]["changed_items"] = -1
+        self.assertEqual("blocked", build_replay_call_plan(negative_length, REPO_ROOT)["status"])
+
+        metadata_drift = self.inline_renamed_slice_spec()
+        second = copy.deepcopy(metadata_drift["fixture_contract"]["cases"][0])
+        second["id"] = "drifted"
+        second["expected_outputs"]["source_note"] = "different"
+        metadata_drift["fixture_contract"]["cases"].append(second)
+        self.assertEqual("blocked", build_replay_call_plan(metadata_drift, REPO_ROOT)["status"])
+
     @staticmethod
     def load_spec() -> dict:
         return json.loads(
@@ -89,6 +142,17 @@ class ReplayCallPlanOutTests(unittest.TestCase):
                 / "validation"
                 / "slice-specs"
                 / "demo-store-add-one.json"
+            ).read_text(encoding="utf-8")
+        )
+
+    @staticmethod
+    def load_slice_spec() -> dict:
+        return json.loads(
+            (
+                REPO_ROOT
+                / "validation"
+                / "slice-specs"
+                / "demo-copy-i32-ptr-arith.json"
             ).read_text(encoding="utf-8")
         )
 
@@ -115,6 +179,45 @@ class ReplayCallPlanOutTests(unittest.TestCase):
                 }
             ],
             "observable_outputs": ["return_code", "status", "result_value"],
+        }
+        return spec
+
+    @classmethod
+    def inline_renamed_slice_spec(cls) -> dict:
+        spec = cls.load_slice_spec()
+        spec["function_name"] = "transform_buffer"
+        signature = spec["c_boundary"]["signatures"][0]
+        signature["function"] = "transform_buffer"
+        signature["parameters"][0].update(
+            {"name": "source_items", "buffer_length_parameter": "count"}
+        )
+        signature["parameters"][1]["name"] = "count"
+        signature["parameters"][2].update(
+            {"name": "destination", "buffer_length_parameter": "count"}
+        )
+        spec["rust_boundary"]["public_api"][0]["name"] = "apply_buffer"
+        expected = {
+            "return_code": 0,
+            "status": "ok",
+            "source_items": [3, -2],
+            "count": 2,
+            "result_items": [3, -2],
+            "source_note": "source projection",
+            "canonical_note": "canonical projection",
+            "write_note": "destination projection",
+            "canonical_write_note": "canonical destination projection",
+            "changed_items": 2,
+        }
+        spec["fixture_contract"] = {
+            "cases": [
+                {
+                    "id": "nominal",
+                    "input_ref": "inline",
+                    "inputs": {"source_items": [3, -2], "count": 2},
+                    "expected_outputs": expected,
+                }
+            ],
+            "observable_outputs": list(expected),
         }
         return spec
 

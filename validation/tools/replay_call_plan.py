@@ -32,13 +32,13 @@ def build_replay_call_plan(spec: dict[str, Any], repo_root: Path) -> dict[str, A
         contract = build_implicit_scalar_contract(spec)
     if not isinstance(contract, dict):
         from validation.tools.replay_call_plan_out import (
-            build_implicit_single_i32_output_plan,
-            supports_implicit_single_i32_output_plan,
+            build_implicit_i32_output_plan,
+            supports_implicit_i32_output_plan,
         )
 
-        if supports_implicit_single_i32_output_plan(spec):
+        if supports_implicit_i32_output_plan(spec):
             try:
-                return build_implicit_single_i32_output_plan(
+                return build_implicit_i32_output_plan(
                     spec,
                     _fixture_binding(spec, repo_root.resolve()),
                 )

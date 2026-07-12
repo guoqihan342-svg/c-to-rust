@@ -452,6 +452,8 @@ def _case_input_values(case: dict[str, Any]) -> dict[str, Any]:
 def _binding_observation_exists(initializer: dict[str, Any], path: list[str]) -> bool:
     if initializer.get("kind") == "array_repeat":
         return len(path) == 1 and path[0].isdigit() and int(path[0]) < initializer["length"]
+    if initializer.get("kind") == "vec_repeat":
+        return not path
     return tuple(path) in _initializer_paths(initializer)
 
 
