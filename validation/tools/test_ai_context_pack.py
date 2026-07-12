@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import jsonschema
+
 from validation.tools import ai_candidate_harness
 from validation.tools._ai_candidate_harness_parts.provider_readiness import evaluate_provider_readiness
 
@@ -106,7 +108,7 @@ class AiContextPackTests(unittest.TestCase):
             context = ai_candidate_harness.build_context_pack(spec_path, source_root=source_root)
             encoded = json.dumps(context, sort_keys=True)
 
-            self.assertEqual(context["schema_version"], 2)
+            self.assertEqual(context["schema_version"], 3)
             self.assertEqual(context["source"]["span"]["status"], "real_source_bound")
             self.assertEqual(context["source"]["span"]["content"].encode(), function)
             self.assertEqual(context["source"]["input"]["sha256"], sha256((source_root / "src/unit.c").read_bytes()))
@@ -155,6 +157,200 @@ class AiContextPackTests(unittest.TestCase):
                 ai_candidate_harness.canonical_json_bytes(first),
                 ai_candidate_harness.canonical_json_bytes(second),
             )
+
+    def test_nested_response_files_are_expanded_and_hash_bound(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="context-pack-response-files-") as tmp:
+            root = Path(tmp)
+            source_root, _function, spec = self.make_project(root)
+            build = source_root / "build"
+            (build / "nested.rsp").write_text(
+                "-I../include --target=arm-none-eabi -m32",
+                encoding="utf-8",
+            )
+            (source_root / "shared.rsp").write_text("-DROOT_PARENT=1", encoding="utf-8")
+            (build / "flags.rsp").write_text(
+                "-DRESPONSE_FEATURE=7 @nested.rsp @../shared.rsp",
+                encoding="utf-8",
+            )
+            self.write_compile_database(
+                source_root,
+                [
+                    {
+                        "directory": str(build),
+                        "arguments": ["clang", "@flags.rsp", "-c", str(source_root / "src/unit.c")],
+                        "file": str(source_root / "src/unit.c"),
+                    }
+                ],
+            )
+
+            context = ai_candidate_harness.build_context_pack(
+                self.write_spec(root, spec),
+                source_root=source_root,
+            )
+            context_schema = json.loads(
+                (
+                    Path(__file__).resolve().parents[1]
+                    / "auto-translation-template"
+                    / "ai-context-pack.schema.json"
+                ).read_text(encoding="utf-8")
+            )
+            jsonschema.Draft7Validator(context_schema).validate(context)
+
+            selected = context["compile_context"]["selected_entry"]
+            self.assertEqual("expanded", selected["response_files"]["status"])
+            self.assertEqual(3, len(selected["response_files"]["files"]))
+            self.assertIn({"name": "RESPONSE_FEATURE", "value": "7"}, selected["defines"])
+            self.assertIn({"name": "ROOT_PARENT", "value": "1"}, selected["defines"])
+            self.assertIn(
+                {"kind": "include", "path": "<source-root>/include"},
+                selected["include_paths"],
+            )
+            self.assertEqual("arm-none-eabi", selected["target_abi"]["triple_or_abi"])
+            self.assertEqual(32, selected["target_abi"]["pointer_width"])
+            response_bindings = [
+                item for item in context["bindings"]["inputs"]
+                if item["kind"] == "compile_response_file"
+            ]
+            self.assertEqual(3, len(response_bindings))
+            self.assertTrue(all(len(item["sha256"]) == 64 for item in response_bindings))
+            self.assertEqual("ready", evaluate_provider_readiness(context)["status"])
+            tampered = json.loads(json.dumps(context))
+            next(
+                item for item in tampered["bindings"]["inputs"]
+                if item["kind"] == "compile_response_file"
+            )["sha256"] = "0" * 64
+            self.assertEqual(
+                "response_file_invalid",
+                evaluate_provider_readiness(tampered)["compile_context_status"],
+            )
+            first_context_sha = context["bindings"]["context_payload_sha256"]
+            (build / "flags.rsp").write_text(
+                "-DRESPONSE_FEATURE=8 @nested.rsp @../shared.rsp",
+                encoding="utf-8",
+            )
+            changed = ai_candidate_harness.build_context_pack(
+                self.write_spec(root, spec),
+                source_root=source_root,
+            )
+            self.assertNotEqual(first_context_sha, changed["bindings"]["context_payload_sha256"])
+
+    def test_response_file_escape_and_cycle_block_provider(self) -> None:
+        for case, flags, nested in (
+            ("escape", "@../../outside.rsp", None),
+            ("cycle", "@nested.rsp", "@flags.rsp"),
+        ):
+            with self.subTest(case=case), tempfile.TemporaryDirectory(
+                prefix=f"context-pack-response-{case}-"
+            ) as tmp:
+                root = Path(tmp)
+                source_root, _function, spec = self.make_project(root)
+                build = source_root / "build"
+                (build / "flags.rsp").write_text(flags, encoding="utf-8")
+                if nested is not None:
+                    (build / "nested.rsp").write_text(nested, encoding="utf-8")
+                self.write_compile_database(
+                    source_root,
+                    [
+                        {
+                            "directory": str(build),
+                            "arguments": ["clang", "@flags.rsp", "-c", str(source_root / "src/unit.c")],
+                            "file": str(source_root / "src/unit.c"),
+                        }
+                    ],
+                )
+                context = ai_candidate_harness.build_context_pack(
+                    self.write_spec(root, spec),
+                    source_root=source_root,
+                )
+
+                response_files = context["compile_context"]["selected_entry"]["response_files"]
+                self.assertEqual("blocked", response_files["status"])
+                self.assertEqual(
+                    {
+                        "status": "blocked",
+                        "source_span_status": "real_source_bound",
+                        "compile_context_status": "response_file_invalid",
+                    },
+                    evaluate_provider_readiness(context),
+                )
+
+    def test_response_file_budget_overflow_blocks_provider(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="context-pack-response-budget-") as tmp:
+            root = Path(tmp)
+            source_root, _function, spec = self.make_project(root)
+            build = source_root / "build"
+            (build / "flags.rsp").write_text("-DVALUE=123456", encoding="utf-8")
+            self.write_compile_database(
+                source_root,
+                [
+                    {
+                        "directory": str(build),
+                        "arguments": ["clang", "@flags.rsp", "-c", str(source_root / "src/unit.c")],
+                        "file": str(source_root / "src/unit.c"),
+                    }
+                ],
+            )
+            with patch(
+                "validation.tools._ai_candidate_harness_parts.context_response_files.MAX_RESPONSE_FILE_BYTES",
+                4,
+            ):
+                context = ai_candidate_harness.build_context_pack(
+                    self.write_spec(root, spec),
+                    source_root=source_root,
+                )
+
+            response_files = context["compile_context"]["selected_entry"]["response_files"]
+            self.assertEqual("response_file_size_exceeded", response_files["reason"])
+            self.assertEqual("blocked", evaluate_provider_readiness(context)["status"])
+            manifest = ai_candidate_harness.generate_candidate(
+                context,
+                out_dir=root / "ai-out",
+                runner=lambda _argv, _timeout: self.fail("blocked response file invoked provider"),
+            )
+            self.assertEqual(0, manifest["provider_invocations"])
+            self.assertEqual("context_not_provider_ready", manifest["failure"]["kind"])
+
+    def test_malformed_compile_command_with_response_reference_blocks_provider(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="context-pack-response-command-") as tmp:
+            root = Path(tmp)
+            source_root, _function, spec = self.make_project(root)
+            self.write_compile_database(
+                source_root,
+                [
+                    {
+                        "directory": str(source_root / "build"),
+                        "command": 'clang @"unterminated',
+                        "file": str(source_root / "src/unit.c"),
+                    }
+                ],
+            )
+            context = ai_candidate_harness.build_context_pack(
+                self.write_spec(root, spec),
+                source_root=source_root,
+            )
+
+            response_files = context["compile_context"]["selected_entry"]["response_files"]
+            self.assertEqual("command_argument_parse_invalid", response_files["reason"])
+            self.assertEqual("blocked", evaluate_provider_readiness(context)["status"])
+            self.write_compile_database(
+                source_root,
+                [
+                    {
+                        "directory": str(source_root / "build"),
+                        "arguments": ["clang", 7, "@flags.rsp"],
+                        "file": str(source_root / "src/unit.c"),
+                    }
+                ],
+            )
+            invalid_arguments = ai_candidate_harness.build_context_pack(
+                self.write_spec(root, spec),
+                source_root=source_root,
+            )
+            self.assertEqual(
+                "command_argument_parse_invalid",
+                invalid_arguments["compile_context"]["selected_entry"]["response_files"]["reason"],
+            )
+            self.assertEqual("blocked", evaluate_provider_readiness(invalid_arguments)["status"])
 
     def test_source_path_escape_is_fail_closed_without_reading_outside(self) -> None:
         with tempfile.TemporaryDirectory(prefix="context-pack-escape-") as tmp:

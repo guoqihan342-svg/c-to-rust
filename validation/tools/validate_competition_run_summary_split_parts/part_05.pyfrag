@@ -153,6 +153,16 @@ def validate_fresh_ai_manifest(
             if isinstance(provider_preflight, dict)
             else None
         )
+        compile_context_status = (
+            provider_preflight.get("compile_context_status")
+            if isinstance(provider_preflight, dict)
+            else None
+        )
+        blocked_by_compile_context = (
+            preflight_status == "blocked"
+            and source_span_status in READY_SOURCE_SPAN_STATUSES
+            and compile_context_status == "response_file_invalid"
+        )
         if (
             preflight_status not in {"ready", "blocked"}
             or not isinstance(source_span_status, str)
@@ -165,6 +175,7 @@ def validate_fresh_ai_manifest(
         ) or (
             preflight_status == "blocked"
             and source_span_status not in BLOCKED_SOURCE_SPAN_STATUSES
+            and not blocked_by_compile_context
         ):
             reasons.append("ai_manifest_provider_preflight_source_status_mismatch")
         if provider_invocations == 0:
@@ -212,6 +223,19 @@ def validate_fresh_ai_manifest(
             if not isinstance(context_payload, dict):
                 reasons.append("ai_manifest_provider_preflight_context_unreadable")
             else:
+                if context_payload.get("schema_version") == 3:
+                    try:
+                        jsonschema.Draft7Validator(
+                            load_json(AI_CONTEXT_PACK_SCHEMA_PATH)
+                        ).validate(context_payload)
+                    except (
+                        OSError,
+                        UnicodeError,
+                        json.JSONDecodeError,
+                        jsonschema.ValidationError,
+                        jsonschema.SchemaError,
+                    ):
+                        reasons.append("ai_context_pack_schema_invalid")
                 recomputed_preflight = evaluate_provider_readiness(context_payload)
                 if provider_preflight != recomputed_preflight:
                     reasons.append("ai_manifest_provider_preflight_context_mismatch")

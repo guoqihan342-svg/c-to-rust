@@ -35,6 +35,9 @@ SCHEMA_PATH = REPO_ROOT / "validation" / "competition-run-summary.schema.json"
 AI_CANDIDATE_MANIFEST_SCHEMA_PATH = (
     REPO_ROOT / "validation" / "auto-translation-template" / "ai-candidate-manifest.schema.json"
 )
+AI_CONTEXT_PACK_SCHEMA_PATH = (
+    REPO_ROOT / "validation" / "auto-translation-template" / "ai-context-pack.schema.json"
+)
 REQUIRED_ARTIFACT_ROOTS = {
     "target/competition-out/evidence",
     "target/competition-out/summary",

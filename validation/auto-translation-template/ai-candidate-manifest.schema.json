@@ -234,7 +234,8 @@
             "source_file_changed_during_read",
             "invalid_context_shape"
           ]
-        }
+        },
+        "compile_context_status": {"const": "response_file_invalid"}
       }
     },
     "candidateCache": {

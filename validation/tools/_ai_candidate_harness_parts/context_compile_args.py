@@ -14,9 +14,7 @@ from .context_security import (
     sensitive_key,
     sha256_bytes,
 )
-
-
-MAX_ARGUMENTS = 4_096
+from .context_response_files import command_parse_failure_report, expand_response_files
 
 
 def summarize_entry(
@@ -27,8 +25,38 @@ def summarize_entry(
     spec: dict[str, Any],
     known_roots: tuple[str, ...],
 ) -> dict[str, Any]:
-    argv = command_arguments(entry)
-    parsed = parse_arguments(argv, source_root, working_directory, known_roots)
+    try:
+        argv = command_arguments(entry)
+    except ValueError:
+        command = entry.get("command")
+        first_token = command.split(maxsplit=1)[0] if isinstance(command, str) and command.strip() else ""
+        argv = [first_token] if first_token else []
+        expanded_argv = None
+        response_files = command_parse_failure_report(command if isinstance(command, str) else "")
+    else:
+        expanded_argv = None
+        response_files = None
+    compiler = compiler_name(argv)
+    if response_files is None:
+        expanded_argv, response_files = expand_response_files(
+            argv,
+            source_root=source_root,
+            working_directory=working_directory,
+            compiler=compiler,
+        )
+    parsed = (
+        parse_arguments(expanded_argv, source_root, working_directory, known_roots)
+        if expanded_argv is not None
+        else {
+            "compiler": compiler,
+            "include_paths": [],
+            "defines": [],
+            "semantic_flags": [],
+            "command_target": {},
+        }
+    )
+    if response_files is not None:
+        parsed["response_files"] = response_files
     parsed.update(
         {
             "entry_sha256": sha256_bytes(canonical_json_bytes(entry)),
@@ -42,17 +70,22 @@ def summarize_entry(
 
 def command_arguments(entry: dict[str, Any]) -> list[str]:
     arguments = entry.get("arguments")
-    if isinstance(arguments, list) and all(isinstance(item, str) for item in arguments):
-        return list(arguments[:MAX_ARGUMENTS])
+    if "arguments" in entry:
+        if isinstance(arguments, list) and arguments and all(isinstance(item, str) for item in arguments):
+            return list(arguments)
+        raise ValueError("command_argument_parse_invalid")
     command = entry.get("command")
-    if not isinstance(command, str):
-        return []
+    if not isinstance(command, str) or not command.strip():
+        raise ValueError("command_argument_parse_invalid")
     try:
         windows_command = bool(re.search(r"(?:^|\s)[A-Za-z]:\\", command))
         parsed = shlex.split(command, posix=not windows_command)
-    except ValueError:
-        return []
-    return [item.strip('"') for item in parsed[:MAX_ARGUMENTS]]
+    except ValueError as error:
+        raise ValueError("command_argument_parse_invalid") from error
+    normalized = [item.strip('"') for item in parsed]
+    if not normalized:
+        raise ValueError("command_argument_parse_invalid")
+    return normalized
 
 
 def parse_arguments(
@@ -118,8 +151,6 @@ def parse_arguments(
     }
     if redacted_defines:
         result["redacted_define_count"] = redacted_defines
-    if any(argument.startswith("@") for argument in argv):
-        result["response_files"] = "not_expanded"
     return result
 
 
