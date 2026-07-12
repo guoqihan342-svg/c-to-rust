@@ -40,6 +40,8 @@ class AiFreshOracleTests(unittest.TestCase):
             "source_file_hashes": {"src/unit.c": source_hash},
             "function_source_span": {
                 "file": "src/unit.c",
+                "line_start": 2,
+                "line_end": 2,
                 "byte_start": start,
                 "byte_end": start + len(function),
                 "sha256": hashlib.sha256(function).hexdigest(),
@@ -143,6 +145,47 @@ class AiFreshOracleTests(unittest.TestCase):
             self.assertEqual(len(result["reuse_key_sha256"]), 64)
             self.assertNotIn("semantic_pass", result)
             self.assertNotIn(str(root), json.dumps(result, sort_keys=True))
+
+    def test_crlf_checkout_matches_lf_source_bindings_without_hiding_content_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fresh-oracle-crlf-") as tmp:
+            root = Path(tmp)
+            spec, payload, harness = self.make_case(root)
+            source = root / "project/src/unit.c"
+            source.write_bytes(source.read_bytes().replace(b"\n", b"\r\n"))
+
+            result = self.prove(root, spec, payload, harness)
+
+            self.assertEqual(result["status"], "passed")
+            source_binding = result["bindings"]["source_files"][0]
+            span_binding = result["bindings"]["source_span"]
+            self.assertEqual(source_binding["hash_match_mode"], "newline_equivalent")
+            self.assertEqual(span_binding["hash_match_mode"], "newline_equivalent")
+            self.assertEqual(source_binding["declared_sha256"], spec["source_file_hashes"]["src/unit.c"])
+            self.assertEqual(span_binding["declared_sha256"], spec["function_source_span"]["sha256"])
+            self.assertEqual(source_binding["sha256"], sha256(source))
+
+    def test_span_byte_coordinates_cannot_fall_back_to_matching_lines(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fresh-oracle-coordinate-drift-") as tmp:
+            root = Path(tmp)
+            spec, payload, harness = self.make_case(root)
+            spec["function_source_span"]["byte_start"] += 1
+            spec["function_source_span"]["byte_end"] += 1
+
+            result = self.prove(root, spec, payload, harness)
+
+            self.assertEqual(result["status"], "failed")
+            self.assertIn("source_span_invalid", self.kinds(result))
+
+    def test_declared_invalid_byte_coordinates_cannot_be_treated_as_line_only(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fresh-oracle-invalid-coordinate-") as tmp:
+            root = Path(tmp)
+            spec, payload, harness = self.make_case(root)
+            spec["function_source_span"]["byte_start"] = -1
+
+            result = self.prove(root, spec, payload, harness)
+
+            self.assertEqual(result["status"], "failed")
+            self.assertIn("source_span_invalid", self.kinds(result))
 
     def test_historical_spec_paths_are_never_read_or_part_of_reuse_identity(self) -> None:
         with tempfile.TemporaryDirectory(prefix="fresh-oracle-history-") as tmp:

@@ -12,8 +12,8 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | --- | --- |
 | Translator-generated semantic pass | `38` named slices, derived from `validation/translator-coverage-matrix.json` |
 | Accepted-evidence authoritative | `1`, reported separately from the translator numerator |
-| Latest development stage | P0-A16: isolate competition/auxiliary model identities and add tool-free candidate validation |
-| Active translator task | P0-A10: run the fixed 12-case cross-project suite once with real GLM-5.1 after resource recovery |
+| Latest development stage | P0-A17: isolated auxiliary cross-project evaluation and strict source binding |
+| Active translator task | P0-A18: put an exact replay-compatible Rust function contract into the AI ContextPack; P0-A10 waits for GLM resources |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | Superpowers specs/plans, canonical roadmap, and harness evidence gates |
@@ -45,6 +45,8 @@ SQLite and agent conversation are not semantic evidence. Only on-disk artifacts 
 AI is the competition translation primary, not a fallback invoked only after deterministic translation fails. Every new slice first receives a hash-bound ContextPack, then OpenCode `zai/glm-5.1` + `c2rust-candidate` + `max` emits one primary Rust candidate. Typed IR and C2Rust remain zero-token alternatives, failure controls, and repair bases. They cannot silently claim that AI ran or bypass the common gates.
 
 ContextPack v3 gives the model only bounded facts: the real source span, compile arguments and response files, type/CFG/pointer excerpts, failure summaries, ABI and pointer policy, plus direct-callee signatures, definition status, source bindings, stub boundaries, and call contracts. Sensitive fields, quoted secret assignments, host absolute paths, and path escapes are redacted; a required callee boundary that is truncated or over budget is refused with zero provider calls.
+
+Candidate and repair prompts place a high-salience boundary summary before the full ContextPack. It copies the declared function signature and parameter order plus Rust public-API, raw-pointer, and unsafe policies. This reduces identifier-based API guessing by smaller models, does not affect routing, and does not replace P0-A18's exact replay-compatible Rust function contract.
 
 AI candidate manifest v7 derives `prompt_scope` from the actual ContextPack and binds provider, logical/resolved model, `competition_eligible`, and `evaluation_scope` to both generator and candidate. Every real provider call also binds a minimal invocation receipt and a separate session-export identity projection. They retain only provider/model/agent/variant/version, session id, prompt/response SHAs, and the SHA of the full in-memory export; the full session, prompt, host directory, and credentials are not persisted. Both artifacts use dedicated `additionalProperties=false` schemas. The fresh-run summary validator reopens these hash-bound artifacts and independently recomputes identity, prompt, scope, and invocation count. `competition-exact` also reopens the same live OpenCode session and checks the full export SHA, actual identity, attached prompt path and ContextPack prefix, and assistant response. The competition lane accepts only `zai/glm-5.1`. When GLM balance is unavailable, DeepSeek V4 Flash or another model may be selected explicitly for `auxiliary-local-validation`, but it cannot close competition tasks or enter the competition success numerator. AI output always remains `semantic_gate=false`; only common gates can accept it.
 
@@ -222,6 +224,16 @@ The default repair cap is five rounds. Process exit status, model text, and repa
 | C oracle + Rust replay + diff gates | Executable equivalence within the declared boundary | Yes |
 
 The AI exact path cannot be combined with accepted-evidence reuse. Candidate and repair prompts are SHA-bound files passed with the `opencode-file-attachment-v2` ordering: the fixed short message precedes `--file=<prompt-path>`, so the full ContextPack and failure facts do not enter process argv. A passing auxiliary-model run remains local evaluation evidence rather than competition evidence.
+
+When GLM balance is unavailable, `run_ai_auxiliary_cross_project_suite` provides a separate lane that defaults to `opencode/deepseek-v4-flash-free`. It rejects competition-eligible models, nonempty out-roots, unsafe or duplicate project/slice identities, and slice-spec SHA drift before or during execution. Concurrent units receive isolated OpenCode config/data/cache/state/tmp directories, separating SQLite, sessions, and logs. Its report hard-codes both competition and translation numerators to zero and cannot close P0-A6/A10/H9.
+
+```bash
+python3 -B -m validation.tools.run_ai_auxiliary_cross_project_suite \
+  --suite validation/ai-finite-cross-project-suite.json \
+  --out-root target/ai-auxiliary-$(date +%Y%m%dT%H%M%S) \
+  --model opencode/deepseek-v4-flash-free \
+  --repair-rounds 1 --max-workers 3
+```
 
 The AI candidate cache is disabled by default and is enabled only through the standalone generator's `--cache-root` or `auto_migrate`/competition runner's `--ai-candidate-cache-root`. Its content key binds the ContextPack payload SHA, prompt schema version, actual prompt SHA, resolved model, agent name, repository-local agent-definition SHA, variant, and parse contract version. It publishes only successful responses whose `entry.json`, `response.jsonl`, and `candidate.rs` can be reopened, reparsed, and verified by SHA. Same-key requests use single-flight plus locked first-writer-wins directory publication; a corrupt entry is quarantined and rebuilt by one real call. Provider failures, timeouts, refusals, and malformed responses are never cached. A hit records `provider_invocations=0`, `cache.status=hit`, and metrics `cache_hits=1`; later repair calls remain separate invocations. The summary validator independently reopens the copied cache entry, raw response, and initial candidate. A cache hit reuses candidate input only, still traverses every common gate, and remains `semantic_gate=false`. The competition runner accepts only repository-local cache roots so host paths cannot enter replay commands.
 

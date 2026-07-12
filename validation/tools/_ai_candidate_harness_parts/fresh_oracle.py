@@ -9,6 +9,8 @@ from typing import Any
 
 from .context import canonical_json_bytes
 from .context_security import redact_metadata_text, resolve_under, sanitize_value, sha256_path
+from .context_source import bytes_hash_match_mode, path_hash_match_mode
+from .source_span_binding import extract_strict_span
 
 
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -195,7 +197,7 @@ def _target_contract(build_profile: Mapping[str, Any]) -> dict[str, Any]:
 
 def _source_bindings(
     spec: Mapping[str, Any], payload: Mapping[str, Any], root: Path, failures: list[dict[str, Any]]
-) -> tuple[list[dict[str, str]], dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     source = _mapping(spec.get("source"))
     source_root_value = spec.get("source_root") or source.get("source_root") or "."
     base = _safe_path(root, source_root_value, "declared source root", failures) or root
@@ -217,15 +219,25 @@ def _source_bindings(
     if not isinstance(declared_files, list) or payload_files != declared_files:
         failures.append(_failure("source_contract_mismatch", "Fresh harness source bindings do not match the spec."))
 
-    bindings: list[dict[str, str]] = []
+    bindings: list[dict[str, Any]] = []
     for raw_path, expected in sorted(hashes.items())[:MAX_SOURCE_FILES]:
         path = _safe_path(base, raw_path, "source file", failures)
         actual = _file_sha(path, "source file", failures)
         if not _valid_sha(expected):
             failures.append(_failure("source_hash_missing", "Source file requires an exact SHA-256 binding."))
-        elif actual != str(expected).lower():
-            failures.append(_failure("source_hash_mismatch", "Source file SHA-256 drifted."))
-        bindings.append({"path": _logical(base, path), "sha256": actual or "invalid"})
+            match_mode = None
+        elif path is None or actual is None:
+            match_mode = None
+        else:
+            match_mode = path_hash_match_mode(path, str(expected).lower(), actual_sha256=actual)
+            if match_mode is None:
+                failures.append(_failure("source_hash_mismatch", "Source file SHA-256 drifted."))
+        binding = {"path": _logical(base, path), "sha256": actual or "invalid"}
+        if _valid_sha(expected):
+            binding["declared_sha256"] = str(expected).lower()
+        if match_mode is not None:
+            binding["hash_match_mode"] = match_mode
+        bindings.append(binding)
 
     span = spec.get("function_source_span")
     if not isinstance(span, Mapping):
@@ -243,25 +255,38 @@ def _span_binding(base: Path, span: Any, failures: list[dict[str, Any]]) -> dict
     path = _safe_path(base, span.get("file"), "source span", failures)
     expected = span.get("sha256")
     data: bytes | None = None
-    if path is not None and path.is_file():
-        start, end = span.get("byte_start"), span.get("byte_end")
-        if isinstance(start, int) and isinstance(end, int) and 0 <= start <= end and end - start <= MAX_SPAN_BYTES:
-            with path.open("rb") as stream:
-                stream.seek(start)
-                data = stream.read(end - start)
-        else:
-            line_start, line_end = span.get("line_start"), span.get("line_end")
-            if isinstance(line_start, int) and isinstance(line_end, int) and 1 <= line_start <= line_end:
-                lines = path.read_bytes().splitlines(keepends=True)
-                data = b"".join(lines[line_start - 1 : line_end])
-                if len(data) > MAX_SPAN_BYTES:
-                    data = None
+    coordinates: dict[str, int] = {}
+    coordinate_match_mode = None
+    if not _valid_sha(expected):
+        failures.append(_failure("source_span_hash_mismatch", "Function source span SHA-256 drifted."))
+    if path is not None and path.is_file() and _valid_sha(expected):
+        try:
+            data, coordinates, coordinate_match_mode = extract_strict_span(
+                path,
+                dict(span),
+                str(expected).lower(),
+                max_span_bytes=MAX_SPAN_BYTES,
+            )
+        except ValueError:
+            data = None
     actual = hashlib.sha256(data).hexdigest() if data is not None else None
+    match_mode = None
     if data is None:
         failures.append(_failure("source_span_invalid", "Source span bounds are invalid or too large."))
-    elif not _valid_sha(expected) or actual != str(expected).lower():
-        failures.append(_failure("source_span_hash_mismatch", "Function source span SHA-256 drifted."))
-    return {"path": _logical(base, path), "sha256": actual or "invalid"}
+        if _valid_sha(expected):
+            failures.append(_failure("source_span_hash_mismatch", "Function source span SHA-256 drifted."))
+    elif _valid_sha(expected):
+        match_mode = bytes_hash_match_mode(data, str(expected).lower(), actual_sha256=actual)
+        if match_mode is None:
+            failures.append(_failure("source_span_hash_mismatch", "Function source span SHA-256 drifted."))
+    binding = {"path": _logical(base, path), "sha256": actual or "invalid", **coordinates}
+    if _valid_sha(expected):
+        binding["declared_sha256"] = str(expected).lower()
+    if match_mode is not None:
+        binding["hash_match_mode"] = match_mode
+    if coordinate_match_mode is not None:
+        binding["coordinate_match_mode"] = coordinate_match_mode
+    return binding
 
 
 def _compile_binding(
