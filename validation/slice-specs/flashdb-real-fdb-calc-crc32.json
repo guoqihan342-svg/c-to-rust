@@ -213,6 +213,44 @@
     "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json",
     "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json"
   },
+  "replay_contract": {
+    "schema_version": 3,
+    "kind": "declarative_call_plan",
+    "rust_api": {
+      "visibility": "pub",
+      "abi": "Rust",
+      "unsafe": false,
+      "parameters": [
+        {
+          "name": "crc",
+          "rust_type": "u32",
+          "c_parameter": "crc",
+          "length_retained": false,
+          "source": {"kind": "fixture_field", "field": "crc", "encoding": "u32"}
+        },
+        {
+          "name": "buf",
+          "rust_type": "&[u8]",
+          "c_parameter": "buf",
+          "length_retained": false,
+          "source": {"kind": "fixture_field", "field": "buf", "encoding": "u8_array"}
+        },
+        {
+          "name": "size",
+          "rust_type": "usize",
+          "c_parameter": "size",
+          "length_retained": true,
+          "source": {"kind": "fixture_field", "field": "size", "encoding": "usize"}
+        }
+      ],
+      "return_type": "u32",
+      "supporting_types": []
+    },
+    "omitted_c_parameters": [],
+    "assertions": [
+      {"actual": "return", "fixture_field": "return_code", "rust_type": "u32", "encoding": "u32"}
+    ]
+  },
   "rust_boundary": {
     "crate": "validation/l2_slices",
     "module": "validation/l2_slices/src/fdb_calc_crc32.rs",
@@ -255,6 +293,7 @@
     "c_boundary.signatures[0].source_span.sha256",
     "c_boundary.scalar_arithmetic_contract",
     "fixture_contract.scalar_input_domain",
+    "replay_contract",
     "build_profile.profile_id",
     "build_profile.target",
     "translator_version"

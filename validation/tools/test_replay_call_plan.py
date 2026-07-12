@@ -14,6 +14,9 @@ from validation.tools.replay_call_plan import (
 )
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
 class ReplayCallPlanTests(unittest.TestCase):
     def test_buffer_length_plan_is_ordered_hash_bound_and_renderable(self) -> None:
         with tempfile.TemporaryDirectory(prefix="replay-plan-") as tmp:
@@ -132,9 +135,47 @@ class ReplayCallPlanTests(unittest.TestCase):
             self.assertEqual("blocked", plan["status"])
             self.assertIn("symbolic", plan["reason"])
 
+    def test_readonly_byte_slice_semantic_contract_normalizes_without_name_dispatch(self) -> None:
+        spec = self.load_repo_spec("flashdb-real-fdb-is-str.json")
+        original = spec["function_name"]
+        spec["function_name"] = "renamed_source"
+        spec["c_boundary"]["signatures"][0]["function"] = "renamed_source"
+        spec["rust_boundary"]["public_api"][0]["name"] = "renamed_api"
+
+        plan = build_replay_call_plan(spec, REPO_ROOT)
+
+        self.assertEqual("bound", plan["status"])
+        self.assertEqual("renamed_source", plan["source_function_name"])
+        self.assertEqual("renamed_api", plan["api_name"])
+        self.assertEqual(["value", "len"], [item["name"] for item in plan["parameters"]])
+        self.assertEqual(["len"], plan["length_parameters_retained"])
+        source = render_declarative_replay_cases(spec, plan, REPO_ROOT)
+        self.assertIn("renamed_api(&[], 0usize)", source)
+        self.assertNotIn(original + "(", source)
+
+    def test_crc32_declarative_contract_accepts_json_byte_array(self) -> None:
+        spec = self.load_repo_spec("flashdb-real-fdb-calc-crc32.json")
+
+        plan = build_replay_call_plan(spec, REPO_ROOT)
+
+        self.assertEqual("bound", plan["status"])
+        self.assertEqual(["crc", "buf", "size"], [item["name"] for item in plan["parameters"]])
+        source = render_declarative_replay_cases(spec, plan, REPO_ROOT)
+        self.assertIn("fdb_calc_crc32(0u32, &[], 0usize)", source)
+        self.assertIn("49u8, 50u8, 51u8", source)
+        self.assertIn("3421780262u32", source)
+
     @staticmethod
     def write_json(path: Path, value: object) -> None:
         path.write_text(json.dumps(value), encoding="utf-8")
+
+    @staticmethod
+    def load_repo_spec(filename: str) -> dict:
+        return json.loads(
+            (REPO_ROOT / "validation" / "slice-specs" / filename).read_text(
+                encoding="utf-8"
+            )
+        )
 
     @staticmethod
     def buffer_spec() -> dict:

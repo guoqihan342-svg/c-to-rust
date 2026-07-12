@@ -81,6 +81,10 @@ class _AutoMigrateTestsPart09:
                 },
                 "output": {"fixture_field": "return_value", "rust_type": "bool"},
             },
+            "rust_boundary": {
+                "public_api": [{"name": "printable_prefix"}],
+                "raw_pointer_policy": "internal_only",
+            },
         }
 
     def test_readonly_byte_slice_bool_contract_generates_generic_oracle_and_replay(self) -> None:
@@ -116,8 +120,8 @@ pub fn printable_prefix(value: &[u8], len: usize) -> bool {
             replay_source = (
                 evidence_dir / "l3-printable-prefix-rust-replay-test-draft.rs"
             ).read_text(encoding="utf-8")
-            self.assertIn("printable_prefix(case.value, case.len)", replay_source)
-            self.assertIn("value: &[65u8, 0u8], len: 1usize", replay_source)
+            self.assertIn("// ReplayCallPlan-SHA256:", replay_source)
+            self.assertIn("printable_prefix(&[65u8, 0u8], 1usize)", replay_source)
             self.assertNotIn("fdb_", replay_source)
             self.assertEqual(replay["status"], "passed")
             self.assertTrue(replay["generated_draft_replay_pass"])

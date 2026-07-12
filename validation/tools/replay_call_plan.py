@@ -10,15 +10,29 @@ from typing import Any
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 RUST_TYPE_RE = re.compile(r"^[A-Za-z0-9_&'\[\]<>:(), ]+$")
 ACTUAL_RE = re.compile(r"^return(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
-ALLOWED_ENCODINGS = {"u32", "i32", "usize", "u16", "bool", "string", "hex_bytes"}
+ALLOWED_ENCODINGS = {
+    "u32",
+    "i32",
+    "usize",
+    "u16",
+    "bool",
+    "string",
+    "hex_bytes",
+    "u8_array",
+}
 MAX_FIXTURE_BYTES = 4 * 1024 * 1024
 
 
 def build_replay_call_plan(spec: dict[str, Any], repo_root: Path) -> dict[str, Any]:
     contract = spec.get("replay_contract")
-    if not isinstance(contract, dict) or contract.get("kind") != "declarative_call_plan":
+    if not isinstance(contract, dict):
+        return {"schema_version": 1, "status": "unavailable"}
+    contract_kind = contract.get("kind")
+    if contract_kind not in {"declarative_call_plan", "readonly_byte_slice_bool_return"}:
         return {"schema_version": 1, "status": "unavailable"}
     try:
+        if contract_kind == "readonly_byte_slice_bool_return":
+            contract = _readonly_byte_slice_bool_contract(contract)
         return _build_bound_plan(spec, contract, repo_root.resolve())
     except ValueError as exc:
         return {
@@ -329,18 +343,44 @@ def _fixture_binding(spec: dict[str, Any], repo_root: Path) -> dict[str, Any]:
     fixture_contract = spec.get("fixture_contract")
     if not isinstance(fixture_contract, dict):
         raise ValueError("fixture_contract is required")
-    fixture_ref = fixture_contract.get("path") or fixture_contract.get("input")
-    path, payload, data = _read_json_ref(fixture_ref, repo_root)
     declared_cases = fixture_contract.get("cases")
     if not isinstance(declared_cases, list) or not declared_cases:
         raise ValueError("fixture_contract cases are required")
+    inline_cases = all(
+        isinstance(item, dict)
+        and item.get("input_ref") == "inline"
+        and isinstance(item.get("inputs"), dict)
+        and isinstance(item.get("expected_outputs"), dict)
+        for item in declared_cases
+    )
+    fixture_ref = fixture_contract.get("path") or fixture_contract.get("input")
+    if inline_cases:
+        path = None
+        payload = None
+        data = json.dumps(
+            {
+                "cases": [
+                    {
+                        "id": item.get("id"),
+                        "inputs": item["inputs"],
+                        "expected_outputs": item["expected_outputs"],
+                    }
+                    for item in declared_cases
+                ]
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    else:
+        path, payload, data = _read_json_ref(fixture_ref, repo_root)
     cases: list[dict[str, Any]] = []
     for index, raw_case in enumerate(declared_cases):
         if not isinstance(raw_case, dict):
             raise ValueError("fixture case must be an object")
         case_id = str(raw_case.get("id") or f"case-{index}")
         input_ref = str(raw_case.get("input_ref") or f"cases[{index}]")
-        case_index = _case_ref_index(input_ref)
+        case_index = index if input_ref == "inline" else _case_ref_index(input_ref)
         input_payload = raw_case.get("inputs")
         if not isinstance(input_payload, dict):
             input_payload = _case_payload(payload, case_index)
@@ -353,7 +393,7 @@ def _fixture_binding(spec: dict[str, Any], repo_root: Path) -> dict[str, Any]:
             raise ValueError(f"fixture case {case_id} cannot be resolved")
         cases.append({"id": case_id, "inputs": input_payload, "expected": expected})
     return {
-        "path": path.relative_to(repo_root).as_posix(),
+        "path": "inline" if path is None else path.relative_to(repo_root).as_posix(),
         "sha256": hashlib.sha256(data).hexdigest(),
         "cases": cases,
     }
@@ -423,6 +463,69 @@ def _normalize_source(value: Any) -> dict[str, Any]:
     if kind == "encoded_length" and value.get("encoding") == "hex":
         return {"kind": kind, "field": field, "encoding": "hex"}
     raise ValueError("call argument source kind is unsupported")
+
+
+def _readonly_byte_slice_bool_contract(contract: dict[str, Any]) -> dict[str, Any]:
+    if contract.get("schema_version") != 1:
+        raise ValueError("readonly byte-slice replay contract schema_version must be 1")
+    input_contract = contract.get("input")
+    output_contract = contract.get("output")
+    if not isinstance(input_contract, dict) or not isinstance(output_contract, dict):
+        raise ValueError("readonly byte-slice replay input and output are required")
+    fixture_encoding = input_contract.get("fixture_encoding")
+    if fixture_encoding not in {"hex", "hex_bytes", "u8_array"}:
+        raise ValueError("readonly byte-slice replay encoding is unsupported")
+    if input_contract.get("fixture_scalar_type") != "u8" or output_contract.get("rust_type") != "bool":
+        raise ValueError("readonly byte-slice replay encoding is unsupported")
+    value_parameter = _identifier(input_contract.get("parameter"), "byte-slice parameter")
+    length_parameter = _identifier(input_contract.get("length_parameter"), "length parameter")
+    value_field = _identifier(input_contract.get("fixture_field"), "byte-slice fixture field")
+    length_field = _identifier(input_contract.get("length_field"), "length fixture field")
+    output_field = _identifier(output_contract.get("fixture_field"), "output fixture field")
+    return {
+        "schema_version": 3,
+        "kind": "declarative_call_plan",
+        "rust_api": {
+            "visibility": "pub",
+            "abi": "Rust",
+            "unsafe": False,
+            "parameters": [
+                {
+                    "name": value_parameter,
+                    "rust_type": "&[u8]",
+                    "c_parameter": value_parameter,
+                    "length_retained": False,
+                    "source": {
+                        "kind": "fixture_field",
+                        "field": value_field,
+                        "encoding": "u8_array" if fixture_encoding == "u8_array" else "hex_bytes",
+                    },
+                },
+                {
+                    "name": length_parameter,
+                    "rust_type": "usize",
+                    "c_parameter": length_parameter,
+                    "length_retained": True,
+                    "source": {
+                        "kind": "fixture_field",
+                        "field": length_field,
+                        "encoding": "usize",
+                    },
+                },
+            ],
+            "return_type": "bool",
+            "supporting_types": [],
+        },
+        "omitted_c_parameters": [],
+        "assertions": [
+            {
+                "actual": "return",
+                "fixture_field": output_field,
+                "rust_type": "bool",
+                "encoding": "bool",
+            }
+        ],
+    }
 
 
 def _normalize_assertions(value: Any) -> list[dict[str, Any]]:
@@ -532,6 +635,9 @@ def _encoded_literal(value: Any, encoding: str) -> str:
         return json.dumps(value, ensure_ascii=True)
     if encoding == "hex_bytes":
         return "&[" + ", ".join(f"{item}u8" for item in _decode_hex(value)) + "]"
+    if encoding == "u8_array" and isinstance(value, list):
+        items = [_integer(item, 0, 255, encoding) for item in value]
+        return "&[" + ", ".join(f"{item}u8" for item in items) + "]"
     raise ValueError(f"value does not match replay encoding {encoding}")
 
 
