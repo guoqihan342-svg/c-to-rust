@@ -16,8 +16,8 @@
 | --- | --- |
 | Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
-| 最近开发阶段 | P0-A16：建立 GLM/辅助模型身份隔离与无工具候选验证通道 |
-| 当前翻译任务 | P0-A10：资源恢复后对固定 12 项跨项目套件做一次真实 GLM-5.1 完整验收 |
+| 最近开发阶段 | P0-A17：建立隔离的辅助模型跨项目套件与严格源码绑定 |
+| 当前翻译任务 | P0-A18：把 replay 兼容的精确 Rust 函数合同前置到 AI ContextPack；P0-A10 等待 GLM 资源恢复 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
@@ -51,6 +51,8 @@ SQLite 不是语义事实源，Agent 对话也不是 evidence。语义结论只�
 本项目以 AI 作为比赛翻译主通道，而不是在确定性翻译失败后才调用 AI。每个新切片先构造 hash-bound ContextPack，再由 OpenCode `zai/glm-5.1` + `c2rust-candidate` + `max` 生成单一 Rust 主候选。typed IR 和 C2Rust 继续保留，用于零 token 替代、失败对照和 repair base；它们不能静默冒充 AI 已运行，也不能绕过共同验证门禁。
 
 ContextPack v3 只向模型提供有界事实：真实 source span、编译参数与 response files、类型/CFG/指针摘要、失败摘要、ABI/指针策略，以及直接被调函数的签名、定义状态、source binding、stub boundary 和调用合同。敏感字段、带引号密钥赋值、宿主绝对路径和路径逃逸会被清理；必需的 callee boundary 超限或截断时会在 provider 启动前零调用拒绝。
+
+候选和 repair prompt 会在完整 ContextPack 前单独重申从 ContextPack 复制出的函数签名、参数顺序、Rust public API、raw-pointer 与 unsafe 策略，降低小模型按标识符惯例猜测 API 的概率。该高显著性摘要不参与路由，也不替代下一阶段 P0-A18 所要求的精确 replay-compatible Rust 函数合同。
 
 AI candidate manifest v7 的 `prompt_scope` 由实际 ContextPack 计算，并把 provider、logical/resolved model、`competition_eligible` 和 `evaluation_scope` 绑定到 generator 与 candidate。每次真实 provider 调用还绑定最小 invocation receipt 和独立的 session-export identity projection：只保留 provider/model/agent/variant/version、session id、prompt/response SHA 与内存中完整 export 的 SHA，不保存完整 session、prompt、宿主目录或凭据；两类工件都有 `additionalProperties=false` 的专用 schema。fresh-run summary validator 会重开这些 hash-bound 工件并独立复算身份、prompt、scope 与调用计数；`competition-exact` 还会实时重开同一 OpenCode session，核对完整 export SHA、实际身份、附件 prompt 路径及 ContextPack 前缀、assistant response。比赛主通道只认 `zai/glm-5.1`；GLM 余额不足时可显式使用 DeepSeek V4 Flash 等模型做 `auxiliary-local-validation`，但不能关闭比赛待办或进入比赛成功率分子。AI 输出始终保持 `semantic_gate=false`，最终接受只由共同门禁决定。
 
@@ -230,6 +232,16 @@ sequenceDiagram
 | Fresh C oracle + exact replay/diff/safety/final gates | 声明边界内、绑定当前 candidate SHA 的可执行等价证据 | 是 |
 
 AI exact 路径禁止同时传入 `--accept-existing-evidence`。历史 accepted reports 可以复验历史切片，但不能给新 AI candidate 补写 SHA 或 semantic status。
+
+GLM 余额不足时使用独立的 `run_ai_auxiliary_cross_project_suite`，默认模型为 `opencode/deepseek-v4-flash-free`。它拒绝 competition-eligible 模型、非空 out-root、路径不安全或重复的 project/slice identity，并在每个单元启动前后复核 spec SHA；并发单元使用独立的 OpenCode config/data/cache/state/tmp，从而隔离 SQLite、session 与日志。报告固定 `competition_success_numerator=0`、`translation_coverage_numerator=0`，不能关闭 P0-A6/A10/H9。
+
+```bash
+python3 -B -m validation.tools.run_ai_auxiliary_cross_project_suite \
+  --suite validation/ai-finite-cross-project-suite.json \
+  --out-root target/ai-auxiliary-$(date +%Y%m%dT%H%M%S) \
+  --model opencode/deepseek-v4-flash-free \
+  --repair-rounds 1 --max-workers 3
+```
 
 跨项目稳定性使用 `validation/ai-finite-cross-project-suite.json` 的固定集合。`validate_ai_finite_cross_project_suite --require-all-ready` 会离线核验三条 pinned checkout 的 Git identity、真实 source/span、spec 和 fixture；preflight 不调用模型、不执行翻译。AI candidate producer 还会在进程启动前检查 ContextPack source span；missing、越界、hash 漂移、超限或编码不支持时写入 `context_not_provider_ready`，并明确记录 `provider_invocations=0`。fragment wrapper 只有在 carrier source、真实 upstream fragment、声明文本与 `verbatim_once` 嵌入全部通过 SHA/行段复核后才是 `inline_translation_carrier_bound`，且不会扩大 whole-function 语义声明。candidate 与 repair prompt 均先写入 hash-bound 文件，再通过 OpenCode `opencode-file-attachment-v2` 传入：固定短消息位于 `--file=<prompt-path>` 之前；完整 ContextPack、候选和失败事实不进入进程 argv。`run_ai_finite_cross-project_suite` 把整套 spec 一次交给同一个 competition runner，禁止历史 accepted evidence 和外层重试；底层 summary validator 未通过时，上层不得复制指标。余额不足、鉴权失败或 provider 无法启动会在首次失败后熔断；timeout 仍需连续两次，不同 kind 会重置计数。未启动项只记为 skipped，不伪造 AI unit。OpenCode 非零退出或超时后的日志诊断绑定首选日志及调用前偏移，首次创建日志时从偏移 0 读取，并且只输出固定错误哨兵，禁止把原始日志或密钥写入证据。缺输入或 fresh runner 时必须保留为 `blocked`，不能过滤难例或用 synthetic carrier 冒充真实项目成功。输入 ready、辅助模型通过或本地 Cargo cache 旁路都不能代替一次完整的 AI-primary/fresh-exact 比赛验收。
 
