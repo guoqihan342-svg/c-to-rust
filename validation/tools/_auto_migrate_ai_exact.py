@@ -42,6 +42,7 @@ from validation.tools._auto_migrate_ai_exact_validation import (
     current_candidate_unsafe_ledger,
     router_gate_results,
     unsafe_policy_from_spec,
+    validate_ai_exact_stage_contract,
     validate_auto_migrate_candidate as _validate_auto_migrate_candidate_impl,
 )
 
@@ -73,6 +74,13 @@ def run_ai_exact_stage(
     variant: str,
     timeout_seconds: int,
 ) -> dict[str, Any]:
+    validate_ai_exact_stage_contract(
+        context_pack,
+        ai_manifest,
+        evidence_dir=evidence_dir,
+        replay_test_path=replay_test_path,
+        canonical_draft_path=canonical_draft_path,
+    )
     slice_id = str(spec["slice_id"])
     attempts_root = evidence_dir / "ai-exact-attempts"
     baseline_path, baseline_audit = resolve_current_c2rust_baseline_candidate(

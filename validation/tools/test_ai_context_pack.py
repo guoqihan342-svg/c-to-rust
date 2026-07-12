@@ -108,7 +108,7 @@ class AiContextPackTests(unittest.TestCase):
             context = ai_candidate_harness.build_context_pack(spec_path, source_root=source_root)
             encoded = json.dumps(context, sort_keys=True)
 
-            self.assertEqual(context["schema_version"], 3)
+            self.assertEqual(context["schema_version"], 4)
             self.assertEqual(context["source"]["span"]["status"], "real_source_bound")
             self.assertEqual(context["source"]["span"]["content"].encode(), function)
             self.assertEqual(context["source"]["input"]["sha256"], sha256((source_root / "src/unit.c").read_bytes()))
@@ -183,9 +183,15 @@ class AiContextPackTests(unittest.TestCase):
                 ],
             )
 
+            replay_path = root / "l3-generic-slice-rust-replay-test-draft.rs"
+            replay_path.write_text(
+                "#[test]\nfn replay() { let _ = transform(1); }\n",
+                encoding="utf-8",
+            )
             context = ai_candidate_harness.build_context_pack(
                 self.write_spec(root, spec),
                 source_root=source_root,
+                replay_test_path=replay_path,
             )
             context_schema = json.loads(
                 (
@@ -231,6 +237,7 @@ class AiContextPackTests(unittest.TestCase):
             changed = ai_candidate_harness.build_context_pack(
                 self.write_spec(root, spec),
                 source_root=source_root,
+                replay_test_path=replay_path,
             )
             self.assertNotEqual(first_context_sha, changed["bindings"]["context_payload_sha256"])
 

@@ -9,7 +9,46 @@ from validation.tools import _auto_migrate_ai_exact as exact
 
 
 class AutoMigrateAiExactSplitTests(unittest.TestCase):
+    def test_exact_stage_rejects_stale_manifest_and_context_versions(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-exact-contract-") as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(ValueError, "manifest schema_version 8"):
+                exact.validate_ai_exact_stage_contract(
+                    {"schema_version": 4},
+                    {"schema_version": 7},
+                    evidence_dir=root,
+                    replay_test_path=root / "replay.rs",
+                    canonical_draft_path=root / "candidate.rs",
+                )
+            with self.assertRaisesRegex(ValueError, "ContextPack schema_version 4"):
+                exact.validate_ai_exact_stage_contract(
+                    {"schema_version": 3},
+                    {"schema_version": 8},
+                    evidence_dir=root,
+                    replay_test_path=root / "replay.rs",
+                    canonical_draft_path=root / "candidate.rs",
+                )
+
     def test_legacy_helpers_remain_importable_from_facade(self) -> None:
+        legacy_symbols = (
+            "run_ai_exact_stage",
+            "_validate_with_new_attempt",
+            "next_attempt_dir",
+            "_router_candidate",
+            "_manifest_candidate_id",
+            "_manifest_generator_metadata",
+            "_passed_gate_count",
+            "_sync_duplicate_audit",
+            "_persist_candidate_result",
+            "_mark_ai_not_applied",
+            "validate_auto_migrate_candidate",
+            "persist_exact_validation_summary",
+            "router_gate_results",
+            "unsafe_policy_from_spec",
+            "current_candidate_unsafe_ledger",
+            "_artifact_root",
+        )
+        self.assertEqual([], [name for name in legacy_symbols if not callable(getattr(exact, name, None))])
         manifest = {
             "selected_candidate_id": "candidate-1",
             "candidates": [{"candidate_id": "candidate-1"}],

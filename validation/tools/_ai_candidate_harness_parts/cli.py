@@ -13,6 +13,7 @@ def main() -> int:
     parser.add_argument("--slice-spec", required=True, type=Path)
     parser.add_argument("--source-root", type=Path)
     parser.add_argument("--deterministic-evidence-dir", type=Path)
+    parser.add_argument("--replay-test", required=True, type=Path)
     parser.add_argument("--out-dir", required=True, type=Path)
     parser.add_argument("--opencode-command", default="opencode")
     parser.add_argument("--model", default=DEFAULT_RESOLVED_MODEL)
@@ -23,11 +24,14 @@ def main() -> int:
     args = parser.parse_args()
     if args.timeout_seconds < 1 or args.timeout_seconds > 600:
         parser.error("--timeout-seconds must be between 1 and 600")
+    args.out_dir.mkdir(parents=True, exist_ok=True)
 
     context = build_context_pack(
         args.slice_spec,
         source_root=args.source_root,
         deterministic_evidence_dir=args.deterministic_evidence_dir,
+        replay_test_path=args.replay_test,
+        replay_root=args.out_dir,
     )
     manifest = generate_candidate(
         context,

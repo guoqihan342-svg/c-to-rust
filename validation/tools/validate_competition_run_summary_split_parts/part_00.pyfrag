@@ -22,6 +22,9 @@ from validation.tools._ai_candidate_harness_parts.candidate_cache import (
     validate_cache_entry,
 )
 from validation.tools._ai_candidate_harness_parts.context_scope import prompt_scope_for_context
+from validation.tools._ai_candidate_harness_parts.context_replay import (
+    validate_replay_api_contract_binding,
+)
 from validation.tools._ai_candidate_harness_parts.model_identity import resolve_model_identity
 from validation.tools._ai_candidate_harness_parts.provider import parse_candidate_response, render_prompt
 from validation.tools._ai_candidate_harness_parts.provider_receipt import invocation_contract
@@ -36,6 +39,9 @@ from validation.tools._ai_candidate_harness_parts.provider_readiness import (
     BLOCKED_SOURCE_SPAN_STATUSES,
     READY_SOURCE_SPAN_STATUSES,
     evaluate_provider_readiness,
+)
+from validation.tools._ai_candidate_harness_parts.repair_fresh import (
+    validate_repair_context_and_prompts,
 )
 from validation.tools._ai_candidate_harness_parts.prompt_transport import (
     PROMPT_FILE_MESSAGE,

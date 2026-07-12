@@ -6,6 +6,7 @@ from typing import Any
 PROMPT_SCOPE_ORDER = (
     "slice_spec",
     "source_spans",
+    "generated_replay_api_contract",
     "type_map_excerpt",
     "cfg_excerpt",
     "pointer_graph_excerpt",
@@ -32,6 +33,14 @@ SUCCESS_STATUS_MARKERS = ("ok", "pass", "ready", "success")
 
 def prompt_scope_for_context(context_pack: dict[str, Any]) -> list[str]:
     scopes = {"slice_spec", "source_spans"}
+    replay_contract = context_pack.get("replay_api_contract")
+    if (
+        isinstance(replay_contract, dict)
+        and replay_contract.get("status") == "bound"
+        and isinstance(replay_contract.get("source"), dict)
+        and value_has_facts(replay_contract["source"].get("content"))
+    ):
+        scopes.add("generated_replay_api_contract")
     artifacts = context_pack.get("deterministic_artifacts")
     if isinstance(artifacts, dict):
         for name, artifact in artifacts.items():

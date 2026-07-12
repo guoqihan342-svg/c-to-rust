@@ -107,8 +107,11 @@ def write_generated_ai_chain(
     candidate_path = base / f"l3-{slice_id}-ai-rust-candidate.rs"
     draft = base / f"l3-{slice_id}-rust-draft.rs"
     c_source = "int sum_values(int a, int b) { return a + b; }"
+    replay_source = "#[test]\nfn replay() { let _ = sum_values(1, 2); }\n"
+    replay_path = base / f"l3-{slice_id}-rust-replay-test-draft.rs"
+    replay_sha = write_text(replay_path, replay_source)
     context_payload = {
-        "schema_version": 3,
+        "schema_version": 4,
         "target_id": target_id,
         "slice_id": slice_id,
         "function_name": "sum_values",
@@ -128,7 +131,40 @@ def write_generated_ai_chain(
             "required_callee_sections": [],
             "missing_required_callee_sections": [],
         },
-        "bindings": {"inputs": []},
+        "rust_boundary": {
+            "sha256": "c" * 64,
+            "truncated": False,
+            "payload": {"public_api": [{"name": "sum_values"}]},
+        },
+        "replay_api_contract": {
+            "schema_version": 1,
+            "contract_kind": "generated_replay_rust_source",
+            "function_name": "sum_values",
+            "status": "bound",
+            "call_count": 1,
+            "source": {
+                "path": replay_path.name,
+                "sha256": replay_sha,
+                "size_bytes": len(replay_source.encode("utf-8")),
+                "content": replay_source,
+            },
+            "requirements": {
+                "candidate_defines_function": True,
+                "all_call_sites_typecheck": True,
+                "parameter_count_and_order": "as_invoked_by_generated_replay",
+                "return_type": "as_constrained_by_generated_replay",
+            },
+        },
+        "bindings": {
+            "inputs": [
+                {
+                    "kind": "generated_replay_contract",
+                    "path": replay_path.name,
+                    "sha256": replay_sha,
+                    "size_bytes": len(replay_source.encode("utf-8")),
+                }
+            ]
+        },
         "claim_boundary": {"semantic_gate": False},
     }
     write_json(context, context_payload)
@@ -334,7 +370,7 @@ def write_generated_ai_chain(
             },
         )
     manifest = {
-        "schema_version": 7,
+        "schema_version": 8,
         "target_id": target_id,
         "slice_id": slice_id,
         "status": "generated",
@@ -380,7 +416,7 @@ def write_generated_ai_chain(
                 "resolved_model": "zai/glm-5.1",
                 "competition_eligible": True,
                 "evaluation_scope": "competition-primary",
-                "prompt_scope": ["slice_spec", "source_spans"],
+                "prompt_scope": ["slice_spec", "source_spans", "generated_replay_api_contract"],
                 "input_artifact_hashes": {
                     "context_pack": runner.sha256(context),
                     "prompt": runner.sha256(prompt),

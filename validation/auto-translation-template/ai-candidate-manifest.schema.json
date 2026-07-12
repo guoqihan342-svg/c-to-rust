@@ -240,7 +240,21 @@
           ]
         },
         "compile_context_status": {"const": "response_file_invalid"},
-        "context_boundary_status": {"const": "required_callee_context_incomplete"}
+        "context_boundary_status": {"const": "required_callee_context_incomplete"},
+        "replay_api_contract_status": {
+          "enum": [
+            "missing",
+            "blocked_invalid_function_identifier",
+            "blocked_replay_source_path",
+            "blocked_replay_source_missing",
+            "blocked_replay_source_too_large",
+            "blocked_replay_source_unreadable",
+            "blocked_replay_source_sensitive",
+            "blocked_replay_call_missing",
+            "binding_mismatch",
+            "invalid"
+          ]
+        }
       }
     },
     "candidateCache": {
@@ -357,7 +371,7 @@
         "resolved_model": {"type": "string"},
         "competition_eligible": {"type": "boolean"},
         "evaluation_scope": {"enum": ["competition-primary", "auxiliary-local-validation"]},
-        "prompt_scope": {"type": "array", "items": {"enum": ["slice_spec", "root_cause_summary", "source_spans", "type_map_excerpt", "cfg_excerpt", "pointer_graph_excerpt", "direct_caller_callee_facts", "verification_delta", "two_hop_expansion"]}},
+        "prompt_scope": {"type": "array", "items": {"enum": ["slice_spec", "source_spans", "generated_replay_api_contract", "root_cause_summary", "type_map_excerpt", "cfg_excerpt", "pointer_graph_excerpt", "direct_caller_callee_facts", "verification_delta", "two_hop_expansion"]}},
         "two_hop_expansion_justification": {"type": "string"},
         "input_artifact_hashes": {"type": "object", "additionalProperties": {"type": "string"}},
         "output_hash": {"type": "string"},

@@ -4,7 +4,11 @@ import json
 import re
 from typing import Any
 
-from .prompt_contract import render_boundary_contract
+from .prompt_contract import (
+    context_without_replay_source,
+    render_boundary_contract,
+    render_replay_api_contract,
+)
 
 
 MAX_CANDIDATE_BYTES = 256_000
@@ -22,17 +26,20 @@ EMBEDDED_JSON_FENCE_PATTERN = re.compile(
 
 def render_prompt(context_pack: dict[str, Any]) -> str:
     context_json = json.dumps(
-        context_pack,
+        context_without_replay_source(context_pack),
         sort_keys=True,
         ensure_ascii=False,
         separators=(",", ":"),
     )
     boundary_contract = render_boundary_contract(context_pack)
+    replay_contract = render_replay_api_contract(context_pack)
     return (
         "Task mode: generate-candidate\n"
         "Generate one Rust candidate for the declared C slice. Do not call tools, inspect files, "
         "or modify the repository. Preserve C integer, alias, ABI, side-effect, and return semantics. "
-        "Use the exact declared function name and preserve the declared parameter count and order. "
+        "Use the exact declared function name. The generated replay API contract is compiler-owned: "
+        "the candidate must typecheck at every shown call site, preserving every argument, including "
+        "length, capacity, flag, and output parameters, in the exact count and order shown. "
         "Honor rust_public_api and raw_pointer_policy. When raw_pointer_policy is internal_only, do not "
         "expose raw pointers in the public function signature; map C pointer parameters to matching Rust "
         "reference or slice forms without dropping or reordering adjacent scalar parameters. "
@@ -43,6 +50,7 @@ def render_prompt(context_pack: dict[str, Any]) -> str:
         "with this shape and no markdown: "
         '{"schema_version":1,"candidate":{"language":"rust","source":"..."},"assumptions":[]}\n'
         f"Required boundary facts: {boundary_contract}\n"
+        f"Required generated replay API contract: {replay_contract}\n"
         f"ContextPack: {context_json}"
     )
 

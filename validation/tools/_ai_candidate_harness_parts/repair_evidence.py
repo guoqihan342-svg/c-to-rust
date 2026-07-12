@@ -28,6 +28,13 @@ def report_base(
     input_source: str,
 ) -> dict[str, Any]:
     identity = resolve_model_identity(resolved_model)
+    bindings = {
+        "context_pack_sha256": sha256_bytes(canonical_json_bytes(context_pack)),
+    }
+    if context_pack.get("schema_version") == 4:
+        bindings["replay_api_contract_sha256"] = sha256_bytes(
+            canonical_json_bytes(context_pack.get("replay_api_contract"))
+        )
     return {
         "schema_version": 3,
         "target_id": target_id,
@@ -54,9 +61,7 @@ def report_base(
             "variant": variant,
             "prompt_transport": prompt_transport_contract(),
         },
-        "bindings": {
-            "context_pack_sha256": sha256_bytes(canonical_json_bytes(context_pack)),
-        },
+        "bindings": bindings,
         "initial_candidate": {
             "name": candidate_path.name,
             "sha256": None,

@@ -51,6 +51,22 @@ def jsonl_response(source: str) -> str:
     return json.dumps({"type": "message.part.updated", "part": {"type": "text", "text": payload}}) + "\n"
 
 
+def build_provider_context(spec_path: Path) -> dict[str, object]:
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    function_name = str(spec["function_name"])
+    replay_path = spec_path.with_name(
+        f"l3-{spec['slice_id']}-rust-replay-test-draft.rs"
+    )
+    replay_path.write_text(
+        f"#[test]\nfn replay() {{ let _ = {function_name}(1); }}\n",
+        encoding="utf-8",
+    )
+    return ai_candidate_harness.build_context_pack(
+        spec_path,
+        replay_test_path=replay_path,
+    )
+
+
 class AiCandidateHarnessTests(unittest.TestCase):
     def assert_manifest_schema(self, manifest: dict[str, object]) -> None:
         schema_path = (
@@ -68,13 +84,40 @@ class AiCandidateHarnessTests(unittest.TestCase):
             spec_path = root / "slice.json"
             spec_path.write_text(json.dumps(minimal_spec(source_root)), encoding="utf-8")
 
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
 
             encoded = json.dumps(context)
             self.assertNotIn(source_root, encoded)
             self.assertNotIn("must-not-leak", encoded)
             self.assertIn("<host-path>", encoded)
             self.assertFalse(context["claim_boundary"]["semantic_gate"])
+
+    def test_missing_replay_contract_blocks_before_provider_invocation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-replay-missing-") as tmp:
+            root = Path(tmp)
+            spec_path = root / "slice.json"
+            spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
+            context = ai_candidate_harness.build_context_pack(spec_path)
+            calls = 0
+
+            def runner(_argv: list[str], _timeout: int) -> ai_candidate_harness.ProviderExecution:
+                nonlocal calls
+                calls += 1
+                raise AssertionError("provider must not run without a replay API contract")
+
+            manifest = ai_candidate_harness.generate_candidate(
+                context,
+                out_dir=root / "out",
+                runner=runner,
+            )
+
+            self.assertEqual(0, calls)
+            self.assertEqual("blocked", manifest["status"])
+            self.assertEqual(0, manifest["provider_invocations"])
+            self.assertEqual(
+                "missing",
+                manifest["provider_preflight"]["replay_api_contract_status"],
+            )
 
     def test_generate_candidate_writes_hash_bound_nonsemantic_manifest(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ai-candidate-") as tmp:
@@ -87,7 +130,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
                 + "*/ return value * 3; }"
             )
             spec_path.write_text(json.dumps(spec), encoding="utf-8")
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
             observed_argv: list[str] = []
 
             def runner(argv: list[str], timeout: int) -> ai_candidate_harness.ProviderExecution:
@@ -141,7 +184,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             )
             self.assertIn("--model", observed_argv)
             self.assertIn("zai/glm-5.1", observed_argv)
-            self.assertEqual(7, manifest["schema_version"])
+            self.assertEqual(8, manifest["schema_version"])
             receipt_ref = manifest["bindings"]["invocation_receipt"]
             receipt_path = out_dir / receipt_ref["path"]
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
@@ -168,7 +211,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assertTrue(manifest["generator"]["competition_eligible"])
             self.assertEqual("competition-primary", manifest["generator"]["evaluation_scope"])
             self.assertEqual(
-                ["slice_spec", "source_spans"],
+                ["slice_spec", "source_spans", "generated_replay_api_contract"],
                 manifest["candidates"][0]["prompt_scope"],
             )
             self.assertEqual(
@@ -300,6 +343,26 @@ class AiCandidateHarnessTests(unittest.TestCase):
             )
             provider.atomic_write_bytes(context_path, original_context_bytes)
 
+            replay_path = out_dir / "l3-generic-scale-rust-replay-test-draft.rs"
+            original_replay_bytes = replay_path.read_bytes()
+            provider.atomic_write_bytes(replay_path, b"fn replay() {}\n")
+            replay_drift_validation = summary_validator.validate_fresh_ai_manifest(
+                manifest,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-candidate",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertIn(
+                "ai_context_replay_api_contract_binding_invalid",
+                replay_drift_validation["reasons"],
+            )
+            provider.atomic_write_bytes(replay_path, original_replay_bytes)
+
             transport_drift = json.loads(json.dumps(manifest))
             transport_drift["generator"]["prompt_transport"]["message_sha256"] = "0" * 64
             transport_validation = summary_validator.validate_fresh_ai_manifest(
@@ -357,7 +420,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             root = Path(tmp)
             spec_path = root / "slice.json"
             spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
             out_dir = root / "out"
             manifest = ai_candidate_harness.generate_candidate(
                 context,
@@ -383,7 +446,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             root = Path(tmp)
             spec_path = root / "slice.json"
             spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
             out_dir = root / "out"
             manifest = ai_candidate_harness.generate_candidate(
                 context,
@@ -407,7 +470,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             root = Path(tmp)
             spec_path = root / "slice.json"
             spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
 
             manifest = ai_candidate_harness.generate_candidate(
                 context,
@@ -441,7 +504,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             root = Path(tmp)
             spec_path = root / "slice.json"
             spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
             oversized = "x" * (ai_candidate_harness.MAX_PROVIDER_STDOUT_BYTES + 1)
 
             manifest = ai_candidate_harness.generate_candidate(
@@ -460,7 +523,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             root = Path(tmp)
             spec_path = root / "slice.json"
             spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
 
             manifest = ai_candidate_harness.generate_candidate(
                 context,
@@ -482,7 +545,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             root = Path(tmp)
             spec_path = root / "slice.json"
             spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
             calls = 0
 
             def runner(_argv: list[str], _timeout: int) -> ai_candidate_harness.ProviderExecution:
@@ -502,7 +565,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             spec.pop("c_source")
             spec_path = root / "slice.json"
             spec_path.write_text(json.dumps(spec), encoding="utf-8")
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
             calls = 0
 
             def runner(_argv: list[str], _timeout: int) -> ai_candidate_harness.ProviderExecution:
@@ -585,7 +648,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             spec["source_root"] = "../outside"
             spec_path = root / "slice.json"
             spec_path.write_text(json.dumps(spec), encoding="utf-8")
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
             calls = 0
 
             def runner(_argv: list[str], _timeout: int) -> ai_candidate_harness.ProviderExecution:
@@ -902,7 +965,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             root = Path(tmp)
             spec_path = root / "slice.json"
             spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
             manifest = ai_candidate_harness.generate_candidate(
                 context,
                 out_dir=root,

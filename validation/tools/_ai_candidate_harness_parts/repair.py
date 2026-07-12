@@ -6,6 +6,10 @@ import re
 from typing import Any, Callable
 
 from .context import atomic_write_bytes, atomic_write_json, sha256_bytes, sha256_path
+from .context_replay import (
+    materialize_replay_api_contract,
+    validate_replay_api_contract_binding,
+)
 from .provider import (
     DEFAULT_AGENT,
     DEFAULT_RESOLVED_MODEL,
@@ -17,7 +21,11 @@ from .provider import (
     subprocess_runner,
 )
 from .prompt_transport import prompt_file_arguments
-from .prompt_contract import render_boundary_contract
+from .prompt_contract import (
+    context_without_replay_source,
+    render_boundary_contract,
+    render_replay_api_contract,
+)
 from .repair_contract import (
     MAX_REPAIR_RESPONSE_BYTES,
     normalize_validation_result,
@@ -37,6 +45,7 @@ from .repair_evidence import (
     structured_failure,
 )
 from .repair_patch import apply_candidate_patch
+from .provider_readiness import evaluate_provider_readiness
 
 
 ValidationRunner = Callable[[Path, int], dict[str, Any]]
@@ -90,11 +99,25 @@ def coordinate_repairs(
         return finish_blocked(report, report_path, "invalid_repair_input", str(error))
 
     current_sha = sha256_bytes(current_source.encode("utf-8"))
-    report["initial_candidate"]["sha256"] = current_sha
+    initial_snapshot_path = out_dir / f"l3-{slice_id}-{artifact_label}-initial-candidate.rs"
+    atomic_write_bytes(initial_snapshot_path, current_source.encode("utf-8"))
+    report["initial_candidate"] = {
+        "name": initial_snapshot_path.name,
+        "sha256": current_sha,
+    }
     seen_inputs: set[str] = set()
     provider_runner = runner or subprocess_runner
 
     for round_number in range(1, max_rounds + 1):
+        replay_status = repair_replay_context_status(context_pack, out_dir)
+        if replay_status != "ready":
+            return finish_blocked(
+                report,
+                report_path,
+                "context_not_provider_ready",
+                replay_status,
+                current_sha,
+            )
         failure_sha = validation_result_sha256(failures)
         input_key = repair_input_key(current_sha, failure_sha)
         if input_key in seen_inputs:
@@ -210,18 +233,51 @@ def coordinate_repairs(
     return report
 
 
+def repair_replay_context_status(context_pack: dict[str, Any], out_dir: Path) -> str:
+    if context_pack.get("schema_version") != 4:
+        return "invalid_context_shape"
+    try:
+        materialize_replay_api_contract(context_pack, out_dir)
+    except ValueError:
+        return "replay_api_contract_binding_mismatch"
+    binding_status = validate_replay_api_contract_binding(
+        context_pack,
+        out_dir / "ai-context-pack.json",
+    )
+    if binding_status != "bound":
+        return f"replay_api_contract_{binding_status}"
+    readiness = evaluate_provider_readiness(context_pack)
+    if readiness.get("status") != "ready":
+        return str(
+            readiness.get("replay_api_contract_status")
+            or readiness.get("context_boundary_status")
+            or readiness.get("compile_context_status")
+            or readiness.get("source_span_status")
+            or "invalid_context_shape"
+        )
+    return "ready"
+
+
 def render_repair_prompt(
     context_pack: dict[str, Any],
     candidate_source: str,
     failure_facts: dict[str, Any],
 ) -> str:
-    context_json = json.dumps(context_pack, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    context_json = json.dumps(
+        context_without_replay_source(context_pack),
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     failures_json = json.dumps(failure_facts, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     boundary_contract = render_boundary_contract(context_pack)
+    replay_contract = render_replay_api_contract(context_pack)
     return (
         "Task mode: generate-candidate\n"
         "Repair only the supplied Rust candidate from the structured validation failures. Do not call tools or "
-        "modify files. Use the exact declared function name and preserve the declared parameter count and order. "
+        "modify files. Use the exact declared function name. The generated replay API contract is "
+        "compiler-owned: the repaired candidate must typecheck at every shown call site and preserve "
+        "every argument in the exact count and order shown. "
         "Honor rust_public_api and raw_pointer_policy; internal_only forbids raw pointers in the public function "
         "signature and requires matching reference or slice forms without dropping adjacent scalar parameters. "
         "Oracle, fixture, validator, and gate configuration are immutable. Return exactly one JSON "
@@ -234,6 +290,7 @@ def render_repair_prompt(
         '{"schema_version":1,"repair":{"kind":"patch","format":"unified_diff","content":"--- a/candidate.rs\\n+++ b/candidate.rs\\n..."},"assumptions":[]}. '
         "A patch must target candidate.rs only. This output is never semantic acceptance.\n"
         f"Required boundary facts: {boundary_contract}\n"
+        f"Required generated replay API contract: {replay_contract}\n"
         f"ContextPack: {context_json}\n"
         f"FailureFacts: {failures_json}\n"
         f"CurrentCandidate:\n{candidate_source}"

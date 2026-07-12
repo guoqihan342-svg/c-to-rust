@@ -50,6 +50,18 @@ def spec() -> dict[str, object]:
     }
 
 
+def build_provider_context(spec_path: Path) -> dict[str, object]:
+    replay_path = spec_path.with_name("l3-deepseek-scale-rust-replay-test-draft.rs")
+    replay_path.write_text(
+        "#[test]\nfn replay() { let _ = scale(1); }\n",
+        encoding="utf-8",
+    )
+    return ai_candidate_harness.build_context_pack(
+        spec_path,
+        replay_test_path=replay_path,
+    )
+
+
 class AiModelIdentityTests(unittest.TestCase):
     def test_default_candidate_agent_is_tool_free_and_unknown_agent_fails_before_launch(self) -> None:
         self.assertEqual("c2rust-candidate", candidate_provider.DEFAULT_AGENT)
@@ -58,7 +70,7 @@ class AiModelIdentityTests(unittest.TestCase):
             root = Path(tmp)
             spec_path = root / "slice.json"
             spec_path.write_text(json.dumps(spec()), encoding="utf-8")
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
 
             def runner(_argv: list[str], _timeout: int) -> ai_candidate_harness.ProviderExecution:
                 nonlocal calls
@@ -140,7 +152,7 @@ class AiModelIdentityTests(unittest.TestCase):
             root = Path(tmp)
             spec_path = root / "slice.json"
             spec_path.write_text(json.dumps(spec()), encoding="utf-8")
-            context = ai_candidate_harness.build_context_pack(spec_path)
+            context = build_provider_context(spec_path)
             out_dir = root / "out"
             manifest = ai_candidate_harness.generate_candidate(
                 context,
@@ -155,7 +167,7 @@ class AiModelIdentityTests(unittest.TestCase):
 
             generator = manifest["generator"]
             candidate = manifest["candidates"][0]
-            self.assertEqual(7, manifest["schema_version"])
+            self.assertEqual(8, manifest["schema_version"])
             self.assertEqual("opencode", generator["provider"])
             self.assertEqual("DeepSeek-V4-Flash", generator["logical_model"])
             self.assertFalse(generator["competition_eligible"])

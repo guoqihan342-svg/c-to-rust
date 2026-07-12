@@ -14,6 +14,7 @@ from .candidate_cache import (
     store_candidate_cache,
 )
 from .context import atomic_write_bytes, atomic_write_json, canonical_json_bytes, sha256_bytes, sha256_path
+from .context_replay import materialize_replay_api_contract
 from .context_scope import prompt_scope_for_context
 from .model_identity import (
     COMPETITION_LOGICAL_MODEL,
@@ -83,10 +84,23 @@ def generate_candidate(
     cache_entry_path = out_dir / f"{prefix}-ai-cache-entry.json"
     manifest_path = out_dir / f"{prefix}-ai-candidate-manifest.json"
 
+    replay_materialization_error = False
+    try:
+        materialize_replay_api_contract(context_pack, out_dir)
+    except ValueError:
+        replay_materialization_error = True
     atomic_write_json(context_path, context_pack)
     prompt = render_prompt(context_pack)
     atomic_write_bytes(prompt_path, prompt.encode("utf-8"))
     provider_preflight = evaluate_provider_readiness(context_pack)
+    if replay_materialization_error:
+        provider_preflight = {
+            "status": "blocked",
+            "source_span_status": provider_preflight.get(
+                "source_span_status", "invalid_context_shape"
+            ),
+            "replay_api_contract_status": "binding_mismatch",
+        }
     if provider_preflight["status"] != "ready":
         atomic_write_bytes(response_path, b"")
         base = manifest_base(
@@ -112,7 +126,7 @@ def generate_candidate(
             "candidates": [],
             "failure": {
                 "kind": "context_not_provider_ready",
-                "message": "ContextPack source span is not ready for provider invocation",
+                "message": "ContextPack is not ready for provider invocation",
             },
         }
         atomic_write_json(manifest_path, manifest)
@@ -437,7 +451,7 @@ def manifest_base(
 ) -> dict[str, Any]:
     identity = resolve_model_identity(resolved_model)
     return {
-        "schema_version": 7,
+        "schema_version": 8,
         "target_id": target_id,
         "slice_id": slice_id,
         "ai_required_for_default_pipeline": True,

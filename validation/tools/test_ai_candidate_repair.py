@@ -15,11 +15,58 @@ INITIAL_SOURCE = "pub fn add_one(value: i32) -> i32 {\n    value + 2\n}\n"
 
 
 def context_pack() -> dict[str, object]:
+    c_source = "int add_one(int value) { return value + 1; }"
+    replay_source = "#[test]\nfn replay() { let _ = add_one(1); }\n"
+    replay_name = "l3-generic-add-one-rust-replay-test-draft.rs"
+    replay_sha = hashlib.sha256(replay_source.encode("utf-8")).hexdigest()
     return {
-        "schema_version": 1,
+        "schema_version": 4,
         "target_id": "generic-target",
         "slice_id": "generic-add-one",
         "function_name": "add_one",
+        "source_root": {"status": "unavailable"},
+        "source": {
+            "span": {
+                "status": "inline_slice_spec",
+                "sha256": hashlib.sha256(c_source.encode("utf-8")).hexdigest(),
+                "content": c_source,
+            }
+        },
+        "compile_context": {},
+        "c_boundary": {
+            "required_callee_sections": [],
+            "missing_required_callee_sections": [],
+        },
+        "rust_boundary": {"payload": {"public_api": [{"name": "add_one"}]}},
+        "replay_api_contract": {
+            "schema_version": 1,
+            "contract_kind": "generated_replay_rust_source",
+            "function_name": "add_one",
+            "status": "bound",
+            "call_count": 1,
+            "source": {
+                "path": replay_name,
+                "sha256": replay_sha,
+                "size_bytes": len(replay_source.encode("utf-8")),
+                "content": replay_source,
+            },
+            "requirements": {
+                "candidate_defines_function": True,
+                "all_call_sites_typecheck": True,
+                "parameter_count_and_order": "as_invoked_by_generated_replay",
+                "return_type": "as_constrained_by_generated_replay",
+            },
+        },
+        "bindings": {
+            "inputs": [
+                {
+                    "kind": "generated_replay_contract",
+                    "path": replay_name,
+                    "sha256": replay_sha,
+                    "size_bytes": len(replay_source.encode("utf-8")),
+                }
+            ]
+        },
         "claim_boundary": {"semantic_gate": False},
     }
 
@@ -68,6 +115,60 @@ def sha256(path: Path) -> str:
 
 
 class AiCandidateRepairTests(unittest.TestCase):
+    def test_replay_drift_blocks_repair_before_provider_invocation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-repair-replay-drift-") as tmp:
+            root = Path(tmp)
+            spec_path = root / "slice.json"
+            spec_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "target_id": "generic-target",
+                        "slice_id": "generic-add-one",
+                        "function_name": "add_one",
+                        "c_source": "int add_one(int value) { return value + 1; }",
+                        "c_boundary": {
+                            "signatures": [{"function": "add_one", "return_type": "int"}]
+                        },
+                        "rust_boundary": {"public_api": [{"name": "add_one"}]},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            replay_name = "l3-generic-add-one-rust-replay-test-draft.rs"
+            replay_path = root / replay_name
+            replay_path.write_text(
+                "#[test]\nfn replay() { let _ = add_one(1); }\n",
+                encoding="utf-8",
+            )
+            context = ai_candidate_harness.build_context_pack(
+                spec_path,
+                replay_test_path=replay_path,
+            )
+            out_dir = root / "out"
+            out_dir.mkdir()
+            (out_dir / replay_name).write_text("fn replay() {}\n", encoding="utf-8")
+            calls = 0
+
+            def provider(_argv: list[str], _timeout: int) -> ai_candidate_harness.ProviderExecution:
+                nonlocal calls
+                calls += 1
+                raise AssertionError("repair provider must not run after replay drift")
+
+            report = ai_candidate_harness.coordinate_repairs(
+                context,
+                candidate_path=write_candidate(root),
+                initial_failure_facts=failed_result(),
+                out_dir=out_dir,
+                validation_runner=lambda _path, _round: passed_result(),
+                max_rounds=1,
+                runner=provider,
+            )
+
+            self.assertEqual(0, calls)
+            self.assertEqual("blocked", report["status"])
+            self.assertEqual("context_not_provider_ready", report["failure"]["kind"])
+
     def test_repair_parser_accepts_one_json_fence_and_rejects_tool_events(self) -> None:
         payload = {
             "schema_version": 1,
@@ -100,11 +201,13 @@ class AiCandidateRepairTests(unittest.TestCase):
     def test_candidate_repair_is_hash_bound_and_never_semantic_acceptance(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ai-repair-candidate-") as tmp:
             root = Path(tmp)
+            out_dir = root / "out with spaces"
+            out_dir.mkdir()
             initial_source = INITIAL_SOURCE + "// " + ("candidate" * 2_500) + "\n"
-            initial = write_candidate(root, initial_source)
+            initial = write_candidate(out_dir, initial_source)
             repaired = "pub fn add_one(value: i32) -> i32 {\n    value.wrapping_add(1)\n}\n"
             observed_argv: list[str] = []
-            out_dir = root / "out with spaces"
+            context = context_pack()
 
             def provider(argv: list[str], timeout: int) -> ai_candidate_harness.ProviderExecution:
                 observed_argv.extend(argv)
@@ -117,7 +220,7 @@ class AiCandidateRepairTests(unittest.TestCase):
                 return passed_result()
 
             report = ai_candidate_harness.coordinate_repairs(
-                context_pack(),
+                context,
                 candidate_path=initial,
                 initial_failure_facts=failed_result(),
                 out_dir=out_dir,
@@ -161,6 +264,63 @@ class AiCandidateRepairTests(unittest.TestCase):
             report_path = out_dir / "l3-generic-add-one-ai-repair-report.json"
             self.assertTrue(report_path.is_file())
 
+            context_path = out_dir / "l3-generic-add-one-ai-context-pack.json"
+            context_path.write_text(json.dumps(context, sort_keys=True), encoding="utf-8")
+            manifest_path = out_dir / "l3-generic-add-one-ai-candidate-manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "bindings": {
+                            "context_pack": {
+                                "path": context_path.name,
+                                "sha256": sha256(context_path),
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            valid_ref = {
+                "path": report_path.name,
+                "sha256": sha256(report_path),
+                "status": report["status"],
+                "semantic_pass": False,
+            }
+            _rounds, valid_reasons = summary_validator.validate_bound_ai_repair_report(
+                valid_ref,
+                manifest_path=manifest_path,
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+                candidate=None,
+                require_transport=True,
+            )
+            self.assertNotIn("ai_repair_context_binding_invalid", valid_reasons)
+            self.assertNotIn("ai_repair_round_prompt_context_mismatch", valid_reasons)
+
+            prompt_binding = report["rounds"][0]["bindings"]["prompt"]
+            repair_prompt_path = out_dir / prompt_binding["path"]
+            original_prompt = repair_prompt_path.read_bytes()
+            repair_prompt_path.write_text("replay contract removed\n", encoding="utf-8")
+            report["rounds"][0]["bindings"]["prompt"]["sha256"] = sha256(
+                repair_prompt_path
+            )
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            valid_ref["sha256"] = sha256(report_path)
+            _rounds, drift_reasons = summary_validator.validate_bound_ai_repair_report(
+                valid_ref,
+                manifest_path=manifest_path,
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+                candidate=None,
+                require_transport=True,
+            )
+            self.assertIn("ai_repair_round_prompt_context_mismatch", drift_reasons)
+            repair_prompt_path.write_bytes(original_prompt)
+            report["rounds"][0]["bindings"]["prompt"]["sha256"] = sha256(
+                repair_prompt_path
+            )
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+
             tampered_report = json.loads(report_path.read_text(encoding="utf-8"))
             tampered_report["generator"]["prompt_transport"]["file_option"] = "--inline"
             report_path.write_text(json.dumps(tampered_report), encoding="utf-8")
@@ -172,7 +332,7 @@ class AiCandidateRepairTests(unittest.TestCase):
             }
             _rounds, reasons = summary_validator.validate_bound_ai_repair_report(
                 ref,
-                manifest_path=out_dir / "l3-generic-add-one-ai-candidate-manifest.json",
+                manifest_path=manifest_path,
                 summary_path=root / "competition-run-summary.json",
                 repo_root=root,
                 candidate=None,
@@ -185,7 +345,7 @@ class AiCandidateRepairTests(unittest.TestCase):
             ref["sha256"] = sha256(report_path)
             _rounds, reasons = summary_validator.validate_bound_ai_repair_report(
                 ref,
-                manifest_path=out_dir / "l3-generic-add-one-ai-candidate-manifest.json",
+                manifest_path=manifest_path,
                 summary_path=root / "competition-run-summary.json",
                 repo_root=root,
                 candidate=None,
@@ -218,7 +378,11 @@ class AiCandidateRepairTests(unittest.TestCase):
             self.assertTrue((out_dir / "l3-generic-add-one-c2rust-repair-report.json").is_file())
             self.assertFalse((out_dir / "l3-generic-add-one-ai-repair-report.json").exists())
             self.assertTrue(
-                all(path.name.startswith("l3-generic-add-one-c2rust-repair-") for path in out_dir.iterdir())
+                all(
+                    path.name.startswith("l3-generic-add-one-c2rust-repair-")
+                    or path.name == "l3-generic-add-one-rust-replay-test-draft.rs"
+                    for path in out_dir.iterdir()
+                )
             )
 
             with self.assertRaisesRegex(ValueError, "artifact_label must be one of"):

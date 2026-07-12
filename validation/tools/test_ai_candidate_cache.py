@@ -46,8 +46,11 @@ def repair_response(source: str) -> str:
 
 def context_pack(slice_id: str = "cache-scale") -> dict[str, object]:
     c_source = "int scale(int value) { return value * 3; }"
+    replay_source = "#[test]\nfn replay() { let _ = scale(1); }\n"
+    replay_sha = sha256_bytes(replay_source.encode("utf-8"))
+    replay_name = f"l3-{slice_id}-rust-replay-test-draft.rs"
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "target_id": "generic-target",
         "slice_id": slice_id,
         "function_name": "scale",
@@ -71,7 +74,36 @@ def context_pack(slice_id: str = "cache-scale") -> dict[str, object]:
             "required_callee_sections": ["external_direct_callees"],
             "missing_required_callee_sections": [],
         },
-        "bindings": {"inputs": []},
+        "rust_boundary": {"payload": {"public_api": [{"name": "scale"}]}},
+        "replay_api_contract": {
+            "schema_version": 1,
+            "contract_kind": "generated_replay_rust_source",
+            "function_name": "scale",
+            "status": "bound",
+            "call_count": 1,
+            "source": {
+                "path": replay_name,
+                "sha256": replay_sha,
+                "size_bytes": len(replay_source.encode("utf-8")),
+                "content": replay_source,
+            },
+            "requirements": {
+                "candidate_defines_function": True,
+                "all_call_sites_typecheck": True,
+                "parameter_count_and_order": "as_invoked_by_generated_replay",
+                "return_type": "as_constrained_by_generated_replay",
+            },
+        },
+        "bindings": {
+            "inputs": [
+                {
+                    "kind": "generated_replay_contract",
+                    "path": replay_name,
+                    "sha256": replay_sha,
+                    "size_bytes": len(replay_source.encode("utf-8")),
+                }
+            ]
+        },
         "claim_boundary": {"semantic_gate": False},
     }
 
@@ -257,7 +289,12 @@ class AiCandidateCacheTests(unittest.TestCase):
             ))
             self.assertEqual(first["candidates"][0]["artifact"]["sha256"], second["candidates"][0]["artifact"]["sha256"])
             self.assertEqual(
-                ["slice_spec", "source_spans", "direct_caller_callee_facts"],
+                [
+                    "slice_spec",
+                    "source_spans",
+                    "generated_replay_api_contract",
+                    "direct_caller_callee_facts",
+                ],
                 second["candidates"][0]["prompt_scope"],
             )
             schema = json.loads(

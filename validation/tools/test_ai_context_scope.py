@@ -20,6 +20,18 @@ class AiContextScopeTests(unittest.TestCase):
             prompt_scope_for_context({}),
         )
 
+    def test_bound_replay_contract_adds_compiler_owned_api_scope(self) -> None:
+        context = {
+            "replay_api_contract": {
+                "status": "bound",
+                "source": {"content": "fn replay() { translate(1, 2); }"},
+            }
+        }
+        self.assertEqual(
+            ["slice_spec", "source_spans", "generated_replay_api_contract"],
+            prompt_scope_for_context(context),
+        )
+
     def test_artifact_scopes_require_loaded_excerpts_or_failure_facts(self) -> None:
         context = {
             "deterministic_artifacts": {

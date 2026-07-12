@@ -10,6 +10,7 @@ from .context_artifacts import (
     load_context_artifacts as _load_context_artifacts,
 )
 from .context_compile import build_compile_context
+from .context_replay import build_replay_api_contract, replay_contract_input_binding
 from .context_scope import value_has_facts
 from .context_security import (
     atomic_write_bytes,
@@ -35,6 +36,8 @@ def build_context_pack(
     *,
     source_root: Path | None = None,
     deterministic_evidence_dir: Path | None = None,
+    replay_test_path: Path | None = None,
+    replay_root: Path | None = None,
 ) -> dict[str, Any]:
     spec_bytes = slice_spec_path.read_bytes()
     if len(spec_bytes) > MAX_SLICE_SPEC_BYTES:
@@ -93,8 +96,15 @@ def build_context_pack(
         known_roots=known_roots,
     )
     artifacts = load_context_artifacts(deterministic_evidence_dir, known_roots)
+    replay_api_contract = build_replay_api_contract(
+        replay_test_path,
+        function_name=function_name,
+        trusted_root=(replay_root or deterministic_evidence_dir or slice_spec_path.parent),
+        expected_filename=f"l3-{slice_id}-rust-replay-test-draft.rs",
+        known_roots=known_roots,
+    )
     context: dict[str, Any] = {
-        "schema_version": 3,
+        "schema_version": 4,
         "target_id": target_id,
         "slice_id": slice_id,
         "function_name": function_name,
@@ -103,6 +113,7 @@ def build_context_pack(
         "compile_context": compile_context,
         "c_boundary": c_boundary,
         "rust_boundary": rust_boundary,
+        "replay_api_contract": replay_api_contract,
         "deterministic_artifacts": artifacts,
         "bindings": {
             "slice_spec_sha256": sha256_bytes(spec_bytes),
@@ -111,7 +122,12 @@ def build_context_pack(
                 "sha256": sha256_bytes(spec_bytes),
                 "size_bytes": len(spec_bytes),
             },
-            "inputs": collect_input_bindings(source_context, compile_context, artifacts),
+            "inputs": collect_input_bindings(
+                source_context,
+                compile_context,
+                artifacts,
+                replay_api_contract,
+            ),
         },
         "claim_boundary": {
             "semantic_gate": False,
@@ -207,6 +223,7 @@ def collect_input_bindings(
     source_context: dict[str, Any],
     compile_context: dict[str, Any],
     artifacts: dict[str, Any],
+    replay_api_contract: dict[str, Any],
 ) -> list[dict[str, Any]]:
     bindings: list[dict[str, Any]] = []
     source_input = source_context.get("input")
@@ -226,6 +243,9 @@ def collect_input_bindings(
         artifact_input = artifact.get("input") if isinstance(artifact, dict) else None
         if isinstance(artifact_input, dict):
             bindings.append({"kind": "deterministic_artifact", "name": name, **artifact_input})
+    replay_input = replay_contract_input_binding(replay_api_contract)
+    if replay_input is not None:
+        bindings.append(replay_input)
     return sorted(bindings, key=lambda item: (str(item.get("kind")), str(item.get("path")), str(item.get("name", ""))))
 
 

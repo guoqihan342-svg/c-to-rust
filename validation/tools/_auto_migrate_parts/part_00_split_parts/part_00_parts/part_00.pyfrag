@@ -174,10 +174,13 @@ def main() -> int:
     context_pack = None
     ai_manifest = None
     if args.ai_first_candidate:
+        replay_test_path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
+        write_rust_replay_test_draft_source(spec, evidence_dir)
         context_pack = build_context_pack(
             args.slice_spec,
             source_root=args.ai_source_root,
             deterministic_evidence_dir=evidence_dir,
+            replay_test_path=replay_test_path,
         )
         ai_manifest = generate_candidate(
             context_pack,

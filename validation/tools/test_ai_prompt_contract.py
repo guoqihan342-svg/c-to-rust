@@ -10,6 +10,7 @@ from validation.tools._ai_candidate_harness_parts.repair import render_repair_pr
 class AiPromptContractTests(unittest.TestCase):
     def context(self) -> dict[str, object]:
         return {
+            "slice_id": "translate-slice",
             "function_name": "translate",
             "c_boundary": {
                 "payload": {
@@ -35,6 +36,25 @@ class AiPromptContractTests(unittest.TestCase):
                     "unsafe_policy": {"ledger_required": True},
                 }
             },
+            "replay_api_contract": {
+                "schema_version": 1,
+                "contract_kind": "generated_replay_rust_source",
+                "function_name": "translate",
+                "status": "bound",
+                "call_count": 1,
+                "source": {
+                    "path": "l3-translate-slice-rust-replay-test-draft.rs",
+                    "sha256": "a" * 64,
+                    "size_bytes": 119,
+                    "content": "struct Case { value: &'static [u8], len: usize }\nfn replay(case: Case) { let _ = translate(case.value, case.len); }\n",
+                },
+                "requirements": {
+                    "candidate_defines_function": True,
+                    "all_call_sites_typecheck": True,
+                    "parameter_count_and_order": "as_invoked_by_generated_replay",
+                    "return_type": "as_constrained_by_generated_replay",
+                },
+            },
         }
 
     def test_generation_prompt_leads_with_exact_generic_boundary_contract(self) -> None:
@@ -52,6 +72,12 @@ class AiPromptContractTests(unittest.TestCase):
         )
         self.assertEqual("internal_only", boundary["raw_pointer_policy"])
         self.assertLess(prompt.index("Required boundary facts:"), prompt.index("ContextPack:"))
+        self.assertLess(
+            prompt.index("Required generated replay API contract:"),
+            prompt.index("ContextPack:"),
+        )
+        self.assertIn("translate(case.value, case.len)", prompt)
+        self.assertIn("<presented-in-required-replay-api-contract>", prompt)
         self.assertIn("without dropping or reordering adjacent scalar parameters", prompt)
 
     def test_repair_prompt_repeats_the_same_boundary_before_failure_payload(self) -> None:
@@ -63,6 +89,11 @@ class AiPromptContractTests(unittest.TestCase):
 
         self.assertIn('\"raw_pointer_policy\":\"internal_only\"', prompt)
         self.assertLess(prompt.index("Required boundary facts:"), prompt.index("ContextPack:"))
+        self.assertLess(
+            prompt.index("Required generated replay API contract:"),
+            prompt.index("FailureFacts:"),
+        )
+        self.assertIn("translate(case.value, case.len)", prompt)
         self.assertIn("internal_only forbids raw pointers", prompt)
 
 

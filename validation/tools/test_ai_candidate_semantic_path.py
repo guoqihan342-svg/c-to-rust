@@ -65,6 +65,10 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
             manifest = json.loads(
                 (evidence_dir / "l3-add-one-ai-candidate-manifest.json").read_text(encoding="utf-8")
             )
+            context = json.loads(
+                (evidence_dir / "l3-add-one-ai-context-pack.json").read_text(encoding="utf-8")
+            )
+            prompt = (evidence_dir / "l3-add-one-ai-prompt.txt").read_text(encoding="utf-8")
             auto_manifest = json.loads(
                 (evidence_dir / "l3-add-one-auto-translation-manifest.json").read_text(encoding="utf-8")
             )
@@ -76,6 +80,20 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
             self.assertEqual(route["candidate_generation"]["selected_candidate_id"], candidate_id)
             self.assertEqual(route["translator"]["kind"], "agent")
             self.assertFalse(manifest["generator"]["competition_eligible"])
+            self.assertEqual(8, manifest["schema_version"])
+            self.assertEqual(4, context["schema_version"])
+            self.assertEqual("bound", context["replay_api_contract"]["status"])
+            self.assertIn("add_one(case.value)", context["replay_api_contract"]["source"]["content"])
+            self.assertNotIn(
+                "l3-add-one-test-translation-generated.json",
+                {
+                    item.get("name")
+                    for item in context["bindings"]["inputs"]
+                    if item.get("kind") == "deterministic_artifact"
+                },
+            )
+            self.assertIn("Required generated replay API contract:", prompt)
+            self.assertIn("add_one(case.value)", prompt)
             self.assertEqual(
                 manifest["generator"]["evaluation_scope"],
                 "auxiliary-local-validation",

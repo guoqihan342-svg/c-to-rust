@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -10,6 +11,69 @@ from validation.tools import _auto_migrate_ai_exact as exact
 from validation.tools import validate_judge_entrypoints as judge_validator
 from validation.tools._ai_candidate_harness_parts import router
 from validation.tools._ai_candidate_harness_parts.context import sha256_path
+
+
+def bound_context(evidence_dir: Path) -> tuple[dict[str, object], Path]:
+    c_source = "int migrated(int value) { return value; }"
+    replay_source = "#[test]\nfn replay() { let _ = migrated(1); }\n"
+    replay_path = evidence_dir / "l3-generic-slice-rust-replay-test-draft.rs"
+    replay_path.write_bytes(replay_source.encode("utf-8"))
+    replay_sha = hashlib.sha256(replay_source.encode("utf-8")).hexdigest()
+    context = {
+            "schema_version": 4,
+            "target_id": "generic-target",
+            "slice_id": "generic-slice",
+            "function_name": "migrated",
+            "source_root": {"status": "unavailable"},
+            "source": {
+                "span": {
+                    "status": "inline_slice_spec",
+                    "sha256": hashlib.sha256(c_source.encode("utf-8")).hexdigest(),
+                    "content": c_source,
+                }
+            },
+            "compile_context": {},
+            "c_boundary": {
+                "required_callee_sections": [],
+                "missing_required_callee_sections": [],
+            },
+            "rust_boundary": {"payload": {"public_api": [{"name": "migrated"}]}},
+            "replay_api_contract": {
+                "schema_version": 1,
+                "contract_kind": "generated_replay_rust_source",
+                "function_name": "migrated",
+                "status": "bound",
+                "call_count": 1,
+                "source": {
+                    "path": replay_path.name,
+                    "sha256": replay_sha,
+                    "size_bytes": len(replay_source.encode("utf-8")),
+                    "content": replay_source,
+                },
+                "requirements": {
+                    "candidate_defines_function": True,
+                    "all_call_sites_typecheck": True,
+                    "parameter_count_and_order": "as_invoked_by_generated_replay",
+                    "return_type": "as_constrained_by_generated_replay",
+                },
+            },
+            "bindings": {
+                "inputs": [
+                    {
+                        "kind": "generated_replay_contract",
+                        "path": replay_path.name,
+                        "sha256": replay_sha,
+                        "size_bytes": len(replay_source.encode("utf-8")),
+                    }
+                ]
+            },
+            "claim_boundary": {"semantic_gate": False},
+        }
+    (evidence_dir / "l3-generic-slice-ai-context-pack.json").write_text(
+        json.dumps(context, sort_keys=True),
+        encoding="utf-8",
+    )
+    return context, replay_path
 
 
 def write_baseline_manifest(
@@ -161,7 +225,14 @@ class C2RustBaselineExactRouteTests(unittest.TestCase):
             passed = path.resolve() == baseline.resolve() and not duplicate_typed
             return exact_result(path, Path(kwargs["attempts_root"]) / path.stem, passed=passed)
 
+        context, replay_path = bound_context(evidence_dir)
+        context_path = evidence_dir / "l3-generic-slice-ai-context-pack.json"
+        context_sha = sha256_path(context_path)
+        candidate_sha = sha256_path(canonical)
         ai_manifest: dict[str, object] = {
+            "schema_version": 8,
+            "target_id": "generic-target",
+            "slice_id": "generic-slice",
             "status": "generated",
             "provider_invocations": 1,
             "generator": {
@@ -173,20 +244,37 @@ class C2RustBaselineExactRouteTests(unittest.TestCase):
                 "agent": "c2rust-candidate",
                 "variant": "max",
             },
+            "bindings": {
+                "context_pack": {
+                    "path": context_path.name,
+                    "sha256": context_sha,
+                }
+            },
             "selected_candidate_id": "opencode-glm51-1",
-            "candidates": [{"candidate_id": "opencode-glm51-1", "applied": True}],
+            "candidates": [
+                {
+                    "candidate_id": "opencode-glm51-1",
+                    "applied": True,
+                    "applied_artifact": {
+                        "path": canonical.name,
+                        "sha256": candidate_sha,
+                    },
+                    "rust_draft_sha256": candidate_sha,
+                    "input_artifact_hashes": {"context_pack": context_sha},
+                }
+            ],
         }
         with mock.patch.object(exact, "_validate_with_new_attempt", side_effect=fake_validate):
             result = exact.run_ai_exact_stage(
                 {"slice_id": "generic-slice"},
-                context_pack={},
+                context_pack=context,
                 ai_manifest=ai_manifest,
                 evidence_dir=evidence_dir,
                 canonical_draft_path=canonical,
                 deterministic_candidate_path=typed,
                 c2rust_baseline=manifest,
                 c2rust_baseline_manifest_path=manifest_path,
-                replay_test_path=evidence_dir / "replay.rs",
+                replay_test_path=replay_path,
                 oracle_payload={},
                 harness_path=evidence_dir / "oracle.c",
                 proof_root=root,
@@ -194,7 +282,7 @@ class C2RustBaselineExactRouteTests(unittest.TestCase):
                 replay_runner=lambda path, replay: {},
                 max_repair_rounds=0,
                 opencode_command="unused",
-                resolved_model="unused",
+                resolved_model="zai/glm-5.1",
                 agent="unused",
                 variant="unused",
                 timeout_seconds=1,

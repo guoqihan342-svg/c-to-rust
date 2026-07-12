@@ -361,6 +361,14 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   当前根因：高显著性边界摘要已使 DeepSeek 将 `fdb_is_str` 从错误的单 `u8` API 改为语义接近的安全切片实现，但模型仍删除了 replay 需要的 `len` 参数，初始候选因参数数量不匹配失败；隔离环境中的第 1 轮 repair 仍未恢复 `len`，还增加了不必要的 `unsafe`，因此 exact gates 正确拒绝。完成条件是模型调用前可直接看到与 generated replay 一致的 Rust API，repair 也绑定同一合同，并在固定跨项目辅助套件中显著减少首轮 rustc API mismatch；通过率只由 exact gates 统计。
 
+  当前拆成三个可验收子阶段，避免把“某个用例改善”误报为通用合同完成：
+
+  - [x] **P0-A18a：可执行 replay source contract**。`auto_migrate` 在 provider 前生成 replay 草稿；ContextPack v4 绑定完整 replay source、SHA、大小和真实调用次数，candidate/repair prompt 在 ContextPack 前只展示一次同源合同。provider readiness、manifest v8、cache、scope 和 fresh summary validator 均 fail closed；缺失、敏感、超限、无真实调用或文件漂移都保持 `provider_invocations=0` 或使 fresh run 无效。`_auto_migrate_ai_exact.py` 同阶段按 routing/persistence/validation 拆成 489 行兼容门面和三个职责模块。
+  - [ ] **P0-A18b：结构化 ReplayCallPlan**。从 replay generator 抽出单一结构化计划，显式携带参数名/顺序/Rust 类型、C 参数映射、length retained、返回类型、ABI、unsafe 和 call args；renderer 与 prompt 只能消费同一计划。删除 `fdb_kv_to_blob/set/del` 等按函数名选择合同的旧分支，函数名只能作为合同数据。
+  - [ ] **P0-A18c：有限跨项目验收**。固定 12 项必须全部可生成真实 replay call，首轮 rustc API mismatch 相比 A17 明显下降，并继续只按 exact gates 统计质量信号。
+
+  WSL run `ai-auxiliary-p0-a18-wsl-20260712-1320` 使用 clang 18.1.3、OpenCode 1.17.18、`opencode/deepseek-v4-flash-free`、0 repair、4 并发：12 项中 10 次 provider 调用、7 个候选、2 个 exact pass。`real-fdb-is-str` 首轮直接生成 `value: &[u8], len: usize -> bool` 且所有 exact gates 通过，证明 A18a 修复了原始丢 `len` 问题；`zlib/adler32-step` 与 `libuv/ip4-addr` 因 replay 仍为 TODO、没有真实函数调用而在 provider 前阻断。另有 5 个 exact failure、2 个 fresh artifact contract failure 和 1 个 WSL worktree `.git` 指针环境失败，均不得算作翻译成功。该运行是 `wsl-local-simulation`，所有 competition/translator numerator 固定为 0。
+
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 
   对 effective request/source/spec/repair-trace/launch-policy 计算 `effective_input_sha256`，对结构化 root cause/status/returncode/diagnostics 计算 `failure_sha256`。连续两次确定性失败且当前输入仍无变化时，第三次启动前关闭 repair hint、清空 retry command、记录 `repair_retry_suppressed`，并以 `refused/retry_input_unchanged` fail closed；不调用 runner、不追加伪 attempt、不提升 semantic 状态。timeout、SQLite/OpenCode lock、preflight、credential、contract、环境缺失、未知根因或 hash 缺失/漂移均保留重试。

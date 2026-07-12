@@ -2,9 +2,9 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "AI ContextPack",
   "type": "object",
-  "required": ["schema_version", "target_id", "slice_id", "function_name", "source_root", "source", "compile_context", "c_boundary", "bindings", "claim_boundary"],
+  "required": ["schema_version", "target_id", "slice_id", "function_name", "source_root", "source", "compile_context", "c_boundary", "rust_boundary", "replay_api_contract", "bindings", "claim_boundary"],
   "properties": {
-    "schema_version": {"const": 3},
+    "schema_version": {"const": 4},
     "target_id": {"type": "string", "minLength": 1},
     "slice_id": {"type": "string", "minLength": 1},
     "function_name": {"type": "string", "minLength": 1},
@@ -38,6 +38,7 @@
         }
       }
     },
+    "replay_api_contract": {"$ref": "#/definitions/replayApiContract"},
     "bindings": {
       "type": "object",
       "required": ["inputs"],
@@ -59,6 +60,64 @@
     }
   },
   "definitions": {
+    "replayApiContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "contract_kind", "function_name", "status"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "contract_kind": {"const": "generated_replay_rust_source"},
+        "function_name": {"type": "string", "minLength": 1},
+        "status": {
+          "enum": [
+            "bound",
+            "missing",
+            "blocked_invalid_function_identifier",
+            "blocked_replay_source_path",
+            "blocked_replay_source_missing",
+            "blocked_replay_source_too_large",
+            "blocked_replay_source_unreadable",
+            "blocked_replay_source_sensitive",
+            "blocked_replay_call_missing"
+          ]
+        },
+        "call_count": {"type": "integer", "minimum": 1},
+        "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "size_bytes", "content"],
+          "properties": {
+            "path": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "size_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+            "content": {"type": "string", "minLength": 1}
+          }
+        },
+        "requirements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["candidate_defines_function", "all_call_sites_typecheck", "parameter_count_and_order", "return_type"],
+          "properties": {
+            "candidate_defines_function": {"const": true},
+            "all_call_sites_typecheck": {"const": true},
+            "parameter_count_and_order": {"const": "as_invoked_by_generated_replay"},
+            "return_type": {"const": "as_constrained_by_generated_replay"}
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "bound"}}},
+          "then": {
+            "required": ["call_count", "source", "requirements"],
+            "properties": {
+              "function_name": {"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
+            }
+          }
+        }
+      ]
+    },
     "responseFile": {
       "type": "object",
       "additionalProperties": false,

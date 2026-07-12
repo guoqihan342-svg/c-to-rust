@@ -30,6 +30,26 @@ def render_boundary_contract(context_pack: dict[str, Any]) -> str:
     return json.dumps(contract, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
+def render_replay_api_contract(context_pack: dict[str, Any]) -> str:
+    contract = context_pack.get("replay_api_contract")
+    return json.dumps(contract, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def context_without_replay_source(context_pack: dict[str, Any]) -> dict[str, Any]:
+    context = dict(context_pack)
+    contract = context_pack.get("replay_api_contract")
+    if not isinstance(contract, dict):
+        return context
+    contract_copy = dict(contract)
+    source = contract.get("source")
+    if isinstance(source, dict):
+        source_copy = dict(source)
+        source_copy["content"] = "<presented-in-required-replay-api-contract>"
+        contract_copy["source"] = source_copy
+    context["replay_api_contract"] = contract_copy
+    return context
+
+
 def boundary_payload(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
@@ -37,4 +57,8 @@ def boundary_payload(value: Any) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else value
 
 
-__all__ = ["render_boundary_contract"]
+__all__ = [
+    "context_without_replay_source",
+    "render_boundary_contract",
+    "render_replay_api_contract",
+]

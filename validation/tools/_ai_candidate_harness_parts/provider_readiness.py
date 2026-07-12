@@ -3,6 +3,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .context_replay import count_rust_function_calls
+from .context_security import sha256_bytes
+
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 READY_SOURCE_SPAN_STATUSES = frozenset(
@@ -30,7 +33,7 @@ BLOCKED_SOURCE_SPAN_STATUSES = frozenset(
 
 def evaluate_provider_readiness(context_pack: dict[str, Any]) -> dict[str, str]:
     """Return a bounded source-span admission result before provider invocation."""
-    if not isinstance(context_pack, dict) or context_pack.get("schema_version") != 3:
+    if not isinstance(context_pack, dict) or context_pack.get("schema_version") != 4:
         return {"status": "blocked", "source_span_status": "invalid_context_shape"}
     source_root = context_pack.get("source_root") if isinstance(context_pack, dict) else None
     source_root_status = source_root.get("status") if isinstance(source_root, dict) else None
@@ -39,37 +42,47 @@ def evaluate_provider_readiness(context_pack: dict[str, Any]) -> dict[str, str]:
     raw_status = span.get("status") if isinstance(span, dict) else None
     response_file_status = response_file_contract_status(context_pack)
     callee_context_status = required_callee_context_status(context_pack)
-    if raw_status in READY_SOURCE_SPAN_STATUSES and response_file_status in {"blocked", "invalid"}:
+    replay_contract_status = replay_api_contract_status(context_pack)
+    source_admitted = (
+        raw_status == "inline_slice_spec"
+        and source_root_status == "unavailable"
+        and inline_span_is_bound(span)
+    ) or (
+        raw_status in {"real_source_bound", "inline_translation_carrier_bound"}
+        and source_root_status in {"explicit", "slice_spec_relative"}
+        and bound_project_span_is_complete(source, span)
+    )
+    if not source_admitted:
+        if raw_status in READY_SOURCE_SPAN_STATUSES:
+            reason = (
+                "source_root_not_ready"
+                if source_root_status not in {"unavailable", "explicit", "slice_spec_relative"}
+                else "source_binding_incomplete"
+            )
+            return {"status": "blocked", "source_span_status": reason}
+        source_span_status = (
+            raw_status if raw_status in BLOCKED_SOURCE_SPAN_STATUSES else "invalid_context_shape"
+        )
+        return {"status": "blocked", "source_span_status": source_span_status}
+    if response_file_status in {"blocked", "invalid"}:
         return {
             "status": "blocked",
             "source_span_status": raw_status,
             "compile_context_status": "response_file_invalid",
         }
-    if raw_status in READY_SOURCE_SPAN_STATUSES and callee_context_status != "ready":
+    if callee_context_status != "ready":
         return {
             "status": "blocked",
             "source_span_status": raw_status,
             "context_boundary_status": "required_callee_context_incomplete",
         }
-    if raw_status == "inline_slice_spec" and source_root_status == "unavailable" and inline_span_is_bound(span):
-        return {"status": "ready", "source_span_status": raw_status}
-    if (
-        raw_status in {"real_source_bound", "inline_translation_carrier_bound"}
-        and source_root_status in {"explicit", "slice_spec_relative"}
-        and bound_project_span_is_complete(source, span)
-    ):
-        return {"status": "ready", "source_span_status": raw_status}
-    if raw_status in READY_SOURCE_SPAN_STATUSES:
-        reason = (
-            "source_root_not_ready"
-            if source_root_status not in {"unavailable", "explicit", "slice_spec_relative"}
-            else "source_binding_incomplete"
-        )
-        return {"status": "blocked", "source_span_status": reason}
-    source_span_status = (
-        raw_status if raw_status in BLOCKED_SOURCE_SPAN_STATUSES else "invalid_context_shape"
-    )
-    return {"status": "blocked", "source_span_status": source_span_status}
+    if replay_contract_status != "bound":
+        return {
+            "status": "blocked",
+            "source_span_status": raw_status,
+            "replay_api_contract_status": replay_contract_status,
+        }
+    return {"status": "ready", "source_span_status": raw_status}
 
 
 def inline_span_is_bound(span: dict[str, Any]) -> bool:
@@ -175,6 +188,64 @@ def required_callee_context_status(context_pack: dict[str, Any]) -> str:
     if not isinstance(required, list) or not isinstance(missing, list):
         return "invalid"
     return "ready" if not missing else "incomplete"
+
+
+def replay_api_contract_status(context_pack: dict[str, Any]) -> str:
+    contract = context_pack.get("replay_api_contract")
+    if not isinstance(contract, dict):
+        return "invalid"
+    status = contract.get("status")
+    if status != "bound":
+        return status if isinstance(status, str) and status else "invalid"
+    source = contract.get("source")
+    requirements = contract.get("requirements")
+    bindings = context_pack.get("bindings")
+    inputs = bindings.get("inputs") if isinstance(bindings, dict) else None
+    if (
+        contract.get("schema_version") != 1
+        or contract.get("contract_kind") != "generated_replay_rust_source"
+        or not isinstance(contract.get("function_name"), str)
+        or contract.get("function_name") != context_pack.get("function_name")
+        or not isinstance(contract.get("call_count"), int)
+        or contract["call_count"] < 1
+        or not isinstance(source, dict)
+        or not isinstance(requirements, dict)
+        or not isinstance(inputs, list)
+    ):
+        return "invalid"
+    path = source.get("path")
+    content = source.get("content")
+    if (
+        not isinstance(path, str)
+        or not path
+        or path != f"l3-{context_pack.get('slice_id')}-rust-replay-test-draft.rs"
+        or "/" in path
+        or "\\" in path
+        or path in {".", ".."}
+        or not is_sha256(source.get("sha256"))
+        or not isinstance(source.get("size_bytes"), int)
+        or not 1 <= source["size_bytes"] <= 65_536
+        or not isinstance(content, str)
+        or len(content.encode("utf-8")) != source["size_bytes"]
+        or sha256_bytes(content.encode("utf-8")) != source["sha256"]
+        or count_rust_function_calls(content, contract["function_name"])
+        != contract["call_count"]
+        or requirements
+        != {
+            "candidate_defines_function": True,
+            "all_call_sites_typecheck": True,
+            "parameter_count_and_order": "as_invoked_by_generated_replay",
+            "return_type": "as_constrained_by_generated_replay",
+        }
+    ):
+        return "invalid"
+    expected_input = {
+        "kind": "generated_replay_contract",
+        "path": path,
+        "sha256": source["sha256"],
+        "size_bytes": source["size_bytes"],
+    }
+    return "bound" if expected_input in inputs else "invalid"
 
 
 def is_sha256(value: Any) -> bool:

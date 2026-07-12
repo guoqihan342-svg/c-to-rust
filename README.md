@@ -16,8 +16,8 @@
 | --- | --- |
 | Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
-| 最近开发阶段 | P0-A17：建立隔离的辅助模型跨项目套件与严格源码绑定 |
-| 当前翻译任务 | P0-A18：把 replay 兼容的精确 Rust 函数合同前置到 AI ContextPack；P0-A10 等待 GLM 资源恢复 |
+| 最近开发阶段 | P0-A18a：ContextPack v4 前置 hash-bound generated replay source contract |
+| 当前翻译任务 | P0-A18b：抽取结构化 ReplayCallPlan 并删除按函数名派生 replay 合同；P0-A10 等待 GLM 资源恢复 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
@@ -50,11 +50,11 @@ SQLite 不是语义事实源，Agent 对话也不是 evidence。语义结论只�
 
 本项目以 AI 作为比赛翻译主通道，而不是在确定性翻译失败后才调用 AI。每个新切片先构造 hash-bound ContextPack，再由 OpenCode `zai/glm-5.1` + `c2rust-candidate` + `max` 生成单一 Rust 主候选。typed IR 和 C2Rust 继续保留，用于零 token 替代、失败对照和 repair base；它们不能静默冒充 AI 已运行，也不能绕过共同验证门禁。
 
-ContextPack v3 只向模型提供有界事实：真实 source span、编译参数与 response files、类型/CFG/指针摘要、失败摘要、ABI/指针策略，以及直接被调函数的签名、定义状态、source binding、stub boundary 和调用合同。敏感字段、带引号密钥赋值、宿主绝对路径和路径逃逸会被清理；必需的 callee boundary 超限或截断时会在 provider 启动前零调用拒绝。
+ContextPack v4 只向模型提供有界事实：真实 source span、编译参数与 response files、类型/CFG/指针摘要、失败摘要、ABI/指针策略、直接被调函数合同，以及 provider 启动前生成的完整 Rust replay source contract。replay 的源码、SHA、大小和真实调用次数进入同一 input binding；缺失、敏感、超限、无真实函数调用或文件漂移均 fail closed。敏感字段、带引号密钥赋值、宿主绝对路径和路径逃逸会被清理；必需的 callee boundary 超限或截断时同样在 provider 启动前零调用拒绝。
 
-候选和 repair prompt 会在完整 ContextPack 前单独重申从 ContextPack 复制出的函数签名、参数顺序、Rust public API、raw-pointer 与 unsafe 策略，降低小模型按标识符惯例猜测 API 的概率。该高显著性摘要不参与路由，也不替代下一阶段 P0-A18 所要求的精确 replay-compatible Rust 函数合同。
+候选和 repair prompt 会在 ContextPack 投影前单独展示同一份 generated replay source contract，并重申函数签名、Rust public API、raw-pointer 与 unsafe 策略。完整 replay source 只出现一次，避免重复耗费 token；它直接暴露真实调用的参数数量与顺序。下一阶段仍需把旧 replay generator 收敛为结构化 ReplayCallPlan，删除按函数名派生合同的历史分支。
 
-AI candidate manifest v7 的 `prompt_scope` 由实际 ContextPack 计算，并把 provider、logical/resolved model、`competition_eligible` 和 `evaluation_scope` 绑定到 generator 与 candidate。每次真实 provider 调用还绑定最小 invocation receipt 和独立的 session-export identity projection：只保留 provider/model/agent/variant/version、session id、prompt/response SHA 与内存中完整 export 的 SHA，不保存完整 session、prompt、宿主目录或凭据；两类工件都有 `additionalProperties=false` 的专用 schema。fresh-run summary validator 会重开这些 hash-bound 工件并独立复算身份、prompt、scope 与调用计数；`competition-exact` 还会实时重开同一 OpenCode session，核对完整 export SHA、实际身份、附件 prompt 路径及 ContextPack 前缀、assistant response。比赛主通道只认 `zai/glm-5.1`；GLM 余额不足时可显式使用 DeepSeek V4 Flash 等模型做 `auxiliary-local-validation`，但不能关闭比赛待办或进入比赛成功率分子。AI 输出始终保持 `semantic_gate=false`，最终接受只由共同门禁决定。
+AI candidate manifest v8 的 `prompt_scope` 由实际 ContextPack 计算，并显式记录 `generated_replay_api_contract`。它把 provider、logical/resolved model、`competition_eligible` 和 `evaluation_scope` 绑定到 generator 与 candidate；fresh-run summary validator 会重开 ContextPack 和 replay 文件，复算 source SHA、调用绑定、prompt、scope、cache 与调用计数。每次真实 provider 调用仍绑定最小 invocation receipt 和独立 session-export identity projection。比赛主通道只认 `zai/glm-5.1`；GLM 余额不足时可显式使用 DeepSeek V4 Flash 等模型做 `auxiliary-local-validation`，但不能关闭比赛待办或进入比赛成功率分子。AI 输出始终保持 `semantic_gate=false`，最终接受只由共同门禁决定。
 
 候选生成使用无工具 `c2rust-candidate` agent，OpenCode 事件中出现任何层级的 `tool`/`tool_use` 都会 fail closed；worker/preflight 仍使用执行命令所需的 `c2rust-migrator`，两类 agent 不再混用。比赛探针使用逻辑模型名 `GLM-5.1`，candidate CLI 使用 resolved id `zai/glm-5.1`。解析器接受严格 JSON，或带少量说明但只有一个完整 JSON 围栏的响应；多围栏、不完整围栏、额外工具访问和不受限字段仍会拒绝。OpenCode 1.17.18 的文件参数按“固定短消息在前，`--file=<prompt>` 在后”的 `opencode-file-attachment-v2` 合同传输，避免 `--file` 把消息误解析为第二个文件。
 
