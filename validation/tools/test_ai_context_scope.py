@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from validation.tools import ai_candidate_harness
 from validation.tools._ai_candidate_harness_parts.context_scope import prompt_scope_for_context
+from validation.tools._ai_candidate_harness_parts.context_typed_ir import typed_ir_summary
 from validation.tools._ai_candidate_harness_parts.provider_readiness import (
     evaluate_provider_readiness,
 )
@@ -33,6 +34,11 @@ class AiContextScopeTests(unittest.TestCase):
         )
 
     def test_artifact_scopes_require_loaded_excerpts_or_failure_facts(self) -> None:
+        ir_summary = typed_ir_summary({
+            "name": "translate",
+            "params": [],
+            "body": [{"Return": {"value": {"LitInt": {"value": 1, "spelling": "1"}}}}],
+        })
         context = {
             "deterministic_artifacts": {
                 "unit-type-map.json": {
@@ -52,7 +58,7 @@ class AiContextScopeTests(unittest.TestCase):
                     "context_excerpt": {
                         "lowering_report": {
                             "status": "lowered",
-                            "function_ir_summary": {"callees": ["helper"]},
+                            "function_ir_summary": ir_summary,
                         }
                     },
                     "failure_summary": [],

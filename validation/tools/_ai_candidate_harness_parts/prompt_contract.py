@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .context_typed_ir import typed_ir_summary_is_valid
+
 
 def render_boundary_contract(context_pack: dict[str, Any]) -> str:
     function_name = context_pack.get("function_name")
@@ -112,6 +114,88 @@ def render_external_callee_source_rule(context_pack: dict[str, Any]) -> str:
     )
 
 
+def render_source_semantics_contract(context_pack: dict[str, Any]) -> str:
+    artifacts = context_pack.get("deterministic_artifacts")
+    if not isinstance(artifacts, dict):
+        return ""
+    summaries = []
+    for name, artifact in sorted(artifacts.items(), key=lambda item: str(item[0])):
+        if (
+            not isinstance(name, str)
+            or not name.endswith("-clang-lowering-report.json")
+            or not isinstance(artifact, dict)
+            or artifact.get("status") != "loaded"
+        ):
+            continue
+        excerpt = artifact.get("context_excerpt")
+        lowering = excerpt.get("lowering_report") if isinstance(excerpt, dict) else None
+        summary = lowering.get("function_ir_summary") if isinstance(lowering, dict) else None
+        binding = artifact.get("input")
+        if not typed_ir_summary_is_valid(summary) or not isinstance(binding, dict):
+            continue
+        summaries.append({
+            "artifact_sha256": binding.get("sha256"),
+            "function_ir": summary,
+        })
+    if not summaries:
+        return ""
+    payload = {
+        "schema_version": 1,
+        "source": "clang_typed_ir_projection",
+        "functions": summaries,
+        "semantics_verified": False,
+    }
+    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return (
+        f"Source-derived C semantics contract: {encoded}\n"
+        "Implement the ordered typed-IR body above exactly, including assignments, calls, branches, "
+        "loops, continues, and returns. Use structure-preserving lowering: keep every statement in "
+        "source order; do not merge, hoist, invert, or replace conditions, loops, side effects, or "
+        "return values. A DoWhile body must execute before its condition is tested. Preserve the exact "
+        "required candidate API signature, including reference mutability. This is hash-bound candidate "
+        "context derived from C source, not oracle output and not semantic acceptance."
+    )
+
+
+def render_harness_owned_callee_contract(context_pack: dict[str, Any]) -> str:
+    replay = context_pack.get("replay_api_contract")
+    call_plan = replay.get("call_plan") if isinstance(replay, dict) else None
+    scripted = call_plan.get("scripted_runtime") if isinstance(call_plan, dict) else None
+    if not isinstance(scripted, dict):
+        return ""
+    roles: dict[str, set[str]] = {}
+    for section, role in (("stimuli", "stimulus"), ("probes", "probe")):
+        values = scripted.get(section)
+        if not isinstance(values, list):
+            continue
+        for item in values:
+            callee = item.get("callee") if isinstance(item, dict) else None
+            if isinstance(callee, str) and callee:
+                roles.setdefault(callee, set()).add(role)
+    if not roles:
+        return ""
+    payload = {
+        "schema_version": 1,
+        "functions": [
+            {"name": name, "roles": sorted(values)}
+            for name, values in sorted(roles.items())
+        ],
+        "candidate_defines_functions": False,
+        "validation_harness_injects_functions": True,
+        "scope": "fixture_only_scripted_runtime",
+        "semantics_verified": False,
+    }
+    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return (
+        f"Harness-owned scripted callee contract: {encoded}\n"
+        "Call these functions at the source-derived positions with the source-derived arguments. "
+        "They are already in lexical scope: call them by bare name, but do not add any fn, extern, "
+        "mod, closure, variable, declaration, definition, mock, replacement, or inline implementation "
+        "for those names. The validation harness injects their fixture-only Rust implementations; "
+        "their real C semantics are not claimed."
+    )
+
+
 def context_without_replay_source(context_pack: dict[str, Any]) -> dict[str, Any]:
     context = dict(context_pack)
     contract = context_pack.get("replay_api_contract")
@@ -191,7 +275,9 @@ __all__ = [
     "render_boundary_contract",
     "render_candidate_source_rule",
     "render_external_callee_source_rule",
+    "render_harness_owned_callee_contract",
     "render_replay_behavior_rule",
     "render_replay_api_contract",
     "render_required_candidate_api",
+    "render_source_semantics_contract",
 ]

@@ -11,6 +11,7 @@ from validation.tools.replay_call_plan import (
     validate_replay_call_plan,
 )
 from .context_security import sha256_bytes
+from .context_typed_ir import typed_ir_context_status
 
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -50,6 +51,7 @@ def evaluate_provider_readiness(context_pack: dict[str, Any]) -> dict[str, str]:
     callee_context_status = required_callee_context_status(context_pack)
     callee_source_status = external_callee_source_context_status(context_pack)
     replay_contract_status = replay_api_contract_status(context_pack)
+    typed_ir_status = typed_ir_context_status(context_pack)
     source_admitted = (
         raw_status == "inline_slice_spec"
         and source_root_status == "unavailable"
@@ -76,6 +78,12 @@ def evaluate_provider_readiness(context_pack: dict[str, Any]) -> dict[str, str]:
             "status": "blocked",
             "source_span_status": raw_status,
             "compile_context_status": "response_file_invalid",
+        }
+    if typed_ir_status == "invalid":
+        return {
+            "status": "blocked",
+            "source_span_status": raw_status,
+            "analysis_context_status": "typed_ir_projection_invalid",
         }
     if callee_context_status != "ready":
         return {

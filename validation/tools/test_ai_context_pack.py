@@ -10,6 +10,9 @@ from unittest.mock import patch
 import jsonschema
 
 from validation.tools import ai_candidate_harness
+from validation.tools._ai_candidate_harness_parts.context_typed_ir import (
+    typed_ir_summary_is_valid,
+)
 from validation.tools._ai_candidate_harness_parts.provider_readiness import evaluate_provider_readiness
 
 
@@ -693,6 +696,90 @@ class AiContextPackTests(unittest.TestCase):
             self.assertEqual(ir_summary["callees"], ["helper"])
             self.assertEqual(ir_summary["integer_literals"], [{"spelling": "7", "value": 7}])
             self.assertEqual(ir_summary["statement_kinds"], ["Expr", "Return"])
+            self.assertEqual(
+                ir_summary["body"],
+                [
+                    {
+                        "kind": "Expr",
+                        "expression": {"kind": "call", "callee": "helper", "args": []},
+                    },
+                    {
+                        "kind": "Return",
+                        "value": {
+                            "kind": "integer",
+                            "value": 7,
+                            "spelling": "7",
+                        },
+                    },
+                ],
+            )
+            self.assertFalse(ir_summary["semantics_verified"])
+            self.assertEqual(ir_summary["projection_status"], "complete")
+            self.assertEqual(len(ir_summary["projection_sha256"]), 64)
+
+            tampered = json.loads(json.dumps(context))
+            tampered_summary = tampered["deterministic_artifacts"][
+                "unit-clang-lowering-report.json"
+            ]["context_excerpt"]["lowering_report"]["function_ir_summary"]
+            tampered_summary["body"][0]["expression"]["callee"] = "drifted"
+            self.assertEqual(
+                evaluate_provider_readiness(tampered),
+                {
+                    "status": "blocked",
+                    "source_span_status": "real_source_bound",
+                    "analysis_context_status": "typed_ir_projection_invalid",
+                },
+            )
+
+    def test_large_complete_typed_ir_projection_survives_artifact_bounding(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="context-pack-large-typed-ir-") as tmp:
+            root = Path(tmp)
+            source_root, _function, spec = self.make_project(root)
+            evidence = root / "evidence"
+            evidence.mkdir()
+            body = [
+                {
+                    "Expr": {
+                        "expr": {
+                            "Call": {
+                                "callee": f"helper_{index:02d}_with_descriptive_name",
+                                "args": [
+                                    {"LitInt": {"spelling": str(index), "value": index}}
+                                ],
+                            }
+                        }
+                    }
+                }
+                for index in range(48)
+            ]
+            body.append({"Return": {"value": {"LitInt": {"spelling": "0", "value": 0}}}})
+            report_path = evidence / "unit-clang-lowering-report.json"
+            report_path.write_text(
+                json.dumps({
+                    "status": "lowered",
+                    "lowering_report": {
+                        "status": "lowered",
+                        "function_ir": {
+                            "name": "transform",
+                            "params": [],
+                            "body": body,
+                        },
+                    },
+                }),
+                encoding="utf-8",
+            )
+
+            context = ai_candidate_harness.build_context_pack(
+                self.write_spec(root, spec),
+                source_root=source_root,
+                deterministic_evidence_dir=evidence,
+            )
+            artifact = context["deterministic_artifacts"][report_path.name]
+            summary = artifact["context_excerpt"]["lowering_report"]["function_ir_summary"]
+
+            self.assertGreater(len(json.dumps(summary).encode("utf-8")), 6_000)
+            self.assertFalse(artifact["context_excerpt_truncated"])
+            self.assertTrue(typed_ir_summary_is_valid(summary))
 
     def test_context_and_each_included_artifact_stay_within_capacity(self) -> None:
         with tempfile.TemporaryDirectory(prefix="context-pack-budget-") as tmp:

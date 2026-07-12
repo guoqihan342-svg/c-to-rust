@@ -315,6 +315,7 @@
           ]
         },
         "compile_context_status": {"const": "response_file_invalid"},
+        "analysis_context_status": {"const": "typed_ir_projection_invalid"},
         "context_boundary_status": {"enum": ["required_callee_context_incomplete", "external_callee_source_context_incomplete"]},
         "replay_api_contract_status": {
           "enum": [

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .context_typed_ir import typed_ir_summary_is_valid
+
 
 PROMPT_SCOPE_ORDER = (
     "slice_spec",
@@ -54,7 +56,8 @@ def prompt_scope_for_context(context_pack: dict[str, Any]) -> list[str]:
             ):
                 for suffix, scope in ARTIFACT_SCOPE_SUFFIXES.items():
                     if name.endswith(suffix):
-                        scopes.add(scope)
+                        if scope != "typed_ir_excerpt" or artifact_has_valid_typed_ir(artifact):
+                            scopes.add(scope)
             failure_summary = artifact.get("failure_summary")
             if failure_summary_has_facts(failure_summary):
                 scopes.add("root_cause_summary")
@@ -105,6 +108,13 @@ def has_direct_caller_callee_facts(c_boundary: Any) -> bool:
         key in call_contract and value_has_facts(call_contract[key], scalar_is_fact=True)
         for key in ("callee_scope", "contexts", "direct_call_only", "unsupported")
     )
+
+
+def artifact_has_valid_typed_ir(artifact: dict[str, Any]) -> bool:
+    excerpt = artifact.get("context_excerpt")
+    lowering = excerpt.get("lowering_report") if isinstance(excerpt, dict) else None
+    summary = lowering.get("function_ir_summary") if isinstance(lowering, dict) else None
+    return typed_ir_summary_is_valid(summary)
 
 
 def failure_summary_has_facts(value: Any) -> bool:

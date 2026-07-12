@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import json
+import copy
 import unittest
 
+from validation.tools._ai_candidate_harness_parts.context_scope import prompt_scope_for_context
+from validation.tools._ai_candidate_harness_parts.context_typed_ir import (
+    typed_ir_context_status,
+    typed_ir_summary,
+)
 from validation.tools._ai_candidate_harness_parts.provider_response import render_prompt
 from validation.tools._ai_candidate_harness_parts.repair import render_repair_prompt
 
@@ -147,6 +153,105 @@ class AiPromptContractTests(unittest.TestCase):
         self.assertNotIn("unified_diff", prompt)
         self.assertNotIn("Choose exactly one repair form", prompt)
 
+    def test_source_typed_ir_semantics_are_high_salience_for_candidate_and_repair(self) -> None:
+        context = self.context()
+        summary = typed_ir_summary({
+            "name": "translate",
+            "return_type": {"canonical": "_Bool", "width_bits": 8},
+            "params": [],
+            "body": [
+                {
+                    "Assign": {
+                        "target": {
+                            "Member": {
+                                "base": {"Var": {"name": "state"}},
+                                "field": "count",
+                                "is_arrow": False,
+                            }
+                        },
+                        "value": {"LitInt": {"value": 1, "spelling": "1"}},
+                    }
+                },
+                {"Return": {"value": {"LitInt": {"value": 0, "spelling": "0"}}}},
+            ],
+        })
+        context["deterministic_artifacts"] = {
+            "unit-clang-lowering-report.json": {
+                "status": "loaded",
+                "input": {"path": "unit-clang-lowering-report.json", "sha256": "d" * 64},
+                "context_excerpt": {
+                    "lowering_report": {
+                        "function_ir_summary": summary,
+                    }
+                },
+            }
+        }
+
+        prompt = render_prompt(context)
+        repair_prompt = render_repair_prompt(
+            context,
+            "pub fn translate(value: &[u8], len: usize) -> bool { value.len() == len }",
+            {"gate": "generated_replay", "kind": "replay_failed"},
+        )
+
+        for rendered in (prompt, repair_prompt):
+            self.assertEqual(rendered.count("Source-derived C semantics contract:"), 1)
+            self.assertIn('"artifact_sha256":"' + ("d" * 64) + '"', rendered)
+            self.assertIn('"field":"count"', rendered)
+            self.assertIn('"kind":"Return"', rendered)
+            self.assertIn("Use structure-preserving lowering", rendered)
+            self.assertIn("A DoWhile body must execute before its condition", rendered)
+            self.assertIn("Preserve the exact required candidate API signature", rendered)
+            self.assertLess(
+                rendered.index("Source-derived C semantics contract:"),
+                rendered.index("Required generated replay API contract:"),
+            )
+            self.assertIn("not oracle output and not semantic acceptance", rendered)
+
+        self.assertEqual(typed_ir_context_status(context), "ready")
+        self.assertIn("typed_ir_excerpt", prompt_scope_for_context(context))
+        tampered = copy.deepcopy(context)
+        tampered_summary = tampered["deterministic_artifacts"][
+            "unit-clang-lowering-report.json"
+        ]["context_excerpt"]["lowering_report"]["function_ir_summary"]
+        tampered_summary["body"][0]["target"]["field"] = "drifted"
+        self.assertEqual(typed_ir_context_status(tampered), "invalid")
+        self.assertNotIn("Source-derived C semantics contract:", render_prompt(tampered))
+        self.assertNotIn("typed_ir_excerpt", prompt_scope_for_context(tampered))
+
+    def test_incomplete_typed_ir_projection_is_never_rendered_as_exact_semantics(self) -> None:
+        for body, expected_issue in (
+            ([{"UnknownStmt": {}}], "statement_unsupported:UnknownStmt"),
+            (
+                [
+                    {"Expr": {"expr": {"LitInt": {"value": index, "spelling": str(index)}}}}
+                    for index in range(65)
+                ],
+                "sequence_limit_exceeded",
+            ),
+        ):
+            with self.subTest(expected_issue=expected_issue):
+                context = self.context()
+                summary = typed_ir_summary({"name": "translate", "params": [], "body": body})
+                self.assertEqual(summary["projection_status"], "incomplete")
+                self.assertIn(expected_issue, summary["unsupported_nodes"])
+                context["deterministic_artifacts"] = {
+                    "unit-clang-lowering-report.json": {
+                        "status": "loaded",
+                        "input": {
+                            "path": "unit-clang-lowering-report.json",
+                            "sha256": "d" * 64,
+                        },
+                        "context_excerpt": {
+                            "lowering_report": {"function_ir_summary": summary}
+                        },
+                    }
+                }
+
+                self.assertEqual(typed_ir_context_status(context), "invalid")
+                self.assertNotIn("Source-derived C semantics contract:", render_prompt(context))
+                self.assertNotIn("typed_ir_excerpt", prompt_scope_for_context(context))
+
     def test_structured_call_plan_payload_appears_once_and_api_name_is_authoritative(self) -> None:
         context = self.context()
         context["replay_api_contract"]["schema_version"] = 3
@@ -213,6 +318,47 @@ class AiPromptContractTests(unittest.TestCase):
                 repair_prompt.index("Required generated replay API contract:"),
                 repair_prompt.index(marker),
             )
+
+    def test_scripted_callees_are_harness_owned_and_oracle_free(self) -> None:
+        context = self.context()
+        context["replay_api_contract"]["schema_version"] = 3
+        context["replay_api_contract"]["call_plan"] = {
+            "status": "bound",
+            "source_function_name": "translate",
+            "api_name": "translate",
+            "plan_sha256": "b" * 64,
+            "scripted_runtime": {
+                "stimuli": [{"callee": "next_value", "expected": 999}],
+                "probes": [
+                    {"callee": "visit", "kind": "call_count", "expected": 17},
+                    {"callee": "next_value", "kind": "call_order", "expected": [1, 2]},
+                ],
+            },
+        }
+
+        prompts = (
+            render_prompt(context),
+            render_repair_prompt(
+                context,
+                "pub fn translate(value: &[u8], len: usize) -> bool { value.len() == len }",
+                {"gate": "generated_replay", "kind": "replay_failed"},
+            ),
+        )
+
+        for prompt in prompts:
+            self.assertEqual(prompt.count("Harness-owned scripted callee contract:"), 1)
+            contract_line = next(
+                line
+                for line in prompt.splitlines()
+                if line.startswith("Harness-owned scripted callee contract:")
+            )
+            self.assertIn('"name":"next_value"', contract_line)
+            self.assertIn('"name":"visit"', contract_line)
+            self.assertIn('"candidate_defines_functions":false', contract_line)
+            self.assertNotIn("999", contract_line)
+            self.assertNotIn("17", contract_line)
+            self.assertIn("already in lexical scope", prompt)
+            self.assertIn("do not add any fn, extern", prompt)
 
 
 if __name__ == "__main__":

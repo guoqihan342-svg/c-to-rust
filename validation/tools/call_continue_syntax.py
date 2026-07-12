@@ -121,7 +121,7 @@ def validate_rust_call_continue_draft(source: str, contract: dict[str, Any]) -> 
     unique(re.compile(
         rf"\b(?:pub\s+)?fn\s+(?!{re.escape(external['name'])}\b)[A-Za-z_][A-Za-z0-9_]*\s*\(\s*"
         + r"\s*,\s*".join(signature_parameters)
-        + rf"\s*\)"
+        + rf"\s*,?\s*\)"
         rf"\s*->\s*bool\s*\{{"
     ), source, "safe target signature")
     alias_state = rust_access(alias, assigned["alias_field_path"])

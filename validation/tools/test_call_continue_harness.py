@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import shutil
 import subprocess
 import tempfile
@@ -133,6 +134,15 @@ class CallContinueHarnessTests(unittest.TestCase):
             validate_rust_call_continue_draft(emitted_form, contract)["status"],
             "passed",
         )
+        trailing_comma = renamed_zero_start_rust_draft().replace(
+            "owner: &mut CursorOwner) -> bool",
+            "owner: &mut CursorOwner,\n) -> bool",
+        )
+        self.assertNotEqual(trailing_comma, renamed_zero_start_rust_draft())
+        self.assertEqual(
+            validate_rust_call_continue_draft(trailing_comma, contract)["status"],
+            "passed",
+        )
 
         with tempfile.TemporaryDirectory(prefix="zero-start-replay-", dir=REPO_ROOT / "target") as tmp:
             root = Path(tmp)
@@ -156,6 +166,52 @@ class CallContinueHarnessTests(unittest.TestCase):
                 [str(executable)], capture_output=True, text=True, check=False
             )
             self.assertEqual(executed.returncode, 0, executed.stderr)
+
+    def test_candidate_owned_scripted_callee_fails_structured_rust_check(self) -> None:
+        spec, _cases = renamed_zero_start_spec()
+        contract = parse_contract(spec)
+        callee = contract["external_callee"]["name"]
+        with tempfile.TemporaryDirectory(prefix="scripted-callee-contract-") as tmp:
+            evidence_dir = Path(tmp)
+            draft = evidence_dir / f"l3-{spec['slice_id']}-rust-draft.rs"
+            full_source = renamed_zero_start_rust_draft()
+            candidate_source = (
+                full_source.split("std::thread_local!", 1)[0]
+                + full_source[full_source.index("fn advance_window"):]
+                + f"\nfn {callee}() {{}}\n"
+            )
+            draft.write_text(
+                candidate_source,
+                encoding="utf-8",
+            )
+            (evidence_dir / f"l3-{spec['slice_id']}-auto-translation-plan.json").write_text(
+                json.dumps({
+                    "translation_summary": {
+                        "call_expressions": [{"callee": callee}],
+                    }
+                }),
+                encoding="utf-8",
+            )
+
+            rust_check, _patch = auto_migrate.run_rust_check(
+                evidence_dir,
+                False,
+                spec,
+                allow_self_heal=False,
+            )
+
+            self.assertEqual(rust_check["status"], "failed")
+            self.assertEqual(
+                rust_check["external_callee_stub_contract"],
+                {
+                    "status": "failed",
+                    "reason": "call-continue callee is defined without fixture controls",
+                },
+            )
+            self.assertEqual(
+                rust_check["errors"][0]["code"]["code"],
+                "external_callee_stub_contract_failed",
+            )
 
     def test_ordered_noalias_argument_and_shape_drift_fail_closed(self) -> None:
         mutations = (

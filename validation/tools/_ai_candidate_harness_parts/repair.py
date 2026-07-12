@@ -26,9 +26,11 @@ from .prompt_contract import (
     render_boundary_contract,
     render_candidate_source_rule,
     render_external_callee_source_rule,
+    render_harness_owned_callee_contract,
     render_replay_api_contract,
     render_replay_behavior_rule,
     render_required_candidate_api,
+    render_source_semantics_contract,
 )
 from .repair_contract import (
     MAX_REPAIR_RESPONSE_BYTES,
@@ -279,6 +281,8 @@ def render_repair_prompt(
     candidate_source_rule = render_candidate_source_rule(context_pack)
     replay_behavior_rule = render_replay_behavior_rule(context_pack)
     external_callee_source_rule = render_external_callee_source_rule(context_pack)
+    source_semantics_contract = render_source_semantics_contract(context_pack)
+    harness_owned_callee_contract = render_harness_owned_callee_contract(context_pack)
     replay_contract = render_replay_api_contract(context_pack)
     required_candidate_api_line = (
         f"Required candidate API: {required_candidate_api}\n"
@@ -293,6 +297,12 @@ def render_repair_prompt(
     )
     external_callee_source_rule_line = (
         f"{external_callee_source_rule}\n" if external_callee_source_rule else ""
+    )
+    source_semantics_contract_line = (
+        f"{source_semantics_contract}\n" if source_semantics_contract else ""
+    )
+    harness_owned_callee_contract_line = (
+        f"{harness_owned_callee_contract}\n" if harness_owned_callee_contract else ""
     )
     return (
         "Task mode: generate-candidate\n"
@@ -315,6 +325,8 @@ def render_repair_prompt(
         f"Required boundary facts: {boundary_contract}\n"
         f"{required_candidate_api_line}"
         f"{candidate_source_rule_line}"
+        f"{source_semantics_contract_line}"
+        f"{harness_owned_callee_contract_line}"
         f"{external_callee_source_rule_line}"
         f"{replay_behavior_rule_line}"
         f"Required generated replay API contract: {replay_contract}\n"

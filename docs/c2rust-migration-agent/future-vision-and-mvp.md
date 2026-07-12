@@ -25,10 +25,10 @@ input.c + compile context
 | --- | ---: | --- |
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
-| 当前 AI 候选状态 | `GLM 0 / auxiliary 6/12 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项 DeepSeek V4 Flash WSL 辅助套件为 6 个 exact pass，明确不具备比赛资格 |
-| 当前翻译主线 | P0-A18c / P0-A10 | A18c7 已关闭；下一步处理 4 个 replay 语义失败和 2 个 fresh C oracle 构建合同失败，不按单项目行号扩展 |
+| 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 + A18c8a targeted 2/4 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑，定向 4 项中 2 项新增 exact pass，均明确不具备比赛资格 |
+| 当前翻译主线 | P0-A18c / P0-A10 | A18c8a 已关闭；下一步实现 A18c8b 原生构建闭包，并保留两个 scripted replay 模型稳定性缺口，不按项目名或样例分派 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A18c7 | 目标函数源码行为、fixture stimulus readiness、translation-carrier fresh oracle 和 typed-IR/CFG/TypeMap prompt 投影已收口 |
+| 最近开发阶段 | P0-A18c8a | hash-bound ordered typed-IR behavior digest、scripted callee lexical-scope 合同和投影 fail-closed 边界已收口 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -182,7 +182,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 顺序 | 待办 | 状态 | 本轮完成判据 |
 | ---: | --- | --- | --- |
 | 1 | P0-A18c7 跨项目 AI 输入与证据合同闭包 | 完成 | Windows/WSL 125 项回归通过；固定 12 项生成 12 个候选、0 contract failure、6 exact pass |
-| 2 | P0-A18c8 剩余 exact failure 收敛 | 下一项 | 通用补齐 4 个 carrier/scripted replay 语义合同和 2 个真实项目 C oracle 构建合同 |
+| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | A18c8a 已完成；下一项通用补齐 2 个真实项目 C oracle 构建合同，并继续由 AI/确定性 fallback/验证层处理两个 scripted 模型失败 |
 | 3 | P0-A10 AI golden set | 待开始 | 以多项目、陌生标识符和最近邻负例扩充能力集，禁止按测试用例修补 |
 | 4 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
 | 5 | P0-C 阶段收口 | 待开始 | 修复历史 evidence 漂移并清理 all-feature Clippy 剩余项 |
@@ -413,7 +413,12 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
       - 剩余失败边界已净化：4 个真实 fragment 的 fresh oracle 均通过，只剩 generated replay 行为不一致；zlib-ng 与 libuv 两项仍因 generated header/include 和整 translation unit 链接闭包不足而 fresh oracle 失败。它们进入 A18c8，不取消 A18c7 已关闭的合同修复。
 
     - [ ] **P0-A18c8：剩余 exact failure 的通用语义闭包**。
-      - [ ] **P0-A18c8a：carrier/scripted source behavior digest**。从真实 fragment、ReplayCallPlan scripted runtime、CFG/effect/typed IR 生成 source-backed 分支、调用顺序、字段写入和返回摘要；禁止把 fixture expected/actual 回灌给模型。
+      - [x] **P0-A18c8a：carrier/scripted source behavior digest**。从真实 fragment、ReplayCallPlan scripted runtime、CFG/effect/typed IR 生成 source-backed 分支、调用顺序、字段写入和返回摘要；禁止把 fixture expected/actual 回灌给模型。
+        - 有序 typed-IR 投影保留 assignment target/RHS、嵌套 `If/While/DoWhile`、call 顺序、`continue`、固定 return、无符号 wrapping 与 all-ones sentinel，并带独立 `projection_sha256`。未知节点、超过 64 项、节点/深度预算耗尽、投影截断或 hash 漂移会在 provider 启动前结构化拒绝；不会把部分投影描述为 exact semantics。
+        - candidate 与 repair 共用同一份高显著性 source-semantics 合同；scripted callee 被声明为 harness-owned 且已在词法作用域，模型必须调用但不得声明、定义、mock 或 inline。候选自带 scripted callee 时，rust-check 生成结构化失败工件，不再 traceback；合法 trailing-comma Rust 签名不再被误拒绝。
+        - artifact bounding 为完整 clang excerpt 预留元数据外预算，修复 6.3 KiB 有序投影被通用限深器改写后 SHA 失配的问题。Windows/WSL 聚焦门均为 131/131，`git diff --check` 通过。
+        - `wsl-local-simulation` 的 4 项 DeepSeek 0-repair 定向运行全部 provider-ready 且各调用 1 次；interior projection 与 stats sequence 从旧 replay failure 转为八类 gate 全绿，独立验证器各重开 16 个工件后 `semantic_pass=true`。router SHA-256 分别为 `1d40a293cd63acee5a8eab1c72c155a879bf932ec5bbe68da9e15e965c394e31`、`7bfbc41e2803d72415c4035ab5068eb4b6bbe02eec5966b1e845556e941b2ae1`。
+        - zero-start 与 read-kv-body-call 的初始候选及各 1 轮修复仍未 exact：DeepSeek 继续改写 nested loop/return/sentinel 或 required API mutability。该事实不回灌 fixture 值、不增加轮次，也不冒充固定 12 项成功率；默认流水线仍由通用 typed-IR fallback 与 exact gates 兜底，父项保持未完成。
       - [ ] **P0-A18c8b：真实项目 fresh C oracle 构建闭包**。优先消费绑定的 compile database、generated include 和构建产物/链接合同；缺失时 fail closed，不按 zlib/libuv 名称添加语义桩或测试专用链接参数。
 
       前序失败证据：同配置 `kv_set` router `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0` 的 rustc/unsafe/oracle 通过，但候选把外部 callee 结果实现为 `-1`，与 oracle 的 `7` 不一致。三项 WSL worktree 运行均报告 `repo_commit=UNKNOWN0`，因此只属于本地 hash-bound AI 路由证据。

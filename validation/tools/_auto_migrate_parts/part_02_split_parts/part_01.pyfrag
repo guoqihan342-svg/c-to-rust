@@ -52,17 +52,35 @@ def run_rust_check(
         patch = write_no_patch_required(spec, evidence_dir, path)
     else:
         original_draft = path.read_bytes()
+        stub_contract_error = None
         try:
             if external_context["status"] == "recorded":
-                inject_external_callee_stubs(path, external_context, spec)
-            first = rust_check_once(path)
+                try:
+                    inject_external_callee_stubs(path, external_context, spec)
+                except ValueError as error:
+                    stub_contract_error = str(error)
+            first = (
+                rust_check_once(path)
+                if stub_contract_error is None
+                else {
+                    "command": None,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "",
+                    "errors": [{
+                        "level": "error",
+                        "message": stub_contract_error,
+                        "code": {"code": "external_callee_stub_contract_failed"},
+                    }],
+                }
+            )
             write_log_text(evidence_dir / "rust-check-initial.stdout.log", first["stdout"])
             write_log_text(evidence_dir / "rust-check-initial.stderr.jsonl", first["stderr"])
             final = first
         finally:
             path.write_bytes(original_draft)
         patch = write_no_patch_required(spec, evidence_dir, path)
-        if final["returncode"] != 0 and allow_self_heal:
+        if final["returncode"] != 0 and allow_self_heal and stub_contract_error is None:
             final, patch = run_safe_self_heal_loop(spec, evidence_dir, path, final)
         if final["returncode"] != 0 and patch["status"] != "blocked":
             patch = write_blocked_patch(
@@ -83,6 +101,10 @@ def run_rust_check(
             "errors": final["errors"],
             "external_callee_context": rust_check_external_context(external_context),
             "rust_check_harness_only_bindings": rust_check_external_binding_report(external_context),
+            "external_callee_stub_contract": {
+                "status": "failed" if stub_contract_error is not None else "passed",
+                "reason": stub_contract_error,
+            },
             "self_healing": {
                 "status": patch["status"],
                 "patch_events": patch["patch_events"],

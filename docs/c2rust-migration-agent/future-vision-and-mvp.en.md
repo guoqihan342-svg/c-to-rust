@@ -23,10 +23,10 @@ input.c + compile context
 | --- | ---: | --- |
 | `translator_generated_semantic_pass_count` | 38 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
 | `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
-| Current AI candidate state | `GLM 0 / auxiliary 6/12 exact` | Competition GLM still has no candidate because balance is unavailable; the fixed 12-case DeepSeek V4 Flash WSL auxiliary suite has six exact passes and is explicitly competition-ineligible |
-| Active translator track | P0-A18c / P0-A10 | A18c7 is closed; next address four replay semantic failures and two fresh-C-oracle build-contract failures without extending one project by source line |
+| Current AI candidate state | `GLM 0 / fixed auxiliary 6/12 + A18c8a targeted 2/4 exact` | Competition GLM still has no candidate because balance is unavailable; the fixed 12 cases have not been rerun as a full suite after A18c8a, while two of four targeted cases newly pass exact gates, all explicitly competition-ineligible |
+| Active translator track | P0-A18c / P0-A10 | A18c8a is closed; next implement the A18c8b native-build closure while retaining two scripted-replay model-stability gaps, without dispatching on project names or examples |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |
-| Latest development stage | P0-A18c7 | Target-function source behavior, fixture-stimulus readiness, translation-carrier fresh oracle, and typed-IR/CFG/TypeMap prompt projection are closed |
+| Latest development stage | P0-A18c8a | Hash-bound ordered typed-IR behavior digest, scripted-callee lexical-scope contract, and fail-closed projection boundaries are closed |
 | Current strict regression | `25/33` | Run `20260711T-finite-p0-t31`; `stress_loops=0`, and eight historical evidence drifts remain |
 | Current proof class | `wsl-local-simulation` | Valid for development and approximation, but not `competition-exact` |
 
@@ -180,7 +180,7 @@ Execute strictly from top to bottom. A successful lower-level sample cannot clos
 | Order | Work item | State | Completion criterion for this stage |
 | ---: | --- | --- | --- |
 | 1 | P0-A18c7 cross-project AI-input and evidence closure | Complete | The 125-test gate passes on Windows and WSL; all 12 fixed cases generate candidates, contract failures are zero, and six pass exact gates |
-| 2 | P0-A18c8 remaining exact-failure closure | Next | Close four carrier/scripted replay semantic contracts and two real-project C-oracle build contracts generically |
+| 2 | P0-A18c8 remaining exact-failure closure | In progress | A18c8a is complete; next close two real-project C-oracle build contracts generically while AI, deterministic fallback, and exact validation continue handling two scripted model failures |
 | 3 | P0-A10 AI golden set | Pending | Expand with multiple projects, unfamiliar identifiers, and nearest negatives without test-case patches |
 | 4 | P0-H9 competition-host verification | Externally blocked | Real-host attestation, OpenCode preflight, GLM-5.1 session, and release packet all close |
 | 5 | P0-C stage closure | Pending | Repair historical evidence drift and clear the remaining all-feature Clippy items |
@@ -411,7 +411,12 @@ Each stage runs the finite construct set once, then expands translator/ContextPa
       - The remaining failure boundary is now clean: fresh oracle passes for all four real fragments, leaving generated-replay behavior mismatches; zlib-ng and libuv still fail fresh oracle because generated include/header and whole-translation-unit link closure are incomplete. These move to A18c8 without reopening A18c7.
 
     - [ ] **P0-A18c8: generic semantic closure for the remaining exact failures**.
-      - [ ] **P0-A18c8a: carrier/scripted source behavior digest**. Derive source-backed branch, call-order, field-write, and return summaries from the real fragment, ReplayCallPlan scripted runtime, CFG/effect data, and typed IR. Fixture expected/actual values must remain hidden from the model.
+      - [x] **P0-A18c8a: carrier/scripted source behavior digest**. Derive source-backed branch, call-order, field-write, and return summaries from the real fragment, ReplayCallPlan scripted runtime, CFG/effect data, and typed IR. Fixture expected/actual values remain hidden from the model.
+        - The ordered typed-IR projection preserves assignment target/RHS pairs, nested `If/While/DoWhile`, call order, `continue`, fixed returns, unsigned wrapping, and all-ones sentinels under an independent `projection_sha256`. Unknown nodes, more than 64 items, exhausted node/depth budgets, truncation, or hash drift are blocked before provider launch; partial projections are never described as exact semantics.
+        - Candidate and repair share the same high-salience source-semantics contract. Scripted callees are harness-owned and already in lexical scope: the model must call but must not declare, define, mock, or inline them. Candidate-owned scripted callees now produce structured rust-check evidence instead of a traceback, and legal Rust signatures with trailing commas are no longer rejected.
+        - Artifact bounding reserves the non-metadata budget for a complete clang excerpt, fixing the case where a 6.3 KiB ordered projection was rewritten by generic depth limiting and then failed its SHA binding. The focused gate passes 131/131 on both Windows and WSL, and `git diff --check` passes.
+        - In a four-case DeepSeek zero-repair `wsl-local-simulation`, all cases were provider-ready and made one call each. Interior projection and stats sequence moved from replay failures to all eight gates passing; each independent validator reopened 16 artifacts and returned `semantic_pass=true`. Router SHA-256 values are `1d40a293cd63acee5a8eab1c72c155a879bf932ec5bbe68da9e15e965c394e31` and `7bfbc41e2803d72415c4035ab5068eb4b6bbe02eec5966b1e845556e941b2ae1`.
+        - Zero-start and read-kv-body-call still fail exact gates after their initial candidates and one repair each: DeepSeek continues rewriting nested loop/return/sentinel behavior or required-API mutability. This evidence does not expose fixture values, add more rounds, or claim a new fixed-suite rate. The default pipeline remains protected by the generic typed-IR fallback and exact gates, so the parent item stays open.
       - [ ] **P0-A18c8b: real-project fresh-C-oracle build closure**. Prefer a bound compile database, generated includes, and build-artifact/link contracts. Missing context fails closed; zlib/libuv names cannot select semantic stubs or test-only link flags.
 
       Prior failure evidence: same-profile `kv_set` router `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0` passed rustc/unsafe/oracle, but the candidate implemented external-callee result `-1` while the oracle produced `7`. All three WSL worktree runs reported `repo_commit=UNKNOWN0`, so they remain local hash-bound AI-routing evidence only.
