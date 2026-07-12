@@ -89,7 +89,7 @@ def build_context_pack(
     )
     artifacts = load_context_artifacts(deterministic_evidence_dir, known_roots)
     context: dict[str, Any] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "target_id": target_id,
         "slice_id": slice_id,
         "function_name": function_name,
@@ -191,6 +191,13 @@ def collect_input_bindings(
     compile_input = compile_context.get("input")
     if isinstance(compile_input, dict):
         bindings.append({"kind": "compile_commands", **compile_input})
+    selected_entry = compile_context.get("selected_entry")
+    response_files = selected_entry.get("response_files") if isinstance(selected_entry, dict) else None
+    response_file_items = response_files.get("files") if isinstance(response_files, dict) else None
+    if isinstance(response_file_items, list):
+        for response_file in response_file_items:
+            if isinstance(response_file, dict):
+                bindings.append({"kind": "compile_response_file", **response_file})
     for name, artifact in sorted(artifacts.items()):
         artifact_input = artifact.get("input") if isinstance(artifact, dict) else None
         if isinstance(artifact_input, dict):

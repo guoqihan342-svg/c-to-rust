@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI ContextPack",
+  "type": "object",
+  "required": ["schema_version", "target_id", "slice_id", "function_name", "source_root", "source", "compile_context", "bindings", "claim_boundary"],
+  "properties": {
+    "schema_version": {"const": 3},
+    "target_id": {"type": "string", "minLength": 1},
+    "slice_id": {"type": "string", "minLength": 1},
+    "function_name": {"type": "string", "minLength": 1},
+    "compile_context": {
+      "type": "object",
+      "properties": {
+        "selected_entry": {
+          "type": "object",
+          "properties": {
+            "response_files": {"$ref": "#/definitions/responseFiles"}
+          }
+        }
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "required": ["inputs"],
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {"type": "string"},
+              "path": {"type": "string"},
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "size_bytes": {"type": "integer", "minimum": 0},
+              "depth": {"type": "integer", "minimum": 1, "maximum": 5}
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "responseFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "depth"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^<source-root>/"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "size_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
+        "depth": {"type": "integer", "minimum": 1, "maximum": 5}
+      }
+    },
+    "responseFiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "contract_version", "dialect", "limits", "files", "expansion_count", "unique_file_count", "total_bytes", "original_argv_sha256"],
+      "properties": {
+        "status": {"enum": ["expanded", "blocked"]},
+        "contract_version": {"const": 1},
+        "dialect": {"enum": ["gnu-v1", "unsupported"]},
+        "reason": {"type": "string", "minLength": 1},
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_depth", "max_files", "max_file_bytes", "max_total_bytes", "max_arguments"],
+          "properties": {
+            "max_depth": {"const": 4},
+            "max_files": {"const": 16},
+            "max_file_bytes": {"const": 65536},
+            "max_total_bytes": {"const": 262144},
+            "max_arguments": {"const": 4096}
+          }
+        },
+        "files": {"type": "array", "maxItems": 16, "items": {"$ref": "#/definitions/responseFile"}},
+        "expansion_count": {"type": "integer", "minimum": 0, "maximum": 17},
+        "unique_file_count": {"type": "integer", "minimum": 0, "maximum": 16},
+        "expanded_argument_count": {"type": "integer", "minimum": 0, "maximum": 4096},
+        "total_bytes": {"type": "integer", "minimum": 0, "maximum": 327680},
+        "original_argv_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "expanded_argv_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "expanded"}}}, "then": {"required": ["expanded_argument_count", "expanded_argv_sha256"]}},
+        {"if": {"properties": {"status": {"const": "blocked"}}}, "then": {"required": ["reason"]}}
+      ]
+    }
+  }
+}
