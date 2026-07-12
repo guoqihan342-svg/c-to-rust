@@ -1,0 +1,185 @@
+def supports_record_pointer_identity_plan(spec: dict[str, Any]) -> bool:
+    contract = spec.get("replay_contract") if isinstance(spec, dict) else None
+    if not isinstance(contract, dict) or contract.get("kind") != "record_pointer_identity_return":
+        return False
+    try:
+        _parse_contract(spec, contract)
+    except ValueError:
+        return False
+    return True
+
+
+def build_record_pointer_identity_plan(
+    spec: dict[str, Any],
+    contract: dict[str, Any],
+    fixture: dict[str, Any],
+) -> dict[str, Any]:
+    if contract != spec.get("replay_contract"):
+        raise ValueError("record identity replay contract drifted from the slice spec")
+    model = _parse_contract(spec, contract)
+    _validate_fixture(spec, fixture, model)
+
+    supporting_types: dict[str, dict[str, Any]] = {}
+    input_binding = _binding(model["input"], False, supporting_types)
+    output_binding = _binding(model["output"], True, supporting_types)
+    bindings = [input_binding, output_binding]
+    binding_by_parameter = {item["name"]: item for item in bindings}
+
+    parameters: list[dict[str, Any]] = []
+    mappings: list[dict[str, Any]] = []
+    for position, c_parameter in enumerate(model["signature_parameters"]):
+        name = c_parameter["name"]
+        binding = binding_by_parameter[name]
+        is_output = name == model["output"]["parameter"]
+        rust_type = f"&mut {binding['rust_type']}" if is_output else f"&{binding['rust_type']}"
+        source = {
+            "kind": "binding_borrow_mut" if is_output else "binding_borrow",
+            "binding": name,
+        }
+        parameters.append(
+            {
+                "position": position,
+                "name": name,
+                "rust_type": rust_type,
+                "c_parameter": name,
+                "length_retained": False,
+                "source": source,
+            }
+        )
+        mappings.append(
+            {
+                "position": position,
+                "c_parameter": name,
+                "c_type": str(c_parameter.get("c_type") or ""),
+                "direction": str(c_parameter.get("direction") or ""),
+                "rust_parameter": name,
+                "rust_type": rust_type,
+            }
+        )
+
+    output_name = model["output"]["parameter"]
+    assertions = [
+        {
+            "actual": f"binding.{output_name}." + ".".join(field["rust_field_path"]),
+            "fixture_field": field["expected_output"],
+            "rust_type": field["rust_scalar_type"],
+            "encoding": field["rust_scalar_type"],
+        }
+        for field in model["output"]["fields"]
+    ]
+    identity_field = f"return_same_{output_name}"
+    plan: dict[str, Any] = {
+        "schema_version": 2,
+        "status": "bound",
+        "source_function_name": model["function_name"],
+        "api_name": model["api_name"],
+        "visibility": "pub",
+        "abi": "Rust",
+        "unsafe": False,
+        "parameters": parameters,
+        "c_parameter_mappings": mappings,
+        "omitted_c_parameters": [],
+        "length_parameters_retained": [],
+        "return_type": f"&mut {model['output']['rust_type']}",
+        "supporting_types": list(supporting_types.values()),
+        "bindings": bindings,
+        "distinct_mutable_bindings": [
+            sorted([model["input"]["parameter"], output_name])
+        ],
+        "call_args": [
+            {"position": item["position"], "parameter": item["name"], "source": item["source"]}
+            for item in parameters
+        ],
+        "assertions": assertions,
+        "identity_assertions": [
+            {
+                "kind": "reference_identity",
+                "actual": "return",
+                "expected_binding": output_name,
+                "mutability": "mutable",
+                "fixture_field": identity_field,
+            }
+        ],
+        "fixture": {
+            "path": fixture["path"],
+            "sha256": fixture["sha256"],
+            "case_count": len(fixture["cases"]),
+            "case_ids": [item["id"] for item in fixture["cases"]],
+        },
+    }
+    _validate_produced_plan(plan, model)
+    plan["plan_sha256"] = _plan_sha256(plan)
+    return plan
+
+
+def _parse_contract(spec: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    _exact_keys(
+        contract,
+        {"schema_version", "kind", "input", "output", "return", "noalias_refs"},
+        "record identity contract",
+    )
+    if contract.get("schema_version") != 1:
+        raise ValueError("record identity contract schema_version must be 1")
+    if contract.get("kind") != "record_pointer_identity_return":
+        raise ValueError("record identity contract kind is unsupported")
+    if contract.get("return") != {"kind": "identity", "parameter_ref": "output"}:
+        raise ValueError("record identity return must bind the output record")
+    if contract.get("noalias_refs") != [["input", "output"]]:
+        raise ValueError("record identity noalias refs must close input/output exactly")
+
+    input_record = _record(contract.get("input"), "input")
+    output_record = _record(contract.get("output"), "output")
+    if input_record["parameter"] == output_record["parameter"]:
+        raise ValueError("record identity parameters must be distinct")
+
+    function_name = _ident(spec.get("function_name"), "source function")
+    signature = _matching_signature(spec, function_name)
+    raw_parameters = signature.get("parameters")
+    if not isinstance(raw_parameters, list) or len(raw_parameters) != 2:
+        raise ValueError("record identity signature must contain exactly two parameters")
+    parameters = []
+    for item in raw_parameters:
+        if not isinstance(item, dict):
+            raise ValueError("record identity C parameter must be an object")
+        normalized = dict(item)
+        normalized["name"] = _ident(item.get("name"), "C parameter")
+        parameters.append(normalized)
+    names = [item["name"] for item in parameters]
+    expected_names = {input_record["parameter"], output_record["parameter"]}
+    if len(set(names)) != 2 or set(names) != expected_names:
+        raise ValueError("record identity contract parameters do not close the C signature")
+    by_name = {item["name"]: item for item in parameters}
+    if by_name[input_record["parameter"]].get("direction") != "input":
+        raise ValueError("record identity input direction drifted")
+    if by_name[output_record["parameter"]].get("direction") not in {"output", "inout"}:
+        raise ValueError("record identity output direction drifted")
+    if _c_type(signature.get("return_type")) != _c_type(
+        by_name[output_record["parameter"]].get("c_type")
+    ):
+        raise ValueError("record identity return type does not match the output pointer type")
+    _validate_identity_source(signature, output_record["parameter"])
+    _validate_pointer_proof(spec, input_record["parameter"], output_record["parameter"])
+
+    observable = spec.get("fixture_contract", {}).get("observable_outputs")
+    expected_observable = {
+        f"return_same_{output_record['parameter']}",
+        *(item["expected_output"] for item in output_record["fields"]),
+    }
+    if not isinstance(observable, list) or len(observable) != len(set(observable)):
+        raise ValueError("record identity observable outputs must be unique")
+    if set(observable) != expected_observable:
+        raise ValueError("record identity observable outputs are not closed")
+    behavior = spec.get("fixture_contract", {}).get("behavior_fields")
+    if behavior is not None and behavior != observable:
+        raise ValueError("record identity behavior fields drifted from observable outputs")
+
+    return {
+        "function_name": function_name,
+        "api_name": _public_api(spec),
+        "signature_parameters": parameters,
+        "input": input_record,
+        "output": output_record,
+        "observable": observable,
+    }
+
+

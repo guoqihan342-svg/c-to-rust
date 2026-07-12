@@ -1,0 +1,198 @@
+def _record(value: Any, role: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"record identity {role} definition is required")
+    _exact_keys(value, RECORD_KEYS, f"record identity {role} definition")
+    result = {
+        "parameter": _ident(value.get("parameter"), f"{role} parameter"),
+        "fixture_root": _fixture_path(value.get("fixture_root"), f"{role} fixture root"),
+        "rust_type": _ident(value.get("rust_type"), f"{role} Rust type"),
+        "fields": _fields(value.get("fields"), role),
+        "defaults": _defaults(value.get("defaults"), role),
+    }
+    _validate_record_topology(result, role)
+    return result
+
+
+def _fields(value: Any, role: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"record identity {role} fields are required")
+    result: list[dict[str, Any]] = []
+    fixture_key = "fixture_path" if role == "input" else "initial_fixture_path"
+    required = INPUT_FIELD_KEYS if role == "input" else OUTPUT_FIELD_KEYS
+    for raw in value:
+        if not isinstance(raw, dict):
+            raise ValueError(f"record identity {role} field must be an object")
+        _exact_keys(raw, required, f"record identity {role} field")
+        fixture_type = raw.get("fixture_scalar_type")
+        rust_type = raw.get("rust_scalar_type")
+        conversion = raw.get("conversion")
+        _scalar_conversion(fixture_type, rust_type, conversion)
+        item = {
+            fixture_key: _fixture_path(raw.get(fixture_key), fixture_key),
+            "rust_field_path": _rust_path(raw.get("rust_field_path"), "Rust field path"),
+            "rust_type_path": _rust_type_path(raw.get("rust_type_path")),
+            "fixture_scalar_type": fixture_type,
+            "rust_scalar_type": rust_type,
+            "conversion": conversion,
+        }
+        if role == "output":
+            expected = raw.get("expected_output")
+            if not isinstance(expected, str) or not expected:
+                raise ValueError("record identity output expected field is required")
+            item["expected_output"] = expected
+        if len(item["rust_type_path"]) != len(item["rust_field_path"]) - 1:
+            raise ValueError("record identity Rust type path length drifted")
+        result.append(item)
+    return result
+
+
+def _defaults(value: Any, role: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ValueError(f"record identity {role} defaults must be an array")
+    allowed = {
+        "u32": "zero",
+        "usize": "zero",
+        "raw_const_ptr": "null",
+        "raw_mut_ptr": "null_mut",
+    }
+    result = []
+    for raw in value:
+        if not isinstance(raw, dict):
+            raise ValueError(f"record identity {role} default must be an object")
+        _exact_keys(raw, DEFAULT_KEYS, f"record identity {role} default")
+        scalar_type = raw.get("rust_scalar_type")
+        default = raw.get("value")
+        if scalar_type not in allowed or default != {"kind": allowed[scalar_type]}:
+            raise ValueError("record identity default type/value pair is unsupported")
+        rust_path = _rust_path(raw.get("rust_field_path"), "default Rust field path")
+        type_path = _rust_type_path(raw.get("rust_type_path"))
+        if len(type_path) != len(rust_path) - 1:
+            raise ValueError("record identity default Rust type path length drifted")
+        result.append(
+            {
+                "rust_field_path": rust_path,
+                "rust_type_path": type_path,
+                "rust_scalar_type": scalar_type,
+                "value": dict(default),
+            }
+        )
+    return result
+
+
+def _validate_record_topology(record: dict[str, Any], role: str) -> None:
+    fixture_key = "fixture_path" if role == "input" else "initial_fixture_path"
+    fixture_paths = [tuple(item[fixture_key]) for item in record["fields"]]
+    rust_paths = [
+        tuple(item["rust_field_path"]) for item in [*record["fields"], *record["defaults"]]
+    ]
+    if len(set(fixture_paths)) != len(fixture_paths):
+        raise ValueError(f"record identity duplicate {role} fixture path")
+    if len(set(rust_paths)) != len(rust_paths):
+        raise ValueError(f"record identity duplicate {role} Rust field path")
+    if role == "output":
+        expected = [item["expected_output"] for item in record["fields"]]
+        if len(set(expected)) != len(expected):
+            raise ValueError("record identity duplicate output observable")
+    prefix_types: dict[tuple[str, ...], str] = {}
+    for item in [*record["fields"], *record["defaults"]]:
+        path = tuple(item["rust_field_path"])
+        for other in rust_paths:
+            if path != other and len(path) < len(other) and other[: len(path)] == path:
+                raise ValueError("record identity Rust field path has a prefix conflict")
+        for index, rust_type in enumerate(item["rust_type_path"]):
+            prefix = path[: index + 1]
+            if prefix in prefix_types and prefix_types[prefix] != rust_type:
+                raise ValueError("record identity Rust type path is inconsistent")
+            prefix_types[prefix] = rust_type
+
+
+def _binding(
+    record: dict[str, Any],
+    mutable: bool,
+    supporting_types: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    tree: dict[str, Any] = {"rust_type": record["rust_type"], "children": {}}
+    fixture_key = "fixture_path" if mutable is False else "initial_fixture_path"
+    for field in record["fields"]:
+        source = {
+            "kind": "fixture_field",
+            "path": [*record["fixture_root"], *field[fixture_key]],
+            "encoding": field["rust_scalar_type"],
+        }
+        _insert_tree(tree, field["rust_field_path"], field["rust_type_path"], source)
+    for default in record["defaults"]:
+        scalar_type = default["rust_scalar_type"]
+        if scalar_type in {"u32", "usize"}:
+            source = {
+                "kind": "constant_scalar",
+                "rust_type": scalar_type,
+                "encoding": scalar_type,
+                "value": 0,
+            }
+        else:
+            source = {
+                "kind": "null_pointer",
+                "rust_type": POINTER_RUST_TYPES[scalar_type],
+                "mutability": "mutable" if scalar_type == "raw_mut_ptr" else "shared",
+            }
+        _insert_tree(tree, default["rust_field_path"], default["rust_type_path"], source)
+    initializer = _tree_initializer(tree, supporting_types)
+    return {
+        "name": record["parameter"],
+        "rust_type": record["rust_type"],
+        "mutable": mutable,
+        "initializer": initializer,
+    }
+
+
+def _insert_tree(
+    tree: dict[str, Any], path: list[str], type_path: list[str], source: dict[str, Any]
+) -> None:
+    node = tree
+    for index, name in enumerate(path):
+        children = node["children"]
+        if index == len(path) - 1:
+            if name in children:
+                raise ValueError("record identity duplicate initializer path")
+            children[name] = {"leaf": source, "rust_type": _source_rust_type(source)}
+            return
+        child_type = type_path[index]
+        child = children.get(name)
+        if child is None:
+            child = {"rust_type": child_type, "children": {}}
+            children[name] = child
+        if child.get("rust_type") != child_type or "children" not in child:
+            raise ValueError("record identity initializer type path drifted")
+        node = child
+
+
+def _tree_initializer(
+    node: dict[str, Any], supporting_types: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    fields = []
+    type_fields = []
+    for name, child in node["children"].items():
+        value = child["leaf"] if "leaf" in child else _tree_initializer(child, supporting_types)
+        fields.append({"name": name, "value": value})
+        type_fields.append({"name": name, "rust_type": child["rust_type"]})
+    if not fields:
+        raise ValueError("record identity initializer record is empty")
+    definition = {
+        "kind": "struct",
+        "name": node["rust_type"],
+        "visibility": "pub",
+        "fields": type_fields,
+    }
+    previous = supporting_types.get(node["rust_type"])
+    if previous is not None and previous != definition:
+        raise ValueError("record identity supporting type definitions conflict")
+    supporting_types[node["rust_type"]] = definition
+    return {"kind": "struct", "rust_type": node["rust_type"], "fields": fields}
+
+
+def _source_rust_type(source: dict[str, Any]) -> str:
+    if source["kind"] == "fixture_field":
+        return source["encoding"]
+    return source["rust_type"]
+
+

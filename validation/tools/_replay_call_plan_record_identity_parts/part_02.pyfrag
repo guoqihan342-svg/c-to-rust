@@ -1,0 +1,222 @@
+def _validate_fixture(spec: dict[str, Any], fixture: dict[str, Any], model: dict[str, Any]) -> None:
+    if not isinstance(fixture, dict):
+        raise ValueError("record identity fixture binding is required")
+    if not isinstance(fixture.get("path"), str) or not fixture["path"]:
+        raise ValueError("record identity fixture path is invalid")
+    if not SHA256_RE.fullmatch(str(fixture.get("sha256") or "")):
+        raise ValueError("record identity fixture sha256 is invalid")
+    cases = fixture.get("cases")
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("record identity fixture cases are required")
+    ids = [item.get("id") if isinstance(item, dict) else None for item in cases]
+    if any(not isinstance(item, str) or not item for item in ids) or len(set(ids)) != len(ids):
+        raise ValueError("record identity fixture case ids are invalid")
+    declared = spec.get("fixture_contract", {}).get("cases")
+    if not isinstance(declared, list) or [item.get("id") for item in declared] != ids:
+        raise ValueError("record identity fixture case ids drifted")
+
+    identity_field = f"return_same_{model['output']['parameter']}"
+    expected_fields = {
+        identity_field, *(item["expected_output"] for item in model["output"]["fields"])
+    }
+    for index, case in enumerate(cases):
+        if set(case) != {"id", "inputs", "expected"}:
+            raise ValueError("record identity fixture case binding shape drifted")
+        inputs = case["inputs"]
+        expected = case["expected"]
+        if not isinstance(inputs, dict) or not isinstance(expected, dict):
+            raise ValueError("record identity fixture case payload is incomplete")
+        if set(expected) != expected_fields or expected.get(identity_field) is not True:
+            raise ValueError("record identity expected outputs drifted")
+        declared_expected = declared[index].get("expected_outputs")
+        if not isinstance(declared_expected, dict) or declared_expected != expected:
+            raise ValueError("record identity declared fixture outputs drifted")
+        _validate_fixture_record(inputs, model["input"], "input")
+        _validate_fixture_record(inputs, model["output"], "output")
+        for field in model["output"]["fields"]:
+            _scalar_value(expected[field["expected_output"]], field["fixture_scalar_type"])
+
+
+def _validate_fixture_record(inputs: dict[str, Any], record: dict[str, Any], role: str) -> None:
+    root = _value_at_path(inputs, record["fixture_root"])
+    fixture_key = "fixture_path" if role == "input" else "initial_fixture_path"
+    expected_paths = {tuple(item[fixture_key]) for item in record["fields"]}
+    try:
+        actual_paths = _leaf_paths(root)
+    except ValueError as exc:
+        raise ValueError(f"record identity {role} fixture shape drifted") from exc
+    if actual_paths != expected_paths:
+        raise ValueError(f"record identity {role} fixture shape drifted")
+    for field in record["fields"]:
+        _scalar_value(_value_at_path(root, field[fixture_key]), field["fixture_scalar_type"])
+
+
+def _validate_produced_plan(plan: dict[str, Any], model: dict[str, Any]) -> None:
+    parameter_names = [item["name"] for item in plan["parameters"]]
+    signature_names = [item["name"] for item in model["signature_parameters"]]
+    if parameter_names != signature_names:
+        raise ValueError("record identity plan reordered C parameters")
+    binding_names = [item["name"] for item in plan["bindings"]]
+    if set(binding_names) != {model["input"]["parameter"], model["output"]["parameter"]}:
+        raise ValueError("record identity plan binding closure drifted")
+    covered = {item["fixture_field"] for item in plan["assertions"]}
+    covered.update(item["fixture_field"] for item in plan["identity_assertions"])
+    if covered != set(model["observable"]):
+        raise ValueError("record identity plan does not cover every observable exactly")
+    if len(covered) != len(plan["assertions"]) + len(plan["identity_assertions"]):
+        raise ValueError("record identity plan observable coverage is duplicated")
+
+
+def _validate_pointer_proof(spec: dict[str, Any], input_name: str, output_name: str) -> None:
+    pointer = spec.get("c_boundary", {}).get("pointer_contract")
+    if not isinstance(pointer, dict):
+        raise ValueError("record identity pointer contract is required")
+    required_pair = frozenset((input_name, output_name))
+    pairs = pointer.get("noalias_required")
+    if not isinstance(pairs, list) or len(pairs) != 1:
+        raise ValueError("record identity pointer noalias proof is not closed")
+    pair = pairs[0]
+    if not isinstance(pair, list) or len(pair) != 2 or frozenset(pair) != required_pair:
+        raise ValueError("record identity pointer noalias pair drifted")
+    input_buffers = pointer.get("input_buffers")
+    output_pointers = pointer.get("output_pointers")
+    if (
+        not isinstance(input_buffers, list)
+        or not isinstance(output_pointers, list)
+        or [item.get("name") for item in input_buffers if isinstance(item, dict)] != [input_name]
+        or [item.get("name") for item in output_pointers if isinstance(item, dict)] != [output_name]
+        or len(input_buffers) != 1
+        or len(output_pointers) != 1
+    ):
+        raise ValueError("record identity pointer roles do not close the signature")
+    alias = pointer.get("alias_contract")
+    actual = pointer.get("actual_argument_noalias_proof")
+    if (
+        pointer.get("aliasing_proven") is not True
+        or not isinstance(alias, dict)
+        or alias.get("requires_noalias") is not True
+        or alias.get("proven") is not True
+        or not isinstance(actual, dict)
+        or actual.get("proven") is not True
+        or not isinstance(actual.get("parameter_pair"), list)
+        or frozenset(actual["parameter_pair"]) != required_pair
+    ):
+        raise ValueError("record identity pointer noalias proof is incomplete")
+    actual_args = actual.get("actual_arguments")
+    if (
+        not isinstance(actual_args, list)
+        or len(actual_args) != 2
+        or {item.get("parameter") for item in actual_args if isinstance(item, dict)}
+        != {input_name, output_name}
+    ):
+        raise ValueError("record identity actual argument proof is not closed")
+
+
+def _validate_identity_source(signature: dict[str, Any], output_name: str) -> None:
+    source = signature.get("c_source")
+    if source is None:
+        return
+    if not isinstance(source, str) or not source.strip():
+        raise ValueError("record identity C source is invalid")
+    returned = re.findall(r"\breturn\s+([A-Za-z_][A-Za-z0-9_]*)\s*;", source)
+    if returned != [output_name]:
+        raise ValueError("record identity C source does not return the output parameter")
+
+
+def _matching_signature(spec: dict[str, Any], function_name: str) -> dict[str, Any]:
+    signatures = spec.get("c_boundary", {}).get("signatures")
+    matches = [
+        item for item in signatures or []
+        if isinstance(item, dict) and item.get("function") == function_name
+    ]
+    if len(matches) != 1:
+        raise ValueError("record identity requires exactly one matching C signature")
+    return matches[0]
+
+
+def _public_api(spec: dict[str, Any]) -> str:
+    entries = [
+        item for item in spec.get("rust_boundary", {}).get("public_api") or []
+        if isinstance(item, dict)
+    ]
+    if len(entries) != 1:
+        raise ValueError("record identity requires exactly one Rust public API")
+    return _ident(entries[0].get("name"), "Rust API")
+
+
+def _scalar_conversion(fixture_type: Any, rust_type: Any, conversion: Any) -> None:
+    if conversion == "identity" and fixture_type == rust_type and rust_type in {"u32", "usize"}:
+        return
+    if conversion == "u32_to_usize" and fixture_type == "u32" and rust_type == "usize":
+        return
+    raise ValueError("record identity scalar conversion is inconsistent")
+
+
+def _scalar_value(value: Any, scalar_type: str) -> None:
+    valid = isinstance(value, int) and not isinstance(value, bool) and value >= 0
+    if scalar_type == "u32" and valid and value <= 0xFFFFFFFF:
+        return
+    if scalar_type == "usize" and valid and value <= 0xFFFFFFFFFFFFFFFF:
+        return
+    raise ValueError(f"record identity fixture scalar does not match {scalar_type}")
+
+
+def _leaf_paths(value: Any, prefix: tuple[str, ...] = ()) -> set[tuple[str, ...]]:
+    if not isinstance(value, dict) or not value:
+        raise ValueError("record identity fixture record is missing or empty")
+    result: set[tuple[str, ...]] = set()
+    for key, child in value.items():
+        if not isinstance(key, str) or not key:
+            raise ValueError("record identity fixture field name is invalid")
+        path = (*prefix, key)
+        if isinstance(child, dict):
+            result.update(_leaf_paths(child, path))
+        else:
+            result.add(path)
+    return result
+
+
+def _value_at_path(value: Any, path: list[str]) -> Any:
+    current = value
+    for part in path:
+        if not isinstance(current, dict) or part not in current:
+            raise ValueError(f"record identity fixture path is missing: {'.'.join(path)}")
+        current = current[part]
+    return current
+
+
+def _fixture_path(value: Any, label: str) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or not value
+        or any(not isinstance(item, str) or not item or "\x00" in item for item in value)
+    ):
+        raise ValueError(f"record identity {label} is invalid")
+    return list(value)
+
+
+def _rust_path(value: Any, label: str) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"record identity {label} is required")
+    return [_ident(item, label) for item in value]
+
+
+def _rust_type_path(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        raise ValueError("record identity Rust type path must be an array")
+    return [_ident(item, "Rust type path") for item in value]
+
+
+def _ident(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not IDENTIFIER_RE.fullmatch(value) or value in RUST_KEYWORDS:
+        raise ValueError(f"record identity {label} is not a safe identifier")
+    return value
+
+
+def _c_type(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip())
+
+
+def _exact_keys(value: dict[str, Any], expected: set[str], label: str) -> None:
+    if set(value) != expected:
+        raise ValueError(f"{label} shape drifted")
