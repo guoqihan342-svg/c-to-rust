@@ -30,6 +30,7 @@ def build_required_candidate_api(plan: dict[str, Any]) -> dict[str, Any]:
     supporting_types_source = "\n\n".join(
         _supporting_type_source(item) for item in plan["supporting_types"]
     )
+    supporting_types_required = bool(supporting_types_source)
     payload = {
         "schema_version": 1,
         "status": "bound",
@@ -37,6 +38,14 @@ def build_required_candidate_api(plan: dict[str, Any]) -> dict[str, Any]:
         "plan_sha256": plan["plan_sha256"],
         "signature": signature,
         "supporting_types_source": supporting_types_source,
+        "candidate_source_contract": {
+            "mode": "self_contained",
+            "type_environment": "closed",
+            "supporting_types_source": (
+                "required_exactly_once" if supporting_types_required else "none"
+            ),
+            "harness_injects_missing_types": False,
+        },
         "return_lifetime_from": (
             parameters[lifetime_binding[0]]["name"]
             if lifetime_binding is not None

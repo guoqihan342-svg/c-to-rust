@@ -16,7 +16,7 @@
 | --- | --- |
 | Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
-| 最近开发阶段 | P0-A18c2：安全语法拒绝转为结构化 replay failure |
+| 最近开发阶段 | P0-A18c3：required API 增加闭合 self-contained source 合同 |
 | 当前翻译任务 | P0-A18c：用固定跨项目样本复验 AI exact 成功率与首轮 API 匹配率 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
@@ -54,7 +54,7 @@ ContextPack v4 只向模型提供有界事实：真实 source span、编译参�
 
 候选和 repair prompt 会在 ContextPack 投影前单独展示同一份 generated replay source contract，并重申函数签名、Rust public API、raw-pointer 与 unsafe 策略。完整 replay source 和 ReplayCallPlan payload 均只出现一次。声明式 plan 通过受限 DSL 绑定 C source function、Rust `api_name`、参数顺序/类型、C 参数映射、保留的 length、返回/字段类型、fixture codec、ABI、unsafe 和 plan SHA；renderer、provider readiness 与 fresh binding 使用同一对象。所有已盘点 adapter 均已计划化，专用 fallback dispatch 与 readiness OR 列表已删除。record identity 使用闭合 JSON 路径、递归 record initializer、受限 null/constant leaf、调用前后 reference identity 和显式 noalias proof；record buffer/length 使用显式可空 byte storage、保留 length 和 raw-pointer identity；opaque context 生成 `&KvDbFixture`、`&str`、`Option<&str>` 安全 Rust replay model，拒绝 marker、`zeroed`、地址字面量和任意 Rust 表达式。动态 slice 继续使用有界 `Vec<i32>` 与最多 4096 项的 codec。以上均是 harness/replay 能力，不自动增加 translator semantic numerator。
 
-AI candidate manifest v9 的 `prompt_scope` 由实际 ContextPack 计算，并显式记录 `generated_replay_api_contract`。ReplayCallPlan 现在额外生成可复算的 `required_candidate_api`，把精确函数签名、必要 supporting structs、ABI、unsafe 和引用返回生命周期在模型调用前单独展示；provider readiness 与 fresh validator 都从同一 plan 复算，漂移即 fail closed。manifest 把 provider、logical/resolved model、`competition_eligible` 和 `evaluation_scope` 绑定到 generator 与 candidate；每次真实调用都绑定独立 response、最小 invocation receipt 和 session-export identity。仅当合法 JSONL 无工具、无 assistant 文本、以 `step_finish` 结束且 output/reasoning token 都为 0 时，才允许原 prompt 原模型再调用一次；余额、鉴权、timeout、非零退出、工具事件和普通 malformed response 均不重试。比赛主通道只认 `zai/glm-5.1`；GLM 余额不足时改用 `opencode/deepseek-v4-flash-free` 做 `auxiliary-local-validation`，但不能关闭比赛待办或进入比赛成功率分子。AI 输出始终保持 `semantic_gate=false`，最终接受只由共同门禁决定。
+AI candidate manifest v9 的 `prompt_scope` 由实际 ContextPack 计算，并显式记录 `generated_replay_api_contract`。ReplayCallPlan 现在额外生成可复算的 `required_candidate_api`，把精确函数签名、必要 supporting structs、ABI、unsafe 和引用返回生命周期在模型调用前单独展示；provider readiness 与 fresh validator 都从同一 plan 复算，漂移即 fail closed。required API 还声明闭合的 self-contained source 合同：非空 `supporting_types_source` 必须原样出现一次，harness 不补注入缺失类型，模型不能用自造 extern/FFI/opaque 类型替代 compiler-owned fixture model。manifest 把 provider、logical/resolved model、`competition_eligible` 和 `evaluation_scope` 绑定到 generator 与 candidate；每次真实调用都绑定独立 response、最小 invocation receipt 和 session-export identity。仅当合法 JSONL 无工具、无 assistant 文本、以 `step_finish` 结束且 output/reasoning token 都为 0 时，才允许原 prompt 原模型再调用一次；余额、鉴权、timeout、非零退出、工具事件和普通 malformed response 均不重试。比赛主通道只认 `zai/glm-5.1`；GLM 余额不足时改用 `opencode/deepseek-v4-flash-free` 做 `auxiliary-local-validation`，但不能关闭比赛待办或进入比赛成功率分子。AI 输出始终保持 `semantic_gate=false`，最终接受只由共同门禁决定。
 
 候选生成使用无工具 `c2rust-candidate` agent，OpenCode 事件中出现任何层级的 `tool`/`tool_use` 都会 fail closed；worker/preflight 仍使用执行命令所需的 `c2rust-migrator`，两类 agent 不再混用。比赛探针使用逻辑模型名 `GLM-5.1`，candidate CLI 使用 resolved id `zai/glm-5.1`。解析器接受严格 JSON，或带少量说明但只有一个完整 JSON 围栏的响应；多围栏、不完整围栏、额外工具访问和不受限字段仍会拒绝。OpenCode 1.17.18 的文件参数按“固定短消息在前，`--file=<prompt>` 在后”的 `opencode-file-attachment-v2` 合同传输，避免 `--file` 把消息误解析为第二个文件。
 

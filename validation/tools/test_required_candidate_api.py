@@ -47,6 +47,15 @@ class RequiredCandidateApiTests(unittest.TestCase):
         self.assertIn("pub struct FdbTslAddr", contract["supporting_types_source"])
         self.assertIn("pub log: u32", contract["supporting_types_source"])
         self.assertIn("pub struct FdbBlob", contract["supporting_types_source"])
+        self.assertEqual(
+            {
+                "mode": "self_contained",
+                "type_environment": "closed",
+                "supporting_types_source": "required_exactly_once",
+                "harness_injects_missing_types": False,
+            },
+            contract["candidate_source_contract"],
+        )
 
     def test_generic_renamed_plan_has_no_project_or_function_dispatch(self) -> None:
         plan = {
@@ -118,6 +127,7 @@ class RequiredCandidateApiTests(unittest.TestCase):
             contract["signature"],
         )
         self.assertIsNone(contract["return_lifetime_from"])
+        self.assertEqual("none", contract["candidate_source_contract"]["supporting_types_source"])
 
     def test_reference_return_without_identity_fails_closed(self) -> None:
         plan = {

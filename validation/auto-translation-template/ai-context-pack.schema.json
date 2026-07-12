@@ -141,6 +141,7 @@
         "plan_sha256",
         "signature",
         "supporting_types_source",
+        "candidate_source_contract",
         "return_lifetime_from",
         "contract_sha256"
       ],
@@ -151,6 +152,24 @@
         "plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "signature": {"type": "string", "minLength": 1, "maxLength": 4096},
         "supporting_types_source": {"type": "string", "maxLength": 65536},
+        "candidate_source_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "type_environment",
+            "supporting_types_source",
+            "harness_injects_missing_types"
+          ],
+          "properties": {
+            "mode": {"const": "self_contained"},
+            "type_environment": {"const": "closed"},
+            "supporting_types_source": {
+              "enum": ["none", "required_exactly_once"]
+            },
+            "harness_injects_missing_types": {"const": false}
+          }
+        },
         "return_lifetime_from": {
           "oneOf": [
             {"type": "null"},

@@ -24,6 +24,7 @@ from .prompt_transport import prompt_file_arguments
 from .prompt_contract import (
     context_without_replay_source,
     render_boundary_contract,
+    render_candidate_source_rule,
     render_replay_api_contract,
     render_required_candidate_api,
 )
@@ -273,11 +274,15 @@ def render_repair_prompt(
     failures_json = json.dumps(failure_facts, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     boundary_contract = render_boundary_contract(context_pack)
     required_candidate_api = render_required_candidate_api(context_pack)
+    candidate_source_rule = render_candidate_source_rule(context_pack)
     replay_contract = render_replay_api_contract(context_pack)
     required_candidate_api_line = (
         f"Required candidate API: {required_candidate_api}\n"
         if required_candidate_api != "null"
         else ""
+    )
+    candidate_source_rule_line = (
+        f"{candidate_source_rule}\n" if candidate_source_rule else ""
     )
     return (
         "Task mode: generate-candidate\n"
@@ -299,6 +304,7 @@ def render_repair_prompt(
         "This output is never semantic acceptance.\n"
         f"Required boundary facts: {boundary_contract}\n"
         f"{required_candidate_api_line}"
+        f"{candidate_source_rule_line}"
         f"Required generated replay API contract: {replay_contract}\n"
         f"ContextPack: {context_json}\n"
         f"FailureFacts: {failures_json}\n"

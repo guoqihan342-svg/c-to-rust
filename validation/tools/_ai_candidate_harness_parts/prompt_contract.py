@@ -53,6 +53,24 @@ def render_required_candidate_api(context_pack: dict[str, Any]) -> str:
     return json.dumps(required_api, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
+def render_candidate_source_rule(context_pack: dict[str, Any]) -> str:
+    contract = context_pack.get("replay_api_contract")
+    required_api = contract.get("required_candidate_api") if isinstance(contract, dict) else None
+    source_contract = (
+        required_api.get("candidate_source_contract")
+        if isinstance(required_api, dict)
+        else None
+    )
+    if not isinstance(source_contract, dict):
+        return ""
+    return (
+        "Candidate source assembly: candidate.source must be self-contained. "
+        "When supporting_types_source is non-empty, include it exactly once before the required "
+        "function. The harness injects no missing types. Treat those declarations as the complete "
+        "closed type model; do not replace them with alternate FFI, extern, or opaque types."
+    )
+
+
 def context_without_replay_source(context_pack: dict[str, Any]) -> dict[str, Any]:
     context = dict(context_pack)
     contract = context_pack.get("replay_api_contract")
@@ -97,6 +115,7 @@ def boundary_payload(value: Any) -> dict[str, Any]:
 __all__ = [
     "context_without_replay_source",
     "render_boundary_contract",
+    "render_candidate_source_rule",
     "render_replay_api_contract",
     "render_required_candidate_api",
 ]

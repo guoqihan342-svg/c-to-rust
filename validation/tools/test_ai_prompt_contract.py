@@ -144,6 +144,12 @@ class AiPromptContractTests(unittest.TestCase):
             "plan_sha256": "b" * 64,
             "signature": "pub fn translate_safe(value: &[u8], len: usize) -> bool",
             "supporting_types_source": "",
+            "candidate_source_contract": {
+                "mode": "self_contained",
+                "type_environment": "closed",
+                "supporting_types_source": "none",
+                "harness_injects_missing_types": False,
+            },
             "return_lifetime_from": None,
             "contract_sha256": "c" * 64,
         }
@@ -160,6 +166,8 @@ class AiPromptContractTests(unittest.TestCase):
         )
         self.assertIn('"api_name":"translate_safe"', prompt)
         self.assertIn('"function_name":"translate"', prompt)
+        self.assertEqual(1, prompt.count("Candidate source assembly:"))
+        self.assertIn("The harness injects no missing types", prompt)
 
         repair_prompt = render_repair_prompt(
             context,
@@ -167,6 +175,7 @@ class AiPromptContractTests(unittest.TestCase):
             {"gate": "generated_replay", "message": "exact API mismatch"},
         )
         self.assertIn('"api_name":"translate_safe"', repair_prompt)
+        self.assertEqual(1, repair_prompt.count("Candidate source assembly:"))
         repair_contract_prefix = repair_prompt.split("CurrentCandidate:", 1)[0]
         self.assertEqual(
             1,
