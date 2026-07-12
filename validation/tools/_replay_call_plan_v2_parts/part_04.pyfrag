@@ -1,0 +1,505 @@
+def _scripted_record_components(
+    spec: dict[str, Any], contract: dict[str, Any]
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[list[str]],
+]:
+    entries = contract.get("entry_arguments")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("scripted record entry arguments are required")
+    source_name = _identifier(spec.get("function_name"), "source function")
+    signature = _matching_signature(spec, source_name)
+    c_parameters = signature.get("parameters")
+    if not isinstance(c_parameters, list) or len(c_parameters) != len(entries):
+        raise ValueError("scripted record C parameter count drifted")
+    if _normalize_c_type(signature.get("return_type")) not in {"bool", "_Bool"}:
+        raise ValueError("scripted record return type must be bool")
+
+    parameters: list[dict[str, Any]] = []
+    mappings: list[dict[str, Any]] = []
+    bindings: list[dict[str, Any]] = []
+    supporting_types: dict[str, dict[str, Any]] = {}
+    legacy_api_shape = not bool(spec.get("rust_boundary", {}).get("public_api"))
+    for position, (entry, c_parameter) in enumerate(zip(entries, c_parameters, strict=True)):
+        if not isinstance(entry, dict) or not isinstance(c_parameter, dict):
+            raise ValueError("scripted record entry argument is invalid")
+        name = _identifier(entry.get("parameter"), "scripted record parameter")
+        rust_type = _rust_type(entry.get("rust_type"), "scripted record parameter type")
+        pass_mode = entry.get("pass_mode")
+        direction = entry.get("direction")
+        if (
+            c_parameter.get("name") != name
+            or _normalize_c_type(c_parameter.get("c_type")) != _normalize_c_type(entry.get("c_type"))
+            or c_parameter.get("direction") != direction
+        ):
+            raise ValueError("scripted record C parameter mapping drifted")
+        if isinstance(entry.get("initializer"), dict):
+            initializer = _normalize_initializer(entry["initializer"], supporting_types)
+            if initializer["rust_type"] != rust_type:
+                raise ValueError("scripted record initializer type drifted")
+            if pass_mode == "mutable_ref":
+                mutable = direction == "inout" or legacy_api_shape
+                if direction not in {"input", "inout"}:
+                    raise ValueError("scripted record reference direction is unsupported")
+                source_kind = "binding_borrow_mut" if mutable else "binding_borrow"
+                parameter_type = f"&mut {rust_type}" if mutable else f"&{rust_type}"
+            elif pass_mode == "value" and direction == "input":
+                mutable = False
+                source_kind = "binding_value"
+                parameter_type = rust_type
+            else:
+                raise ValueError("scripted record pass mode is unsupported")
+            bindings.append(
+                {
+                    "name": name,
+                    "rust_type": rust_type,
+                    "mutable": mutable,
+                    "initializer": initializer,
+                }
+            )
+            source = {"kind": source_kind, "binding": name}
+        else:
+            fixture_field = _identifier(entry.get("fixture_field"), "scripted scalar fixture")
+            if pass_mode != "value" or direction != "input" or rust_type not in {"u32", "usize", "bool"}:
+                raise ValueError("scripted scalar entry is unsupported")
+            source = {"kind": "fixture_field", "field": fixture_field, "encoding": rust_type}
+            parameter_type = rust_type
+        parameters.append(
+            {
+                "position": position,
+                "name": name,
+                "rust_type": parameter_type,
+                "c_parameter": name,
+                "length_retained": False,
+                "source": source,
+            }
+        )
+        mappings.append(_scripted_mapping(position, c_parameter, name, parameter_type))
+
+    borrowed = [
+        item["source"]["binding"]
+        for item in parameters
+        if item["source"]["kind"] in {"binding_borrow", "binding_borrow_mut"}
+    ]
+    required_pairs = sorted(
+        sorted([borrowed[left], borrowed[right]])
+        for left in range(len(borrowed))
+        for right in range(left + 1, len(borrowed))
+    )
+    declared_pairs = _normalize_pairs(contract.get("noalias_required"), "scripted noalias_required")
+    pointer = spec.get("c_boundary", {}).get("pointer_contract")
+    if not isinstance(pointer, dict) or pointer.get("aliasing_proven") is not True:
+        raise ValueError("scripted record pointer proof is required")
+    boundary_pairs = _normalize_pairs(pointer.get("noalias_required"), "scripted pointer noalias_required")
+    if declared_pairs != required_pairs or boundary_pairs != required_pairs:
+        raise ValueError("scripted record noalias binding set drifted")
+    return parameters, mappings, list(supporting_types.values()), bindings, declared_pairs
+
+
+def _finish_scripted_plan(
+    spec: dict[str, Any],
+    fixture: dict[str, Any],
+    parameters: list[dict[str, Any]],
+    mappings: list[dict[str, Any]],
+    supporting_types: list[dict[str, Any]],
+    bindings: list[dict[str, Any]],
+    noalias: list[list[str]],
+    assertions: list[dict[str, Any]],
+    runtime: dict[str, Any],
+) -> dict[str, Any]:
+    observable = spec.get("fixture_contract", {}).get("observable_outputs")
+    runtime_fields = [
+        field
+        for probe in runtime["probes"]
+        for field in _scripted_expected_fields(probe["expected"])
+    ]
+    output_fields = [item["fixture_field"] for item in assertions] + runtime_fields
+    if not isinstance(observable, list) or set(observable) != set(output_fields):
+        raise ValueError("scripted plan observable output mapping drifted")
+    if len(output_fields) != len(set(output_fields)):
+        raise ValueError("scripted plan observable outputs must be unique")
+    plan: dict[str, Any] = {
+        "schema_version": 2,
+        "status": "bound",
+        "source_function_name": _identifier(spec.get("function_name"), "source function"),
+        "api_name": _scripted_api_name(spec),
+        "visibility": "pub",
+        "abi": "Rust",
+        "unsafe": False,
+        "parameters": parameters,
+        "c_parameter_mappings": mappings,
+        "omitted_c_parameters": [],
+        "length_parameters_retained": [
+            item["name"] for item in parameters if item["length_retained"]
+        ],
+        "return_type": "bool",
+        "supporting_types": supporting_types,
+        "bindings": bindings,
+        "distinct_mutable_bindings": noalias,
+        "call_args": [
+            {"position": item["position"], "parameter": item["name"], "source": item["source"]}
+            for item in parameters
+        ],
+        "assertions": assertions,
+        "scripted_runtime": runtime,
+        "fixture": {
+            "path": fixture["path"],
+            "sha256": fixture["sha256"],
+            "case_count": len(fixture["cases"]),
+            "case_ids": [item["id"] for item in fixture["cases"]],
+        },
+    }
+    _validate_scripted_fixture_cases(plan, fixture["cases"])
+    plan["plan_sha256"] = _plan_sha256(plan)
+    validate_replay_call_plan_v2(plan)
+    return plan
+
+
+def _scripted_return_runtime(
+    external: dict[str, Any],
+    *,
+    call_args_codec: dict[str, Any],
+    call_args_rust_type: str,
+    call_args_fields: list[Any] | None = None,
+) -> dict[str, Any]:
+    callee = _identifier(external.get("name"), "scripted callee")
+    count = _scripted_scalar_probe(
+        callee,
+        "external",
+        "call_count",
+        external.get("call_count_output"),
+        "usize",
+    )
+    expected = (
+        {
+            "kind": "fields",
+            "fields": [_identifier(item, "scripted call snapshot output") for item in call_args_fields],
+        }
+        if call_args_fields is not None
+        else {
+            "kind": "field",
+            "field": _identifier(external.get("call_args_output"), "scripted call arguments output"),
+        }
+    )
+    return {
+        "scope": "fixture_only",
+        "semantics_verified": False,
+        "stimuli": [
+            {
+                "callee": callee,
+                "channel": "external",
+                "kind": "return_u32",
+                "fixture_field": _identifier(external.get("return_fixture_field"), "scripted return fixture"),
+            }
+        ],
+        "reset_channels": ["external"],
+        "probes": [
+            count,
+            {
+                "callee": callee,
+                "channel": "external",
+                "kind": "call_args",
+                "expected": expected,
+                "rust_type": call_args_rust_type,
+                "codec": call_args_codec,
+            },
+        ],
+    }
+
+
+def _scripted_api_name(spec: dict[str, Any]) -> str:
+    entries = [
+        item
+        for item in spec.get("rust_boundary", {}).get("public_api") or []
+        if isinstance(item, dict)
+    ]
+    if not entries:
+        return _identifier(spec.get("function_name"), "scripted Rust API")
+    if len(entries) != 1:
+        raise ValueError("scripted replay requires at most one Rust public API")
+    return _identifier(entries[0].get("name"), "scripted Rust API")
+
+
+def _scripted_scalar_probe(
+    callee: Any, channel: str, kind: str, field: Any, encoding: str
+) -> dict[str, Any]:
+    return _scripted_field_probe(
+        callee,
+        channel,
+        kind,
+        field,
+        encoding,
+        {"kind": "scalar", "encoding": encoding},
+    )
+
+
+def _scripted_field_probe(
+    callee: Any,
+    channel: str,
+    kind: str,
+    field: Any,
+    rust_type: str,
+    codec: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "callee": _identifier(callee, "scripted probe callee"),
+        "channel": channel,
+        "kind": kind,
+        "expected": {
+            "kind": "field",
+            "field": _identifier(field, "scripted probe fixture field"),
+        },
+        "rust_type": rust_type,
+        "codec": codec,
+    }
+
+
+def _scripted_mapping(
+    position: int, c_parameter: dict[str, Any], name: str, rust_type: str
+) -> dict[str, Any]:
+    return {
+        "position": position,
+        "c_parameter": name,
+        "c_type": str(c_parameter.get("c_type") or ""),
+        "direction": str(c_parameter.get("direction") or ""),
+        "rust_parameter": name,
+        "rust_type": rust_type,
+    }
+
+
+def _scripted_assertion(actual: str, value: dict[str, Any], encoding: str) -> dict[str, Any]:
+    if value.get("rust_type") != encoding:
+        raise ValueError("scripted assertion Rust type drifted")
+    return {
+        "actual": actual,
+        "fixture_field": _identifier(value.get("fixture_field"), "scripted assertion fixture"),
+        "rust_type": encoding,
+        "encoding": encoding,
+    }
+
+
+def _scripted_state_assertion(state: dict[str, Any]) -> dict[str, Any]:
+    parameter = _identifier(state.get("parameter"), "scripted state parameter")
+    path = _field_path(state.get("field_path"), "scripted state path")
+    rust_type = state.get("rust_type")
+    if rust_type not in {"u32", "usize", "bool"}:
+        raise ValueError("scripted state type is unsupported")
+    return {
+        "actual": "binding." + parameter + "." + ".".join(path),
+        "fixture_field": _identifier(state.get("fixture_field"), "scripted state fixture"),
+        "rust_type": rust_type,
+        "encoding": rust_type,
+    }
+
+
+def _normalize_scripted_runtime(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("ReplayCallPlan v2 scripted runtime is invalid")
+    if value.get("scope") != "fixture_only" or value.get("semantics_verified") is not False:
+        raise ValueError("ReplayCallPlan v2 scripted runtime claim boundary drifted")
+    stimuli = value.get("stimuli")
+    resets = value.get("reset_channels")
+    probes = value.get("probes")
+    if not isinstance(stimuli, list) or not stimuli or not isinstance(resets, list) or not resets:
+        raise ValueError("ReplayCallPlan v2 scripted runtime controls are required")
+    if not isinstance(probes, list) or not probes:
+        raise ValueError("ReplayCallPlan v2 scripted runtime probes are required")
+    normalized_stimuli = []
+    for item in stimuli:
+        if not isinstance(item, dict) or item.get("kind") not in {"return_u32", "return_u32_sequence"}:
+            raise ValueError("ReplayCallPlan v2 scripted stimulus is invalid")
+        normalized = {
+            "callee": _identifier(item.get("callee"), "scripted stimulus callee"),
+            "channel": item.get("channel"),
+            "kind": item["kind"],
+            "fixture_field": _identifier(item.get("fixture_field"), "scripted stimulus fixture"),
+        }
+        if normalized["channel"] != "external":
+            raise ValueError("ReplayCallPlan v2 scripted stimulus channel is invalid")
+        _scripted_runtime_helper(normalized["channel"], normalized["kind"])
+        if item["kind"] == "return_u32_sequence":
+            max_items = item.get("max_items")
+            if not isinstance(max_items, int) or not 1 <= max_items <= 1024:
+                raise ValueError("ReplayCallPlan v2 scripted sequence bound is invalid")
+            normalized["max_items"] = max_items
+        normalized_stimuli.append(normalized)
+    normalized_resets = list(resets)
+    if any(item != "external" for item in normalized_resets):
+        raise ValueError("ReplayCallPlan v2 scripted reset channel is invalid")
+    if len(normalized_resets) != len(set(normalized_resets)):
+        raise ValueError("ReplayCallPlan v2 scripted reset channels are duplicated")
+    normalized_probes = []
+    for item in probes:
+        if not isinstance(item, dict) or item.get("kind") not in {"call_count", "call_args", "call_order"}:
+            raise ValueError("ReplayCallPlan v2 scripted probe is invalid")
+        normalized_probes.append(
+            {
+                "callee": _identifier(item.get("callee"), "scripted probe callee"),
+                "channel": item.get("channel"),
+                "kind": item["kind"],
+                "expected": _normalize_scripted_expected(item.get("expected")),
+                "rust_type": _rust_type(item.get("rust_type"), "scripted probe type"),
+                "codec": _normalize_scripted_codec(item.get("codec")),
+            }
+        )
+        _scripted_runtime_helper(
+            normalized_probes[-1]["channel"], normalized_probes[-1]["kind"]
+        )
+    return {
+        "scope": "fixture_only",
+        "semantics_verified": False,
+        "stimuli": normalized_stimuli,
+        "reset_channels": normalized_resets,
+        "probes": normalized_probes,
+    }
+
+
+def _scripted_runtime_helper(channel: Any, operation: str) -> str:
+    helpers = {
+        ("external", "return_u32"): "__c2r_scripted_external_set_return",
+        ("external", "return_u32_sequence"): "__c2r_scripted_external_set_sequence",
+        ("external", "reset"): "__c2r_scripted_external_reset_calls",
+        ("external", "call_count"): "__c2r_scripted_external_call_count",
+        ("external", "call_args"): "__c2r_scripted_external_call_args",
+        ("body", "call_count"): "__c2r_scripted_body_call_count",
+        ("body", "call_args"): "__c2r_scripted_body_call_args",
+        ("event", "call_order"): "__c2r_scripted_call_order",
+    }
+    helper = helpers.get((channel, operation))
+    if helper is None:
+        raise ValueError("ReplayCallPlan v2 scripted channel/operation is unsupported")
+    return helper
+
+
+def _normalize_scripted_expected(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or value.get("kind") not in {"field", "fields"}:
+        raise ValueError("ReplayCallPlan v2 scripted expected source is invalid")
+    if value["kind"] == "field":
+        return {"kind": "field", "field": _identifier(value.get("field"), "scripted expected field")}
+    fields = value.get("fields")
+    if not isinstance(fields, list) or not fields:
+        raise ValueError("ReplayCallPlan v2 scripted expected fields are required")
+    normalized = [_identifier(item, "scripted expected field") for item in fields]
+    if len(normalized) != len(set(normalized)):
+        raise ValueError("ReplayCallPlan v2 scripted expected fields are duplicated")
+    return {"kind": "fields", "fields": normalized}
+
+
+def _normalize_scripted_codec(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("ReplayCallPlan v2 scripted codec is invalid")
+    kind = value.get("kind")
+    if kind == "scalar" and value.get("encoding") in {"u32", "usize", "bool"}:
+        return {"kind": kind, "encoding": value["encoding"]}
+    if kind == "tuple":
+        encodings = value.get("encodings")
+        if isinstance(encodings, list) and 1 <= len(encodings) <= 8 and all(
+            item in {"u32", "usize", "bool"} for item in encodings
+        ):
+            return {"kind": kind, "encodings": encodings}
+    if kind in {"array", "matrix"}:
+        size_key = "length" if kind == "array" else "width"
+        size = value.get(size_key)
+        if value.get("encoding") in {"u32", "usize", "bool"} and isinstance(size, int) and 1 <= size <= 32:
+            return {"kind": kind, "encoding": value["encoding"], size_key: size}
+    if kind == "vector" and value.get("encoding") in {"u32", "usize", "bool"}:
+        return {"kind": kind, "encoding": value["encoding"]}
+    raise ValueError("ReplayCallPlan v2 scripted codec is unsupported")
+
+
+def _scripted_expected_fields(expected: dict[str, Any]) -> list[str]:
+    return [expected["field"]] if expected["kind"] == "field" else list(expected["fields"])
+
+
+def _validate_scripted_fixture_cases(plan: dict[str, Any], cases: list[dict[str, Any]]) -> None:
+    expected_fields = {
+        item["fixture_field"] for item in plan["assertions"]
+    } | {
+        field
+        for probe in plan["scripted_runtime"]["probes"]
+        for field in _scripted_expected_fields(probe["expected"])
+    }
+    for case in cases:
+        inputs = _case_input_values(case)
+        expected = case.get("expected")
+        if not isinstance(expected, dict) or set(expected) != expected_fields:
+            raise ValueError("scripted fixture expected outputs drifted")
+        local_names = {item["name"]: item["name"] for item in plan["bindings"]}
+        for binding in plan["bindings"]:
+            _initializer_literal(binding["initializer"], inputs)
+        for parameter in plan["parameters"]:
+            _binding_argument(parameter["source"], local_names, inputs)
+        for assertion in plan["assertions"]:
+            _encoded_literal(expected[assertion["fixture_field"]], assertion["encoding"])
+        for stimulus in plan["scripted_runtime"]["stimuli"]:
+            _scripted_stimulus_literal(stimulus, inputs)
+        for probe in plan["scripted_runtime"]["probes"]:
+            _scripted_probe_expected_literal(probe, expected)
+
+
+def _case_input_values(case: dict[str, Any]) -> dict[str, Any]:
+    inputs = case.get("inputs")
+    if isinstance(inputs, dict) and isinstance(inputs.get("inputs"), dict):
+        return inputs["inputs"]
+    if not isinstance(inputs, dict):
+        raise ValueError("ReplayCallPlan v2 fixture inputs are invalid")
+    return inputs
+
+
+def _binding_observation_exists(initializer: dict[str, Any], path: list[str]) -> bool:
+    if initializer.get("kind") == "array_repeat":
+        return len(path) == 1 and path[0].isdigit() and int(path[0]) < initializer["length"]
+    return tuple(path) in _initializer_paths(initializer)
+
+
+def _scripted_stimulus_literal(stimulus: dict[str, Any], inputs: dict[str, Any]) -> str:
+    value = inputs.get(stimulus["fixture_field"])
+    if stimulus["kind"] == "return_u32":
+        return _encoded_literal(value, "u32")
+    if not isinstance(value, list) or not value or len(value) > stimulus["max_items"]:
+        raise ValueError("scripted return sequence fixture is invalid")
+    return "&[" + ", ".join(_encoded_literal(item, "u32") for item in value) + "]"
+
+
+def _scripted_probe_expected_literal(probe: dict[str, Any], expected: dict[str, Any]) -> str:
+    source = probe["expected"]
+    value = (
+        expected.get(source["field"])
+        if source["kind"] == "field"
+        else [expected.get(field) for field in source["fields"]]
+    )
+    return _scripted_codec_literal(value, probe["codec"])
+
+
+def _scripted_codec_literal(value: Any, codec: dict[str, Any]) -> str:
+    kind = codec["kind"]
+    if kind == "scalar":
+        return _encoded_literal(value, codec["encoding"])
+    if kind == "tuple":
+        encodings = codec["encodings"]
+        if not isinstance(value, list) or len(value) != len(encodings):
+            raise ValueError("scripted tuple probe shape drifted")
+        values = [_encoded_literal(item, encoding) for item, encoding in zip(value, encodings, strict=True)]
+        suffix = "," if len(values) == 1 else ""
+        return "(" + ", ".join(values) + suffix + ")"
+    if kind == "array":
+        if not isinstance(value, list) or len(value) != codec["length"]:
+            raise ValueError("scripted array probe shape drifted")
+        return "[" + ", ".join(_encoded_literal(item, codec["encoding"]) for item in value) + "]"
+    if kind == "vector":
+        if not isinstance(value, list):
+            raise ValueError("scripted vector probe shape drifted")
+        return "vec![" + ", ".join(_encoded_literal(item, codec["encoding"]) for item in value) + "]"
+    if kind == "matrix":
+        if not isinstance(value, list):
+            raise ValueError("scripted matrix probe shape drifted")
+        rows = []
+        for row in value:
+            if not isinstance(row, list) or len(row) != codec["width"]:
+                raise ValueError("scripted matrix probe row drifted")
+            rows.append("[" + ", ".join(_encoded_literal(item, codec["encoding"]) for item in row) + "]")
+        return "vec![" + ", ".join(rows) + "]"
+    raise ValueError("scripted probe codec is unsupported")

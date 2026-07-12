@@ -60,6 +60,12 @@ def validate_replay_call_plan_v2(plan: dict[str, Any]) -> None:
         if left not in binding_by_name or right not in binding_by_name or left == right:
             raise ValueError("ReplayCallPlan v2 distinct binding is invalid")
 
+    scripted_runtime = plan.get("scripted_runtime")
+    if scripted_runtime is not None:
+        normalized_runtime = _normalize_scripted_runtime(scripted_runtime)
+        if normalized_runtime != scripted_runtime:
+            raise ValueError("ReplayCallPlan v2 scripted runtime is not canonical")
+
     assertions = _normalize_assertions(plan.get("assertions"), binding_by_name)
     if assertions != plan.get("assertions"):
         raise ValueError("ReplayCallPlan v2 assertions are not canonical")
@@ -77,17 +83,28 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
     lines: list[str] = []
     for index, case in enumerate(cases):
         case_ident = _safe_ident(case["id"])
+        inputs = _case_input_values(case)
         local_names: dict[str, str] = {}
         lines.append("    {\n")
         lines.append(f"        let case_id = {json.dumps(case['id'])};\n")
+        runtime = plan.get("scripted_runtime")
+        if isinstance(runtime, dict):
+            lines.append("        // Fixture-only scripted callee controls; callee semantics are not verified.\n")
+            for stimulus in runtime["stimuli"]:
+                literal = _scripted_stimulus_literal(stimulus, inputs)
+                helper = _scripted_runtime_helper(stimulus["channel"], stimulus["kind"])
+                lines.append(f"        {helper}({literal});\n")
+            for channel in runtime["reset_channels"]:
+                helper = _scripted_runtime_helper(channel, "reset")
+                lines.append(f"        {helper}();\n")
         for binding in plan["bindings"]:
             local_name = f"actual_{case_ident}_{index}_{binding['name']}"
             local_names[binding["name"]] = local_name
             mutable = "mut " if binding["mutable"] else ""
-            literal = _initializer_literal(binding["initializer"], case["inputs"])
+            literal = _initializer_literal(binding["initializer"], inputs)
             lines.append(f"        let {mutable}{local_name}: {binding['rust_type']} = {literal};\n")
         arguments = [
-            _binding_argument(item["source"], local_names, case["inputs"])
+            _binding_argument(item["source"], local_names, inputs)
             for item in plan["parameters"]
         ]
         call = f"{plan['api_name']}({', '.join(arguments)})"
@@ -102,6 +119,18 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
             lines.append(
                 f"        assert_eq!({observed}, {expected}, \"{{}} {assertion['fixture_field']} drifted\", case_id);\n"
             )
+        if isinstance(runtime, dict):
+            for probe_index, probe in enumerate(runtime["probes"]):
+                observed = f"observed_probe_{case_ident}_{index}_{probe_index}"
+                expected = _scripted_probe_expected_literal(probe, case["expected"])
+                helper = _scripted_runtime_helper(probe["channel"], probe["kind"])
+                lines.append(
+                    f"        let {observed}: {probe['rust_type']} = {helper}();\n"
+                )
+                label = ",".join(_scripted_expected_fields(probe["expected"]))
+                lines.append(
+                    f"        assert_eq!({observed}, {expected}, \"{{}} {label} drifted\", case_id);\n"
+                )
         lines.append("    }\n")
     return "".join(lines)
 
@@ -232,8 +261,28 @@ def _normalize_bindings(value: Any) -> list[dict[str, Any]]:
 
 
 def _normalize_plan_initializer(value: Any, types: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    if not isinstance(value, dict) or value.get("kind") != "struct":
-        raise ValueError("ReplayCallPlan v2 initializer must be a struct")
+    if not isinstance(value, dict):
+        raise ValueError("ReplayCallPlan v2 initializer must be an object")
+    if value.get("kind") == "array_repeat":
+        length = value.get("length")
+        scalar = value.get("value")
+        if (
+            value.get("element_type") != "u32"
+            or not isinstance(length, int)
+            or not 1 <= length <= 32
+            or not _is_u32(scalar)
+            or value.get("rust_type") != f"[u32; {length}]"
+        ):
+            raise ValueError("ReplayCallPlan v2 array initializer is invalid")
+        return {
+            "kind": "array_repeat",
+            "rust_type": value["rust_type"],
+            "element_type": "u32",
+            "length": length,
+            "value": scalar,
+        }
+    if value.get("kind") != "struct":
+        raise ValueError("ReplayCallPlan v2 initializer kind is unsupported")
     rust_type = _identifier(value.get("rust_type"), "initializer type")
     fields = value.get("fields")
     if not isinstance(fields, list) or not fields:
@@ -269,8 +318,8 @@ def _normalize_plan_initializer(value: Any, types: dict[str, dict[str, Any]]) ->
 
 
 def _normalize_supporting_types(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list) or not value:
-        raise ValueError("ReplayCallPlan v2 supporting types are required")
+    if not isinstance(value, list):
+        raise ValueError("ReplayCallPlan v2 supporting types must be an array")
     result = []
     for item in value:
         if not isinstance(item, dict) or item.get("kind") != "struct":
@@ -311,11 +360,11 @@ def _normalize_binding_source(value: Any, bindings: dict[str, dict[str, Any]]) -
         if kind in {"binding_borrow", "binding_value"} and bindings[binding]["mutable"] is not False:
             raise ValueError("ReplayCallPlan v2 value binding source is invalid")
         return {"kind": kind, "binding": binding}
-    if kind == "fixture_field" and value.get("encoding") == "u32":
+    if kind == "fixture_field" and value.get("encoding") in {"u32", "usize", "bool"}:
         return {
             "kind": "fixture_field",
             "field": _identifier(value.get("field"), "argument fixture field"),
-            "encoding": "u32",
+            "encoding": value["encoding"],
         }
     raise ValueError("ReplayCallPlan v2 argument source is unsupported")
 
@@ -347,7 +396,7 @@ def _normalize_assertions(value: Any, bindings: dict[str, dict[str, Any]]) -> li
         if actual.startswith("binding."):
             parts = actual.split(".")
             binding = bindings.get(parts[1])
-            if binding is None or tuple(parts[2:]) not in _initializer_paths(binding["initializer"]):
+            if binding is None or not _binding_observation_exists(binding["initializer"], parts[2:]):
                 raise ValueError("ReplayCallPlan v2 assertion binding path is invalid")
         encoding = item.get("encoding")
         if encoding not in {"u32", "usize", "bool"}:

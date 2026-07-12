@@ -217,6 +217,7 @@
           "minItems": 1,
           "items": {"$ref": "#/definitions/replayAssertion"}
         },
+        "scripted_runtime": {"$ref": "#/definitions/replayScriptedRuntime"},
         "fixture": {
           "type": "object",
           "additionalProperties": false,
@@ -302,7 +303,7 @@
       "additionalProperties": false,
       "required": ["actual", "fixture_field", "rust_type", "encoding"],
       "properties": {
-        "actual": {"type": "string", "pattern": "^(?:return(?:\\.[A-Za-z_][A-Za-z0-9_]*)*|binding\\.[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+)$"},
+        "actual": {"type": "string", "pattern": "^(?:return(?:\\.[A-Za-z_][A-Za-z0-9_]*)*|binding\\.[A-Za-z_][A-Za-z0-9_]*(?:\\.(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+))+)$"},
         "fixture_field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
         "rust_type": {"type": "string", "minLength": 1},
         "encoding": {"enum": ["u32", "i32", "usize", "u16", "bool", "string"]}
@@ -339,7 +340,24 @@
         "name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
         "rust_type": {"type": "string", "minLength": 1},
         "mutable": {"type": "boolean"},
-        "initializer": {"$ref": "#/definitions/replayStructInitializer"}
+        "initializer": {
+          "oneOf": [
+            {"$ref": "#/definitions/replayStructInitializer"},
+            {"$ref": "#/definitions/replayArrayInitializer"}
+          ]
+        }
+      }
+    },
+    "replayArrayInitializer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "rust_type", "element_type", "length", "value"],
+      "properties": {
+        "kind": {"const": "array_repeat"},
+        "rust_type": {"type": "string", "pattern": "^\\[u32; [1-9][0-9]*\\]$"},
+        "element_type": {"const": "u32"},
+        "length": {"type": "integer", "minimum": 1, "maximum": 32},
+        "value": {"type": "integer", "minimum": 0, "maximum": 4294967295}
       }
     },
     "replayStructInitializer": {
@@ -377,6 +395,145 @@
           }
         }
       }
+    },
+    "replayScriptedRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "semantics_verified", "stimuli", "reset_channels", "probes"],
+      "properties": {
+        "scope": {"const": "fixture_only"},
+        "semantics_verified": {"const": false},
+        "stimuli": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/replayScriptedStimulus"}
+        },
+        "reset_channels": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"const": "external"}
+        },
+        "probes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/replayScriptedProbe"}
+        }
+      }
+    },
+    "replayScriptedStimulus": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["callee", "channel", "kind", "fixture_field"],
+          "properties": {
+            "callee": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+            "channel": {"const": "external"},
+            "kind": {"const": "return_u32"},
+            "fixture_field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["callee", "channel", "kind", "fixture_field", "max_items"],
+          "properties": {
+            "callee": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+            "channel": {"const": "external"},
+            "kind": {"const": "return_u32_sequence"},
+            "fixture_field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+            "max_items": {"type": "integer", "minimum": 1, "maximum": 1024}
+          }
+        }
+      ]
+    },
+    "replayScriptedProbe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["callee", "channel", "kind", "expected", "rust_type", "codec"],
+      "properties": {
+        "callee": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "channel": {"enum": ["external", "body", "event"]},
+        "kind": {"enum": ["call_count", "call_args", "call_order"]},
+        "expected": {"$ref": "#/definitions/replayScriptedExpected"},
+        "rust_type": {"type": "string", "minLength": 1},
+        "codec": {"$ref": "#/definitions/replayScriptedCodec"}
+      }
+    },
+    "replayScriptedExpected": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "field"],
+          "properties": {
+            "kind": {"const": "field"},
+            "field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "fields"],
+          "properties": {
+            "kind": {"const": "fields"},
+            "fields": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
+            }
+          }
+        }
+      ]
+    },
+    "replayScriptedCodec": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "encoding"],
+          "properties": {
+            "kind": {"enum": ["scalar", "vector"]},
+            "encoding": {"enum": ["u32", "usize", "bool"]}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "encodings"],
+          "properties": {
+            "kind": {"const": "tuple"},
+            "encodings": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {"enum": ["u32", "usize", "bool"]}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "encoding", "length"],
+          "properties": {
+            "kind": {"const": "array"},
+            "encoding": {"enum": ["u32", "usize", "bool"]},
+            "length": {"type": "integer", "minimum": 1, "maximum": 32}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "encoding", "width"],
+          "properties": {
+            "kind": {"const": "matrix"},
+            "encoding": {"enum": ["u32", "usize", "bool"]},
+            "width": {"type": "integer", "minimum": 1, "maximum": 32}
+          }
+        }
+      ]
     },
     "responseFile": {
       "type": "object",

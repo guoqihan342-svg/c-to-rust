@@ -40,10 +40,27 @@ def build_replay_call_plan(spec: dict[str, Any], repo_root: Path) -> dict[str, A
         "record_owner_interior_guarded_stats_sequence_state",
         "record_owner_interior_u32_to_usize_wrapping_add_state",
         "record_interior_projection_u32_reset_add_while_continue_state",
+        "scripted_external_u32_call_bool_out",
+        "scripted_external_record_u32_call_bool_state",
+        "scripted_external_record_u32_sequence_do_while_state",
+        "scripted_external_u32_call_interior_reset_add_while_continue_state",
     }:
         return {"schema_version": 1, "status": "unavailable"}
     try:
         resolved_root = repo_root.resolve()
+        if contract_kind in {
+            "scripted_external_u32_call_bool_out",
+            "scripted_external_record_u32_call_bool_state",
+            "scripted_external_record_u32_sequence_do_while_state",
+            "scripted_external_u32_call_interior_reset_add_while_continue_state",
+        }:
+            from validation.tools.replay_call_plan_v2 import build_scripted_external_plan
+
+            return build_scripted_external_plan(
+                spec,
+                _validated_scripted_contract(spec, contract_kind),
+                _fixture_binding(spec, resolved_root),
+            )
         if contract_kind in {
             "record_u32_field_constant_state",
             "record_u32_field_wrapping_add_state",
@@ -264,6 +281,26 @@ def _build_bound_plan(
     plan["plan_sha256"] = _plan_sha256(plan)
     validate_replay_call_plan(plan)
     return plan
+
+
+def _validated_scripted_contract(spec: dict[str, Any], kind: str) -> dict[str, Any]:
+    from validation.tools import auto_migrate
+
+    validators = {
+        "scripted_external_u32_call_bool_out":
+            auto_migrate.scripted_external_u32_call_bool_out_replay_contract,
+        "scripted_external_record_u32_call_bool_state":
+            auto_migrate.scripted_external_record_u32_call_bool_state_replay_contract,
+        "scripted_external_record_u32_sequence_do_while_state":
+            auto_migrate.scripted_external_record_u32_sequence_do_while_state_replay_contract,
+        "scripted_external_u32_call_interior_reset_add_while_continue_state":
+            auto_migrate.call_continue_state_replay_contract,
+    }
+    validator = validators[kind]
+    validated = validator(spec, auto_migrate.oracle_fixture_binding(spec))
+    if not isinstance(validated, dict):
+        raise ValueError("scripted external replay contract is unavailable")
+    return validated
 
 
 def render_declarative_replay_cases(

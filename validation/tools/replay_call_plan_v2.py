@@ -8,10 +8,10 @@ from typing import Any
 
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-RUST_TYPE_RE = re.compile(r"^[A-Za-z0-9_&'\[\]<>:(), ]+$")
+RUST_TYPE_RE = re.compile(r"^[A-Za-z0-9_&'\[\]<>:(),; ]+$")
 ACTUAL_RE = re.compile(
     r"^(?:return(?:\.[A-Za-z_][A-Za-z0-9_]*)*|"
-    r"binding\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)$"
+    r"binding\.[A-Za-z_][A-Za-z0-9_]*(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+))+)$"
 )
 ENTRY_RECORD_STATE_KINDS = {
     "record_u32_field_constant_state",
@@ -27,6 +27,8 @@ for _PART_NAME in (
     "part_00_tail.pyfrag",
     "part_01.pyfrag",
     "part_02.pyfrag",
+    "part_03.pyfrag",
+    "part_04.pyfrag",
 ):
     _PART_PATH = _PARTS_DIR / _PART_NAME
     exec(

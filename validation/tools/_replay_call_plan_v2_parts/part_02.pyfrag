@@ -97,6 +97,9 @@ def _validate_fixture_identity(value: Any) -> None:
 
 
 def _initializer_literal(initializer: dict[str, Any], inputs: dict[str, Any]) -> str:
+    if initializer["kind"] == "array_repeat":
+        value = _encoded_literal(initializer["value"], initializer["element_type"])
+        return f"[{value}; {initializer['length']}]"
     fields = []
     for field in initializer["fields"]:
         value = field["value"]
@@ -127,7 +130,10 @@ def _actual_expression(actual: str, names: dict[str, str]) -> str:
     if actual == "return":
         return "actual_return"
     parts = actual.split(".")
-    return names[parts[1]] + "." + ".".join(parts[2:])
+    expression = names[parts[1]]
+    for segment in parts[2:]:
+        expression += f"[{segment}]" if segment.isdigit() else f".{segment}"
+    return expression
 
 
 def _encoded_literal(value: Any, encoding: str) -> str:
@@ -213,6 +219,7 @@ def _plan_sha256(plan: dict[str, Any]) -> str:
 
 
 __all__ = [
+    "build_scripted_external_plan",
     "build_record_interior_u32_constant_state_plan",
     "build_record_owner_stats_sequence_plan",
     "build_record_owner_usize_wrapping_add_plan",

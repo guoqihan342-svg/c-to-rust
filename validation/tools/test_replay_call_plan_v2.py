@@ -52,6 +52,15 @@ class ReplayCallPlanV2Tests(unittest.TestCase):
             ["binding_borrow", "binding_borrow_mut"],
         ),
     )
+    SCRIPTED_CASES = (
+        "flashdb-real-fdb-new-kv-alloc-compare.json",
+        "flashdb-real-fdb-kv-iterate-next.json",
+        "flashdb-real-fdb-kv-iterate-kv-tail.json",
+        "flashdb-real-fdb-kv-iterate-read-kv-body-call.json",
+        "flashdb-real-fdb-kv-iterate-sector-tail.json",
+        "flashdb-real-fdb-kv-iterate-next-sector-advance-continue.json",
+        "flashdb-real-fdb-kv-iterate-zero-start-next-sector-advance-continue.json",
+    )
 
     def test_entry_record_state_kinds_share_one_plan_shape(self) -> None:
         for filename, expected_sources in self.RECORD_CASES:
@@ -109,6 +118,74 @@ class ReplayCallPlanV2Tests(unittest.TestCase):
             source = path.read_text(encoding="utf-8")
             self.assertIn("legacy replay fallback is disabled", source)
             self.assertNotIn("fdb_kv_iterate_kv_reset_probe(", source)
+
+    def test_scripted_external_contracts_share_bounded_runtime_plan(self) -> None:
+        for filename in self.SCRIPTED_CASES:
+            with self.subTest(filename=filename):
+                spec = self.load_named_spec(filename)
+                plan = build_replay_call_plan(spec, REPO_ROOT)
+                self.assertEqual("bound", plan["status"])
+                self.assertEqual(2, plan["schema_version"])
+                self.assertEqual("fixture_only", plan["scripted_runtime"]["scope"])
+                self.assertFalse(plan["scripted_runtime"]["semantics_verified"])
+                self.assertGreaterEqual(len(plan["scripted_runtime"]["probes"]), 2)
+                source = render_declarative_replay_cases(spec, plan, REPO_ROOT)
+                self.assertIn("__c2r_scripted_external_reset_calls();", source)
+                self.assertIn(f"{plan['api_name']}(", source)
+
+    def test_scripted_scalar_out_uses_plan_bound_api_and_array_binding(self) -> None:
+        spec = self.load_named_spec("flashdb-real-fdb-new-kv-alloc-compare.json")
+        old_name = spec["function_name"]
+        spec["function_name"] = "renamed_scripted_source"
+        spec["c_boundary"]["signatures"][0]["function"] = "renamed_scripted_source"
+        spec["rust_boundary"]["public_api"][0]["name"] = "renamed_scripted_api"
+        plan = build_replay_call_plan(spec, REPO_ROOT)
+        self.assertEqual("bound", plan["status"])
+        self.assertEqual("array_repeat", plan["bindings"][0]["initializer"]["kind"])
+        self.assertEqual("binding.empty_kv_out.0", plan["assertions"][1]["actual"])
+        source = render_declarative_replay_cases(spec, plan, REPO_ROOT)
+        self.assertIn("renamed_scripted_api(", source)
+        self.assertNotIn(f"{old_name}(", source)
+        self.assertIn("let mut actual_failed_address_0_empty_kv_out: [u32; 1]", source)
+
+    def test_scripted_runtime_and_array_observation_tampering_fail_closed(self) -> None:
+        plan = build_replay_call_plan(
+            self.load_named_spec("flashdb-real-fdb-new-kv-alloc-compare.json"),
+            REPO_ROOT,
+        )
+        helper_drift = copy.deepcopy(plan)
+        helper_drift["scripted_runtime"]["probes"][0]["channel"] = "unbounded"
+        with self.assertRaisesRegex(ValueError, "channel/operation"):
+            validate_replay_call_plan(helper_drift)
+
+        index_drift = copy.deepcopy(plan)
+        index_drift["assertions"][1]["actual"] = "binding.empty_kv_out.1"
+        with self.assertRaisesRegex(ValueError, "binding path"):
+            validate_replay_call_plan(index_drift)
+
+        fixture_drift = self.load_named_spec("flashdb-real-fdb-new-kv-alloc-compare.json")
+        fixture_drift["fixture_contract"]["cases"][0]["expected_outputs"][
+            "external_call_args"
+        ] = [17, 29, 63]
+        self.assertEqual("blocked", build_replay_call_plan(fixture_drift, REPO_ROOT)["status"])
+
+    def test_context_pack_schema_accepts_scripted_runtime_plan(self) -> None:
+        schema = json.loads(
+            (
+                REPO_ROOT
+                / "validation"
+                / "auto-translation-template"
+                / "ai-context-pack.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        plan_schema = {
+            "$ref": "#/definitions/boundReplayCallPlan",
+            "definitions": schema["definitions"],
+        }
+        for filename in self.SCRIPTED_CASES:
+            with self.subTest(filename=filename):
+                plan = build_replay_call_plan(self.load_named_spec(filename), REPO_ROOT)
+                jsonschema.Draft7Validator(plan_schema).validate(plan)
 
     def test_context_pack_schema_accepts_bound_plan_v2(self) -> None:
         schema = json.loads(

@@ -1,0 +1,284 @@
+SCRIPTED_EXTERNAL_PLAN_KINDS = {
+    "scripted_external_u32_call_bool_out",
+    "scripted_external_record_u32_call_bool_state",
+    "scripted_external_record_u32_sequence_do_while_state",
+    "scripted_external_u32_call_interior_reset_add_while_continue_state",
+}
+
+
+def build_scripted_external_plan(
+    spec: dict[str, Any],
+    contract: dict[str, Any],
+    fixture: dict[str, Any],
+) -> dict[str, Any]:
+    kind = contract.get("kind")
+    if kind not in SCRIPTED_EXTERNAL_PLAN_KINDS:
+        raise ValueError("scripted external replay contract kind is unsupported")
+    if kind == "scripted_external_u32_call_bool_out":
+        return _build_scripted_scalar_out_plan(spec, contract, fixture)
+    if kind == "scripted_external_record_u32_call_bool_state":
+        return _build_scripted_record_call_plan(spec, contract, fixture)
+    if kind == "scripted_external_record_u32_sequence_do_while_state":
+        return _build_scripted_sequence_plan(spec, contract, fixture)
+    return _build_scripted_call_continue_plan(spec, contract, fixture)
+
+
+def _build_scripted_scalar_out_plan(
+    spec: dict[str, Any], contract: dict[str, Any], fixture: dict[str, Any]
+) -> dict[str, Any]:
+    if contract.get("schema_version") != 1:
+        raise ValueError("scripted scalar-out contract schema_version must be 1")
+    inputs = contract.get("inputs")
+    output = contract.get("output_pointer")
+    result = contract.get("return")
+    external = contract.get("external_callee")
+    if not isinstance(inputs, list) or not isinstance(output, dict):
+        raise ValueError("scripted scalar-out entry contract is incomplete")
+    if not isinstance(result, dict) or not isinstance(external, dict):
+        raise ValueError("scripted scalar-out result contract is incomplete")
+    signature = _matching_signature(spec, _identifier(spec.get("function_name"), "source function"))
+    c_parameters = signature.get("parameters")
+    if not isinstance(c_parameters, list) or len(c_parameters) != len(inputs) + 1:
+        raise ValueError("scripted scalar-out C parameter count drifted")
+
+    parameters: list[dict[str, Any]] = []
+    mappings: list[dict[str, Any]] = []
+    expected_types = ["u32", "u32", "usize"]
+    expected_c_types = ["uint32_t", "uint32_t", "size_t"]
+    if len(inputs) != len(expected_types):
+        raise ValueError("scripted scalar-out requires three scalar inputs")
+    for position, (entry, c_parameter, rust_type, c_type) in enumerate(
+        zip(inputs, c_parameters, expected_types, expected_c_types, strict=False)
+    ):
+        if not isinstance(entry, dict) or not isinstance(c_parameter, dict):
+            raise ValueError("scripted scalar-out input is invalid")
+        name = _identifier(entry.get("parameter"), "scripted scalar input")
+        fixture_field = _identifier(entry.get("fixture_field"), "scripted scalar fixture")
+        if (
+            entry.get("rust_type") != rust_type
+            or c_parameter.get("name") != name
+            or _normalize_c_type(c_parameter.get("c_type")) != c_type
+            or c_parameter.get("direction") != "input"
+        ):
+            raise ValueError("scripted scalar-out input mapping drifted")
+        source = {"kind": "fixture_field", "field": fixture_field, "encoding": rust_type}
+        parameters.append(
+            {
+                "position": position,
+                "name": name,
+                "rust_type": rust_type,
+                "c_parameter": name,
+                "length_retained": rust_type == "usize",
+                "source": source,
+            }
+        )
+        mappings.append(_scripted_mapping(position, c_parameter, name, rust_type))
+
+    output_parameter = c_parameters[-1]
+    output_name = _identifier(output.get("parameter"), "scripted output parameter")
+    if (
+        output.get("rust_type") != "u32"
+        or output_parameter.get("name") != output_name
+        or _normalize_c_type(output_parameter.get("c_type")) != "uint32_t*"
+        or output_parameter.get("direction") != "output"
+    ):
+        raise ValueError("scripted scalar-out output mapping drifted")
+    pointer_outputs = spec.get("c_boundary", {}).get("pointer_contract", {}).get("output_pointers")
+    matches = [item for item in pointer_outputs or [] if isinstance(item, dict) and item.get("name") == output_name]
+    if len(matches) != 1 or matches[0].get("length_companion") != "constant:1":
+        raise ValueError("scripted scalar-out requires one bounded output element")
+    binding = {
+        "name": output_name,
+        "rust_type": "[u32; 1]",
+        "mutable": True,
+        "initializer": {
+            "kind": "array_repeat",
+            "rust_type": "[u32; 1]",
+            "element_type": "u32",
+            "length": 1,
+            "value": 0,
+        },
+    }
+    position = len(parameters)
+    source = {"kind": "binding_borrow_mut", "binding": output_name}
+    parameters.append(
+        {
+            "position": position,
+            "name": output_name,
+            "rust_type": "&mut [u32; 1]",
+            "c_parameter": output_name,
+            "length_retained": False,
+            "source": source,
+        }
+    )
+    mappings.append(_scripted_mapping(position, output_parameter, output_name, "&mut [u32; 1]"))
+    assertions = [
+        _scripted_assertion("return", result, "bool"),
+        {
+            "actual": f"binding.{output_name}.0",
+            "fixture_field": _identifier(output.get("fixture_field"), "scripted output fixture"),
+            "rust_type": "u32",
+            "encoding": "u32",
+        },
+    ]
+    runtime = _scripted_return_runtime(
+        external,
+        call_args_codec={"kind": "tuple", "encodings": ["u32", "u32", "usize"]},
+        call_args_rust_type="(u32, u32, usize)",
+    )
+    return _finish_scripted_plan(
+        spec, fixture, parameters, mappings, [], [binding], [], assertions, runtime
+    )
+
+
+def _build_scripted_record_call_plan(
+    spec: dict[str, Any], contract: dict[str, Any], fixture: dict[str, Any]
+) -> dict[str, Any]:
+    if contract.get("schema_version") != 1:
+        raise ValueError("scripted record-call contract schema_version must be 1")
+    components = _scripted_record_components(spec, contract)
+    state = contract.get("state_output")
+    result = contract.get("return")
+    external = contract.get("external_callee")
+    if not all(isinstance(item, dict) for item in (state, result, external)):
+        raise ValueError("scripted record-call contract is incomplete")
+    arguments = external.get("arguments")
+    if not isinstance(arguments, list) or not arguments:
+        raise ValueError("scripted record-call external arguments are required")
+    assertions = [
+        _scripted_assertion("return", result, "bool"),
+        _scripted_state_assertion(state),
+    ]
+    runtime = _scripted_return_runtime(
+        external,
+        call_args_codec={"kind": "array", "encoding": "u32", "length": len(arguments)},
+        call_args_rust_type=f"[u32; {len(arguments)}]",
+    )
+    return _finish_scripted_plan(spec, fixture, *components, assertions, runtime)
+
+
+def _build_scripted_sequence_plan(
+    spec: dict[str, Any], contract: dict[str, Any], fixture: dict[str, Any]
+) -> dict[str, Any]:
+    if contract.get("schema_version") not in {1, 2}:
+        raise ValueError("scripted sequence contract schema_version is unsupported")
+    components = _scripted_record_components(spec, contract)
+    state = contract.get("state_output")
+    result = contract.get("return")
+    external = contract.get("external_callee")
+    loop = contract.get("loop")
+    if not all(isinstance(item, dict) for item in (state, result, external, loop)):
+        raise ValueError("scripted sequence contract is incomplete")
+    max_calls = loop.get("max_calls")
+    external_args = external.get("arguments")
+    if not isinstance(max_calls, int) or not 1 <= max_calls <= 1024:
+        raise ValueError("scripted sequence max_calls is invalid")
+    if not isinstance(external_args, list) or not external_args:
+        raise ValueError("scripted sequence external arguments are required")
+    runtime = {
+        "scope": "fixture_only",
+        "semantics_verified": False,
+        "stimuli": [
+            {
+                "callee": _identifier(external.get("name"), "scripted sequence callee"),
+                "channel": "external",
+                "kind": "return_u32_sequence",
+                "fixture_field": _identifier(
+                    external.get("return_sequence_fixture_field"), "scripted sequence fixture"
+                ),
+                "max_items": max_calls,
+            }
+        ],
+        "reset_channels": ["external"],
+        "probes": [],
+    }
+    body = contract.get("body_callee")
+    if isinstance(body, dict):
+        body_args = body.get("arguments")
+        if not isinstance(body_args, list) or not body_args:
+            raise ValueError("scripted sequence body arguments are required")
+        body_name = _identifier(body.get("name"), "scripted body callee")
+        runtime["probes"].extend(
+            [
+                _scripted_scalar_probe(body_name, "body", "call_count", body.get("call_count_output"), "usize"),
+                _scripted_field_probe(
+                    body_name,
+                    "body",
+                    "call_args",
+                    body.get("call_args_output"),
+                    f"Vec<[u32; {len(body_args)}]>",
+                    {"kind": "matrix", "encoding": "u32", "width": len(body_args)},
+                ),
+            ]
+        )
+    external_name = _identifier(external.get("name"), "scripted sequence callee")
+    runtime["probes"].extend(
+        [
+            _scripted_scalar_probe(external_name, "external", "call_count", external.get("call_count_output"), "usize"),
+            _scripted_field_probe(
+                external_name,
+                "external",
+                "call_args",
+                external.get("call_args_output"),
+                f"Vec<[u32; {len(external_args)}]>",
+                {"kind": "matrix", "encoding": "u32", "width": len(external_args)},
+            ),
+        ]
+    )
+    if isinstance(body, dict):
+        runtime["probes"].append(
+            _scripted_field_probe(
+                _identifier(body.get("name"), "scripted body callee"),
+                "event",
+                "call_order",
+                body.get("call_order_output"),
+                "Vec<u32>",
+                {"kind": "vector", "encoding": "u32"},
+            )
+        )
+    assertions = [_scripted_assertion("return", result, "bool"), _scripted_state_assertion(state)]
+    return _finish_scripted_plan(spec, fixture, *components, assertions, runtime)
+
+
+def _build_scripted_call_continue_plan(
+    spec: dict[str, Any], contract: dict[str, Any], fixture: dict[str, Any]
+) -> dict[str, Any]:
+    if contract.get("schema_version") not in {1, 2}:
+        raise ValueError("scripted call-continue schema_version is unsupported")
+    components = _scripted_record_components(spec, contract)
+    result = contract.get("return")
+    external = contract.get("external_callee")
+    assigned = contract.get("assigned_state")
+    added = contract.get("add_state")
+    owner = _identifier(contract.get("owner_parameter"), "call-continue owner")
+    if not all(isinstance(item, dict) for item in (result, external, assigned, added)):
+        raise ValueError("scripted call-continue contract is incomplete")
+    external_args = external.get("arguments")
+    if not isinstance(external_args, list) or not external_args:
+        raise ValueError("scripted call-continue external arguments are required")
+    runtime = _scripted_return_runtime(
+        external,
+        call_args_codec={"kind": "tuple", "encodings": ["u32"] * len(external_args)},
+        call_args_rust_type="(" + ", ".join(["u32"] * len(external_args)) + ")",
+        call_args_fields=[item.get("snapshot_output") for item in external_args],
+    )
+    assertions = [
+        _scripted_assertion("return", result, "bool"),
+        _scripted_state_assertion(
+            {
+                "parameter": owner,
+                "field_path": assigned.get("owner_field_path"),
+                "fixture_field": assigned.get("fixture_field"),
+                "rust_type": assigned.get("rust_type"),
+            }
+        ),
+        _scripted_state_assertion(
+            {
+                "parameter": owner,
+                "field_path": added.get("owner_field_path"),
+                "fixture_field": added.get("fixture_field"),
+                "rust_type": added.get("rust_type"),
+            }
+        ),
+    ]
+    return _finish_scripted_plan(spec, fixture, *components, assertions, runtime)
