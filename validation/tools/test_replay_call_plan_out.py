@@ -134,6 +134,46 @@ class ReplayCallPlanOutTests(unittest.TestCase):
         metadata_drift["fixture_contract"]["cases"].append(second)
         self.assertEqual("blocked", build_replay_call_plan(metadata_drift, REPO_ROOT)["status"])
 
+    def test_real_i32_slice_sum_specs_share_one_plan_shape(self) -> None:
+        for filename in ("demo-sum-i32-buffer.json", "demo-sum-i32-ptr-arith.json"):
+            with self.subTest(filename=filename):
+                spec = self.load_named_spec(filename)
+                plan = build_replay_call_plan(spec, REPO_ROOT)
+                source = render_declarative_replay_cases(spec, plan, REPO_ROOT)
+
+                self.assertEqual("bound", plan["status"])
+                self.assertEqual(2, plan["schema_version"])
+                self.assertEqual("array_repeat", plan["bindings"][0]["initializer"]["kind"])
+                self.assertEqual("binding.out.0", plan["assertions"][1]["actual"])
+                self.assertEqual(2, len(plan["fixture_relations"]))
+                self.assertIn(f"{plan['api_name']}(&[], 0i32, &mut actual_empty_0_out)", source)
+                self.assertNotIn("struct FixtureCase", source)
+
+    def test_slice_sum_match_survives_symbol_and_observable_rename(self) -> None:
+        spec = self.inline_renamed_slice_sum_spec()
+
+        plan = build_replay_call_plan(spec, REPO_ROOT)
+        source = render_declarative_replay_cases(spec, plan, REPO_ROOT)
+
+        self.assertEqual("accumulate_items", plan["api_name"])
+        self.assertEqual("binding.destination.0", plan["assertions"][1]["actual"])
+        self.assertEqual("total_result", plan["assertions"][1]["fixture_field"])
+        self.assertIn("accumulate_items(&[3i32, -2i32], 2i32, &mut actual_nominal_0_destination)", source)
+        self.assertNotIn("sum_i32_buffer", source)
+
+    def test_slice_sum_fixture_drift_fails_closed(self) -> None:
+        length_drift = self.inline_renamed_slice_sum_spec()
+        length_drift["fixture_contract"]["cases"][0]["inputs"]["count"] = 1
+        self.assertEqual("blocked", build_replay_call_plan(length_drift, REPO_ROOT)["status"])
+
+        output_drift = self.inline_renamed_slice_sum_spec()
+        output_drift["fixture_contract"]["cases"][0]["expected_outputs"]["total_result"] = 2**31
+        self.assertEqual("blocked", build_replay_call_plan(output_drift, REPO_ROOT)["status"])
+
+        status_drift = self.inline_renamed_slice_sum_spec()
+        status_drift["fixture_contract"]["cases"][0]["expected_outputs"]["status"] = "failed"
+        self.assertEqual("blocked", build_replay_call_plan(status_drift, REPO_ROOT)["status"])
+
     @staticmethod
     def load_spec() -> dict:
         return json.loads(
@@ -154,6 +194,14 @@ class ReplayCallPlanOutTests(unittest.TestCase):
                 / "slice-specs"
                 / "demo-copy-i32-ptr-arith.json"
             ).read_text(encoding="utf-8")
+        )
+
+    @staticmethod
+    def load_named_spec(filename: str) -> dict:
+        return json.loads(
+            (REPO_ROOT / "validation" / "slice-specs" / filename).read_text(
+                encoding="utf-8"
+            )
         )
 
     @classmethod
@@ -207,6 +255,39 @@ class ReplayCallPlanOutTests(unittest.TestCase):
             "write_note": "destination projection",
             "canonical_write_note": "canonical destination projection",
             "changed_items": 2,
+        }
+        spec["fixture_contract"] = {
+            "cases": [
+                {
+                    "id": "nominal",
+                    "input_ref": "inline",
+                    "inputs": {"source_items": [3, -2], "count": 2},
+                    "expected_outputs": expected,
+                }
+            ],
+            "observable_outputs": list(expected),
+        }
+        return spec
+
+    @classmethod
+    def inline_renamed_slice_sum_spec(cls) -> dict:
+        spec = cls.load_named_spec("demo-sum-i32-buffer.json")
+        spec["function_name"] = "reduce_items"
+        signature = spec["c_boundary"]["signatures"][0]
+        signature["function"] = "reduce_items"
+        signature["parameters"][0].update(
+            {"name": "source_items", "buffer_length_parameter": "count"}
+        )
+        signature["parameters"][1]["name"] = "count"
+        signature["parameters"][2]["name"] = "destination"
+        spec["rust_boundary"]["public_api"][0]["name"] = "accumulate_items"
+        expected = {
+            "return_code": 0,
+            "status": "ok",
+            "count": 2,
+            "total_result": 1,
+            "read_note": "bounded reads",
+            "write_note": "single output write",
         }
         spec["fixture_contract"] = {
             "cases": [

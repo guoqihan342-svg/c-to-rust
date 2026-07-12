@@ -16,8 +16,15 @@ def supports_implicit_i32_output_plan(spec: dict[str, Any]) -> bool:
     from validation.tools.replay_call_plan_slice_out import (
         supports_implicit_i32_slice_output_plan,
     )
+    from validation.tools.replay_call_plan_slice_sum import (
+        supports_implicit_i32_slice_sum_plan,
+    )
 
-    return supports_implicit_single_i32_output_plan(spec) or supports_implicit_i32_slice_output_plan(spec)
+    return (
+        supports_implicit_single_i32_output_plan(spec)
+        or supports_implicit_i32_slice_output_plan(spec)
+        or supports_implicit_i32_slice_sum_plan(spec)
+    )
 
 
 def build_implicit_i32_output_plan(
@@ -32,6 +39,13 @@ def build_implicit_i32_output_plan(
 
     if supports_implicit_i32_slice_output_plan(spec):
         return build_implicit_i32_slice_output_plan(spec, fixture)
+    from validation.tools.replay_call_plan_slice_sum import (
+        build_implicit_i32_slice_sum_plan,
+        supports_implicit_i32_slice_sum_plan,
+    )
+
+    if supports_implicit_i32_slice_sum_plan(spec):
+        return build_implicit_i32_slice_sum_plan(spec, fixture)
     raise ValueError("implicit i32 output replay shape is unsupported")
 
 
