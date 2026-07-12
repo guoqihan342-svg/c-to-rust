@@ -228,6 +228,70 @@ class AiExactValidationTests(unittest.TestCase):
             self.assertEqual(gates["alias_contract"]["failures"][0]["kind"], "alias_proof_missing")
             self.assertFalse(gates["final_verification"]["semantic_pass"])
 
+    def test_non_null_type_does_not_require_raw_pointer_alias_proof(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-exact-non-null-") as tmp:
+            root = Path(tmp)
+            source = (
+                "pub struct Proxy { "
+                "pub opaque: Option<core::ptr::NonNull<core::ffi::c_void>> "
+                "}\n"
+                "pub fn add_one(value: i32) -> i32 { value + 1 }\n"
+            )
+
+            gates, _, _ = self.run_validation(root, source)
+
+            self.assertEqual(gates["alias_contract"]["status"], "passed")
+            self.assertFalse(gates["alias_contract"]["required"])
+            self.assertEqual(gates["alias_contract"]["raw_pointer_token_count"], 0)
+            self.assertTrue(gates["final_verification"]["semantic_pass"])
+
+    def test_non_null_raw_pointer_operations_still_require_alias_proof(self) -> None:
+        sources = {
+            "as-ptr": (
+                "pub fn add_one(value: i32) -> i32 { "
+                "let pointer = core::ptr::NonNull::<i32>::dangling(); "
+                "let _raw = pointer.as_ptr(); value + 1 }\n"
+            ),
+            "constructor": (
+                "pub fn add_one(value: i32) -> i32 { "
+                "let _pointer = core::ptr::NonNull::<i32>::dangling(); value + 1 }\n"
+            ),
+            "ptr-api": (
+                "pub fn add_one(value: i32) -> i32 { "
+                "let _raw = core::ptr::null::<i32>(); value + 1 }\n"
+            ),
+            "spaced-ptr-api": (
+                "pub fn add_one(value: i32) -> i32 { "
+                "let _raw = core :: ptr :: null::<i32>(); value + 1 }\n"
+            ),
+            "commented-constructor-path": (
+                "pub fn add_one(value: i32) -> i32 { "
+                "let _pointer = core/*path*/::ptr::NonNull::<i32>::dangling(); "
+                "value + 1 }\n"
+            ),
+            "module-import": (
+                "use core::ptr;\n"
+                "pub fn add_one(value: i32) -> i32 { let _ = ptr::null::<i32>(); value + 1 }\n"
+            ),
+            "unsafe-non-null-use": (
+                "pub struct Proxy { "
+                "pub opaque: Option<core::ptr::NonNull<core::ffi::c_void>> "
+                "}\n"
+                "pub fn add_one(value: i32) -> i32 { unsafe { value + 1 } }\n"
+            ),
+        }
+        for label, source in sources.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory(
+                prefix=f"ai-exact-non-null-{label}-"
+            ) as tmp:
+                gates, _, _ = self.run_validation(Path(tmp), source)
+
+                self.assertEqual(
+                    gates["alias_contract"]["failures"][0]["kind"],
+                    "alias_proof_missing",
+                )
+                self.assertFalse(gates["final_verification"]["semantic_pass"])
+
     def test_historical_oracle_report_path_is_never_accepted(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ai-exact-history-") as tmp:
             root = Path(tmp)

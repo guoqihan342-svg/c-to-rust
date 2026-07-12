@@ -10,9 +10,12 @@ from .exact_validation_artifacts import failed, gate, safe_json
 
 MAX_UNSAFE_TOKENS = 128
 UNSAFE_RE = re.compile(r"\bunsafe\b")
-POINTER_RE = re.compile(
-    r"\*\s*(?:const|mut)\b|\b(?:core|std)::ptr\b|"
+RAW_POINTER_OPERATION_RE = re.compile(
+    r"\*\s*(?:const|mut)\b|\b(?:core|std)\s*::\s*ptr\b|"
     r"\b(?:addr_of|addr_of_mut)!|\b(?:as_ptr|as_mut_ptr|from_raw|into_raw)\b"
+)
+SAFE_NON_NULL_TYPE_RE = re.compile(
+    r"\b(?:core|std)\s*::\s*ptr\s*::\s*NonNull(?=\s*<)"
 )
 RAW_STRING_RE = re.compile(r'(?:br|r)(?P<hashes>#{0,255})"')
 CHAR_LITERAL_RE = re.compile(
@@ -122,7 +125,12 @@ def alias_gate(
     target_sha: str | None,
     target_error: str | None,
 ) -> dict[str, Any]:
-    count = len(POINTER_RE.findall(source))
+    scan_source = (
+        source
+        if UNSAFE_RE.search(source)
+        else SAFE_NON_NULL_TYPE_RE.sub("NonNull", source)
+    )
+    count = len(RAW_POINTER_OPERATION_RE.findall(scan_source))
     if target_error:
         return failed(candidate_sha, "invalid_target_contract", target_error)
     if count == 0:

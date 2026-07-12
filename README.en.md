@@ -233,6 +233,8 @@ P0-A18c1 fixes that accounting and removes low-information calls. Fixture-only c
 
 The P0-A18c3 zero-repair targeted DeepSeek run for `kv_to_blob` proves the closed source contract works: one initial call emitted every supporting struct and passed both rustc and generated replay. The router SHA-256 is `0c5f8f7130f4b6b8c163f1007af130cc6016f48234a54e6dde4485a8a7b31316`. Its only remaining blocker was `alias_proof_missing`, caused by an unobserved compiler-owned proxy field whose contract required only a null default but still used `*mut c_void`. P0-A18c4 maps only such record-default fields to `Option<NonNull<c_void>> = None`; fields that participate in buffer, length, or pointer-identity semantics keep their original contracts.
 
+P0-A18c5 no longer counts a safe `Option<core::ptr::NonNull<T>>` type declaration itself as a raw-pointer operation. The exemption applies only when the candidate contains no `unsafe` and `NonNull` appears in a generic type position. `NonNull::<T>` construction, other `core/std::ptr` APIs, `as_ptr/as_mut_ptr/from_raw/into_raw`, raw-pointer types, and every `unsafe` + `NonNull` combination still require a current-candidate alias proof. The related 53-test gate passes on both Windows and WSL.
+
 ```bash
 python3 -B -m validation.tools.run_ai_auxiliary_cross_project_suite \
   --suite validation/ai-finite-cross-project-suite.json \

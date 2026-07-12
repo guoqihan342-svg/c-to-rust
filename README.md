@@ -241,6 +241,8 @@ P0-A18c1 已修正聚合计量并减少无信息调用：canonical draft 的 fix
 
 P0-A18c3 的 `kv_to_blob` 单项 0-repair DeepSeek 验证证明闭合 source 合同有效：一次 initial 调用即输出全部 supporting structs，rustc 与 generated replay 均通过；router SHA-256 为 `0c5f8f7130f4b6b8c163f1007af130cc6016f48234a54e6dde4485a8a7b31316`。剩余阻断只有 `alias_proof_missing`，原因是 compiler-owned proxy 中一个未观测、仅以 null 默认值初始化的字段仍使用 `*mut c_void`。P0-A18c4 仅把这类 record-default 字段投影为 `Option<NonNull<c_void>> = None`；真正参与 buffer、length 或 pointer identity 的字段不受影响。
 
+P0-A18c5 不再把安全的 `Option<core::ptr::NonNull<T>>` 类型声明本身误计为 raw-pointer operation。该豁免只在候选完全不含 `unsafe` 且 `NonNull` 出现在泛型类型位置时生效；`NonNull::<T>` 构造、`core/std::ptr` 其他 API、`as_ptr/as_mut_ptr/from_raw/into_raw`、raw pointer 类型和任何 `unsafe` + `NonNull` 组合仍要求 current-candidate alias proof。Windows 与 WSL 的 53 项相关门禁均通过。
+
 ```bash
 python3 -B -m validation.tools.run_ai_auxiliary_cross_project_suite \
   --suite validation/ai-finite-cross-project-suite.json \
