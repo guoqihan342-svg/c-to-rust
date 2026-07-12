@@ -338,7 +338,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   ContextPack 必须把直接被调函数的签名、定义状态、source binding、stub boundary 和调用表达式合同作为有界事实交给 AI；不能只给 caller 源码后要求模型猜测跨函数语义。candidate manifest 的 `prompt_scope` 必须从实际 ContextPack 计算，不能固定宣称模型看过不存在的 type map、CFG、pointer graph、root cause 或 caller/callee facts。
 
-  完成证据：ContextPack v3 的 16 KiB C boundary 现包含经统一敏感字段/宿主路径清理的 `external_direct_callees` 与 `call_expression_contract`；普通字符串中的带引号 secret assignment 也会清理。独立 `context_scope.py` 只按实际非空 loaded excerpt、真实失败状态和具名直接 callee facts 生成稳定 scope；普通生成与 cache-hit 共用该规则。必需 callee boundary 被压缩或截断时，provider admission 以 `required_callee_context_incomplete` 零调用拒绝。schema-v5 manifest 记录 scope，fresh-run summary validator 强制 v5、重开 hash-bound ContextPack、逐字节复算 prompt 并拒绝 scope 漂移或版本降级；v1-v4 只保留 schema/accepted-evidence 归档读取能力，不能作为 fresh run 自选降级。该项不含项目名、函数名或 fixture 特判，不提升 semantic numerator。Windows/WSL 同组各 155 项全部通过，均仅跳过 1 项平台专用用例。
+  完成证据：ContextPack v3 的 16 KiB C boundary 现包含经统一敏感字段/宿主路径清理的 `external_direct_callees` 与 `call_expression_contract`；普通字符串、嵌入 JSON 和转义 JSON 中的带引号 secret assignment 也会清理。独立 `context_scope.py` 只按实际非空 loaded excerpt、真实失败状态和具名直接 callee facts 生成稳定 scope，成功状态下的信息性 diagnostics 不计为 root cause；普通生成与 cache-hit 共用该规则。必需 callee boundary 在单边界或 128 KiB 总 ContextPack 预算中被压缩/截断时，provider admission 都以 `required_callee_context_incomplete` 零调用拒绝。schema-v5 manifest 记录 scope，fresh-run summary validator 强制 v5、重开 hash-bound ContextPack、逐字节复算 prompt 并拒绝 scope 漂移或版本降级；v1-v4 只保留 schema/accepted-evidence 归档读取能力，不能作为 fresh run 自选降级。该项不含项目名、函数名或 fixture 特判，不提升 semantic numerator。Windows/WSL 同组各 156 项全部通过，均仅跳过 1 项平台专用用例。
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 
