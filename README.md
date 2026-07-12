@@ -16,8 +16,8 @@
 | --- | --- |
 | Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
-| 最近开发阶段 | P0-T31：完成 `fdb_kvdb.c:1880-1883` ordered stats sequence 的 source-backed 严格语义闭环 |
-| 当前翻译任务 | P0-T32：组合 `fdb_kvdb.c:1877` 条件与已验收 `:1880-1883` body，且不重复计数 |
+| 最近开发阶段 | P0-A15：补齐 AI 直接被调函数上下文，并使 prompt scope 可复算 |
+| 当前翻译任务 | P0-A10：资源恢复后对固定 12 项跨项目套件做一次真实 GLM-5.1 完整验收 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
@@ -32,7 +32,7 @@
 
 1. **固定输入**：绑定仓库、分支、commit、真实函数、编译数据库和 fixture。
 2. **规划与隔离**：把 source file 拆成独立 worker assignment，每个 worker 使用独立 out-root。
-3. **候选生成**：选择 generic typed IR、raw C2Rust/C2Rust+repair 或 OpenCode candidate。
+3. **候选生成**：新翻译默认由 OpenCode/GLM-5.1 生成主候选，generic typed IR、raw C2Rust/C2Rust+repair 作为可审计替代候选。
 4. **共同验证**：执行 C oracle、Rust replay、schema diff、negative diff、unsafe 和 profile gates。
 5. **自动修复**：每轮只处理一个具体 compile/semantic/unsafe blocker；失败回滚 last-good。
 6. **状态恢复**：SQLite 保存 assignment、lease、event 和 artifact index，磁盘 summary 保存语义事实。
@@ -45,6 +45,14 @@ OpenCode worker 与 preflight prompt 只保留一条可执行 `Command line:`；
 批处理还支持 `mode=auto` 的 deterministic-first admission gate：只有全部 worker 都绑定 accepted evidence、现存 evidence root、source hash 和 slice spec，且没有 repair policy 时，才会在 OpenCode preflight 前选择 deterministic；其余输入 fail closed。`competition-exact`、hostless rehearsal 和显式 OpenCode attestation 不允许自动降级。
 
 SQLite 不是语义事实源，Agent 对话也不是 evidence。语义结论只来自落盘 artifact 和 validator。
+
+## AI-first 翻译合同
+
+本项目以 AI 作为比赛翻译主通道，而不是在确定性翻译失败后才调用 AI。每个新切片先构造 hash-bound ContextPack，再由 OpenCode `zai/glm-5.1` + `c2rust-migrator` + `max` 生成单一 Rust 主候选。typed IR 和 C2Rust 继续保留，用于零 token 替代、失败对照和 repair base；它们不能静默冒充 AI 已运行，也不能绕过共同验证门禁。
+
+ContextPack v3 只向模型提供有界事实：真实 source span、编译参数与 response files、类型/CFG/指针摘要、失败摘要、ABI/指针策略，以及直接被调函数的签名、定义状态、source binding、stub boundary 和调用合同。敏感字段、宿主绝对路径、路径逃逸和超限内容会在 provider 启动前清理或拒绝。
+
+AI candidate manifest v5 的 `prompt_scope` 不再使用固定模板，而是由实际 ContextPack 计算。summary validator 会重开 hash-bound ContextPack 独立复算；清单宣称看过不存在的 type map、CFG、pointer graph、root cause 或 caller/callee facts 时，验收失败。该合同提高模型输入质量和证据准确性，但 AI 输出仍保持 `semantic_gate=false`，最终接受只由共同门禁决定。
 
 ## Harness 架构图
 
@@ -71,6 +79,7 @@ flowchart TB
         WORKER["Isolated worker out-root"]
         MIGRATOR["scripts/c2rust-migrator.py"]
         AUTO["auto_migrate.py"]
+        CONTEXT["Bounded AI ContextPack\nsource + compile + callee facts"]
         TRANSLATOR["c2r-translator\nclang AST -> typed IR -> Rust"]
         C2RUST["C2Rust baseline / repair"]
         OPENCODE["OpenCode worker\nGLM-5.1 + c2rust-migrator + max"]
@@ -108,8 +117,9 @@ flowchart TB
     MIGRATOR --> AUTO
     AUTO --> TRANSLATOR
     AUTO --> C2RUST
-    HARNESS --> OPENCODE
-    OPENCODE --> WORKER
+    AUTO --> CONTEXT
+    CONTEXT --> OPENCODE
+    OPENCODE --> AUTO
     TRANSLATOR --> ORACLE
     TRANSLATOR --> REPLAY
     C2RUST --> REPLAY
@@ -134,7 +144,7 @@ flowchart LR
     A["1. Source pin\nrepo + branch + commit"]
     B["2. Source extraction\nfunction + dependencies"]
     C["3. Slice spec\nboundary + fixture + build profile"]
-    D["4. Context pack\ntypes + calls + globals + hashes"]
+    D["4. Context pack\nsource + compile + callee facts + hashes"]
     E["5. Worker assignment\nworker id + isolated out-root"]
     F["6. AI-primary inventory\nOpenCode + typed IR + C2Rust"]
     G["7. Fresh exact proof\ncandidate SHA + current-run oracle"]

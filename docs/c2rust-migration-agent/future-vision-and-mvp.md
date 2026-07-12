@@ -272,8 +272,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 2 | P0-A12 文件化 prompt transport | 已完成；后续只修 transport/CLI 兼容回归 |
 | 3 | P0-A13 内容寻址 AI candidate cache | 已完成；后续只修 cache binding/schema/validator 回归 |
 | 4 | P0-A14 受限展开编译 response file | 已完成；后续只修 dialect/schema/binding 回归 |
-| 5 | P0-A10 固定套件真实验收 | 资源恢复后只运行一次完整套件并发布可复核指标 |
-| 6 | P0-A6 / P0-H9 比赛主机复验 | 有效资源包和 competition-exact host 可用；不得用模拟结果代替 |
+| 5 | P0-A15 可复算 AI caller/callee 上下文 | 已完成；后续只修 ContextPack/prompt-scope/validator 回归 |
+| 6 | P0-A10 固定套件真实验收 | 资源恢复后只运行一次完整套件并发布可复核指标 |
+| 7 | P0-A6 / P0-H9 比赛主机复验 | 有效资源包和 competition-exact host 可用；不得用模拟结果代替 |
 
 任何阶段都先运行一次有限构造集合，再按失败频率扩展 translator/ContextPack；禁止继续按 FlashDB 行号堆规则，也禁止为了等待外部资源停止可独立完成的 harness 工作。
 
@@ -281,7 +282,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   OpenCode `zai/glm-5.1` 读取 hash-bound ContextPack，输出单一结构化 Rust candidate；记录 provider、logical/resolved model、variant、prompt、输入、原始响应、解析结果和候选 SHA-256。模型输出、聊天文本和文件写入本身都保持 `semantic_gate=false`。无凭据、超时、响应格式错误或候选缺失必须结构化 blocked，不得静默回退后冒充 AI 已运行。
 
-  当前进度：候选生成器、schema-v4 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、source-span provider readiness、余额/鉴权/启动/超时分类和 `auto_migrate --ai-first-candidate` 已实现。missing、越界、hash 漂移、超限或编码不支持的 source span 会在启动 OpenCode 前结构化为 `context_not_provider_ready`，并记录 `provider_invocations=0`；summary validator 会重开 hash-bound ContextPack 独立复算 preflight 与调用计数。LF/CRLF 等价由 full-source 流式 hash 和 span hash 共同校验；fragment wrapper 还必须通过 carrier、containing-function、真实 upstream fragment 的 SHA/text/claim 合同和 `verbatim_once` 嵌入校验，才标记为 `inline_translation_carrier_bound`，且仍不声明 whole-function 语义。在保留三条 pinned checkout 的 P0-A10 输入工作树中，固定 12 项在 Windows/WSL 均为 provider-ready 12/12；普通新 worktree 未物化这些 ignored checkout 时不具备该前置条件。WSL 能列出并实际启动 `zai/glm-5.1`。OpenCode 会把 provider 错误写入受限日志后继续内部重试，旧 harness 因外层 30/180 秒先到而把空响应记为 `provider_timeout`；2026-07-12 新增的日志偏移诊断覆盖非零退出、超时和首次创建日志，只提取固定哨兵、不保存原始日志或密钥。单次真实调用已把根因还原为 `provider_insufficient_balance`。因此尚无真实 GLM candidate，本项保持未完成。模型可见、进程已启动和确定性 fallback 通过都不能替代候选证据。
+  当前进度：候选生成器、schema-v5 manifest、敏感字段/宿主路径清理、严格 JSON 解析、候选物化 SHA 检查、source-span provider readiness、余额/鉴权/启动/超时分类和 `auto_migrate --ai-first-candidate` 已实现。missing、越界、hash 漂移、超限或编码不支持的 source span 会在启动 OpenCode 前结构化为 `context_not_provider_ready`，并记录 `provider_invocations=0`；summary validator 会重开 hash-bound ContextPack 独立复算 preflight 与调用计数。LF/CRLF 等价由 full-source 流式 hash 和 span hash 共同校验；fragment wrapper 还必须通过 carrier、containing-function、真实 upstream fragment 的 SHA/text/claim 合同和 `verbatim_once` 嵌入校验，才标记为 `inline_translation_carrier_bound`，且仍不声明 whole-function 语义。在保留三条 pinned checkout 的 P0-A10 输入工作树中，固定 12 项在 Windows/WSL 均为 provider-ready 12/12；普通新 worktree 未物化这些 ignored checkout 时不具备该前置条件。WSL 能列出并实际启动 `zai/glm-5.1`。OpenCode 会把 provider 错误写入受限日志后继续内部重试，旧 harness 因外层 30/180 秒先到而把空响应记为 `provider_timeout`；2026-07-12 新增的日志偏移诊断覆盖非零退出、超时和首次创建日志，只提取固定哨兵、不保存原始日志或密钥。单次真实调用已把根因还原为 `provider_insufficient_balance`。因此尚无真实 GLM candidate，本项保持未完成。模型可见、进程已启动和确定性 fallback 通过都不能替代候选证据。
 
 - [x] **P0-A7：项目级 ContextPack 与编译上下文闭环**
 
@@ -332,6 +333,12 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   仅展开 source root 内的相对 `@file`，限制递归深度、文件数、单文件/总字节并检测环；每个 response file 记录 repo/logical path 与 SHA。解析失败、路径逃逸或预算超限必须 fail-closed，不能静默丢失 include、define、target ABI 等参数。完成后用不同真实 C 项目验证，不新增项目名、函数名或 fixture 特判。
 
   完成证据：ContextPack v3 与独立 schema 只为 clang/gcc/cc 系列启用 `gnu-v1`，MSVC/未知 dialect fail-closed。相对路径允许 root 内规范化 `..`，真实逃逸、absolute/drive/UNC、cycle、link、非法 UTF-8/NUL/引号、深度 4、展开 16 次、单文件 64 KiB、总计 256 KiB 或 4096 参数超限都会在 provider 前结构化阻断。成功展开会恢复 define/include/target ABI，记录 original/expanded argv SHA，并把每个文件的 logical path/SHA/size/depth 同时绑定到 selected entry 与 ContextPack inputs；response 变化会失效 ContextPack、prompt 和 AI cache key。Windows/WSL 同组各 149 项、148 项通过：Windows 仅跳过无权限 symlink 创建用例，WSL 仅跳过 Windows 锁专用用例。
+
+- [x] **P0-A15：可复算 AI caller/callee 上下文与 prompt scope**
+
+  ContextPack 必须把直接被调函数的签名、定义状态、source binding、stub boundary 和调用表达式合同作为有界事实交给 AI；不能只给 caller 源码后要求模型猜测跨函数语义。candidate manifest 的 `prompt_scope` 必须从实际 ContextPack 计算，不能固定宣称模型看过不存在的 type map、CFG、pointer graph、root cause 或 caller/callee facts。
+
+  完成证据：ContextPack v3 的 16 KiB C boundary 现包含经统一敏感字段/宿主路径清理的 `external_direct_callees` 与 `call_expression_contract`。独立 `context_scope.py` 按实际 loaded excerpt、failure summary 和直接 callee facts 生成稳定 scope；普通生成与 cache-hit 共用该规则。schema-v5 manifest 记录结果，summary validator 重开 hash-bound ContextPack 独立复算并拒绝 scope 漂移；历史 v1-v4 manifest 保持兼容。该项不含项目名、函数名或 fixture 特判，不提升 semantic numerator。Windows/WSL 同组各 153 项全部通过，均仅跳过 1 项平台专用用例。
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 

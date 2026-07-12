@@ -281,7 +281,7 @@ def write_generated_ai_chain(
     manifest_path = base / f"l3-{slice_id}-ai-candidate-manifest.json"
     candidate_id = "opencode-glm51-1"
     manifest = {
-        "schema_version": 4,
+        "schema_version": 5,
         "target_id": target_id,
         "slice_id": slice_id,
         "status": "generated",

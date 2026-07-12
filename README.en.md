@@ -12,8 +12,8 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | --- | --- |
 | Translator-generated semantic pass | `38` named slices, derived from `validation/translator-coverage-matrix.json` |
 | Accepted-evidence authoritative | `1`, reported separately from the translator numerator |
-| Latest development stage | P0-T31: complete source-backed strict semantic closure for the `fdb_kvdb.c:1880-1883` ordered stats sequence |
-| Active translator task | P0-T32: compose the `fdb_kvdb.c:1877` condition with the accepted `:1880-1883` body without duplicate counting |
+| Latest development stage | P0-A15: add direct-callee AI context and make prompt scope recomputable |
+| Active translator task | P0-A10: run the fixed 12-case cross-project suite once with real GLM-5.1 after resource recovery |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | Superpowers specs/plans, canonical roadmap, and harness evidence gates |
@@ -26,7 +26,7 @@ The canonical backlog is [future-vision-and-mvp.md](docs/c2rust-migration-agent/
 
 1. Pins repository, branch, commit, function, compile database, and fixture input.
 2. Plans isolated worker assignments with one out-root per worker.
-3. Generates candidates through generic typed IR, C2Rust/C2Rust+repair, or OpenCode.
+3. Uses OpenCode/GLM-5.1 as the primary generator for new translations, with generic typed IR and C2Rust/C2Rust+repair as auditable alternatives.
 4. Executes the shared C oracle, Rust replay, diff, negative-diff, unsafe, and profile gates.
 5. Applies one bounded repair per round and rolls back to the last-good candidate on failure.
 6. Stores scheduling state in SQLite and semantic facts in on-disk validated artifacts.
@@ -39,6 +39,14 @@ OpenCode worker and preflight prompts retain one executable `Command line:`. The
 Batch profiles also support a deterministic-first `mode=auto` admission gate. It selects deterministic execution before OpenCode preflight only when every worker binds accepted evidence, an existing evidence root, a source hash, and a slice spec with no repair policy. All other inputs fail closed. `competition-exact`, hostless rehearsal, and explicit OpenCode attestation cannot auto-downgrade.
 
 SQLite and agent conversation are not semantic evidence. Only on-disk artifacts and validators establish acceptance.
+
+## AI-first Translation Contract
+
+AI is the competition translation primary, not a fallback invoked only after deterministic translation fails. Every new slice first receives a hash-bound ContextPack, then OpenCode `zai/glm-5.1` + `c2rust-migrator` + `max` emits one primary Rust candidate. Typed IR and C2Rust remain zero-token alternatives, failure controls, and repair bases. They cannot silently claim that AI ran or bypass the common gates.
+
+ContextPack v3 gives the model only bounded facts: the real source span, compile arguments and response files, type/CFG/pointer excerpts, failure summaries, ABI and pointer policy, plus direct-callee signatures, definition status, source bindings, stub boundaries, and call contracts. Sensitive fields, host absolute paths, path escapes, and over-budget content are redacted or refused before provider launch.
+
+AI candidate manifest v5 derives `prompt_scope` from the actual ContextPack instead of a fixed template. The summary validator reopens the hash-bound ContextPack and recomputes that scope; claiming a missing type map, CFG, pointer graph, root cause, or caller/callee fact fails validation. This improves model input quality and evidence accuracy, but AI output remains `semantic_gate=false`; only the common gates can accept it.
 
 ## Harness Architecture
 
@@ -65,6 +73,7 @@ flowchart TB
         WORKER["Isolated worker out-root"]
         MIGRATOR["scripts/c2rust-migrator.py"]
         AUTO["auto_migrate.py"]
+        CONTEXT["Bounded AI ContextPack\nsource + compile + callee facts"]
         TRANSLATOR["c2r-translator\nclang AST -> typed IR -> Rust"]
         C2RUST["C2Rust baseline / repair"]
         OPENCODE["OpenCode worker\nGLM-5.1 + c2rust-migrator + max"]
@@ -102,8 +111,9 @@ flowchart TB
     MIGRATOR --> AUTO
     AUTO --> TRANSLATOR
     AUTO --> C2RUST
-    HARNESS --> OPENCODE
-    OPENCODE --> WORKER
+    AUTO --> CONTEXT
+    CONTEXT --> OPENCODE
+    OPENCODE --> AUTO
     TRANSLATOR --> ORACLE
     TRANSLATOR --> REPLAY
     C2RUST --> REPLAY
@@ -128,13 +138,13 @@ flowchart LR
     A["1. Source pin\nrepo + branch + commit"]
     B["2. Source extraction\nfunction + dependencies"]
     C["3. Slice spec\nboundary + fixture + build profile"]
-    D["4. Context pack\ntypes + calls + globals + hashes"]
+    D["4. Context pack\nsource + compile + callee facts + hashes"]
     E["5. Worker assignment\nworker id + isolated out-root"]
-    F["6. Candidate generation\ntyped IR / C2Rust / OpenCode"]
-    G["7. Rust candidate\ncompile status + provenance"]
-    H["8. Executed evidence\nC oracle + Rust replay"]
-    I["9. Differential gates\ndiff + negative diff + unsafe"]
-    J{"10. Final gate"}
+    F["6. AI-primary inventory\nOpenCode + typed IR + C2Rust"]
+    G["7. Fresh exact proof\ncandidate SHA + current-run oracle"]
+    H["8. Executed gates\nrustc + Rust replay + schema diff"]
+    I["9. Safety gates\nnegative + unsafe + alias + ABI"]
+    J{"10. Gate-only router"}
     K["accepted\ndeclared slice only"]
     L["refused\nunsupported construct"]
     M["blocked\nmissing environment/evidence"]
@@ -143,7 +153,9 @@ flowchart LR
     P["13. Judge publication\nbundle + notes + public packet"]
 
     A --> B --> C --> D --> E --> F --> G --> H --> I --> J
-    J -->|"all gates pass"| K
+    J -->|"AI passes"| K
+    J -->|"AI fails; exact deterministic passes"| K
+    J -->|"repairable; all zero-token candidates failed"| F
     J -->|"known unsupported"| L
     J -->|"missing proof/tool"| M
     K --> N
