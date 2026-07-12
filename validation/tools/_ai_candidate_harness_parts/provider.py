@@ -17,6 +17,7 @@ from .candidate_cache import (
     store_candidate_cache,
 )
 from .context import atomic_write_bytes, atomic_write_json, canonical_json_bytes, sha256_bytes, sha256_path
+from .context_scope import prompt_scope_for_context
 from .prompt_transport import prompt_file_arguments, prompt_transport_contract
 from .provider_readiness import evaluate_provider_readiness
 
@@ -155,6 +156,7 @@ def generate_candidate(
             )
             candidate = candidate_record(
                 cached.parsed,
+                context_pack=context_pack,
                 resolved_model=resolved_model,
                 context_path=context_path,
                 prompt_path=prompt_path,
@@ -274,6 +276,7 @@ def generate_candidate(
         base["cache"] = cache_evidence
     candidate = candidate_record(
         parsed,
+        context_pack=context_pack,
         resolved_model=resolved_model,
         context_path=context_path,
         prompt_path=prompt_path,
@@ -287,6 +290,7 @@ def generate_candidate(
 def candidate_record(
     parsed: dict[str, Any],
     *,
+    context_pack: dict[str, Any],
     resolved_model: str,
     context_path: Path,
     prompt_path: Path,
@@ -299,14 +303,7 @@ def candidate_record(
         "provider_label": "zai",
         "model_label": LOGICAL_MODEL,
         "resolved_model": resolved_model,
-        "prompt_scope": [
-            "slice_spec",
-            "source_spans",
-            "type_map_excerpt",
-            "cfg_excerpt",
-            "pointer_graph_excerpt",
-            "root_cause_summary",
-        ],
+        "prompt_scope": prompt_scope_for_context(context_pack),
         "input_artifact_hashes": {
             "context_pack": sha256_path(context_path),
             "prompt": sha256_path(prompt_path),
@@ -521,7 +518,7 @@ def manifest_base(
     cache_evidence: dict[str, Any],
 ) -> dict[str, Any]:
     return {
-        "schema_version": 4,
+        "schema_version": 5,
         "target_id": target_id,
         "slice_id": slice_id,
         "ai_required_for_default_pipeline": True,

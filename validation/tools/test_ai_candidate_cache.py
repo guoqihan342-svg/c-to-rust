@@ -59,6 +59,13 @@ def context_pack(slice_id: str = "cache-scale") -> dict[str, object]:
                 "content": c_source,
             }
         },
+        "c_boundary": {
+            "payload": {
+                "external_direct_callees": [
+                    {"name": "helper", "definition_status": "real_source_bound"}
+                ]
+            }
+        },
         "claim_boundary": {"semantic_gate": False},
     }
 
@@ -233,6 +240,10 @@ class AiCandidateCacheTests(unittest.TestCase):
                 second["provider_invocations"], second["cache"]["status"]
             ))
             self.assertEqual(first["candidates"][0]["artifact"]["sha256"], second["candidates"][0]["artifact"]["sha256"])
+            self.assertEqual(
+                ["slice_spec", "source_spans", "direct_caller_callee_facts"],
+                second["candidates"][0]["prompt_scope"],
+            )
             schema = json.loads(
                 (
                     Path(__file__).resolve().parents[1]

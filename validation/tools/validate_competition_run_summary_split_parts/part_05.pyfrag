@@ -74,6 +74,7 @@ def validate_fresh_ai_manifest(
     repo_root: Path,
 ) -> dict[str, Any]:
     reasons: list[str] = []
+    recomputed_prompt_scope: list[str] | None = None
     try:
         jsonschema.Draft7Validator(load_json(AI_CANDIDATE_MANIFEST_SCHEMA_PATH)).validate(manifest)
     except (OSError, UnicodeError, json.JSONDecodeError, jsonschema.ValidationError, jsonschema.SchemaError):
@@ -237,6 +238,12 @@ def validate_fresh_ai_manifest(
                     ):
                         reasons.append("ai_context_pack_schema_invalid")
                 recomputed_preflight = evaluate_provider_readiness(context_payload)
+                if (
+                    isinstance(schema_version, int)
+                    and not isinstance(schema_version, bool)
+                    and schema_version >= 5
+                ):
+                    recomputed_prompt_scope = prompt_scope_for_context(context_payload)
                 if provider_preflight != recomputed_preflight:
                     reasons.append("ai_manifest_provider_preflight_context_mismatch")
                 recomputed_invocations = int(
@@ -334,6 +341,16 @@ def validate_fresh_ai_manifest(
     if status == "generated" and len(rust_candidates) != 1:
         reasons.append("generated_ai_manifest_requires_one_rust_draft")
     candidate = rust_candidates[0] if len(rust_candidates) == 1 else None
+    if (
+        status == "generated"
+        and isinstance(schema_version, int)
+        and not isinstance(schema_version, bool)
+        and schema_version >= 5
+        and candidate is not None
+        and recomputed_prompt_scope is not None
+        and candidate.get("prompt_scope") != recomputed_prompt_scope
+    ):
+        reasons.append("ai_manifest_prompt_scope_context_mismatch")
     if cache_hit:
         artifact = candidate.get("artifact") if isinstance(candidate, dict) else None
         initial_artifact = candidate.get("initial_artifact") if isinstance(candidate, dict) else None

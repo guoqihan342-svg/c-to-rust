@@ -77,6 +77,8 @@ def build_context_pack(
             "functions",
             "signatures",
             "direct_dependencies",
+            "external_direct_callees",
+            "call_expression_contract",
             "scalar_arithmetic_contract",
             "target_abi_contract",
         ),

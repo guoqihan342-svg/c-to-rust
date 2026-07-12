@@ -115,7 +115,11 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assert_manifest_schema(manifest)
             self.assertIn("--model", observed_argv)
             self.assertIn("zai/glm-5.1", observed_argv)
-            self.assertEqual(4, manifest["schema_version"])
+            self.assertEqual(5, manifest["schema_version"])
+            self.assertEqual(
+                ["slice_spec", "source_spans"],
+                manifest["candidates"][0]["prompt_scope"],
+            )
             self.assertEqual(
                 prompt_transport.prompt_transport_contract(),
                 manifest["generator"]["prompt_transport"],
@@ -167,6 +171,42 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assertIn(
                 "ai_manifest_provider_invocations_context_mismatch",
                 tampered_validation["reasons"],
+            )
+
+            scope_drift = json.loads(json.dumps(manifest))
+            scope_drift["candidates"][0]["prompt_scope"].append("cfg_excerpt")
+            scope_validation = summary_validator.validate_fresh_ai_manifest(
+                scope_drift,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-migrator",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertIn(
+                "ai_manifest_prompt_scope_context_mismatch",
+                scope_validation["reasons"],
+            )
+
+            legacy_scope_drift = json.loads(json.dumps(scope_drift))
+            legacy_scope_drift["schema_version"] = 4
+            legacy_scope_validation = summary_validator.validate_fresh_ai_manifest(
+                legacy_scope_drift,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-migrator",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertNotIn(
+                "ai_manifest_prompt_scope_context_mismatch",
+                legacy_scope_validation["reasons"],
             )
 
             transport_drift = json.loads(json.dumps(manifest))
