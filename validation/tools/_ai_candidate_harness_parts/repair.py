@@ -26,6 +26,7 @@ from .prompt_contract import (
     render_boundary_contract,
     render_candidate_source_rule,
     render_replay_api_contract,
+    render_replay_behavior_rule,
     render_required_candidate_api,
 )
 from .repair_contract import (
@@ -275,6 +276,7 @@ def render_repair_prompt(
     boundary_contract = render_boundary_contract(context_pack)
     required_candidate_api = render_required_candidate_api(context_pack)
     candidate_source_rule = render_candidate_source_rule(context_pack)
+    replay_behavior_rule = render_replay_behavior_rule(context_pack)
     replay_contract = render_replay_api_contract(context_pack)
     required_candidate_api_line = (
         f"Required candidate API: {required_candidate_api}\n"
@@ -283,6 +285,9 @@ def render_repair_prompt(
     )
     candidate_source_rule_line = (
         f"{candidate_source_rule}\n" if candidate_source_rule else ""
+    )
+    replay_behavior_rule_line = (
+        f"{replay_behavior_rule}\n" if replay_behavior_rule else ""
     )
     return (
         "Task mode: generate-candidate\n"
@@ -305,6 +310,7 @@ def render_repair_prompt(
         f"Required boundary facts: {boundary_contract}\n"
         f"{required_candidate_api_line}"
         f"{candidate_source_rule_line}"
+        f"{replay_behavior_rule_line}"
         f"Required generated replay API contract: {replay_contract}\n"
         f"ContextPack: {context_json}\n"
         f"FailureFacts: {failures_json}\n"

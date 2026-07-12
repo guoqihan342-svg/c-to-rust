@@ -79,6 +79,13 @@ class AiPromptContractTests(unittest.TestCase):
         self.assertIn("translate(case.value, case.len)", prompt)
         self.assertIn("<presented-in-required-replay-api-contract>", prompt)
         self.assertIn("without dropping or reordering adjacent scalar parameters", prompt)
+        self.assertEqual(1, prompt.count("Required replay behavior:"))
+        self.assertIn("immutable behavior constraint", prompt)
+        self.assertIn("do not implement a fixture-value lookup table", prompt)
+        self.assertLess(
+            prompt.index("Required replay behavior:"),
+            prompt.index("Required generated replay API contract:"),
+        )
 
     def test_repair_prompt_repeats_the_same_boundary_before_failure_payload(self) -> None:
         prompt = render_repair_prompt(
@@ -107,6 +114,12 @@ class AiPromptContractTests(unittest.TestCase):
         )
         self.assertIn("translate(case.value, case.len)", prompt)
         self.assertIn("internal_only forbids raw pointers", prompt)
+        self.assertEqual(1, prompt.count("Required replay behavior:"))
+        self.assertIn("smallest general behavior", prompt)
+        self.assertLess(
+            prompt.index("Required replay behavior:"),
+            prompt.index("Required generated replay API contract:"),
+        )
 
     def test_repair_prompt_requests_only_one_full_candidate_shape(self) -> None:
         prompt = render_repair_prompt(

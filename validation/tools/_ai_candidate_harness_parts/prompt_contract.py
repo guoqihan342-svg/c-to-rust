@@ -71,6 +71,20 @@ def render_candidate_source_rule(context_pack: dict[str, Any]) -> str:
     )
 
 
+def render_replay_behavior_rule(context_pack: dict[str, Any]) -> str:
+    contract = context_pack.get("replay_api_contract")
+    if not isinstance(contract, dict) or contract.get("status") != "bound":
+        return ""
+    return (
+        "Required replay behavior: every assertion, expected value, identity relation, and call "
+        "result in the required generated replay API contract is an immutable behavior constraint, "
+        "not merely a typechecking example. If external callee semantics are unavailable, do not "
+        "invent behavior that contradicts those constraints; synthesize the smallest general behavior "
+        "consistent with the C source and every presented case. Do not branch on project, function, "
+        "or case identifiers, and do not implement a fixture-value lookup table."
+    )
+
+
 def context_without_replay_source(context_pack: dict[str, Any]) -> dict[str, Any]:
     context = dict(context_pack)
     contract = context_pack.get("replay_api_contract")
@@ -116,6 +130,7 @@ __all__ = [
     "context_without_replay_source",
     "render_boundary_contract",
     "render_candidate_source_rule",
+    "render_replay_behavior_rule",
     "render_replay_api_contract",
     "render_required_candidate_api",
 ]
