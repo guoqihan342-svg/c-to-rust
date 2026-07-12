@@ -626,6 +626,74 @@ class AiContextPackTests(unittest.TestCase):
             for artifact in artifacts.values():
                 self.assertLessEqual(len(json.dumps(artifact).encode("utf-8")), 32_000)
 
+    def test_real_artifact_shapes_project_translation_facts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="context-pack-real-artifacts-") as tmp:
+            root = Path(tmp)
+            source_root, _function, spec = self.make_project(root)
+            evidence = root / "evidence"
+            evidence.mkdir()
+            (evidence / "unit-type-map.json").write_text(
+                json.dumps({
+                    "status": "recorded",
+                    "mappings": [{"c_name": "value", "rust_type": "u32"}],
+                    "unsupported_nodes": [],
+                }),
+                encoding="utf-8",
+            )
+            (evidence / "unit-cfg.json").write_text(
+                json.dumps({
+                    "status": "recorded",
+                    "functions": [{"name": "transform", "basic_blocks": [{"id": "entry"}]}],
+                    "unsupported_control_flow": [],
+                }),
+                encoding="utf-8",
+            )
+            clang_report = {
+                "status": "lowered",
+                "diagnostics": ["x" * 40_000],
+                "lowering_report": {
+                    "status": "lowered",
+                    "frontend": "clang-ast-dump-json",
+                    "function_name": "transform",
+                    "function_ir": {
+                        "name": "transform",
+                        "return_type": {"canonical": "unsigned int", "width_bits": 32},
+                        "params": [{"name": "value", "ty": {"canonical": "unsigned int"}}],
+                        "body": [
+                            {"Expr": {"expr": {"Call": {"callee": "helper", "args": []}}}},
+                            {"Return": {"value": {"LitInt": {"spelling": "7", "value": 7}}}},
+                        ],
+                    },
+                },
+                "typed_ir_candidate": {"status": "generated", "semantic_pass": False},
+            }
+            (evidence / "unit-clang-lowering-report.json").write_text(
+                json.dumps(clang_report),
+                encoding="utf-8",
+            )
+
+            context = ai_candidate_harness.build_context_pack(
+                self.write_spec(root, spec),
+                source_root=source_root,
+                deterministic_evidence_dir=evidence,
+            )
+            artifacts = context["deterministic_artifacts"]
+
+            self.assertEqual(
+                artifacts["unit-type-map.json"]["context_excerpt"]["mappings"][0]["rust_type"],
+                "u32",
+            )
+            self.assertEqual(
+                artifacts["unit-cfg.json"]["context_excerpt"]["functions"][0]["name"],
+                "transform",
+            )
+            ir_summary = artifacts["unit-clang-lowering-report.json"]["context_excerpt"][
+                "lowering_report"
+            ]["function_ir_summary"]
+            self.assertEqual(ir_summary["callees"], ["helper"])
+            self.assertEqual(ir_summary["integer_literals"], [{"spelling": "7", "value": 7}])
+            self.assertEqual(ir_summary["statement_kinds"], ["Expr", "Return"])
+
     def test_context_and_each_included_artifact_stay_within_capacity(self) -> None:
         with tempfile.TemporaryDirectory(prefix="context-pack-budget-") as tmp:
             root = Path(tmp)

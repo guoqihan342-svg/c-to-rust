@@ -10,6 +10,7 @@ from .context_callee_behavior import (
     source_behavior_disagrees_with_fixture,
 )
 from .context_security import logical_path, redact_text, sha256_bytes, sha256_path
+from .context_source import bytes_hash_match_mode, expected_source_sha256, extract_span
 from validation.tools.extract_source_slice import extract_function
 
 
@@ -27,8 +28,27 @@ def build_external_callee_source_context(
     known_roots: tuple[str, ...],
 ) -> dict[str, Any]:
     declared = spec.get("c_boundary", {}).get("external_direct_callees")
+    target_block = _target_behavior_block(
+        spec,
+        source_root=source_root,
+        known_roots=known_roots,
+    )
     if not isinstance(declared, list) or not declared:
-        return _context("not_applicable", [], [], [], [])
+        dependencies, behavior_rules, behavior_blocked = source_backed_behavior(
+            spec,
+            blocks=[target_block] if target_block is not None else [],
+            source_root=source_root,
+            known_roots=known_roots,
+        )
+        if source_behavior_disagrees_with_fixture(spec, behavior_rules):
+            behavior_blocked.append({"reason": "source_behavior_expected_output_mismatch"})
+        return _context(
+            "not_applicable",
+            [],
+            behavior_blocked,
+            dependencies,
+            behavior_rules,
+        )
     if len(declared) > MAX_CALLEE_BLOCKS:
         return _context(
             "blocked",
@@ -75,7 +95,7 @@ def build_external_callee_source_context(
 
     dependencies, behavior_rules, behavior_blocked = source_backed_behavior(
         spec,
-        blocks=blocks,
+        blocks=[*blocks, *([target_block] if target_block is not None else [])],
         source_root=source_root,
         known_roots=known_roots,
     )
@@ -84,6 +104,91 @@ def build_external_callee_source_context(
     blocked.extend(behavior_blocked)
     status = "bound" if blocks and not blocked else "partial" if blocks else "unavailable"
     return _context(status, blocks, blocked, dependencies, behavior_rules)
+
+
+def _target_behavior_block(
+    spec: dict[str, Any],
+    *,
+    source_root: Path | None,
+    known_roots: tuple[str, ...],
+) -> dict[str, Any] | None:
+    function_name = spec.get("function_name")
+    signatures = spec.get("c_boundary", {}).get("signatures")
+    if (
+        source_root is None
+        or not isinstance(function_name, str)
+        or not isinstance(signatures, list)
+    ):
+        return None
+    matching = [
+        item
+        for item in signatures
+        if isinstance(item, dict)
+        and item.get("function") == function_name
+        and item.get("definition_status") == "real_source_bound"
+        and isinstance(item.get("source_span"), dict)
+    ]
+    if len(matching) != 1:
+        return None
+    signature = matching[0]
+    source_span = signature["source_span"]
+    span_sha = source_span.get("sha256")
+    if not isinstance(span_sha, str) or SHA256_RE.fullmatch(span_sha) is None:
+        return None
+    source_path_text = _normalized_declared_path(source_span.get("file"))
+    if source_path_text is None:
+        return None
+    declared_file_sha = expected_source_sha256(spec, source_path_text)
+    if not isinstance(declared_file_sha, str) or SHA256_RE.fullmatch(declared_file_sha) is None:
+        return None
+    resolved_root = source_root.resolve()
+    resolved = (resolved_root / PurePosixPath(source_path_text)).resolve()
+    try:
+        resolved.relative_to(resolved_root)
+    except ValueError:
+        return None
+    if not resolved.is_file() or resolved.stat().st_size > MAX_CALLEE_FILE_BYTES:
+        return None
+    full_sha = sha256_path(resolved)
+    if full_sha != declared_file_sha:
+        return None
+    try:
+        content_bytes, coordinates = extract_span(
+            resolved,
+            source_span,
+            signature.get("c_source"),
+        )
+    except ValueError:
+        return None
+    if len(content_bytes) > MAX_CALLEE_BLOCK_BYTES:
+        return None
+    content_sha = sha256_bytes(content_bytes)
+    if bytes_hash_match_mode(content_bytes, span_sha, actual_sha256=content_sha) is None:
+        return None
+    try:
+        content = content_bytes.decode("utf-8-sig")
+    except UnicodeError:
+        return None
+    if sha256_path(resolved) != full_sha:
+        return None
+    redacted = redact_text(content, known_roots)
+    return {
+        "callee": function_name,
+        "role": "target_function",
+        "source_file": {
+            "path": logical_path(resolved_root, resolved),
+            "sha256": full_sha,
+            "size_bytes": resolved.stat().st_size,
+        },
+        "source_span": {
+            "content": redacted,
+            "sha256": content_sha,
+            "declared_sha256": span_sha,
+            "size_bytes": len(content_bytes),
+            "redacted": redacted != content,
+            **coordinates,
+        },
+    }
 
 
 def callee_source_input_bindings(context: dict[str, Any]) -> list[dict[str, Any]]:

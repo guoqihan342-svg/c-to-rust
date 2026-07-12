@@ -8,6 +8,7 @@ from .context_security import bounded_value, compact_json_bytes, sanitize_value,
 
 
 MAX_ARTIFACT_BYTES = 32_000
+MAX_CLANG_ARTIFACT_BYTES = 128_000
 MAX_ARTIFACT_CONTEXT_BYTES = 12_000
 CONTEXT_ARTIFACT_SUFFIXES = (
     "-clang-lowering-report.json",
@@ -38,12 +39,20 @@ EXCERPT_KEYS = {
     "call_edges",
     "edges",
     "fields",
+    "functions",
+    "global_dependencies",
+    "mappings",
     "nodes",
+    "pointer_decisions",
     "pointer_nodes",
     "records",
+    "safe_boundary_preconditions",
     "signatures",
     "typedefs",
     "types",
+    "uncertainties",
+    "unsupported_control_flow",
+    "unsupported_nodes",
 }
 
 
@@ -63,7 +72,12 @@ def load_context_artifacts(directory: Path | None, known_roots: tuple[str, ...])
             continue
         data = resolved.read_bytes()
         binding = {"path": path.name, "sha256": sha256_bytes(data), "size_bytes": len(data)}
-        if len(data) > MAX_ARTIFACT_BYTES:
+        raw_limit = (
+            MAX_CLANG_ARTIFACT_BYTES
+            if path.name.endswith("-clang-lowering-report.json")
+            else MAX_ARTIFACT_BYTES
+        )
+        if len(data) > raw_limit:
             artifacts[path.name] = {"status": "omitted_too_large", "input": binding}
             continue
         try:
@@ -73,11 +87,7 @@ def load_context_artifacts(directory: Path | None, known_roots: tuple[str, ...])
             continue
         sanitized = sanitize_value(payload, known_roots)
         failure_summary = collect_failure_summary(sanitized)
-        excerpt_source = (
-            {key: value for key, value in sanitized.items() if key in EXCERPT_KEYS}
-            if isinstance(sanitized, dict)
-            else {}
-        )
+        excerpt_source = context_excerpt(path.name, sanitized)
         excerpt, truncated = bounded_value(excerpt_source, max_bytes=MAX_ARTIFACT_CONTEXT_BYTES // 2)
         result: dict[str, Any] = {
             "status": "loaded",
@@ -100,13 +110,125 @@ def load_context_artifacts(directory: Path | None, known_roots: tuple[str, ...])
     return artifacts
 
 
+def context_excerpt(name: str, value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    excerpt = {key: item for key, item in value.items() if key in EXCERPT_KEYS}
+    if not name.endswith("-clang-lowering-report.json"):
+        return excerpt
+    lowering = value.get("lowering_report")
+    typed_candidate = value.get("typed_ir_candidate")
+    if isinstance(lowering, dict):
+        projected = {
+            key: lowering[key]
+            for key in ("status", "frontend", "function_name", "globals")
+            if key in lowering
+        }
+        summary = typed_ir_summary(lowering.get("function_ir"))
+        if summary:
+            projected["function_ir_summary"] = summary
+        excerpt["lowering_report"] = projected
+    if isinstance(typed_candidate, dict):
+        excerpt["typed_ir_candidate"] = {
+            key: typed_candidate[key]
+            for key in (
+                "status",
+                "candidate_route",
+                "readonly_globals",
+                "runtime_preconditions",
+                "semantic_pass",
+            )
+            if key in typed_candidate
+        }
+    return excerpt
+
+
+def typed_ir_summary(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    params = value.get("params")
+    summary: dict[str, Any] = {
+        key: value[key]
+        for key in ("name", "return_type")
+        if key in value
+    }
+    if isinstance(params, list):
+        summary["params"] = [
+            {
+                key: item[key]
+                for key in ("name", "ty")
+                if key in item
+            }
+            for item in params[:32]
+            if isinstance(item, dict)
+        ]
+    body = value.get("body")
+    if isinstance(body, list):
+        summary["statement_kinds"] = stable_unique(
+            next(iter(item))
+            for item in body
+            if isinstance(item, dict) and len(item) == 1
+        )
+    facts = {"callees": [], "integer_literals": [], "operators": [], "members": []}
+    collect_typed_ir_facts(value, facts)
+    summary.update({key: items for key, items in facts.items() if items})
+    return summary
+
+
+def collect_typed_ir_facts(value: Any, facts: dict[str, list[Any]], *, depth: int = 0) -> None:
+    if depth > 48 or sum(len(items) for items in facts.values()) >= 128:
+        return
+    if isinstance(value, dict):
+        call = value.get("Call")
+        if isinstance(call, dict) and isinstance(call.get("callee"), str):
+            append_unique(facts["callees"], call["callee"])
+        literal = value.get("LitInt")
+        if isinstance(literal, dict):
+            projected = {
+                key: literal[key]
+                for key in ("spelling", "value")
+                if isinstance(literal.get(key), (str, int)) and not isinstance(literal.get(key), bool)
+            }
+            if projected:
+                append_unique(facts["integer_literals"], projected)
+        for operator_kind in ("Binary", "Unary", "AssignOp"):
+            operator = value.get(operator_kind)
+            if isinstance(operator, dict) and isinstance(operator.get("op"), str):
+                append_unique(facts["operators"], operator["op"])
+        for member_kind in ("Member", "MemberExpr", "Field"):
+            member = value.get(member_kind)
+            if not isinstance(member, dict):
+                continue
+            for key in ("field", "member", "name"):
+                if isinstance(member.get(key), str):
+                    append_unique(facts["members"], member[key])
+        for item in value.values():
+            collect_typed_ir_facts(item, facts, depth=depth + 1)
+    elif isinstance(value, list):
+        for item in value[:256]:
+            collect_typed_ir_facts(item, facts, depth=depth + 1)
+
+
+def stable_unique(values: Any) -> list[Any]:
+    result: list[Any] = []
+    for value in values:
+        append_unique(result, value)
+    return result
+
+
+def append_unique(values: list[Any], value: Any) -> None:
+    if value not in values and len(values) < 32:
+        values.append(value)
+
+
 def collect_failure_summary(value: Any, path: str = "$") -> list[dict[str, Any]]:
     found: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, item in sorted(value.items(), key=lambda pair: str(pair[0])):
             child_path = f"{path}.{key}"
             if str(key).lower() in FAILURE_KEYS and scalar_or_small_list(item):
-                found.append({"path": child_path, "value": item})
+                bounded, _ = bounded_value(item, max_bytes=1_024)
+                found.append({"path": child_path, "value": bounded})
             if len(found) < 24:
                 found.extend(collect_failure_summary(item, child_path)[: 24 - len(found)])
     elif isinstance(value, list):

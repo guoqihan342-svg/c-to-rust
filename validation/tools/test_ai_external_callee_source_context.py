@@ -141,6 +141,29 @@ class AiExternalCalleeSourceContextTests(unittest.TestCase):
 
         self.assertEqual(external_callee_source_context_status(context_pack), "incomplete")
 
+    def test_fixture_stimulus_callee_does_not_require_repository_source(self) -> None:
+        context_pack = {
+            "c_boundary": {
+                "required_callee_sections": ["external_direct_callees"],
+                "payload": {
+                    "external_direct_callees": [{
+                        "name": "fixture_call",
+                        "definition_status": "deterministic_fixture_stimulus",
+                    }]
+                },
+            },
+            "external_callee_source_context": {
+                "status": "unavailable",
+                "blocks": [],
+                "blocked": [{
+                    "callee": "fixture_call",
+                    "reason": "repository_source_ref_required",
+                }],
+            },
+        }
+
+        self.assertEqual(external_callee_source_context_status(context_pack), "ready")
+
     def test_commented_guard_does_not_become_source_behavior(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ai-callee-commented-guard-") as tmp:
             root = Path(tmp)
@@ -192,7 +215,7 @@ class AiExternalCalleeSourceContextTests(unittest.TestCase):
 
             self.assertEqual(context["external_callee_source_context"]["status"], "bound")
             self.assertIn("external_callee_source_blocks", prompt_scope_for_context(context))
-            self.assertIn("Source-backed external callees:", prompt)
+            self.assertIn("Source-backed C dependencies:", prompt)
             self.assertEqual(prompt.count("return value + 1"), 1)
             self.assertIn(
                 "external_callee_source",
@@ -260,6 +283,28 @@ class AiExternalCalleeSourceContextTests(unittest.TestCase):
         ] = "0" * 64
         self.assertEqual(external_callee_source_context_status(context), "invalid")
 
+    def test_target_function_guard_resolves_from_bound_source_dependencies(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        spec_path = repo_root / "validation" / "slice-specs" / "flashdb-real-fdb-kv-del.json"
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        source_root = repo_root / "sources" / "FlashDB"
+
+        context = build_external_callee_source_context(
+            spec,
+            source_root=source_root,
+            known_roots=(str(source_root),),
+        )
+        target_rules = [
+            rule
+            for rule in context["source_backed_behavior"]["rules"]
+            if rule["callee"] == spec["function_name"]
+        ]
+
+        self.assertEqual(len(target_rules), 1)
+        self.assertEqual(target_rules[0]["effect"]["symbol"], "FDB_INIT_FAILED")
+        self.assertEqual(target_rules[0]["effect"]["resolved_integer"], 7)
+        self.assertEqual(target_rules[0]["when"]["field_path"], ["init_ok"])
+
     def test_candidate_prompt_withholds_replay_oracle_but_keeps_source_rule(self) -> None:
         repo_root = Path(__file__).resolve().parents[2]
         spec_path = repo_root / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
@@ -297,12 +342,12 @@ class AiExternalCalleeSourceContextTests(unittest.TestCase):
         prompt = render_prompt(context)
 
         self.assertIn("<withheld-oracle-bearing-replay-source>", prompt)
-        self.assertIn("Source-backed external-callee behavior contract:", prompt)
+        self.assertIn("Source-backed C behavior contract:", prompt)
         self.assertIn('"resolved_integer":7', prompt)
         behavior_line = next(
             line
             for line in prompt.splitlines()
-            if line.startswith("Source-backed external-callee behavior contract:")
+            if line.startswith("Source-backed C behavior contract:")
         )
         self.assertEqual(behavior_line.count('"resolved_integer":7'), 2)
         self.assertIn(
@@ -310,7 +355,7 @@ class AiExternalCalleeSourceContextTests(unittest.TestCase):
             prompt,
         )
         self.assertLess(
-            prompt.index("Source-backed external-callee behavior contract:"),
+            prompt.index("Source-backed C behavior contract:"),
             prompt.index("Required generated replay API contract:"),
         )
         self.assertNotIn("assert_eq!", prompt)

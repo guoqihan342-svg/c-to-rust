@@ -25,10 +25,10 @@ input.c + compile context
 | --- | ---: | --- |
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
-| 当前 AI 候选状态 | `GLM 0 / auxiliary verified` | 比赛 GLM 仍因余额不足没有 candidate；DeepSeek V4 Flash 已在 WSL 本地无工具通道生成候选并通过 8 类 exact gates，但明确不具备比赛资格 |
-| 当前翻译主线 | P0-A18c / P0-A10 | A18c6 已关闭，下一步以空 out-root 重跑固定跨项目套件；不再以单个 FlashDB 行号扩展作为主线 |
+| 当前 AI 候选状态 | `GLM 0 / auxiliary 6/12 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项 DeepSeek V4 Flash WSL 辅助套件为 6 个 exact pass，明确不具备比赛资格 |
+| 当前翻译主线 | P0-A18c / P0-A10 | A18c7 已关闭；下一步处理 4 个 replay 语义失败和 2 个 fresh C oracle 构建合同失败，不按单项目行号扩展 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A18c6 | 通用 source-backed external-callee 合同、模型输入去 oracle、跨平台合同门和 DeepSeek 定向 exact 复验已收口 |
+| 最近开发阶段 | P0-A18c7 | 目标函数源码行为、fixture stimulus readiness、translation-carrier fresh oracle 和 typed-IR/CFG/TypeMap prompt 投影已收口 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -181,8 +181,8 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 | 顺序 | 待办 | 状态 | 本轮完成判据 |
 | ---: | --- | --- | --- |
-| 1 | P0-A18c6 通用 external-callee behavior contract | 完成 | Windows/WSL 合同门、schema/fresh binding 和无硬编码审计全部通过；DeepSeek 定向 exact 结果有 hash-bound 证据 |
-| 2 | P0-A18c 固定跨项目验收 | 下一项 | 使用空 out-root 重跑固定 12 项，只统计 exact gates；辅助模型两个公开 numerator 继续为 0 |
+| 1 | P0-A18c7 跨项目 AI 输入与证据合同闭包 | 完成 | Windows/WSL 125 项回归通过；固定 12 项生成 12 个候选、0 contract failure、6 exact pass |
+| 2 | P0-A18c8 剩余 exact failure 收敛 | 下一项 | 通用补齐 4 个 carrier/scripted replay 语义合同和 2 个真实项目 C oracle 构建合同 |
 | 3 | P0-A10 AI golden set | 待开始 | 以多项目、陌生标识符和最近邻负例扩充能力集，禁止按测试用例修补 |
 | 4 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
 | 5 | P0-C 阶段收口 | 待开始 | 修复历史 evidence 漂移并清理 all-feature Clippy 剩余项 |
@@ -327,7 +327,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   `run_ai_finite_cross_project_suite.py` 现在把 12 个 spec 一次传给同一个 competition runner，禁止 accepted-evidence shortcut 和外层重试；suite/summary 均做 SHA 绑定，底层 summary validator 未通过时上层不复制任何指标。WSL local simulation 可显式使用离线 Cargo cache，但 summary 必须记录 `bypassed_for_local_cache`，`competition-exact` 会拒绝该旁路。余额不足、鉴权失败或 provider 无法启动会在首次失败后打开熔断，timeout 保持连续两次阈值；不同 kind 会重置连续计数。只有实际调用项计入 slices/workflow/AI units，剩余项记录为 skipped，不制造 `not_invoked` 单元；ContextPack preflight 拒绝项则显式记录为零次 provider 调用。
 
-  2026-07-12 的有限熔断演练在约 65 秒内完成：请求 12 项，实际调用 2 项，跳过 10 项；`slices.attempted=2`、`workflow_metrics.units_total=2`、`ai_translation_metrics.units_total=2`、`invocations=2`、`blocked=2`、`abnormal=0`，独立 summary validator 返回 0。该历史运行按当时代码记录为两个 `provider_timeout`；后续受限日志诊断确认底层错误为余额/资源包不足，但不回写旧工件。当前没有 candidate、compile 或 semantic acceptance，所以本项仍未完成，也不得发布跨项目成功率。下一步只在 GLM 资源包恢复后对同一固定套件再运行一次完整阶段验收，再发布 generation、compile、semantic、refused/blocked、repair 和 route 指标；不得为绕过 provider 故障更换测试项或硬编码项目。
+  2026-07-12 的空 out-root WSL 辅助运行 `ai-auxiliary-p0-a18c8-deepseek-wsl-20260712-02` 完成固定 12 项：12 个 initial candidate 全部生成，4 次证据驱动 repair，共 16 次 provider 调用；6 个 exact pass、6 个 exact failure，contract/execution/provider-block 均为 0。报告 SHA-256 为 `dfff968ad274924b763a8cede749338f37dcca25e38b5148fbeaaef0d09c2927`。这是 DeepSeek 的 `wsl-local-simulation` 质量信号，两个公开 numerator 仍固定为 0；比赛 GLM 资源恢复后的同套件验收和真实比赛主机证据尚未完成，因此 P0-A10 保持未勾选。
 
 - [x] **P0-A11：provider admission 与零调用证据闭环**
 
@@ -392,6 +392,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
         - [x] **P0-A18b2c2：mutable-out/report 4/4**。single i32 output、dynamic i32 slice output、input-buffer out0+sum 与 call-metadata 已按 C 签名、参数方向、length companion、call-expression contract 和 fixture observable 闭合生成通用 plan；固定 i32 array、受限 `Vec<i32>` initializer、最多 4096 项的 `i32_slice/i32_vec` codec、whole-binding observation、`usize/string_vec` metadata assertion、fixture relation、完整符号/字段重命名和漂移拒绝均已覆盖。call-metadata 显式声明 `input_fixture_fields`、contexts 与 source_calls，不猜测字段或解析 C 文本。真实 store-add-one、copy-i32-ptr-arith、sum-i32-buffer、sum-i32-ptr-arith 与 call-expression replay 均不再进入对应 legacy renderer。
         - [x] **P0-A18b2c3：record-pointer/opaque 5/5**。record pointer identity、record projection identity、record buffer/length identity、opaque key 与 opaque key/value 均已迁移到通用 v2 producer。opaque context 使用安全 Rust fixture model，不再伪造 FlashDB ABI marker；旧 raw-pointer AI draft 会在 replay 编译门 fail-closed。Windows/WSL 聚焦门禁均为 48/48；WSL 阶段全量 207 项仅保留干净基线已有的 2 个 CRC32 失败和 1 项平台跳过。该阶段仍是 replay/harness 能力，不增加 translation coverage numerator，也不替代 C oracle/Rust replay/diff 语义证据。
     - [x] **P0-A18b3：ReplayCallPlan 按职责拆分**。原 946 行实现已拆为 48 行兼容门面和 dispatch、v1 builder、fixture binding、schema、literal rendering 五个真实模块，不使用 `exec` 或代码片段拼接；提交 `b28d5648` 的兼容门为 87 项通过、1 项 Windows symlink 条件跳过。
+    - [ ] **P0-A18b4：ReplayCallPlan v2 退出动态 fragment**。`replay_call_plan_v2.py` 仍动态装载 9 个 `.pyfrag`、约 2,949 行；迁移为显式 builder/schema/fixture/scripted/identity/buffer/string 模块，并逐字保持 plan JSON、plan SHA 和生成 Rust。
   - [ ] **P0-A18c：有限跨项目验收**。固定 12 项必须全部可生成真实 replay call，首轮 rustc API mismatch 相比 A17 明显下降，并继续只按 exact gates 统计质量信号。
     - [x] **P0-A18c1：有界 provider/repair 可靠性**。ContextPack replay 合同提升为 v3，并从 ReplayCallPlan 生成可独立复算的 `required_candidate_api`，包含精确签名、supporting structs、ABI、unsafe 和引用返回生命周期；candidate/repair prompt 只展示一份完整 API。AI manifest 提升为 v9：仅对“合法无工具 JSONL、无 assistant 文本、终止于 `step_finish`、output/reasoning token 均为 0”的空 completion 原样重试一次，两次 response/receipt/session identity 都 hash-bound；余额、鉴权、timeout、非零退出、工具事件和普通 malformed response 不重试。fixture-only Rust compile stub 在检查后逐字节恢复 canonical AI draft，避免 applied artifact SHA 漂移。repair 只接受完整自包含 Rust candidate；fresh oracle 未通过、target contract 缺失或结构化候选失败缺失时零调用跳过。辅助聚合器重开 hash-bound repair report，分别统计 initial、repair 和 total provider invocations；默认 timeout 为 300 秒。161 项 Windows 聚焦回归通过。该项只完成 harness 改造，固定 12 项复跑结果仍由 P0-A18c 追踪。
     - [x] **P0-A18c2：安全语法拒绝 fail-closed**。call-continue、reset-add 和 interior-projection 的 Rust 安全合同抛出 `ValueError` 时，不再使 `auto_migrate` 以 traceback 终止；runner 写入 `replay_safety.kind=generated_rust_safety_contract_failed`、`replay_execution.phase=safety`、失败 mappings 与 `semantic_gate=false`，不执行 rustc/replay，并允许后续 exact/repair 流程继续。新增路径在 Windows/WSL 均为 4/4。
@@ -406,6 +407,14 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
       - [x] **P0-A18c6d：跨平台阶段门**。schema 解析、fresh binding、`git diff --check` 和直接受影响的 auto-migrate 路径已闭合；最终聚焦合同组在 Windows 完成 96 项（95 通过、1 项平台跳过），在 WSL 为 96/96；删除专用桩的 7 个 auto-migrate 用例在两端各 7/7。readiness 会复算 rule/behavior hash、核对全部真实 callee 及 source bindings，注释伪控制流和 `oracle_contract` 回灌均有 fail-closed 负例。Windows 252 项阶段组只保留 2 个已在干净基线登记的 CRC32 失败和 2 个平台跳过，不计作本阶段回归。
       - [x] **P0-A18c6e：辅助模型精确复验**。空 out-root `ai-auxiliary-p0-a18c6-kv-set-deepseek-wsl-20260712-02` 使用 `opencode/deepseek-v4-flash-free`、1 initial、0 repair；独立 validator 重开 16 个 hash-bound artifacts 后为 AI exact pass。router SHA-256 `3d71be46e6d8530842397547a9011c1e65b1dc500922ee0d7f69daa12f7514e2`，candidate SHA-256 `9e9b78cac94f05e6cd23ee6aafd9e4598be415df325e8b4e77e803f75c292230`。该结果保持辅助模型身份与两个公开 numerator 为 0，不能替代固定 12 项和 GLM 比赛复验。
       - [x] **P0-A18c6f：实现按职责拆分**。external-callee 源码块提取/输入绑定与 guard/macro/enum 行为解析分别位于 260 行和 307 行模块；通用 provider readiness 与 callee hash/binding readiness 分别为 309 行和 164 行。不使用 `exec`、`.pyfrag` 动态装载或项目专用分派。
+
+    - [x] **P0-A18c7：跨项目 AI 输入与证据合同闭包**。repair 完成后重新计算 eligibility；manifest schema 接受实际 external-source/typed-IR scope 和两类 context-boundary 状态；fixture-only scripted callee 不再被误要求仓库函数源码；目标函数 guard/return 从文件 SHA 与严格 source span 重新提取并与宏/枚举依赖共同生成高显著性行为规则；translation-carrier 真实 fragment 成为 fresh-oracle span。TypeMap `mappings`、CFG `functions` 和有界 clang typed-IR summary 进入 prompt scope，超长 diagnostics 独立截断。规则均按结构、声明和源码哈希驱动，不读取项目、函数、fixture id 选择翻译。Windows 与 WSL 聚焦回归均为 125/125。
+      - 固定 12 项空目录辅助运行生成 12/12 candidates，12 initial + 4 repair，0 contract failure、0 execution failure、0 provider block，exact pass 从上一阶段 3/12 提升到 6/12。新增通过 `tsl_to_blob`、`kv_set`、`kv_del`；报告 SHA-256 为 `dfff968ad274924b763a8cede749338f37dcca25e38b5148fbeaaef0d09c2927`。辅助身份和两个公开 numerator 均保持 0。
+      - 剩余失败边界已净化：4 个真实 fragment 的 fresh oracle 均通过，只剩 generated replay 行为不一致；zlib-ng 与 libuv 两项仍因 generated header/include 和整 translation unit 链接闭包不足而 fresh oracle 失败。它们进入 A18c8，不取消 A18c7 已关闭的合同修复。
+
+    - [ ] **P0-A18c8：剩余 exact failure 的通用语义闭包**。
+      - [ ] **P0-A18c8a：carrier/scripted source behavior digest**。从真实 fragment、ReplayCallPlan scripted runtime、CFG/effect/typed IR 生成 source-backed 分支、调用顺序、字段写入和返回摘要；禁止把 fixture expected/actual 回灌给模型。
+      - [ ] **P0-A18c8b：真实项目 fresh C oracle 构建闭包**。优先消费绑定的 compile database、generated include 和构建产物/链接合同；缺失时 fail closed，不按 zlib/libuv 名称添加语义桩或测试专用链接参数。
 
       前序失败证据：同配置 `kv_set` router `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0` 的 rustc/unsafe/oracle 通过，但候选把外部 callee 结果实现为 `-1`，与 oracle 的 `7` 不一致。三项 WSL worktree 运行均报告 `repo_commit=UNKNOWN0`，因此只属于本地 hash-bound AI 路由证据。
 

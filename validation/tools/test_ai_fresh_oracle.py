@@ -164,6 +164,36 @@ class AiFreshOracleTests(unittest.TestCase):
             self.assertEqual(span_binding["declared_sha256"], spec["function_source_span"]["sha256"])
             self.assertEqual(source_binding["sha256"], sha256(source))
 
+    def test_translation_carrier_fragment_is_the_fresh_oracle_span(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fresh-oracle-carrier-fragment-") as tmp:
+            root = Path(tmp)
+            spec, payload, harness = self.make_case(root)
+            declared = spec.pop("function_source_span")
+            spec["translation_carrier"] = {
+                "real_source": {
+                    "file": declared["file"],
+                    "fragment": {
+                        "line_start": declared["line_start"],
+                        "line_end": declared["line_end"],
+                        "sha256": declared["sha256"],
+                        "hash_mode": "normalized_line_span_with_newline",
+                    },
+                }
+            }
+
+            result = self.prove(root, spec, payload, harness)
+
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(
+                result["bindings"]["source_span"]["declared_sha256"],
+                declared["sha256"],
+            )
+
+            spec["translation_carrier"]["real_source"]["fragment"]["sha256"] = "0" * 64
+            drifted = self.prove(root, spec, payload, harness)
+            self.assertEqual(drifted["status"], "failed")
+            self.assertIn("source_span_hash_mismatch", self.kinds(drifted))
+
     def test_span_byte_coordinates_cannot_fall_back_to_matching_lines(self) -> None:
         with tempfile.TemporaryDirectory(prefix="fresh-oracle-coordinate-drift-") as tmp:
             root = Path(tmp)

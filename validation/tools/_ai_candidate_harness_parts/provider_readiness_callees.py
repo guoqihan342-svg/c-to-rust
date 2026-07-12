@@ -15,13 +15,6 @@ def external_callee_source_context_status(context_pack: dict[str, Any]) -> str:
     required = c_boundary.get("required_callee_sections") if isinstance(c_boundary, dict) else []
     if not isinstance(required, list) or "external_direct_callees" not in required:
         return "ready"
-    context = context_pack.get("external_callee_source_context")
-    if not isinstance(context, dict):
-        return "invalid"
-    if context.get("status") not in {"bound", "partial"}:
-        return "incomplete"
-    if not isinstance(context.get("blocks"), list) or not context["blocks"]:
-        return "incomplete"
     boundary_payload = c_boundary.get("payload")
     if not isinstance(boundary_payload, dict):
         boundary_payload = c_boundary
@@ -35,6 +28,15 @@ def external_callee_source_context_status(context_pack: dict[str, Any]) -> str:
         and item.get("definition_status") == "real_source_bound"
         and isinstance(item.get("name"), str)
     }
+    if not required_source_names:
+        return "ready"
+    context = context_pack.get("external_callee_source_context")
+    if not isinstance(context, dict):
+        return "invalid"
+    if context.get("status") not in {"bound", "partial"}:
+        return "incomplete"
+    if not isinstance(context.get("blocks"), list) or not context["blocks"]:
+        return "incomplete"
     bound_source_names = {
         item.get("callee")
         for item in context["blocks"]
@@ -65,6 +67,12 @@ def external_callee_source_context_status(context_pack: dict[str, Any]) -> str:
         if identity is None or identity not in source_bindings:
             return "invalid"
         known_span_hashes.add(identity[5])
+    source_span = context_pack.get("source", {}).get("span")
+    if isinstance(source_span, dict):
+        for key in ("sha256", "declared_sha256"):
+            value = source_span.get(key)
+            if _is_sha256(value):
+                known_span_hashes.add(value)
     critical_reasons = {
         "source_file_sha256_mismatch",
         "source_file_changed_during_read",

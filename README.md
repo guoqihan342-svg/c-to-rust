@@ -245,8 +245,10 @@ P0-A18c5 不再把安全的 `Option<core::ptr::NonNull<T>>` 类型声明本身�
 
 提交 `ecbb2ef3` 后的 WSL DeepSeek 0-repair 验证中，`kv_to_blob` 与 `tsl_to_blob` 均以 1 次 provider 调用获得 AI exact pass；router SHA-256 分别为 `4f753f9cd00359d46ed13044f9845b9dff04702c84a4c9ede0aacfc85de31cac` 和 `93f7b5fe6d2f7f3d903d7042d2a78236b96b86afa491faeea5c971ed00d7a68b`，unsafe token 与 raw-pointer operation 均为 0。`kv_set` 同配置下仍失败：候选通过 rustc/unsafe/oracle，但 replay 期望外部 callee fixture 返回 `7`，候选自行实现为 `-1`；失败 router SHA-256 为 `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0`。下一项不是增加函数特例，而是让 ContextPack 提供可复算、可执行的外部 callee 行为合同。三次运行的 WSL worktree Git 元数据均因 Windows `.git` 路径显示 `UNKNOWN0`，因此只作为 hash-bound 本地 AI 路由证据，不作为 competition-exact 或完整项目验收结论。
 
+P0-A18c7 的固定 12 项 WSL 辅助运行 `ai-auxiliary-p0-a18c8-deepseek-wsl-20260712-02` 使用空 out-root、`opencode/deepseek-v4-flash-free`、3 worker 和最多 1 轮 repair：12/12 candidates 生成，12 次 initial 加 4 次 repair，共 16 次 provider 调用；6 个 exact pass、6 个 exact failure，contract/execution/provider-block 均为 0。新增 exact pass 为 `tsl_to_blob`、`kv_set`、`kv_del`，报告 SHA-256 为 `dfff968ad274924b763a8cede749338f37dcca25e38b5148fbeaaef0d09c2927`。该结果仍是 `wsl-local-simulation`，两个公开 numerator 固定为 0；P0-A18c、P0-A10 和 P0-H9 均未关闭。
+
 ```bash
-python3 -B -m validation.tools.run_ai_auxiliary_cross_project_suite \
+CLANG_PATH=/usr/bin/clang python3 -B -m validation.tools.run_ai_auxiliary_cross_project_suite \
   --suite validation/ai-finite-cross-project-suite.json \
   --out-root target/ai-auxiliary-$(date +%Y%m%dT%H%M%S) \
   --model opencode/deepseek-v4-flash-free \

@@ -305,6 +305,7 @@ def run_ai_exact_stage(
                     compile_runner=compile_runner,
                     replay_runner=replay_runner,
                 )
+                ai_repair_eligibility = classify_ai_repair_eligibility(ai_result)
 
     ai_candidate_id = _manifest_candidate_id(ai_manifest)
     candidates = [

@@ -239,13 +239,32 @@ def _source_bindings(
             binding["hash_match_mode"] = match_mode
         bindings.append(binding)
 
-    span = spec.get("function_source_span")
-    if not isinstance(span, Mapping):
-        signatures = _mapping(spec.get("c_boundary")).get("signatures")
-        if isinstance(signatures, Sequence) and signatures and isinstance(signatures[0], Mapping):
-            span = signatures[0].get("source_span")
+    span = _declared_source_span(spec)
     span_binding = _span_binding(base, span, failures)
     return bindings, span_binding
+
+
+def _declared_source_span(spec: Mapping[str, Any]) -> Any:
+    span = spec.get("function_source_span")
+    if isinstance(span, Mapping):
+        return span
+    signatures = _mapping(spec.get("c_boundary")).get("signatures")
+    if isinstance(signatures, Sequence):
+        function_name = spec.get("function_name")
+        for signature in signatures:
+            if (
+                isinstance(signature, Mapping)
+                and signature.get("function") == function_name
+                and isinstance(signature.get("source_span"), Mapping)
+            ):
+                return signature["source_span"]
+    carrier = _mapping(spec.get("translation_carrier"))
+    real_source = _mapping(carrier.get("real_source"))
+    fragment = real_source.get("fragment")
+    source_file = real_source.get("file")
+    if isinstance(fragment, Mapping) and isinstance(source_file, str):
+        return {"file": source_file, **dict(fragment)}
+    return None
 
 
 def _span_binding(base: Path, span: Any, failures: list[dict[str, Any]]) -> dict[str, Any]:

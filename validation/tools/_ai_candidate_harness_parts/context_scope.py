@@ -9,6 +9,7 @@ PROMPT_SCOPE_ORDER = (
     "generated_replay_api_contract",
     "type_map_excerpt",
     "cfg_excerpt",
+    "typed_ir_excerpt",
     "pointer_graph_excerpt",
     "root_cause_summary",
     "direct_caller_callee_facts",
@@ -18,6 +19,7 @@ PROMPT_SCOPE_ORDER = (
 ARTIFACT_SCOPE_SUFFIXES = {
     "-type-map.json": "type_map_excerpt",
     "-cfg.json": "cfg_excerpt",
+    "-clang-lowering-report.json": "typed_ir_excerpt",
     "-pointer-graph.json": "pointer_graph_excerpt",
 }
 

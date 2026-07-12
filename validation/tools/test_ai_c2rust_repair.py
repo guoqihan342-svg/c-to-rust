@@ -58,6 +58,12 @@ def bound_context(evidence_dir: Path) -> tuple[dict[str, object], Path]:
                 "parameter_count_and_order": "as_invoked_by_generated_replay",
                 "return_type": "as_constrained_by_generated_replay",
             },
+            "model_input_policy": {
+                "replay_source_content": "withheld_oracle_bearing",
+                "oracle_values": "withheld",
+                "call_plan": "included",
+                "required_candidate_api": "included_when_bound",
+            },
         },
         "bindings": {
             "inputs": [
@@ -433,6 +439,15 @@ class C2RustRepairExactStageTests(unittest.TestCase):
             )
             self.assertEqual(selected["source"], "opencode-ai")
             self.assertNotIn("c2rust_repair", result["router"]["candidate_source_audit"])
+            self.assertEqual(
+                result["router"]["repair_eligibility"]["opencode-ai"],
+                {
+                    "status": "skipped",
+                    "reason": "structured_candidate_failure_missing",
+                    "provider_invocations": 0,
+                    "semantic_gate": False,
+                },
+            )
 
     def test_zero_token_pass_skips_both_repair_coordinators(self) -> None:
         with tempfile.TemporaryDirectory(prefix="c2rust-repair-skip-") as tmp:

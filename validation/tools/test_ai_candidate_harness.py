@@ -185,6 +185,12 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assertFalse(manifest["claim_boundary"]["semantic_gate"])
             self.assertFalse(manifest["candidates"][0]["semantic_pass"])
             self.assert_manifest_schema(manifest)
+            extended_scope = json.loads(json.dumps(manifest))
+            extended_scope["candidates"][0]["prompt_scope"].append(
+                "external_callee_source_blocks"
+            )
+            extended_scope["candidates"][0]["prompt_scope"].append("typed_ir_excerpt")
+            self.assert_manifest_schema(extended_scope)
             missing_receipt = json.loads(json.dumps(manifest))
             missing_receipt["bindings"].pop("invocation_receipt")
             schema_path = (
@@ -852,6 +858,11 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assertEqual("context_not_provider_ready", manifest["failure"]["kind"])
             self.assertEqual(b"", (out_dir / "l3-generic-scale-ai-response.jsonl").read_bytes())
             self.assert_manifest_schema(manifest)
+            external_context_blocked = json.loads(json.dumps(manifest))
+            external_context_blocked["provider_preflight"]["context_boundary_status"] = (
+                "external_callee_source_context_incomplete"
+            )
+            self.assert_manifest_schema(external_context_blocked)
 
             validation = summary_validator.validate_fresh_ai_manifest(
                 manifest,

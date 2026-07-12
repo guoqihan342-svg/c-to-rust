@@ -91,17 +91,20 @@ def render_replay_behavior_rule(context_pack: dict[str, Any]) -> str:
 
 def render_external_callee_source_rule(context_pack: dict[str, Any]) -> str:
     context = context_pack.get("external_callee_source_context")
-    if not isinstance(context, dict) or not context.get("blocks"):
+    if not isinstance(context, dict):
         return ""
     behavior = context.get("source_backed_behavior")
+    has_behavior = isinstance(behavior, dict) and bool(behavior.get("rules"))
+    if not context.get("blocks") and not has_behavior:
+        return ""
     behavior_contract = (
         json.dumps(behavior, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
         if isinstance(behavior, dict) and behavior.get("rules")
         else "null"
     )
     return (
-        f"Source-backed external-callee behavior contract: {behavior_contract}\n"
-        "Source-backed external callees: ContextPack.external_callee_source_context.blocks contains "
+        f"Source-backed C behavior contract: {behavior_contract}\n"
+        "Source-backed C dependencies: ContextPack.external_callee_source_context.blocks contains "
         "the hash-bound C definitions and dependencies from the declared source root. Implement every "
         "applicable rule in the behavior contract above. Resolved constants may come only from those "
         "source rules. They are candidate context only and keep semantics_verified=false; they cannot "

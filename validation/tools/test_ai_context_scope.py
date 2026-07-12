@@ -47,6 +47,16 @@ class AiContextScopeTests(unittest.TestCase):
                         "sha256": "a" * 64,
                     },
                 },
+                "unit-clang-lowering-report.json": {
+                    "status": "loaded",
+                    "context_excerpt": {
+                        "lowering_report": {
+                            "status": "lowered",
+                            "function_ir_summary": {"callees": ["helper"]},
+                        }
+                    },
+                    "failure_summary": [],
+                },
                 "unit-pointer-graph.json": {
                     "status": "loaded",
                     "failure_summary": [
@@ -62,7 +72,13 @@ class AiContextScopeTests(unittest.TestCase):
         }
 
         self.assertEqual(
-            ["slice_spec", "source_spans", "type_map_excerpt", "root_cause_summary"],
+            [
+                "slice_spec",
+                "source_spans",
+                "type_map_excerpt",
+                "typed_ir_excerpt",
+                "root_cause_summary",
+            ],
             prompt_scope_for_context(context),
         )
 
