@@ -16,7 +16,7 @@
 | --- | --- |
 | Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
-| 最近开发阶段 | P0-A18c1：精确候选 API、空响应单次重试与 repair 调用治理 |
+| 最近开发阶段 | P0-A18c2：安全语法拒绝转为结构化 replay failure |
 | 当前翻译任务 | P0-A18c：用固定跨项目样本复验 AI exact 成功率与首轮 API 匹配率 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
@@ -235,9 +235,9 @@ AI exact 路径禁止同时传入 `--accept-existing-evidence`。历史 accepted
 
 GLM 余额不足时使用独立的 `run_ai_auxiliary_cross_project_suite`，默认模型为 `opencode/deepseek-v4-flash-free`。它拒绝 competition-eligible 模型、非空 out-root、路径不安全或重复的 project/slice identity，并在每个单元启动前后复核 spec SHA；并发单元使用独立的 OpenCode config/data/cache/state/tmp，从而隔离 SQLite、session 与日志。报告固定 `competition_success_numerator=0`、`translation_coverage_numerator=0`，不能关闭 P0-A6/A10/H9。
 
-最新已归档 WSL 辅助运行 `ai-auxiliary-p0-a18b2c3-deepseek-wsl-20260712-192612` 的固定 12 项均实际调用 provider：8 个候选、2 个 exact pass、6 个 exact failure、2 个 contract failure、1 个 execution failure、1 个 provider block。重开各单元绑定的 repair report 后，真实调用口径是 12 次 initial 加 6 次 repair，共 18 次；旧聚合字段误报 repair 为 0。6 次 repair 中 2 次 timeout、3 次 exhausted、1 次 invalid patch。exact pass 是 `real-fdb-calc-crc32` 与 `real-fdb-is-str`；相较紧邻上一轮 1 个 pass 有恢复，但只回到更早的 2-pass 基线，不能声明通用成功率提升。报告位于 `target/ai-auxiliary-p0-a18b2c3-deepseek-wsl-20260712-192612/summary/ai-auxiliary-cross-project-suite-report.json`，SHA-256 为 `7e8bd77b9afd6c5883d007a47c5058d47a12d1a5d973b86e5ff042b908e2d5c0`。
+最新 WSL 辅助运行 `ai-auxiliary-p0-a18c1-deepseek-wsl-20260712-204206` 使用固定 12 项和 `opencode/deepseek-v4-flash-free`：12/12 preflight ready，12 次 initial 加 4 次有 response 证明的 repair，共 16 次 provider 调用；生成 11 个候选，结果为 2 个 exact pass、9 个 exact failure、0 contract failure、1 个 execution failure、0 provider block。exact pass 仍是 `real-fdb-calc-crc32` 与 `real-fdb-is-str`，因此成功率没有提升。相比上一轮，候选数 8→11、contract failure 2→0、provider block 1→0、总调用 18→16；有效 target contract 下首轮 rustc API mismatch 从 3 项降到 1 项，`tsl_to_blob` 与 `kv_set` 已可编译，但 `kv_to_blob` 仍失败。唯一 execution failure 是 zero-start AI draft 不满足安全 owner-interior alias 合同，且当时异常未结构化；P0-A18c2 已把这类拒绝改为 fail-closed replay failure。报告 SHA-256 为 `512641d1ece1d6dcf8b5bc20af3208da467a1c5284931d3c2a32bdb5cf8551c1`。该运行仍是 `wsl-local-simulation`，两个公开 numerator 均为 0。
 
-P0-A18c1 已修正聚合计量并减少无信息调用：canonical draft 的 fixture-only 编译 stub 只在检查期间存在，随后逐字节恢复 AI candidate，避免 manifest SHA 与落盘 draft 分叉；repair prompt 只请求完整自包含 Rust candidate；fresh C oracle 未通过、目标契约缺失或没有结构化候选失败时，不调用 AI repair并记录跳过原因。辅助套件默认 timeout 提升到 300 秒。上述实现已通过 161 项 Windows 聚焦回归，但新的固定 12 项 DeepSeek 结果尚未生成，因此 P0-A18c 仍未完成。
+P0-A18c1 已修正聚合计量并减少无信息调用：canonical draft 的 fixture-only 编译 stub 只在检查期间存在，随后逐字节恢复 AI candidate，避免 manifest SHA 与落盘 draft 分叉；repair prompt 只请求完整自包含 Rust candidate；fresh C oracle 未通过、目标契约缺失或没有结构化候选失败时，不调用 AI repair并记录跳过原因。辅助套件默认 timeout 提升到 300 秒。实现通过 161 项 Windows 聚焦回归；P0-A18c2 的结构化安全拒绝在 Windows/WSL 聚焦门禁均为 4/4。固定 12 项 exact pass 仍为 2，因此 P0-A18c 未完成。
 
 ```bash
 python3 -B -m validation.tools.run_ai_auxiliary_cross_project_suite \

@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from validation.tools import auto_migrate
@@ -119,6 +120,62 @@ class AutoMigrateCallContinueTests(unittest.TestCase):
         self.assertEqual(safety["fixture_partitions"], EXPECTED_V2_PARTITIONS)
         self.assertEqual(safety["external_call_count_values"], [0, 1])
         self.assertTrue(safety["zero_start_external_call_skipped"])
+
+    def test_generated_replay_safety_rejection_is_structured_not_exception(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="auto-call-continue-replay-safety-", dir=REPO_ROOT / "target"
+        ) as tmp:
+            evidence_dir = Path(tmp)
+            slice_id = "renamed-zero-start"
+            (evidence_dir / f"l3-{slice_id}-rust-draft.rs").write_text(
+                "pub fn candidate() {}\n",
+                encoding="utf-8",
+            )
+            (evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs").write_text(
+                "#[test] fn replay() {}\n",
+                encoding="utf-8",
+            )
+            replay = {"translation_mappings": [{"status": "candidate"}]}
+            with (
+                mock.patch.object(
+                    auto_migrate,
+                    "generated_rust_replay_supported",
+                    return_value=True,
+                ),
+                mock.patch.object(
+                    auto_migrate,
+                    "call_continue_generated_rust_safety",
+                    side_effect=ValueError(
+                        "carrier must contain exactly one declared safe owner interior alias"
+                    ),
+                ),
+                mock.patch.object(auto_migrate, "run_generated_rust_replay_once") as execute,
+            ):
+                result = auto_migrate.run_generated_rust_replay(
+                    {"slice_id": slice_id},
+                    evidence_dir,
+                    replay,
+                    {"status": "passed"},
+                )
+
+            execute.assert_not_called()
+            self.assertEqual("failed", result["status"])
+            self.assertEqual("safety", result["replay_execution"]["phase"])
+            self.assertFalse(result["generated_draft_replay_pass"])
+            self.assertFalse(result["generated_draft_semantic_pass"])
+            self.assertFalse(result["replay_safety"]["semantic_gate"])
+            self.assertEqual(
+                "generated_rust_safety_contract_failed",
+                result["replay_safety"]["kind"],
+            )
+            self.assertEqual("failed", result["translation_mappings"][0]["status"])
+            persisted = json.loads(
+                (
+                    evidence_dir
+                    / f"l3-{slice_id}-test-translation-generated.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(result, persisted)
 
     def test_schema_v2_identity_partition_recomputation_checks_call_counts(self) -> None:
         spec, cases = schema_v2_spec_with_five_partitions()

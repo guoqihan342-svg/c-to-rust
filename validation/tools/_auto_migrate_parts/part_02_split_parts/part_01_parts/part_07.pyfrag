@@ -22,9 +22,17 @@ def run_generated_rust_replay(
         return replay
     if not generated_rust_replay_supported(spec, evidence_dir):
         return replay
-    call_continue_safety = call_continue_generated_rust_safety(spec, draft_path)
-    reset_add_safety = reset_add_generated_rust_safety(spec, draft_path)
-    projection_safety = interior_projection_generated_rust_safety(spec, draft_path)
+    try:
+        call_continue_safety = call_continue_generated_rust_safety(spec, draft_path)
+        reset_add_safety = reset_add_generated_rust_safety(spec, draft_path)
+        projection_safety = interior_projection_generated_rust_safety(spec, draft_path)
+    except ValueError as error:
+        return record_generated_rust_replay_safety_failure(
+            spec,
+            evidence_dir,
+            replay,
+            error,
+        )
     external_context = external_direct_callee_context(
         spec,
         load_plan_call_expressions(evidence_dir, slice_id),
@@ -139,6 +147,43 @@ def run_generated_rust_replay(
     for mapping in replay.get("translation_mappings", []):
         if isinstance(mapping, dict):
             mapping["status"] = "passed" if passed else "failed"
+    write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", replay)
+    return replay
+
+
+def record_generated_rust_replay_safety_failure(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    replay: dict[str, Any],
+    error: ValueError,
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    diagnostic = str(error).strip()[:512] or "generated Rust safety contract rejected the candidate"
+    replay["status"] = "failed"
+    replay["generated_draft_replay_pass"] = False
+    replay["generated_draft_semantic_pass"] = False
+    replay["replay_safety"] = {
+        "status": "failed",
+        "kind": "generated_rust_safety_contract_failed",
+        "diagnostic": diagnostic,
+        "semantic_gate": False,
+    }
+    replay["replay_execution"] = {
+        "status": "failed",
+        "phase": "safety",
+        "compile_command": None,
+        "compile_returncode": None,
+        "run_command": None,
+        "run_returncode": None,
+        "stdout_log": None,
+        "stderr_log": None,
+    }
+    replay["known_gaps"] = [
+        "Generated Rust failed the bounded safety syntax contract before replay compilation."
+    ]
+    for mapping in replay.get("translation_mappings", []):
+        if isinstance(mapping, dict):
+            mapping["status"] = "failed"
     write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", replay)
     return replay
 
