@@ -204,10 +204,49 @@ class AiCandidateHarnessTests(unittest.TestCase):
                 summary_path=root / "competition-run-summary.json",
                 repo_root=root,
             )
-            self.assertNotIn(
-                "ai_manifest_prompt_scope_context_mismatch",
+            self.assertIn(
+                "ai_manifest_schema_version_stale_for_fresh_run",
                 legacy_scope_validation["reasons"],
             )
+
+            context_path = out_dir / "l3-generic-scale-ai-context-pack.json"
+            original_context_bytes = context_path.read_bytes()
+            prompt_context_drift = json.loads(json.dumps(manifest))
+            drifted_context = json.loads(original_context_bytes.decode("utf-8"))
+            drifted_context["deterministic_artifacts"] = {
+                "unit-cfg.json": {
+                    "status": "loaded",
+                    "context_excerpt": {"blocks": [{"id": "entry"}]},
+                    "failure_summary": [],
+                }
+            }
+            provider.atomic_write_json(context_path, drifted_context)
+            drifted_context_sha = provider.sha256_path(context_path)
+            prompt_context_drift["bindings"]["context_pack"]["sha256"] = drifted_context_sha
+            prompt_context_drift["candidates"][0]["input_artifact_hashes"][
+                "context_pack"
+            ] = drifted_context_sha
+            prompt_context_drift["candidates"][0]["prompt_scope"] = [
+                "slice_spec",
+                "source_spans",
+                "cfg_excerpt",
+            ]
+            prompt_context_validation = summary_validator.validate_fresh_ai_manifest(
+                prompt_context_drift,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-migrator",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertIn(
+                "ai_manifest_prompt_context_mismatch",
+                prompt_context_validation["reasons"],
+            )
+            provider.atomic_write_bytes(context_path, original_context_bytes)
 
             transport_drift = json.loads(json.dumps(manifest))
             transport_drift["generator"]["prompt_transport"]["message_sha256"] = "0" * 64

@@ -10,7 +10,7 @@ from typing import Any, Iterable
 SENSITIVE_KEY_PARTS = ("api_key", "apikey", "credential", "password", "secret", "token")
 SECRET_ASSIGNMENT_PATTERN = re.compile(
     r"(?i)\b(api[_-]?key|access[_-]?key|credential|password|secret|token)\b"
-    r"(\s*[:=]\s*)([^\s,;\]\}\"']+)"
+    r"(\s*[:=]\s*)(?:\"[^\"\r\n]*\"|'[^'\r\n]*'|[^\s,;\]\}\"']+)"
 )
 BEARER_PATTERN = re.compile(r"(?i)\bbearer\s+[a-z0-9._~+\-/]+=*")
 KNOWN_KEY_PATTERN = re.compile(r"\b[0-9a-fA-F]{32}\.[A-Za-z0-9_-]{12,}\b")
@@ -71,7 +71,10 @@ def redact_text(value: str, known_roots: Iterable[str] = ()) -> str:
         variants = {root, root.replace("\\", "/"), root.replace("/", "\\")}
         for variant in sorted(variants, key=len, reverse=True):
             sanitized = re.sub(re.escape(variant), "<source-root>", sanitized, flags=re.IGNORECASE)
-    sanitized = SECRET_ASSIGNMENT_PATTERN.sub(lambda match: f"{match.group(1)}{match.group(2)}<redacted>", sanitized)
+    sanitized = SECRET_ASSIGNMENT_PATTERN.sub(
+        lambda match: f"{match.group(1)}{match.group(2)}<redacted>",
+        sanitized,
+    )
     sanitized = BEARER_PATTERN.sub("Bearer <redacted>", sanitized)
     sanitized = KNOWN_KEY_PATTERN.sub("<redacted-key>", sanitized)
     return HOST_PATH_PATTERN.sub("<host-path>", sanitized)

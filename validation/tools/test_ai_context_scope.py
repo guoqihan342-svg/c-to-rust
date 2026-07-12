@@ -7,6 +7,9 @@ import unittest
 
 from validation.tools import ai_candidate_harness
 from validation.tools._ai_candidate_harness_parts.context_scope import prompt_scope_for_context
+from validation.tools._ai_candidate_harness_parts.provider_readiness import (
+    evaluate_provider_readiness,
+)
 
 
 class AiContextScopeTests(unittest.TestCase):
@@ -21,14 +24,21 @@ class AiContextScopeTests(unittest.TestCase):
             "deterministic_artifacts": {
                 "unit-type-map.json": {
                     "status": "loaded",
-                    "context_excerpt": {"types": []},
+                    "context_excerpt": {"types": [{"name": "word_t"}]},
                     "failure_summary": [],
                 },
                 "unit-cfg.json": {
-                    "status": "omitted_invalid_json",
-                    "context_excerpt": {"blocks": []},
+                    "status": "loaded",
+                    "context_excerpt": {
+                        "status": "omitted_too_large",
+                        "sha256": "a" * 64,
+                    },
                 },
                 "unit-pointer-graph.json": {
+                    "status": "loaded",
+                    "failure_summary": [{"path": "$.status", "value": "ok"}],
+                },
+                "unit-blocked-repairs.json": {
                     "status": "loaded",
                     "failure_summary": [{"path": "$.status", "value": "blocked"}],
                 },
@@ -37,6 +47,23 @@ class AiContextScopeTests(unittest.TestCase):
 
         self.assertEqual(
             ["slice_spec", "source_spans", "type_map_excerpt", "root_cause_summary"],
+            prompt_scope_for_context(context),
+        )
+
+    def test_empty_callee_objects_do_not_claim_caller_callee_facts(self) -> None:
+        context = {
+            "c_boundary": {
+                "payload": {
+                    "external_direct_callees": [{}],
+                    "signatures": [{"role": "external_direct_callee"}],
+                    "direct_dependencies": [{"kind": "callee"}],
+                    "call_expression_contract": {"unknown": True},
+                }
+            }
+        }
+
+        self.assertNotIn(
+            "direct_caller_callee_facts",
             prompt_scope_for_context(context),
         )
 
@@ -73,6 +100,10 @@ class AiContextScopeTests(unittest.TestCase):
                                     "name": "helper",
                                     "source_ref": "C:/private/project/helper.c",
                                     "api_key": "must-not-leak",
+                                    "notes": (
+                                        'api_key="quoted-secret"; '
+                                        "password: 'single-quoted-secret'"
+                                    ),
                                 }
                             ]
                         },
@@ -85,8 +116,63 @@ class AiContextScopeTests(unittest.TestCase):
             encoded = json.dumps(context["c_boundary"], sort_keys=True)
 
             self.assertNotIn("must-not-leak", encoded)
+            self.assertNotIn("quoted-secret", encoded)
+            self.assertNotIn("single-quoted-secret", encoded)
             self.assertNotIn("C:/private/project", encoded)
             self.assertIn("direct_caller_callee_facts", prompt_scope_for_context(context))
+
+    def test_truncated_required_callee_boundary_blocks_provider(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-callee-budget-") as tmp:
+            root = Path(tmp)
+            spec_path = root / "slice.json"
+            spec_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "target_id": "generic",
+                        "slice_id": "large-callee",
+                        "function_name": "caller",
+                        "c_source": "int caller(int x) { return helper(x); }",
+                        "c_boundary": {
+                            "external_direct_callees": [
+                                {
+                                    "name": "helper",
+                                    "definition_status": "real_source_bound",
+                                }
+                            ],
+                            "call_expression_contract": {"direct_call_only": True},
+                            "signatures": [
+                                {"function": f"helper_{index}", "c_source": "x" * 600}
+                                for index in range(40)
+                            ],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            context = ai_candidate_harness.build_context_pack(spec_path)
+
+            self.assertTrue(context["c_boundary"]["truncated"])
+            self.assertIn(
+                "c_boundary_truncated",
+                context["c_boundary"]["missing_required_callee_sections"],
+            )
+            self.assertEqual(
+                {
+                    "status": "blocked",
+                    "source_span_status": "inline_slice_spec",
+                    "context_boundary_status": "required_callee_context_incomplete",
+                },
+                evaluate_provider_readiness(context),
+            )
+            manifest = ai_candidate_harness.generate_candidate(
+                context,
+                out_dir=root / "out",
+                runner=lambda _argv, _timeout: self.fail("truncated callee invoked provider"),
+            )
+            self.assertEqual("blocked", manifest["status"])
+            self.assertEqual(0, manifest["provider_invocations"])
 
 
 if __name__ == "__main__":

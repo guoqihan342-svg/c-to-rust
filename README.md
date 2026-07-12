@@ -50,9 +50,9 @@ SQLite 不是语义事实源，Agent 对话也不是 evidence。语义结论只�
 
 本项目以 AI 作为比赛翻译主通道，而不是在确定性翻译失败后才调用 AI。每个新切片先构造 hash-bound ContextPack，再由 OpenCode `zai/glm-5.1` + `c2rust-migrator` + `max` 生成单一 Rust 主候选。typed IR 和 C2Rust 继续保留，用于零 token 替代、失败对照和 repair base；它们不能静默冒充 AI 已运行，也不能绕过共同验证门禁。
 
-ContextPack v3 只向模型提供有界事实：真实 source span、编译参数与 response files、类型/CFG/指针摘要、失败摘要、ABI/指针策略，以及直接被调函数的签名、定义状态、source binding、stub boundary 和调用合同。敏感字段、宿主绝对路径、路径逃逸和超限内容会在 provider 启动前清理或拒绝。
+ContextPack v3 只向模型提供有界事实：真实 source span、编译参数与 response files、类型/CFG/指针摘要、失败摘要、ABI/指针策略，以及直接被调函数的签名、定义状态、source binding、stub boundary 和调用合同。敏感字段、带引号密钥赋值、宿主绝对路径和路径逃逸会被清理；必需的 callee boundary 超限或截断时会在 provider 启动前零调用拒绝。
 
-AI candidate manifest v5 的 `prompt_scope` 不再使用固定模板，而是由实际 ContextPack 计算。summary validator 会重开 hash-bound ContextPack 独立复算；清单宣称看过不存在的 type map、CFG、pointer graph、root cause 或 caller/callee facts 时，验收失败。该合同提高模型输入质量和证据准确性，但 AI 输出仍保持 `semantic_gate=false`，最终接受只由共同门禁决定。
+AI candidate manifest v5 的 `prompt_scope` 不再使用固定模板，而是由实际 ContextPack 计算。fresh-run summary validator 会重开 hash-bound ContextPack，逐字节复算实际 prompt，并独立复算 scope；版本降级、prompt/ContextPack 漂移或宣称看过不存在的 type map、CFG、pointer graph、root cause、caller/callee facts 都会验收失败。该合同提高模型输入质量和证据准确性，但 AI 输出仍保持 `semantic_gate=false`，最终接受只由共同门禁决定。
 
 ## Harness 架构图
 

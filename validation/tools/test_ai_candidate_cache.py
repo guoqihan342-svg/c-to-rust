@@ -47,7 +47,7 @@ def repair_response(source: str) -> str:
 def context_pack(slice_id: str = "cache-scale") -> dict[str, object]:
     c_source = "int scale(int value) { return value * 3; }"
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "target_id": "generic-target",
         "slice_id": slice_id,
         "function_name": "scale",
@@ -59,13 +59,19 @@ def context_pack(slice_id: str = "cache-scale") -> dict[str, object]:
                 "content": c_source,
             }
         },
+        "compile_context": {},
         "c_boundary": {
+            "sha256": "b" * 64,
+            "truncated": False,
             "payload": {
                 "external_direct_callees": [
                     {"name": "helper", "definition_status": "real_source_bound"}
                 ]
-            }
+            },
+            "required_callee_sections": ["external_direct_callees"],
+            "missing_required_callee_sections": [],
         },
+        "bindings": {"inputs": []},
         "claim_boundary": {"semantic_gate": False},
     }
 
