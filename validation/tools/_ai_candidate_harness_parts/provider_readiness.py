@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .context_required_api import validate_required_candidate_api
 from .context_replay import count_rust_function_calls, rust_function_call_arities
 from validation.tools.replay_call_plan import (
     replay_call_plan_marker,
@@ -207,7 +208,7 @@ def replay_api_contract_status(context_pack: dict[str, Any]) -> str:
     inputs = bindings.get("inputs") if isinstance(bindings, dict) else None
     api_name = contract.get("api_name", contract.get("function_name"))
     if (
-        contract.get("schema_version") not in {1, 2}
+        contract.get("schema_version") not in {1, 2, 3}
         or contract.get("contract_kind") != "generated_replay_rust_source"
         or not isinstance(contract.get("function_name"), str)
         or contract.get("function_name") != context_pack.get("function_name")
@@ -246,7 +247,7 @@ def replay_api_contract_status(context_pack: dict[str, Any]) -> str:
     ):
         return "invalid"
     call_plan = contract.get("call_plan")
-    if contract.get("schema_version") == 2 and not isinstance(call_plan, dict):
+    if contract.get("schema_version") in {2, 3} and not isinstance(call_plan, dict):
         return "invalid"
     if contract.get("schema_version") == 1 and call_plan is not None:
         return "invalid"
@@ -255,6 +256,11 @@ def replay_api_contract_status(context_pack: dict[str, Any]) -> str:
             return "invalid"
         try:
             validate_replay_call_plan(call_plan)
+            if contract.get("schema_version") == 3:
+                validate_required_candidate_api(
+                    call_plan,
+                    contract.get("required_candidate_api"),
+                )
         except ValueError:
             return "invalid"
         if (

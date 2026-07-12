@@ -80,10 +80,10 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
             self.assertEqual(route["candidate_generation"]["selected_candidate_id"], candidate_id)
             self.assertEqual(route["translator"]["kind"], "agent")
             self.assertFalse(manifest["generator"]["competition_eligible"])
-            self.assertEqual(8, manifest["schema_version"])
+            self.assertEqual(9, manifest["schema_version"])
             self.assertEqual(4, context["schema_version"])
             self.assertEqual("bound", context["replay_api_contract"]["status"])
-            self.assertIn("add_one(case.value)", context["replay_api_contract"]["source"]["content"])
+            self.assertIn("add_one(0i32)", context["replay_api_contract"]["source"]["content"])
             self.assertNotIn(
                 "l3-add-one-test-translation-generated.json",
                 {
@@ -93,7 +93,7 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
                 },
             )
             self.assertIn("Required generated replay API contract:", prompt)
-            self.assertIn("add_one(case.value)", prompt)
+            self.assertIn("add_one(0i32)", prompt)
             self.assertEqual(
                 manifest["generator"]["evaluation_scope"],
                 "auxiliary-local-validation",

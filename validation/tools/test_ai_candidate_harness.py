@@ -51,6 +51,34 @@ def jsonl_response(source: str) -> str:
     return json.dumps({"type": "message.part.updated", "part": {"type": "text", "text": payload}}) + "\n"
 
 
+def empty_completion_response(session_id: str = "ses_empty") -> str:
+    return "\n".join(
+        json.dumps(event)
+        for event in (
+            {
+                "type": "step_start",
+                "sessionID": session_id,
+                "part": {"type": "step-start", "sessionID": session_id},
+            },
+            {
+                "type": "step_finish",
+                "sessionID": session_id,
+                "part": {
+                    "type": "step-finish",
+                    "sessionID": session_id,
+                    "reason": "unknown",
+                    "tokens": {
+                        "input": 0,
+                        "output": 0,
+                        "reasoning": 0,
+                        "cache": {"write": 0, "read": 0},
+                    },
+                },
+            },
+        )
+    ) + "\n"
+
+
 def build_provider_context(spec_path: Path) -> dict[str, object]:
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     function_name = str(spec["function_name"])
@@ -184,7 +212,7 @@ class AiCandidateHarnessTests(unittest.TestCase):
             )
             self.assertIn("--model", observed_argv)
             self.assertIn("zai/glm-5.1", observed_argv)
-            self.assertEqual(8, manifest["schema_version"])
+            self.assertEqual(9, manifest["schema_version"])
             receipt_ref = manifest["bindings"]["invocation_receipt"]
             receipt_path = out_dir / receipt_ref["path"]
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
@@ -487,6 +515,240 @@ class AiCandidateHarnessTests(unittest.TestCase):
             self.assertEqual(manifest["candidates"], [])
             self.assert_manifest_schema(manifest)
             self.assertFalse(any((root / "out").glob("*-ai-rust-candidate.rs")))
+
+    def test_empty_completion_retries_once_with_same_prompt_and_binds_both_attempts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-empty-retry-") as tmp:
+            root = Path(tmp)
+            spec_path = root / "slice.json"
+            spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
+            context = build_provider_context(spec_path)
+            calls: list[list[str]] = []
+            valid_event = json.loads(
+                jsonl_response(
+                    "pub fn scale_value(value: i32) -> i32 { value.wrapping_mul(3) }\n"
+                )
+            )
+            valid_event["sessionID"] = "ses_valid_second"
+            valid_response = json.dumps(valid_event) + "\n"
+            executions = iter(
+                (
+                    ai_candidate_harness.ProviderExecution(
+                        0,
+                        empty_completion_response("ses_empty_first"),
+                        "",
+                        identity_receipt={
+                            "source": "opencode-session-export",
+                            "session_id": "ses_empty_first",
+                            "provider_id": "zai",
+                            "model_id": "glm-5.1",
+                            "agent": "c2rust-candidate",
+                            "variant": "max",
+                            "opencode_version": "1.0.0",
+                            "session_export_sha256": "a" * 64,
+                        },
+                    ),
+                    ai_candidate_harness.ProviderExecution(
+                        0,
+                        valid_response,
+                        "",
+                        identity_receipt={
+                            "source": "opencode-session-export",
+                            "session_id": "ses_valid_second",
+                            "provider_id": "zai",
+                            "model_id": "glm-5.1",
+                            "agent": "c2rust-candidate",
+                            "variant": "max",
+                            "opencode_version": "1.0.0",
+                            "session_export_sha256": "b" * 64,
+                        },
+                    ),
+                )
+            )
+
+            def runner(argv: list[str], _timeout: int) -> ai_candidate_harness.ProviderExecution:
+                calls.append(list(argv))
+                return next(executions)
+
+            out_dir = root / "out"
+            manifest = ai_candidate_harness.generate_candidate(
+                context,
+                out_dir=out_dir,
+                runner=runner,
+            )
+
+            self.assertEqual(2, len(calls))
+            self.assertEqual(calls[0], calls[1])
+            self.assertEqual("generated", manifest["status"])
+            self.assertEqual(2, manifest["provider_invocations"])
+            self.assertEqual(2, len(manifest["provider_attempts"]))
+            self.assertEqual(
+                "provider_empty_completion_retry",
+                manifest["provider_attempts"][1]["reason"],
+            )
+            self.assertEqual("generated", manifest["provider_retry"]["result"])
+            self.assertFalse(manifest["provider_retry"]["semantic_gate"])
+            self.assertFalse(manifest["claim_boundary"]["semantic_gate"])
+            self.assertEqual(
+                manifest["provider_attempts"][-1]["raw_response"],
+                manifest["bindings"]["raw_response"],
+            )
+            self.assertEqual(
+                manifest["provider_attempts"][-1]["invocation_receipt"],
+                manifest["bindings"]["invocation_receipt"],
+            )
+            for attempt in manifest["provider_attempts"]:
+                self.assertIn("session_export_identity", attempt)
+                for key in ("raw_response", "invocation_receipt"):
+                    ref = attempt[key]
+                    self.assertEqual(ref["sha256"], provider.sha256_path(out_dir / ref["path"]))
+            self.assert_manifest_schema(manifest)
+            validation = summary_validator.validate_fresh_ai_manifest(
+                manifest,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-candidate",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertEqual([], validation["reasons"])
+            self.assertEqual(2, validation["invocations"])
+            drifted = json.loads(json.dumps(manifest))
+            drifted["provider_attempts"][0]["raw_response"]["sha256"] = "0" * 64
+            rejected = summary_validator.validate_fresh_ai_manifest(
+                drifted,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-candidate",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertIn(
+                "ai_manifest_provider_attempt_response_binding_invalid",
+                rejected["reasons"],
+            )
+            malformed = json.loads(json.dumps(manifest))
+            malformed["provider_attempts"][0] = None
+            rejected = summary_validator.validate_fresh_ai_manifest(
+                malformed,
+                manifest_path=out_dir / "l3-generic-scale-ai-candidate-manifest.json",
+                policy={
+                    "model": "zai/glm-5.1",
+                    "agent": "c2rust-candidate",
+                    "variant": "max",
+                },
+                summary_path=root / "competition-run-summary.json",
+                repo_root=root,
+            )
+            self.assertIn(
+                "ai_manifest_provider_attempt_identity_invalid",
+                rejected["reasons"],
+            )
+
+    def test_empty_completion_second_empty_or_invalid_remains_blocked(self) -> None:
+        for label, second, expected_kind in (
+            (
+                "empty",
+                ai_candidate_harness.ProviderExecution(
+                    0, empty_completion_response("ses_empty_second"), ""
+                ),
+                "provider_empty_completion",
+            ),
+            (
+                "invalid",
+                ai_candidate_harness.ProviderExecution(
+                    0, json.dumps({"type": "text", "text": "not-json"}) + "\n", ""
+                ),
+                "invalid_ai_response",
+            ),
+        ):
+            with self.subTest(label=label), tempfile.TemporaryDirectory(
+                prefix=f"ai-empty-{label}-"
+            ) as tmp:
+                root = Path(tmp)
+                spec_path = root / "slice.json"
+                spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
+                context = build_provider_context(spec_path)
+                calls = 0
+
+                def runner(_argv: list[str], _timeout: int) -> ai_candidate_harness.ProviderExecution:
+                    nonlocal calls
+                    calls += 1
+                    return (
+                        ai_candidate_harness.ProviderExecution(
+                            0, empty_completion_response("ses_empty_first"), ""
+                        )
+                        if calls == 1
+                        else second
+                    )
+
+                manifest = ai_candidate_harness.generate_candidate(
+                    context,
+                    out_dir=root / "out",
+                    runner=runner,
+                )
+
+                self.assertEqual(2, calls)
+                self.assertEqual("blocked", manifest["status"])
+                self.assertEqual([], manifest["candidates"])
+                self.assertEqual(expected_kind, manifest["failure"]["kind"])
+                self.assertEqual("blocked", manifest["provider_retry"]["result"])
+                self.assert_manifest_schema(manifest)
+
+    def test_only_exact_empty_completion_fingerprint_retries(self) -> None:
+        cases = {
+            "malformed": ai_candidate_harness.ProviderExecution(0, "not-json\n", ""),
+            "tool": ai_candidate_harness.ProviderExecution(
+                0, json.dumps({"type": "tool_use", "tool": "read"}) + "\n", ""
+            ),
+            "auth": ai_candidate_harness.ProviderExecution(1, "", "invalid api key"),
+            "balance": ai_candidate_harness.ProviderExecution(1, "", "insufficient balance"),
+            "timeout": ai_candidate_harness.ProviderExecution(124, "", "", timed_out=True),
+            "nonzero": ai_candidate_harness.ProviderExecution(7, "", "failed"),
+            "assistant_text": ai_candidate_harness.ProviderExecution(
+                0, json.dumps({"type": "text", "text": ""}) + "\n", ""
+            ),
+        }
+        for label, execution in cases.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory(
+                prefix=f"ai-no-retry-{label}-"
+            ) as tmp:
+                root = Path(tmp)
+                spec_path = root / "slice.json"
+                spec_path.write_text(json.dumps(minimal_spec(str(root))), encoding="utf-8")
+                context = build_provider_context(spec_path)
+                calls = 0
+
+                def runner(_argv: list[str], _timeout: int) -> ai_candidate_harness.ProviderExecution:
+                    nonlocal calls
+                    calls += 1
+                    return execution
+
+                manifest = ai_candidate_harness.generate_candidate(
+                    context,
+                    out_dir=root / "out",
+                    runner=runner,
+                )
+
+                self.assertEqual(1, calls)
+                self.assertEqual(1, manifest["provider_invocations"])
+                self.assertNotIn("provider_retry", manifest)
+
+    def test_empty_completion_fingerprint_requires_terminal_zero_token_finish(self) -> None:
+        valid = empty_completion_response()
+        self.assertTrue(provider_runtime.is_retryable_empty_completion(valid))
+        for drifted in (
+            valid + json.dumps({"type": "step_start", "part": {"type": "step-start"}}),
+            valid.replace('"output": 0', '"output": 1'),
+            valid.replace('"reasoning": 0', '"reasoning": 1'),
+            valid + "not-json\n",
+        ):
+            self.assertFalse(provider_runtime.is_retryable_empty_completion(drifted))
 
     def test_response_with_extra_fields_is_blocked(self) -> None:
         payload = {

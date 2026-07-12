@@ -199,7 +199,7 @@ def ai_generated_candidate_replay_supported(
     except (OSError, ValueError, json.JSONDecodeError):
         return False
     return bool(
-        manifest.get("schema_version") == 8
+        manifest.get("schema_version") in {8, 9}
         and manifest.get("slice_id") == slice_id
         and manifest.get("status") == "generated"
         and isinstance(candidate, dict)

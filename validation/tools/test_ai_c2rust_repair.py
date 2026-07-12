@@ -109,7 +109,10 @@ def exact_result(path: Path, attempt_dir: Path, *, passed_gates: int, passed: bo
         "status": status,
         "candidate_sha256": candidate_sha,
         "semantic_pass": passed,
-        "oracle_proof": {},
+        "oracle_proof": {
+            "status": "passed",
+            "target_contract": {"schema_version": 1},
+        },
         "gate_index": {"path": "gate-index.json", "sha256": "a" * 64},
         "gates": {},
         "repair_validation_result": {
@@ -460,6 +463,44 @@ class C2RustRepairExactStageTests(unittest.TestCase):
             self.assertEqual(result["router"]["selected_candidate_id"], "c2rust-baseline:raw-current-run")
             self.assertFalse((root / "evidence" / "l3-generic-slice-ai-repair-report.json").exists())
             self.assertFalse((root / "evidence" / "l3-generic-slice-c2rust-repair-report.json").exists())
+
+    def test_failed_oracle_skips_both_repair_coordinators(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="c2rust-repair-oracle-skip-") as tmp:
+            root = Path(tmp)
+
+            def fake_validate(*_args: object, **kwargs: object) -> dict[str, object]:
+                label = str(kwargs["label"])
+                path = Path(kwargs["candidate_path"])
+                result = exact_result(
+                    path,
+                    Path(kwargs["attempts_root"]) / label,
+                    passed_gates=2 if label == "c2rust-baseline" else 1,
+                )
+                result["oracle_proof"] = {"status": "failed"}
+                return result
+
+            with mock.patch.object(exact, "repair_ai_candidate_after_validation") as ai_repair, mock.patch.object(
+                exact,
+                "repair_c2rust_candidate_after_validation",
+            ) as raw_repair:
+                result, _canonical, _typed, _manifest, _baseline = run_stage(
+                    root,
+                    fake_validate=fake_validate,
+                    max_repair_rounds=5,
+                )
+
+            ai_repair.assert_not_called()
+            raw_repair.assert_not_called()
+            eligibility = result["router"]["repair_eligibility"]
+            self.assertEqual(
+                eligibility["opencode-ai"]["reason"],
+                "fresh_oracle_not_passed",
+            )
+            self.assertEqual(
+                eligibility["c2rust-baseline"]["reason"],
+                "fresh_oracle_not_passed",
+            )
+            self.assertEqual(eligibility["opencode-ai"]["provider_invocations"], 0)
 
     def test_repair_matching_raw_baseline_omits_baseline_evidence_and_syncs_audit(self) -> None:
         with tempfile.TemporaryDirectory(prefix="c2rust-repair-dedup-baseline-") as tmp:

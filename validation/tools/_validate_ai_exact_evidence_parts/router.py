@@ -66,6 +66,7 @@ def validate_router(store: EvidenceStore, router: dict[str, Any]) -> dict[str, A
     inputs: list[dict[str, Any]] = []
     seen_sources: set[str] = set()
     by_sha: dict[str, dict[str, Any]] = {}
+    source_summaries: dict[str, dict[str, Any]] = {}
     expected_ref_keys: set[str] = set()
     for candidate in candidate_set:
         if not isinstance(candidate, dict):
@@ -89,6 +90,7 @@ def validate_router(store: EvidenceStore, router: dict[str, Any]) -> dict[str, A
             fail("candidate_id_invalid", "router candidate_id must be a non-empty string", path="router")
         summaries[candidate_id] = summary
         by_sha[artifact_sha] = summary
+        source_summaries[source] = summary
         inputs.append(
             {
                 "candidate_id": candidate_id,
@@ -121,6 +123,32 @@ def validate_router(store: EvidenceStore, router: dict[str, Any]) -> dict[str, A
                 "artifact_sha256": digest,
                 "gate_results": summary["router_gate_results"],
             }
+        )
+        source = duplicate.get("source")
+        if isinstance(source, str):
+            source_summaries[source] = summary
+
+    not_validated = {
+        "status": "skipped",
+        "reason": "candidate_not_validated",
+        "provider_invocations": 0,
+        "semantic_gate": False,
+    }
+    expected_repair_eligibility = {
+        "opencode-ai": source_summaries.get("opencode-ai", {}).get(
+            "repair_eligibility",
+            not_validated,
+        ),
+        "c2rust-baseline": source_summaries.get("c2rust-baseline", {}).get(
+            "repair_eligibility",
+            not_validated,
+        ),
+    }
+    if router.get("repair_eligibility") != expected_repair_eligibility:
+        fail(
+            "repair_eligibility_drift",
+            "router repair eligibility differs from exact gate evidence",
+            path="router",
         )
 
     try:

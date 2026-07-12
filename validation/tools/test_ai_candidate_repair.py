@@ -254,6 +254,10 @@ class AiCandidateRepairTests(unittest.TestCase):
             prompt_text = attached_prompt.read_text(encoding="utf-8")
             self.assertEqual(prompt_text.splitlines()[0], "Task mode: generate-candidate")
             self.assertIn("Oracle, fixture, validator, and gate configuration are immutable", prompt_text)
+            self.assertIn("one full, self-contained Rust replacement candidate", prompt_text)
+            self.assertIn('"kind":"candidate"', prompt_text)
+            self.assertNotIn('"kind":"patch"', prompt_text)
+            self.assertNotIn("unified_diff", prompt_text)
             round_record = report["rounds"][0]
             self.assertEqual(round_record["repair_kind"], "candidate")
             self.assertEqual(round_record["bindings"]["previous_candidate_sha256"], sha256(initial))

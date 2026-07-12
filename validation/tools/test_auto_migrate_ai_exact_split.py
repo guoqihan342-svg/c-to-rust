@@ -12,10 +12,18 @@ class AutoMigrateAiExactSplitTests(unittest.TestCase):
     def test_exact_stage_rejects_stale_manifest_and_context_versions(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ai-exact-contract-") as tmp:
             root = Path(tmp)
-            with self.assertRaisesRegex(ValueError, "manifest schema_version 8"):
+            with self.assertRaisesRegex(ValueError, "manifest schema_version 8 or 9"):
                 exact.validate_ai_exact_stage_contract(
                     {"schema_version": 4},
                     {"schema_version": 7},
+                    evidence_dir=root,
+                    replay_test_path=root / "replay.rs",
+                    canonical_draft_path=root / "candidate.rs",
+                )
+            with self.assertRaisesRegex(ValueError, "ContextPack schema_version 4"):
+                exact.validate_ai_exact_stage_contract(
+                    {"schema_version": 3},
+                    {"schema_version": 9},
                     evidence_dir=root,
                     replay_test_path=root / "replay.rs",
                     canonical_draft_path=root / "candidate.rs",

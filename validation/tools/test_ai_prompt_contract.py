@@ -93,12 +93,42 @@ class AiPromptContractTests(unittest.TestCase):
             prompt.index("Required generated replay API contract:"),
             prompt.index("FailureFacts:"),
         )
+        self.assertLess(
+            prompt.index("Required boundary facts:"),
+            prompt.index("CurrentCandidate:"),
+        )
+        self.assertLess(
+            prompt.index("Required generated replay API contract:"),
+            prompt.index("ContextPack:"),
+        )
+        self.assertLess(
+            prompt.index("Required generated replay API contract:"),
+            prompt.index("CurrentCandidate:"),
+        )
         self.assertIn("translate(case.value, case.len)", prompt)
         self.assertIn("internal_only forbids raw pointers", prompt)
 
+    def test_repair_prompt_requests_only_one_full_candidate_shape(self) -> None:
+        prompt = render_repair_prompt(
+            self.context(),
+            "pub fn translate(value: &[u8], len: usize) -> bool { value.len() == len }",
+            {"gate": "rustc", "message": "supporting declaration missing"},
+        )
+
+        candidate_shape = (
+            '{"schema_version":1,"repair":{"kind":"candidate","language":"rust",'
+            '"source":"...full Rust source..."},"assumptions":[]}'
+        )
+        self.assertEqual(1, prompt.count(candidate_shape))
+        self.assertIn("one full, self-contained Rust replacement candidate", prompt)
+        self.assertIn("include all declarations needed by the generated replay API contract", prompt)
+        self.assertNotIn('"kind":"patch"', prompt)
+        self.assertNotIn("unified_diff", prompt)
+        self.assertNotIn("Choose exactly one repair form", prompt)
+
     def test_structured_call_plan_payload_appears_once_and_api_name_is_authoritative(self) -> None:
         context = self.context()
-        context["replay_api_contract"]["schema_version"] = 2
+        context["replay_api_contract"]["schema_version"] = 3
         context["replay_api_contract"]["api_name"] = "translate_safe"
         context["replay_api_contract"]["call_plan"] = {
             "status": "bound",
@@ -107,13 +137,51 @@ class AiPromptContractTests(unittest.TestCase):
             "plan_sha256": "b" * 64,
             "c_parameter_mappings": [{"c_parameter": "value"}],
         }
+        context["replay_api_contract"]["required_candidate_api"] = {
+            "schema_version": 1,
+            "status": "bound",
+            "api_name": "translate_safe",
+            "plan_sha256": "b" * 64,
+            "signature": "pub fn translate_safe(value: &[u8], len: usize) -> bool",
+            "supporting_types_source": "",
+            "return_lifetime_from": None,
+            "contract_sha256": "c" * 64,
+        }
 
         prompt = render_prompt(context)
 
         self.assertEqual(1, prompt.count('"c_parameter_mappings"'))
+        self.assertEqual(1, prompt.count("pub fn translate_safe(value: &[u8], len: usize) -> bool"))
         self.assertIn("Implement the exact api_name", prompt)
+        self.assertLess(prompt.index("Required candidate API:"), prompt.index("ContextPack:"))
+        self.assertLess(
+            prompt.index("Required candidate API:"),
+            prompt.index("Required generated replay API contract:"),
+        )
         self.assertIn('"api_name":"translate_safe"', prompt)
         self.assertIn('"function_name":"translate"', prompt)
+
+        repair_prompt = render_repair_prompt(
+            context,
+            "pub fn translate_safe(value: &[u8], len: usize) -> bool { value.len() == len }",
+            {"gate": "generated_replay", "message": "exact API mismatch"},
+        )
+        self.assertIn('"api_name":"translate_safe"', repair_prompt)
+        repair_contract_prefix = repair_prompt.split("CurrentCandidate:", 1)[0]
+        self.assertEqual(
+            1,
+            repair_contract_prefix.count(
+                "pub fn translate_safe(value: &[u8], len: usize) -> bool"
+            ),
+        )
+        self.assertIn("translate(case.value, case.len)", repair_prompt)
+        for marker in ("ContextPack:", "CurrentCandidate:"):
+            self.assertLess(repair_prompt.index("Required boundary facts:"), repair_prompt.index(marker))
+            self.assertLess(repair_prompt.index("Required candidate API:"), repair_prompt.index(marker))
+            self.assertLess(
+                repair_prompt.index("Required generated replay API contract:"),
+                repair_prompt.index(marker),
+            )
 
 
 if __name__ == "__main__":

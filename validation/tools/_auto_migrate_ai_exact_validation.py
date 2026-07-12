@@ -29,8 +29,8 @@ def validate_ai_exact_stage_contract(
     replay_test_path: Path,
     canonical_draft_path: Path,
 ) -> None:
-    if ai_manifest.get("schema_version") != 8:
-        raise ValueError("AI exact stage requires candidate manifest schema_version 8")
+    if ai_manifest.get("schema_version") not in {8, 9}:
+        raise ValueError("AI exact stage requires candidate manifest schema_version 8 or 9")
     if context_pack.get("schema_version") != 4:
         raise ValueError("AI exact stage requires ContextPack schema_version 4")
     contract = context_pack.get("replay_api_contract")

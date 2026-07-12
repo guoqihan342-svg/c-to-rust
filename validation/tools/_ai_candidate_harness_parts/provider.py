@@ -23,7 +23,7 @@ from .model_identity import (
 )
 from .prompt_transport import prompt_file_arguments, prompt_transport_contract
 from .provider_readiness import evaluate_provider_readiness
-from .provider_receipt import write_invocation_receipt
+from .provider_retry import run_with_empty_completion_retry
 from .provider_response import (
     MAX_ASSUMPTIONS,
     MAX_ASSUMPTION_BYTES,
@@ -246,21 +246,22 @@ def generate_candidate(
         variant,
         *prompt_file_arguments(prompt_path),
     ]
-    execution = (runner or subprocess_runner)(argv, timeout_seconds)
-    response_bytes = execution.stdout.encode("utf-8")
-    atomic_write_bytes(response_path, response_bytes[:MAX_PROVIDER_STDOUT_BYTES])
-    persisted_response = response_path.read_text(encoding="utf-8", errors="replace")
-    write_invocation_receipt(
-        execution,
+    retry_result = run_with_empty_completion_retry(
+        argv,
+        timeout_seconds,
+        runner or subprocess_runner,
         resolved_model=resolved_model,
         agent=agent,
         variant=variant,
-        persisted_response=persisted_response,
         prompt_path=prompt_path,
         response_path=response_path,
         receipt_path=invocation_receipt_path,
         session_identity_path=session_identity_path,
     )
+    final_attempt = retry_result.final_attempt
+    execution = final_attempt.execution
+    response_path = final_attempt.response_path
+    response_bytes = execution.stdout.encode("utf-8")
 
     base = manifest_base(
         target_id,
@@ -271,16 +272,20 @@ def generate_candidate(
         context_path,
         prompt_path,
         response_path,
-        provider_invocations=1,
+        provider_invocations=retry_result.provider_invocations,
         provider_preflight=provider_preflight,
         cache_evidence=cache_evidence,
     )
+    base["provider_attempts"] = retry_result.attempt_bindings()
     base["bindings"]["invocation_receipt"] = {
-        "path": invocation_receipt_path.name,
-        "sha256": sha256_path(invocation_receipt_path),
+        "path": final_attempt.receipt_path.name,
+        "sha256": sha256_path(final_attempt.receipt_path),
     }
     failure = classify_provider_failure(execution)
     if failure is not None:
+        retry_record = retry_result.retry_record(result="blocked")
+        if retry_record is not None:
+            base["provider_retry"] = retry_record
         manifest = {
             **base,
             "status": "blocked",
@@ -293,6 +298,9 @@ def generate_candidate(
     try:
         parsed = parse_candidate_response(execution.stdout)
     except ValueError as error:
+        retry_record = retry_result.retry_record(result="blocked")
+        if retry_record is not None:
+            base["provider_retry"] = retry_record
         manifest = {
             **base,
             "status": "blocked",
@@ -324,6 +332,9 @@ def generate_candidate(
         prompt_path=prompt_path,
         candidate_path=candidate_path,
     )
+    retry_record = retry_result.retry_record(result="generated")
+    if retry_record is not None:
+        base["provider_retry"] = retry_record
     manifest = {**base, "status": "generated", "candidates": [candidate]}
     atomic_write_json(manifest_path, manifest)
     return manifest
@@ -451,11 +462,12 @@ def manifest_base(
 ) -> dict[str, Any]:
     identity = resolve_model_identity(resolved_model)
     return {
-        "schema_version": 8,
+        "schema_version": 9,
         "target_id": target_id,
         "slice_id": slice_id,
         "ai_required_for_default_pipeline": True,
         "provider_invocations": provider_invocations,
+        "provider_attempts": [],
         "provider_preflight": provider_preflight,
         "cache": cache_evidence,
         "generator": {

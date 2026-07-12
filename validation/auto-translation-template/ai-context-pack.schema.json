@@ -65,7 +65,7 @@
       "additionalProperties": false,
       "required": ["schema_version", "contract_kind", "function_name", "status"],
       "properties": {
-        "schema_version": {"enum": [1, 2]},
+        "schema_version": {"enum": [1, 2, 3]},
         "contract_kind": {"const": "generated_replay_rust_source"},
         "function_name": {"type": "string", "minLength": 1},
         "api_name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
@@ -108,7 +108,8 @@
             "return_type": {"const": "as_constrained_by_generated_replay"}
           }
         },
-        "call_plan": {"$ref": "#/definitions/replayCallPlan"}
+        "call_plan": {"$ref": "#/definitions/replayCallPlan"},
+        "required_candidate_api": {"$ref": "#/definitions/requiredCandidateApi"}
       },
       "allOf": [
         {
@@ -123,8 +124,41 @@
         {
           "if": {"properties": {"schema_version": {"const": 2}}},
           "then": {"required": ["api_name", "call_plan"]}
+        },
+        {
+          "if": {"properties": {"schema_version": {"const": 3}}},
+          "then": {"required": ["api_name", "call_plan", "required_candidate_api"]}
         }
       ]
+    },
+    "requiredCandidateApi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "status",
+        "api_name",
+        "plan_sha256",
+        "signature",
+        "supporting_types_source",
+        "return_lifetime_from",
+        "contract_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": 1},
+        "status": {"const": "bound"},
+        "api_name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "signature": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "supporting_types_source": {"type": "string", "maxLength": 65536},
+        "return_lifetime_from": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
+          ]
+        },
+        "contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
     },
     "replayCallPlan": {
       "oneOf": [

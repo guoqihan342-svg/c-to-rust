@@ -12,6 +12,11 @@ import sys
 import time
 from typing import Any, Callable
 
+from validation.tools._ai_auxiliary_repair_metrics import (
+    RepairReportError,
+    apply_provider_invocation_accounting,
+    reopen_bound_repair_report,
+)
 from validation.tools._ai_auxiliary_suite_support import (
     artifact_ref,
     atomic_write_bytes,
@@ -42,6 +47,7 @@ DEFAULT_OUT_ROOT = Path("target/ai-auxiliary-cross-project-suite")
 DEFAULT_MODEL = "opencode/deepseek-v4-flash-free"
 DEFAULT_AGENT = "c2rust-candidate"
 DEFAULT_VARIANT = "max"
+DEFAULT_TIMEOUT_SECONDS = 300
 REPORT_NAME = "ai-auxiliary-cross-project-suite-report.json"
 MAX_CAPTURE_BYTES = 2_000_000
 
@@ -155,7 +161,12 @@ def run_unit(
         "returncode": returncode,
         "duration_ms": duration_ms,
         "provider_invocations": 0,
+        "initial_candidate_provider_invocations": 0,
+        "repair_provider_invocations": 0,
+        "provider_invocations_total": 0,
         "repair_rounds": 0,
+        "repair_status": None,
+        "repair_stop_reason": None,
         "auxiliary_exact_pass": False,
         "reason": None,
         "runtime_isolation": runtime,
@@ -182,12 +193,22 @@ def run_unit(
     unit["artifacts"]["candidate_manifest"] = artifact_ref(
         candidate_manifest_path, root=repo_root
     )
-    unit["provider_invocations"] = manifest.get("provider_invocations", 0)
-    unit["repair_rounds"] = sum(
-        1
-        for candidate in manifest.get("candidates", [])
-        if isinstance(candidate, dict) and candidate.get("purpose") == "repair_candidate"
-    )
+    apply_provider_invocation_accounting(unit, manifest, None)
+    try:
+        repair = reopen_bound_repair_report(
+            manifest=manifest,
+            manifest_path=candidate_manifest_path,
+            evidence_dir=evidence_dir,
+            summary_path=report_path,
+            repo_root=repo_root,
+            target_id=target_id,
+            slice_id=slice_id,
+        )
+    except RepairReportError as error:
+        unit["status"] = "contract_failed"
+        unit["reason"] = str(error)
+        return unit
+    apply_provider_invocation_accounting(unit, manifest, repair)
     fresh = summary_validator.validate_fresh_ai_manifest(
         manifest,
         manifest_path=candidate_manifest_path,
@@ -247,7 +268,7 @@ def run_suite(
     model: str = DEFAULT_MODEL,
     agent: str = DEFAULT_AGENT,
     variant: str = DEFAULT_VARIANT,
-    timeout_seconds: int = 180,
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
     repair_rounds: int = 1,
     max_workers: int = 1,
     opencode_command: str = "opencode",
@@ -433,6 +454,11 @@ def base_report(
             "max_workers": max_workers,
             "batch_circuit_updates": True,
             "outer_retries": 0,
+            "provider_invocation_semantics": {
+                "initial_candidate_provider_invocations": "manifest-recorded initial candidate provider calls",
+                "repair_provider_invocations": "rounds from hash-verified manifest-bound repair reports",
+                "provider_invocations": "total initial candidate plus verified repair provider calls",
+            },
         },
         "summary": {
             "items_total": len(units),
@@ -441,6 +467,30 @@ def base_report(
                 value
                 for unit in units
                 for value in [unit.get("provider_invocations")]
+                if isinstance(value, int) and not isinstance(value, bool)
+            ),
+            "provider_invocations_total": sum(
+                value
+                for unit in units
+                for value in [unit.get("provider_invocations_total", unit.get("provider_invocations"))]
+                if isinstance(value, int) and not isinstance(value, bool)
+            ),
+            "initial_candidate_provider_invocations": sum(
+                value
+                for unit in units
+                for value in [unit.get("initial_candidate_provider_invocations", unit.get("provider_invocations"))]
+                if isinstance(value, int) and not isinstance(value, bool)
+            ),
+            "repair_provider_invocations": sum(
+                value
+                for unit in units
+                for value in [unit.get("repair_provider_invocations", 0)]
+                if isinstance(value, int) and not isinstance(value, bool)
+            ),
+            "repair_rounds": sum(
+                value
+                for unit in units
+                for value in [unit.get("repair_rounds", 0)]
                 if isinstance(value, int) and not isinstance(value, bool)
             ),
             "candidates_generated": sum(
@@ -461,7 +511,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--agent", default=DEFAULT_AGENT)
     parser.add_argument("--variant", default=DEFAULT_VARIANT)
-    parser.add_argument("--timeout-seconds", type=int, default=180)
+    parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument("--repair-rounds", type=int, choices=range(0, 6), default=1)
     parser.add_argument("--max-workers", type=int, choices=range(1, 5), default=1)
     parser.add_argument("--opencode-command", default="opencode")

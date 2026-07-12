@@ -39,7 +39,18 @@ def render_boundary_contract(context_pack: dict[str, Any]) -> str:
 
 def render_replay_api_contract(context_pack: dict[str, Any]) -> str:
     contract = context_pack.get("replay_api_contract")
+    if isinstance(contract, dict):
+        contract = dict(contract)
+        required_api = contract.get("required_candidate_api")
+        if isinstance(required_api, dict):
+            contract["required_candidate_api"] = _required_candidate_api_placeholder(required_api)
     return json.dumps(contract, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def render_required_candidate_api(context_pack: dict[str, Any]) -> str:
+    contract = context_pack.get("replay_api_contract")
+    required_api = contract.get("required_candidate_api") if isinstance(contract, dict) else None
+    return json.dumps(required_api, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
 def context_without_replay_source(context_pack: dict[str, Any]) -> dict[str, Any]:
@@ -60,8 +71,20 @@ def context_without_replay_source(context_pack: dict[str, Any]) -> dict[str, Any
             "api_name": call_plan.get("api_name"),
             "plan_sha256": call_plan.get("plan_sha256"),
         }
+    required_api = contract.get("required_candidate_api")
+    if isinstance(required_api, dict):
+        contract_copy["required_candidate_api"] = _required_candidate_api_placeholder(required_api)
     context["replay_api_contract"] = contract_copy
     return context
+
+
+def _required_candidate_api_placeholder(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "presented-in-required-candidate-api",
+        "api_name": value.get("api_name"),
+        "plan_sha256": value.get("plan_sha256"),
+        "contract_sha256": value.get("contract_sha256"),
+    }
 
 
 def boundary_payload(value: Any) -> dict[str, Any]:
@@ -75,4 +98,5 @@ __all__ = [
     "context_without_replay_source",
     "render_boundary_contract",
     "render_replay_api_contract",
+    "render_required_candidate_api",
 ]

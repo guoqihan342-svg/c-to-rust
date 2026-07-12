@@ -290,10 +290,12 @@ pub fn classify_ticket(owner: u32, bucket: u32, amount: usize, ticket_out: &mut 
             self.assertFalse(
                 oracle_report["harness_contract"]["fixture_external_stub"]["semantics_verified"]
             )
-            (evidence_dir / "l3-classify-ticket-reservation-rust-draft.rs").write_text(
+            draft_path = evidence_dir / "l3-classify-ticket-reservation-rust-draft.rs"
+            draft_path.write_text(
                 draft,
                 encoding="utf-8",
             )
+            original_draft = draft_path.read_bytes()
             (evidence_dir / "l3-classify-ticket-reservation-auto-translation-plan.json").write_text(
                 json.dumps(
                     {
@@ -314,10 +316,9 @@ pub fn classify_ticket(owner: u32, bucket: u32, amount: usize, ticket_out: &mut 
             self.assertEqual(bindings["bindings"][0]["fixture_only"], True)
             self.assertFalse(bindings["bindings"][0]["semantics_verified"])
 
-            checked_draft = (
-                evidence_dir / "l3-classify-ticket-reservation-rust-draft.rs"
-            ).read_text(encoding="utf-8")
-            self.assertIn("std::thread_local!", checked_draft)
+            checked_draft = draft_path.read_text(encoding="utf-8")
+            self.assertEqual(original_draft, draft_path.read_bytes())
+            self.assertNotIn("std::thread_local!", checked_draft)
             self.assertNotIn("unsafe", checked_draft)
             replay = module.run_generated_rust_replay(spec, evidence_dir, replay, rust_check)
             self.assertEqual(replay["status"], "passed")

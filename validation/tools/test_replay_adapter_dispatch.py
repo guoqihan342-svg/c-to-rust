@@ -57,7 +57,7 @@ class ReplayAdapterDispatchTests(unittest.TestCase):
             draft.write_text("pub fn translated() {}\n", encoding="utf-8")
             draft_sha = auto_migrate.sha256(draft)
             manifest = {
-                "schema_version": 8,
+                "schema_version": 9,
                 "slice_id": slice_id,
                 "status": "generated",
                 "selected_candidate_id": "ai-1",

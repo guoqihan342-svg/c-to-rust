@@ -58,6 +58,11 @@ class AuxiliaryCrossProjectSuiteTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def test_deepseek_auxiliary_timeout_defaults_to_stability_window(self) -> None:
+        args = module.build_parser().parse_args([])
+        self.assertEqual(300, module.DEFAULT_TIMEOUT_SECONDS)
+        self.assertEqual(module.DEFAULT_TIMEOUT_SECONDS, args.timeout_seconds)
+
     def test_auxiliary_results_are_separate_from_competition_numerators(self) -> None:
         calls: list[dict[str, object]] = []
 
@@ -99,6 +104,9 @@ class AuxiliaryCrossProjectSuiteTests(unittest.TestCase):
         self.assertEqual(2, report["execution"]["max_workers"])
         self.assertEqual([0, 1], [unit["index"] for unit in report["units"]])
         self.assertEqual(2, report["summary"]["provider_invocations"])
+        self.assertEqual(2, report["summary"]["provider_invocations_total"])
+        self.assertEqual(2, report["summary"]["initial_candidate_provider_invocations"])
+        self.assertEqual(0, report["summary"]["repair_provider_invocations"])
         self.assertEqual(1, report["summary"]["auxiliary_exact_pass"])
         self.assertEqual(0, report["claim_boundary"]["competition_success_numerator"])
         self.assertEqual(0, report["claim_boundary"]["translation_coverage_numerator"])

@@ -34,6 +34,37 @@ ROUTER_GATE_SOURCES = {
 }
 
 
+def _repair_eligibility(
+    gates: dict[str, dict[str, Any]],
+    exact_status: str,
+) -> dict[str, Any]:
+    oracle = gates["oracle_contract"]
+    if oracle.get("status") != "passed":
+        reason = "fresh_oracle_not_passed"
+        status = "skipped"
+    else:
+        target_sha = oracle.get("target_contract_sha256")
+        if not (
+            isinstance(target_sha, str)
+            and len(target_sha) == 64
+            and all(character in "0123456789abcdef" for character in target_sha)
+        ):
+            reason = "target_contract_missing"
+            status = "skipped"
+        elif exact_status != "failed":
+            reason = "structured_candidate_failure_missing"
+            status = "skipped"
+        else:
+            reason = "fresh_oracle_and_target_contract_bound"
+            status = "eligible"
+    return {
+        "status": status,
+        "reason": reason,
+        "provider_invocations": 0,
+        "semantic_gate": False,
+    }
+
+
 def _router_gates(gates: dict[str, dict[str, Any]], candidate_sha: str) -> dict[str, dict[str, Any]]:
     output: dict[str, dict[str, Any]] = {}
     for name, sources in ROUTER_GATE_SOURCES.items():
@@ -120,4 +151,5 @@ def validate_exact_summary(
         "semantic_pass": semantic_pass,
         "status": expected_status,
         "router_gate_results": router_gates,
+        "repair_eligibility": _repair_eligibility(gates, expected_status),
     }

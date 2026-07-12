@@ -24,6 +24,9 @@ from validation.tools._auto_migrate_c2rust_candidates import (
     resolve_current_c2rust_baseline_candidate,
 )
 from validation.tools._auto_migrate_ai_repair import repair_ai_candidate_after_validation
+from validation.tools._auto_migrate_ai_repair_eligibility import (
+    classify_ai_repair_eligibility,
+)
 from validation.tools._auto_migrate_ai_exact_persistence import (
     mark_ai_not_applied as _mark_ai_not_applied_impl,
     persist_candidate_result as _persist_candidate_result_impl,
@@ -107,6 +110,13 @@ def run_ai_exact_stage(
     c2rust_repair_audit = None
     c2rust_repaired_candidate_path = None
     canonical_changed = False
+    ai_repair_eligibility = classify_ai_repair_eligibility(ai_result)
+    c2rust_repair_eligibility = {
+        "status": "skipped",
+        "reason": "candidate_not_validated",
+        "provider_invocations": 0,
+        "semantic_gate": False,
+    }
 
     if (
         ai_result["status"] != "passed"
@@ -173,6 +183,11 @@ def run_ai_exact_stage(
                 reason="higher_priority_candidate_passed",
             )
 
+    if c2rust_baseline_result is not None:
+        c2rust_repair_eligibility = classify_ai_repair_eligibility(
+            c2rust_baseline_result
+        )
+
     zero_token_results = (ai_result, deterministic_result, c2rust_baseline_result)
     if not any(result is not None and result.get("status") == "passed" for result in zero_token_results):
         repair_raw_c2rust = (
@@ -181,6 +196,7 @@ def run_ai_exact_stage(
             and c2rust_baseline_result is not None
             and baseline_audit.get("status") != "duplicate"
             and _passed_gate_count(c2rust_baseline_result) > _passed_gate_count(ai_result)
+            and c2rust_repair_eligibility["status"] == "eligible"
         )
         if repair_raw_c2rust:
             def validate_c2rust_repair(path: Path, round_number: int) -> dict[str, Any]:
@@ -245,7 +261,7 @@ def run_ai_exact_stage(
                     if c2rust_repair_result["status"] == "passed"
                     else "fresh_exact_gates_failed",
                 )
-        elif max_repair_rounds > 0:
+        elif max_repair_rounds > 0 and ai_repair_eligibility["status"] == "eligible":
             def validate_ai_repair(path: Path, round_number: int) -> dict[str, Any]:
                 result = _validate_with_new_attempt(
                     spec,
@@ -323,10 +339,14 @@ def run_ai_exact_stage(
     if (
         isinstance(provider_invocations, bool)
         or not isinstance(provider_invocations, int)
-        or provider_invocations not in {0, 1}
+        or provider_invocations not in {0, 1, 2}
     ):
-        raise ValueError("AI candidate manifest provider_invocations must be 0 or 1")
-    router = route_candidates(candidates, provider_invocations=provider_invocations)
+        raise ValueError("AI candidate manifest provider_invocations must be 0, 1, or 2")
+    router = route_candidates(
+        candidates,
+        provider_invocation_budget=max(1, provider_invocations),
+        provider_invocations=provider_invocations,
+    )
     _sync_duplicate_audit(router, source="c2rust-baseline", audit=baseline_audit)
     if c2rust_repair_audit is not None:
         _sync_duplicate_audit(router, source="c2rust-repair", audit=c2rust_repair_audit)
@@ -378,6 +398,10 @@ def run_ai_exact_stage(
         **router,
         "candidate_evidence": summaries,
         "candidate_source_audit": candidate_source_audit,
+        "repair_eligibility": {
+            "opencode-ai": ai_repair_eligibility,
+            "c2rust-baseline": c2rust_repair_eligibility,
+        },
         "canonical_draft_sha256": sha256_path(canonical_draft_path),
         "semantic_pass": selected_id is not None,
     }

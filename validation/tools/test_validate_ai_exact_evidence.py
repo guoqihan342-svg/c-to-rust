@@ -131,6 +131,24 @@ class Fixture:
         router = route_candidates(candidates, provider_invocations=1)
         router.update({
             "candidate_evidence": evidence,
+            "repair_eligibility": {
+                "opencode-ai": {
+                    "status": "skipped" if ai["passed"] else "eligible",
+                    "reason": (
+                        "structured_candidate_failure_missing"
+                        if ai["passed"]
+                        else "fresh_oracle_and_target_contract_bound"
+                    ),
+                    "provider_invocations": 0,
+                    "semantic_gate": False,
+                },
+                "c2rust-baseline": {
+                    "status": "skipped",
+                    "reason": "candidate_not_validated",
+                    "provider_invocations": 0,
+                    "semantic_gate": False,
+                },
+            },
             "canonical_draft_sha256": digest(self.canonical),
             "semantic_pass": router["selected_candidate_id"] is not None,
         })
@@ -163,6 +181,8 @@ class Fixture:
             if not passed and name == "rustc":
                 status = "failed"
             payload = {"candidate_sha256": candidate_sha, "status": status}
+            if name == "oracle_contract":
+                payload["target_contract_sha256"] = "a" * 64
             if name == "final_verification":
                 payload.update({
                     "status": "passed" if passed else "failed",
@@ -195,6 +215,7 @@ class Fixture:
         write_json(summary_path, summary)
         return {
             "bytes": source,
+            "passed": passed,
             "sha": candidate_sha,
             "router_gates": projected,
             "ref": {"path": summary_path.name, "sha256": digest(summary_path), "status": summary["status"]},
@@ -411,6 +432,17 @@ class ValidateAiExactEvidenceTests(unittest.TestCase):
                     fixture.rebind_summary()
                 with self.assertRaises(EvidenceError):
                     self.validate(fixture)
+
+    def test_repair_eligibility_tampering_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Fixture(Path(tmp))
+            router = read_json(fixture.router)
+            router["repair_eligibility"]["opencode-ai"]["status"] = "eligible"
+            router["repair_eligibility"]["opencode-ai"]["reason"] = "tampered"
+            write_json(fixture.router, router)
+            fixture.rebind_router()
+            with self.assertRaisesRegex(EvidenceError, "repair eligibility"):
+                self.validate(fixture)
 
     def test_c2rust_repair_audit_is_reopened_and_fails_closed_on_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

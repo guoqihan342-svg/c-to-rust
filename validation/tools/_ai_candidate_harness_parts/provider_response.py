@@ -8,6 +8,7 @@ from .prompt_contract import (
     context_without_replay_source,
     render_boundary_contract,
     render_replay_api_contract,
+    render_required_candidate_api,
 )
 
 
@@ -32,7 +33,13 @@ def render_prompt(context_pack: dict[str, Any]) -> str:
         separators=(",", ":"),
     )
     boundary_contract = render_boundary_contract(context_pack)
+    required_candidate_api = render_required_candidate_api(context_pack)
     replay_contract = render_replay_api_contract(context_pack)
+    required_candidate_api_line = (
+        f"Required candidate API: {required_candidate_api}\n"
+        if required_candidate_api != "null"
+        else ""
+    )
     return (
         "Task mode: generate-candidate\n"
         "Generate one Rust candidate for the declared C slice. Do not call tools, inspect files, "
@@ -51,6 +58,7 @@ def render_prompt(context_pack: dict[str, Any]) -> str:
         "with this shape and no markdown: "
         '{"schema_version":1,"candidate":{"language":"rust","source":"..."},"assumptions":[]}\n'
         f"Required boundary facts: {boundary_contract}\n"
+        f"{required_candidate_api_line}"
         f"Required generated replay API contract: {replay_contract}\n"
         f"ContextPack: {context_json}"
     )

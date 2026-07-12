@@ -16,8 +16,8 @@
 | --- | --- |
 | Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
-| 最近开发阶段 | P0-A18b2c3：5 个 record-pointer/opaque adapter 已全部计划化 |
-| 当前翻译任务 | P0-A18c：固定跨项目样本的 AI exact 成功率与首轮 API 匹配率 |
+| 最近开发阶段 | P0-A18c1：精确候选 API、空响应单次重试与 repair 调用治理 |
+| 当前翻译任务 | P0-A18c：用固定跨项目样本复验 AI exact 成功率与首轮 API 匹配率 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
@@ -54,7 +54,7 @@ ContextPack v4 只向模型提供有界事实：真实 source span、编译参�
 
 候选和 repair prompt 会在 ContextPack 投影前单独展示同一份 generated replay source contract，并重申函数签名、Rust public API、raw-pointer 与 unsafe 策略。完整 replay source 和 ReplayCallPlan payload 均只出现一次。声明式 plan 通过受限 DSL 绑定 C source function、Rust `api_name`、参数顺序/类型、C 参数映射、保留的 length、返回/字段类型、fixture codec、ABI、unsafe 和 plan SHA；renderer、provider readiness 与 fresh binding 使用同一对象。所有已盘点 adapter 均已计划化，专用 fallback dispatch 与 readiness OR 列表已删除。record identity 使用闭合 JSON 路径、递归 record initializer、受限 null/constant leaf、调用前后 reference identity 和显式 noalias proof；record buffer/length 使用显式可空 byte storage、保留 length 和 raw-pointer identity；opaque context 生成 `&KvDbFixture`、`&str`、`Option<&str>` 安全 Rust replay model，拒绝 marker、`zeroed`、地址字面量和任意 Rust 表达式。动态 slice 继续使用有界 `Vec<i32>` 与最多 4096 项的 codec。以上均是 harness/replay 能力，不自动增加 translator semantic numerator。
 
-AI candidate manifest v8 的 `prompt_scope` 由实际 ContextPack 计算，并显式记录 `generated_replay_api_contract`。它把 provider、logical/resolved model、`competition_eligible` 和 `evaluation_scope` 绑定到 generator 与 candidate；fresh-run summary validator 会重开 ContextPack 和 replay 文件，复算 source SHA、调用绑定、prompt、scope、cache 与调用计数。每次真实 provider 调用仍绑定最小 invocation receipt 和独立 session-export identity projection。比赛主通道只认 `zai/glm-5.1`；GLM 余额不足时改用 `opencode/deepseek-v4-flash-free` 做 `auxiliary-local-validation`，但不能关闭比赛待办或进入比赛成功率分子。AI 输出始终保持 `semantic_gate=false`，最终接受只由共同门禁决定。
+AI candidate manifest v9 的 `prompt_scope` 由实际 ContextPack 计算，并显式记录 `generated_replay_api_contract`。ReplayCallPlan 现在额外生成可复算的 `required_candidate_api`，把精确函数签名、必要 supporting structs、ABI、unsafe 和引用返回生命周期在模型调用前单独展示；provider readiness 与 fresh validator 都从同一 plan 复算，漂移即 fail closed。manifest 把 provider、logical/resolved model、`competition_eligible` 和 `evaluation_scope` 绑定到 generator 与 candidate；每次真实调用都绑定独立 response、最小 invocation receipt 和 session-export identity。仅当合法 JSONL 无工具、无 assistant 文本、以 `step_finish` 结束且 output/reasoning token 都为 0 时，才允许原 prompt 原模型再调用一次；余额、鉴权、timeout、非零退出、工具事件和普通 malformed response 均不重试。比赛主通道只认 `zai/glm-5.1`；GLM 余额不足时改用 `opencode/deepseek-v4-flash-free` 做 `auxiliary-local-validation`，但不能关闭比赛待办或进入比赛成功率分子。AI 输出始终保持 `semantic_gate=false`，最终接受只由共同门禁决定。
 
 候选生成使用无工具 `c2rust-candidate` agent，OpenCode 事件中出现任何层级的 `tool`/`tool_use` 都会 fail closed；worker/preflight 仍使用执行命令所需的 `c2rust-migrator`，两类 agent 不再混用。比赛探针使用逻辑模型名 `GLM-5.1`，candidate CLI 使用 resolved id `zai/glm-5.1`。解析器接受严格 JSON，或带少量说明但只有一个完整 JSON 围栏的响应；多围栏、不完整围栏、额外工具访问和不受限字段仍会拒绝。OpenCode 1.17.18 的文件参数按“固定短消息在前，`--file=<prompt>` 在后”的 `opencode-file-attachment-v2` 合同传输，避免 `--file` 把消息误解析为第二个文件。
 
@@ -235,7 +235,9 @@ AI exact 路径禁止同时传入 `--accept-existing-evidence`。历史 accepted
 
 GLM 余额不足时使用独立的 `run_ai_auxiliary_cross_project_suite`，默认模型为 `opencode/deepseek-v4-flash-free`。它拒绝 competition-eligible 模型、非空 out-root、路径不安全或重复的 project/slice identity，并在每个单元启动前后复核 spec SHA；并发单元使用独立的 OpenCode config/data/cache/state/tmp，从而隔离 SQLite、session 与日志。报告固定 `competition_success_numerator=0`、`translation_coverage_numerator=0`，不能关闭 P0-A6/A10/H9。
 
-最新 WSL 辅助运行 `ai-auxiliary-p0-a18b2c3-deepseek-wsl-20260712-192612` 的固定 12 项均实际调用 provider：8 个候选、2 个 exact pass、6 个 exact failure、2 个 contract failure、1 个 execution failure、1 个 provider block。exact pass 是 `real-fdb-calc-crc32` 与 `real-fdb-is-str`；相较紧邻上一轮 1 个 pass 有恢复，但只回到更早的 2-pass 基线，不能声明通用成功率提升。报告位于 `target/ai-auxiliary-p0-a18b2c3-deepseek-wsl-20260712-192612/summary/ai-auxiliary-cross-project-suite-report.json`，SHA-256 为 `7e8bd77b9afd6c5883d007a47c5058d47a12d1a5d973b86e5ff042b908e2d5c0`。
+最新已归档 WSL 辅助运行 `ai-auxiliary-p0-a18b2c3-deepseek-wsl-20260712-192612` 的固定 12 项均实际调用 provider：8 个候选、2 个 exact pass、6 个 exact failure、2 个 contract failure、1 个 execution failure、1 个 provider block。重开各单元绑定的 repair report 后，真实调用口径是 12 次 initial 加 6 次 repair，共 18 次；旧聚合字段误报 repair 为 0。6 次 repair 中 2 次 timeout、3 次 exhausted、1 次 invalid patch。exact pass 是 `real-fdb-calc-crc32` 与 `real-fdb-is-str`；相较紧邻上一轮 1 个 pass 有恢复，但只回到更早的 2-pass 基线，不能声明通用成功率提升。报告位于 `target/ai-auxiliary-p0-a18b2c3-deepseek-wsl-20260712-192612/summary/ai-auxiliary-cross-project-suite-report.json`，SHA-256 为 `7e8bd77b9afd6c5883d007a47c5058d47a12d1a5d973b86e5ff042b908e2d5c0`。
+
+P0-A18c1 已修正聚合计量并减少无信息调用：canonical draft 的 fixture-only 编译 stub 只在检查期间存在，随后逐字节恢复 AI candidate，避免 manifest SHA 与落盘 draft 分叉；repair prompt 只请求完整自包含 Rust candidate；fresh C oracle 未通过、目标契约缺失或没有结构化候选失败时，不调用 AI repair并记录跳过原因。辅助套件默认 timeout 提升到 300 秒。上述实现已通过 161 项 Windows 聚焦回归，但新的固定 12 项 DeepSeek 结果尚未生成，因此 P0-A18c 仍未完成。
 
 ```bash
 python3 -B -m validation.tools.run_ai_auxiliary_cross_project_suite \

@@ -44,9 +44,13 @@ class AiReplayContractTests(unittest.TestCase):
             )
 
             self.assertEqual("bound", contract["status"])
-            self.assertEqual(2, contract["schema_version"])
+            self.assertEqual(3, contract["schema_version"])
             self.assertEqual("adler32_z", contract["function_name"])
             self.assertEqual("adler32", contract["api_name"])
+            self.assertEqual(
+                "pub fn adler32(adler: u32, buf: &[u8], len: usize) -> u32",
+                contract["required_candidate_api"]["signature"],
+            )
             self.assertEqual([3], rust_function_call_arities(replay.read_text(), "adler32"))
             replay.write_bytes(
                 (

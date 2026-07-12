@@ -73,6 +73,10 @@ def validate_fresh_ai_manifest(
     summary_path: Path,
     repo_root: Path,
 ) -> dict[str, Any]:
+    from validation.tools._validate_ai_provider_attempts import (
+        validate_ai_provider_attempts,
+    )
+
     reasons: list[str] = []
     recomputed_prompt_scope: list[str] | None = None
     schema_version = manifest.get("schema_version")
@@ -156,7 +160,7 @@ def validate_fresh_ai_manifest(
     if (
         isinstance(provider_invocations, bool)
         or not isinstance(provider_invocations, int)
-        or provider_invocations not in {0, 1}
+        or provider_invocations not in {0, 1, 2}
     ):
         reasons.append("ai_manifest_provider_invocations_invalid")
         provider_invocations = 0
@@ -243,7 +247,8 @@ def validate_fresh_ai_manifest(
             ref = bindings.get(key) if isinstance(bindings, dict) else None
             if not nested_ai_ref_is_hash_bound(ref, owner_path=manifest_path, summary_path=summary_path, repo_root=repo_root):
                 reasons.append(f"ai_manifest_{key}_binding_invalid")
-        if provider_invocations == 1:
+        provider_attempts_valid = provider_invocations == 0
+        if provider_invocations in {1, 2}:
             reasons.extend(
                 validate_ai_invocation_receipt(
                     bindings.get("invocation_receipt") if isinstance(bindings, dict) else None,
@@ -254,6 +259,35 @@ def validate_fresh_ai_manifest(
                     policy=policy,
                 )
             )
+            attempt_reasons, provider_attempts_valid = validate_ai_provider_attempts(
+                manifest,
+                bindings=bindings if isinstance(bindings, dict) else None,
+                provider_invocations=provider_invocations,
+                manifest_path=manifest_path,
+                summary_path=summary_path,
+                repo_root=repo_root,
+                policy=policy,
+                nested_ref_is_hash_bound=nested_ai_ref_is_hash_bound,
+                resolve_artifact=resolve_nested_ai_artifact,
+                load_json=load_json,
+                validate_receipt=validate_ai_invocation_receipt,
+            )
+            reasons.extend(attempt_reasons)
+        elif isinstance(schema_version, int) and schema_version >= 9:
+            attempt_reasons, provider_attempts_valid = validate_ai_provider_attempts(
+                manifest,
+                bindings=bindings if isinstance(bindings, dict) else None,
+                provider_invocations=provider_invocations,
+                manifest_path=manifest_path,
+                summary_path=summary_path,
+                repo_root=repo_root,
+                policy=policy,
+                nested_ref_is_hash_bound=nested_ai_ref_is_hash_bound,
+                resolve_artifact=resolve_nested_ai_artifact,
+                load_json=load_json,
+                validate_receipt=validate_ai_invocation_receipt,
+            )
+            reasons.extend(attempt_reasons)
         if validate_provider_accounting and isinstance(bindings, dict):
             context_ref = bindings.get("context_pack")
             context_path = (
@@ -328,6 +362,8 @@ def validate_fresh_ai_manifest(
                 recomputed_invocations = int(
                     recomputed_preflight["status"] == "ready" and not cache_hit
                 )
+                if recomputed_invocations == 1 and provider_invocations == 2 and provider_attempts_valid:
+                    recomputed_invocations = 2
                 if provider_invocations != recomputed_invocations:
                     reasons.append("ai_manifest_provider_invocations_context_mismatch")
             if cache_required and cache_status in {"hit", "miss"}:

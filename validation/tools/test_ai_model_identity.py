@@ -167,7 +167,7 @@ class AiModelIdentityTests(unittest.TestCase):
 
             generator = manifest["generator"]
             candidate = manifest["candidates"][0]
-            self.assertEqual(8, manifest["schema_version"])
+            self.assertEqual(9, manifest["schema_version"])
             self.assertEqual("opencode", generator["provider"])
             self.assertEqual("DeepSeek-V4-Flash", generator["logical_model"])
             self.assertFalse(generator["competition_eligible"])

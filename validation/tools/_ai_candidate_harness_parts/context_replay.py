@@ -5,6 +5,10 @@ import re
 from typing import Any, Iterable
 
 from .context_security import atomic_write_bytes, redact_metadata_text, resolve_under, sha256_bytes
+from .context_required_api import (
+    build_required_candidate_api,
+    validate_required_candidate_api,
+)
 from validation.tools.replay_call_plan import (
     replay_call_plan_marker,
     validate_replay_call_plan,
@@ -31,7 +35,7 @@ def build_replay_api_contract(
     }
     api_name = str(call_plan.get("api_name")) if has_structured_call_plan else function_name
     base = {
-        "schema_version": 2 if has_structured_contract else 1,
+        "schema_version": 3 if has_structured_call_plan else 2 if has_structured_contract else 1,
         "contract_kind": "generated_replay_rust_source",
         "function_name": function_name,
         "api_name": api_name,
@@ -73,6 +77,7 @@ def build_replay_api_contract(
             "call_plan": call_plan,
         }
     bound_call_plan = None
+    required_candidate_api = None
     if has_structured_call_plan:
         try:
             validate_replay_call_plan(call_plan)
@@ -89,6 +94,14 @@ def build_replay_api_contract(
                 "source_sha256": sha256_bytes(data),
             }
         bound_call_plan = call_plan
+        try:
+            required_candidate_api = build_required_candidate_api(call_plan)
+        except ValueError:
+            return {
+                **base,
+                "status": "blocked_replay_call_plan_invalid",
+                "source_sha256": sha256_bytes(data),
+            }
     call_count = count_rust_function_calls(source, api_name)
     if call_count < 1:
         return {
@@ -124,6 +137,7 @@ def build_replay_api_contract(
     }
     if bound_call_plan is not None:
         contract["call_plan"] = bound_call_plan
+        contract["required_candidate_api"] = required_candidate_api
     return contract
 
 
@@ -188,10 +202,15 @@ def validate_replay_api_contract_binding(context_pack: Any, context_path: Path) 
     if isinstance(call_plan, dict):
         try:
             validate_replay_call_plan(call_plan)
+            validate_required_candidate_api(
+                call_plan,
+                contract.get("required_candidate_api"),
+            )
         except ValueError:
             return "binding_mismatch"
         if (
-            call_plan.get("source_function_name") != context_pack.get("function_name")
+            contract.get("schema_version") != 3
+            or call_plan.get("source_function_name") != context_pack.get("function_name")
             or call_plan.get("api_name") != contract.get("api_name")
             or replay_call_plan_marker(call_plan).rstrip("\n") not in content
             or any(
