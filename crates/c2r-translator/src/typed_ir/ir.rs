@@ -190,6 +190,12 @@ pub enum IrExpr {
         ty: IrType,
         source_span: Option<SourceSpan>,
     },
+    MutableVoidPointerAddress {
+        operand: Box<IrExpr>,
+        source_pointer: IrType,
+        target: IrType,
+        source_span: Option<SourceSpan>,
+    },
     Unsupported {
         node: String,
         reason: String,

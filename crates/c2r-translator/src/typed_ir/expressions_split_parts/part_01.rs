@@ -87,8 +87,48 @@ fn emit_call_arg_expr(
         IrExpr::AddrOf { operand, ty, .. } => {
             emit_local_record_address_call_arg(operand, ty, symbols)
         }
+        IrExpr::MutableVoidPointerAddress {
+            operand,
+            source_pointer,
+            target,
+            ..
+        } => emit_mutable_void_pointer_address_call_arg(
+            operand,
+            source_pointer,
+            target,
+            symbols,
+            context,
+        ),
         _ => emit_expr(arg, symbols, context),
     }
+}
+
+fn emit_mutable_void_pointer_address_call_arg(
+    operand: &IrExpr,
+    source_pointer: &IrType,
+    target: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let root = validate_mutable_void_pointer_address_call_arg(
+        operand,
+        source_pointer,
+        target,
+        Some(context),
+    )?;
+    if !symbols.contains(root) {
+        return Err(format!(
+            "mutable void pointer address root {root} is not declared"
+        ));
+    }
+    let path = record_pointer_member_path_from_expr(operand)?
+        .ok_or_else(|| "mutable void pointer address operand path disappeared".to_string())?;
+    let value = emit_record_pointer_member_path(
+        &path,
+        "mutable void pointer address root",
+        "mutable void pointer address field",
+    )?;
+    Ok(format!("&mut {value}"))
 }
 
 fn emit_pointer_return_nested_call_arg_expr(

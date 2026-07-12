@@ -128,7 +128,8 @@ fn collect_ir_post_increment_deref_vars_from_expr(expr: &typed_ir::IrExpr, vars:
         typed_ir::IrExpr::IncDec { target, .. } => {
             collect_ir_post_increment_deref_vars_from_expr(target, vars);
         }
-        typed_ir::IrExpr::AddrOf { operand, .. } => {
+        typed_ir::IrExpr::AddrOf { operand, .. }
+        | typed_ir::IrExpr::MutableVoidPointerAddress { operand, .. } => {
             collect_ir_post_increment_deref_vars_from_expr(operand, vars);
         }
         typed_ir::IrExpr::LitInt { .. }

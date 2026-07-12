@@ -102,7 +102,7 @@ where
     let mut first_error = None;
     for candidate in candidates {
         match parse(&candidate) {
-            Ok(ty) if !matches!(ty.kind, ClangTypeKind::Unsupported { .. }) => return Ok(ty),
+            Ok(ty) if clang_type_is_fully_supported(&ty) => return Ok(ty),
             Ok(ty) => {
                 if source_unsupported.is_none() {
                     source_unsupported = Some(ty.clone());
@@ -132,6 +132,19 @@ where
             kind: missing_kind.to_string(),
             message: missing_message.to_string(),
         })
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_fully_supported(ty: &ClangTypeSkeleton) -> bool {
+    match &ty.kind {
+        ClangTypeKind::Pointer { pointee, .. } => clang_type_is_fully_supported(pointee),
+        ClangTypeKind::Array { element, .. } => clang_type_is_fully_supported(element),
+        ClangTypeKind::Unsupported { .. } => false,
+        ClangTypeKind::Void
+        | ClangTypeKind::Integer { .. }
+        | ClangTypeKind::Record { .. }
+        | ClangTypeKind::Function => true,
     }
 }
 
@@ -232,14 +245,28 @@ fn validate_type_alias_desugaring(
     target_abi: Option<&TargetAbiProfile>,
     aliases: &TypeAliasInventory,
 ) -> Result<(), ClangFrontendError> {
-    let Some(alias_name) = string_field(type_object, "qualType")
+    let Some(qual_type) = string_field(type_object, "qualType")
         .map(|value| value.trim().to_string())
-        .filter(|value| is_simple_c_identifier(value))
+        .filter(|value| !value.is_empty())
     else {
         return Ok(());
     };
-    let Some(Ok(alias_ty)) = aliases.by_name.get(&alias_name) else {
-        return Ok(());
+    let alias_ty = if is_simple_c_identifier(&qual_type) {
+        let Some(Ok(alias_ty)) = aliases.by_name.get(&qual_type) else {
+            return Ok(());
+        };
+        alias_ty.clone()
+    } else {
+        if type_from_qual_type_with_target_abi(&qual_type, target_abi)
+            .is_ok_and(|ty| clang_type_is_fully_supported(&ty))
+        {
+            return Ok(());
+        }
+        let alias_ty = type_from_qual_type_with_aliases(&qual_type, target_abi, aliases)?;
+        if !clang_type_is_fully_supported(&alias_ty) {
+            return Ok(());
+        }
+        alias_ty
     };
 
     for field in ["desugaredQualType", "canonicalQualType"] {
@@ -247,18 +274,18 @@ fn validate_type_alias_desugaring(
             continue;
         };
         let spelling = spelling.trim();
-        if spelling == alias_name {
+        if spelling == qual_type {
             continue;
         }
         let parsed = type_from_qual_type_with_target_abi(spelling, target_abi)?;
-        if matches!(parsed.kind, ClangTypeKind::Unsupported { .. }) {
+        if !clang_type_is_fully_supported(&parsed) {
             continue;
         }
         if parsed.kind != alias_ty.kind {
             return Err(ClangFrontendError {
                 kind: "typedef_desugaring_mismatch".to_string(),
                 message: format!(
-                    "typedef {alias_name} resolves to {} but {field} resolves to {}",
+                    "typedef-containing type {qual_type} resolves to {} but {field} resolves to {}",
                     alias_ty.canonical, parsed.canonical
                 ),
             });

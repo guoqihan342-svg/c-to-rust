@@ -216,6 +216,14 @@ pub(super) fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: 
         | ClangExprSkeleton::Member { ty, .. } => {
             bind_target_abi_to_type(ty, target_abi);
         }
+        ClangExprSkeleton::MutableVoidPointerAddress {
+            source_pointer,
+            target,
+            ..
+        } => {
+            bind_target_abi_to_type(source_pointer, target_abi);
+            bind_target_abi_to_type(target, target_abi);
+        }
         ClangExprSkeleton::Cast { target, .. }
         | ClangExprSkeleton::LValueToRValue { target, .. }
         | ClangExprSkeleton::ArrayToPointerDecay { target, .. }
@@ -250,6 +258,9 @@ pub(super) fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: 
             bind_target_abi_to_expr(ptr, target_abi);
         }
         ClangExprSkeleton::AddrOf { operand, .. } => {
+            bind_target_abi_to_expr(operand, target_abi);
+        }
+        ClangExprSkeleton::MutableVoidPointerAddress { operand, .. } => {
             bind_target_abi_to_expr(operand, target_abi);
         }
         ClangExprSkeleton::Cast { expr, .. } | ClangExprSkeleton::LValueToRValue { expr, .. } => {

@@ -239,6 +239,9 @@ fn ir_expr_type_matches(expr: &IrExpr, expected: &IrType) -> bool {
         | IrExpr::Call { ty, .. }
         | IrExpr::Member { ty, .. }
         | IrExpr::AddrOf { ty, .. } => ir_types_match_for_clang(ty, expected),
+        IrExpr::MutableVoidPointerAddress { target, .. } => {
+            ir_types_match_for_clang(target, expected)
+        }
         IrExpr::Cast { target, .. }
         | IrExpr::LValueToRValue { target, .. }
         | IrExpr::ArrayToPointerDecay { target, .. }
@@ -361,6 +364,16 @@ pub(super) fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFronte
         ClangExprSkeleton::AddrOf { operand, ty } => Ok(IrExpr::AddrOf {
             operand: Box::new(lower_expr(operand)?),
             ty: lower_type(ty)?,
+            source_span: None,
+        }),
+        ClangExprSkeleton::MutableVoidPointerAddress {
+            operand,
+            source_pointer,
+            target,
+        } => Ok(IrExpr::MutableVoidPointerAddress {
+            operand: Box::new(lower_expr(operand)?),
+            source_pointer: lower_type(source_pointer)?,
+            target: lower_type(target)?,
             source_span: None,
         }),
         ClangExprSkeleton::Cast {
@@ -528,6 +541,7 @@ pub(super) fn clang_expr_skeleton_type(expr: &ClangExprSkeleton) -> Option<&Clan
         | ClangExprSkeleton::ArrayLiteral { ty, .. }
         | ClangExprSkeleton::Call { ty, .. }
         | ClangExprSkeleton::Member { ty, .. } => Some(ty),
+        ClangExprSkeleton::MutableVoidPointerAddress { target, .. } => Some(target),
         ClangExprSkeleton::Cast { target, .. }
         | ClangExprSkeleton::LValueToRValue { target, .. }
         | ClangExprSkeleton::ArrayToPointerDecay { target, .. }

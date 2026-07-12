@@ -61,6 +61,8 @@ fn validate_bounded_call_args(args: &[IrExpr], context: &EmitContext) -> Result<
             {
                 Some((index, name.as_str()))
             }
+            IrExpr::MutableVoidPointerAddress { operand, .. } =>
+                mutable_void_pointer_address_root(operand).map(|name| (index, name)),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -233,6 +235,18 @@ fn validate_bounded_call_arg_with_context(
         IrExpr::AddrOf { operand, ty, .. } => {
             validate_local_record_address_call_arg(operand, ty).map(|_| ())
         }
+        IrExpr::MutableVoidPointerAddress {
+            operand,
+            source_pointer,
+            target,
+            ..
+        } => validate_mutable_void_pointer_address_call_arg(
+            operand,
+            source_pointer,
+            target,
+            context,
+        )
+        .map(|_| ()),
         IrExpr::Unsupported { node, reason, .. } => {
             Err(format!("unsupported argument expression {node}: {reason}"))
         }

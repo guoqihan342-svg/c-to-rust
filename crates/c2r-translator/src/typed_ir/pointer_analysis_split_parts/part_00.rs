@@ -150,6 +150,7 @@ fn reject_nullable_mutable_pointer_params_in_expr(
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. }
         | IrExpr::Deref { ptr: operand, .. }
         | IrExpr::Member { base: operand, .. }
         | IrExpr::IncDec {
@@ -388,7 +389,8 @@ fn collect_nullable_pointer_params_from_expr(
         | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
-        | IrExpr::AddrOf { operand, .. } => collect_nullable_pointer_params_from_expr(
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. } => collect_nullable_pointer_params_from_expr(
             operand,
             readonly_pointer_params,
             nullable_params,

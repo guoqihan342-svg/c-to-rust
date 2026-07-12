@@ -18,4 +18,5 @@ mod tests {
     include!("tests/record_layout.rs");
     include!("tests/record_typedef_fields.rs");
     include!("tests/typedef_body.rs");
+    include!("tests/typedef_pointer_ast.rs");
 }

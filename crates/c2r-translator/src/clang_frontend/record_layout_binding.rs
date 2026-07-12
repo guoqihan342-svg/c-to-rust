@@ -169,7 +169,8 @@ fn bind_record_layouts_to_expr(
             bind_record_layouts_to_expr(rhs, dump, used);
         }
         ClangExprSkeleton::Unary { operand, .. }
-        | ClangExprSkeleton::AddrOf { operand, .. } => {
+        | ClangExprSkeleton::AddrOf { operand, .. }
+        | ClangExprSkeleton::MutableVoidPointerAddress { operand, .. } => {
             bind_record_layouts_to_expr(operand, dump, used);
         }
         ClangExprSkeleton::Conditional {

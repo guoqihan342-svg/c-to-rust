@@ -6980,11 +6980,11 @@
       "id": "generic-typedef-canonical-desugared-recovery",
       "status": "partial",
       "scope_limitations": [
-        "covers direct translation-unit typedef aliases and clang type objects with source, desugared, or canonical spellings",
+        "covers direct translation-unit typedef aliases and recursively parsed pointer/array/function type objects with source, desugared, or canonical spellings",
         "late ABI binding supports the already modeled integer and record type subset only",
         "record fields may recover an omitted desugared spelling only from a unique non-implicit TypedefDecl",
         "does not admit unions, bitfields, packed volatile or atomic fields, unresolved alias chains, or platform widths absent from the target ABI",
-        "the real libuv run advances to mutable scalar-address void-pointer lowering before Rust emission, so no named-slice semantic acceptance is claimed"
+        "the real libuv run now resolves the typedef inside the scalar-address pointer and reaches typed IR, but later alias proof still prevents Rust emission and named-slice semantic acceptance"
       ],
       "ir_constructs": [
         "clang qualType candidate ordering",
@@ -6993,6 +6993,7 @@
         "translation-unit TypedefDecl inventory",
         "late target-ABI integer binding",
         "function-body AST alias binding",
+        "composite pointer pointee alias binding",
         "named record field alias binding",
         "anonymous record field alias binding",
         "typedef desugaring conflict refusal"
@@ -7008,6 +7009,10 @@
             {
               "name": "function body typedef fixture without node desugaring",
               "path": "crates/c2r-translator/src/clang_frontend/tests/typedef_body.rs"
+            },
+            {
+              "name": "typedef inside pointer type object binding",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/typedef_pointer_ast.rs"
             }
           ]
         },
@@ -7021,6 +7026,10 @@
             {
               "name": "typedef/desugared conflict and unknown field typedef refusals",
               "path": "crates/c2r-translator/src/clang_frontend/tests/record_typedef_fields.rs"
+            },
+            {
+              "name": "conflicting pointer-pointee typedef desugaring refusal",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/typedef_pointer_ast.rs"
             }
           ]
         },
@@ -7053,6 +7062,10 @@
         {
           "name": "function_body_uses_translation_unit_typedef_without_node_desugaring",
           "path": "crates/c2r-translator/src/clang_frontend/tests/typedef_body.rs"
+        },
+        {
+          "name": "binds_typedef_inside_pointer_type_object_before_expression_parsing",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/typedef_pointer_ast.rs"
         }
       ],
       "negative_cases": [
@@ -7065,6 +7078,103 @@
           "name": "unknown_record_field_typedef_remains_incomplete",
           "path": "crates/c2r-translator/src/clang_frontend/tests/record_typedef_fields.rs",
           "fail_closed_reason": "an unknown field alias cannot make a record inventory complete"
+        },
+        {
+          "name": "rejects_conflicting_desugaring_for_typedef_inside_pointer",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/typedef_pointer_ast.rs",
+          "fail_closed_reason": "a composite pointer type resolved through typedef inventory must agree with explicit desugared or canonical pointer structure"
+        }
+      ]
+    },
+    {
+      "id": "generic-mutable-record-scalar-address-safe-adapter",
+      "status": "partial",
+      "scope_limitations": [
+        "covers a direct mutable record-pointer root, one initial arrow, subsequent dot-only nested fields, and a fixed-width integer terminal field",
+        "requires a direct FunctionDecl and a mutable void pointer parameter at the exact argument position",
+        "emits a temporary Rust mutable reference only for a compile-checked safe adapter contract; it does not synthesize or trust a raw extern binding",
+        "direct local or scalar-parameter addresses, raw extern no-escape proof, and post-call field initialization are not modeled",
+        "the real libuv function reaches complete typed IR but multiple pointer parameters still fail the existing record-write alias-proof gate",
+        "no named-slice C/Rust replay, diff, unsafe ledger, or semantic acceptance is claimed"
+      ],
+      "ir_constructs": [
+        "ClangExprSkeleton::MutableVoidPointerAddress",
+        "IrExpr::MutableVoidPointerAddress",
+        "direct FunctionDecl signature verification",
+        "mutable void pointer parameter verification",
+        "complete nested record member path",
+        "same-width and signedness integer source pointer",
+        "temporary mutable safe-adapter borrow",
+        "same-call overlapping mutable borrow refusal"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "covered",
+          "scope_note": "two fully renamed in-memory clang ASTs prove identifier-independent lowering without invoking clang",
+          "evidence": [
+            {
+              "name": "clang_ast_preserves_renamed_mutable_void_pointer_scalar_address_provenance",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_38_00.rs"
+            }
+          ]
+        },
+        "handwritten_ir": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "forged source/target, incomplete inventory, and sibling alias refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_38_01.rs"
+            }
+          ]
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "signature, variadic, indirect-call, type, inventory, and alias fail-closed cases",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_38_01.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "scope_note": "two neutral safe-adapter candidates compile and run; this is candidate-context unit evidence only",
+          "evidence": [
+            {
+              "name": "renamed nested record scalar address safe-adapter runtime checks",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_38_00.rs"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "the WSL libuv probe reaches typed IR but emits no Rust draft, replay, or schema-aware diff because multi-pointer alias proof fails"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "the capability requires clang signature and dedicated typed-IR provenance"
+        },
+        "route_evidence": {
+          "status": "gap",
+          "reason": "the A18c8h WSL probe is an unpublished local-simulation diagnostic under target and remains semantic false"
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "clang_ast_preserves_renamed_mutable_void_pointer_scalar_address_provenance",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_38_00.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "clang_ast_rejects_unverified_mutable_void_pointer_scalar_address_calls",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_38_01.rs",
+          "fail_closed_reason": "const parameters, variadic signatures, and indirect callees cannot create mutable scalar-address provenance"
+        },
+        {
+          "name": "typed_ir_rejects_forged_or_aliasing_mutable_void_pointer_scalar_addresses",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_38_01.rs",
+          "fail_closed_reason": "source/field type drift, const targets, incomplete record inventories, and sibling reads of the same mutable root remain unsupported"
         }
       ]
     }

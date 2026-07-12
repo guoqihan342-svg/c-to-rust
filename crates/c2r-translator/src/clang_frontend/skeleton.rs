@@ -163,6 +163,11 @@ pub enum ClangExprSkeleton {
         operand: Box<ClangExprSkeleton>,
         ty: ClangTypeSkeleton,
     },
+    MutableVoidPointerAddress {
+        operand: Box<ClangExprSkeleton>,
+        source_pointer: ClangTypeSkeleton,
+        target: ClangTypeSkeleton,
+    },
     Cast {
         target: ClangTypeSkeleton,
         expr: Box<ClangExprSkeleton>,

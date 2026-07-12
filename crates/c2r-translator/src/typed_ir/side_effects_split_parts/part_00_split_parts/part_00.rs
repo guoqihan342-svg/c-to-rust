@@ -410,6 +410,7 @@ fn find_direct_inc_dec_comparison_memory_operand(expr: &IrExpr) -> Option<&'stat
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. }
         | IrExpr::IncDec {
             target: operand, ..
         } => find_direct_inc_dec_comparison_memory_operand(operand),

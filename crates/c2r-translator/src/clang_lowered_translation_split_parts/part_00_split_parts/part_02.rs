@@ -434,7 +434,8 @@ fn record_ir_call_expression_evidence_for_expr(
         typed_ir::IrExpr::Deref { ptr, .. } => {
             record_ir_call_expression_evidence_for_expr(ptr, statement_context, result);
         }
-        typed_ir::IrExpr::AddrOf { operand, .. } => {
+        typed_ir::IrExpr::AddrOf { operand, .. }
+        | typed_ir::IrExpr::MutableVoidPointerAddress { operand, .. } => {
             record_ir_call_expression_evidence_for_expr(operand, statement_context, result);
         }
         typed_ir::IrExpr::LitInt { .. }

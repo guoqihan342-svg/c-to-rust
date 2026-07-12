@@ -178,6 +178,7 @@ fn collect_mutable_pointer_index_uses_from_expr(
         }
         | IrExpr::Deref { ptr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::Member { base: operand, .. } => {
@@ -420,6 +421,7 @@ fn collect_record_pointer_array_index_uses_from_expr(
         }
         | IrExpr::Deref { ptr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. } => {
             collect_record_pointer_array_index_uses_from_expr(operand, candidates, uses, false)?;
@@ -540,6 +542,7 @@ fn validate_side_effect_free_integer_index(expr: &IrExpr) -> Result<(), String> 
         | IrExpr::IncDec { .. }
         | IrExpr::Deref { .. }
         | IrExpr::AddrOf { .. }
+        | IrExpr::MutableVoidPointerAddress { .. }
         | IrExpr::Unsupported { .. } => Err(
             "record pointer array index must be a side-effect-free integer expression".to_string(),
         ),

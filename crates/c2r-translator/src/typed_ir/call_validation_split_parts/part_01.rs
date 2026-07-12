@@ -190,6 +190,134 @@ fn validate_local_record_address_call_arg<'a>(
     Ok(name)
 }
 
+fn validate_mutable_void_pointer_address_call_arg<'a>(
+    operand: &'a IrExpr,
+    source_pointer: &IrType,
+    target: &IrType,
+    context: Option<&EmitContext>,
+) -> Result<&'a str, String> {
+    let IrTypeKind::Pointer { pointee: target_pointee } = &target.kind else {
+        return Err(format!(
+            "mutable void pointer address target {} is not a pointer",
+            type_label(target)
+        ));
+    };
+    if target_pointee.is_const || !matches!(target_pointee.kind, IrTypeKind::Void) {
+        return Err(format!(
+            "mutable void pointer address target {} is not mutable void *",
+            type_label(target)
+        ));
+    }
+    let source_pointee = mutable_pointer_slice_element_type(source_pointer).ok_or_else(|| {
+        format!(
+            "mutable void pointer address source {} is not a mutable integer pointer",
+            type_label(source_pointer)
+        )
+    })?;
+    let path = record_pointer_member_path_from_expr(operand)?.ok_or_else(|| {
+        "mutable void pointer address operand must be a bounded record scalar member path"
+            .to_string()
+    })?;
+    if !is_integer_type(path.ty) {
+        return Err(format!(
+            "mutable void pointer address field {} must be a fixed-width integer scalar, got {}",
+            record_pointer_member_path_key(&path),
+            type_label(path.ty)
+        ));
+    }
+    emit_scalar_type(path.ty).map_err(|detail| {
+        format!(
+            "mutable void pointer address field {} has {detail}",
+            record_pointer_member_path_key(&path)
+        )
+    })?;
+    if !types_match_ignoring_spelling(source_pointee, path.ty) {
+        return Err(format!(
+            "mutable void pointer address source pointee {} does not match field type {}",
+            type_label(source_pointee),
+            type_label(path.ty)
+        ));
+    }
+    validate_complete_record_member_path(operand)?;
+    let context = context.ok_or_else(|| {
+        "mutable void pointer address requires mutable record ownership context".to_string()
+    })?;
+    if !context.is_mutable_record_pointer_write_param(path.root_name) {
+        return Err(format!(
+            "mutable void pointer address root {} lacks ownership evidence",
+            path.root_name
+        ));
+    }
+    if context.is_nullable_pointer_param(path.root_name) {
+        return Err(format!(
+            "nullable mutable record pointer {} cannot provide a scalar address",
+            path.root_name
+        ));
+    }
+    Ok(path.root_name)
+}
+
+fn mutable_void_pointer_address_root(expr: &IrExpr) -> Option<&str> {
+    let path = record_pointer_member_path_from_expr(expr).ok()??;
+    Some(path.root_name)
+}
+
+fn validate_complete_record_member_path(expr: &IrExpr) -> Result<(), String> {
+    let IrExpr::Member {
+        base,
+        field,
+        ty,
+        is_arrow,
+        ..
+    } = expr
+    else {
+        return Err("mutable void pointer address operand is not a record member".to_string());
+    };
+    let record_ty = if *is_arrow {
+        let IrExpr::Var { ty: root_ty, .. } = base.as_ref() else {
+            return Err(
+                "mutable void pointer address must have one direct record pointer root"
+                    .to_string(),
+            );
+        };
+        mutable_record_pointer_pointee_type(root_ty).ok_or_else(|| {
+            format!(
+                "mutable void pointer address root has unsupported type {}",
+                type_label(root_ty)
+            )
+        })?
+    } else {
+        validate_complete_record_member_path(base)?;
+        expr_type(base).ok_or_else(|| {
+            "mutable void pointer address nested member base lacks a type".to_string()
+        })?
+    };
+    let IrTypeKind::Record {
+        name,
+        fields: Some(fields),
+    } = &record_ty.kind
+    else {
+        return Err(format!(
+            "mutable void pointer address record {} lacks a complete field inventory",
+            type_label(record_ty)
+        ));
+    };
+    let declared = fields
+        .iter()
+        .find(|candidate| candidate.name == *field)
+        .ok_or_else(|| {
+            format!("mutable void pointer address record {name} has no field {field}")
+        })?;
+    if !types_match_ignoring_spelling(&declared.ty, ty) {
+        return Err(format!(
+            "mutable void pointer address field {name}.{field} type {} does not match declared type {}",
+            type_label(ty),
+            type_label(&declared.ty)
+        ));
+    }
+    Ok(())
+}
+
 fn validate_bounded_nested_call_arg(
     callee: &str,
     args: &[IrExpr],
@@ -351,7 +479,8 @@ fn find_call_callee(expr: &IrExpr) -> Option<&str> {
         IrExpr::ArrayLiteral { elements, .. } => elements.iter().find_map(find_call_callee),
         IrExpr::IncDec { target, .. } => find_call_callee(target),
         IrExpr::Deref { ptr, .. } => find_call_callee(ptr),
-        IrExpr::AddrOf { operand, .. } => find_call_callee(operand),
+        IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. } => find_call_callee(operand),
         IrExpr::LitInt { .. }
         | IrExpr::NullPtr { .. }
         | IrExpr::Var { .. }

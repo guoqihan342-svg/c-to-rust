@@ -186,7 +186,10 @@ fn expr_mentions_var(expr: &IrExpr, expected: &str) -> bool {
         | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
-        | IrExpr::AddrOf { operand, .. } => expr_mentions_var(operand, expected),
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. } => {
+            expr_mentions_var(operand, expected)
+        }
         IrExpr::Conditional {
             condition,
             then_expr,

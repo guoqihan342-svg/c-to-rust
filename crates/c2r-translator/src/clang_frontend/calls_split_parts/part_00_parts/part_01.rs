@@ -383,7 +383,8 @@ fn clang_expr_mentions_decl(expr: &ClangExprSkeleton, expected: &str) -> bool {
         | ClangExprSkeleton::LValueToRValue { expr: operand, .. }
         | ClangExprSkeleton::ArrayToPointerDecay { expr: operand, .. }
         | ClangExprSkeleton::FunctionToPointerDecay { expr: operand, .. }
-        | ClangExprSkeleton::AddrOf { operand, .. } => {
+        | ClangExprSkeleton::AddrOf { operand, .. }
+        | ClangExprSkeleton::MutableVoidPointerAddress { operand, .. } => {
             clang_expr_mentions_decl(operand, expected)
         }
         ClangExprSkeleton::Conditional {

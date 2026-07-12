@@ -328,7 +328,7 @@ fn validate_readonly_pointer_add_index_expr(expr: &IrExpr) -> Result<(), String>
         IrExpr::Member { .. } => {
             Err("deref pointer add index cannot use member expression".to_string())
         }
-        IrExpr::AddrOf { .. } => {
+        IrExpr::AddrOf { .. } | IrExpr::MutableVoidPointerAddress { .. } => {
             Err("deref pointer add index cannot use address-of expression".to_string())
         }
         IrExpr::NullPtr { .. } => {

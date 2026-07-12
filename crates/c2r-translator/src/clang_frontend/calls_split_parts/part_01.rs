@@ -99,7 +99,8 @@ fn bounded_call_arg_rejection_reason(
         ClangExprSkeleton::Deref { .. } => {
             Some("call arguments cannot use dereference value semantics".to_string())
         }
-        ClangExprSkeleton::AddrOf { .. } => None,
+        ClangExprSkeleton::AddrOf { .. }
+        | ClangExprSkeleton::MutableVoidPointerAddress { .. } => None,
         ClangExprSkeleton::Unsupported { node, reason } => {
             Some(format!("unsupported argument expression {node}: {reason}"))
         }

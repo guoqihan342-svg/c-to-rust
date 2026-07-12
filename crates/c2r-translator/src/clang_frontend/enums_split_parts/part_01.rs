@@ -143,6 +143,15 @@ fn rewrite_supported_enum_types_in_expr(
             rewrite_supported_enum_types_in_expr(operand, inventory)?;
             rewrite_supported_enum_type(ty, inventory)?;
         }
+        ClangExprSkeleton::MutableVoidPointerAddress {
+            operand,
+            source_pointer,
+            target,
+        } => {
+            rewrite_supported_enum_types_in_expr(operand, inventory)?;
+            rewrite_supported_enum_type(source_pointer, inventory)?;
+            rewrite_supported_enum_type(target, inventory)?;
+        }
         ClangExprSkeleton::ArrayToPointerDecay { expr, target } => {
             rewrite_supported_enum_types_in_expr(expr, inventory)?;
             rewrite_supported_enum_type(target, inventory)?;

@@ -160,6 +160,7 @@ fn collect_readonly_pointer_read_params_from_expr(
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. }
         | IrExpr::Member { base: operand, .. }
         | IrExpr::IncDec {
             target: operand, ..

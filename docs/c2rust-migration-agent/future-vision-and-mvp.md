@@ -26,9 +26,9 @@ input.c + compile context
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 + A18c8a targeted 2/4 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑，定向 4 项中 2 项新增 exact pass，均明确不具备比赛资格 |
-| 当前翻译主线 | P0-A18c / P0-A10 | A18c8a 至 A18c8g 已关闭；下一步处理通用可变标量地址到 `void *` 调用参数，再处理 zlib 函数表间接调用 |
+| 当前翻译主线 | P0-A18c / P0-A10 | A18c8h1 已覆盖记录字段标量地址的安全适配器候选；下一步关闭真实函数的多指针别名证明，再处理直接局部标量与 zlib 函数表间接调用 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A18c8g | clang 类型候选在暂缺 ABI 时保留最深 canonical spelling，translation-unit typedef 可绑定函数体和记录字段，且 alias/desugared 冲突 fail closed；真实 libuv blocker 已推进到可变标量地址传给 `void *` 参数 |
+| 最近开发阶段 | P0-A18c8h1 | 专用 AST/IR provenance 仅接受直接 FunctionDecl、mutable `void *` 形参和完整整数记录字段路径，并生成安全 `&mut` 适配器调用；真实 libuv 已产生 function IR，当前阻塞推进到多指针参数下的记录写入别名证明 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -182,7 +182,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 顺序 | 待办 | 状态 | 本轮完成判据 |
 | ---: | --- | --- | --- |
 | 1 | P0-A18c7 跨项目 AI 输入与证据合同闭包 | 完成 | Windows/WSL 125 项回归通过；固定 12 项生成 12 个候选、0 contract failure、6 exact pass |
-| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | A18c8a 至 A18c8g 已完成；下一项关闭通用可变标量地址到 `void *` 调用参数和函数表间接调用缺口，并继续由验证层处理剩余语义失败 |
+| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | A18c8h1 已完成记录字段安全适配器候选；A18c8h 仍需多指针别名、直接局部标量、原始 extern 边界和写后初始化证明，然后处理函数表间接调用缺口 |
 | 3 | P0-A10 AI golden set | 待开始 | 以多项目、陌生标识符和最近邻负例扩充能力集，禁止按测试用例修补 |
 | 4 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
 | 5 | P0-C 阶段收口 | 待开始 | 修复历史 evidence 漂移并清理 all-feature Clippy 剩余项 |
@@ -448,6 +448,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
         - 当前提交在 WSL 使用 clang 18.1.3、同一 hash-bound libuv compile DB 与 `x86_64-unknown-linux-gnu` ABI 直接复跑 translator；旧 `sa_family_t is outside the current type skeleton` blocker 已消失。新 blocker 为 `CallExpr: argument 2: ... mutable void * BitCast address target in_addr_t * is not a mutable record pointer`，即尚未建模“完整可变标量 lvalue 地址作为 `void *` 写入参数”。观察到的两个 typedef 名称只用于记录真实推进结果，不作为规则分派键。
         - 本轮 probe 是 `target/` 下未发布的 WSL local-simulation 诊断，不包含 Rust candidate、C/Rust replay/diff 或语义通过；`semantic_pass=false`，翻译成功分子不增加。
       - [ ] **P0-A18c8h：通用可变标量地址到 `void *` 调用参数**。仅对可证明为完整整数标量 lvalue 的直接/记录字段地址、直接外部函数调用和明确的 mutable `void *` 参数建模临时可变借用；要求别名、存活期、对齐、宽度、调用签名和写后读取路径可验证。const、nullable、位域、packed/volatile/atomic、指针算术、跨调用逃逸和重叠可变借用继续拒绝，禁止按 `in_addr_t`、libuv 或固定 callee 名称放行。
+        - [x] **P0-A18c8h1：记录指针字段地址的安全适配器候选**。前端保留专用 `MutableVoidPointerAddress` provenance，仅接受一个直接 mutable 记录指针根、首跳 `->` 后仅 `.` 的完整记录字段路径、固定宽度整数终点、源整数指针同宽同符号、直接 `FunctionDecl` 和对应位置的 mutable `void *` 形参。typed IR 再验证完整字段 inventory、根所有权、非 nullable、同调用重叠借用和源/目标类型，并只向可编译的安全适配器发射 `&mut root.path`；普通 `AddrOf` 或手写数值相等节点不能进入该路径。原始 `*mut c_void` extern 绑定不会被伪装成安全接口，缺少适配器时由 rustc/链接门禁继续 fail closed。
+        - WSL clang 18.1.3 使用同一 hash-bound libuv compile database 与 `x86_64-unknown-linux-gnu` ABI 复跑后，旧 `in_addr_t * is not a mutable record pointer` blocker 消失，完整 function IR 已生成。新 blocker 为 `mutable record pointer field assignment requires exactly one pointer param for alias proof`，来自真实函数同时包含多个指针参数时尚缺别名证明；因此仍无 libuv Rust draft、C/Rust replay/diff 或 semantic acceptance，成功分子不增加。
+        - A18h 父项保持未完成：直接局部/参数标量地址、原始 extern/no-escape 边界、调用写后字段初始化，以及真实多指针参数的精确别名证明仍需独立收敛。const、nullable、可变参数、间接调用、类型漂移、不完整记录和同根兄弟读取已有 fail-closed 回归测试。
 
       前序失败证据：同配置 `kv_set` router `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0` 的 rustc/unsafe/oracle 通过，但候选把外部 callee 结果实现为 `-1`，与 oracle 的 `7` 不一致。三项 WSL worktree 运行均报告 `repo_commit=UNKNOWN0`，因此只属于本地 hash-bound AI 路由证据。
 

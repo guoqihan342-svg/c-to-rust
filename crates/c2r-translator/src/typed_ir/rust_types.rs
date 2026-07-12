@@ -15,6 +15,7 @@ pub(super) fn expr_type(expr: &IrExpr) -> Option<&IrType> {
         | IrExpr::IncDec { ty, .. }
         | IrExpr::Deref { ty, .. }
         | IrExpr::AddrOf { ty, .. } => Some(ty),
+        IrExpr::MutableVoidPointerAddress { target, .. } => Some(target),
         IrExpr::Cast { target, .. }
         | IrExpr::LValueToRValue { target, .. }
         | IrExpr::ArrayToPointerDecay { target, .. }

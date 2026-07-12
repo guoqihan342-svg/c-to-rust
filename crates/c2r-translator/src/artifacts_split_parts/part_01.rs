@@ -194,7 +194,8 @@ fn collect_expr_runtime_preconditions(
         typed_ir::IrExpr::Deref { ptr, .. } => {
             collect_expr_runtime_preconditions(ptr, preconditions);
         }
-        typed_ir::IrExpr::AddrOf { operand, .. } => {
+        typed_ir::IrExpr::AddrOf { operand, .. }
+        | typed_ir::IrExpr::MutableVoidPointerAddress { operand, .. } => {
             collect_expr_runtime_preconditions(operand, preconditions);
         }
         typed_ir::IrExpr::LitInt { .. }

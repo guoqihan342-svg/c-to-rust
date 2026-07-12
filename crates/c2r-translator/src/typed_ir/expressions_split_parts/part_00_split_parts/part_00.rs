@@ -137,6 +137,10 @@ fn emit_expr(
             emit_readonly_pointer_deref_expr(ptr, ty, symbols, context)
         }
         IrExpr::AddrOf { .. } => Err("address-of expression is unsupported".to_string()),
+        IrExpr::MutableVoidPointerAddress { .. } => Err(
+            "mutable void pointer address is only supported as a direct call argument"
+                .to_string(),
+        ),
         IrExpr::Unsupported { node, reason, .. } => {
             Err(format!("unsupported expression {node}: {reason}"))
         }

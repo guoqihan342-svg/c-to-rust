@@ -132,6 +132,7 @@ fn collect_opaque_pointer_call_arg_params_from_expr(
         }
         | IrExpr::Deref { ptr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. }
         | IrExpr::Member { base: operand, .. } => {
             collect_opaque_pointer_call_arg_params_from_expr(operand, param_types, call_arg_params);
         }
@@ -375,6 +376,7 @@ fn collect_raw_direct_call_pointer_params_from_expr(
         }
         | IrExpr::Deref { ptr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. }
         | IrExpr::Member { base: operand, .. } => {
             collect_raw_direct_call_pointer_params_from_expr(operand, param_types, call_arg_params);
         }

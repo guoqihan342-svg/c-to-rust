@@ -10,7 +10,10 @@ fn expr_has_post_increment_byte_read(expr: &IrExpr, cursor: &str) -> bool {
         | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
-        | IrExpr::AddrOf { operand, .. } => expr_has_post_increment_byte_read(operand, cursor),
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. } => {
+            expr_has_post_increment_byte_read(operand, cursor)
+        }
         IrExpr::Conditional {
             condition,
             then_expr,
@@ -52,7 +55,10 @@ fn count_post_increment_byte_reads(expr: &IrExpr) -> usize {
         | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
-        | IrExpr::AddrOf { operand, .. } => count_post_increment_byte_reads(operand),
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. } => {
+            count_post_increment_byte_reads(operand)
+        }
         IrExpr::Conditional {
             condition,
             then_expr,

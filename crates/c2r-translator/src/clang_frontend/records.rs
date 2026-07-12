@@ -436,6 +436,14 @@ fn attach_record_inventory_to_expr(
         | IrExpr::IncDec { ty, .. }
         | IrExpr::Deref { ty, .. }
         | IrExpr::AddrOf { ty, .. } => attach_record_inventory_to_type(ty, inventory),
+        IrExpr::MutableVoidPointerAddress {
+            source_pointer,
+            target,
+            ..
+        } => {
+            attach_record_inventory_to_type(source_pointer, inventory);
+            attach_record_inventory_to_type(target, inventory);
+        }
         IrExpr::Cast { target, .. }
         | IrExpr::LValueToRValue { target, .. }
         | IrExpr::ArrayToPointerDecay { target, .. }
@@ -459,7 +467,10 @@ fn attach_record_inventory_to_expr(
             target: operand, ..
         }
         | IrExpr::Deref { ptr: operand, .. }
-        | IrExpr::AddrOf { operand, .. } => attach_record_inventory_to_expr(operand, inventory),
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. } => {
+            attach_record_inventory_to_expr(operand, inventory)
+        }
         IrExpr::Conditional {
             condition,
             then_expr,

@@ -43,6 +43,13 @@ fn collect_mutable_record_pointer_write_params_from_expr(
                 write_params,
             )
         }
+        IrExpr::MutableVoidPointerAddress { operand, .. } => {
+            collect_mutable_record_pointer_write_param_from_target(
+                operand,
+                mutable_record_pointer_params,
+                write_params,
+            )
+        }
         IrExpr::Conditional {
             condition,
             then_expr,
@@ -306,6 +313,7 @@ fn collect_readonly_record_pointer_read_params_from_expr(
         }
     }
     match expr {
+        IrExpr::MutableVoidPointerAddress { .. } => Ok(()),
         IrExpr::Binary { lhs, rhs, .. } => {
             collect_readonly_record_pointer_read_params_from_expr(
                 lhs,

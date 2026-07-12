@@ -79,6 +79,9 @@ fn collect_address_taken_vars_from_expr(expr: &IrExpr, vars: &mut HashSet<String
             }
             collect_address_taken_vars_from_expr(operand, vars);
         }
+        IrExpr::MutableVoidPointerAddress { operand, .. } => {
+            collect_address_taken_vars_from_expr(operand, vars);
+        }
         IrExpr::Binary { lhs, rhs, .. } => {
             collect_address_taken_vars_from_expr(lhs, vars);
             collect_address_taken_vars_from_expr(rhs, vars);
@@ -458,6 +461,7 @@ fn collect_zero_init_record_local_uses_from_expr(
         }
         | IrExpr::Deref { ptr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. }
         | IrExpr::Member { base: operand, .. } => {
             collect_zero_init_record_local_uses_from_expr(
                 operand,

@@ -226,7 +226,8 @@ fn for_init_comma_assignment_rhs_rejection_reason(value: &ClangExprSkeleton) -> 
         ClangExprSkeleton::Deref { .. } => Some(
             "ForStmt init comma-chain assignment RHS cannot contain a dereference".to_string(),
         ),
-        ClangExprSkeleton::AddrOf { .. } => Some(
+        ClangExprSkeleton::AddrOf { .. }
+        | ClangExprSkeleton::MutableVoidPointerAddress { .. } => Some(
             "ForStmt init comma-chain assignment RHS cannot contain address-of".to_string(),
         ),
         ClangExprSkeleton::IncDec { .. } => Some(

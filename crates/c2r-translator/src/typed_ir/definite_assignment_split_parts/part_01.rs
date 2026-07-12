@@ -425,6 +425,11 @@ fn validate_definite_assignment_expr(
         }
         IrExpr::AddrOf { operand, .. } => validate_definite_assignment_expr(operand, state)
             .map_err(|detail| format!("address-of operand {detail}")),
+        IrExpr::MutableVoidPointerAddress { operand, .. } => {
+            validate_definite_assignment_target(operand, state)
+                .map(|_| ())
+                .map_err(|detail| format!("mutable void pointer address operand {detail}"))
+        }
         IrExpr::LitInt { .. } | IrExpr::NullPtr { .. } | IrExpr::Unsupported { .. } => Ok(()),
     }
 }

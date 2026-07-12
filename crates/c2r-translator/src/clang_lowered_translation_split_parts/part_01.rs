@@ -82,6 +82,9 @@ fn ir_expr_source_text(expr: &typed_ir::IrExpr) -> String {
         }
         typed_ir::IrExpr::Deref { ptr, .. } => format!("*{}", ir_expr_source_text(ptr)),
         typed_ir::IrExpr::AddrOf { operand, .. } => format!("&{}", ir_expr_source_text(operand)),
+        typed_ir::IrExpr::MutableVoidPointerAddress { operand, .. } => {
+            format!("(void *)&{}", ir_expr_source_text(operand))
+        }
         typed_ir::IrExpr::Unsupported { node, .. } => format!("unsupported({node})"),
     }
 }
@@ -348,6 +351,9 @@ fn ir_expr_label(expr: &typed_ir::IrExpr) -> String {
         typed_ir::IrExpr::IncDec { op, prefix, .. } => format!("{op:?} prefix={prefix}"),
         typed_ir::IrExpr::Deref { .. } => "deref".to_string(),
         typed_ir::IrExpr::AddrOf { .. } => "addr_of".to_string(),
+        typed_ir::IrExpr::MutableVoidPointerAddress { .. } => {
+            "mutable_void_pointer_address".to_string()
+        }
         typed_ir::IrExpr::Unsupported { node, .. } => format!("unsupported {node}"),
     }
 }
@@ -557,7 +563,10 @@ fn ir_expr_mentions_var(expr: &typed_ir::IrExpr, expected: &str) -> bool {
         | typed_ir::IrExpr::Member { base: operand, .. }
         | typed_ir::IrExpr::IncDec { target: operand, .. }
         | typed_ir::IrExpr::Deref { ptr: operand, .. }
-        | typed_ir::IrExpr::AddrOf { operand, .. } => ir_expr_mentions_var(operand, expected),
+        | typed_ir::IrExpr::AddrOf { operand, .. }
+        | typed_ir::IrExpr::MutableVoidPointerAddress { operand, .. } => {
+            ir_expr_mentions_var(operand, expected)
+        }
         typed_ir::IrExpr::Conditional {
             condition,
             then_expr,

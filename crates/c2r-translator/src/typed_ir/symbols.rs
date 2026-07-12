@@ -126,7 +126,8 @@ fn collect_assigned_vars_from_expr(expr: &IrExpr, assigned_vars: &mut HashSet<St
         | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
-        | IrExpr::AddrOf { operand, .. } => {
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. } => {
             collect_assigned_vars_from_expr(operand, assigned_vars);
         }
         IrExpr::Conditional {

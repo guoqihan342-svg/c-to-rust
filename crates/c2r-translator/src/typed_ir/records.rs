@@ -237,7 +237,8 @@ fn collect_record_field_uses_from_expr<'a>(
             target: operand, ..
         }
         | IrExpr::Deref { ptr: operand, .. }
-        | IrExpr::AddrOf { operand, .. } => {
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. } => {
             collect_record_field_uses_from_expr(operand, records)?;
         }
         IrExpr::Conditional {

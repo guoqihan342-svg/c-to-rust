@@ -370,7 +370,8 @@ fn expr_has_inc_dec(expr: &IrExpr) -> bool {
         | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
-        | IrExpr::AddrOf { operand, .. } => expr_has_inc_dec(operand),
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. } => expr_has_inc_dec(operand),
         IrExpr::Conditional {
             condition,
             then_expr,
@@ -407,7 +408,10 @@ fn expr_has_assign_or_comma(expr: &IrExpr) -> bool {
         | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
-        | IrExpr::AddrOf { operand, .. } => expr_has_assign_or_comma(operand),
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. } => {
+            expr_has_assign_or_comma(operand)
+        }
         IrExpr::Conditional {
             condition,
             then_expr,

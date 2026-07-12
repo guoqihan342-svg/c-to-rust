@@ -52,6 +52,19 @@ fn call_expr_skeleton_from_ast_with_memory_statement_args(
             });
         }
     }
+    if args
+        .iter()
+        .any(clang_is_mutable_void_pointer_address_call_arg)
+    {
+        if let Some(reason) =
+            clang_mutable_void_pointer_address_signature_rejection_reason(callee_node, &args)
+        {
+            return Ok(ClangExprSkeleton::Unsupported {
+                node: "CallExpr".to_string(),
+                reason,
+            });
+        }
+    }
     let rejection_reason = match (allow_memory_statement_args, callee.as_str()) {
         (true, "memset") => bounded_memset_statement_args_rejection_reason(&args),
         (true, "memcpy") => bounded_memcpy_statement_args_rejection_reason(&args),
@@ -128,37 +141,36 @@ fn direct_call_arg_skeleton_from_ast(arg: &Value) -> Result<ClangExprSkeleton, C
             operand: addr_operand,
             ty,
         } => {
-            let Some(address_record) = clang_mutable_record_pointer_record_name(ty) else {
+            if let Some(address_record) = clang_mutable_record_pointer_record_name(ty) {
+                let ClangExprSkeleton::DeclRef {
+                    ty: operand_ty, ..
+                } = addr_operand.as_ref()
+                else {
+                    return Ok(ClangExprSkeleton::Unsupported {
+                        node: "ImplicitCastExpr".to_string(),
+                        reason:
+                            "direct-call argument mutable void * BitCast operand must address a direct record variable"
+                                .to_string(),
+                    });
+                };
+                if matches!(&operand_ty.kind, ClangTypeKind::Record { name } if name == address_record)
+                {
+                    return Ok(operand);
+                }
                 return Ok(ClangExprSkeleton::Unsupported {
-                    node: "ImplicitCastExpr".to_string(),
-                    reason: format!(
-                        "direct-call argument mutable void * BitCast address target {} is not a mutable record pointer",
-                        ty.spelled
-                    ),
-                });
-            };
-            let ClangExprSkeleton::DeclRef {
-                ty: operand_ty, ..
-            } = addr_operand.as_ref()
-            else {
-                return Ok(ClangExprSkeleton::Unsupported {
-                    node: "ImplicitCastExpr".to_string(),
-                    reason:
-                        "direct-call argument mutable void * BitCast operand must address a direct record variable"
-                            .to_string(),
-                });
-            };
-            if matches!(&operand_ty.kind, ClangTypeKind::Record { name } if name == address_record)
-            {
-                Ok(operand)
-            } else {
-                Ok(ClangExprSkeleton::Unsupported {
                     node: "ImplicitCastExpr".to_string(),
                     reason: format!(
                         "direct-call argument mutable void * BitCast operand {} does not match address target record {address_record}",
                         operand_ty.spelled
                     ),
-                })
+                });
+            }
+            match clang_mutable_void_pointer_address_skeleton(addr_operand, ty, &target) {
+                Ok(address) => Ok(address),
+                Err(reason) => Ok(ClangExprSkeleton::Unsupported {
+                    node: "ImplicitCastExpr".to_string(),
+                    reason,
+                }),
             }
         }
         ClangExprSkeleton::Unsupported { node, reason } => Ok(ClangExprSkeleton::Unsupported {

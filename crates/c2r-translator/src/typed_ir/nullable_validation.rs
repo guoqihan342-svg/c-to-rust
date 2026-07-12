@@ -236,7 +236,8 @@ fn validate_nullable_pointer_param_uses_in_expr(
         | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
-        | IrExpr::AddrOf { operand, .. } => validate_nullable_pointer_param_uses_in_expr(
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::MutableVoidPointerAddress { operand, .. } => validate_nullable_pointer_param_uses_in_expr(
             operand,
             nullable_params,
             proven_nonnull_params,
