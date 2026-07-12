@@ -16,8 +16,8 @@
 | --- | --- |
 | Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
-| 最近开发阶段 | P0-A18a：ContextPack v4 前置 hash-bound generated replay source contract |
-| 当前翻译任务 | P0-A18b：抽取结构化 ReplayCallPlan 并删除按函数名派生 replay 合同；P0-A10 等待 GLM 资源恢复 |
+| 最近开发阶段 | P0-A18b1：声明式 ReplayCallPlan v1 已接入 replay、ContextPack、prompt 和 fresh binding |
+| 当前翻译任务 | P0-A18b2：让其余 legacy semantic adapter 消费同一 plan；P0-A18c 继续 exact 闭环 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
@@ -52,7 +52,7 @@ SQLite 不是语义事实源，Agent 对话也不是 evidence。语义结论只�
 
 ContextPack v4 只向模型提供有界事实：真实 source span、编译参数与 response files、类型/CFG/指针摘要、失败摘要、ABI/指针策略、直接被调函数合同，以及 provider 启动前生成的完整 Rust replay source contract。replay 的源码、SHA、大小和真实调用次数进入同一 input binding；缺失、敏感、超限、无真实函数调用或文件漂移均 fail closed。敏感字段、带引号密钥赋值、宿主绝对路径和路径逃逸会被清理；必需的 callee boundary 超限或截断时同样在 provider 启动前零调用拒绝。
 
-候选和 repair prompt 会在 ContextPack 投影前单独展示同一份 generated replay source contract，并重申函数签名、Rust public API、raw-pointer 与 unsafe 策略。完整 replay source 只出现一次，避免重复耗费 token；它直接暴露真实调用的参数数量与顺序。下一阶段仍需把旧 replay generator 收敛为结构化 ReplayCallPlan，删除按函数名派生合同的历史分支。
+候选和 repair prompt 会在 ContextPack 投影前单独展示同一份 generated replay source contract，并重申函数签名、Rust public API、raw-pointer 与 unsafe 策略。完整 replay source 和 ReplayCallPlan payload 均只出现一次。声明式 plan 通过受限 DSL 绑定 C source function、Rust `api_name`、参数顺序/类型、C 参数映射、保留的 length、返回/字段类型、fixture codec、ABI、unsafe 和 plan SHA；renderer、provider readiness 与 fresh binding 使用同一对象。zlib/libuv 已走该路径，`fdb_blob_make/kv_to_blob/set/del` 已从函数名判断改为语义合同判断；其余 legacy semantic adapter 尚待迁入同一 plan。
 
 AI candidate manifest v8 的 `prompt_scope` 由实际 ContextPack 计算，并显式记录 `generated_replay_api_contract`。它把 provider、logical/resolved model、`competition_eligible` 和 `evaluation_scope` 绑定到 generator 与 candidate；fresh-run summary validator 会重开 ContextPack 和 replay 文件，复算 source SHA、调用绑定、prompt、scope、cache 与调用计数。每次真实 provider 调用仍绑定最小 invocation receipt 和独立 session-export identity projection。比赛主通道只认 `zai/glm-5.1`；GLM 余额不足时可显式使用 DeepSeek V4 Flash 等模型做 `auxiliary-local-validation`，但不能关闭比赛待办或进入比赛成功率分子。AI 输出始终保持 `semantic_gate=false`，最终接受只由共同门禁决定。
 

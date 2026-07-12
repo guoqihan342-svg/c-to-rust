@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -10,10 +11,77 @@ from validation.tools._ai_candidate_harness_parts.context_replay import (
     count_rust_function_calls,
     materialize_replay_api_contract,
     validate_replay_api_contract_binding,
+    rust_function_call_arities,
 )
+from validation.tools.replay_call_plan import build_replay_call_plan, replay_call_plan_marker
 
 
 class AiReplayContractTests(unittest.TestCase):
+    def test_structured_plan_binds_distinct_c_source_and_rust_api_names(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        spec = json.loads(
+            (
+                repo_root / "validation" / "slice-specs" / "zlib-adler32-step.json"
+            ).read_text(encoding="utf-8")
+        )
+        plan = build_replay_call_plan(spec, repo_root)
+        with tempfile.TemporaryDirectory(prefix="ai-replay-plan-") as tmp:
+            root = Path(tmp)
+            replay = root / "l3-adler32-step-rust-replay-test-draft.rs"
+            replay.write_bytes(
+                (
+                    replay_call_plan_marker(plan)
+                    + "fn replay() { let _ = adler32(1u32, &[], 0usize); }\n"
+                ).encode("utf-8")
+            )
+
+            contract = build_replay_api_contract(
+                replay,
+                function_name="adler32_z",
+                trusted_root=root,
+                expected_filename=replay.name,
+                call_plan=plan,
+            )
+
+            self.assertEqual("bound", contract["status"])
+            self.assertEqual(2, contract["schema_version"])
+            self.assertEqual("adler32_z", contract["function_name"])
+            self.assertEqual("adler32", contract["api_name"])
+            self.assertEqual([3], rust_function_call_arities(replay.read_text(), "adler32"))
+            replay.write_bytes(
+                (
+                    replay_call_plan_marker(plan)
+                    + "fn replay() { let _ = adler32(1u32, &[]); }\n"
+                ).encode("utf-8")
+            )
+            self.assertEqual(
+                "blocked_replay_call_plan_mismatch",
+                build_replay_api_contract(
+                    replay,
+                    function_name="adler32_z",
+                    trusted_root=root,
+                    expected_filename=replay.name,
+                    call_plan=plan,
+                )["status"],
+            )
+            replay.write_bytes(
+                (
+                    "// ReplayCallPlan-SHA256: "
+                    + "0" * 64
+                    + "\nfn replay() { let _ = adler32(1u32, &[], 0usize); }\n"
+                ).encode("utf-8")
+            )
+            self.assertEqual(
+                "blocked_replay_call_plan_mismatch",
+                build_replay_api_contract(
+                    replay,
+                    function_name="adler32_z",
+                    trusted_root=root,
+                    expected_filename=replay.name,
+                    call_plan=plan,
+                )["status"],
+            )
+
     def test_call_counter_ignores_noncode_occurrences(self) -> None:
         source = """
 // translate(fake)

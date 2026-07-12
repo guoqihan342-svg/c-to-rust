@@ -6,17 +6,26 @@ def write_rust_replay_test_draft_source(
     slice_id = required_str(spec, "slice_id")
     function_name = required_str(spec, "function_name")
     path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
-    fixture_cases_source = rust_replay_fixture_cases_source(
-        spec,
-        oracle_fixture_binding(spec),
-    )
+    call_plan = build_replay_call_plan(spec, REPO_ROOT)
+    if call_plan.get("status") == "bound":
+        fixture_cases_source = render_declarative_replay_cases(spec, call_plan, REPO_ROOT)
+        plan_marker = replay_call_plan_marker(call_plan)
+        api_name = call_plan["api_name"]
+    else:
+        fixture_cases_source = rust_replay_fixture_cases_source(
+            spec,
+            oracle_fixture_binding(spec),
+        )
+        plan_marker = ""
+        api_name = function_name
     text = (
         "// Auto-generated Rust replay test draft.\n"
         "// Review before promoting into validation/l2_slices/tests.\n\n"
+        f"{plan_marker}"
         "#[test]\n"
         f"fn replay_{safe_ident(slice_id)}_fixture_contract() {{\n"
         f"    let _fixture = {rust_string_literal(fixture_path(spec))};\n"
-        f"    let _api = {rust_string_literal(function_name)};\n"
+        f"    let _api = {rust_string_literal(api_name)};\n"
         "    const GENERATED_DRAFT_SEMANTIC_PASS: bool = false;\n"
         f"{fixture_cases_source}"
         "}\n"
@@ -250,7 +259,7 @@ def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict
 
 
 def fdb_blob_make_replay_supported(spec: dict[str, Any]) -> bool:
-    return required_str(spec, "function_name") == "fdb_blob_make" and behavior_fields(spec) == [
+    return replay_contract_kind(spec) == "record_buffer_length_identity_return" and behavior_fields(spec) == [
         "return_same_blob",
         "blob.buf",
         "blob.size",
@@ -258,7 +267,7 @@ def fdb_blob_make_replay_supported(spec: dict[str, Any]) -> bool:
 
 
 def fdb_kv_to_blob_replay_supported(spec: dict[str, Any]) -> bool:
-    return required_str(spec, "function_name") == "fdb_kv_to_blob" and behavior_fields(spec) == [
+    return replay_contract_kind(spec) == "record_projection_identity_return" and behavior_fields(spec) == [
         "return_same_blob",
         "blob.saved.meta_addr",
         "blob.saved.addr",
@@ -267,12 +276,18 @@ def fdb_kv_to_blob_replay_supported(spec: dict[str, Any]) -> bool:
 
 
 def fdb_kv_set_replay_supported(spec: dict[str, Any]) -> bool:
-    return required_str(spec, "function_name") == "fdb_kv_set" and behavior_fields(spec) == [
+    return replay_contract_kind(spec) == "opaque_context_key_value_return_code" and behavior_fields(spec) == [
         "return_code",
     ]
 
 
 def fdb_kv_del_replay_supported(spec: dict[str, Any]) -> bool:
-    return required_str(spec, "function_name") == "fdb_kv_del" and behavior_fields(spec) == [
+    return replay_contract_kind(spec) == "opaque_context_key_return_code" and behavior_fields(spec) == [
         "return_code",
     ]
+
+
+def replay_contract_kind(spec: dict[str, Any]) -> str | None:
+    contract = spec.get("replay_contract")
+    kind = contract.get("kind") if isinstance(contract, dict) else None
+    return kind if isinstance(kind, str) and kind else None

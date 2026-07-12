@@ -365,9 +365,11 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   - [x] **P0-A18a：可执行 replay source contract**。`auto_migrate` 在 provider 前生成 replay 草稿；ContextPack v4 绑定完整 replay source、SHA、大小和真实调用次数，candidate/repair prompt 在 ContextPack 前只展示一次同源合同。provider readiness、manifest v8、cache、scope 和 fresh summary validator 均 fail closed；缺失、敏感、超限、无真实调用或文件漂移都保持 `provider_invocations=0` 或使 fresh run 无效。`_auto_migrate_ai_exact.py` 同阶段按 routing/persistence/validation 拆成 489 行兼容门面和三个职责模块。
   - [ ] **P0-A18b：结构化 ReplayCallPlan**。从 replay generator 抽出单一结构化计划，显式携带参数名/顺序/Rust 类型、C 参数映射、length retained、返回类型、ABI、unsafe 和 call args；renderer 与 prompt 只能消费同一计划。删除 `fdb_kv_to_blob/set/del` 等按函数名选择合同的旧分支，函数名只能作为合同数据。
+    - [x] **P0-A18b1：声明式 plan 核心**。受限 DSL、plan SHA、ContextPack 子合同 v2、source marker、调用 arity 复算、prompt 单份 payload 与 fresh binding 已完成。`source_function_name` 与 Rust `api_name` 分离，zlib/libuv 已生成真实调用；`fdb_blob_make/kv_to_blob/set/del` 已改为按语义合同选择 renderer。AI 生成 draft 只有在 manifest v8、selected candidate、applied artifact、draft SHA 全部闭合时才能进入 replay。
+    - [ ] **P0-A18b2：legacy adapter 全部计划化**。其余 scalar/record/external-sequence renderer 仍直接构造调用，尚未全部改为消费 ReplayCallPlan；因此 P0-A18b 总项保持未完成。
   - [ ] **P0-A18c：有限跨项目验收**。固定 12 项必须全部可生成真实 replay call，首轮 rustc API mismatch 相比 A17 明显下降，并继续只按 exact gates 统计质量信号。
 
-  WSL run `ai-auxiliary-p0-a18-wsl-20260712-1320` 使用 clang 18.1.3、OpenCode 1.17.18、`opencode/deepseek-v4-flash-free`、0 repair、4 并发：12 项中 10 次 provider 调用、7 个候选、2 个 exact pass。`real-fdb-is-str` 首轮直接生成 `value: &[u8], len: usize -> bool` 且所有 exact gates 通过，证明 A18a 修复了原始丢 `len` 问题；`zlib/adler32-step` 与 `libuv/ip4-addr` 因 replay 仍为 TODO、没有真实函数调用而在 provider 前阻断。另有 5 个 exact failure、2 个 fresh artifact contract failure 和 1 个 WSL worktree `.git` 指针环境失败，均不得算作翻译成功。该运行是 `wsl-local-simulation`，所有 competition/translator numerator 固定为 0。
+  WSL run `ai-auxiliary-p0-a18b-wsl-20260712-1434` 使用相同 clang/OpenCode/DeepSeek、0 repair、4 并发：12/12 预检 ready，12 次 provider 调用，9 个候选，1 个 exact pass，8 个 exact failure，1 个 contract failure，1 个 execution failure，1 个 provider block。与 A18a 的 10 次调用、7 个候选、2 个 exact pass 相比，两个 replay 前置阻塞已归零，但 exact 成功率没有提升，不能据此宣称翻译率改善。zlib 首轮候选正确生成 `adler32(adler, buf, len)`，rustc 与新 replay 均通过；libuv 首轮候选 rustc 通过，但新 typed replay 因 report 字段类型/值不一致而拒绝。两项仍受 fresh C oracle 编译链阻塞。该运行仍是 `wsl-local-simulation`，所有 competition/translator numerator 固定为 0。
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 

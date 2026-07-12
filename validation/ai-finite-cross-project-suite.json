@@ -148,7 +148,7 @@
       "construct_family": "nested-record-field-projection",
       "slice_spec": {
         "path": "validation/slice-specs/flashdb-real-fdb-kv-to-blob.json",
-        "sha256": "9e7382bc40f2420f99d8118756b776aedbc92d2b91bf1f5e4cdff533a5f5f1c7"
+        "sha256": "a34bb67aff7a0b1e931d52e4d284e467d6bf8970a0fdec3992dd77cc2bd42f7b"
       },
       "source_binding": {
         "root": "sources/FlashDB",
@@ -177,7 +177,7 @@
       "construct_family": "null-branch-direct-call-chain",
       "slice_spec": {
         "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-        "sha256": "5484bfe9c6e68fdaa20c41bd120d049ee8c7470979c25b3dbab16eacf20bede2"
+        "sha256": "051fa2a2cda9600e60fb32e4250f765ed30a7a893de20c53166df1809fd20c6a"
       },
       "source_binding": {
         "root": "sources/FlashDB",
@@ -206,7 +206,7 @@
       "construct_family": "guarded-lock-call-sequence",
       "slice_spec": {
         "path": "validation/slice-specs/flashdb-real-fdb-kv-del.json",
-        "sha256": "9c573e05c56d3e7c42343f1259b5700764164375912ba62603373ac6f388c6f1"
+        "sha256": "3a31fb5ace3b55246e32a38da357e0fa00a49cd1ac87e4edbe7ef9cfefa45a43"
       },
       "source_binding": {
         "root": "sources/FlashDB",
@@ -351,7 +351,7 @@
       "construct_family": "macro-dispatched-buffer-checksum",
       "slice_spec": {
         "path": "validation/slice-specs/zlib-adler32-step.json",
-        "sha256": "67ca1d8e707bc5f6e2b9bafdc369f5c16025b471df79f0089dc54659dfa504e5"
+        "sha256": "f7e7217a5a1368726c259c22171dc723ede81fa3e92a07bd5340d16c6a03b944"
       },
       "source_binding": {
         "root": "sources/zlib-ng",
@@ -380,7 +380,7 @@
       "construct_family": "abi-record-external-network-call",
       "slice_spec": {
         "path": "validation/slice-specs/libuv-ip4-addr.json",
-        "sha256": "fccace9cd1d9bb491487016fa863029401f7d00fc054c7e9135d6faa5b7e5c67"
+        "sha256": "eb07173dd13444fafcdecba515916beab45573fd0ebf331f3a4e438d7ee2c639"
       },
       "source_binding": {
         "root": "sources/libuv",

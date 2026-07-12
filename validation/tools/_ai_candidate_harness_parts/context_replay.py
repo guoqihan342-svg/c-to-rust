@@ -5,6 +5,10 @@ import re
 from typing import Any, Iterable
 
 from .context_security import atomic_write_bytes, redact_metadata_text, resolve_under, sha256_bytes
+from validation.tools.replay_call_plan import (
+    replay_call_plan_marker,
+    validate_replay_call_plan,
+)
 
 
 MAX_REPLAY_SOURCE_BYTES = 64 * 1024
@@ -18,15 +22,23 @@ def build_replay_api_contract(
     trusted_root: Path,
     expected_filename: str,
     known_roots: Iterable[str] = (),
+    call_plan: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    has_structured_call_plan = isinstance(call_plan, dict) and call_plan.get("status") == "bound"
+    has_structured_contract = isinstance(call_plan, dict) and call_plan.get("status") in {
+        "bound",
+        "blocked",
+    }
+    api_name = str(call_plan.get("api_name")) if has_structured_call_plan else function_name
     base = {
-        "schema_version": 1,
+        "schema_version": 2 if has_structured_contract else 1,
         "contract_kind": "generated_replay_rust_source",
         "function_name": function_name,
+        "api_name": api_name,
     }
     if replay_test_path is None:
         return {**base, "status": "missing"}
-    if not RUST_IDENTIFIER_RE.fullmatch(function_name):
+    if not RUST_IDENTIFIER_RE.fullmatch(function_name) or not RUST_IDENTIFIER_RE.fullmatch(api_name):
         return {**base, "status": "blocked_invalid_function_identifier"}
     try:
         if (
@@ -53,14 +65,47 @@ def build_replay_api_contract(
             "status": "blocked_replay_source_sensitive",
             "source_sha256": sha256_bytes(data),
         }
-    call_count = count_rust_function_calls(source, function_name)
+    if has_structured_contract and not has_structured_call_plan:
+        return {
+            **base,
+            "status": "blocked_replay_call_plan_invalid",
+            "source_sha256": sha256_bytes(data),
+            "call_plan": call_plan,
+        }
+    bound_call_plan = None
+    if has_structured_call_plan:
+        try:
+            validate_replay_call_plan(call_plan)
+        except ValueError:
+            return {
+                **base,
+                "status": "blocked_replay_call_plan_invalid",
+                "source_sha256": sha256_bytes(data),
+            }
+        if replay_call_plan_marker(call_plan).rstrip("\n") not in source:
+            return {
+                **base,
+                "status": "blocked_replay_call_plan_mismatch",
+                "source_sha256": sha256_bytes(data),
+            }
+        bound_call_plan = call_plan
+    call_count = count_rust_function_calls(source, api_name)
     if call_count < 1:
         return {
             **base,
             "status": "blocked_replay_call_missing",
             "source_sha256": sha256_bytes(data),
         }
-    return {
+    if bound_call_plan is not None and any(
+        arity != len(bound_call_plan["parameters"])
+        for arity in rust_function_call_arities(source, api_name)
+    ):
+        return {
+            **base,
+            "status": "blocked_replay_call_plan_mismatch",
+            "source_sha256": sha256_bytes(data),
+        }
+    contract = {
         **base,
         "status": "bound",
         "call_count": call_count,
@@ -77,6 +122,9 @@ def build_replay_api_contract(
             "return_type": "as_constrained_by_generated_replay",
         },
     }
+    if bound_call_plan is not None:
+        contract["call_plan"] = bound_call_plan
+    return contract
 
 
 def replay_contract_input_binding(contract: Any) -> dict[str, Any] | None:
@@ -119,6 +167,9 @@ def validate_replay_api_contract_binding(context_pack: Any, context_path: Path) 
     source = contract.get("source")
     if not isinstance(source, dict):
         return "invalid"
+    api_name = contract.get("api_name", contract.get("function_name"))
+    if not isinstance(api_name, str):
+        return "invalid"
     expected_path = f"l3-{context_pack.get('slice_id')}-rust-replay-test-draft.rs"
     if (
         contract.get("function_name") != context_pack.get("function_name")
@@ -133,11 +184,27 @@ def validate_replay_api_contract_binding(context_pack: Any, context_path: Path) 
         content = data.decode("utf-8")
     except (OSError, UnicodeDecodeError, ValueError):
         return "binding_unreadable"
+    call_plan = contract.get("call_plan")
+    if isinstance(call_plan, dict):
+        try:
+            validate_replay_call_plan(call_plan)
+        except ValueError:
+            return "binding_mismatch"
+        if (
+            call_plan.get("source_function_name") != context_pack.get("function_name")
+            or call_plan.get("api_name") != contract.get("api_name")
+            or replay_call_plan_marker(call_plan).rstrip("\n") not in content
+            or any(
+                arity != len(call_plan["parameters"])
+                for arity in rust_function_call_arities(content, str(call_plan["api_name"]))
+            )
+        ):
+            return "binding_mismatch"
     if (
         len(data) != source.get("size_bytes")
         or sha256_bytes(data) != source.get("sha256")
         or content != source.get("content")
-        or count_rust_function_calls(content, str(contract.get("function_name") or ""))
+        or count_rust_function_calls(content, api_name)
         != contract.get("call_count")
     ):
         return "binding_mismatch"
@@ -210,6 +277,102 @@ def count_rust_function_calls(source: str, function_name: str) -> int:
     return 0 if target_definition_found else count
 
 
+def rust_function_call_arities(source: str, function_name: str) -> list[int]:
+    if not RUST_IDENTIFIER_RE.fullmatch(function_name):
+        return []
+    code = rust_code_projection(source)
+    if re.search(rf"\bfn\s+{re.escape(function_name)}\s*\(", code):
+        return []
+    arities: list[int] = []
+    for match in re.finditer(rf"\b{re.escape(function_name)}\s*\(", code):
+        qualifier = match.start() - 1
+        while qualifier >= 0 and code[qualifier].isspace():
+            qualifier -= 1
+        if qualifier >= 0 and code[qualifier] in {".", ":"}:
+            continue
+        open_index = code.find("(", match.start(), match.end())
+        close_index, arity = call_arity(code, open_index)
+        if close_index is not None:
+            arities.append(arity)
+    return arities
+
+
+def call_arity(code: str, open_index: int) -> tuple[int | None, int]:
+    paren_depth = 1
+    bracket_depth = 0
+    brace_depth = 0
+    commas = 0
+    has_token = False
+    index = open_index + 1
+    while index < len(code):
+        char = code[index]
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth -= 1
+            if paren_depth == 0:
+                return index, 0 if not has_token else commas + 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]" and bracket_depth:
+            bracket_depth -= 1
+        elif char == "{":
+            brace_depth += 1
+        elif char == "}" and brace_depth:
+            brace_depth -= 1
+        elif (
+            char == ","
+            and paren_depth == 1
+            and bracket_depth == 0
+            and brace_depth == 0
+        ):
+            commas += 1
+        elif not char.isspace() and paren_depth == 1:
+            has_token = True
+        index += 1
+    return None, 0
+
+
+def rust_code_projection(source: str) -> str:
+    projected = list(source)
+    index = 0
+    while index < len(source):
+        if source.startswith("//", index):
+            end = source.find("\n", index + 2)
+            end = len(source) if end < 0 else end
+        elif source.startswith("/*", index):
+            depth = 1
+            end = index + 2
+            while end < len(source) and depth:
+                if source.startswith("/*", end):
+                    depth += 1
+                    end += 2
+                elif source.startswith("*/", end):
+                    depth -= 1
+                    end += 2
+                else:
+                    end += 1
+        else:
+            raw_end = raw_string_end(source, index)
+            if raw_end is not None:
+                end = raw_end
+            elif source[index] == "'" and index + 1 < len(source) and (
+                source[index + 1].isalpha() or source[index + 1] == "_"
+            ):
+                index += 1
+                continue
+            elif source[index] in {'"', "'"}:
+                end = quoted_end(source, index, source[index])
+            else:
+                index += 1
+                continue
+        for masked in range(index, end):
+            if projected[masked] not in {"\r", "\n"}:
+                projected[masked] = " "
+        index = end
+    return "".join(projected)
+
+
 def quoted_end(source: str, start: int, quote: str) -> int:
     index = start + 1
     while index < len(source):
@@ -242,5 +405,6 @@ __all__ = [
     "count_rust_function_calls",
     "materialize_replay_api_contract",
     "replay_contract_input_binding",
+    "rust_function_call_arities",
     "validate_replay_api_contract_binding",
 ]

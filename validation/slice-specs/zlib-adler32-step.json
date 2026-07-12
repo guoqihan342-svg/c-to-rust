@@ -91,6 +91,16 @@
         "inputs": {"seed": null, "input_hex": ""},
         "expected_outputs": {"value": 1},
         "expected_ref": "validation/evidence/l2-slices/zlib-adler32-oracle.json"
+      },
+      {
+        "id": "ascii",
+        "input_ref": "cases[1]",
+        "inputs": {
+          "seed": null,
+          "input_hex": "7a6c696220636865636b73756d2066697874757265"
+        },
+        "expected_outputs": {"value": 1503070284},
+        "expected_ref": "validation/evidence/l2-slices/zlib-adler32-oracle.json"
       }
     ],
     "observable_outputs": ["value"],
@@ -98,6 +108,62 @@
     "c_oracle": "validation/evidence/l2-slices/zlib-adler32-oracle.json",
     "rust_report": "validation/evidence/l2-slices/zlib-adler32-rust-report.json",
     "behavior_fields": ["value"]
+  },
+  "replay_contract": {
+    "schema_version": 3,
+    "kind": "declarative_call_plan",
+    "rust_api": {
+      "visibility": "pub",
+      "abi": "Rust",
+      "unsafe": false,
+      "parameters": [
+        {
+          "name": "adler",
+          "rust_type": "u32",
+          "c_parameter": "adler",
+          "length_retained": false,
+          "source": {
+            "kind": "fixture_field",
+            "field": "seed",
+            "encoding": "u32",
+            "null_default": 1
+          }
+        },
+        {
+          "name": "buf",
+          "rust_type": "&[u8]",
+          "c_parameter": "buf",
+          "length_retained": false,
+          "source": {
+            "kind": "fixture_field",
+            "field": "input_hex",
+            "encoding": "hex_bytes"
+          }
+        },
+        {
+          "name": "len",
+          "rust_type": "usize",
+          "c_parameter": "len",
+          "length_retained": true,
+          "source": {
+            "kind": "encoded_length",
+            "field": "input_hex",
+            "encoding": "hex"
+          }
+        }
+      ],
+      "return_type": "u32",
+      "supporting_types": []
+    },
+    "omitted_c_parameters": [],
+    "assertions": [
+      {
+        "actual": "return",
+        "fixture_field": "value",
+        "rust_type": "u32",
+        "encoding": "u32"
+      }
+    ]
   },
   "rust_boundary": {
     "crate": "validation/l2_slices",
@@ -136,6 +202,7 @@
     "source.source_commit",
     "source.repo_commit",
     "fixture_contract.hash",
+    "replay_contract",
     "build_profile.profile_id",
     "rust_boundary.module",
     "translator_version"

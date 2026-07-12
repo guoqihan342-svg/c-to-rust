@@ -275,7 +275,8 @@ def render_repair_prompt(
     return (
         "Task mode: generate-candidate\n"
         "Repair only the supplied Rust candidate from the structured validation failures. Do not call tools or "
-        "modify files. Use the exact declared function name. The generated replay API contract is "
+        "modify files. Implement the exact api_name shown by the generated replay API contract; "
+        "function_name is the C source identity and may differ. The generated replay API contract is "
         "compiler-owned: the repaired candidate must typecheck at every shown call site and preserve "
         "every argument in the exact count and order shown. "
         "Honor rust_public_api and raw_pointer_policy; internal_only forbids raw pointers in the public function "

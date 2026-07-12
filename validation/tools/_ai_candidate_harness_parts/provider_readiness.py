@@ -3,7 +3,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .context_replay import count_rust_function_calls
+from .context_replay import count_rust_function_calls, rust_function_call_arities
+from validation.tools.replay_call_plan import (
+    replay_call_plan_marker,
+    validate_replay_call_plan,
+)
 from .context_security import sha256_bytes
 
 
@@ -201,11 +205,13 @@ def replay_api_contract_status(context_pack: dict[str, Any]) -> str:
     requirements = contract.get("requirements")
     bindings = context_pack.get("bindings")
     inputs = bindings.get("inputs") if isinstance(bindings, dict) else None
+    api_name = contract.get("api_name", contract.get("function_name"))
     if (
-        contract.get("schema_version") != 1
+        contract.get("schema_version") not in {1, 2}
         or contract.get("contract_kind") != "generated_replay_rust_source"
         or not isinstance(contract.get("function_name"), str)
         or contract.get("function_name") != context_pack.get("function_name")
+        or not isinstance(api_name, str)
         or not isinstance(contract.get("call_count"), int)
         or contract["call_count"] < 1
         or not isinstance(source, dict)
@@ -228,7 +234,7 @@ def replay_api_contract_status(context_pack: dict[str, Any]) -> str:
         or not isinstance(content, str)
         or len(content.encode("utf-8")) != source["size_bytes"]
         or sha256_bytes(content.encode("utf-8")) != source["sha256"]
-        or count_rust_function_calls(content, contract["function_name"])
+        or count_rust_function_calls(content, api_name)
         != contract["call_count"]
         or requirements
         != {
@@ -239,6 +245,28 @@ def replay_api_contract_status(context_pack: dict[str, Any]) -> str:
         }
     ):
         return "invalid"
+    call_plan = contract.get("call_plan")
+    if contract.get("schema_version") == 2 and not isinstance(call_plan, dict):
+        return "invalid"
+    if contract.get("schema_version") == 1 and call_plan is not None:
+        return "invalid"
+    if call_plan is not None:
+        if not isinstance(call_plan, dict):
+            return "invalid"
+        try:
+            validate_replay_call_plan(call_plan)
+        except ValueError:
+            return "invalid"
+        if (
+            call_plan.get("source_function_name") != contract.get("function_name")
+            or call_plan.get("api_name") != api_name
+            or replay_call_plan_marker(call_plan).rstrip("\n") not in content
+            or any(
+                arity != len(call_plan["parameters"])
+                for arity in rust_function_call_arities(content, api_name)
+            )
+        ):
+            return "invalid"
     expected_input = {
         "kind": "generated_replay_contract",
         "path": path,

@@ -424,12 +424,15 @@ def compile_link_source_files(spec: dict[str, Any], source_root: str) -> list[di
     for item in spec.get("c_boundary", {}).get("files", []):
         if not isinstance(item, dict) or not item.get("path"):
             continue
+        role = str(item.get("role") or "source")
+        if role not in {"source", "link_dependency"}:
+            continue
         path = normalize_path_text(item["path"])
         files.append(
             {
                 "path": path,
                 "resolved_path": resolve_source_root_path(source_root, path),
-                "role": str(item.get("role") or "source"),
+                "role": role,
                 "sha256": str(item.get("sha256") or "unknown"),
                 "resolution": "source_root_relative" if source_root != "." else "declared_path",
             }

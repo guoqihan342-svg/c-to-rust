@@ -483,6 +483,10 @@ pub fn delete_key(crc: u32, buf: &'static [u8], size: usize) -> u32 {
                     }
                 ],
             },
+            "replay_contract": {
+                "schema_version": 1,
+                "kind": "opaque_context_key_return_code",
+            },
             "c_boundary": {
                 "direct_dependencies": [
                     {"kind": "callee", "name": "db_init_ok"},

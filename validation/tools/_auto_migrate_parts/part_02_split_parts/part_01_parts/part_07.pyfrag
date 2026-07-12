@@ -158,8 +158,10 @@ def rust_check_has_harness_only_external_bindings(rust_check: dict[str, Any]) ->
 
 
 def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) -> bool:
+    declarative_call_plan_ready = build_replay_call_plan(spec, REPO_ROOT).get("status") == "bound"
     if (
         behavior_fields(spec) != ["return_code"]
+        and not declarative_call_plan_ready
         and not call_continue_state_replay_supported(spec)
         and not record_interior_projection_u32_reset_add_while_continue_state_replay_supported(spec)
         and not record_interior_projection_u32_constant_state_replay_supported(spec)
@@ -195,7 +197,41 @@ def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) ->
         return False
     plan = read_json(plan_path)
     rule_ids = plan.get("translation_summary", {}).get("translation_rule_ids", [])
-    return "clang-lowered-typed-ir" in rule_ids
+    return "clang-lowered-typed-ir" in rule_ids or ai_generated_candidate_replay_supported(
+        evidence_dir,
+        slice_id,
+        draft_path,
+    )
+
+
+def ai_generated_candidate_replay_supported(
+    evidence_dir: Path,
+    slice_id: str,
+    draft_path: Path,
+) -> bool:
+    manifest_path = evidence_dir / f"l3-{slice_id}-ai-candidate-manifest.json"
+    if manifest_path.is_symlink() or not manifest_path.is_file() or draft_path.is_symlink():
+        return False
+    try:
+        manifest = read_json(manifest_path)
+        candidates = manifest.get("candidates")
+        candidate = candidates[0] if isinstance(candidates, list) and len(candidates) == 1 else None
+        applied = candidate.get("applied_artifact") if isinstance(candidate, dict) else None
+        draft_sha = sha256(draft_path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+    return bool(
+        manifest.get("schema_version") == 8
+        and manifest.get("slice_id") == slice_id
+        and manifest.get("status") == "generated"
+        and isinstance(candidate, dict)
+        and manifest.get("selected_candidate_id") == candidate.get("candidate_id")
+        and candidate.get("applied") is True
+        and candidate.get("rust_draft_sha256") == draft_sha
+        and isinstance(applied, dict)
+        and applied.get("path") == draft_path.name
+        and applied.get("sha256") == draft_sha
+    )
 
 
 def run_generated_rust_replay_once(draft_path: Path, replay_path: Path) -> dict[str, Any]:

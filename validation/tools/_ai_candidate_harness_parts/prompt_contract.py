@@ -27,6 +27,13 @@ def render_boundary_contract(context_pack: dict[str, Any]) -> str:
         "raw_pointer_policy": rust_payload.get("raw_pointer_policy"),
         "unsafe_policy": rust_payload.get("unsafe_policy"),
     }
+    replay_contract = context_pack.get("replay_api_contract")
+    call_plan = replay_contract.get("call_plan") if isinstance(replay_contract, dict) else None
+    if isinstance(call_plan, dict):
+        contract["replay_call_plan_binding"] = {
+            "api_name": call_plan.get("api_name"),
+            "plan_sha256": call_plan.get("plan_sha256"),
+        }
     return json.dumps(contract, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
@@ -46,6 +53,13 @@ def context_without_replay_source(context_pack: dict[str, Any]) -> dict[str, Any
         source_copy = dict(source)
         source_copy["content"] = "<presented-in-required-replay-api-contract>"
         contract_copy["source"] = source_copy
+    call_plan = contract.get("call_plan")
+    if isinstance(call_plan, dict):
+        contract_copy["call_plan"] = {
+            "status": "presented-in-required-replay-api-contract",
+            "api_name": call_plan.get("api_name"),
+            "plan_sha256": call_plan.get("plan_sha256"),
+        }
     context["replay_api_contract"] = contract_copy
     return context
 

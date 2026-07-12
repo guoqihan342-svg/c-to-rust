@@ -12,8 +12,8 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | --- | --- |
 | Translator-generated semantic pass | `38` named slices, derived from `validation/translator-coverage-matrix.json` |
 | Accepted-evidence authoritative | `1`, reported separately from the translator numerator |
-| Latest development stage | P0-A18a: ContextPack v4 carries a hash-bound generated replay source contract |
-| Active translator task | P0-A18b: extract a structured ReplayCallPlan and remove function-name-derived replay contracts; P0-A10 waits for GLM resources |
+| Latest development stage | P0-A18b1: declarative ReplayCallPlan v1 is wired into replay, ContextPack, prompts, and fresh binding |
+| Active translator task | P0-A18b2: move the remaining legacy semantic adapters onto the same plan; continue P0-A18c exact closure |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | Superpowers specs/plans, canonical roadmap, and harness evidence gates |
@@ -46,7 +46,7 @@ AI is the competition translation primary, not a fallback invoked only after det
 
 ContextPack v4 gives the model only bounded facts: the real source span, compile arguments and response files, type/CFG/pointer excerpts, failure summaries, ABI and pointer policy, direct-callee contracts, and the complete Rust replay source contract generated before provider launch. Replay source, SHA, size, and real call count share one input binding. Missing, sensitive, oversized, call-free, or drifted replay evidence fails closed. Required callee context that is truncated or over budget is still refused with zero provider calls.
 
-Candidate and repair prompts place the same generated replay source contract before a ContextPack projection, followed by the declared signature and Rust public-API, raw-pointer, and unsafe policies. The complete replay source appears once to control token use while exposing the real call arity and order. The next stage still replaces legacy replay-generator branches with a structured ReplayCallPlan.
+Candidate and repair prompts place the same generated replay source contract before a ContextPack projection, followed by the declared signature and Rust public-API, raw-pointer, and unsafe policies. The complete replay source and ReplayCallPlan payload each appear once. The bounded declarative DSL binds the C source function, Rust `api_name`, parameter order/types, C mappings, retained lengths, return/field types, fixture codecs, ABI, unsafe policy, and plan SHA; the renderer, provider readiness, and fresh binding consume the same object. zlib/libuv now use this path, while `fdb_blob_make/kv_to_blob/set/del` route by semantic contract rather than function name. Remaining legacy semantic adapters still need migration to the same plan.
 
 AI candidate manifest v8 derives `prompt_scope` from the actual ContextPack and records `generated_replay_api_contract`. It binds provider, logical/resolved model, `competition_eligible`, and `evaluation_scope` to generator and candidate. The fresh-run summary validator reopens both ContextPack and replay, then recomputes source SHA, call binding, prompt, scope, cache, and invocation count. Minimal invocation receipts and session-export identity projections remain hash-bound. The competition lane accepts only `zai/glm-5.1`; DeepSeek V4 Flash is auxiliary quality evaluation only and never enters competition or translator numerators. AI output remains `semantic_gate=false`; only common gates can accept it.
 

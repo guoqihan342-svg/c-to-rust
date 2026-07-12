@@ -24,6 +24,7 @@ from .context_security import (
     sha256_path,
 )
 from .context_source import build_source_context
+from validation.tools.replay_call_plan import build_replay_call_plan
 
 
 MAX_CONTEXT_BYTES = 128_000
@@ -96,12 +97,17 @@ def build_context_pack(
         known_roots=known_roots,
     )
     artifacts = load_context_artifacts(deterministic_evidence_dir, known_roots)
+    replay_call_plan = build_replay_call_plan(
+        spec,
+        Path(__file__).resolve().parents[3],
+    )
     replay_api_contract = build_replay_api_contract(
         replay_test_path,
         function_name=function_name,
         trusted_root=(replay_root or deterministic_evidence_dir or slice_spec_path.parent),
         expected_filename=f"l3-{slice_id}-rust-replay-test-draft.rs",
         known_roots=known_roots,
+        call_plan=replay_call_plan,
     )
     context: dict[str, Any] = {
         "schema_version": 4,

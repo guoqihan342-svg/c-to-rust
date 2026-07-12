@@ -250,6 +250,10 @@
     "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-unsafe-scan.json",
     "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-unsafe-ledger.json"
   },
+  "replay_contract": {
+    "schema_version": 1,
+    "kind": "record_projection_identity_return"
+  },
   "rust_boundary": {
     "crate": "validation/l2_slices",
     "module": "validation/l2_slices/src/fdb_kv_to_blob.rs",
@@ -389,6 +393,7 @@
     "c_boundary.direct_dependencies",
     "build_profile.profile_id",
     "build_profile.target",
+    "replay_contract",
     "memory_model.alias_contract",
     "translator_version",
     "source.source_repository",

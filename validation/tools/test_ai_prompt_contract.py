@@ -96,6 +96,25 @@ class AiPromptContractTests(unittest.TestCase):
         self.assertIn("translate(case.value, case.len)", prompt)
         self.assertIn("internal_only forbids raw pointers", prompt)
 
+    def test_structured_call_plan_payload_appears_once_and_api_name_is_authoritative(self) -> None:
+        context = self.context()
+        context["replay_api_contract"]["schema_version"] = 2
+        context["replay_api_contract"]["api_name"] = "translate_safe"
+        context["replay_api_contract"]["call_plan"] = {
+            "status": "bound",
+            "source_function_name": "translate",
+            "api_name": "translate_safe",
+            "plan_sha256": "b" * 64,
+            "c_parameter_mappings": [{"c_parameter": "value"}],
+        }
+
+        prompt = render_prompt(context)
+
+        self.assertEqual(1, prompt.count('"c_parameter_mappings"'))
+        self.assertIn("Implement the exact api_name", prompt)
+        self.assertIn('"api_name":"translate_safe"', prompt)
+        self.assertIn('"function_name":"translate"', prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

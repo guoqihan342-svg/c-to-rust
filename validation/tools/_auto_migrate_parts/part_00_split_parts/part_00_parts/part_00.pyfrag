@@ -35,6 +35,11 @@ from validation.tools.ai_candidate_harness import (
     generate_candidate,
 )
 from validation.tools._auto_migrate_ai_exact import run_ai_exact_stage
+from validation.tools.replay_call_plan import (
+    build_replay_call_plan,
+    render_declarative_replay_cases,
+    replay_call_plan_marker,
+)
 TRANSLATOR_MANIFEST = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.toml"
 TRANSLATOR_LOCK = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.lock"
 COMPETITION_ENVIRONMENT_PROFILE = REPO_ROOT / "config" / "competition-env" / "environment.json"

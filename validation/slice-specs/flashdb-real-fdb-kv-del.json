@@ -407,6 +407,10 @@
     "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-unsafe-scan.json",
     "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-unsafe-ledger.json"
   },
+  "replay_contract": {
+    "schema_version": 1,
+    "kind": "opaque_context_key_return_code"
+  },
   "rust_boundary": {
     "crate": "validation/l2_slices",
     "module": "validation/l2_slices/src/fdb_kv_del.rs",
@@ -450,6 +454,7 @@
     "source.source_file_hashes",
     "c_boundary.signatures[0].source_span.sha256",
     "build_profile.profile_id",
+    "replay_contract",
     "translator_version",
     "source.source_repository",
     "source.source_branch"

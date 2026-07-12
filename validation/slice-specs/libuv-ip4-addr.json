@@ -105,6 +105,64 @@
       "addr_bytes_hex"
     ]
   },
+  "replay_contract": {
+    "schema_version": 3,
+    "kind": "declarative_call_plan",
+    "rust_api": {
+      "visibility": "pub",
+      "abi": "Rust",
+      "unsafe": false,
+      "parameters": [
+        {
+          "name": "ip",
+          "rust_type": "&str",
+          "c_parameter": "ip",
+          "length_retained": false,
+          "source": {
+            "kind": "fixture_field",
+            "field": "ip",
+            "encoding": "string"
+          }
+        },
+        {
+          "name": "port",
+          "rust_type": "i32",
+          "c_parameter": "port",
+          "length_retained": false,
+          "source": {
+            "kind": "fixture_field",
+            "field": "port",
+            "encoding": "i32"
+          }
+        }
+      ],
+      "return_type": "Ip4AddrReport",
+      "supporting_types": [
+        {
+          "kind": "struct",
+          "name": "Ip4AddrReport",
+          "visibility": "pub",
+          "fields": [
+            {"name": "return_code", "rust_type": "i32"},
+            {"name": "status", "rust_type": "&'static str"},
+            {"name": "family", "rust_type": "u16"},
+            {"name": "port_host", "rust_type": "u16"},
+            {"name": "port_bytes_hex", "rust_type": "String"},
+            {"name": "addr_bytes_hex", "rust_type": "String"}
+          ]
+        }
+      ]
+    },
+    "omitted_c_parameters": ["addr"],
+    "assertions": [
+      {"actual": "return.return_code", "fixture_field": "return_code", "rust_type": "i32", "encoding": "i32"},
+      {"actual": "return.status", "fixture_field": "status", "rust_type": "&str", "encoding": "string"},
+      {"actual": "return.family", "fixture_field": "family", "rust_type": "u16", "encoding": "u16"},
+      {"actual": "return.port_host", "fixture_field": "port_host", "rust_type": "u16", "encoding": "u16"},
+      {"actual": "return.port_bytes_hex", "fixture_field": "port_bytes_hex", "rust_type": "String", "encoding": "string"},
+      {"actual": "return.addr_bytes_hex", "fixture_field": "addr_bytes_hex", "rust_type": "String", "encoding": "string"}
+    ]
+  },
   "rust_boundary": {
     "crate": "validation/l2_slices",
     "module": "validation/l2_slices/src/libuv_ip4_addr.rs",
@@ -147,6 +205,7 @@
     "source.source_commit",
     "source.repo_commit",
     "fixture_contract.hash",
+    "replay_contract",
     "build_profile.profile_id",
     "rust_boundary.module",
     "translator_version"
