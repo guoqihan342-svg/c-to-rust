@@ -116,6 +116,7 @@ fn collect_mutable_pointer_index_uses_from_body(
             IrStmt::Expr { expr, .. } => {
                 collect_mutable_pointer_index_uses_from_expr(expr, candidates, uses, true)?;
             }
+            IrStmt::RecordMemset { .. } => {}
             IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
         }
     }
@@ -346,6 +347,7 @@ fn collect_record_pointer_array_index_uses_from_body(
             IrStmt::Expr { expr, .. } => {
                 collect_record_pointer_array_index_uses_from_expr(expr, candidates, uses, true)?;
             }
+            IrStmt::RecordMemset { .. } => {}
             IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
         }
     }

@@ -30,6 +30,7 @@ fn collect_interior_reborrow_decls<'a>(body: &'a [IrStmt], found: &mut Vec<&'a I
             | IrStmt::Break { .. }
             | IrStmt::Continue { .. }
             | IrStmt::Expr { .. }
+            | IrStmt::RecordMemset { .. }
             | IrStmt::Unsupported { .. } => {}
         }
     }
@@ -120,6 +121,7 @@ fn validate_bounded_alias_use_list(
                 }
             }
             IrStmt::Expr { expr, .. } => reject_alias_expr(expr, plan)?,
+            IrStmt::RecordMemset { destination, .. } => reject_alias_expr(destination, plan)?,
             IrStmt::Break { .. }
             | IrStmt::Continue { .. }
             | IrStmt::Unsupported { .. } => {}

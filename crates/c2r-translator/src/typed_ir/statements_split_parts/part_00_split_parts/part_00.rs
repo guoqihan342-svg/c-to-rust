@@ -325,6 +325,20 @@ fn emit_stmt(
                 emit_expr(expr, symbols, context).map_err(|detail| format!("expr {detail}"))?;
             Ok(format!("{indent}{expr};\n"))
         }
+        IrStmt::RecordMemset {
+            destination,
+            byte,
+            write_len_bytes,
+            layout,
+            ..
+        } => emit_record_memset_statement(
+            destination,
+            *byte,
+            *write_len_bytes,
+            layout,
+            symbols,
+        )
+        .map(|line| format!("{indent}{line}\n")),
         IrStmt::If {
             condition,
             then_body,

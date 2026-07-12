@@ -358,6 +358,7 @@ fn record_ir_call_expression_evidence(
             typed_ir::IrStmt::Expr { expr, .. } => {
                 record_ir_call_expression_evidence_for_expr(expr, "expression", result);
             }
+            typed_ir::IrStmt::RecordMemset { .. } => {}
             typed_ir::IrStmt::Unsupported { .. } => {}
         }
     }

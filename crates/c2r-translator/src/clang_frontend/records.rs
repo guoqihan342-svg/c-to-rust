@@ -387,6 +387,9 @@ fn attach_record_inventory_to_stmt(
             }
         }
         IrStmt::Expr { expr, .. } => attach_record_inventory_to_expr(expr, inventory),
+        IrStmt::RecordMemset { destination, .. } => {
+            attach_record_inventory_to_expr(destination, inventory)
+        }
         IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
     }
 }

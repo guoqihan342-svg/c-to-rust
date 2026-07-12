@@ -163,3 +163,174 @@ fn record_layout_binding_lowers_record_sizeof_to_bound_literal() {
         .expect_err("layout from another target must fail closed");
     assert_eq!(error.kind, "invalid_record_layout_binding");
 }
+
+#[test]
+fn record_memset_bitcast_accepts_renamed_mutable_record_pointer_only_for_memset() {
+    let argument = serde_json::json!({
+        "kind": "ImplicitCastExpr",
+        "castKind": "BitCast",
+        "type": {"qualType": "void *"},
+        "inner": [{
+            "kind": "ImplicitCastExpr",
+            "castKind": "LValueToRValue",
+            "type": {"qualType": "struct renamed_packet *"},
+            "inner": [{
+                "kind": "DeclRefExpr",
+                "type": {"qualType": "struct renamed_packet *"},
+                "referencedDecl": {
+                    "kind": "ParmVarDecl",
+                    "name": "output"
+                }
+            }]
+        }]
+    });
+
+    let accepted = memory_destination_arg_skeleton_from_ast(&argument, "memset")
+        .expect("parse renamed record pointer memset destination");
+    assert!(matches!(
+        accepted,
+        ClangExprSkeleton::DeclRef { name, ty }
+            if name == "output"
+                && clang_mutable_record_pointer_record_name(&ty) == Some("renamed_packet")
+    ));
+
+    let rejected = memory_destination_arg_skeleton_from_ast(&argument, "memcpy")
+        .expect("represent unsupported memcpy record destination");
+    assert!(matches!(
+        rejected,
+        ClangExprSkeleton::Unsupported { reason, .. }
+            if reason.contains("supported mutable byte or record pointer")
+    ));
+}
+
+#[test]
+fn record_memset_lowering_requires_same_bound_record_sizeof() {
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        int_width: 32,
+        char_width: 8,
+        long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+    let record = ClangTypeSkeleton {
+        spelled: "struct renamed_packet".to_string(),
+        canonical: "struct renamed_packet".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "renamed_packet".to_string(),
+        },
+    };
+    let destination_type = ClangTypeSkeleton {
+        spelled: "struct renamed_packet *".to_string(),
+        canonical: "struct renamed_packet *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(record.clone()),
+            width: Some(64),
+        },
+    };
+    let size_type = ClangTypeSkeleton {
+        spelled: "size_t".to_string(),
+        canonical: "size_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 64,
+        },
+    };
+    let layout = ClangRecordLayoutBinding {
+        record_type: "struct renamed_packet".to_string(),
+        size_bytes: 16,
+        align_bytes: 8,
+        dump_sha256: "a".repeat(64),
+        diagnostics_sha256: "b".repeat(64),
+        compile_arguments_sha256: "c".repeat(64),
+        compile_database_sha256: "d".repeat(64),
+        target_abi: target_abi.clone(),
+    };
+    let statement = ClangStmtSkeleton::Expr {
+        expr: ClangExprSkeleton::Call {
+            callee: "memset".to_string(),
+            args: vec![
+                ClangExprSkeleton::DeclRef {
+                    name: "output".to_string(),
+                    ty: destination_type,
+                },
+                ClangExprSkeleton::IntegerLiteral {
+                    value: 0,
+                    spelling: "0".to_string(),
+                    ty: ClangTypeSkeleton {
+                        spelled: "int".to_string(),
+                        canonical: "int".to_string(),
+                        kind: ClangTypeKind::Integer {
+                            signed: true,
+                            width: 32,
+                        },
+                    },
+                },
+                ClangExprSkeleton::SizeOfType {
+                    arg_type: record,
+                    ty: size_type,
+                    record_layout: Some(layout),
+                    target_abi: Some(target_abi),
+                },
+            ],
+            ty: ClangTypeSkeleton {
+                spelled: "void *".to_string(),
+                canonical: "void *".to_string(),
+                kind: ClangTypeKind::Pointer {
+                    pointee: Box::new(ClangTypeSkeleton {
+                        spelled: "void".to_string(),
+                        canonical: "void".to_string(),
+                        kind: ClangTypeKind::Void,
+                    }),
+                    width: Some(64),
+                },
+            },
+        },
+    };
+
+    let lowered = lower_stmt(&statement).expect("lower bound record memset");
+    assert!(matches!(
+        lowered,
+        IrStmt::RecordMemset {
+            destination: IrExpr::Var { name, .. },
+            byte: 0,
+            write_len_bytes: 16,
+            layout: crate::typed_ir::IrRecordLayoutBinding { record_type, .. },
+            ..
+        } if name == "output" && record_type == "struct renamed_packet"
+    ));
+
+    let mut mismatched = statement.clone();
+    let ClangStmtSkeleton::Expr {
+        expr: ClangExprSkeleton::Call { args, .. },
+    } = &mut mismatched
+    else {
+        panic!("expected record memset call skeleton");
+    };
+    let ClangExprSkeleton::SizeOfType { arg_type, .. } = &mut args[2] else {
+        panic!("expected bound sizeof argument");
+    };
+    *arg_type = ClangTypeSkeleton {
+        spelled: "struct unrelated".to_string(),
+        canonical: "struct unrelated".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "unrelated".to_string(),
+        },
+    };
+    let error = lower_stmt(&mismatched).expect_err("different sizeof record must fail closed");
+    assert_eq!(error.kind, "unsupported_record_memset");
+
+    let mut unbound = statement;
+    let ClangStmtSkeleton::Expr {
+        expr: ClangExprSkeleton::Call { args, .. },
+    } = &mut unbound
+    else {
+        panic!("expected record memset call skeleton");
+    };
+    let ClangExprSkeleton::SizeOfType { record_layout, .. } = &mut args[2] else {
+        panic!("expected bound sizeof argument");
+    };
+    *record_layout = None;
+    let error = lower_stmt(&unbound).expect_err("unbound sizeof must fail closed");
+    assert_eq!(error.kind, "unsupported_record_memset");
+}

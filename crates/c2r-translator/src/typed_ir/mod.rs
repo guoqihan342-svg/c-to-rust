@@ -63,8 +63,8 @@ mod rust_types;
 use definite_assignment::*;
 pub use ir::{
     EmitPolicy, IrBinOp, IrEmitError, IrExpr, IrFunction, IrGlobal, IrGlobalInit, IrIncDecOp,
-    IrParam, IrRecordField, IrStmt, IrType, IrTypeKind, IrUnOp, NoAliasParamPair,
-    SignedRightShiftPolicy, SourceSpan,
+    IrParam, IrRecordField, IrRecordLayoutBinding, IrStmt, IrType, IrTypeKind, IrUnOp,
+    NoAliasParamPair, SignedRightShiftPolicy, SourceSpan,
 };
 use rust_types::*;
 
@@ -77,6 +77,7 @@ include!("records.rs");
 include!("globals.rs");
 include!("statements.rs");
 include!("expressions.rs");
+include!("record_memset.rs");
 include!("memory_calls.rs");
 include!("call_validation.rs");
 include!("side_effects.rs");

@@ -182,6 +182,9 @@ fn collect_record_field_uses_from_stmt<'a>(
             }
         }
         IrStmt::Expr { expr, .. } => collect_record_field_uses_from_expr(expr, records)?,
+        IrStmt::RecordMemset { destination, .. } => {
+            collect_record_field_uses_from_expr(destination, records)?
+        }
         IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
     }
     Ok(())

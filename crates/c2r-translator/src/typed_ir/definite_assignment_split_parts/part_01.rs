@@ -60,6 +60,17 @@ fn validate_definite_assignment_stmt(
         IrStmt::Break { .. } | IrStmt::Continue { .. } => Ok(()),
         IrStmt::Expr { expr, .. } => validate_definite_assignment_expr(expr, state)
             .map_err(|detail| format!("expr {detail}")),
+        IrStmt::RecordMemset { destination, .. } => {
+            validate_definite_assignment_expr(destination, state)
+                .map_err(|detail| format!("record memset destination {detail}"))?;
+            let IrExpr::Var { name, ty, .. } = destination else {
+                return Err("record memset destination must be a direct parameter".to_string());
+            };
+            let pointee = mutable_record_pointer_pointee_type(ty).ok_or_else(|| {
+                "record memset destination must be a mutable record pointer".to_string()
+            })?;
+            mark_record_memset_fields_initialized(state, name, pointee, "")
+        }
         IrStmt::If {
             condition,
             then_body,
@@ -193,6 +204,36 @@ fn validate_definite_assignment_stmt(
         }
         IrStmt::Unsupported { .. } => Ok(()),
     }
+}
+
+fn mark_record_memset_fields_initialized(
+    state: &mut DefiniteAssignmentState,
+    base: &str,
+    record: &IrType,
+    prefix: &str,
+) -> Result<(), String> {
+    let IrTypeKind::Record {
+        fields: Some(fields),
+        ..
+    } = &record.kind
+    else {
+        return Err("record memset destination lacks complete field inventory".to_string());
+    };
+    for field in fields {
+        let path = if prefix.is_empty() {
+            field.name.clone()
+        } else {
+            format!("{prefix}.{}", field.name)
+        };
+        state.assign_mutable_record_pointer_field(MutableRecordPointerFieldKey {
+            base: base.to_string(),
+            field: path.clone(),
+        });
+        if matches!(field.ty.kind, IrTypeKind::Record { .. }) {
+            mark_record_memset_fields_initialized(state, base, &field.ty, &path)?;
+        }
+    }
+    Ok(())
 }
 
 fn validate_definite_assignment_target(

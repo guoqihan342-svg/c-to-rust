@@ -164,6 +164,13 @@ fn validate_nullable_pointer_param_uses_in_stmt(
                 proven_nonnull_params,
             )?;
         }
+        IrStmt::RecordMemset { destination, .. } => {
+            validate_nullable_pointer_param_uses_in_expr(
+                destination,
+                nullable_params,
+                proven_nonnull_params,
+            )?;
+        }
         IrStmt::Unsupported { .. } => {}
     }
     Ok(())

@@ -70,6 +70,7 @@ fn collect_record_pointer_field_value_params_from_body(
             | IrStmt::Break { .. }
             | IrStmt::Continue { .. }
             | IrStmt::Expr { .. }
+            | IrStmt::RecordMemset { .. }
             | IrStmt::Unsupported { .. } => {}
         }
     }
@@ -373,6 +374,7 @@ fn collect_mutable_pointer_write_params_from_body(
                     write_params,
                 )?;
             }
+            IrStmt::RecordMemset { .. } => {}
             IrStmt::Decl { .. }
             | IrStmt::Return { .. }
             | IrStmt::Break { .. }

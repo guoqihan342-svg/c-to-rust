@@ -6875,6 +6875,106 @@
           "fail_closed_reason": "compile-database, target ABI, per-layout hash, duplicate, and ambiguous-record drift must be rejected"
         }
       ]
+    },
+    {
+      "id": "record-memset-zero-value-lowering",
+      "status": "partial",
+      "scope_limitations": [
+        "covers only statement-position standard memset over one direct non-null mutable record parameter",
+        "requires byte zero and the complete object length from the same hash-bound sizeof(record) layout proof",
+        "safe value initialization covers integers, fixed integer arrays, and recursively complete records only",
+        "does not preserve or expose C padding bytes and refuses pointer fields, nonzero fills, partial fills, memcpy, custom calls, unions, bitfields, flexible arrays, and incomplete records",
+        "the real libuv run advances to typedef recovery before Rust emission, so no named-slice semantic acceptance is claimed"
+      ],
+      "ir_constructs": [
+        "mutable record pointer to void pointer BitCast",
+        "layout-bound sizeof(record)",
+        "IrStmt::RecordMemset",
+        "IrRecordLayoutBinding",
+        "recursive record zero-value initializer",
+        "mutable record write and definite-assignment tracking"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "renamed mutable record BitCast and bound sizeof lowering tests",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/record_layout.rs"
+            }
+          ]
+        },
+        "handwritten_ir": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "dedicated record memset typed-IR safe zero-value tests",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_37.rs"
+            }
+          ]
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "unbound and mismatched sizeof record frontend refusals",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/record_layout.rs"
+            },
+            {
+              "name": "hash, length, byte, record identity, pointer field, and ordinary-call bypass refusals",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_37.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "scope_note": "the neutral wire_packet regression compiles and runs safe generated Rust; this is unit evidence rather than named-slice semantic acceptance",
+          "evidence": [
+            {
+              "name": "typed_ir_emits_generic_record_memset_as_safe_zero_value_assignment",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_37.rs"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "the real libuv unit advances to unsupported typedef sa_family_t before a Rust candidate or C/Rust diff is produced"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "the rule requires hash-bound clang record-layout provenance and dedicated typed IR"
+        },
+        "route_evidence": {
+          "status": "gap",
+          "reason": "the schema-valid WSL runs-09 report remains an uncommitted local-simulation artifact under target/ and cannot serve as durable route evidence"
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "record_memset_bitcast_accepts_renamed_mutable_record_pointer_only_for_memset",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/record_layout.rs"
+        },
+        {
+          "name": "record_memset_lowering_requires_same_bound_record_sizeof",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/record_layout.rs"
+        },
+        {
+          "name": "typed_ir_emits_generic_record_memset_as_safe_zero_value_assignment",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_37.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "typed_ir_record_memset_boundaries_fail_closed",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_37.rs",
+          "fail_closed_reason": "malformed provenance, wrong length, nonzero fill, pointer fields, record identity drift, and ordinary numeric calls cannot enter record zero-value lowering"
+        },
+        {
+          "name": "record memset frontend bound-size refusals",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/record_layout.rs",
+          "fail_closed_reason": "destination record, sizeof record, and layout binding must be the same unique record with current target ABI provenance"
+        }
+      ]
     }
   ]
 }

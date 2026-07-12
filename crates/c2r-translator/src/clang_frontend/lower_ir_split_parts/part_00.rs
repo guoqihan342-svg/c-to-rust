@@ -1,11 +1,14 @@
 use super::{
+    clang_mutable_record_pointer_record_name,
     compound_assignment_target_is_direct_index, compound_assignment_target_is_direct_record_field,
     compound_assignment_target_type, index_compound_assignment_value_rejection_reason,
     record_field_compound_assignment_value_rejection_reason, ClangBinaryOperator,
     ClangExprSkeleton, ClangFrontendError, ClangIncDecOperator, ClangRecordLayoutBinding,
     ClangStmtSkeleton, ClangTypeKind, ClangTypeSkeleton, ClangUnaryOperator, TargetAbiProfile,
 };
-use crate::typed_ir::{IrBinOp, IrExpr, IrIncDecOp, IrStmt, IrType, IrTypeKind, IrUnOp};
+use crate::typed_ir::{
+    IrBinOp, IrExpr, IrIncDecOp, IrRecordLayoutBinding, IrStmt, IrType, IrTypeKind, IrUnOp,
+};
 
 #[cfg(feature = "typed-ir")]
 /// Lowers an accepted statement skeleton into typed IR without choosing Rust.
@@ -97,10 +100,13 @@ pub(super) fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFronte
         }),
         ClangStmtSkeleton::Break => Ok(IrStmt::Break { source_span: None }),
         ClangStmtSkeleton::Continue => Ok(IrStmt::Continue { source_span: None }),
-        ClangStmtSkeleton::Expr { expr } => Ok(IrStmt::Expr {
-            expr: lower_expr(expr)?,
-            source_span: None,
-        }),
+        ClangStmtSkeleton::Expr { expr } => match lower_record_memset_statement(expr)? {
+            Some(stmt) => Ok(stmt),
+            None => Ok(IrStmt::Expr {
+                expr: lower_expr(expr)?,
+                source_span: None,
+            }),
+        },
         ClangStmtSkeleton::Unsupported { reason } => Err(ClangFrontendError {
             kind: "unsupported_clang_stmt".to_string(),
             message: reason.clone(),

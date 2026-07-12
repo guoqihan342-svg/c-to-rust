@@ -1,3 +1,4 @@
+use crate::TargetAbiProfile;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -52,6 +53,18 @@ pub struct IrType {
 pub struct IrRecordField {
     pub name: String,
     pub ty: IrType,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IrRecordLayoutBinding {
+    pub record_type: String,
+    pub size_bytes: u64,
+    pub align_bytes: u64,
+    pub dump_sha256: String,
+    pub diagnostics_sha256: String,
+    pub compile_arguments_sha256: String,
+    pub compile_database_sha256: String,
+    pub target_abi: TargetAbiProfile,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -232,6 +245,13 @@ pub enum IrStmt {
     },
     Expr {
         expr: IrExpr,
+        source_span: Option<SourceSpan>,
+    },
+    RecordMemset {
+        destination: IrExpr,
+        byte: u8,
+        write_len_bytes: u64,
+        layout: IrRecordLayoutBinding,
         source_span: Option<SourceSpan>,
     },
     Unsupported {

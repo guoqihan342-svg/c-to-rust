@@ -111,6 +111,7 @@ fn validate_nested_record_scalar_add_stmt_list(
             | IrStmt::Break { .. }
             | IrStmt::Continue { .. }
             | IrStmt::Expr { .. }
+            | IrStmt::RecordMemset { .. }
             | IrStmt::Unsupported { .. } => {}
         }
     }

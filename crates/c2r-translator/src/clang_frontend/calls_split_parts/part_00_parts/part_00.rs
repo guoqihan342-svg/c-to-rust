@@ -207,6 +207,11 @@ fn memory_destination_arg_skeleton_from_ast(
         {
             Ok(operand)
         }
+        ClangExprSkeleton::DeclRef { ty, .. }
+            if callee == "memset" && clang_mutable_record_pointer_record_name(ty).is_some() =>
+        {
+            Ok(operand)
+        }
         ClangExprSkeleton::ArrayToPointerDecay { target, expr }
             if callee == "memset" || callee == "memcpy" =>
         {
@@ -224,7 +229,7 @@ fn memory_destination_arg_skeleton_from_ast(
         ClangExprSkeleton::DeclRef { ty, .. } => Ok(ClangExprSkeleton::Unsupported {
             node: "ImplicitCastExpr".to_string(),
             reason: format!(
-                "{callee} destination BitCast operand {} is not mutable unsigned 8-bit pointer",
+                "{callee} destination BitCast operand {} is not a supported mutable byte or record pointer",
                 ty.spelled
             ),
         }),

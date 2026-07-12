@@ -64,6 +64,9 @@ fn collect_address_taken_vars_from_stmt(stmt: &IrStmt, vars: &mut HashSet<String
             }
         }
         IrStmt::Expr { expr, .. } => collect_address_taken_vars_from_expr(expr, vars),
+        IrStmt::RecordMemset { destination, .. } => {
+            collect_address_taken_vars_from_expr(destination, vars)
+        }
         IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
     }
 }
@@ -159,6 +162,7 @@ fn collect_nested_local_record_assigned_vars(body: &[IrStmt], assigned_vars: &mu
             | IrStmt::Break { .. }
             | IrStmt::Continue { .. }
             | IrStmt::Expr { .. }
+            | IrStmt::RecordMemset { .. }
             | IrStmt::Unsupported { .. } => {}
         }
     }
@@ -225,6 +229,7 @@ fn collect_uninitialized_record_local_decls(
             | IrStmt::Break { .. }
             | IrStmt::Continue { .. }
             | IrStmt::Expr { .. }
+            | IrStmt::RecordMemset { .. }
             | IrStmt::Unsupported { .. } => {}
         }
     }
@@ -387,6 +392,14 @@ fn collect_zero_init_record_local_uses_from_stmt(
             allowed_address_args,
             disallowed_uses,
         ),
+        IrStmt::RecordMemset { destination, .. } => {
+            collect_zero_init_record_local_uses_from_expr(
+                destination,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            )
+        }
         IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
     }
 }
@@ -612,6 +625,9 @@ fn stmt_has_post_increment_byte_read(stmt: &IrStmt, cursor: &str) -> bool {
             .is_some_and(|expr| expr_has_post_increment_byte_read(expr, cursor)),
         IrStmt::Break { .. } | IrStmt::Continue { .. } => false,
         IrStmt::Expr { expr, .. } => expr_has_post_increment_byte_read(expr, cursor),
+        IrStmt::RecordMemset { destination, .. } => {
+            expr_has_post_increment_byte_read(destination, cursor)
+        }
         IrStmt::If {
             condition,
             then_body,

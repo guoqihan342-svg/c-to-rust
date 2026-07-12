@@ -63,6 +63,9 @@ fn collect_ir_post_increment_deref_vars_from_stmts(
             typed_ir::IrStmt::Expr { expr, .. } => {
                 collect_ir_post_increment_deref_vars_from_expr(expr, vars);
             }
+            typed_ir::IrStmt::RecordMemset { destination, .. } => {
+                collect_ir_post_increment_deref_vars_from_expr(destination, vars);
+            }
             typed_ir::IrStmt::Unsupported { .. } => {}
         }
     }

@@ -285,6 +285,7 @@ fn collect_readonly_record_pointer_read_params_from_body(
                 mutable_record_pointer_params,
                 read_params,
             )?,
+            IrStmt::RecordMemset { .. } => {}
             IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
         }
     }

@@ -95,6 +95,7 @@ fn collect_opaque_pointer_call_arg_params_from_stmt(
         IrStmt::Expr { expr, .. } => {
             collect_opaque_pointer_call_arg_params_from_expr(expr, param_types, call_arg_params);
         }
+        IrStmt::RecordMemset { .. } => {}
         IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
     }
 }
@@ -322,6 +323,7 @@ fn collect_raw_direct_call_pointer_params_from_body(
                     call_arg_params,
                 );
             }
+            IrStmt::RecordMemset { .. } => {}
             IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
         }
     }

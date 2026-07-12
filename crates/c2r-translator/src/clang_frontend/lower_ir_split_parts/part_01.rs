@@ -234,7 +234,7 @@ fn record_layout_size_bytes(
         || layout.size_bytes == 0
         || layout.align_bytes == 0
         || !layout.align_bytes.is_power_of_two()
-        || layout.size_bytes % layout.align_bytes != 0
+        || !layout.size_bytes.is_multiple_of(layout.align_bytes)
         || !valid_hash(&layout.dump_sha256)
         || !valid_hash(&layout.diagnostics_sha256)
         || !valid_hash(&layout.compile_arguments_sha256)

@@ -109,6 +109,9 @@ fn reject_nullable_mutable_pointer_params_in_stmt(
         IrStmt::Expr { expr, .. } => {
             reject_nullable_mutable_pointer_params_in_expr(expr, mutable_pointer_params)?;
         }
+        IrStmt::RecordMemset { destination, .. } => {
+            reject_nullable_mutable_pointer_params_in_expr(destination, mutable_pointer_params)?;
+        }
         IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
     }
     Ok(())
@@ -314,6 +317,13 @@ fn collect_nullable_pointer_params_from_body(
             IrStmt::Expr { expr, .. } => {
                 collect_nullable_pointer_params_from_expr(
                     expr,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+            }
+            IrStmt::RecordMemset { destination, .. } => {
+                collect_nullable_pointer_params_from_expr(
+                    destination,
                     readonly_pointer_params,
                     nullable_params,
                 );

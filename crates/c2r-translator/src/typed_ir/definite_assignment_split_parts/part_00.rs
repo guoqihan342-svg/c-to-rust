@@ -6,8 +6,8 @@ use super::{
     emit_mutable_record_pointer_field_type, emit_scalar_type, interior_reborrow_decl_parts,
     mutable_pointer_slice_element_type, mutable_record_pointer_pointee_type,
     record_pointer_member_path_from_expr, record_pointer_member_path_key, type_label, EmitContext,
-    InteriorReborrowPlan, IrExpr, IrFunction, IrGlobal, IrStmt, IrType, MutablePointerSlotKey,
-    MutableRecordPointerFieldKey,
+    InteriorReborrowPlan, IrExpr, IrFunction, IrGlobal, IrStmt, IrType, IrTypeKind,
+    MutablePointerSlotKey, MutableRecordPointerFieldKey,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -207,6 +207,7 @@ fn stmt_definitely_returns(stmt: &IrStmt) -> bool {
         | IrStmt::Break { .. }
         | IrStmt::Continue { .. }
         | IrStmt::Expr { .. }
+        | IrStmt::RecordMemset { .. }
         | IrStmt::Unsupported { .. } => false,
     }
 }

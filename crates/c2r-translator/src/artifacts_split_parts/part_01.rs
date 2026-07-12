@@ -113,6 +113,9 @@ fn collect_stmt_runtime_preconditions(
             typed_ir::IrStmt::Expr { expr, .. } => {
                 collect_expr_runtime_preconditions(expr, preconditions);
             }
+            typed_ir::IrStmt::RecordMemset { destination, .. } => {
+                collect_expr_runtime_preconditions(destination, preconditions);
+            }
             typed_ir::IrStmt::Break { .. }
             | typed_ir::IrStmt::Continue { .. }
             | typed_ir::IrStmt::Unsupported { .. } => {}

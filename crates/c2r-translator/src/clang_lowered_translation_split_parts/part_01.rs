@@ -322,6 +322,9 @@ fn ir_statement_label(statement: &typed_ir::IrStmt) -> String {
         typed_ir::IrStmt::Break { .. } => "break".to_string(),
         typed_ir::IrStmt::Continue { .. } => "continue".to_string(),
         typed_ir::IrStmt::Expr { expr, .. } => format!("expr {}", ir_expr_label(expr)),
+        typed_ir::IrStmt::RecordMemset { destination, .. } => {
+            format!("record_memset {}", ir_expr_label(destination))
+        }
         typed_ir::IrStmt::Unsupported { node, .. } => format!("unsupported {node}"),
     }
 }
@@ -365,6 +368,7 @@ fn ir_statement_kind_labels(statements: &[typed_ir::IrStmt]) -> Vec<String> {
                 typed_ir::IrStmt::Break { .. } => "break",
                 typed_ir::IrStmt::Continue { .. } => "continue",
                 typed_ir::IrStmt::Expr { .. } => "expression",
+                typed_ir::IrStmt::RecordMemset { .. } => "record_memset",
                 typed_ir::IrStmt::Unsupported { .. } => "unsupported",
             },
         );
@@ -530,6 +534,9 @@ fn ir_stmt_mentions_var(statement: &typed_ir::IrStmt, expected: &str) -> bool {
             .as_ref()
             .is_some_and(|value| ir_expr_mentions_var(value, expected)),
         typed_ir::IrStmt::Expr { expr, .. } => ir_expr_mentions_var(expr, expected),
+        typed_ir::IrStmt::RecordMemset { destination, .. } => {
+            ir_expr_mentions_var(destination, expected)
+        }
         typed_ir::IrStmt::Break { .. }
         | typed_ir::IrStmt::Continue { .. }
         | typed_ir::IrStmt::Unsupported { .. } => false,

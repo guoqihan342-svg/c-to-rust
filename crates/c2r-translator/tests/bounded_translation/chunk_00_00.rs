@@ -25,9 +25,10 @@ use c2r_translator::translation_route::{CandidateGenerator, CandidateRoute};
 use c2r_translator::typed_ir::{
     emit_rust_from_ir, emit_rust_from_ir_with_globals, emit_rust_from_ir_with_globals_and_policy,
     EmitPolicy, IrBinOp, IrExpr, IrFunction, IrGlobal, IrGlobalInit, IrIncDecOp, IrParam,
-    IrRecordField, IrStmt, IrType, IrTypeKind, IrUnOp, NoAliasParamPair, SignedRightShiftPolicy,
+    IrRecordField, IrRecordLayoutBinding, IrStmt, IrType, IrTypeKind, IrUnOp, NoAliasParamPair,
+    SignedRightShiftPolicy,
 };
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[cfg(feature = "typed-ir")]
 use c2r_translator::TargetAbiProfile;
 use c2r_translator::{write_translation_artifacts, BuildProfile, SliceSpec};
 use serde_json::Value;

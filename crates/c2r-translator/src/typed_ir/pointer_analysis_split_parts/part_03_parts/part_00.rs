@@ -124,6 +124,7 @@ fn collect_readonly_pointer_read_params_from_body(
                     uses,
                 )?;
             }
+            IrStmt::RecordMemset { .. } => {}
             IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
         }
     }
@@ -411,6 +412,16 @@ fn collect_mutable_record_pointer_write_params_from_body(
                     mutable_record_pointer_params,
                     write_params,
                 )?;
+            }
+            IrStmt::RecordMemset { destination, .. } => {
+                let IrExpr::Var { name, ty, .. } = destination else {
+                    return Err("record memset destination must be a direct parameter".to_string());
+                };
+                if mutable_record_pointer_params.get(name.as_str()).is_some_and(|param_ty| {
+                    record_pointer_types_match_ignoring_spelling(param_ty, ty)
+                }) {
+                    write_params.insert(name.clone());
+                }
             }
             IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
         }
