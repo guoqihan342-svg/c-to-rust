@@ -72,9 +72,18 @@ def _fixture_binding(spec: dict[str, Any], repo_root: Path) -> dict[str, Any]:
         if not isinstance(input_payload, dict) or not isinstance(expected, dict):
             raise ValueError(f"fixture case {case_id} cannot be resolved")
         cases.append({"id": case_id, "inputs": input_payload, "expected": expected})
+    effective_binding = json.dumps(
+        {
+            "source_fixture_sha256": hashlib.sha256(data).hexdigest(),
+            "cases": cases,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
     return {
         "path": "inline" if path is None else path.relative_to(repo_root).as_posix(),
-        "sha256": hashlib.sha256(data).hexdigest(),
+        "sha256": hashlib.sha256(effective_binding).hexdigest(),
         "cases": cases,
     }
 

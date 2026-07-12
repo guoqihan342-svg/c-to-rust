@@ -10,6 +10,10 @@ from .context_artifacts import (
     load_context_artifacts as _load_context_artifacts,
 )
 from .context_compile import build_compile_context
+from .context_callees import (
+    build_external_callee_source_context,
+    callee_source_input_bindings,
+)
 from .context_replay import build_replay_api_contract, replay_contract_input_binding
 from .context_scope import value_has_facts
 from .context_security import (
@@ -91,6 +95,11 @@ def build_context_pack(
         known_roots=known_roots,
     )
     bind_required_callee_sections(c_boundary, raw_c_boundary)
+    external_callee_source_context = build_external_callee_source_context(
+        spec,
+        source_root=resolved_source_root,
+        known_roots=known_roots,
+    )
     rust_boundary = boundary_context(
         spec.get("rust_boundary", {}),
         keys=("crate", "module", "public_api", "raw_pointer_policy", "unsafe_policy"),
@@ -118,6 +127,7 @@ def build_context_pack(
         "source": source_context,
         "compile_context": compile_context,
         "c_boundary": c_boundary,
+        "external_callee_source_context": external_callee_source_context,
         "rust_boundary": rust_boundary,
         "replay_api_contract": replay_api_contract,
         "deterministic_artifacts": artifacts,
@@ -133,6 +143,7 @@ def build_context_pack(
                 compile_context,
                 artifacts,
                 replay_api_contract,
+                external_callee_source_context,
             ),
         },
         "claim_boundary": {
@@ -230,6 +241,7 @@ def collect_input_bindings(
     compile_context: dict[str, Any],
     artifacts: dict[str, Any],
     replay_api_contract: dict[str, Any],
+    external_callee_source_context: dict[str, Any],
 ) -> list[dict[str, Any]]:
     bindings: list[dict[str, Any]] = []
     source_input = source_context.get("input")
@@ -252,6 +264,7 @@ def collect_input_bindings(
     replay_input = replay_contract_input_binding(replay_api_contract)
     if replay_input is not None:
         bindings.append(replay_input)
+    bindings.extend(callee_source_input_bindings(external_callee_source_context))
     return sorted(bindings, key=lambda item: (str(item.get("kind")), str(item.get("path")), str(item.get("name", ""))))
 
 

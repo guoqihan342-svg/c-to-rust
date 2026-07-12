@@ -47,6 +47,7 @@ def evaluate_provider_readiness(context_pack: dict[str, Any]) -> dict[str, str]:
     raw_status = span.get("status") if isinstance(span, dict) else None
     response_file_status = response_file_contract_status(context_pack)
     callee_context_status = required_callee_context_status(context_pack)
+    callee_source_status = external_callee_source_context_status(context_pack)
     replay_contract_status = replay_api_contract_status(context_pack)
     source_admitted = (
         raw_status == "inline_slice_spec"
@@ -80,6 +81,12 @@ def evaluate_provider_readiness(context_pack: dict[str, Any]) -> dict[str, str]:
             "status": "blocked",
             "source_span_status": raw_status,
             "context_boundary_status": "required_callee_context_incomplete",
+        }
+    if callee_source_status != "ready":
+        return {
+            "status": "blocked",
+            "source_span_status": raw_status,
+            "context_boundary_status": "external_callee_source_context_incomplete",
         }
     if replay_contract_status != "bound":
         return {
@@ -204,6 +211,7 @@ def replay_api_contract_status(context_pack: dict[str, Any]) -> str:
         return status if isinstance(status, str) and status else "invalid"
     source = contract.get("source")
     requirements = contract.get("requirements")
+    model_input_policy = contract.get("model_input_policy")
     bindings = context_pack.get("bindings")
     inputs = bindings.get("inputs") if isinstance(bindings, dict) else None
     api_name = contract.get("api_name", contract.get("function_name"))
@@ -217,6 +225,13 @@ def replay_api_contract_status(context_pack: dict[str, Any]) -> str:
         or contract["call_count"] < 1
         or not isinstance(source, dict)
         or not isinstance(requirements, dict)
+        or model_input_policy
+        != {
+            "replay_source_content": "withheld_oracle_bearing",
+            "oracle_values": "withheld",
+            "call_plan": "included",
+            "required_candidate_api": "included_when_bound",
+        }
         or not isinstance(inputs, list)
     ):
         return "invalid"
@@ -280,6 +295,58 @@ def replay_api_contract_status(context_pack: dict[str, Any]) -> str:
         "size_bytes": source["size_bytes"],
     }
     return "bound" if expected_input in inputs else "invalid"
+
+
+def external_callee_source_context_status(context_pack: dict[str, Any]) -> str:
+    c_boundary = context_pack.get("c_boundary")
+    required = c_boundary.get("required_callee_sections") if isinstance(c_boundary, dict) else []
+    if not isinstance(required, list) or "external_direct_callees" not in required:
+        return "ready"
+    context = context_pack.get("external_callee_source_context")
+    if not isinstance(context, dict):
+        return "invalid"
+    if context.get("status") not in {"bound", "partial"}:
+        return "incomplete"
+    if not isinstance(context.get("blocks"), list) or not context["blocks"]:
+        return "incomplete"
+    boundary_payload = c_boundary.get("payload")
+    if not isinstance(boundary_payload, dict):
+        boundary_payload = c_boundary
+    declared = boundary_payload.get("external_direct_callees")
+    if not isinstance(declared, list):
+        return "invalid"
+    required_source_names = {
+        item.get("name")
+        for item in declared
+        if isinstance(item, dict)
+        and item.get("definition_status") == "real_source_bound"
+        and isinstance(item.get("name"), str)
+    }
+    bound_source_names = {
+        item.get("callee")
+        for item in context["blocks"]
+        if isinstance(item, dict) and isinstance(item.get("callee"), str)
+    }
+    if not required_source_names.issubset(bound_source_names):
+        return "incomplete"
+    critical_reasons = {
+        "source_file_sha256_mismatch",
+        "source_file_changed_during_read",
+        "guard_macro_definition_not_found",
+        "return_constant_definition_not_found",
+        "source_behavior_expected_output_mismatch",
+        "callee_context_exceeds_total_limit",
+    }
+    blocked = context.get("blocked")
+    if not isinstance(blocked, list) or any(
+        isinstance(item, dict) and item.get("reason") in critical_reasons
+        for item in blocked
+    ):
+        return "incomplete"
+    behavior = context.get("source_backed_behavior")
+    if not isinstance(behavior, dict) or behavior.get("semantics_verified") is not False:
+        return "invalid"
+    return "ready"
 
 
 def is_sha256(value: Any) -> bool:

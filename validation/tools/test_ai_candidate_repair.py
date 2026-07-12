@@ -37,6 +37,21 @@ def context_pack() -> dict[str, object]:
             "required_callee_sections": [],
             "missing_required_callee_sections": [],
         },
+        "external_callee_source_context": {
+            "schema_version": 1,
+            "status": "not_applicable",
+            "blocks": [],
+            "blocked": [],
+            "dependencies": [],
+            "source_backed_behavior": {
+                "schema_version": 1,
+                "scope": "source_backed_fixture_path",
+                "rules": [],
+                "semantics_verified": False,
+                "behavior_sha256": "0" * 64,
+            },
+            "semantics_verified": False,
+        },
         "rust_boundary": {"payload": {"public_api": [{"name": "add_one"}]}},
         "replay_api_contract": {
             "schema_version": 1,
@@ -55,6 +70,12 @@ def context_pack() -> dict[str, object]:
                 "all_call_sites_typecheck": True,
                 "parameter_count_and_order": "as_invoked_by_generated_replay",
                 "return_type": "as_constrained_by_generated_replay",
+            },
+            "model_input_policy": {
+                "replay_source_content": "withheld_oracle_bearing",
+                "oracle_values": "withheld",
+                "call_plan": "included",
+                "required_candidate_api": "included_when_bound",
             },
         },
         "bindings": {

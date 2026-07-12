@@ -195,6 +195,15 @@ def _fact(
     *,
     details: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    oracle_sensitive = gate in {
+        "generated_replay",
+        "schema_diff",
+        "negative_mutation",
+        "final_verification",
+    }
+    if oracle_sensitive:
+        message = "Semantic gate failed; concrete oracle values are withheld from repair input."
+        details = _redact_oracle_details(details) if details else details
     fact: dict[str, Any] = {
         "gate": _bounded_text(gate, "unknown_gate", max_bytes=MAX_GATE_BYTES),
         "kind": _bounded_text(kind, "gate_failure", max_bytes=MAX_KIND_BYTES),
@@ -207,6 +216,13 @@ def _fact(
     if details:
         fact["details"] = _bounded_details(details)
     return fact
+
+
+def _redact_oracle_details(value: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "oracle_values": "withheld",
+        "detail_keys": sorted(str(key) for key in value)[:32],
+    }
 
 
 def _bounded_text(value: str, fallback: str, *, max_bytes: int) -> str:

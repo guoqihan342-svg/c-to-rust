@@ -54,6 +54,12 @@ class AiPromptContractTests(unittest.TestCase):
                     "parameter_count_and_order": "as_invoked_by_generated_replay",
                     "return_type": "as_constrained_by_generated_replay",
                 },
+                "model_input_policy": {
+                    "replay_source_content": "withheld_oracle_bearing",
+                    "oracle_values": "withheld",
+                    "call_plan": "included",
+                    "required_candidate_api": "included_when_bound",
+                },
             },
         }
 
@@ -76,14 +82,15 @@ class AiPromptContractTests(unittest.TestCase):
             prompt.index("Required generated replay API contract:"),
             prompt.index("ContextPack:"),
         )
-        self.assertIn("translate(case.value, case.len)", prompt)
+        self.assertNotIn("translate(case.value, case.len)", prompt)
+        self.assertIn("<withheld-oracle-bearing-replay-source>", prompt)
         self.assertIn("<presented-in-required-replay-api-contract>", prompt)
         self.assertIn("without dropping or reordering adjacent scalar parameters", prompt)
-        self.assertEqual(1, prompt.count("Required replay behavior:"))
-        self.assertIn("immutable behavior constraint", prompt)
-        self.assertIn("do not implement a fixture-value lookup table", prompt)
+        self.assertEqual(1, prompt.count("Required replay discipline:"))
+        self.assertIn("oracle values are intentionally withheld", prompt)
+        self.assertIn("fixture lookup tables", prompt)
         self.assertLess(
-            prompt.index("Required replay behavior:"),
+            prompt.index("Required replay discipline:"),
             prompt.index("Required generated replay API contract:"),
         )
 
@@ -112,12 +119,13 @@ class AiPromptContractTests(unittest.TestCase):
             prompt.index("Required generated replay API contract:"),
             prompt.index("CurrentCandidate:"),
         )
-        self.assertIn("translate(case.value, case.len)", prompt)
+        self.assertNotIn("translate(case.value, case.len)", prompt)
+        self.assertIn("<withheld-oracle-bearing-replay-source>", prompt)
         self.assertIn("internal_only forbids raw pointers", prompt)
-        self.assertEqual(1, prompt.count("Required replay behavior:"))
-        self.assertIn("smallest general behavior", prompt)
+        self.assertEqual(1, prompt.count("Required replay discipline:"))
+        self.assertIn("oracle values are intentionally withheld", prompt)
         self.assertLess(
-            prompt.index("Required replay behavior:"),
+            prompt.index("Required replay discipline:"),
             prompt.index("Required generated replay API contract:"),
         )
 
@@ -196,7 +204,8 @@ class AiPromptContractTests(unittest.TestCase):
                 "pub fn translate_safe(value: &[u8], len: usize) -> bool"
             ),
         )
-        self.assertIn("translate(case.value, case.len)", repair_prompt)
+        self.assertNotIn("translate(case.value, case.len)", repair_prompt)
+        self.assertIn("<withheld-oracle-bearing-replay-source>", repair_prompt)
         for marker in ("ContextPack:", "CurrentCandidate:"):
             self.assertLess(repair_prompt.index("Required boundary facts:"), repair_prompt.index(marker))
             self.assertLess(repair_prompt.index("Required candidate API:"), repair_prompt.index(marker))

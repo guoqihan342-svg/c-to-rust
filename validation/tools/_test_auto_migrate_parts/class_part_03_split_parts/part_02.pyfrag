@@ -1,5 +1,5 @@
 
-    def test_real_fdb_kv_set_rust_check_uses_harness_only_external_bindings(self) -> None:
+    def test_real_fdb_kv_set_rust_check_does_not_inject_project_fixture_behavior(self) -> None:
         module = load_auto_migrate_module()
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
         spec = json.loads(spec_path.read_text(encoding="utf-8"))
@@ -23,21 +23,11 @@
             reported_context = module.rust_check_external_context(context)
 
             self.assertTrue(changed)
-            self.assertEqual(rust_check["returncode"], 0, rust_check["stderr"])
+            self.assertNotEqual(rust_check["returncode"], 0, rust_check["stderr"])
             draft = draft_path.read_text(encoding="utf-8")
-            self.assertIn("rust-check harness-only external callee binding: fdb_blob_make", draft)
-            self.assertIn(
-                "pub fn fdb_blob_make(blob: &mut FdbBlob, value_buf: *const core::ffi::c_void, buf_len: usize) -> &mut FdbBlob",
-                draft,
-            )
-            self.assertIn(
-                "pub fn fdb_kv_set_blob(db: *mut core::ffi::c_void, key: *const core::ffi::c_void, blob: &mut FdbBlob) -> i32",
-                draft,
-            )
-            self.assertIn(
-                "pub fn fdb_kv_del(db: *mut core::ffi::c_void, key: *const core::ffi::c_void) -> i32",
-                draft,
-            )
+            self.assertNotIn("rust-check harness-only external callee binding", draft)
+            self.assertNotIn("7i32", draft)
+            self.assertNotIn("fn fdb_blob_make", draft)
             self.assertNotIn("fn strlen", draft)
             self.assertEqual(claim_scope["status"], "compile_context_only")
             self.assertFalse(claim_scope["semantics_verified"])
@@ -52,9 +42,9 @@
                 item["name"]: item
                 for item in reported_context["declared_callees"]
             }
-            self.assertEqual(bindings["fdb_blob_make"]["binding_status"], "harness_only")
-            self.assertEqual(bindings["fdb_kv_set_blob"]["binding_status"], "harness_only")
-            self.assertEqual(bindings["fdb_kv_del"]["binding_status"], "harness_only")
+            self.assertEqual(bindings["fdb_blob_make"]["binding_status"], "not_emitted")
+            self.assertEqual(bindings["fdb_kv_set_blob"]["binding_status"], "generated_compile_only")
+            self.assertEqual(bindings["fdb_kv_del"]["binding_status"], "generated_compile_only")
             self.assertFalse(bindings["fdb_blob_make"]["semantics_verified"])
             self.assertFalse(bindings["fdb_kv_set_blob"]["semantics_verified"])
             self.assertFalse(bindings["fdb_kv_del"]["semantics_verified"])
@@ -128,7 +118,7 @@
             self.assertTrue(replay["generated_draft_replay_pass"])
             self.assertFalse(replay["generated_draft_semantic_pass"])
 
-    def test_real_fdb_kv_set_fixture_model_rust_checks_with_opaque_blob_record(self) -> None:
+    def test_real_fdb_kv_set_opaque_blob_cannot_enable_fixture_value_stub(self) -> None:
         module = load_auto_migrate_module()
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
         spec = json.loads(spec_path.read_text(encoding="utf-8"))
@@ -155,14 +145,17 @@ pub fn fdb_kv_set(db: *mut core::ffi::c_void, key: *const core::ffi::c_void, val
             rust_check = module.rust_check_once(draft_path)
 
             self.assertTrue(changed)
-            self.assertEqual(rust_check["returncode"], 0, rust_check["stderr"])
+            self.assertNotEqual(rust_check["returncode"], 0, rust_check["stderr"])
+            rewritten = draft_path.read_text(encoding="utf-8")
+            self.assertNotIn("7i32", rewritten)
+            self.assertNotIn("fixture model", rewritten)
             bindings = {
                 item["name"]: item
                 for item in module.rust_check_external_binding_report(context)["bindings"]
             }
-            self.assertEqual(bindings["fdb_blob_make"]["status"], "fixture_model")
-            self.assertEqual(bindings["fdb_kv_set_blob"]["status"], "fixture_model")
-            self.assertEqual(bindings["fdb_kv_del"]["status"], "fixture_model")
+            self.assertNotIn("fdb_blob_make", bindings)
+            self.assertEqual(bindings["fdb_kv_set_blob"]["status"], "generated_compile_only")
+            self.assertEqual(bindings["fdb_kv_del"]["status"], "generated_compile_only")
 
     def test_declared_external_context_generates_compile_only_stub_when_fixture_model_absent(self) -> None:
         module = load_auto_migrate_module()
@@ -432,7 +425,7 @@ pub fn delete_key(crc: u32, buf: &'static [u8], size: usize) -> u32 {
             self.assertTrue(replay["generated_draft_replay_pass"])
             self.assertFalse(replay["generated_draft_semantic_pass"])
 
-    def test_real_fdb_kv_del_fixture_bound_external_model_replay_runs(self) -> None:
+    def test_real_fdb_kv_del_project_fixture_stubs_are_not_injected(self) -> None:
         module = load_auto_migrate_module()
         spec = {
             "schema_version": 1,
@@ -608,17 +601,21 @@ pub fn fdb_kv_del(db: &KvDbFixture, _key: &str) -> i32 {
                 item["name"]: item
                 for item in module.rust_check_external_binding_report(context)["bindings"]
             }
-            self.assertEqual(bindings["db_init_ok"]["status"], "fixture_model")
-            self.assertEqual(bindings["db_name"]["status"], "fixture_model")
-            self.assertEqual(bindings["db_lock"]["status"], "fixture_model")
-            self.assertEqual(bindings["del_kv"]["status"], "fixture_model")
-            self.assertEqual(bindings["db_unlock"]["status"], "fixture_model")
+            self.assertEqual(bindings["db_init_ok"]["status"], "generated_compile_only")
+            self.assertEqual(bindings["db_name"]["status"], "generated_compile_only")
+            self.assertEqual(bindings["db_lock"]["status"], "generated_compile_only")
+            self.assertEqual(bindings["del_kv"]["status"], "generated_compile_only")
+            self.assertEqual(bindings["db_unlock"]["status"], "generated_compile_only")
             replay_source = (
                 evidence_dir / "l3-real-fdb-kv-del-rust-replay-test-draft.rs"
             ).read_text(encoding="utf-8")
             self.assertIn("KvDbFixture = KvDbFixture { init_ok: false", replay_source)
             self.assertIn('fdb_kv_del(&actual_uninit_delete_0_db, "boot_count")', replay_source)
             self.assertNotIn("db_marker", replay_source)
-            self.assertEqual(replay["status"], "passed")
-            self.assertTrue(replay["generated_draft_replay_pass"])
+            self.assertEqual(replay["status"], "not_applicable")
+            self.assertEqual(
+                replay["skip_reason"],
+                "compile_only_external_bindings_not_executable",
+            )
+            self.assertFalse(replay["generated_draft_replay_pass"])
             self.assertFalse(replay["generated_draft_semantic_pass"])

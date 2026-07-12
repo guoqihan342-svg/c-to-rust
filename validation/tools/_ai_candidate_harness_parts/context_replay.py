@@ -134,6 +134,12 @@ def build_replay_api_contract(
             "parameter_count_and_order": "as_invoked_by_generated_replay",
             "return_type": "as_constrained_by_generated_replay",
         },
+        "model_input_policy": {
+            "replay_source_content": "withheld_oracle_bearing",
+            "oracle_values": "withheld",
+            "call_plan": "included",
+            "required_candidate_api": "included_when_bound",
+        },
     }
     if bound_call_plan is not None:
         contract["call_plan"] = bound_call_plan

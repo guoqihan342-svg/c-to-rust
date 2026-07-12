@@ -8,6 +8,7 @@ from .prompt_contract import (
     context_without_replay_source,
     render_boundary_contract,
     render_candidate_source_rule,
+    render_external_callee_source_rule,
     render_replay_api_contract,
     render_replay_behavior_rule,
     render_required_candidate_api,
@@ -38,6 +39,7 @@ def render_prompt(context_pack: dict[str, Any]) -> str:
     required_candidate_api = render_required_candidate_api(context_pack)
     candidate_source_rule = render_candidate_source_rule(context_pack)
     replay_behavior_rule = render_replay_behavior_rule(context_pack)
+    external_callee_source_rule = render_external_callee_source_rule(context_pack)
     replay_contract = render_replay_api_contract(context_pack)
     required_candidate_api_line = (
         f"Required candidate API: {required_candidate_api}\n"
@@ -49,6 +51,9 @@ def render_prompt(context_pack: dict[str, Any]) -> str:
     )
     replay_behavior_rule_line = (
         f"{replay_behavior_rule}\n" if replay_behavior_rule else ""
+    )
+    external_callee_source_rule_line = (
+        f"{external_callee_source_rule}\n" if external_callee_source_rule else ""
     )
     return (
         "Task mode: generate-candidate\n"
@@ -70,6 +75,7 @@ def render_prompt(context_pack: dict[str, Any]) -> str:
         f"Required boundary facts: {boundary_contract}\n"
         f"{required_candidate_api_line}"
         f"{candidate_source_rule_line}"
+        f"{external_callee_source_rule_line}"
         f"{replay_behavior_rule_line}"
         f"Required generated replay API contract: {replay_contract}\n"
         f"ContextPack: {context_json}"

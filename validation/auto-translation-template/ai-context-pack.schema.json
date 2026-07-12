@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "AI ContextPack",
   "type": "object",
-  "required": ["schema_version", "target_id", "slice_id", "function_name", "source_root", "source", "compile_context", "c_boundary", "rust_boundary", "replay_api_contract", "bindings", "claim_boundary"],
+  "required": ["schema_version", "target_id", "slice_id", "function_name", "source_root", "source", "compile_context", "c_boundary", "external_callee_source_context", "rust_boundary", "replay_api_contract", "bindings", "claim_boundary"],
   "properties": {
     "schema_version": {"const": 4},
     "target_id": {"type": "string", "minLength": 1},
@@ -36,6 +36,31 @@
           "uniqueItems": true,
           "items": {"enum": ["external_direct_callees", "call_expression_contract", "c_boundary_truncated"]}
         }
+      }
+    },
+    "external_callee_source_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "status", "blocks", "blocked", "dependencies", "source_backed_behavior", "semantics_verified"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "status": {"enum": ["not_applicable", "bound", "partial", "unavailable", "blocked"]},
+        "blocks": {"type": "array", "maxItems": 24},
+        "blocked": {"type": "array", "maxItems": 24},
+        "dependencies": {"type": "array"},
+        "source_backed_behavior": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema_version", "scope", "rules", "semantics_verified", "behavior_sha256"],
+          "properties": {
+            "schema_version": {"const": 1},
+            "scope": {"const": "source_backed_fixture_path"},
+            "rules": {"type": "array"},
+            "semantics_verified": {"const": false},
+            "behavior_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        },
+        "semantics_verified": {"const": false}
       }
     },
     "replay_api_contract": {"$ref": "#/definitions/replayApiContract"},
@@ -108,6 +133,17 @@
             "return_type": {"const": "as_constrained_by_generated_replay"}
           }
         },
+        "model_input_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["replay_source_content", "oracle_values", "call_plan", "required_candidate_api"],
+          "properties": {
+            "replay_source_content": {"const": "withheld_oracle_bearing"},
+            "oracle_values": {"const": "withheld"},
+            "call_plan": {"const": "included"},
+            "required_candidate_api": {"const": "included_when_bound"}
+          }
+        },
         "call_plan": {"$ref": "#/definitions/replayCallPlan"},
         "required_candidate_api": {"$ref": "#/definitions/requiredCandidateApi"}
       },
@@ -115,7 +151,7 @@
         {
           "if": {"properties": {"status": {"const": "bound"}}},
           "then": {
-            "required": ["call_count", "source", "requirements"],
+            "required": ["call_count", "source", "requirements", "model_input_policy"],
             "properties": {
               "function_name": {"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
             }

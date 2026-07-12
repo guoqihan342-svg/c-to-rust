@@ -41,9 +41,15 @@ def render_replay_api_contract(context_pack: dict[str, Any]) -> str:
     contract = context_pack.get("replay_api_contract")
     if isinstance(contract, dict):
         contract = dict(contract)
+        source = contract.get("source")
+        if isinstance(source, dict):
+            source = dict(source)
+            source["content"] = "<withheld-oracle-bearing-replay-source>"
+            contract["source"] = source
         required_api = contract.get("required_candidate_api")
         if isinstance(required_api, dict):
             contract["required_candidate_api"] = _required_candidate_api_placeholder(required_api)
+        contract = _withhold_oracle_values(contract)
     return json.dumps(contract, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
@@ -76,12 +82,30 @@ def render_replay_behavior_rule(context_pack: dict[str, Any]) -> str:
     if not isinstance(contract, dict) or contract.get("status") != "bound":
         return ""
     return (
-        "Required replay behavior: every assertion, expected value, identity relation, and call "
-        "result in the required generated replay API contract is an immutable behavior constraint, "
-        "not merely a typechecking example. If external callee semantics are unavailable, do not "
-        "invent behavior that contradicts those constraints; synthesize the smallest general behavior "
-        "consistent with the C source and every presented case. Do not branch on project, function, "
-        "or case identifiers, and do not implement a fixture-value lookup table."
+        "Required replay discipline: concrete replay assertions and oracle values are intentionally "
+        "withheld from model input. Implement behavior only from the bound C source, compile context, "
+        "structured call plan, and source-backed external-callee definitions. Do not infer or invent "
+        "expected values, branch on project/function/case identifiers, or implement fixture lookup tables."
+    )
+
+
+def render_external_callee_source_rule(context_pack: dict[str, Any]) -> str:
+    context = context_pack.get("external_callee_source_context")
+    if not isinstance(context, dict) or not context.get("blocks"):
+        return ""
+    behavior = context.get("source_backed_behavior")
+    behavior_contract = (
+        json.dumps(behavior, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        if isinstance(behavior, dict) and behavior.get("rules")
+        else "null"
+    )
+    return (
+        f"Source-backed external-callee behavior contract: {behavior_contract}\n"
+        "Source-backed external callees: ContextPack.external_callee_source_context.blocks contains "
+        "the hash-bound C definitions and dependencies from the declared source root. Implement every "
+        "applicable rule in the behavior contract above. Resolved constants may come only from those "
+        "source rules. They are candidate context only and keep semantics_verified=false; they cannot "
+        "replace oracle, replay, diff, or final verification."
     )
 
 
@@ -107,7 +131,40 @@ def context_without_replay_source(context_pack: dict[str, Any]) -> dict[str, Any
     if isinstance(required_api, dict):
         contract_copy["required_candidate_api"] = _required_candidate_api_placeholder(required_api)
     context["replay_api_contract"] = contract_copy
-    return context
+    callee_context = context_pack.get("external_callee_source_context")
+    if isinstance(callee_context, dict):
+        callee_context_copy = dict(callee_context)
+        behavior = callee_context.get("source_backed_behavior")
+        if isinstance(behavior, dict):
+            callee_context_copy["source_backed_behavior"] = {
+                "status": "presented-in-source-backed-external-callee-behavior-contract",
+                "behavior_sha256": behavior.get("behavior_sha256"),
+            }
+        context["external_callee_source_context"] = callee_context_copy
+    return _withhold_oracle_values(context, preserve_source_backed=True)
+
+
+def _withhold_oracle_values(value: Any, *, preserve_source_backed: bool = False) -> Any:
+    withheld_keys = {
+        "actual",
+        "expected",
+        "expected_outputs",
+        "first_mismatch",
+        "observed",
+    }
+    if isinstance(value, dict):
+        projected = {}
+        for key, item in value.items():
+            if preserve_source_backed and key == "external_callee_source_context":
+                projected[key] = item
+            elif key in withheld_keys:
+                projected[key] = "<withheld-oracle-value>"
+            else:
+                projected[key] = _withhold_oracle_values(item)
+        return projected
+    if isinstance(value, list):
+        return [_withhold_oracle_values(item) for item in value]
+    return value
 
 
 def _required_candidate_api_placeholder(value: dict[str, Any]) -> dict[str, Any]:
@@ -130,6 +187,7 @@ __all__ = [
     "context_without_replay_source",
     "render_boundary_contract",
     "render_candidate_source_rule",
+    "render_external_callee_source_rule",
     "render_replay_behavior_rule",
     "render_replay_api_contract",
     "render_required_candidate_api",

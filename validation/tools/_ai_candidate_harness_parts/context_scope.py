@@ -12,6 +12,7 @@ PROMPT_SCOPE_ORDER = (
     "pointer_graph_excerpt",
     "root_cause_summary",
     "direct_caller_callee_facts",
+    "external_callee_source_blocks",
 )
 
 ARTIFACT_SCOPE_SUFFIXES = {
@@ -57,6 +58,13 @@ def prompt_scope_for_context(context_pack: dict[str, Any]) -> list[str]:
                 scopes.add("root_cause_summary")
     if has_direct_caller_callee_facts(context_pack.get("c_boundary")):
         scopes.add("direct_caller_callee_facts")
+    callee_context = context_pack.get("external_callee_source_context")
+    if (
+        isinstance(callee_context, dict)
+        and callee_context.get("status") in {"bound", "partial"}
+        and value_has_facts(callee_context.get("blocks"))
+    ):
+        scopes.add("external_callee_source_blocks")
     return [scope for scope in PROMPT_SCOPE_ORDER if scope in scopes]
 
 

@@ -292,23 +292,3 @@ def rust_check_ignored_non_observable_void_stub(
     )
     callee["rust_check_binding"]["replay_contract_kind"] = contract["kind"]
     return signature + " {\n" + "\n".join(body_lines) + "\n}"
-
-
-def flashdb_kv_set_fixture_model_allowed(spec: dict[str, Any] | None, name: str) -> bool:
-    return (
-        isinstance(spec, dict)
-        and spec.get("target_id") == "flashdb"
-        and spec.get("slice_id") == "real-fdb-kv-set"
-        and behavior_fields(spec) == ["return_code"]
-        and name in {"fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"}
-    )
-
-
-def flashdb_kv_del_fixture_model_allowed(spec: dict[str, Any] | None, name: str) -> bool:
-    return (
-        isinstance(spec, dict)
-        and spec.get("target_id") == "flashdb"
-        and spec.get("slice_id") == "real-fdb-kv-del"
-        and behavior_fields(spec) == ["return_code"]
-        and name in {"db_init_ok", "db_name", "db_lock", "del_kv", "db_unlock"}
-    )

@@ -26,9 +26,9 @@ input.c + compile context
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
 | 当前 AI 候选状态 | `GLM 0 / auxiliary verified` | 比赛 GLM 仍因余额不足没有 candidate；DeepSeek V4 Flash 已在 WSL 本地无工具通道生成候选并通过 8 类 exact gates，但明确不具备比赛资格 |
-| 当前翻译主线 | P0-A18 / P0-A10 | 前置精确 Rust replay 合同并完成有限跨项目验收；不再以单个 FlashDB 行号扩展作为主线 |
+| 当前翻译主线 | P0-A18c / P0-A10 | A18c6 已关闭，下一步以空 out-root 重跑固定跨项目套件；不再以单个 FlashDB 行号扩展作为主线 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A17 | 辅助跨项目 runner、OpenCode 单元隔离、严格 source/span/spec 绑定与高显著性边界提示已收口 |
+| 最近开发阶段 | P0-A18c6 | 通用 source-backed external-callee 合同、模型输入去 oracle、跨平台合同门和 DeepSeek 定向 exact 复验已收口 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -175,7 +175,21 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
 ## 3. 当前执行队列
 
-### P0-T：确定性翻译辅助通道
+### 3.1 本轮优先级看板
+
+只从上到下执行；下层事项不能用局部样例成功越级关闭上层事项。
+
+| 顺序 | 待办 | 状态 | 本轮完成判据 |
+| ---: | --- | --- | --- |
+| 1 | P0-A18c6 通用 external-callee behavior contract | 完成 | Windows/WSL 合同门、schema/fresh binding 和无硬编码审计全部通过；DeepSeek 定向 exact 结果有 hash-bound 证据 |
+| 2 | P0-A18c 固定跨项目验收 | 下一项 | 使用空 out-root 重跑固定 12 项，只统计 exact gates；辅助模型两个公开 numerator 继续为 0 |
+| 3 | P0-A10 AI golden set | 待开始 | 以多项目、陌生标识符和最近邻负例扩充能力集，禁止按测试用例修补 |
+| 4 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
+| 5 | P0-C 阶段收口 | 待开始 | 修复历史 evidence 漂移并清理 all-feature Clippy 剩余项 |
+
+勾选规则：实现完成只勾子项；父项必须在其全部验收门和证据闭合后才能勾选。定向样例、AI 文本、candidate 编译、WSL 模拟或辅助模型成功均不能单独关闭 P0-A18c、P0-A10 或 P0-H9。
+
+### 3.2 P0-T：确定性翻译辅助通道
 
 - [x] **P0-T21：组合 `:1868-:1874` zero-start 与 next-address 二分支**
 
@@ -262,7 +276,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   暂停作为当前主线。该切片保留为 AI-first harness 的真实 golden case，用于比较 GLM-5.1、typed IR 和 C2Rust 候选；只有共同门禁通过时才增加 numerator，已有 stats body 不重复计数。
 
-### P0-A：AI-first Harness 主线
+### 3.3 P0-A：AI-first Harness 主线
 
 收口顺序按可执行依赖排列，不因外部模型或 checkout 阻塞本地开发：
 
@@ -363,7 +377,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   当前拆成三个可验收子阶段，避免把“某个用例改善”误报为通用合同完成：
 
-  - [x] **P0-A18a：可执行 replay source contract**。`auto_migrate` 在 provider 前生成 replay 草稿；ContextPack v4 绑定完整 replay source、SHA、大小和真实调用次数，candidate/repair prompt 在 ContextPack 前只展示一次同源合同。provider readiness、manifest v8、cache、scope 和 fresh summary validator 均 fail closed；缺失、敏感、超限、无真实调用或文件漂移都保持 `provider_invocations=0` 或使 fresh run 无效。`_auto_migrate_ai_exact.py` 同阶段按 routing/persistence/validation 拆成 489 行兼容门面和三个职责模块。
+  - [x] **P0-A18a：可执行 replay source contract**。`auto_migrate` 在 provider 前生成 replay 草稿；ContextPack v4 完整绑定 replay source、SHA、大小和真实调用次数，供 validator 重开与复算。模型投影不再暴露可能携带 expected/actual 的 replay source，只展示同源 ReplayCallPlan 与 `required_candidate_api`；candidate/repair prompt 各只展示一份合同。provider readiness、manifest v8、cache、scope 和 fresh summary validator 均 fail closed；缺失、敏感、超限、无真实调用或文件漂移都保持 `provider_invocations=0` 或使 fresh run 无效。`_auto_migrate_ai_exact.py` 同阶段按 routing/persistence/validation 拆成 489 行兼容门面和三个职责模块。
   - [x] **P0-A18b：结构化 ReplayCallPlan**。从 replay generator 抽出单一结构化计划，显式携带参数名/顺序/Rust 类型、C 参数映射、length retained、返回类型、ABI、unsafe 和 call args；renderer 与 prompt 只能消费同一计划。已删除专用 legacy fallback dispatch 与 readiness OR 列表，函数名只作为合同数据。
     - [x] **P0-A18b1：声明式 plan 核心**。受限 DSL、plan SHA、ContextPack 子合同 v2、source marker、调用 arity 复算、prompt 单份 payload 与 fresh binding 已完成。`source_function_name` 与 Rust `api_name` 分离，zlib/libuv 已生成真实调用；`fdb_blob_make/kv_to_blob/set/del` 已改为按语义合同选择 renderer。AI 生成 draft 只有在 manifest v8、selected candidate、applied artifact、draft SHA 全部闭合时才能进入 replay。
     - [x] **P0-A18b2：legacy adapter 全部计划化**。已盘点的 scalar、record、external-sequence、record-pointer 与 opaque-context adapter 均消费 ReplayCallPlan；不完整合同 fail-closed，不再回退专用 renderer。
@@ -377,6 +391,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
         - [x] **P0-A18b2c1：scalar-return 4/4**。结构性识别 pure-u32、single-i32、signed-rshift-i32 与 ABI-bound u64，不读取函数名或项目名；统一生成 schema-v3 declarative contract。`status/contract` 等 fixture 元数据进入 hash-bound `fixture_assertions`，并在 plan 构建时校验固定值；`u64` 成为正式 codec。8 个现有 demo spec 均退出 legacy renderer，27 项 plan 回归和 3 项 exact auto-migrate 回归通过。
         - [x] **P0-A18b2c2：mutable-out/report 4/4**。single i32 output、dynamic i32 slice output、input-buffer out0+sum 与 call-metadata 已按 C 签名、参数方向、length companion、call-expression contract 和 fixture observable 闭合生成通用 plan；固定 i32 array、受限 `Vec<i32>` initializer、最多 4096 项的 `i32_slice/i32_vec` codec、whole-binding observation、`usize/string_vec` metadata assertion、fixture relation、完整符号/字段重命名和漂移拒绝均已覆盖。call-metadata 显式声明 `input_fixture_fields`、contexts 与 source_calls，不猜测字段或解析 C 文本。真实 store-add-one、copy-i32-ptr-arith、sum-i32-buffer、sum-i32-ptr-arith 与 call-expression replay 均不再进入对应 legacy renderer。
         - [x] **P0-A18b2c3：record-pointer/opaque 5/5**。record pointer identity、record projection identity、record buffer/length identity、opaque key 与 opaque key/value 均已迁移到通用 v2 producer。opaque context 使用安全 Rust fixture model，不再伪造 FlashDB ABI marker；旧 raw-pointer AI draft 会在 replay 编译门 fail-closed。Windows/WSL 聚焦门禁均为 48/48；WSL 阶段全量 207 项仅保留干净基线已有的 2 个 CRC32 失败和 1 项平台跳过。该阶段仍是 replay/harness 能力，不增加 translation coverage numerator，也不替代 C oracle/Rust replay/diff 语义证据。
+    - [x] **P0-A18b3：ReplayCallPlan 按职责拆分**。原 946 行实现已拆为 48 行兼容门面和 dispatch、v1 builder、fixture binding、schema、literal rendering 五个真实模块，不使用 `exec` 或代码片段拼接；提交 `b28d5648` 的兼容门为 87 项通过、1 项 Windows symlink 条件跳过。
   - [ ] **P0-A18c：有限跨项目验收**。固定 12 项必须全部可生成真实 replay call，首轮 rustc API mismatch 相比 A17 明显下降，并继续只按 exact gates 统计质量信号。
     - [x] **P0-A18c1：有界 provider/repair 可靠性**。ContextPack replay 合同提升为 v3，并从 ReplayCallPlan 生成可独立复算的 `required_candidate_api`，包含精确签名、supporting structs、ABI、unsafe 和引用返回生命周期；candidate/repair prompt 只展示一份完整 API。AI manifest 提升为 v9：仅对“合法无工具 JSONL、无 assistant 文本、终止于 `step_finish`、output/reasoning token 均为 0”的空 completion 原样重试一次，两次 response/receipt/session identity 都 hash-bound；余额、鉴权、timeout、非零退出、工具事件和普通 malformed response 不重试。fixture-only Rust compile stub 在检查后逐字节恢复 canonical AI draft，避免 applied artifact SHA 漂移。repair 只接受完整自包含 Rust candidate；fresh oracle 未通过、target contract 缺失或结构化候选失败缺失时零调用跳过。辅助聚合器重开 hash-bound repair report，分别统计 initial、repair 和 total provider invocations；默认 timeout 为 300 秒。161 项 Windows 聚焦回归通过。该项只完成 harness 改造，固定 12 项复跑结果仍由 P0-A18c 追踪。
     - [x] **P0-A18c2：安全语法拒绝 fail-closed**。call-continue、reset-add 和 interior-projection 的 Rust 安全合同抛出 `ValueError` 时，不再使 `auto_migrate` 以 traceback 终止；runner 写入 `replay_safety.kind=generated_rust_safety_contract_failed`、`replay_execution.phase=safety`、失败 mappings 与 `semantic_gate=false`，不执行 rustc/replay，并允许后续 exact/repair 流程继续。新增路径在 Windows/WSL 均为 4/4。
@@ -384,17 +399,29 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [x] **P0-A18c4：未观测 null pointer 默认值安全投影**。record pointer identity 合同中未进入 observable、仅以 `null/null_mut` 默认值补全 proxy record 的字段，不再生成 raw pointer，而是生成 `Option<NonNull<c_void>>` 与 `None` initializer；record buffer/length 和实际 pointer identity 字段不走该路径。ReplayCallPlan validator、renderer、ContextPack schema 与 required API 同步支持 `optional_non_null_none`，规则不读取项目或函数名。34 项聚焦测试通过。
     - [x] **P0-A18c5：safe `NonNull` 类型与 raw-pointer operation 分离**。exact alias gate 只在候选无 `unsafe` 且 `core/std::ptr::NonNull<T>` 出现在泛型类型位置时屏蔽该安全类型路径；`NonNull::<T>` 构造、其他 `ptr` API、`as_ptr/as_mut_ptr/from_raw/into_raw`、raw pointer 类型与任何 `unsafe` + `NonNull` 组合仍 fail-closed 要求 current-candidate alias proof。规则不读取项目、函数或字段名；Windows/WSL 53 项相关门禁均通过。
       - 提交 `ecbb2ef3` 后，DeepSeek 0-repair 单项验证中 `kv_to_blob`、`tsl_to_blob` 均为 1-call AI exact pass；router SHA-256 分别为 `4f753f9cd00359d46ed13044f9845b9dff04702c84a4c9ede0aacfc85de31cac`、`93f7b5fe6d2f7f3d903d7042d2a78236b96b86afa491faeea5c971ed00d7a68b`。这关闭了两个 record identity 候选的 alias 误报，不提升 competition numerator。
-      - `kv_set` 同配置 router `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0` 仍失败：rustc/unsafe/oracle 通过，replay 因外部 callee fixture 期望 `7`、候选实现 `-1` 失败。**P0-A18c6** 聚焦通用 executable external-callee behavior contract；禁止按函数名或 fixture 值硬编码。三项 WSL worktree 运行的 `repo_commit=UNKNOWN0`，仅为本地 hash-bound AI 路由证据。
+    - [x] **P0-A18c6：通用、源码支撑的 external-callee behavior contract**。当待翻译函数调用当前 slice 外的函数时，模型只能从 SHA 绑定的 C 定义、宏、枚举和结构字段恢复行为；fixture expected/actual 和携带 oracle 的 replay source 对模型及 repair 都不可见。禁止读取项目名、函数名、路径或固定 fixture 值选择翻译行为。
+      - [x] **P0-A18c6a：外部 callee 源码上下文**。按声明的 direct callees 从 source root 提取有界函数定义，并对路径、文件 SHA、span、TOCTOU、数量和字节预算 fail closed；不按目标名称分派。
+      - [x] **P0-A18c6b：源码行为解析与独立绑定**。从 SHA 绑定源码解析否定 guard、函数式宏字段投影和 enum ordinal，生成独立 `behavior_sha256`；fixture expected 只由 validator 交叉核对，不参与规则构建。effective fixture SHA 同时绑定源 fixture 和 spec overlay。
+      - [x] **P0-A18c6c：模型输入去 oracle 与删除专用语义桩**。candidate/repair prompt 隐藏 replay source、expected/actual/observed/mismatch 和 gate value；已删除 `flashdb_kv_set_fixture_model_allowed`、`flashdb_kv_del_fixture_model_allowed`、`rust_check_harness_only_external_stub` 及固定 `7i32` 路径。Windows 聚焦合同门 41 项通过、1 项平台条件跳过。
+      - [x] **P0-A18c6d：跨平台阶段门**。schema 解析、fresh binding、`git diff --check` 和直接受影响的 auto-migrate 路径已闭合；最终聚焦合同组在 Windows 完成 94 项（93 通过、1 项平台跳过），在 WSL 为 94/94；删除专用桩的 7 个 auto-migrate 用例在两端各 7/7。Windows 252 项阶段组只保留 2 个已在干净基线登记的 CRC32 失败和 2 个平台跳过，不计作本阶段回归。
+      - [x] **P0-A18c6e：辅助模型精确复验**。空 out-root `ai-auxiliary-p0-a18c6-kv-set-deepseek-wsl-20260712-02` 使用 `opencode/deepseek-v4-flash-free`、1 initial、0 repair；独立 validator 重开 16 个 hash-bound artifacts 后为 AI exact pass。router SHA-256 `3d71be46e6d8530842397547a9011c1e65b1dc500922ee0d7f69daa12f7514e2`，candidate SHA-256 `9e9b78cac94f05e6cd23ee6aafd9e4598be415df325e8b4e77e803f75c292230`。该结果保持辅助模型身份与两个公开 numerator 为 0，不能替代固定 12 项和 GLM 比赛复验。
+      - [x] **P0-A18c6f：实现按职责拆分**。external-callee 源码块提取/输入绑定与 guard/macro/enum 行为解析分别位于 260 行和 307 行模块；不使用 `exec`、`.pyfrag` 动态装载或项目专用分派。
 
-  WSL run `ai-auxiliary-p0-a18b2b2a-wsl-20260712-160700` 使用 clang 18.1.3、OpenCode 1.17.18、`opencode/deepseek-v4-flash-free`、0 repair、4 并发：12/12 预检 ready，12 次 provider 调用，8 个候选，2 个 exact pass，6 个 exact failure，2 个 contract failure，1 个 execution failure，1 个 provider block。exact pass 为 `real-fdb-calc-crc32` 和 `real-fdb-is-str`；相对上一轮 A18b 的 1 个 exact pass 提升到 2 个，但样本仍只有固定 12 项，不能据此声明通用稳定性或比赛通过。两个 contract failure 均为 applied-artifact binding 无效；interior-projection 的 execution failure 是 AI 候选没有满足唯一 safe mutable interior projection 的语法安全门，不是 ReplayCallPlan v2 执行器回归；libuv 因无效 AI 响应被 provider block。该运行仍是 `wsl-local-simulation`，`competition_success_numerator=0`、`translation_coverage_numerator=0`。
+      前序失败证据：同配置 `kv_set` router `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0` 的 rustc/unsafe/oracle 通过，但候选把外部 callee 结果实现为 `-1`，与 oracle 的 `7` 不一致。三项 WSL worktree 运行均报告 `repo_commit=UNKNOWN0`，因此只属于本地 hash-bound AI 路由证据。
 
-  P0-A18b2c2 完成后的 WSL 辅助运行 `ai-auxiliary-p0-a18b2c2-deepseek-wsl-20260712-180000` 使用同一固定 12 项、`opencode/deepseek-v4-flash-free`、最多 1 轮 repair 和 3 并发。12/12 预检 ready，12 次 provider 调用生成 8 个候选；结果为 1 个 exact pass、7 个 exact failure、3 个 contract failure、1 个 execution failure、0 provider block，实际执行 repair 均为 0。唯一 exact pass 是 `real-fdb-is-str`；`real-fdb-calc-crc32` 本轮退化为 common exact gates failed，三个 contract failure 仍是 applied-artifact binding 无效，execution failure 仍为 interior projection。相较上一轮 2 个 exact pass 没有改善，因此不能声明 replay 计划化已提高 AI 成功率。报告路径为 `target/ai-auxiliary-p0-a18b2c2-deepseek-wsl-20260712-180000/summary/ai-auxiliary-cross-project-suite-report.json`，SHA-256 `bc26d70321086cd5a6e27b9e5d13912aaa29c32445160536364fe9ad00f27458`；运行保持 `wsl-local-simulation`、`competition_success_numerator=0`、`translation_coverage_numerator=0`。
+  历史辅助运行只保留决策所需索引；详细 artifact 以对应 report 和 Git 历史为准。所有运行均为 `wsl-local-simulation`，两个公开 numerator 均为 0。
 
-  P0-A18b2c3 完成后的 WSL 辅助运行 `ai-auxiliary-p0-a18b2c3-deepseek-wsl-20260712-192612` 使用同一固定 12 项、`opencode/deepseek-v4-flash-free`、最多 1 轮 repair 和 3 并发。Windows/WSL 预检均为 12/12 ready；12 次 initial provider 调用生成 8 个候选，结果为 2 个 exact pass、6 个 exact failure、2 个 contract failure、1 个 execution failure、1 个 provider block。重开单元绑定的 repair report 后确认另有 6 次 repair 调用，因此总调用数是 18，而旧聚合字段误报 repair 为 0；6 次 repair 中 2 次 timeout、3 次 exhausted、1 次 invalid patch。exact pass 为 `real-fdb-calc-crc32` 与 `real-fdb-is-str`；两个 contract failure 是 fixture-only compile stub 覆盖 canonical draft 后造成的 applied-artifact binding 无效，execution failure 仍为 interior projection，provider block 是 read-kv-body 的无效 AI response。相较紧邻上一轮 1 个 pass 有恢复，但只回到更早的 2-pass 基线，因此 P0-A18c 仍保持未完成。报告路径为 `target/ai-auxiliary-p0-a18b2c3-deepseek-wsl-20260712-192612/summary/ai-auxiliary-cross-project-suite-report.json`，SHA-256 `7e8bd77b9afd6c5883d007a47c5058d47a12d1a5d973b86e5ff042b908e2d5c0`；运行保持 `wsl-local-simulation`、`competition_success_numerator=0`、`translation_coverage_numerator=0`。
+  | 阶段 / run id | exact | 关键结论 | 绑定证据 |
+  | --- | ---: | --- | --- |
+  | A18b2b2a / `ai-auxiliary-p0-a18b2b2a-wsl-20260712-160700` | 2/12 | 12 calls、8 candidates；2 contract failure、1 execution failure、1 provider block，不能声明通用提升 | run id + unit artifacts |
 
-  P0-A18c1 完成后的 WSL 辅助运行 `ai-auxiliary-p0-a18c1-deepseek-wsl-20260712-204206` 使用同一固定 12 项、`opencode/deepseek-v4-flash-free`、最多 1 轮 repair 和 3 并发。12/12 preflight ready；12 次 initial 加 4 次有 response 证明的 repair，共 16 次 provider 调用，生成 11 个候选。结果为 2 个 exact pass、9 个 exact failure、0 contract failure、1 个 execution failure、0 provider block；没有单元触发空 completion 重试。exact pass 仍为 `real-fdb-calc-crc32` 和 `real-fdb-is-str`，因此不能声明成功率提升。相较上一轮，候选 8→11、contract failure 2→0、provider block 1→0、总调用 18→16；有效 target contract 下首轮 rustc API mismatch 从 3 项降为 1 项，`tsl_to_blob` 和 `kv_set` 已可编译，`kv_to_blob` 仍编译失败。唯一 execution failure 是 zero-start AI draft 未声明唯一 safe owner-interior alias，旧路径抛出未结构化 `ValueError`；P0-A18c2 已修复该 harness 边界。报告路径为 `target/ai-auxiliary-p0-a18c1-deepseek-wsl-20260712-204206/summary/ai-auxiliary-cross-project-suite-report.json`，SHA-256 `512641d1ece1d6dcf8b5bc20af3208da467a1c5284931d3c2a32bdb5cf8551c1`；运行保持 `wsl-local-simulation`、两个公开 numerator 均为 0，P0-A18c 继续未完成。
+  | A18b2c2 / `ai-auxiliary-p0-a18b2c2-deepseek-wsl-20260712-180000` | 1/12 | 12 calls、8 candidates；相对前一轮退化，不能声明 replay 计划化提高成功率 | report SHA `bc26d70321086cd5a6e27b9e5d13912aaa29c32445160536364fe9ad00f27458` |
 
-  P0-A18c3 的 `kv_to_blob` WSL 定向验证使用 `opencode/deepseek-v4-flash-free`、1 次 initial、0 repair。模型按闭合 source 合同一次输出全部 supporting structs，rustc 与 generated replay 均通过，证明上一轮唯一 API compile mismatch 已在该样本消除；exact router 仍因 compiler-owned proxy 的未观测 `*mut c_void` 字段触发 `alias_proof_missing`，因此保持 semantic false。router SHA-256 为 `0c5f8f7130f4b6b8c163f1007af130cc6016f48234a54e6dde4485a8a7b31316`，candidate manifest SHA-256 为 `16a7fa57a8038cb9c66a57c8f8a8eeb04cb171dba68a5cc9b6802aa55529f18b`；该定向验证不是固定套件成功率证据。P0-A18c4 已修正 safe proxy 类型，等待下一次定向 exact 验证。
+  | A18b2c3 / `ai-auxiliary-p0-a18b2c3-deepseek-wsl-20260712-192612` | 2/12 | 12 initial + 6 repair；修复旧聚合误报，但仅回到 2-pass 基线 | report SHA `7e8bd77b9afd6c5883d007a47c5058d47a12d1a5d973b86e5ff042b908e2d5c0` |
+
+  | A18c1 / `ai-auxiliary-p0-a18c1-deepseek-wsl-20260712-204206` | 2/12 | 12 initial + 4 repair、11 candidates；contract failure 降至 0，首轮 API mismatch 3→1，但 exact 未提升 | report SHA `512641d1ece1d6dcf8b5bc20af3208da467a1c5284931d3c2a32bdb5cf8551c1` |
+
+  | A18c3 / `kv_to_blob` targeted | 0/1 exact | rustc/replay 通过，因 `alias_proof_missing` 保持 semantic false；定向样例不是固定套件成功率 | router SHA `0c5f8f7130f4b6b8c163f1007af130cc6016f48234a54e6dde4485a8a7b31316`；manifest SHA `16a7fa57a8038cb9c66a57c8f8a8eeb04cb171dba68a5cc9b6802aa55529f18b` |
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 
@@ -420,7 +447,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   worker 与 preflight prompt 删除重复的 `Command: <JSON argv>` 文本，只保留一条可执行 `Command line:`；结构化 argv、命令 hash、session 和 handoff 证据保持不变。代表性 prompt 减少 13.2%-16.1% bytes，完整 harness 测试通过；该项只降低 token 和命令歧义，`semantic_gate=false`。
 
-### P0-B：比赛主机与 OpenCode
+### 3.4 P0-B：比赛主机与 OpenCode
 
 - [ ] **P0-H9：真实 OpenCode + GLM-5.1 比赛合同复验**
 
@@ -434,7 +461,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   依赖 P0-H9。仅在真实比赛主机复跑已闭合的 CRC32 C2Rust+repair before/after，并发布 hash-bound workflow metrics 后关闭。
 
-### P0-C：阶段收口
+### 3.5 P0-C：阶段收口
 
 - [ ] **P0-C1：历史 evidence 漂移**。修复 run `20260711T-finite-p0-t31` 再确认的 8 个失败项，按 artifact 所有权分批处理，不与翻译层功能改动混交。
 - [ ] **P0-C2：全功能 Clippy**。commit `81a772d1` 已清理 9 个低风险告警；当前剩余 8 个（2 个 `large_enum_variant`、1 个 `redundant_guards`、1 个 `needless_lifetimes`、4 个 `too_many_arguments`）。新切片不得增加告警。
@@ -554,6 +581,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 6. unsafe 数量是治理指标，不是 FFI、并发、volatile、ABI 或硬件语义的完整安全证明。
 7. evidence 使用 repo-relative path、稳定 hash 和明确保留策略；禁止把密钥和宿主绝对路径写入可发布 artifact。
 8. 大文件按模块职责拆分；测试、schema、证据和文档改动只在确有行为或验收收益时加入。
+9. AI 输入以源码、编译上下文、类型/API 合同和失败分类为准；不得向 candidate 或 repair 暴露 fixture expected/actual、oracle 输出、首个 mismatch 或携带这些值的 replay source。validator 可以读取完整 hash-bound 证据，但不能把验证答案回灌给模型。
 
 ## 9. 常用验证命令
 
