@@ -12,6 +12,7 @@ RUST_TYPE_RE = re.compile(r"^[A-Za-z0-9_&'\[\]<>:(), ]+$")
 ACTUAL_RE = re.compile(r"^return(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
 ALLOWED_ENCODINGS = {
     "u32",
+    "u64",
     "i32",
     "usize",
     "u16",
@@ -25,6 +26,10 @@ MAX_FIXTURE_BYTES = 4 * 1024 * 1024
 
 def build_replay_call_plan(spec: dict[str, Any], repo_root: Path) -> dict[str, Any]:
     contract = spec.get("replay_contract")
+    if not isinstance(contract, dict):
+        from validation.tools.replay_call_plan_scalar import build_implicit_scalar_contract
+
+        contract = build_implicit_scalar_contract(spec)
     if not isinstance(contract, dict):
         return {"schema_version": 1, "status": "unavailable"}
     contract_kind = contract.get("kind")
@@ -227,14 +232,22 @@ def _build_bound_plan(
         raise ValueError("C parameter mappings are not closed")
 
     assertions = _normalize_assertions(contract.get("assertions"))
+    fixture_assertions = _normalize_fixture_assertions(
+        contract.get("fixture_assertions", [])
+    )
     observable_outputs = spec.get("fixture_contract", {}).get("observable_outputs")
     if not isinstance(observable_outputs, list) or not observable_outputs:
         raise ValueError("fixture observable_outputs are required")
-    if {item["fixture_field"] for item in assertions} != set(observable_outputs):
+    covered_outputs = {
+        item["fixture_field"] for item in [*assertions, *fixture_assertions]
+    }
+    if covered_outputs != set(observable_outputs):
         raise ValueError("replay assertions must cover every observable output exactly")
 
     fixture = _fixture_binding(spec, repo_root)
-    _validate_case_values(fixture["cases"], normalized_parameters, assertions)
+    _validate_case_values(
+        fixture["cases"], normalized_parameters, assertions, fixture_assertions
+    )
     c_by_name = {item["name"]: item for item in c_parameters}
     plan: dict[str, Any] = {
         "schema_version": 1,
@@ -278,6 +291,8 @@ def _build_bound_plan(
             "case_ids": [item["id"] for item in fixture["cases"]],
         },
     }
+    if fixture_assertions:
+        plan["fixture_assertions"] = fixture_assertions
     plan["plan_sha256"] = _plan_sha256(plan)
     validate_replay_call_plan(plan)
     return plan
@@ -342,6 +357,15 @@ def render_declarative_replay_cases(
             lines.append(
                 f"    assert_eq!({observed}, {expected}, "
                 f"{json.dumps(case['id'] + ' ' + assertion['fixture_field'] + ' drifted')});\n"
+            )
+        for assertion_index, assertion in enumerate(plan.get("fixture_assertions", [])):
+            actual = _encoded_literal(
+                case["expected"][assertion["fixture_field"]], assertion["encoding"]
+            )
+            expected = _encoded_literal(assertion["expected"], assertion["encoding"])
+            lines.append(
+                f"    assert_eq!({actual}, {expected}, "
+                f"{json.dumps(case['id'] + ' ' + assertion['fixture_field'] + ' metadata drifted')});\n"
             )
     return "".join(lines)
 
@@ -417,6 +441,10 @@ def validate_replay_call_plan(plan: dict[str, Any]) -> None:
         raise ValueError("ReplayCallPlan call arguments drifted")
     if _normalize_assertions(plan.get("assertions")) != plan.get("assertions"):
         raise ValueError("ReplayCallPlan assertions are not canonical")
+    if "fixture_assertions" in plan and _normalize_fixture_assertions(
+        plan.get("fixture_assertions")
+    ) != plan.get("fixture_assertions"):
+        raise ValueError("ReplayCallPlan fixture assertions are not canonical")
     if _normalize_supporting_types(plan.get("supporting_types")) != plan.get("supporting_types"):
         raise ValueError("ReplayCallPlan supporting types are not canonical")
     omitted = plan.get("omitted_c_parameters")
@@ -691,6 +719,30 @@ def _normalize_assertions(value: Any) -> list[dict[str, Any]]:
     return result
 
 
+def _normalize_fixture_assertions(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ValueError("fixture assertions must be an array")
+    result: list[dict[str, Any]] = []
+    fields: set[str] = set()
+    for raw in value:
+        if not isinstance(raw, dict):
+            raise ValueError("fixture assertion must be an object")
+        field = _identifier(raw.get("fixture_field"), "fixture assertion field")
+        encoding = raw.get("encoding")
+        if field in fields or encoding not in {"u32", "u64", "i32", "usize", "bool", "string"}:
+            raise ValueError("fixture assertion field or encoding is invalid")
+        _encoded_literal(raw.get("expected"), encoding)
+        result.append(
+            {
+                "fixture_field": field,
+                "encoding": encoding,
+                "expected": raw.get("expected"),
+            }
+        )
+        fields.add(field)
+    return result
+
+
 def _normalize_supporting_types(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise ValueError("supporting_types must be an array")
@@ -734,6 +786,7 @@ def _validate_case_values(
     cases: list[dict[str, Any]],
     parameters: list[dict[str, Any]],
     assertions: list[dict[str, Any]],
+    fixture_assertions: list[dict[str, Any]],
 ) -> None:
     for case in cases:
         for parameter in parameters:
@@ -742,6 +795,13 @@ def _validate_case_values(
             field = assertion["fixture_field"]
             if field not in case["expected"]:
                 raise ValueError(f"fixture case {case['id']} is missing expected field {field}")
+            _encoded_literal(case["expected"][field], assertion["encoding"])
+        for assertion in fixture_assertions:
+            field = assertion["fixture_field"]
+            if field not in case["expected"]:
+                raise ValueError(f"fixture case {case['id']} is missing metadata field {field}")
+            if case["expected"][field] != assertion["expected"]:
+                raise ValueError(f"fixture case {case['id']} metadata field {field} drifted")
             _encoded_literal(case["expected"][field], assertion["encoding"])
 
 
@@ -760,6 +820,8 @@ def _source_literal(source: dict[str, Any], payload: dict[str, Any]) -> str:
 def _encoded_literal(value: Any, encoding: str) -> str:
     if encoding == "u32":
         return f"{_integer(value, 0, 2**32 - 1, encoding)}u32"
+    if encoding == "u64":
+        return f"{_integer(value, 0, 2**64 - 1, encoding)}u64"
     if encoding == "i32":
         return f"{_integer(value, -(2**31), 2**31 - 1, encoding)}i32"
     if encoding == "usize":
