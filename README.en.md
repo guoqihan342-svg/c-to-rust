@@ -235,6 +235,8 @@ The P0-A18c3 zero-repair targeted DeepSeek run for `kv_to_blob` proves the close
 
 P0-A18c5 no longer counts a safe `Option<core::ptr::NonNull<T>>` type declaration itself as a raw-pointer operation. The exemption applies only when the candidate contains no `unsafe` and `NonNull` appears in a generic type position. `NonNull::<T>` construction, other `core/std::ptr` APIs, `as_ptr/as_mut_ptr/from_raw/into_raw`, raw-pointer types, and every `unsafe` + `NonNull` combination still require a current-candidate alias proof. The related 53-test gate passes on both Windows and WSL.
 
+In the post-`ecbb2ef3` WSL DeepSeek zero-repair checks, both `kv_to_blob` and `tsl_to_blob` reached AI exact pass with one provider invocation. Their router SHA-256 values are `4f753f9cd00359d46ed13044f9845b9dff04702c84a4c9ede0aacfc85de31cac` and `93f7b5fe6d2f7f3d903d7042d2a78236b96b86afa491faeea5c971ed00d7a68b`; both candidates have zero unsafe tokens and zero raw-pointer operations. `kv_set` still failed under the same profile: its candidate passed rustc/unsafe/oracle, but replay expected the external-callee fixture result `7` while the candidate implemented `-1`; the failed router SHA-256 is `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0`. The next generic step is a recomputable executable external-callee behavior contract in ContextPack, not a function-specific exception. The WSL worktree reported `UNKNOWN0` Git metadata in all three runs because its `.git` file contains a Windows path, so these are hash-bound local AI-routing results, not competition-exact or full-project acceptance evidence.
+
 ```bash
 python3 -B -m validation.tools.run_ai_auxiliary_cross_project_suite \
   --suite validation/ai-finite-cross-project-suite.json \

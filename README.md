@@ -243,6 +243,8 @@ P0-A18c3 的 `kv_to_blob` 单项 0-repair DeepSeek 验证证明闭合 source 合
 
 P0-A18c5 不再把安全的 `Option<core::ptr::NonNull<T>>` 类型声明本身误计为 raw-pointer operation。该豁免只在候选完全不含 `unsafe` 且 `NonNull` 出现在泛型类型位置时生效；`NonNull::<T>` 构造、`core/std::ptr` 其他 API、`as_ptr/as_mut_ptr/from_raw/into_raw`、raw pointer 类型和任何 `unsafe` + `NonNull` 组合仍要求 current-candidate alias proof。Windows 与 WSL 的 53 项相关门禁均通过。
 
+提交 `ecbb2ef3` 后的 WSL DeepSeek 0-repair 验证中，`kv_to_blob` 与 `tsl_to_blob` 均以 1 次 provider 调用获得 AI exact pass；router SHA-256 分别为 `4f753f9cd00359d46ed13044f9845b9dff04702c84a4c9ede0aacfc85de31cac` 和 `93f7b5fe6d2f7f3d903d7042d2a78236b96b86afa491faeea5c971ed00d7a68b`，unsafe token 与 raw-pointer operation 均为 0。`kv_set` 同配置下仍失败：候选通过 rustc/unsafe/oracle，但 replay 期望外部 callee fixture 返回 `7`，候选自行实现为 `-1`；失败 router SHA-256 为 `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0`。下一项不是增加函数特例，而是让 ContextPack 提供可复算、可执行的外部 callee 行为合同。三次运行的 WSL worktree Git 元数据均因 Windows `.git` 路径显示 `UNKNOWN0`，因此只作为 hash-bound 本地 AI 路由证据，不作为 competition-exact 或完整项目验收结论。
+
 ```bash
 python3 -B -m validation.tools.run_ai_auxiliary_cross_project_suite \
   --suite validation/ai-finite-cross-project-suite.json \
