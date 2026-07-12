@@ -148,7 +148,7 @@
       "construct_family": "nested-record-field-projection",
       "slice_spec": {
         "path": "validation/slice-specs/flashdb-real-fdb-kv-to-blob.json",
-        "sha256": "a34bb67aff7a0b1e931d52e4d284e467d6bf8970a0fdec3992dd77cc2bd42f7b"
+        "sha256": "ddef077bb0c90b547661a71b0095d690a2c032ab6f936e250d04a7f691ea5cd2"
       },
       "source_binding": {
         "root": "sources/FlashDB",
@@ -177,7 +177,7 @@
       "construct_family": "null-branch-direct-call-chain",
       "slice_spec": {
         "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-        "sha256": "051fa2a2cda9600e60fb32e4250f765ed30a7a893de20c53166df1809fd20c6a"
+        "sha256": "87e54cbf285fe387d413bc880e7a1d910784c63194ce09d77ff0661d290805a7"
       },
       "source_binding": {
         "root": "sources/FlashDB",
@@ -206,7 +206,7 @@
       "construct_family": "guarded-lock-call-sequence",
       "slice_spec": {
         "path": "validation/slice-specs/flashdb-real-fdb-kv-del.json",
-        "sha256": "3a31fb5ace3b55246e32a38da357e0fa00a49cd1ac87e4edbe7ef9cfefa45a43"
+        "sha256": "4478e4e4a6dd6ce6774804fa413f42d6e316b469dd47f3b07c2cbbe2b3550612"
       },
       "source_binding": {
         "root": "sources/FlashDB",
