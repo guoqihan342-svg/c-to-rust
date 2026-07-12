@@ -235,7 +235,7 @@ AI exact 路径禁止同时传入 `--accept-existing-evidence`。历史 accepted
 
 GLM 余额不足时使用独立的 `run_ai_auxiliary_cross_project_suite`，默认模型为 `opencode/deepseek-v4-flash-free`。它拒绝 competition-eligible 模型、非空 out-root、路径不安全或重复的 project/slice identity，并在每个单元启动前后复核 spec SHA；并发单元使用独立的 OpenCode config/data/cache/state/tmp，从而隔离 SQLite、session 与日志。报告固定 `competition_success_numerator=0`、`translation_coverage_numerator=0`，不能关闭 P0-A6/A10/H9。
 
-最新 WSL 辅助运行 `ai-auxiliary-p0-a18b2c2-deepseek-wsl-20260712-180000` 的固定 12 项均实际调用 provider：8 个候选、1 个 exact pass、7 个 exact failure、3 个 contract failure、1 个 execution failure。唯一 exact pass 是 `real-fdb-is-str`；相较上一轮 2 个 exact pass 没有改善，不能声明成功率提升。报告位于 `target/ai-auxiliary-p0-a18b2c2-deepseek-wsl-20260712-180000/summary/ai-auxiliary-cross-project-suite-report.json`，SHA-256 为 `bc26d70321086cd5a6e27b9e5d13912aaa29c32445160536364fe9ad00f27458`。
+最新 WSL 辅助运行 `ai-auxiliary-p0-a18b2c3-deepseek-wsl-20260712-192612` 的固定 12 项均实际调用 provider：8 个候选、2 个 exact pass、6 个 exact failure、2 个 contract failure、1 个 execution failure、1 个 provider block。exact pass 是 `real-fdb-calc-crc32` 与 `real-fdb-is-str`；相较紧邻上一轮 1 个 pass 有恢复，但只回到更早的 2-pass 基线，不能声明通用成功率提升。报告位于 `target/ai-auxiliary-p0-a18b2c3-deepseek-wsl-20260712-192612/summary/ai-auxiliary-cross-project-suite-report.json`，SHA-256 为 `7e8bd77b9afd6c5883d007a47c5058d47a12d1a5d973b86e5ff042b908e2d5c0`。
 
 ```bash
 python3 -B -m validation.tools.run_ai_auxiliary_cross_project_suite \
