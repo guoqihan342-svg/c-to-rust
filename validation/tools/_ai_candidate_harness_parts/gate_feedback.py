@@ -199,6 +199,7 @@ def _fact(
         "generated_replay",
         "schema_diff",
         "negative_mutation",
+        "oracle_contract",
         "final_verification",
     }
     if oracle_sensitive:

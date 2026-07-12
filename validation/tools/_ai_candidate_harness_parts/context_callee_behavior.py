@@ -32,7 +32,7 @@ def source_backed_behavior(
     matches_by_callee: dict[str, list[re.Match[str]]] = {}
     for block in blocks:
         content = str(block.get("source_span", {}).get("content") or "")
-        matches = list(NEGATED_GUARD_RE.finditer(content))
+        matches = list(NEGATED_GUARD_RE.finditer(mask_comments_and_strings(content)))
         if not matches:
             continue
         matches_by_callee[str(block["callee"])] = matches

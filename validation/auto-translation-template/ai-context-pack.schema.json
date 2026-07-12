@@ -45,9 +45,16 @@
       "properties": {
         "schema_version": {"const": 1},
         "status": {"enum": ["not_applicable", "bound", "partial", "unavailable", "blocked"]},
-        "blocks": {"type": "array", "maxItems": 24},
+        "blocks": {
+          "type": "array",
+          "maxItems": 24,
+          "items": {"type": "object", "required": ["callee", "source_file", "source_span", "allowed_use", "semantics_verified"]}
+        },
         "blocked": {"type": "array", "maxItems": 24},
-        "dependencies": {"type": "array"},
+        "dependencies": {
+          "type": "array",
+          "items": {"type": "object", "required": ["kind", "symbol", "source_file", "source_span"]}
+        },
         "source_backed_behavior": {
           "type": "object",
           "additionalProperties": false,
@@ -55,7 +62,10 @@
           "properties": {
             "schema_version": {"const": 1},
             "scope": {"const": "source_backed_fixture_path"},
-            "rules": {"type": "array"},
+            "rules": {
+              "type": "array",
+              "items": {"type": "object", "required": ["callee", "scope", "when", "effect", "source_span_sha256", "rule_sha256", "semantics_verified"]}
+            },
             "semantics_verified": {"const": false},
             "behavior_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
           }

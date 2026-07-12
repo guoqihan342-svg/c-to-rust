@@ -403,9 +403,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
       - [x] **P0-A18c6a：外部 callee 源码上下文**。按声明的 direct callees 从 source root 提取有界函数定义，并对路径、文件 SHA、span、TOCTOU、数量和字节预算 fail closed；不按目标名称分派。
       - [x] **P0-A18c6b：源码行为解析与独立绑定**。从 SHA 绑定源码解析否定 guard、函数式宏字段投影和 enum ordinal，生成独立 `behavior_sha256`；fixture expected 只由 validator 交叉核对，不参与规则构建。effective fixture SHA 同时绑定源 fixture 和 spec overlay。
       - [x] **P0-A18c6c：模型输入去 oracle 与删除专用语义桩**。candidate/repair prompt 隐藏 replay source、expected/actual/observed/mismatch 和 gate value；已删除 `flashdb_kv_set_fixture_model_allowed`、`flashdb_kv_del_fixture_model_allowed`、`rust_check_harness_only_external_stub` 及固定 `7i32` 路径。Windows 聚焦合同门 41 项通过、1 项平台条件跳过。
-      - [x] **P0-A18c6d：跨平台阶段门**。schema 解析、fresh binding、`git diff --check` 和直接受影响的 auto-migrate 路径已闭合；最终聚焦合同组在 Windows 完成 94 项（93 通过、1 项平台跳过），在 WSL 为 94/94；删除专用桩的 7 个 auto-migrate 用例在两端各 7/7。Windows 252 项阶段组只保留 2 个已在干净基线登记的 CRC32 失败和 2 个平台跳过，不计作本阶段回归。
+      - [x] **P0-A18c6d：跨平台阶段门**。schema 解析、fresh binding、`git diff --check` 和直接受影响的 auto-migrate 路径已闭合；最终聚焦合同组在 Windows 完成 96 项（95 通过、1 项平台跳过），在 WSL 为 96/96；删除专用桩的 7 个 auto-migrate 用例在两端各 7/7。readiness 会复算 rule/behavior hash、核对全部真实 callee 及 source bindings，注释伪控制流和 `oracle_contract` 回灌均有 fail-closed 负例。Windows 252 项阶段组只保留 2 个已在干净基线登记的 CRC32 失败和 2 个平台跳过，不计作本阶段回归。
       - [x] **P0-A18c6e：辅助模型精确复验**。空 out-root `ai-auxiliary-p0-a18c6-kv-set-deepseek-wsl-20260712-02` 使用 `opencode/deepseek-v4-flash-free`、1 initial、0 repair；独立 validator 重开 16 个 hash-bound artifacts 后为 AI exact pass。router SHA-256 `3d71be46e6d8530842397547a9011c1e65b1dc500922ee0d7f69daa12f7514e2`，candidate SHA-256 `9e9b78cac94f05e6cd23ee6aafd9e4598be415df325e8b4e77e803f75c292230`。该结果保持辅助模型身份与两个公开 numerator 为 0，不能替代固定 12 项和 GLM 比赛复验。
-      - [x] **P0-A18c6f：实现按职责拆分**。external-callee 源码块提取/输入绑定与 guard/macro/enum 行为解析分别位于 260 行和 307 行模块；不使用 `exec`、`.pyfrag` 动态装载或项目专用分派。
+      - [x] **P0-A18c6f：实现按职责拆分**。external-callee 源码块提取/输入绑定与 guard/macro/enum 行为解析分别位于 260 行和 307 行模块；通用 provider readiness 与 callee hash/binding readiness 分别为 309 行和 164 行。不使用 `exec`、`.pyfrag` 动态装载或项目专用分派。
 
       前序失败证据：同配置 `kv_set` router `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0` 的 rustc/unsafe/oracle 通过，但候选把外部 callee 结果实现为 `-1`，与 oracle 的 `7` 不一致。三项 WSL worktree 运行均报告 `repo_commit=UNKNOWN0`，因此只属于本地 hash-bound AI 路由证据。
 

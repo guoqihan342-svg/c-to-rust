@@ -141,6 +141,42 @@ class AiExternalCalleeSourceContextTests(unittest.TestCase):
 
         self.assertEqual(external_callee_source_context_status(context_pack), "incomplete")
 
+    def test_commented_guard_does_not_become_source_behavior(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ai-callee-commented-guard-") as tmp:
+            root = Path(tmp)
+            source = root / "src" / "unit.c"
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_text(
+                "#define READY(value) ((value)->ready)\n"
+                "typedef enum { OK, FAILED } result_t;\n"
+                "int helper(int value) {\n"
+                "    /* if (!READY(value)) { return FAILED; } */\n"
+                "    return OK;\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            digest = hashlib.sha256(source.read_bytes()).hexdigest()
+            spec = {
+                "source": {"source_file_hashes": {"src/unit.c": digest}},
+                "c_boundary": {
+                    "external_direct_callees": [{
+                        "name": "helper",
+                        "source_ref": "src/unit.c#helper",
+                        "source_files": [{"path": "src/unit.c", "sha256": digest}],
+                        "definition_status": "real_source_bound",
+                    }]
+                },
+            }
+
+            context = build_external_callee_source_context(
+                spec,
+                source_root=root,
+                known_roots=(str(root),),
+            )
+
+            self.assertEqual(context["status"], "bound")
+            self.assertEqual(context["source_backed_behavior"]["rules"], [])
+
     def test_context_pack_and_prompt_expose_source_without_duplicate_body(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ai-callee-context-pack-") as tmp:
             root = Path(tmp)
@@ -209,6 +245,20 @@ class AiExternalCalleeSourceContextTests(unittest.TestCase):
             "source_behavior_expected_output_mismatch",
             {item["reason"] for item in drifted_context["blocked"]},
         )
+
+    def test_behavior_hash_and_source_bindings_are_recomputed_for_readiness(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        spec_path = repo_root / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
+        context = ai_candidate_harness.build_context_pack(
+            spec_path,
+            source_root=repo_root / "sources" / "FlashDB",
+        )
+
+        self.assertEqual(external_callee_source_context_status(context), "ready")
+        context["external_callee_source_context"]["source_backed_behavior"][
+            "behavior_sha256"
+        ] = "0" * 64
+        self.assertEqual(external_callee_source_context_status(context), "invalid")
 
     def test_candidate_prompt_withholds_replay_oracle_but_keeps_source_rule(self) -> None:
         repo_root = Path(__file__).resolve().parents[2]
@@ -291,6 +341,15 @@ class AiExternalCalleeSourceContextTests(unittest.TestCase):
                 }
             ],
         }
+        payloads["oracle_contract"] = {
+            "candidate_sha256": digest,
+            "status": "failed",
+            "failures": [{
+                "kind": "oracle_mismatch",
+                "message": "expected 7 observed -1",
+                "details": {"expected": 7, "actual": -1},
+            }],
+        }
 
         result = extract_gate_failure_facts(
             payloads,
@@ -303,6 +362,7 @@ class AiExternalCalleeSourceContextTests(unittest.TestCase):
         self.assertNotIn('"expected": 7', encoded)
         self.assertNotIn('"actual": -1', encoded)
         self.assertNotIn("expected 7 but observed -1", encoded)
+        self.assertNotIn("expected 7 observed -1", encoded)
         self.assertIn('"oracle_values": "withheld"', encoded)
 
 
