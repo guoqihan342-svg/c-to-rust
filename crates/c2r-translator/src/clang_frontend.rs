@@ -54,6 +54,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "typed-ir")]
 use serde_json::Value;
 
+pub use crate::model::CompileDatabaseRef;
 #[cfg(feature = "typed-ir")]
 use crate::typed_ir::{
     IrBinOp, IrExpr, IrFunction, IrGlobal, IrGlobalInit, IrParam, IrStmt, IrType, IrTypeKind,
@@ -68,9 +69,33 @@ pub struct ClangParseSpec {
     pub include_paths: Vec<String>,
     pub defines: Vec<String>,
     pub target_abi: Option<TargetAbiProfile>,
-    pub compile_commands: Option<PathBuf>,
+    pub compile_commands: Option<CompileDatabaseRef>,
     pub source_file_hashes: BTreeMap<String, String>,
     pub function_source_span: Option<SourceSpanRef>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResolvedCompileCommand {
+    pub database_path: PathBuf,
+    pub database_sha256: String,
+    pub working_directory: PathBuf,
+    pub arguments: Vec<String>,
+}
+
+impl ClangParseSpec {
+    pub fn resolved_compile_command(
+        &self,
+    ) -> Result<Option<ResolvedCompileCommand>, ClangFrontendError> {
+        let Some(reference) = &self.compile_commands else {
+            return Ok(None);
+        };
+        let source_file = if self.source_file.is_absolute() {
+            self.source_file.clone()
+        } else {
+            self.source_root.join(&self.source_file)
+        };
+        resolve_compile_database(reference, &self.source_root, &source_file).map(Some)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -232,6 +257,7 @@ pub fn resolve_clang_path(environment: &BTreeMap<String, String>) -> Option<(Pat
     None
 }
 
+mod compile_database;
 #[cfg(feature = "typed-ir")]
 mod enums;
 #[cfg(feature = "typed-ir")]
@@ -242,8 +268,12 @@ mod records;
 mod skeleton;
 #[cfg(feature = "typed-ir")]
 mod types;
+pub use compile_database::resolve_compile_database;
 #[cfg(feature = "typed-ir")]
 use enums::*;
+#[cfg(all(test, feature = "typed-ir"))]
+#[path = "clang_frontend/tests/compile_database.rs"]
+mod compile_database_tests;
 #[cfg(feature = "typed-ir")]
 use lower_ir::*;
 #[cfg(feature = "typed-ir")]

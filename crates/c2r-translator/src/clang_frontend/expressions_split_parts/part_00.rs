@@ -96,6 +96,21 @@ fn expr_skeleton_from_ast_with_options(
             if cast_kind.as_deref() == Some("NullToPointer") {
                 return null_pointer_skeleton_from_cast(expr, &operand, "ImplicitCastExpr");
             }
+            if cast_kind.as_deref() == Some("BitCast")
+                && matches!(operand, ClangExprSkeleton::NullPtr { .. })
+            {
+                let target = expr_type(expr)?;
+                if matches!(target.kind, ClangTypeKind::Pointer { .. }) {
+                    return Ok(ClangExprSkeleton::NullPtr { ty: target });
+                }
+                return Ok(ClangExprSkeleton::Unsupported {
+                    node: "ImplicitCastExpr".to_string(),
+                    reason: format!(
+                        "null pointer BitCast target {} is not a pointer",
+                        target.spelled
+                    ),
+                });
+            }
             if cast_kind.as_deref() == Some("ArrayToPointerDecay") {
                 return Ok(ClangExprSkeleton::ArrayToPointerDecay {
                     target: expr_type(expr)?,

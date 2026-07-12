@@ -65,8 +65,21 @@ pub fn lower_function_from_clang_parse_spec_report(
     parse_spec: &ClangParseSpec,
 ) -> ClangLoweringReport {
     let source_file = parse_spec.source_root.join(&parse_spec.source_file);
-    let arguments =
-        clang_ast_dump_arguments_with_extra(&source_file, &parse_spec.clang_arguments());
+    let (extra_arguments, compile_database_diagnostic) =
+        match verified_parse_arguments(parse_spec) {
+            Ok(arguments) => arguments,
+            Err(error) => {
+                return report_from_lowering_result(
+                    Some(normalized_report_path(&source_file)),
+                    parse_spec.function_name.clone(),
+                    None,
+                    Vec::new(),
+                    environment,
+                    Err(error),
+                );
+            }
+        };
+    let arguments = clang_ast_dump_arguments_with_extra(&source_file, &extra_arguments);
     let Some((clang_path, _clang_source)) = resolve_clang_path(environment) else {
         return ClangLoweringReport {
             status: "unavailable".to_string(),
@@ -88,20 +101,44 @@ pub fn lower_function_from_clang_parse_spec_report(
         };
     };
 
-    report_from_lowering_result(
+    let mut resolved_function_name = None;
+    let mut report = report_from_lowering_result(
         Some(normalized_report_path(&source_file)),
         parse_spec.function_name.clone(),
         Some(clang_path.to_string_lossy().to_string()),
         arguments.clone(),
         environment,
         clang_ast_dump_json(&clang_path, &arguments).and_then(|ast| {
-            lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+            let selected_name = match parse_spec.function_source_span.as_ref() {
+                Some(span) => source_span_selector::select_expanded_function_name_by_source_span(
+                    &ast,
+                    &source_file,
+                    span,
+                )?,
+                None => parse_spec.function_name.clone(),
+            };
+            resolved_function_name = Some(selected_name.clone());
+            let mut lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
                 &ast,
-                &parse_spec.function_name,
+                &selected_name,
                 parse_spec.target_abi.as_ref(),
-            )
+            )?;
+            lowered.function_ir.name.clone_from(&parse_spec.function_name);
+            Ok(lowered)
         }),
-    )
+    );
+    if let Some(diagnostic) = compile_database_diagnostic {
+        report.diagnostics.insert(0, diagnostic);
+    }
+    if let Some(selected_name) = resolved_function_name
+        .filter(|selected_name| selected_name != &parse_spec.function_name)
+    {
+        report.diagnostics.push(format!(
+            "source-span selection resolved macro-expanded FunctionDecl {selected_name}; emitted logical function name {}",
+            parse_spec.function_name
+        ));
+    }
+    report
 }
 
 #[cfg(feature = "typed-ir")]
@@ -210,6 +247,73 @@ fn clang_ast_dump_arguments_with_extra(
     .chain(extra_arguments.iter().cloned())
     .chain(std::iter::once(source_file.to_string_lossy().into_owned()))
     .collect()
+}
+
+#[cfg(feature = "typed-ir")]
+fn verified_parse_arguments(
+    parse_spec: &ClangParseSpec,
+) -> Result<(Vec<String>, Option<String>), ClangFrontendError> {
+    let Some(command) = parse_spec.resolved_compile_command()? else {
+        return Ok((parse_spec.clang_arguments(), None));
+    };
+    let mut arguments = without_captured_include_paths(&command.arguments)?;
+    for include_path in parse_spec.resolved_include_paths() {
+        let argument = format!("-I{}", include_path.to_string_lossy().replace('\\', "/"));
+        if !arguments.contains(&argument) {
+            arguments.push(argument);
+        }
+    }
+    for define in &parse_spec.defines {
+        let argument = format!("-D{define}");
+        if !arguments.contains(&argument) {
+            arguments.push(argument);
+        }
+    }
+    Ok((
+        arguments,
+        Some(format!(
+            "hash-bound compile database replay selected: path={}, sha256={}",
+            parse_spec
+                .compile_commands
+                .as_ref()
+                .map(CompileDatabaseRef::path)
+                .unwrap_or_default(),
+            command.database_sha256,
+        )),
+    ))
+}
+
+#[cfg(feature = "typed-ir")]
+fn without_captured_include_paths(
+    arguments: &[String],
+) -> Result<Vec<String>, ClangFrontendError> {
+    let mut filtered = Vec::new();
+    let mut index = 0usize;
+    while index < arguments.len() {
+        let argument = &arguments[index];
+        if matches!(argument.as_str(), "-I" | "-isystem" | "-iquote" | "-idirafter" | "/I") {
+            if index + 1 >= arguments.len() {
+                return Err(ClangFrontendError {
+                    kind: "invalid_compile_database_entry".to_string(),
+                    message: format!("compile include flag {argument} requires a path"),
+                });
+            }
+            index += 2;
+            continue;
+        }
+        if (argument.starts_with("-I") && argument.len() > 2)
+            || (argument.starts_with("/I") && argument.len() > 2)
+            || argument.starts_with("-isystem=")
+            || argument.starts_with("-iquote=")
+            || argument.starts_with("-idirafter=")
+        {
+            index += 1;
+            continue;
+        }
+        filtered.push(argument.clone());
+        index += 1;
+    }
+    Ok(filtered)
 }
 
 #[cfg(feature = "typed-ir")]

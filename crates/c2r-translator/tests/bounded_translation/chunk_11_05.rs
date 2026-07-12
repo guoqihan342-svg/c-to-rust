@@ -160,10 +160,16 @@ fn clang_lowering_report_feature_blocks_retired_legacy_fallback_when_unavailable
     } else {
         assert_eq!(manifest.status, "blocked");
         let plan = json_file(out_dir.join("l3-add-one-auto-translation-plan.json"));
-        assert_eq!(plan["errors"][0]["kind"], "legacy_fallback_retired");
+        assert_eq!(plan["errors"][0]["kind"], "missing_clang_path");
+        assert_eq!(
+            plan["errors"][0]["message"],
+            report["lowering_report"]["errors"][0]["message"]
+        );
         let events =
             fs::read_to_string(out_dir.join("l3-add-one-auto-translation-events.jsonl")).unwrap();
-        assert!(events.contains("\"event\":\"translation_fallback\""));
+        assert!(events.contains("\"event\":\"translation_blocked\""));
+        assert!(events.contains("\"kind\":\"missing_clang_path\""));
+        assert!(!events.contains("\"event\":\"translation_fallback\""));
         assert!(!events.contains("\"event\":\"translation_generated\""));
     }
     assert!(manifest

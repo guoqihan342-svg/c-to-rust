@@ -127,6 +127,30 @@
             }.issubset(kind_enum)
         )
 
+    def test_cfg_template_allows_empty_functions_only_when_blocked(self) -> None:
+        schema_path = REPO_ROOT / "validation" / "cfg-template" / "cfg.schema.json"
+        schema = load_json(schema_path)
+        artifact = {
+            "schema_version": 1,
+            "target_id": "generic-target",
+            "slice_id": "unsupported-expression",
+            "level": "L3",
+            "status": "blocked",
+            "source_commit": "1234567",
+            "repo_commit": "7654321",
+            "slice_spec_ref": {"path": "slice.json", "status": "ready"},
+            "functions": [],
+            "unsupported_control_flow": [],
+            "cache_invalidation_keys": ["slice-spec"],
+        }
+
+        jsonschema.validate(artifact, schema)
+        for status in ("recorded", "stale", "incomplete"):
+            with self.subTest(status=status), self.assertRaises(
+                jsonschema.exceptions.ValidationError
+            ):
+                jsonschema.validate({**artifact, "status": status}, schema)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -96,6 +96,12 @@ pub(crate) fn lower_parse_spec_report_with_optional_ast_fixture_and_slice_source
     spec: Option<&SliceSpec>,
 ) -> clang_frontend::ClangLoweringReport {
     let Some(ast_fixture) = ast_fixture.map(str::trim).filter(|value| !value.is_empty()) else {
+        if parse_spec.compile_commands.is_some() {
+            return clang_frontend::lower_function_from_clang_parse_spec_report(
+                environment,
+                parse_spec,
+            );
+        }
         if let Some(spec) = spec.and_then(|spec| {
             if spec.c_source.trim().is_empty() {
                 None

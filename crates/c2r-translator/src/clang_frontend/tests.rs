@@ -12,4 +12,7 @@ mod tests {
     include!("tests/chunk_06.rs");
     include!("tests/chunk_07.rs");
     include!("tests/chunk_08.rs");
+    include!("tests/ast_utils_source_span.rs");
+    include!("tests/verified_parse_arguments.rs");
+    include!("tests/null_pointer_bitcast.rs");
 }

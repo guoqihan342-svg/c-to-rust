@@ -3,6 +3,21 @@
 def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_dir: Path) -> Path:
     build_profile = spec.get("build_profile", {})
     target = build_profile.get("target", {})
+    from validation.tools.native_build_context import resolve_native_build_context
+    from validation.tools.native_build_translator_projection import (
+        native_translator_build_profile,
+        rebase_native_signature,
+        rebase_native_source_files,
+        rebase_native_source_span,
+    )
+
+    native_build_context = resolve_native_build_context(spec, REPO_ROOT)
+    if native_build_context is not None:
+        build_profile, target = native_translator_build_profile(
+            build_profile,
+            target,
+            native_build_context,
+        )
     clang = build_profile.get("clang_type_extraction", {})
     signatures = spec.get("c_boundary", {}).get("signatures", [])
     function_name = spec.get("function_name")
@@ -38,16 +53,35 @@ def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_di
     if translator_spec["build_profile"]["target"] is None:
         del translator_spec["build_profile"]["target"]
     source_root = spec.get("source", {}).get("source_root")
+    if native_build_context is not None:
+        declared_root = normalized_metadata_path(source_root)
+        closure_root = normalized_metadata_path(native_build_context["source_root"]["path"])
+        if declared_root and declared_root != closure_root:
+            raise SystemExit("native build closure source_root conflicts with slice source_root")
+        source_root = "."
     if source_root:
         translator_spec["source_root"] = source_root
     source_files = c_boundary_source_files(spec)
     source_span = function_source_span(signatures, function_name)
+    source_path_projection: dict[str, str] = {}
+    if native_build_context is not None:
+        closure_root = native_build_context["source_root"]["path"]
+        source_files, source_path_projection = rebase_native_source_files(
+            source_files,
+            closure_root,
+        )
+        source_span = rebase_native_source_span(source_span, source_path_projection, closure_root)
     if source_files:
         translator_spec["source_files"] = source_files
         primary_source = primary_source_file(source_files, source_span)
         if primary_source.get("path"):
             translator_spec["source_file"] = primary_source["path"]
     resolved_source_file_hashes = source_file_hashes(spec)
+    if native_build_context is not None:
+        resolved_source_file_hashes = {
+            source_path_projection.get(normalized_metadata_path(path), normalized_metadata_path(path)): sha
+            for path, sha in resolved_source_file_hashes.items()
+        }
     if resolved_source_file_hashes:
         translator_spec["source_file_hashes"] = resolved_source_file_hashes
     if source_span:
@@ -63,7 +97,13 @@ def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_di
         c_boundary["pointer_contract"] = pointer_contract
     declared_signatures = spec.get("c_boundary", {}).get("signatures", [])
     if declared_signatures:
-        c_boundary["signatures"] = declared_signatures
+        if native_build_context is not None:
+            c_boundary["signatures"] = [
+                rebase_native_signature(item, source_path_projection, native_build_context["source_root"]["path"])
+                for item in declared_signatures
+            ]
+        else:
+            c_boundary["signatures"] = declared_signatures
     direct_dependencies = spec.get("c_boundary", {}).get("direct_dependencies", [])
     if direct_dependencies:
         c_boundary["direct_dependencies"] = direct_dependencies
@@ -72,9 +112,15 @@ def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_di
         c_boundary["external_direct_callees"] = external_direct_callees
     if c_boundary:
         translator_spec["c_boundary"] = c_boundary
-    compile_commands = build_profile.get("compile_commands") or build_profile.get("compile_commands_path")
+    compile_commands = (
+        native_build_context["compile_database"]
+        if native_build_context is not None
+        else build_profile.get("compile_commands") or build_profile.get("compile_commands_path")
+    )
     if compile_commands:
         translator_spec["compile_commands"] = compile_commands
+    if native_build_context is not None:
+        translator_spec["native_build_context"] = native_build_context
     path = evidence_dir / f"l3-{spec['slice_id']}-translator-input.json"
     write_json(path, translator_spec)
     return path

@@ -55,7 +55,7 @@ impl ClangParseSpec {
             include_paths: spec.build_profile.include_paths.clone(),
             defines: spec.build_profile.defines.clone(),
             target_abi: spec.build_profile.resolved_target_abi(),
-            compile_commands: spec.compile_commands.as_ref().map(PathBuf::from),
+            compile_commands: spec.compile_commands.clone(),
             source_file_hashes: spec.source_file_hashes.clone(),
             function_source_span,
         })
@@ -88,7 +88,7 @@ impl ClangParseSpec {
             compile_commands: self
                 .compile_commands
                 .as_ref()
-                .map(|path| path.to_string_lossy().into_owned()),
+                .map(|reference| reference.path().to_string()),
             environment: ClangEnvironment::detect_from_env(environment),
             diagnostics,
         }

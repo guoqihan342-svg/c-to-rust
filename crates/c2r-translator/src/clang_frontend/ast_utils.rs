@@ -149,6 +149,11 @@ fn find_function_decl_any<'a>(node: &'a Value, function_name: &str) -> Option<&'
 }
 
 #[cfg(feature = "typed-ir")]
+#[allow(dead_code)]
+#[path = "ast_utils/source_span_selector.rs"]
+mod source_span_selector;
+
+#[cfg(feature = "typed-ir")]
 fn is_named_function_decl(node: &Value, function_name: &str) -> bool {
     string_field(node, "kind").as_deref() == Some("FunctionDecl")
         && string_field(node, "name").as_deref() == Some(function_name)

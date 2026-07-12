@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -235,10 +236,41 @@ pub struct SliceSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub translation_carrier: Option<JsonValue>,
     #[serde(default)]
-    pub compile_commands: Option<String>,
+    pub compile_commands: Option<CompileDatabaseRef>,
     #[serde(default)]
     pub c_boundary: CBoundary,
     pub build_profile: BuildProfile,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum CompileDatabaseRef {
+    HashBound { path: String, sha256: String },
+    LegacyPath(String),
+}
+
+impl CompileDatabaseRef {
+    pub fn path(&self) -> &str {
+        match self {
+            Self::HashBound { path, .. } => path,
+            Self::LegacyPath(path) => path,
+        }
+    }
+
+    pub fn sha256(&self) -> Option<&str> {
+        match self {
+            Self::HashBound { sha256, .. } => Some(sha256),
+            Self::LegacyPath(_) => None,
+        }
+    }
+}
+
+impl Deref for CompileDatabaseRef {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.path()
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

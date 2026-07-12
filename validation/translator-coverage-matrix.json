@@ -88,6 +88,103 @@
       ]
     },
     {
+      "id": "hash-bound-real-tu-compile-context",
+      "status": "partial",
+      "ir_constructs": [
+        "hash-bound CompileDatabaseRef",
+        "exact translation-unit command selection",
+        "sanitized compile arguments",
+        "closure-authoritative include and define overlay",
+        "macro-expanded FunctionDecl source-span selection",
+        "LF-normalized source-span SHA mapped to raw CRLF offsets",
+        "blocked empty CFG evidence"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "source-span selector and cross-line-ending regression tests",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/ast_utils_source_span.rs"
+            }
+          ]
+        },
+        "handwritten_ir": {
+          "status": "not_applicable",
+          "reason": "this capability selects and configures a real clang translation unit before typed IR exists"
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "compile-database hash, ambiguity, response-file, and shell-token refusals",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/compile_database.rs"
+            },
+            {
+              "name": "native build context hash and path refusals",
+              "path": "validation/tools/test_native_build_context.py"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "gap",
+          "reason": "real zlib-ng and libuv translation units currently reach typed-IR refusals before a Rust draft is emitted"
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "compile-context replay and schema-valid refusal evidence are candidate context only and do not prove C/Rust behavior"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "declaring a compile database routes through the real-TU clang lane and invalid context blocks without legacy fallback"
+        },
+        "route_evidence": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "auto-migrate native build context projection tests",
+              "path": "validation/tools/test_auto_migrate_native_build_context.py"
+            },
+            {
+              "name": "blocked CFG schema contract",
+              "path": "validation/tools/test_template_schema_contracts_split_parts/part_01.pyfrag"
+            }
+          ]
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "hash_bound_command_uses_declared_closure_includes_and_preserves_semantic_flags",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/verified_parse_arguments.rs"
+        },
+        {
+          "name": "source_span_selector_maps_normalized_lf_offsets_to_crlf_source_offsets",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/ast_utils_source_span.rs"
+        },
+        {
+          "name": "native build closure projects repo-relative translator context",
+          "path": "validation/tools/test_auto_migrate_native_build_context.py"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "compile database rejects hash drift and unsafe commands",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/compile_database.rs",
+          "fail_closed_reason": "hash drift, ambiguous source entries, response files, and shell operators cannot enter clang argv"
+        },
+        {
+          "name": "source span selector rejects file byte line hash and ambiguity drift",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/ast_utils_source_span.rs",
+          "fail_closed_reason": "real-TU selection requires one body-bearing FunctionDecl bound to matching source evidence"
+        },
+        {
+          "name": "native build context rejects closure drift and ABI conflicts",
+          "path": "validation/tools/test_native_build_context.py",
+          "fail_closed_reason": "invalid closure identity or conflicting ABI evidence cannot fall back to unbound legacy build flags"
+        }
+      ]
+    },
+    {
       "id": "handwritten-ir-readonly-global-crc32",
       "status": "covered",
       "ir_constructs": [
@@ -339,7 +436,7 @@
         },
         {
           "name": "validate_auto_translation_evidence_accepts_generated_draft_after_gates",
-          "path": "validation/tools/_validate_auto_translation_evidence_parts/part_02_split_parts/part_00.pyfrag"
+          "path": "validation/tools/_validate_auto_translation_evidence_parts/part_02_split_parts/part_00_02.pyfrag"
         }
       ],
       "negative_cases": [
@@ -4323,6 +4420,7 @@
         "fixture-bound external callee Rust replay model for real-fdb-kv-del with explicit ignored non-observable external logging replay contract and generated_draft_acceptance-bound named-slice evidence",
         "missing explicit external replay contract remains compile-only fail-closed",
         "direct NULL pointer call argument",
+        "proven NULL pointer ImplicitCastExpr BitCast retargeting",
         "non-literal integer IntegralToBoolean and C-style truthiness with target ABI gates",
         "C _Bool direct-call result emission as Rust bool",
         "typedef-backed opaque void pointer parameter passthrough",
@@ -5133,6 +5231,10 @@
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
+          "name": "implicit_bitcast_retargets_an_already_proven_null_pointer",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/null_pointer_bitcast.rs"
+        },
+        {
           "name": "clang_ast_fixture_replays_function_pointer_parameter_call_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -5438,6 +5540,11 @@
           "name": "typed_ir_rejects_unassigned_function_pointer_local_call",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "local function pointer variables must be definitely assigned before they can act as callees"
+        },
+        {
+          "name": "implicit_bitcast_of_non_null_pointer_stays_unsupported",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/null_pointer_bitcast.rs",
+          "fail_closed_reason": "only an operand already proven to be the null pointer constant may be retargeted by an implicit pointer BitCast"
         },
         {
           "name": "typed_ir_rejects_memset_calls_outside_minimal_statement_model",

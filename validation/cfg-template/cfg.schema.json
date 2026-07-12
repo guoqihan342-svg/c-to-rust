@@ -4,6 +4,17 @@
   "type": "object",
   "additionalProperties": true,
   "required": ["schema_version", "target_id", "slice_id", "level", "status", "source_commit", "repo_commit", "slice_spec_ref", "functions", "unsupported_control_flow", "cache_invalidation_keys"],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "blocked"}},
+        "required": ["status"]
+      },
+      "else": {
+        "properties": {"functions": {"minItems": 1}}
+      }
+    }
+  ],
   "properties": {
     "schema_version": {"type": "integer", "minimum": 1},
     "target_id": {"type": "string"},
@@ -13,7 +24,7 @@
     "source_commit": {"type": "string", "minLength": 7},
     "repo_commit": {"type": "string", "minLength": 7},
     "slice_spec_ref": {"$ref": "#/definitions/evidenceRef"},
-    "functions": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/functionCfg"}},
+    "functions": {"type": "array", "items": {"$ref": "#/definitions/functionCfg"}},
     "unsupported_control_flow": {"type": "array", "items": {"$ref": "#/definitions/unsupportedControlFlow"}},
     "cache_invalidation_keys": {"type": "array", "minItems": 1, "items": {"type": "string"}}
   },

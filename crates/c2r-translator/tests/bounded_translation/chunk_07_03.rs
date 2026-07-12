@@ -258,7 +258,7 @@ fn typed_ir_rejects_out_of_range_integer_literal_in_generic_emitter() {
 }
 
 #[test]
-fn slice_spec_deserializes_real_tu_metadata_without_changing_translation() {
+fn slice_spec_legacy_compile_database_reference_blocks_translation() {
     let spec: SliceSpec = serde_json::from_value(serde_json::json!({
         "target_id": "demo",
         "slice_id": "add-one",
@@ -324,18 +324,10 @@ fn slice_spec_deserializes_real_tu_metadata_without_changing_translation() {
 
     let plan = json_file(out_dir.join("l3-add-one-auto-translation-plan.json"));
     let plan_errors = plan["errors"].as_array().expect("plan errors");
-    assert!(
-        plan_errors.iter().all(|error| {
-            let kind = error["kind"].as_str().unwrap_or_default();
-            kind.starts_with("legacy_") && kind.ends_with("_retired")
-        }),
-        "expected only retired-legacy diagnostics, got {plan_errors:?}"
-    );
+    assert_eq!(plan_errors.len(), 1, "unexpected errors: {plan_errors:?}");
+    assert_eq!(plan_errors[0]["kind"], "unhashed_compile_database");
     let rust_draft = fs::read_to_string(out_dir.join("l3-add-one-rust-draft.rs")).unwrap();
-    assert!(
-        rust_draft.contains("pub fn add_one(value: i32) -> i32"),
-        "{rust_draft}"
-    );
+    assert!(rust_draft.is_empty(), "unhashed real-TU input emitted Rust");
 }
 
 #[cfg(feature = "clang-frontend")]

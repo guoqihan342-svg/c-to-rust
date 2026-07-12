@@ -13,7 +13,10 @@ use crate::clang_frontend;
 use crate::typed_ir;
 #[cfg(feature = "clang-lowering-report")]
 use crate::TranslationSource;
-use crate::{translate_slice, ArtifactManifest, SliceSpec, TranslationError, TranslationResult};
+use crate::{
+    translate_slice, ArtifactManifest, SliceSpec, TranslationError, TranslationPlan,
+    TranslationResult,
+};
 
 pub(crate) fn write_core_translation_artifacts(
     spec: &SliceSpec,
@@ -157,9 +160,7 @@ pub fn write_translation_artifacts(
     #[cfg(feature = "clang-lowering-report")]
     let result = translate_slice_with_optional_clang_lowered_ir(
         spec,
-        clang_lowered_attempt
-            .as_ref()
-            .and_then(|attempt| attempt.result.clone()),
+        clang_lowered_attempt.as_ref(),
     );
     #[cfg(not(feature = "clang-lowering-report"))]
     let result = translate_slice_with_retired_legacy_direct_path(spec);
@@ -246,10 +247,39 @@ fn translate_slice_with_retired_legacy_direct_path(spec: &SliceSpec) -> Translat
 #[cfg(feature = "clang-lowering-report")]
 fn translate_slice_with_optional_clang_lowered_ir(
     spec: &SliceSpec,
-    clang_lowered_result: Option<TranslationResult>,
+    clang_lowered_attempt: Option<
+        &crate::clang_lowered_translation::ClangLoweredTranslationAttempt,
+    >,
 ) -> TranslationResult {
-    if let Some(result) = clang_lowered_result {
-        return result;
+    if let Some(attempt) = clang_lowered_attempt {
+        if let Some(result) = &attempt.result {
+            return result.clone();
+        }
+        if !attempt.report.errors.is_empty() {
+            return TranslationResult {
+                errors: attempt
+                    .report
+                    .errors
+                    .iter()
+                    .map(|error| TranslationError {
+                        kind: error.kind.clone(),
+                        message: error.message.clone(),
+                        source_span: None,
+                    })
+                    .collect(),
+                translation_source: TranslationSource::selected("clang-lowered-typed-ir"),
+                plan: TranslationPlan {
+                    target_id: spec.target_id.clone(),
+                    slice_id: spec.slice_id.clone(),
+                    function_name: spec.function_name.clone(),
+                    translation_rule_ids: vec!["clang-lowering-blocked".to_string()],
+                    unsupported_node_count: attempt.report.errors.len(),
+                    unsafe_candidate_count: 0,
+                    ..TranslationPlan::default()
+                },
+                ..TranslationResult::default()
+            };
+        }
     }
     let mut result = translate_slice(spec);
     result.translation_source = TranslationSource::fallback(
