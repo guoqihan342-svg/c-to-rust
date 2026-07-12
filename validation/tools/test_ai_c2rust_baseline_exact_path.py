@@ -163,6 +163,16 @@ class C2RustBaselineExactRouteTests(unittest.TestCase):
 
         ai_manifest: dict[str, object] = {
             "status": "generated",
+            "provider_invocations": 1,
+            "generator": {
+                "provider": "zai",
+                "logical_model": "GLM-5.1",
+                "resolved_model": "zai/glm-5.1",
+                "competition_eligible": True,
+                "evaluation_scope": "competition-primary",
+                "agent": "c2rust-candidate",
+                "variant": "max",
+            },
             "selected_candidate_id": "opencode-glm51-1",
             "candidates": [{"candidate_id": "opencode-glm51-1", "applied": True}],
         }

@@ -60,6 +60,16 @@ def exact_result(path: Path, attempt_dir: Path, *, passed_gates: int, passed: bo
 def ai_manifest() -> dict[str, object]:
     return {
         "status": "generated",
+        "provider_invocations": 1,
+        "generator": {
+            "provider": "zai",
+            "logical_model": "GLM-5.1",
+            "resolved_model": "zai/glm-5.1",
+            "competition_eligible": True,
+            "evaluation_scope": "competition-primary",
+            "agent": "c2rust-candidate",
+            "variant": "max",
+        },
         "selected_candidate_id": "opencode-glm51-1",
         "candidates": [{"candidate_id": "opencode-glm51-1", "applied": True}],
     }
