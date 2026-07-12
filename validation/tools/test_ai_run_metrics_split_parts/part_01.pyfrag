@@ -22,6 +22,7 @@ class AiRunMetricsTests(unittest.TestCase):
                 ai_variant="max",
                 ai_timeout_seconds=41,
                 ai_opencode_command="opencode-custom",
+                ai_candidate_cache_root=REPO_ROOT / "target" / "test-ai-candidate-cache",
             )
             command = next(
                 command
@@ -32,6 +33,10 @@ class AiRunMetricsTests(unittest.TestCase):
             self.assertEqual(command[command.index("--ai-model") + 1], "custom/glm-5.1")
             self.assertEqual(command[command.index("--ai-timeout-seconds") + 1], "41")
             self.assertEqual(command[command.index("--ai-opencode-command") + 1], "opencode-custom")
+            self.assertEqual(
+                Path(command[command.index("--ai-candidate-cache-root") + 1]),
+                Path("target/test-ai-candidate-cache"),
+            )
             self.assertEqual(result.summary["schema_version"], 2)
             self.assertEqual(result.summary["ai_translation_metrics"]["abnormal"], 1)
 
@@ -57,6 +62,19 @@ class AiRunMetricsTests(unittest.TestCase):
                 [metrics[key] for key in ["invocations", "generated", "applied", "selected", "rustc_pass", "semantic_acceptance"]],
                 [0, 0, 0, 0, 0, 0],
             )
+
+    def test_competition_runner_rejects_host_specific_cache_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(SystemExit, "cache root must stay inside"):
+                runner.run_competition(
+                    slice_specs=[REPO_ROOT / "validation/slice-specs/demo-add-one.json"],
+                    out_root=Path(tmp) / "out",
+                    proof_class="local-simulation",
+                    command_runner=RecordingRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="external-cache-root",
+                    ai_candidate_cache_root=Path(tmp) / "host-cache",
+                )
 
     def test_unselected_ai_candidate_does_not_advance_the_ai_funnel(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -112,6 +130,39 @@ class AiRunMetricsTests(unittest.TestCase):
             self.assertEqual(metrics["terminal_classifications"]["semantic_acceptance"], 1)
             self.assertEqual(metrics["blocked"], 0)
             self.assertEqual(metrics["router_totals"]["selected_by_source"]["opencode-ai"], 1)
+
+    def test_cache_hit_resolves_candidate_without_provider_invocation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_root = Path(tmp)
+            summary, descriptor = write_generated_ai_chain(
+                out_root,
+                common_acceptance=True,
+                cache_hit=True,
+            )
+            summary_path = out_root / "summary/competition-run-summary.json"
+            metrics = runner.build_ai_translation_metrics(
+                summary=summary,
+                descriptors=[descriptor],
+                ai_runtime=runtime(),
+                reuse_accepted_evidence=False,
+                summary_path=summary_path,
+                repo_root=REPO_ROOT,
+                out_root=out_root,
+            )
+            summary["ai_translation_metrics"] = metrics
+            write_json(summary_path, summary)
+
+            self.assertEqual(metrics["schema_version"], 2)
+            self.assertEqual(metrics["invocations"], 0)
+            self.assertEqual(metrics["cache_hits"], 1)
+            self.assertEqual(metrics["generated"], 1)
+            self.assertEqual(metrics["semantic_acceptance"], 1)
+            self.assertEqual(metrics["units"][0]["cache_hits"], 1)
+            validator.validate_ai_translation_metrics(
+                summary,
+                summary_path=summary_path,
+                repo_root=REPO_ROOT,
+            )
 
     def test_metric_tampering_and_artifact_drift_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

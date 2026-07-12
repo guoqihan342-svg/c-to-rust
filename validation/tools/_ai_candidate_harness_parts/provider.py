@@ -8,6 +8,14 @@ import shlex
 import subprocess
 from typing import Any, Callable
 
+from .candidate_cache import (
+    agent_definition_sha256,
+    cache_key_payload,
+    cache_key_sha256,
+    candidate_generation_lock,
+    load_candidate_cache,
+    store_candidate_cache,
+)
 from .context import atomic_write_bytes, atomic_write_json, canonical_json_bytes, sha256_bytes, sha256_path
 from .prompt_transport import prompt_file_arguments, prompt_transport_contract
 from .provider_readiness import evaluate_provider_readiness
@@ -49,6 +57,8 @@ def generate_candidate(
     variant: str = DEFAULT_VARIANT,
     timeout_seconds: int = 180,
     runner: Runner | None = None,
+    cache_root: Path | None = None,
+    _cache_generation_lock_held: bool = False,
 ) -> dict[str, Any]:
     out_dir.mkdir(parents=True, exist_ok=True)
     target_id = str(context_pack["target_id"])
@@ -58,6 +68,7 @@ def generate_candidate(
     prompt_path = out_dir / f"{prefix}-ai-prompt.txt"
     response_path = out_dir / f"{prefix}-ai-response.jsonl"
     candidate_path = out_dir / f"{prefix}-ai-rust-candidate.rs"
+    cache_entry_path = out_dir / f"{prefix}-ai-cache-entry.json"
     manifest_path = out_dir / f"{prefix}-ai-candidate-manifest.json"
 
     atomic_write_json(context_path, context_pack)
@@ -77,6 +88,11 @@ def generate_candidate(
             response_path,
             provider_invocations=0,
             provider_preflight=provider_preflight,
+            cache_evidence=(
+                {"status": "not_checked", "reason": "context_not_provider_ready"}
+                if cache_root is not None
+                else {"status": "disabled"}
+            ),
         )
         manifest = {
             **base,
@@ -89,6 +105,102 @@ def generate_candidate(
         }
         atomic_write_json(manifest_path, manifest)
         return manifest
+    cache_payload = None
+    cache_evidence: dict[str, Any] = {"status": "disabled"}
+    if cache_root is not None:
+        cache_payload = cache_key_payload(
+            sha256_path(context_path),
+            prompt_sha256=sha256_path(prompt_path),
+            resolved_model=resolved_model,
+            agent=agent,
+            agent_definition_sha256=agent_definition_sha256(
+                agent,
+                Path(__file__).resolve().parents[3],
+            ),
+            variant=variant,
+        )
+        cache_key = cache_key_sha256(cache_payload)
+        cached, cache_reason = load_candidate_cache(
+            cache_root,
+            cache_payload,
+            parse_candidate_response,
+        )
+        if cached is not None:
+            atomic_write_bytes(cache_entry_path, cached.entry_bytes)
+            atomic_write_bytes(response_path, cached.response_bytes)
+            atomic_write_bytes(candidate_path, cached.candidate_bytes)
+            cache_evidence = {
+                "status": "hit",
+                "key_sha256": cache_key,
+                "entry_sha256": cached.entry_sha256,
+                "entry": {
+                    "path": cache_entry_path.name,
+                    "sha256": sha256_path(cache_entry_path),
+                },
+                "raw_response_sha256": sha256_bytes(cached.response_bytes),
+                "candidate_sha256": sha256_bytes(cached.candidate_bytes),
+            }
+            base = manifest_base(
+                target_id,
+                slice_id,
+                resolved_model,
+                agent,
+                variant,
+                context_path,
+                prompt_path,
+                response_path,
+                provider_invocations=0,
+                provider_preflight=provider_preflight,
+                cache_evidence=cache_evidence,
+            )
+            candidate = candidate_record(
+                cached.parsed,
+                resolved_model=resolved_model,
+                context_path=context_path,
+                prompt_path=prompt_path,
+                candidate_path=candidate_path,
+            )
+            manifest = {**base, "status": "generated", "candidates": [candidate]}
+            atomic_write_json(manifest_path, manifest)
+            return manifest
+        cache_evidence = {
+            "status": "miss",
+            "key_sha256": cache_key,
+            "miss_reason": cache_reason,
+            "stored": False,
+        }
+        if not _cache_generation_lock_held:
+            try:
+                with candidate_generation_lock(
+                    cache_root,
+                    cache_payload,
+                    timeout_seconds=timeout_seconds + 30,
+                ):
+                    return generate_candidate(
+                        context_pack,
+                        out_dir=out_dir,
+                        opencode_command=opencode_command,
+                        resolved_model=resolved_model,
+                        agent=agent,
+                        variant=variant,
+                        timeout_seconds=timeout_seconds,
+                        runner=runner,
+                        cache_root=cache_root,
+                        _cache_generation_lock_held=True,
+                    )
+            except TimeoutError:
+                return generate_candidate(
+                    context_pack,
+                    out_dir=out_dir,
+                    opencode_command=opencode_command,
+                    resolved_model=resolved_model,
+                    agent=agent,
+                    variant=variant,
+                    timeout_seconds=timeout_seconds,
+                    runner=runner,
+                    cache_root=None,
+                    _cache_generation_lock_held=True,
+                )
     argv = [
         *provider_command_prefix(opencode_command),
         "run",
@@ -121,6 +233,7 @@ def generate_candidate(
         response_path,
         provider_invocations=1,
         provider_preflight=provider_preflight,
+        cache_evidence=cache_evidence,
     )
     failure = classify_provider_failure(execution)
     if failure is not None:
@@ -147,7 +260,39 @@ def generate_candidate(
 
     candidate_source = parsed["candidate"]["source"]
     atomic_write_bytes(candidate_path, candidate_source.encode("utf-8"))
-    candidate = {
+    if cache_root is not None and cache_payload is not None:
+        stored = store_candidate_cache(
+            cache_root,
+            cache_payload,
+            response_bytes,
+            candidate_source.encode("utf-8"),
+            parse_candidate_response,
+        )
+        cache_evidence["stored"] = stored
+        if not stored:
+            cache_evidence["miss_reason"] = "store_failed"
+        base["cache"] = cache_evidence
+    candidate = candidate_record(
+        parsed,
+        resolved_model=resolved_model,
+        context_path=context_path,
+        prompt_path=prompt_path,
+        candidate_path=candidate_path,
+    )
+    manifest = {**base, "status": "generated", "candidates": [candidate]}
+    atomic_write_json(manifest_path, manifest)
+    return manifest
+
+
+def candidate_record(
+    parsed: dict[str, Any],
+    *,
+    resolved_model: str,
+    context_path: Path,
+    prompt_path: Path,
+    candidate_path: Path,
+) -> dict[str, Any]:
+    return {
         "candidate_id": "opencode-glm51-1",
         "purpose": "rust_draft",
         "kind": "opencode-ai",
@@ -174,9 +319,6 @@ def generate_candidate(
         "rejected_by_gates": [],
         "assumptions": parsed.get("assumptions", []),
     }
-    manifest = {**base, "status": "generated", "candidates": [candidate]}
-    atomic_write_json(manifest_path, manifest)
-    return manifest
 
 
 def provider_command_prefix(command: str) -> list[str]:
@@ -376,14 +518,16 @@ def manifest_base(
     *,
     provider_invocations: int,
     provider_preflight: dict[str, str],
+    cache_evidence: dict[str, Any],
 ) -> dict[str, Any]:
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "target_id": target_id,
         "slice_id": slice_id,
         "ai_required_for_default_pipeline": True,
         "provider_invocations": provider_invocations,
         "provider_preflight": provider_preflight,
+        "cache": cache_evidence,
         "generator": {
             "tool": "opencode",
             "provider": "zai",

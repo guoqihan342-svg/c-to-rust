@@ -119,6 +119,7 @@ def main() -> int:
     parser.add_argument("--ai-variant")
     parser.add_argument("--ai-timeout-seconds", type=int)
     parser.add_argument("--ai-opencode-command")
+    parser.add_argument("--ai-candidate-cache-root", type=Path)
     parser.add_argument("--run-id")
     args = parser.parse_args()
     extraction_specs: list[ExtractionSpecInput] = list(args.extraction_specs)
@@ -146,6 +147,7 @@ def main() -> int:
         ai_variant=args.ai_variant,
         ai_timeout_seconds=args.ai_timeout_seconds,
         ai_opencode_command=args.ai_opencode_command,
+        ai_candidate_cache_root=args.ai_candidate_cache_root,
     )
     print(json.dumps(result.summary, indent=2, sort_keys=True))
     return result.exit_code
@@ -168,6 +170,7 @@ def run_competition(
     ai_variant: str | None = None,
     ai_timeout_seconds: int | None = None,
     ai_opencode_command: str | None = None,
+    ai_candidate_cache_root: Path | None = None,
 ) -> CompetitionRunResult:
     extraction_specs = extraction_specs or []
     worker_summaries = worker_summaries or []
@@ -179,6 +182,14 @@ def run_competition(
 
     repo_root = repo_root.resolve()
     out_root = out_root if out_root.is_absolute() else repo_root / out_root
+    if ai_candidate_cache_root is not None and not ai_candidate_cache_root.is_absolute():
+        ai_candidate_cache_root = repo_root / ai_candidate_cache_root
+    if ai_candidate_cache_root is not None:
+        ai_candidate_cache_root = ai_candidate_cache_root.resolve()
+        try:
+            ai_candidate_cache_root.relative_to(repo_root)
+        except ValueError as error:
+            raise SystemExit("AI candidate cache root must stay inside the repository") from error
     require_competition_exact_host(proof_class)
     ai_runtime = resolve_ai_runtime(
         repo_root=repo_root,
@@ -314,28 +325,33 @@ def run_competition(
             )
         )
         if not reuse_accepted_evidence:
+            auto_migrate_command = [
+                sys.executable,
+                rel_script(AUTO_MIGRATE, repo_root),
+                "--slice-spec",
+                rel_path(spec_path, repo_root),
+                "--out-root",
+                rel_path(evidence_root, repo_root),
+                "--competition-clang-lane",
+                "--ai-first-candidate",
+                "--ai-model",
+                ai_runtime["model"],
+                "--ai-agent",
+                ai_runtime["agent"],
+                "--ai-variant",
+                ai_runtime["variant"],
+                "--ai-timeout-seconds",
+                str(ai_runtime["timeout_seconds"]),
+                "--ai-opencode-command",
+                ai_runtime["opencode_command"],
+            ]
+            if ai_candidate_cache_root is not None:
+                auto_migrate_command.extend(
+                    ["--ai-candidate-cache-root", rel_path(ai_candidate_cache_root, repo_root)]
+                )
             auto_result = run_logged_step(
                 f"auto-migrate-{slice_id}",
-                [
-                    sys.executable,
-                    rel_script(AUTO_MIGRATE, repo_root),
-                    "--slice-spec",
-                    rel_path(spec_path, repo_root),
-                    "--out-root",
-                    rel_path(evidence_root, repo_root),
-                    "--competition-clang-lane",
-                    "--ai-first-candidate",
-                    "--ai-model",
-                    ai_runtime["model"],
-                    "--ai-agent",
-                    ai_runtime["agent"],
-                    "--ai-variant",
-                    ai_runtime["variant"],
-                    "--ai-timeout-seconds",
-                    str(ai_runtime["timeout_seconds"]),
-                    "--ai-opencode-command",
-                    ai_runtime["opencode_command"],
-                ],
+                auto_migrate_command,
                 command_runner=command_runner,
                 repo_root=repo_root,
                 logs_dir=logs_dir,

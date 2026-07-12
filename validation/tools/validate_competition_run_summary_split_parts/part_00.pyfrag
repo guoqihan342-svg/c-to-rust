@@ -13,6 +13,13 @@ from typing import Any
 
 import jsonschema
 
+from validation.tools._ai_candidate_harness_parts.candidate_cache import (
+    agent_definition_sha256,
+    cache_key_payload,
+    cache_key_sha256,
+    validate_cache_entry,
+)
+from validation.tools._ai_candidate_harness_parts.provider import parse_candidate_response
 from validation.tools._ai_candidate_harness_parts.provider_readiness import (
     BLOCKED_SOURCE_SPAN_STATUSES,
     READY_SOURCE_SPAN_STATUSES,
@@ -25,6 +32,9 @@ from validation.tools._ai_candidate_harness_parts.prompt_transport import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_PATH = REPO_ROOT / "validation" / "competition-run-summary.schema.json"
+AI_CANDIDATE_MANIFEST_SCHEMA_PATH = (
+    REPO_ROOT / "validation" / "auto-translation-template" / "ai-candidate-manifest.schema.json"
+)
 REQUIRED_ARTIFACT_ROOTS = {
     "target/competition-out/evidence",
     "target/competition-out/summary",
@@ -113,6 +123,7 @@ def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict
         result["ai_translation_metrics"] = {
             key: metrics[key]
             for key in AI_METRIC_COUNT_FIELDS
+            if key in metrics
         }
     return result
 

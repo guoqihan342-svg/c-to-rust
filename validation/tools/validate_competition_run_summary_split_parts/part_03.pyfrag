@@ -113,6 +113,7 @@ def repo_relative(path: Path, repo_root: Path) -> str:
 
 AI_METRIC_COUNT_FIELDS = (
     "invocations",
+    "cache_hits",
     "generated",
     "applied",
     "selected",
@@ -172,6 +173,9 @@ def recompute_ai_translation_metrics(
     summary_path: Path,
     repo_root: Path,
 ) -> dict[str, Any]:
+    metrics_schema_version = metrics.get("schema_version")
+    if metrics_schema_version not in {1, 2}:
+        raise SystemExit("ai_translation_metrics.schema_version must be 1 or 2")
     policy = metrics.get("execution_policy")
     if not isinstance(policy, dict):
         raise SystemExit("ai_translation_metrics.execution_policy must be an object")
@@ -202,8 +206,11 @@ def recompute_ai_translation_metrics(
         classification: sum(unit["classification"] == classification for unit in evaluated)
         for classification in AI_TERMINAL_CLASSIFICATIONS
     }
+    if metrics_schema_version == 1:
+        for unit in evaluated:
+            unit.pop("cache_hits", None)
     result = {
-        "schema_version": 1,
+        "schema_version": metrics_schema_version,
         "counting_boundary": {
             "unit": "slice",
             "funnel": "cumulative_verified_stages",
@@ -229,6 +236,8 @@ def recompute_ai_translation_metrics(
         "router_totals": recompute_router_totals(evaluated),
         "units": evaluated,
     }
+    if metrics_schema_version == 2:
+        result["cache_hits"] = sum(unit["cache_hits"] for unit in evaluated)
     validate_ai_funnel_invariants(result)
     return result
 
@@ -292,6 +301,7 @@ def evaluate_ai_metric_unit(
     outcome = {
         **unit,
         "invocations": 0,
+        "cache_hits": 0,
         "generated": False,
         "applied": False,
         "selected": False,
@@ -333,6 +343,7 @@ def evaluate_ai_metric_unit(
         outcome["abnormal_reasons"] = generation["reasons"]
         return outcome
     outcome["invocations"] = generation["invocations"]
+    outcome["cache_hits"] = generation["cache_hits"]
     outcome["repair_rounds"] = generation["repair_rounds"]
     if manifest.get("status") == "blocked":
         outcome["blocked"] = True
@@ -374,7 +385,7 @@ def evaluate_ai_metric_unit(
     elif route.get("status") == "refused" or final.get("status") == "refused":
         outcome["refused"] = True
         outcome["classification"] = "refused"
-    elif outcome["invocations"] > 0:
+    elif outcome["invocations"] > 0 or outcome["cache_hits"] > 0:
         outcome["blocked"] = True
         outcome["classification"] = "blocked"
     else:
@@ -404,10 +415,12 @@ def validate_ai_funnel_invariants(metrics: dict[str, Any]) -> None:
         metrics["selected"],
         metrics["applied"],
         metrics["generated"],
-        metrics["invocations"],
     ]
     if ordered != sorted(ordered):
         raise SystemExit("ai_translation_metrics cumulative funnel is inconsistent")
+    candidate_resolutions = metrics["invocations"] + metrics.get("cache_hits", 0)
+    if metrics["generated"] > candidate_resolutions:
+        raise SystemExit("ai_translation_metrics generated candidates exceed provider calls plus cache hits")
     if metrics["repair_rounds"] > metrics["invocations"]:
         raise SystemExit("ai_translation_metrics repair_rounds cannot exceed invocations")
     if sum(metrics["terminal_classifications"].values()) != metrics["units_total"]:

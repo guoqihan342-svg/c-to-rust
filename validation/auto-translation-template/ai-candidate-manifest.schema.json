@@ -12,6 +12,7 @@
     "ai_required_for_default_pipeline": {"type": "boolean"},
     "provider_invocations": {"type": "integer", "minimum": 0, "maximum": 1},
     "provider_preflight": {"$ref": "#/definitions/providerPreflight"},
+    "cache": {"$ref": "#/definitions/candidateCache"},
     "candidates": {"type": "array", "items": {"$ref": "#/definitions/candidate"}},
     "generator": {"$ref": "#/definitions/generator"},
     "bindings": {"$ref": "#/definitions/bindings"},
@@ -32,6 +33,18 @@
       },
       "then": {
         "required": ["provider_invocations", "provider_preflight"]
+      }
+    },
+    {
+      "if": {
+        "required": ["schema_version", "status"],
+        "properties": {
+          "schema_version": {"minimum": 4},
+          "status": {"enum": ["generated", "blocked"]}
+        }
+      },
+      "then": {
+        "required": ["cache"]
       }
     },
     {
@@ -88,16 +101,35 @@
         "properties": {"provider_invocations": {"const": 0}}
       },
       "then": {
-        "required": ["provider_preflight", "failure"],
-        "properties": {
-          "status": {"const": "blocked"},
-          "provider_preflight": {
-            "properties": {"status": {"const": "blocked"}}
+        "oneOf": [
+          {
+            "required": ["provider_preflight", "failure"],
+            "properties": {
+              "status": {"const": "blocked"},
+              "provider_preflight": {
+                "properties": {"status": {"const": "blocked"}}
+              },
+              "failure": {
+                "properties": {"kind": {"const": "context_not_provider_ready"}}
+              },
+              "cache": {
+                "properties": {"status": {"enum": ["disabled", "not_checked"]}}
+              }
+            }
           },
-          "failure": {
-            "properties": {"kind": {"const": "context_not_provider_ready"}}
+          {
+            "required": ["provider_preflight", "cache"],
+            "properties": {
+              "status": {"const": "generated"},
+              "provider_preflight": {
+                "properties": {"status": {"const": "ready"}}
+              },
+              "cache": {
+                "properties": {"status": {"const": "hit"}}
+              }
+            }
           }
-        }
+        ]
       }
     },
     {
@@ -110,6 +142,9 @@
         "properties": {
           "provider_preflight": {
             "properties": {"status": {"const": "ready"}}
+          },
+          "cache": {
+            "properties": {"status": {"enum": ["disabled", "miss"]}}
           }
         }
       }
@@ -201,6 +236,78 @@
           ]
         }
       }
+    },
+    "candidateCache": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["disabled", "not_checked", "miss", "hit"]},
+        "key_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "entry_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "entry": {"$ref": "#/definitions/artifactRef"},
+        "raw_response_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "candidate_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "miss_reason": {"enum": ["entry_missing", "entry_invalid", "store_failed"]},
+        "stored": {"type": "boolean"},
+        "reason": {"const": "context_not_provider_ready"}
+      },
+      "oneOf": [
+        {
+          "properties": {"status": {"const": "disabled"}},
+          "not": {
+            "anyOf": [
+              {"required": ["key_sha256"]},
+              {"required": ["entry_sha256"]},
+              {"required": ["entry"]},
+              {"required": ["raw_response_sha256"]},
+              {"required": ["candidate_sha256"]},
+              {"required": ["miss_reason"]},
+              {"required": ["stored"]},
+              {"required": ["reason"]}
+            ]
+          }
+        },
+        {
+          "required": ["reason"],
+          "properties": {"status": {"const": "not_checked"}},
+          "not": {
+            "anyOf": [
+              {"required": ["key_sha256"]},
+              {"required": ["entry_sha256"]},
+              {"required": ["entry"]},
+              {"required": ["raw_response_sha256"]},
+              {"required": ["candidate_sha256"]},
+              {"required": ["miss_reason"]},
+              {"required": ["stored"]}
+            ]
+          }
+        },
+        {
+          "required": ["key_sha256", "miss_reason", "stored"],
+          "properties": {"status": {"const": "miss"}},
+          "not": {
+            "anyOf": [
+              {"required": ["entry_sha256"]},
+              {"required": ["entry"]},
+              {"required": ["raw_response_sha256"]},
+              {"required": ["candidate_sha256"]},
+              {"required": ["reason"]}
+            ]
+          }
+        },
+        {
+          "required": ["key_sha256", "entry_sha256", "entry", "raw_response_sha256", "candidate_sha256"],
+          "properties": {"status": {"const": "hit"}},
+          "not": {
+            "anyOf": [
+              {"required": ["miss_reason"]},
+              {"required": ["stored"]},
+              {"required": ["reason"]}
+            ]
+          }
+        }
+      ]
     },
     "bindings": {
       "type": "object",
