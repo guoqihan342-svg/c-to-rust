@@ -20,7 +20,7 @@ from validation.tools._ai_candidate_harness_parts.candidate_cache import (
     validate_cache_entry,
 )
 from validation.tools._ai_candidate_harness_parts.context_scope import prompt_scope_for_context
-from validation.tools._ai_candidate_harness_parts.provider import parse_candidate_response
+from validation.tools._ai_candidate_harness_parts.provider import parse_candidate_response, render_prompt
 from validation.tools._ai_candidate_harness_parts.provider_readiness import (
     BLOCKED_SOURCE_SPAN_STATUSES,
     READY_SOURCE_SPAN_STATUSES,

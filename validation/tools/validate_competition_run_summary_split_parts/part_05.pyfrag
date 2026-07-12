@@ -75,6 +75,13 @@ def validate_fresh_ai_manifest(
 ) -> dict[str, Any]:
     reasons: list[str] = []
     recomputed_prompt_scope: list[str] | None = None
+    schema_version = manifest.get("schema_version")
+    if (
+        not isinstance(schema_version, int)
+        or isinstance(schema_version, bool)
+        or schema_version < 5
+    ):
+        reasons.append("ai_manifest_schema_version_stale_for_fresh_run")
     try:
         jsonschema.Draft7Validator(load_json(AI_CANDIDATE_MANIFEST_SCHEMA_PATH)).validate(manifest)
     except (OSError, UnicodeError, json.JSONDecodeError, jsonschema.ValidationError, jsonschema.SchemaError):
@@ -100,7 +107,6 @@ def validate_fresh_ai_manifest(
     status = manifest.get("status")
     if status not in {"generated", "blocked"}:
         reasons.append("ai_first_manifest_not_invoked")
-    schema_version = manifest.get("schema_version")
     cache_required = (
         isinstance(schema_version, int)
         and not isinstance(schema_version, bool)
@@ -164,6 +170,16 @@ def validate_fresh_ai_manifest(
             and source_span_status in READY_SOURCE_SPAN_STATUSES
             and compile_context_status == "response_file_invalid"
         )
+        context_boundary_status = (
+            provider_preflight.get("context_boundary_status")
+            if isinstance(provider_preflight, dict)
+            else None
+        )
+        blocked_by_context_boundary = (
+            preflight_status == "blocked"
+            and source_span_status in READY_SOURCE_SPAN_STATUSES
+            and context_boundary_status == "required_callee_context_incomplete"
+        )
         if (
             preflight_status not in {"ready", "blocked"}
             or not isinstance(source_span_status, str)
@@ -177,6 +193,7 @@ def validate_fresh_ai_manifest(
             preflight_status == "blocked"
             and source_span_status not in BLOCKED_SOURCE_SPAN_STATUSES
             and not blocked_by_compile_context
+            and not blocked_by_context_boundary
         ):
             reasons.append("ai_manifest_provider_preflight_source_status_mismatch")
         if provider_invocations == 0:
@@ -224,7 +241,9 @@ def validate_fresh_ai_manifest(
             if not isinstance(context_payload, dict):
                 reasons.append("ai_manifest_provider_preflight_context_unreadable")
             else:
-                if context_payload.get("schema_version") == 3:
+                if context_payload.get("schema_version") != 3:
+                    reasons.append("ai_context_pack_schema_invalid")
+                else:
                     try:
                         jsonschema.Draft7Validator(
                             load_json(AI_CONTEXT_PACK_SCHEMA_PATH)
@@ -244,6 +263,24 @@ def validate_fresh_ai_manifest(
                     and schema_version >= 5
                 ):
                     recomputed_prompt_scope = prompt_scope_for_context(context_payload)
+                    prompt_ref = bindings.get("prompt")
+                    prompt_path = (
+                        resolve_nested_ai_artifact(
+                            prompt_ref.get("path"),
+                            owner_path=manifest_path,
+                            summary_path=summary_path,
+                            repo_root=repo_root,
+                        )
+                        if isinstance(prompt_ref, dict)
+                        and isinstance(prompt_ref.get("path"), str)
+                        else None
+                    )
+                    try:
+                        actual_prompt = prompt_path.read_bytes() if prompt_path is not None else None
+                    except OSError:
+                        actual_prompt = None
+                    if actual_prompt != render_prompt(context_payload).encode("utf-8"):
+                        reasons.append("ai_manifest_prompt_context_mismatch")
                 if provider_preflight != recomputed_preflight:
                     reasons.append("ai_manifest_provider_preflight_context_mismatch")
                 recomputed_invocations = int(

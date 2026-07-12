@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "AI ContextPack",
   "type": "object",
-  "required": ["schema_version", "target_id", "slice_id", "function_name", "source_root", "source", "compile_context", "bindings", "claim_boundary"],
+  "required": ["schema_version", "target_id", "slice_id", "function_name", "source_root", "source", "compile_context", "c_boundary", "bindings", "claim_boundary"],
   "properties": {
     "schema_version": {"const": 3},
     "target_id": {"type": "string", "minLength": 1},
@@ -16,6 +16,25 @@
           "properties": {
             "response_files": {"$ref": "#/definitions/responseFiles"}
           }
+        }
+      }
+    },
+    "c_boundary": {
+      "type": "object",
+      "required": ["sha256", "truncated", "payload", "required_callee_sections", "missing_required_callee_sections"],
+      "properties": {
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "truncated": {"type": "boolean"},
+        "payload": {"type": "object"},
+        "required_callee_sections": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["external_direct_callees", "call_expression_contract"]}
+        },
+        "missing_required_callee_sections": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["external_direct_callees", "call_expression_contract", "c_boundary_truncated"]}
         }
       }
     },

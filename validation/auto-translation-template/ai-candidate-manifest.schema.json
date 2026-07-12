@@ -235,7 +235,8 @@
             "invalid_context_shape"
           ]
         },
-        "compile_context_status": {"const": "response_file_invalid"}
+        "compile_context_status": {"const": "response_file_invalid"},
+        "context_boundary_status": {"const": "required_callee_context_incomplete"}
       }
     },
     "candidateCache": {

@@ -10,6 +10,7 @@ from .context_artifacts import (
     load_context_artifacts as _load_context_artifacts,
 )
 from .context_compile import build_compile_context
+from .context_scope import value_has_facts
 from .context_security import (
     atomic_write_bytes,
     atomic_write_json,
@@ -70,8 +71,9 @@ def build_context_pack(
         source_file=source_file,
         known_roots=known_roots,
     )
+    raw_c_boundary = spec.get("c_boundary", {})
     c_boundary = boundary_context(
-        spec.get("c_boundary", {}),
+        raw_c_boundary,
         keys=(
             "files",
             "functions",
@@ -84,6 +86,7 @@ def build_context_pack(
         ),
         known_roots=known_roots,
     )
+    bind_required_callee_sections(c_boundary, raw_c_boundary)
     rust_boundary = boundary_context(
         spec.get("rust_boundary", {}),
         keys=("crate", "module", "public_api", "raw_pointer_policy", "unsafe_policy"),
@@ -179,6 +182,25 @@ def boundary_context(
         "truncated": truncated,
         "payload": payload,
     }
+
+
+def bind_required_callee_sections(boundary: dict[str, Any], raw_value: Any) -> None:
+    raw_boundary = raw_value if isinstance(raw_value, dict) else {}
+    required = [
+        key
+        for key in ("external_direct_callees", "call_expression_contract")
+        if value_has_facts(raw_boundary.get(key))
+    ]
+    payload = boundary.get("payload")
+    missing = [
+        key
+        for key in required
+        if not isinstance(payload, dict) or not value_has_facts(payload.get(key))
+    ]
+    if required and boundary.get("truncated") is True:
+        missing.append("c_boundary_truncated")
+    boundary["required_callee_sections"] = required
+    boundary["missing_required_callee_sections"] = missing
 
 
 def collect_input_bindings(

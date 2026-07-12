@@ -30,17 +30,26 @@ BLOCKED_SOURCE_SPAN_STATUSES = frozenset(
 
 def evaluate_provider_readiness(context_pack: dict[str, Any]) -> dict[str, str]:
     """Return a bounded source-span admission result before provider invocation."""
+    if not isinstance(context_pack, dict) or context_pack.get("schema_version") != 3:
+        return {"status": "blocked", "source_span_status": "invalid_context_shape"}
     source_root = context_pack.get("source_root") if isinstance(context_pack, dict) else None
     source_root_status = source_root.get("status") if isinstance(source_root, dict) else None
     source = context_pack.get("source") if isinstance(context_pack, dict) else None
     span = source.get("span") if isinstance(source, dict) else None
     raw_status = span.get("status") if isinstance(span, dict) else None
     response_file_status = response_file_contract_status(context_pack)
+    callee_context_status = required_callee_context_status(context_pack)
     if raw_status in READY_SOURCE_SPAN_STATUSES and response_file_status in {"blocked", "invalid"}:
         return {
             "status": "blocked",
             "source_span_status": raw_status,
             "compile_context_status": "response_file_invalid",
+        }
+    if raw_status in READY_SOURCE_SPAN_STATUSES and callee_context_status != "ready":
+        return {
+            "status": "blocked",
+            "source_span_status": raw_status,
+            "context_boundary_status": "required_callee_context_incomplete",
         }
     if raw_status == "inline_slice_spec" and source_root_status == "unavailable" and inline_span_is_bound(span):
         return {"status": "ready", "source_span_status": raw_status}
@@ -153,6 +162,19 @@ def response_file_contract_status(context_pack: dict[str, Any]) -> str:
         key=lambda item: str(item.get("path")),
     )
     return "expanded" if expected == actual else "invalid"
+
+
+def required_callee_context_status(context_pack: dict[str, Any]) -> str:
+    c_boundary = context_pack.get("c_boundary")
+    if not isinstance(c_boundary, dict):
+        return "ready"
+    required = c_boundary.get("required_callee_sections")
+    missing = c_boundary.get("missing_required_callee_sections")
+    if required is None and missing is None:
+        return "ready"
+    if not isinstance(required, list) or not isinstance(missing, list):
+        return "invalid"
+    return "ready" if not missing else "incomplete"
 
 
 def is_sha256(value: Any) -> bool:

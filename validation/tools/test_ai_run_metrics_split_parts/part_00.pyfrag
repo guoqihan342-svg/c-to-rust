@@ -19,6 +19,7 @@ from validation.tools._ai_candidate_harness_parts.candidate_cache import (
 from validation.tools._ai_candidate_harness_parts.prompt_transport import (
     prompt_transport_contract,
 )
+from validation.tools._ai_candidate_harness_parts.provider import render_prompt
 from validation.tools._ai_candidate_harness_parts.router import REQUIRED_GATES, route_candidates
 
 
@@ -105,22 +106,32 @@ def write_generated_ai_chain(
     candidate_path = base / f"l3-{slice_id}-ai-rust-candidate.rs"
     draft = base / f"l3-{slice_id}-rust-draft.rs"
     c_source = "int sum_values(int a, int b) { return a + b; }"
-    write_json(
-        context,
-        {
-            "target_id": target_id,
-            "slice_id": slice_id,
-            "source_root": {"status": "unavailable"},
-            "source": {
-                "span": {
-                    "status": "inline_slice_spec",
-                    "sha256": hashlib.sha256(c_source.encode("utf-8")).hexdigest(),
-                    "content": c_source,
-                }
-            },
+    context_payload = {
+        "schema_version": 3,
+        "target_id": target_id,
+        "slice_id": slice_id,
+        "function_name": "sum_values",
+        "source_root": {"status": "unavailable"},
+        "source": {
+            "span": {
+                "status": "inline_slice_spec",
+                "sha256": hashlib.sha256(c_source.encode("utf-8")).hexdigest(),
+                "content": c_source,
+            }
         },
-    )
-    write_text(prompt, "translate this bounded slice")
+        "compile_context": {},
+        "c_boundary": {
+            "sha256": "b" * 64,
+            "truncated": False,
+            "payload": {},
+            "required_callee_sections": [],
+            "missing_required_callee_sections": [],
+        },
+        "bindings": {"inputs": []},
+        "claim_boundary": {"semantic_gate": False},
+    }
+    write_json(context, context_payload)
+    write_text(prompt, render_prompt(context_payload))
     candidate_source = "pub fn sum_values(a: i32, b: i32) -> i32 { a + b }\n"
     response_payload = {
         "schema_version": 1,
