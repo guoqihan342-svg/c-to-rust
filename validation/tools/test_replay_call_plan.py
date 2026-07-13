@@ -35,7 +35,11 @@ class ReplayCallPlanTests(unittest.TestCase):
             source = render_declarative_replay_cases(spec, plan, root)
             self.assertIn("checksum(1u32, &[1u8, 2u8], 2usize)", source)
             self.assertIn("let actual_case_0_0: u32 = checksum", source)
-            self.assertIn("assert_eq!(observed_case_0_0_0, 3u32", source)
+            self.assertIn(
+                "if observed_case_0_0_0 != 3u32 { panic!(\"C2R_REPLAY_ASSERT:",
+                source,
+            )
+            self.assertNotIn("case-0 expected drifted", source)
 
     def test_output_pointer_can_be_declared_as_return_report(self) -> None:
         with tempfile.TemporaryDirectory(prefix="replay-report-") as tmp:

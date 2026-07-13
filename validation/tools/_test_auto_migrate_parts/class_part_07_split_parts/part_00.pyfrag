@@ -455,7 +455,7 @@ class _AutoMigrateTestsPart07:
             self.assertIn("// ReplayCallPlan-SHA256:", replay_draft)
             self.assertIn("signed_rshift_contract(-8i32, 1i32)", replay_draft)
             self.assertIn(
-                'assert_eq!(observed_negative_half_1_0, -4i32, "negative-half return_value drifted");',
+                'if observed_negative_half_1_0 != -4i32 { panic!("C2R_REPLAY_ASSERT:',
                 replay_draft,
             )
             self.assertEqual(rust_report["status"], "passed")
@@ -543,7 +543,7 @@ class _AutoMigrateTestsPart07:
             self.assertIn("// ReplayCallPlan-SHA256:", replay_draft)
             self.assertIn("let actual_negative_two_0: i32 = call_expression_chain(-2i32);", replay_draft)
             self.assertIn(
-                'assert_eq!(observed_negative_two_0_0, 2i32, "negative-two return_value drifted");',
+                'if observed_negative_two_0_0 != 2i32 { panic!("C2R_REPLAY_ASSERT:',
                 replay_draft,
             )
             self.assertIn(
@@ -640,8 +640,8 @@ class _AutoMigrateTestsPart07:
                 "store_add_one(-2147483648i32, &mut actual_int_min_0_out)",
                 replay_draft,
             )
-            self.assertIn('assert_eq!(observed_int_min_0_0, 0i32, "{} return_code drifted", case_id);', replay_draft)
-            self.assertIn('assert_eq!(observed_int_min_0_1, -2147483647i32, "{} out0 drifted", case_id);', replay_draft)
+            self.assertIn('if observed_int_min_0_0 != 0i32 { panic!("C2R_REPLAY_ASSERT:', replay_draft)
+            self.assertIn('if observed_int_min_0_1 != -2147483647i32 { panic!("C2R_REPLAY_ASSERT:', replay_draft)
             self.assertNotIn("struct FixtureCase", replay_draft)
             self.assertEqual(rust_report["status"], "passed")
             self.assertTrue(rust_report["semantic_pass"])

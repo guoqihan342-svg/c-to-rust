@@ -30,6 +30,10 @@ from .exact_validation_runners import (
     replay_gate,
     schema_diff_gate,
 )
+from validation.tools.replay_assertion_inventory import (
+    validate_inventory_fixture_identity,
+    validate_inventory_source_markers,
+)
 
 
 def validate_exact_candidate(
@@ -44,6 +48,7 @@ def validate_exact_candidate(
     attempt_dir: Path,
     compile_runner: Runner,
     replay_runner: Runner,
+    replay_assertion_inventory: dict[str, Any] | None = None,
     alias_proof: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Return ten exact, SHA-bound gate payloads for one frozen candidate.
@@ -62,11 +67,22 @@ def validate_exact_candidate(
     actual_sha = sha256_bytes(candidate)
     if actual_sha != selected_sha:
         return persist(root, selected_sha, binding_failures(selected_sha, actual_sha))
-
     target, target_sha, target_error = normalize_target_contract(target_contract)
     oracle, oracle_values = oracle_gate(
         fresh_oracle_proof, selected_sha, target_sha, target_error
     )
+    if replay_assertion_inventory is not None:
+        try:
+            validate_inventory_source_markers(
+                replay_assertion_inventory,
+                replay_bytes.decode("utf-8"),
+            )
+            validate_inventory_fixture_identity(
+                replay_assertion_inventory,
+                oracle_values.get("shared_fixture_identity"),
+            )
+        except (UnicodeError, ValueError):
+            replay_assertion_inventory = None
     rustc = compile_gate(
         compile_runner,
         frozen,
@@ -87,6 +103,7 @@ def validate_exact_candidate(
         oracle_values.get("shared_fixture_identity"),
         oracle_values.get("shared_fixture_identity_sha256"),
         rustc["status"] == "passed",
+        replay_assertion_inventory,
     )
     schema_diff = schema_diff_gate(selected_sha, oracle, oracle_values, replay)
     negative = negative_mutation_gate(

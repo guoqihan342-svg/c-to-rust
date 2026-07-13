@@ -7,6 +7,9 @@ from collections.abc import Mapping
 from typing import Any
 
 from .compiler_diagnostics import validated_compiler_diagnostic_details
+from validation.tools.replay_assertion_inventory import (
+    validated_runtime_localization,
+)
 from .context_security import redact_metadata_text, sanitize_value
 from .repair_contract import normalize_validation_result
 
@@ -188,13 +191,21 @@ def _embedded_failures(gate: str, payload: Mapping[str, Any]) -> list[dict[str, 
                 if gate in {"rustc", "generated_replay"}
                 else None
             )
+            runtime_details = (
+                validated_runtime_localization(details)
+                if gate == "generated_replay"
+                and str(kind) == "runtime_assertion_failed"
+                else None
+            )
+            safe_details = compiler_details or runtime_details or details
             facts.append(
                 _fact(
                     gate,
                     str(kind),
                     str(message),
-                    details=compiler_details if compiler_details is not None else details,
+                    details=safe_details,
                     compiler_owned=compiler_details is not None,
+                    oracle_safe=runtime_details is not None,
                 )
             )
         else:
@@ -209,8 +220,9 @@ def _fact(
     *,
     details: Mapping[str, Any] | None = None,
     compiler_owned: bool = False,
+    oracle_safe: bool = False,
 ) -> dict[str, Any]:
-    oracle_sensitive = not compiler_owned and gate in {
+    oracle_sensitive = not compiler_owned and not oracle_safe and gate in {
         "generated_replay",
         "schema_diff",
         "negative_mutation",

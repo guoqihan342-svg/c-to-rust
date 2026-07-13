@@ -6,6 +6,12 @@ from pathlib import Path
 import re
 from typing import Any
 
+from validation.tools.replay_assertion_inventory import (
+    assertion_id_for,
+    build_replay_assertion_inventory,
+    render_assertion_guard,
+)
+
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 FIXTURE_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")

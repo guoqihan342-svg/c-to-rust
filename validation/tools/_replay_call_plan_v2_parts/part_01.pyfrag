@@ -129,6 +129,7 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
     validate_replay_call_plan_v2(plan)
     if [item["id"] for item in cases] != plan["fixture"]["case_ids"]:
         raise ValueError("ReplayCallPlan v2 fixture identities drifted")
+    inventory = build_replay_assertion_inventory(plan)
     lines: list[str] = []
     for index, case in enumerate(cases):
         case_ident = _safe_ident(case["id"])
@@ -211,7 +212,14 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
                 f"        let {actual_identity}: bool = core::ptr::eq({actual_pointer}, {expected_identity_pointer});\n"
             )
             lines.append(
-                f"        assert_eq!({actual_identity}, {expected}, \"{{}} {identity['fixture_field']} drifted\", case_id);\n"
+                render_assertion_guard(
+                    actual_identity,
+                    expected,
+                    assertion_id_for(
+                        inventory, case["id"], identity["fixture_field"]
+                    ),
+                    indent="        ",
+                )
             )
         for pointer_index, assertion in enumerate(plan.get("pointer_identity_assertions", [])):
             expected = case.get("expected")
@@ -227,7 +235,14 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
                 f"{expected_buffer_pointers[pointer_index]});\n"
             )
             lines.append(
-                f"        assert_eq!({observed}, true, \"{{}} {assertion['fixture_field']} drifted\", case_id);\n"
+                render_assertion_guard(
+                    observed,
+                    "true",
+                    assertion_id_for(
+                        inventory, case["id"], assertion["fixture_field"]
+                    ),
+                    indent="        ",
+                )
             )
         for assertion_index, assertion in enumerate(plan["assertions"]):
             actual = _actual_expression(assertion["actual"], local_names)
@@ -235,7 +250,14 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
             expected = _encoded_literal(case["expected"][assertion["fixture_field"]], assertion["encoding"])
             lines.append(f"        let {observed}: {assertion['rust_type']} = {actual};\n")
             lines.append(
-                f"        assert_eq!({observed}, {expected}, \"{{}} {assertion['fixture_field']} drifted\", case_id);\n"
+                render_assertion_guard(
+                    observed,
+                    expected,
+                    assertion_id_for(
+                        inventory, case["id"], assertion["fixture_field"]
+                    ),
+                    indent="        ",
+                )
             )
         for assertion in plan.get("fixture_assertions", []):
             actual = _encoded_literal(
@@ -259,9 +281,20 @@ def render_replay_call_plan_v2(plan: dict[str, Any], cases: list[dict[str, Any]]
                     f"        let {observed}: {probe['rust_type']} = {helper}();\n"
                 )
                 label = ",".join(_scripted_expected_fields(probe["expected"]))
-                lines.append(
-                    f"        assert_eq!({observed}, {expected}, \"{{}} {label} drifted\", case_id);\n"
-                )
+                fields = _scripted_expected_fields(probe["expected"])
+                if len(fields) == 1:
+                    lines.append(
+                        render_assertion_guard(
+                            observed,
+                            expected,
+                            assertion_id_for(inventory, case["id"], fields[0]),
+                            indent="        ",
+                        )
+                    )
+                else:
+                    lines.append(
+                        f"        assert_eq!({observed}, {expected}, \"{{}} {label} drifted\", case_id);\n"
+                    )
         lines.append("    }\n")
     return "".join(lines)
 

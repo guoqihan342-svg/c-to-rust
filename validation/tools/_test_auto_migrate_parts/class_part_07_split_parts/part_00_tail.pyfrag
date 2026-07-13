@@ -56,7 +56,7 @@
             self.assertIn("// ReplayCallPlan-SHA256:", replay_draft)
             self.assertIn("add_one(-2147483648i32)", replay_draft)
             self.assertIn(
-                'assert_eq!(observed_zero_1_0, 1i32, "zero return_value drifted");',
+                'if observed_zero_1_0 != 1i32 { panic!("C2R_REPLAY_ASSERT:',
                 replay_draft,
             )
             self.assertEqual(rust_report["status"], "passed")
@@ -151,7 +151,7 @@
                 replay_draft,
             )
             self.assertIn(
-                'assert_eq!(observed_mixed_negative_2_1, vec![-5i32, 2i32, -3i32, 6i32], "{} out_values drifted", case_id);',
+                'if observed_mixed_negative_2_1 != vec![-5i32, 2i32, -3i32, 6i32] { panic!("C2R_REPLAY_ASSERT:',
                 replay_draft,
             )
             self.assertNotIn("struct FixtureCase", replay_draft)
@@ -247,7 +247,7 @@
                 "sum_i32_buffer(&[-5i32, 2i32, -3i32, 6i32], 4i32, &mut actual_mixed_negative_2_out)",
                 replay_draft,
             )
-            self.assertIn('assert_eq!(observed_mixed_negative_2_1, 0i32, "{} sum drifted", case_id);', replay_draft)
+            self.assertIn('if observed_mixed_negative_2_1 != 0i32 { panic!("C2R_REPLAY_ASSERT:', replay_draft)
             self.assertIn('assert_eq!("out[0]", "out[0]", "{} source_write metadata drifted", case_id);', replay_draft)
             self.assertNotIn("struct FixtureCase", replay_draft)
             self.assertEqual(rust_report["status"], "passed")

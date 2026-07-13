@@ -26,9 +26,9 @@ input.c + compile context
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 / libuv AI-first 0/1 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑。新 libuv DeepSeek 辅助实跑完成 1 次 initial + 3 次 repair，provider-ready 但 exact 未通过，明确不具备比赛资格 |
-| 当前翻译主线 | P0-A18c / P0-A10 | A18c8h5a 已闭合真实 exact replay compiler/linker facts，WSL 真实候选可安全反馈名称无关的 undefined symbol；下一步优先实现 h5b 无 oracle 值的 case/field 反馈，再收敛 h5c ABI 门禁 |
+| 当前翻译主线 | P0-A18c / P0-A19 / P0-A10 | h5b 已闭合无 oracle 值的 case/field 反馈，当前收敛 h5c 候选源码驱动 ABI 门禁；之后立即进入陌生仓库整项目发现、拆解、并行候选、集成与 repair，不再围绕单个已知切片扩语法 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A18c8h5a | exact replay 结果投影已拆为独立小模块，compile phase 转发受绑定保护的 JSONL；严格 linker child 只提取合法 C 标识符，不传路径/rendered/任意 child 文本。62 项阶段测试与真实 WSL 重放通过，`semantic_pass=false`、成功计数仍为 38 |
+| 最近开发阶段 | P0-A18c8h5b | ReplayCallPlan 派生 opaque assertion inventory，Windows/POSIX 稳定 panic 别名、真实 runner、wrapper、exact gate、negative mutation 与 repair fact 已闭合；模型只收到 `{case_id, observable_field}`。Windows 阶段组 67 通过/1 平台跳过，WSL 67/67；两端 163 项全量均无新增失败，`semantic_pass=false`、成功计数仍为 38 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -182,12 +182,13 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 顺序 | 待办 | 状态 | 本轮完成判据 |
 | ---: | --- | --- | --- |
 | 1 | P0-A18c7 跨项目 AI 输入与证据合同闭包 | 完成 | Windows/WSL 125 项回归通过；固定 12 项生成 12 个候选、0 contract failure、6 exact pass |
-| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | h5a 已完成；当前先做 h5b 只暴露 case/field 路径的语义反馈，随后修复 h5c 安全候选 ABI 误拒绝。两项均需改名正例、漂移负例和同一 exact gate 重跑 |
-| 3 | P0-A10 AI golden set | 待开始 | 以多项目、陌生标识符和最近邻负例扩充能力集，禁止按测试用例修补 |
-| 4 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
-| 5 | P0-C 阶段收口 | 待开始 | 修复历史 evidence 漂移并清理 all-feature Clippy 剩余项 |
+| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | h5a/h5b 已完成；当前做 h5c 候选源码驱动 ABI 分类，安全无 ABI 依赖候选不再继承 replay 失败噪声，raw/extern/repr/布局/目标宽度依赖继续要求完整证明。完成后重跑同一 exact gate |
+| 3 | P0-A19 陌生 C 项目整项目 AI harness | 待开始 | 从任意 repo root 自动发现构建闭包和翻译单元，按依赖图分解并用隔离 OpenCode workers 生成候选，重建可编译 Cargo 项目并按通用 gate repair；禁止项目/函数/路径/fixture 身份分派 |
+| 4 | P0-A10 有限 held-out 跨项目验收 | 待开始 | 固定 12 项继续作为非回归基线，新增有限的未参与规则开发的整项目验收；只运行有限集合一次，不用重复轮次放大成功率 |
+| 5 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
+| 6 | P0-C 阶段收口 | 待开始 | 修复历史 evidence 漂移并清理 all-feature Clippy 剩余项 |
 
-勾选规则：实现完成只勾子项；父项必须在其全部验收门和证据闭合后才能勾选。定向样例、AI 文本、candidate 编译、WSL 模拟或辅助模型成功均不能单独关闭 P0-A18c、P0-A10 或 P0-H9。
+勾选规则：实现完成只勾子项；父项必须在其全部验收门和证据闭合后才能勾选。定向样例、AI 文本、candidate 编译、WSL 模拟或辅助模型成功均不能单独关闭 P0-A18c、P0-A19、P0-A10 或 P0-H9。
 
 ### 3.2 P0-T：确定性翻译辅助通道
 
@@ -461,7 +462,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
         - [x] **P0-A18c8h4f：外部被调函数源码跨平台换行绑定**。抽出独立 hash-bound UTF-8 source reader，让外部 callee 定义、目标行为块和宏/枚举行为依赖复用主源码已有的 LF/CRLF 等价规则。每个 source block 和输入 binding 都保留 checkout 实际 SHA、slice 声明 SHA 与 `exact/newline_equivalent` 模式，provider readiness 逐项重算身份；仅换行风格变化可通过，内容、声明 SHA、匹配模式、span 或绑定漂移继续 fail-closed。中立测试用完全改名的 CRLF checkout 对 LF 声明哈希验证 callee 与行为依赖绑定。真实 libuv 的 `uv_inet_pton` 由原 `source_file_sha256_mismatch` 变为 `newline_equivalent` bound，系统头 `__bswap_16` 仍以非仓库来源明确记录但不冒充 real-source，整体 provider readiness 从 blocked 变为 `ready`。本阶段仍未调用模型，成功计数仍为 38。
         - [x] **P0-A18c8h4g：真实 AI-first/repair 阶段验收与瓶颈重排**。全新 `target/a18c8h-ai-deepseek-02` 在 WSL competition-like lane 使用 clang 18.1.3、fresh C oracle、`opencode/deepseek-v4-flash-free`、受限 `c2rust-candidate` agent、`max` variant 和 3 轮 repair。provider preflight 为 `ready`，完成 1 次 initial + 3 次 repair；第 2/3 轮候选均通过 rustc、fresh oracle、unsafe scan/ledger 和 alias，replay 从 initial/round-1 的 link compile failure 推进到 round-2/3 的 runtime failure，但 ABI、diff 和 final gate 未闭合。独立 `validate_ai_exact_evidence.py` 重开 29 个 hash-bound artifacts，结构校验通过且 `semantic_pass=false`；该辅助结果不计比赛或翻译成功分子。实跑同时证明 h4d 只在 direct runner 单测闭合，真实 `exact_replay_runner` 仍丢弃 `compile_stderr`，而 runtime repair 只收到泛化 `replay_failed`，因此下一阶段不再盲目扩展翻译语法，先修反馈信息闭包。
         - [x] **P0-A18c8h5a：真实 exact replay compiler/linker facts 闭包**。`validate_auto_migrate_candidate` 的 replay 结果投影拆入独立 50 行级小模块，只在 phase=`compile` 时转发 `compile_stderr`；exact gate 继续先核对 candidate、replay、fixture 和 target SHA，任一漂移都丢弃 compiler facts。从 rustc JSON 只接受严格 `linking with ... failed` error 下、note child 中完整匹配 `rust-lld: error: undefined symbol: <C identifier>` 的名称，输出受限 `{code: linker_undefined_symbol, message}`；路径、rendered、命令、secret、任意 child 文本和非法符号均不跨边界。真实 WSL 对本轮 DeepSeek initial candidate + generated replay 重放得到 `undefined external symbol uv_inet_pton`，Windows 非目标 linker 仅保留泛化 compile_error。真实 wrapper、名称中立 linker、spoof、敏感信息和四类绑定漂移回归均通过；阶段 62 项 AI exact/repair/provider 测试全绿。全量 auto-migrate 163 项保持原有 3 个 CRC32 失败与 1 个平台跳过，没有新增失败。该项只提高 repair 信息质量，不执行 compile-only stub、不产生语义通过，成功计数仍为 38。
-        - [ ] **P0-A18c8h5b：无 oracle 值的 replay case/field 失败定位**。generated replay runner 在 runtime assertion failure 时只允许从生成时已绑定的 ReplayCallPlan 映射出 `{case_id, observable_field}`，禁止把 expected/actual、fixture 内容、replay source、panic 文本或行号传给模型。映射必须由 plan SHA、replay SHA、candidate SHA 与 assertion inventory 重算，重复/未知/伪造 assertion fail closed。完成判据是完全改名的多 case/multi-field 正例让 AI 明确修复字段，同时 oracle 值红线测试保持零泄露。
+        - [x] **P0-A18c8h5b：无 oracle 值的 replay case/field 失败定位**。ReplayCallPlan 派生完整 assertion inventory，v1/v2 renderer 用 opaque guard 代替携带值的断言；真实 runner 只接受固定 `<generated-replay>` 别名、单个 Windows/POSIX 分隔符、可选数字线程 id、精确组合源码行和 replay-owned 唯一 marker。auto-migrate wrapper 从 spec/replay 重建 inventory，exact gate 在 candidate/replay/fixture/target/plan/inventory 全绑定后才映射 `{case_id, observable_field}`，repair 合同拒绝任何额外字段。expected/actual、fixture 内容、replay source、panic、路径、行号和 raw stderr 均不跨边界；unknown/duplicate/spoof、三类 envelope 漂移和四类执行绑定漂移退回泛化失败。negative mutation 优先翻转 opaque observable guard，不再误测剩余 metadata assertion；旧 replay 保留受限 fallback，无可识别断言则拒绝。v2 多字段 scripted probe 暂不定位，继续 fail closed。Windows 阶段组 67 通过/1 平台跳过，WSL 为 67/67；Windows 全量 163 项仅保留既有 3 个 CRC32 失败/1 跳过，WSL 全量仅保留其中 `missing_clang_path` 路由失败/6 平台跳过，均无新增失败。该项只改善 repair 信息，不产生语义通过，成功计数保持 38。
         - [ ] **P0-A18c8h5c：安全 Rust 候选 ABI 门禁精确化**。审计 `abi_target_binding_failed` 对无 raw pointer、无 `extern`、无 `unsafe` 的自包含安全候选是否误拒；ABI gate 只能在候选实际依赖布局/FFI/目标宽度时要求对应证明，不得因原 C 边界存在 ABI 风险而无条件失败。任何 `repr(C)`、raw pointer、extern ABI、目标宽度 cast 或布局依赖继续要求完整 hash-bound target/layout 证明。完成判据是安全改名候选通过、等价 raw/extern/布局漂移负例拒绝，且 final verifier 不放宽其他门。
         - [ ] **P0-A18c8h5d：compiler-header declaration-only 来源分类**。仅在 `definition_status`、严格 `compiler-header:<relative-header>#<symbol>`、header inventory、signature_ref 和 `stub_boundary=compile_only` 全部一致时把系统头 inline 记录为 declaration-only，不生成 repository source block，也不写误导性的 repository path error。malformed namespace、符号/header/signature 漂移或把 compile-only 用于执行必须 fail closed。该项当前不阻塞 provider，排在 h5a-h5c 后。
         - `target/a18c8h-probe-08` 的真实 WSL local simulation 仍为 `rust_check.status=passed`，但预检返回 101 和 `candidate_replay_api_compile_failed`，明确报告缺少 `Ip4AddrReport` 及调用形状不匹配；replay 仍以 `compile_only_external_bindings_not_executable` 跳过。该阶段只改善 repair 诊断，不增加成功计数。
@@ -482,6 +483,19 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   | A18c1 / `ai-auxiliary-p0-a18c1-deepseek-wsl-20260712-204206` | 2/12 | 12 initial + 4 repair、11 candidates；contract failure 降至 0，首轮 API mismatch 3→1，但 exact 未提升 | report SHA `512641d1ece1d6dcf8b5bc20af3208da467a1c5284931d3c2a32bdb5cf8551c1` |
 
   | A18c3 / `kv_to_blob` targeted | 0/1 exact | rustc/replay 通过，因 `alias_proof_missing` 保持 semantic false；定向样例不是固定套件成功率 | router SHA `0c5f8f7130f4b6b8c163f1007af130cc6016f48234a54e6dde4485a8a7b31316`；manifest SHA `16a7fa57a8038cb9c66a57c8f8a8eeb04cb171dba68a5cc9b6802aa55529f18b` |
+
+- [ ] **P0-A19：陌生 C 项目整项目 AI harness 泛化**
+
+  目标不是继续增加已知函数的 translator 分支，而是让比赛平台把一个此前未见的 C 仓库交给 OpenCode 后，harness 能自动形成可审计的项目级翻译计划、隔离并行候选、可编译 Rust 项目和验证驱动 repair。所有决策只允许读取源码/AST/编译数据库/构建文件/类型/调用图/ABI/诊断和 hash-bound evidence；项目名、函数名、目录名、slice id、fixture 常量和 golden case 身份不得选择翻译器、prompt、adapter、stub 或修复策略。
+
+  1. **A19a 任意仓库入口与构建闭包发现（待开始）**：从 repo root 自动识别受支持的 compile database、Make/CMake/Meson 等构建事实，展开 response file、generated include、defines、target 与 link closure，生成 translation-unit inventory。没有足够事实时按缺失类别 fail closed，不要求用户预先手写每函数 spec，也不能猜测编译参数。
+  2. **A19b 项目级依赖图与有界分解（待开始）**：由 AST/符号表/调用图/SCC/全局状态/类型布局/宏依赖/FFI 边界生成稳定迁移 DAG，区分可独立安全翻译、需上下文共同翻译和必须保留边界的单元；ContextPack 按依赖分页并去重，不能靠固定函数列表分片。
+  3. **A19c OpenCode 多 worker 候选组合（待开始）**：运行阶段由现有 harness 调度隔离的 planner/translator/reviewer/repairer worker，每个 worker 使用独立 state/cache/tmp/out-root 和绑定的上下文预算；AI 为主候选，typed IR/C2Rust 只提供候选或事实。并行只用于独立单元，合并顺序由 DAG 和 gate 决定，模型投票不能替代语义门禁。
+  4. **A19d Rust 项目重建与增量集成（待开始）**：自动生成稳定 module tree、Cargo targets/features、public API/FFI boundary、共享类型和初始化顺序，将已通过的单元集成为可构建项目；符号冲突、循环依赖、布局需求和链接缺口必须回到结构化诊断，不得通过手写项目模板掩盖。
+  5. **A19e 项目级验证与精确 repair（待开始）**：把 rustc/linker、测试、C oracle/Rust replay、schema diff、negative、unsafe/alias/ABI 和集成失败归一为候选绑定事实，只把允许的最小诊断送回对应 worker；支持 last-good、失败去重、预算上限、断点恢复和失败单元重排，禁止把 expected/actual 或测试答案喂给模型。
+  6. **A19f 泛化防特判与有限 held-out 验收（待开始）**：增加标识符/路径/项目名全改名等价测试、未知项目导入测试和身份分派静态检查；在不超过 20 个有限 case 中覆盖至少 5 个真实项目、整项目构建和 12 个不同 construct family，其中至少 2 个项目不得参与对应规则开发。只发布 initial/repair/compile/integration/semantic/refusal 指标，不执行 1,000/10,000 轮，不用重复近似切片放大成功率。
+
+  完成判据：同一入口可对 held-out 仓库从零生成 translation inventory、迁移 DAG、hash-bound ContextPacks、候选/repair 证据和可复现 Cargo 输出；至少一个此前未参与开发的多文件 C 项目通过项目级 build 与声明边界内 semantic gates。任何按身份分派、手写项目 adapter、未绑定模型输出或只通过函数级 demo 的结果都不能关闭本项，也不能增加 translator numerator。
 
 - [x] **P0-A1：OpenCode no-progress retry suppression**
 

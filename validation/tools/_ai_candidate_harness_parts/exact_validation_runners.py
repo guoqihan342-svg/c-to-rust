@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
-import re
 from typing import Any
 
 from .compiler_diagnostics import compiler_failure_fact
+from validation.tools.replay_runtime_assertion import (
+    localized_runtime_assertion_details,
+)
+from validation.tools.replay_negative_mutation import mutate_key_replay_assertion
 from .context_security import (
     atomic_write_bytes,
     canonical_json_bytes,
@@ -82,6 +85,7 @@ def replay_gate(
     fixture_identity: Any,
     fixture_sha: Any,
     prerequisite: bool,
+    assertion_inventory: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     test_sha = sha256_path(replay_test)
     if not prerequisite:
@@ -100,7 +104,7 @@ def replay_gate(
         mode="positive",
     )
     error = replay_binding(result, candidate_sha, test_sha, target_sha, fixture_sha)
-    if result.get("phase") == "compile":
+    if result.get("phase") == "compile" or result.get("status") != "passed":
         outputs = None
     else:
         try:
@@ -128,11 +132,23 @@ def replay_gate(
         compile_failed = error is None and result.get("phase") == "compile"
         failure_kind = "replay_compile_failed" if compile_failed else error or "replay_failed"
         failure_message = "The exact candidate replay did not run successfully."
-        failure = (
-            compiler_failure_fact(failure_kind, failure_message, result)
-            if compile_failed
-            else {"kind": failure_kind, "message": failure_message}
+        runtime_details = (
+            localized_runtime_assertion_details(
+                result.get("runtime_assertion_failure"), assertion_inventory
+            )
+            if error is None and result.get("phase") == "run"
+            else None
         )
+        if compile_failed:
+            failure = compiler_failure_fact(failure_kind, failure_message, result)
+        elif runtime_details is not None:
+            failure = {
+                "kind": "runtime_assertion_failed",
+                "message": "A generated replay observable assertion failed.",
+                "details": runtime_details,
+            }
+        else:
+            failure = {"kind": failure_kind, "message": failure_message}
         return gate(
             candidate_sha,
             "failed",
@@ -279,10 +295,8 @@ def negative_mutation_gate(
     fixture_sha: Any,
     prerequisite: bool,
 ) -> dict[str, Any]:
-    mutated, count = re.subn(
-        r"\bassert_eq\s*!", "assert_ne!", test_bytes.decode("utf-8"), count=1
-    )
-    if count != 1:
+    mutated = mutate_key_replay_assertion(test_bytes.decode("utf-8"))
+    if mutated is None:
         return failed(
             candidate_sha,
             "mutation_not_applicable",

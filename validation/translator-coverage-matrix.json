@@ -7116,6 +7116,8 @@
         "rust-check compiles the raw candidate first and selects only exact rustc E0425 unresolved-function diagnostics intersecting declared external callees; self-contained AI candidates remain eligible for replay and partially inlined candidates receive only their required compile-only bindings",
         "rust-check and generated replay compilation use short JSON diagnostics so multiple candidate API errors remain structured AI-repair input instead of triggering long-renderer compiler crashes; this does not authorize compile-only execution",
         "exact compile and replay gates forward at most eight hash-bound compiler-owned code/message pairs into AI repair only after candidate, target, replay, and fixture bindings match; rendered source, spans, fixtures, oracle values, and all extra fields are excluded",
+        "runtime replay assertions use plan-derived opaque ids and may expose only a hash-bound case_id and observable_field after candidate, replay, fixture, target, plan, and assertion-inventory bindings match; expected/actual values, panic text, source, paths, and line numbers remain excluded",
+        "negative mutation flips the first opaque observable guard before considering legacy assert_eq syntax, so metadata assertions cannot impersonate candidate-observable mutation coverage",
         "the real libuv function emits a Rust candidate under its explicit ip-to-addr noalias precondition and passes rustc with two compile-only external bindings; candidate+replay preflight now exposes the required safe API mismatch, while callee behavior/no-escape semantics remain non-executable and unverified",
         "no named-slice C/Rust replay, diff, unsafe ledger, or semantic acceptance is claimed"
       ],
@@ -7131,7 +7133,8 @@
         "hash-bound AI ContextPack RecordMemset projection",
         "hash-bound AI ContextPack MutableVoidPointerAddress projection",
         "newline-equivalent external-callee source binding",
-        "hash-bound exact replay linker diagnostic projection"
+        "hash-bound exact replay linker diagnostic projection",
+        "plan-derived opaque replay assertion inventory and runtime localization"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -7174,7 +7177,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "A18c8h4g runs a fresh WSL competition-like DeepSeek AI-first stage with provider readiness ready, one initial call, and three repairs; rounds two and three pass rustc, fresh oracle, unsafe, and alias while replay reaches runtime failure, but ABI, schema-aware diff, negative diff, and final verification remain incomplete"
+          "reason": "A18c8h4g runs a fresh WSL competition-like DeepSeek AI-first stage with provider readiness ready, one initial call, and three repairs; rounds two and three pass rustc, fresh oracle, unsafe, and alias while replay reaches runtime failure. A18c8h5b can now localize a bound failing case/field without oracle values, but ABI, schema-aware diff, negative diff, and final verification remain incomplete"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -7182,7 +7185,7 @@
         },
         "route_evidence": {
           "status": "gap",
-          "reason": "A18c8h5a closes the real exact replay compile-diagnostic wrapper and projects strict rust-lld undefined-symbol facts only after candidate, replay, fixture, and target bindings match; the prior noncompetition DeepSeek run still has no candidate passing all exact gates, selected_candidate_id remains null, and semantic_pass=false"
+          "reason": "A18c8h5a closes compiler/linker facts and A18c8h5b closes plan-derived runtime case/field feedback through the real wrapper and repair contract, each only after exact hash bindings match. The prior noncompetition DeepSeek run still has no candidate passing all exact gates, selected_candidate_id remains null, and semantic_pass=false"
         }
       },
       "positive_cases": [
@@ -7241,6 +7244,22 @@
         {
           "name": "test_linker_symbol_reaches_repair_without_linker_metadata",
           "path": "validation/tools/test_ai_linker_diagnostics.py"
+        },
+        {
+          "name": "test_real_runtime_panic_authenticates_only_the_replay_owned_marker",
+          "path": "validation/tools/test_replay_runtime_assertion.py"
+        },
+        {
+          "name": "test_exact_gate_exposes_only_renamed_case_and_field",
+          "path": "validation/tools/test_ai_runtime_assertion_feedback.py"
+        },
+        {
+          "name": "test_real_wrapper_rebuilds_runtime_assertion_inventory",
+          "path": "validation/tools/test_auto_migrate_ai_exact_diagnostics.py"
+        },
+        {
+          "name": "test_opaque_observable_guard_is_mutated_before_metadata_assertion",
+          "path": "validation/tools/test_replay_negative_mutation.py"
         }
       ],
       "negative_cases": [
@@ -7273,6 +7292,26 @@
           "name": "test_linker_symbol_text_without_exact_parent_contract_is_not_classified",
           "path": "validation/tools/test_ai_linker_diagnostics.py",
           "fail_closed_reason": "linker-like child text without the exact compiler-owned parent diagnostic cannot spoof undefined-symbol classification"
+        },
+        {
+          "name": "test_spoofed_location_duplicate_marker_and_inventory_drift_fail_closed",
+          "path": "validation/tools/test_replay_runtime_assertion.py",
+          "fail_closed_reason": "candidate-owned, duplicate, wrong-line, unknown, or drifted opaque assertion markers cannot cross the replay ownership boundary"
+        },
+        {
+          "name": "test_envelope_and_execution_binding_drift_remove_localization",
+          "path": "validation/tools/test_ai_runtime_assertion_feedback.py",
+          "fail_closed_reason": "assertion, plan, inventory, candidate, replay, fixture, or target drift removes case/field localization and falls back to a generic failure"
+        },
+        {
+          "name": "test_repair_contract_rejects_extra_oracle_value",
+          "path": "validation/tools/test_ai_runtime_assertion_feedback.py",
+          "fail_closed_reason": "runtime repair facts accept exactly case_id and observable_field and reject expected, actual, or any additional detail"
+        },
+        {
+          "name": "test_legacy_assertion_fallback_and_missing_assertion_fail_closed",
+          "path": "validation/tools/test_replay_negative_mutation.py",
+          "fail_closed_reason": "legacy replay remains mutation-compatible while a replay with no recognized key assertion cannot claim negative-mutation coverage"
         }
       ]
     }

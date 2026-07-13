@@ -314,14 +314,18 @@ def ai_generated_candidate_replay_supported(
 def run_generated_rust_replay_once(
     draft_path: Path, replay_path: Path, *, execute: bool = True
 ) -> dict[str, Any]:
+    from validation.tools.replay_runtime_assertion import (
+        authenticate_runtime_assertion_id,
+    )
+
     with tempfile.TemporaryDirectory(prefix="c2r-generated-replay-") as build_dir_text:
         build_dir = Path(build_dir_text)
         combined_path = build_dir / "generated_replay.rs"
         exe_path = build_dir / "generated_replay.exe"
+        candidate_source = draft_path.read_text(encoding="utf-8-sig")
+        replay_source = replay_path.read_text(encoding="utf-8-sig")
         combined_path.write_text(
-            draft_path.read_text(encoding="utf-8-sig")
-            + "\n"
-            + replay_path.read_text(encoding="utf-8-sig"),
+            candidate_source + "\n" + replay_source,
             encoding="utf-8",
         )
         compile_cmd = [
@@ -388,7 +392,8 @@ def run_generated_rust_replay_once(
             errors="replace",
             capture_output=True,
         )
-        return {
+        run_stderr = stable_process_text(run_result.stderr, aliases)
+        payload = {
             "status": "passed" if run_result.returncode == 0 else "failed",
             "phase": "run",
             "compile_command": stable_compile_command,
@@ -398,5 +403,13 @@ def run_generated_rust_replay_once(
             "run_command": "<generated-replay-executable> --nocapture",
             "run_returncode": run_result.returncode,
             "run_stdout": stable_process_text(run_result.stdout, aliases),
-            "run_stderr": stable_process_text(run_result.stderr, aliases),
+            "run_stderr": run_stderr,
         }
+        assertion_id = authenticate_runtime_assertion_id(
+            candidate_source,
+            replay_source,
+            run_stderr,
+        )
+        if assertion_id is not None:
+            payload["runtime_assertion_id"] = assertion_id
+        return payload

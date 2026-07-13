@@ -16,6 +16,7 @@ from validation.tools._ai_candidate_harness_parts.context import (
     sha256_path as _sha256_path,
 )
 from validation.tools._auto_migrate_ai_exact_results import (
+    bound_replay_assertion_inventory,
     exact_replay_runner_result,
 )
 
@@ -132,6 +133,9 @@ def validate_auto_migrate_candidate(
         else None
     )
     observable_outputs = oracle_proof.get("observable_outputs")
+    assertion_inventory = bound_replay_assertion_inventory(
+        spec, proof_root, replay_test_path
+    )
 
     def exact_compile_runner(**kwargs: Any) -> dict[str, Any]:
         path = Path(kwargs["candidate_path"])
@@ -159,6 +163,7 @@ def validate_auto_migrate_candidate(
             sha256_observables=lambda value: sha256_bytes(
                 canonical_json_bytes(value)
             ),
+            assertion_inventory=assertion_inventory,
         )
 
     exact_oracle_proof = {
@@ -183,6 +188,7 @@ def validate_auto_migrate_candidate(
         attempt_dir=attempt_dir,
         compile_runner=exact_compile_runner,
         replay_runner=exact_replay_runner,
+        replay_assertion_inventory=assertion_inventory,
         alias_proof=None,
     )
     validation_result = extract_gate_failure_facts(

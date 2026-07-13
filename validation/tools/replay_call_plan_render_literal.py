@@ -7,6 +7,11 @@ import re
 from typing import Any
 
 from validation.tools.replay_call_plan_fixture import _fixture_binding
+from validation.tools.replay_assertion_inventory import (
+    assertion_id_for,
+    build_replay_assertion_inventory,
+    render_assertion_guard,
+)
 
 
 def render_declarative_replay_cases(
@@ -24,6 +29,7 @@ def render_declarative_replay_cases(
         from validation.tools.replay_call_plan_v2 import render_replay_call_plan_v2
 
         return render_replay_call_plan_v2(plan, fixture["cases"])
+    inventory = build_replay_assertion_inventory(plan)
     lines: list[str] = []
     for index, case in enumerate(fixture["cases"]):
         variable = f"actual_{_safe_ident(case['id'])}_{index}"
@@ -46,8 +52,14 @@ def render_declarative_replay_cases(
             )
             lines.append(f"    let {observed}: {assertion['rust_type']} = {actual};\n")
             lines.append(
-                f"    assert_eq!({observed}, {expected}, "
-                f"{json.dumps(case['id'] + ' ' + assertion['fixture_field'] + ' drifted')});\n"
+                render_assertion_guard(
+                    observed,
+                    expected,
+                    assertion_id_for(
+                        inventory, case["id"], assertion["fixture_field"]
+                    ),
+                    indent="    ",
+                )
             )
         for assertion in plan.get("fixture_assertions", []):
             actual = _encoded_literal(

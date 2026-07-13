@@ -12,6 +12,9 @@ from .provider_response import (
     normalize_assumptions,
     reject_tool_events,
 )
+from validation.tools.replay_assertion_inventory import (
+    validated_runtime_localization,
+)
 
 
 MAX_FAILURE_FACTS_BYTES = 64_000
@@ -61,6 +64,11 @@ def normalize_failure_fact(fact: Any) -> dict[str, Any]:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"failure fact requires non-empty {field}")
     normalized = {key: json_compatible(value, field=key) for key, value in fact.items()}
+    if fact.get("gate") == "generated_replay" and fact.get("kind") == "runtime_assertion_failed":
+        details = validated_runtime_localization(normalized.get("details"))
+        if details is None:
+            raise ValueError("runtime assertion failure requires exact case/field details")
+        normalized["details"] = details
     return {key: normalized[key] for key in FAILURE_FACT_KEYS if key in normalized}
 
 
