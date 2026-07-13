@@ -7127,7 +7127,9 @@
         "complete nested record member path",
         "same-width and signedness integer source pointer",
         "temporary mutable safe-adapter borrow",
-        "same-call overlapping mutable borrow refusal"
+        "same-call overlapping mutable borrow refusal",
+        "hash-bound AI ContextPack RecordMemset projection",
+        "hash-bound AI ContextPack MutableVoidPointerAddress projection"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -7170,7 +7172,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "the A18c8h4c probe-11 WSL local simulation selects both candidate-required declared external callees, passes rust-check, and preserves two E0425 plus two E0061 API diagnostics without a compiler ICE in the non-executing replay preflight; required AI API repair, executable callee semantics, schema-aware diff, negative diff, and final verification remain incomplete"
+          "reason": "A18c8h4e rebuilds the AI ContextPack from the existing real libuv WSL evidence with complete RecordMemset and MutableVoidPointerAddress projections, typed_ir_status=ready, and no unsupported nodes; provider invocation remains blocked by incomplete external-callee source context, so AI API repair, executable callee semantics, schema-aware diff, negative diff, and final verification remain incomplete"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -7178,7 +7180,7 @@
         },
         "route_evidence": {
           "status": "gap",
-          "reason": "the A18c8h4c probe-11 WSL run records a rustc-passing GenericTypedIr L1 candidate, exact candidate-required external resolution, and complete short-form structured API diagnostics from a failed non-executing replay preflight; it is unpublished local-simulation evidence with no AI invocation, skipped C oracle, and semantic_pass=false"
+          "reason": "A18c8h4e proves a hash-bound identity-neutral AI typed-IR projection against existing real libuv WSL artifacts and advances provider readiness to external_callee_source_context_incomplete; it is local development evidence with no provider invocation, no accepted candidate, and semantic_pass=false"
         }
       },
       "positive_cases": [
@@ -7213,6 +7215,14 @@
         {
           "name": "test_replay_compile_diagnostics_reach_repair_without_oracle_values",
           "path": "validation/tools/test_ai_compiler_diagnostics.py"
+        },
+        {
+          "name": "test_extended_nodes_form_complete_hash_bound_projection",
+          "path": "validation/tools/test_ai_context_typed_ir_extensions.py"
+        },
+        {
+          "name": "test_extended_projection_is_identifier_independent",
+          "path": "validation/tools/test_ai_context_typed_ir_extensions.py"
         }
       ],
       "negative_cases": [
@@ -7225,6 +7235,11 @@
           "name": "typed_ir_rejects_forged_or_aliasing_mutable_void_pointer_scalar_addresses",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_38_01.rs",
           "fail_closed_reason": "source/field signedness or width drift, const targets, incomplete record inventories, and sibling reads of the same mutable root remain unsupported"
+        },
+        {
+          "name": "test_layout_and_pointer_contract_drift_remain_fail_closed",
+          "path": "validation/tools/test_ai_context_typed_ir_extensions.py",
+          "fail_closed_reason": "record-size mismatch, incomplete ABI evidence, integer width drift, const void targets, and unknown typed-IR nodes invalidate the AI projection"
         }
       ]
     }

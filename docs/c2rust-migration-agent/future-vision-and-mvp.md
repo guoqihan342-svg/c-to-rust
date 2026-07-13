@@ -4,7 +4,7 @@
 
 本文是项目的中文 canonical backlog，也是当前状态、执行顺序和能力边界的唯一入口。详细实现过程由 Git 历史、coverage matrix 和机器可读 evidence 保存，不再把逐日流水账复制到本文。
 
-最后更新：2026-07-12。
+最后更新：2026-07-13。
 
 ## 1. 当前状态
 
@@ -26,9 +26,9 @@ input.c + compile context
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 + A18c8a targeted 2/4 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑，定向 4 项中 2 项新增 exact pass，均明确不具备比赛资格 |
-| 当前翻译主线 | P0-A18c / P0-A10 | A18c8h4d 已把 hash-bound exact rustc/replay compile 诊断安全传入既有 AI repair loop；只保留最多 8 条 `{code,message}`，不传 rendered source、span、fixture 或 oracle 值。下一步用 AI-first exact stage 实测 API 修复并补齐可执行 callee 语义/no-escape |
+| 当前翻译主线 | P0-A18c / P0-A10 | A18c8h4e 已让 AI ContextPack 结构化投影 `RecordMemset` 与 `MutableVoidPointerAddress`，真实 libuv typed-IR 已从 invalid 推进到 ready；当前下一阻塞点是外部被调函数源码上下文不完整，修复后再进入 AI-first exact stage |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A18c8h4d | exact compile/replay gate 仅在 candidate、target、replay 和 fixture 绑定匹配时提取白名单 compiler diagnostics，repair prompt 可见 API 错误但仍看不到 oracle-bearing replay source。修复候选必须重跑全部十项 exact gates，`semantic_pass=false` 不变 |
+| 最近开发阶段 | P0-A18c8h4e | ContextPack 对记录清零布局及可变整数指针到 `void *` 的地址语义做名称无关、哈希绑定投影，并严格拒绝布局、ABI、宽度、const 性和未知节点漂移。真实证据重建仍未调用模型，`semantic_pass=false` 不变 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -457,6 +457,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
         - `target/a18c8h-probe-10` 的 WSL local simulation 使用 clang 18.1.3、Rust 1.95.0-dev、同一 hash-bound libuv compile database 和 `x86_64-unknown-linux-gnu` ABI。原始候选诊断精确选择 `__bswap_16` 与 `uv_inet_pton` 两个已声明函数，两个 compile-only binding 注入后 `rust_check.status=passed`；candidate+replay 预检仍因安全 API 形状返回 101，`execution_allowed=false`，replay 以 `compile_only_external_bindings_not_executable` 跳过。本轮使用 `--skip-c-oracle`，因此 `semantic_pass=false`，不增加成功计数，也不冒充 `competition-exact`。
         - [x] **P0-A18c8h4c：AI repair 多诊断稳定性**。generated replay 与 non-executing preflight 统一使用 `--json=diagnostic-short`，不改变编译、执行或语义门禁，只去除易触发 Rust 诊断 renderer ICE 的长 rendered snippet。中立回归在一个 replay 中同时制造缺失类型和参数类型不匹配并要求两类结构化诊断均持久化。`target/a18c8h-probe-11` 的 WSL local simulation 对同一真实候选返回正常失败码 1、两个 `E0425` 与两个 `E0061`，`compiler unexpectedly panicked=false`；这些错误可进入既有 AI exact repair loop，但本轮没有调用模型、使用 `--skip-c-oracle`，`execution_allowed=false`、`semantic_pass=false`、成功计数仍为 38。
         - [x] **P0-A18c8h4d：exact compiler diagnostics 到 AI repair facts**。新增独立、名称无关的诊断归一化层，从 exact rustc 的 `errors` 或 replay compile JSONL 中最多提取 8 条 error，仅保留受限 `code` 与去主机/敏感元数据后的 `message`，去重后绑定到对应 candidate SHA。compile gate 只有 candidate/target binding 匹配时转发，replay gate 还要求 replay/fixture binding 匹配且 phase 精确为 compile；SHA 或合同漂移时不信任 runner 诊断。repair facts 再次重验该白名单并丢弃额外字段，rendered source、span、fixture 值和 oracle 值不会进入模型提示。harness 不自动拼 wrapper 或改写候选；OpenCode 只能返回完整自包含 Rust candidate，随后重新执行 rustc、fresh oracle、replay、schema diff、negative mutation、unsafe、alias、ABI 和 final verification。该阶段只改善 AI 修复输入，成功计数仍为 38。
+        - [x] **P0-A18c8h4e：AI ContextPack typed-IR 扩展节点投影闭合**。新增独立投影扩展模块，以结构和类型合同而非项目/函数/字段名称识别 `RecordMemset` 与 `MutableVoidPointerAddress`：记录清零必须携带完整哈希绑定布局和 ABI，写入长度必须等于记录大小；可变地址必须由同宽整数指针转换为可变 `void *`，并保留嵌套成员路径。中立改名测试覆盖两套根变量/字段名称，布局大小、完整 ABI、整数宽度、const 性或未知节点漂移均 fail-closed。使用既有真实 libuv WSL 产物重建 ContextPack 后，typed-IR 从 `invalid` 变为 `ready` 且 unsupported 节点清零，provider readiness 准确推进到下一项 `external_callee_source_context_incomplete`。本阶段没有模型调用、没有候选语义验收，成功计数仍为 38。
         - `target/a18c8h-probe-08` 的真实 WSL local simulation 仍为 `rust_check.status=passed`，但预检返回 101 和 `candidate_replay_api_compile_failed`，明确报告缺少 `Ip4AddrReport` 及调用形状不匹配；replay 仍以 `compile_only_external_bindings_not_executable` 跳过。该阶段只改善 repair 诊断，不增加成功计数。
         - A18h 父项保持未完成：required safe candidate API 适配、可执行 external-callee 语义/no-escape、直接局部/参数标量地址、原始 extern 边界和调用写后字段初始化仍需独立收敛。const、nullable、可变参数、间接调用、signedness/width 漂移、不完整记录和同根兄弟读取已有 fail-closed 回归测试。
 

@@ -4,6 +4,13 @@ import hashlib
 import json
 from typing import Any
 
+from .context_typed_ir_extensions import (
+    summarize_mutable_void_pointer_address,
+    summarize_record_memset,
+    validate_mutable_void_pointer_address,
+    validate_record_memset,
+)
+
 
 MAX_SUMMARY_NODES = 512
 MAX_SEQUENCE_ITEMS = 64
@@ -134,6 +141,15 @@ def validate_statements(value: Any, issues: list[str], *, budget: list[int], dep
         elif kind in {"While", "DoWhile"}:
             validate_expression(payload.get("condition"), issues, budget=budget, depth=depth + 1)
             validate_statements(payload.get("body"), issues, budget=budget, depth=depth + 1)
+        elif kind == "RecordMemset":
+            validate_record_memset(
+                payload,
+                issues,
+                budget=budget,
+                depth=depth,
+                validate_expression=validate_expression,
+                append_issue=append_issue,
+            )
         else:
             append_issue(issues, f"statement_unsupported:{kind}")
 
@@ -188,6 +204,15 @@ def validate_expression(value: Any, issues: list[str], *, budget: list[int], dep
     elif kind in {"Index", "Subscript"}:
         validate_expression(payload.get("base"), issues, budget=budget, depth=depth + 1)
         validate_expression(payload.get("index"), issues, budget=budget, depth=depth + 1)
+    elif kind == "MutableVoidPointerAddress":
+        validate_mutable_void_pointer_address(
+            payload,
+            issues,
+            budget=budget,
+            depth=depth,
+            validate_expression=validate_expression,
+            append_issue=append_issue,
+        )
     else:
         append_issue(issues, f"expression_unsupported:{kind}")
 
@@ -255,6 +280,13 @@ def summarize_statement(
             payload.get("body", []) if isinstance(payload.get("body"), list) else [],
             budget=budget,
             depth=depth + 1,
+        )
+    elif kind == "RecordMemset":
+        return summarize_record_memset(
+            payload,
+            budget=budget,
+            depth=depth,
+            summarize_expression=summarize_expression,
         )
     else:
         for key in ("name", "op", "value"):
@@ -358,6 +390,13 @@ def summarize_expression(
             "base": summarize_expression(payload.get("base"), budget=budget, depth=depth + 1),
             "index": summarize_expression(payload.get("index"), budget=budget, depth=depth + 1),
         }
+    if kind == "MutableVoidPointerAddress" and isinstance(payload, dict):
+        return summarize_mutable_void_pointer_address(
+            payload,
+            budget=budget,
+            depth=depth,
+            summarize_expression=summarize_expression,
+        )
     if kind == "NullPtr":
         return {"kind": "null_pointer"}
     return {"kind": kind}
