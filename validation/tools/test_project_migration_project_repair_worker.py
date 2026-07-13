@@ -7,6 +7,9 @@ import unittest
 
 from validation.tools._project_migration_harness.ledger import ProjectLedger
 from validation.tools._project_migration_harness.ledger_security import LedgerError
+from validation.tools._project_migration_harness.project_interface_orchestration import (
+    prepare_project_interfaces,
+)
 from validation.tools._project_migration_harness.project_repair_ingest import (
     ingest_project_repair_response,
 )
@@ -62,6 +65,28 @@ class ProjectRepairWorkerTests(unittest.TestCase):
         latest = self.ledger.load_latest_project_interface_receipt(run_id="run")
         self.assertEqual(2, latest[0])
         self.assertEqual("candidate-ready", latest[1]["status"])
+
+    def test_repaired_authoritative_ir_survives_coordinator_resume(self) -> None:
+        request, base, duplicate_id = self.case("authoritative-resume")
+        result = ingest_project_repair_response(
+            request, self.response(request, [{
+                "section": "public_api", "action": "remove",
+                "record_id": duplicate_id, "changes": {},
+            }]), ledger=self.ledger, harness_root=self.root,
+            out_root=self.out, out_root_rel="target/run",
+        )
+        preparation = prepare_project_interfaces(
+            base, ledger=self.ledger, run_id="run", harness_root=self.root,
+            out_root=self.out, out_root_rel="target/run",
+        )
+        self.assertEqual(
+            result["candidate_ir_sha256"],
+            preparation.rust_project_ir["ir_sha256"],
+        )
+        self.assertEqual(
+            "ready-for-project-final",
+            preparation.coordinator_action["status"],
+        )
 
     def test_non_allowlisted_model_patch_is_recorded_as_retryable_failure(self) -> None:
         request, _, duplicate_id = self.case("invalid")

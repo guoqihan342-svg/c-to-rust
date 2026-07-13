@@ -17,6 +17,7 @@ from .project_interface_contract import (
     coordinator_receipt_accepts_repair_candidate, validate_coordinator_receipt,
 )
 from .project_interface_coordinator import coordinate_project_interfaces
+from .project_repair_run_domain import assert_project_repair_run_domain
 from .rust_project_ir_validation import validate_rust_project_ir
 
 
@@ -71,28 +72,9 @@ class ProjectRepairFinalizer:
                 raise LedgerError(
                     "project repair finalization receipt is not recomputable"
                 )
-            ledger_units = {
-                str(row["unit_id"]) for row in self.connection.execute(
-                    "select unit_id from migration_units where run_id=?", (run_id,),
-                ).fetchall()
-            }
-            ir_units = {
-                str(value["unit_id"])
-                for value in rust_project_ir["bindings"]["candidates"]
-            }
-            if ledger_units != ir_units:
-                raise LedgerError(
-                    "project repair finalization changed the run unit domain"
-                )
-            run_dag = self.connection.execute(
-                "select dag_sha256 from project_runs where run_id=?", (run_id,),
-            ).fetchone()
-            if (
-                run_dag is None
-                or run_dag[0]
-                != rust_project_ir["bindings"]["migration_dag"]["sha256"]
-            ):
-                raise LedgerError("project repair finalization changed the run DAG")
+            assert_project_repair_run_domain(
+                self.connection, run_id=run_id, rust_project_ir=rust_project_ir,
+            )
             original = registry.load_receipt(
                 run_id=run_id, queue_sha256=queue_sha256,
             )

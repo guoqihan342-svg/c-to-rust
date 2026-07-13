@@ -45,4 +45,26 @@ def require_quiescent_last_good_run(
         raise LedgerError("project completion rejects active worker leases")
 
 
-__all__ = ["require_quiescent_last_good_run"]
+def require_project_interface_ready(connection: Any, run_id: str) -> None:
+    receipt = connection.execute(
+        """select status,queue_item_count from project_interface_receipts
+           where run_id=? order by receipt_epoch desc limit 1""",
+        (run_id,),
+    ).fetchone()
+    if (
+        receipt is None or receipt["status"] != "candidate-ready"
+        or int(receipt["queue_item_count"]) != 0
+    ):
+        raise LedgerError(
+            "project completion requires a latest candidate-ready interface receipt"
+        )
+    running = connection.execute(
+        """select count(*) from project_repair_attempts
+           where run_id=? and status='running'""",
+        (run_id,),
+    ).fetchone()
+    if running is None or int(running[0]) != 0:
+        raise LedgerError("project completion rejects running project repair attempts")
+
+
+__all__ = ["require_project_interface_ready", "require_quiescent_last_good_run"]

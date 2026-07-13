@@ -58,7 +58,7 @@ class CoordinatorContextTests(RuntimeHarnessCase):
         plan = self.plan()
         ledger = self.ledger()
         unit_id = plan["portfolio"]["assignments"][0]["unit_id"]
-        dag_sha256 = self.run_dag_sha(ledger, plan["run_id"])
+        dag_sha256 = self.run_ir_dag_binding_sha(ledger, plan["run_id"])
         first_ir, first = coordinated_case(
             "first", unit_id=unit_id, dag_sha256=dag_sha256,
         )
@@ -97,7 +97,7 @@ class CoordinatorContextTests(RuntimeHarnessCase):
         unit_id = plan["portfolio"]["assignments"][0]["unit_id"]
         rust_project_ir, receipt = coordinated_case(
             "swap", unit_id=unit_id,
-            dag_sha256=self.run_dag_sha(ledger, plan["run_id"]),
+            dag_sha256=self.run_ir_dag_binding_sha(ledger, plan["run_id"]),
         )
         registration = ledger.register_project_interface_receipt(
             run_id=plan["run_id"], receipt=receipt,
@@ -124,7 +124,7 @@ class CoordinatorContextTests(RuntimeHarnessCase):
         plan = self.plan()
         ledger = self.ledger()
         unit_id = plan["portfolio"]["assignments"][0]["unit_id"]
-        dag_sha256 = self.run_dag_sha(ledger, plan["run_id"])
+        dag_sha256 = self.run_ir_dag_binding_sha(ledger, plan["run_id"])
         first_ir, first = coordinated_case(
             "runtime-first", unit_id=unit_id, dag_sha256=dag_sha256,
         )
@@ -151,7 +151,7 @@ class CoordinatorContextTests(RuntimeHarnessCase):
         unit_id = plan["portfolio"]["assignments"][0]["unit_id"]
         rust_project_ir, receipt = coordinated_case(
             "runtime-late-first", unit_id=unit_id,
-            dag_sha256=self.run_dag_sha(ledger, plan["run_id"]),
+            dag_sha256=self.run_ir_dag_binding_sha(ledger, plan["run_id"]),
         )
         ledger.register_project_interface_receipt(
             run_id=plan["run_id"], receipt=receipt,
@@ -164,12 +164,15 @@ class CoordinatorContextTests(RuntimeHarnessCase):
             )
 
     @staticmethod
-    def run_dag_sha(ledger, run_id: str) -> str:
+    def run_ir_dag_binding_sha(ledger, run_id: str) -> str:
         with ledger.connect() as connection:
             row = connection.execute(
-                "select dag_sha256 from project_runs where run_id=?", (run_id,),
+                "select metadata_json from project_runs where run_id=?", (run_id,),
             ).fetchone()
-        return str(row[0])
+        metadata = json.loads(str(row[0]))
+        return str(
+            metadata["migration_contract"]["integration_manifest"]["sha256"]
+        )
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .accepted_candidates import accepted_candidate_descriptors
@@ -9,6 +9,7 @@ from .artifacts import canonical_json_bytes, content_sha256, write_json_artifact
 from .integration import integrate_rust_project_ir
 from .ledger import LedgerError, ProjectLedger
 from .ledger_run_contract import load_migration_contract
+from .project_interface_orchestration import prepare_project_interfaces
 from .project_rust_ir import derive_bound_project_ir, persist_project_ir
 
 
@@ -32,7 +33,31 @@ def integrate_verified_project(
         candidate_descriptors=descriptors,
         artifact_root=candidate_root,
     )
-    ir_reference = persist_project_ir(candidate_root, "integration", rust_project_ir)
+    preparation = prepare_project_interfaces(
+        rust_project_ir, ledger=ledger, run_id=run_id,
+        harness_root=_harness_root(candidate_root, candidate_root_rel),
+        out_root=candidate_root, out_root_rel=candidate_root_rel,
+    )
+    rust_project_ir = preparation.rust_project_ir
+    ir_reference = preparation.rust_project_ir_reference
+    action = preparation.coordinator_action
+    if action["status"] != "ready-for-project-final":
+        report = {
+            "schema_version": 1, "status": action["status"],
+            "stage": "project-interface-repair", "run_id": run_id,
+            "project_repair": action, "rust_project_ir": ir_reference,
+            "rust_project_ir_sha256": rust_project_ir["ir_sha256"],
+            "semantic_gate": False,
+            "proof_boundary": (
+                "project interface repair only; Cargo reconstruction and "
+                "project-final gates not run"
+            ),
+        }
+        write_json_artifact(candidate_root, "integration/latest-integration.json", report)
+        return report
+    integration_ir_reference = persist_project_ir(
+        candidate_root, "integration", rust_project_ir,
+    )
     result = integrate_rust_project_ir(rust_project_ir, candidate_root, project_root)
     candidate_set_sha256 = ledger.bind_current_candidate_set(run_id=run_id)
     report = {
@@ -41,7 +66,8 @@ def integrate_verified_project(
         "candidate_set_sha256": candidate_set_sha256,
         "candidate_descriptor_sha256": content_sha256(descriptors),
         "candidate_count": len(descriptors),
-        "rust_project_ir": ir_reference,
+        "rust_project_ir": integration_ir_reference,
+        "authoritative_rust_project_ir": ir_reference,
         "rust_project_ir_sha256": rust_project_ir["ir_sha256"],
         "rust_project_interface_sha256": rust_project_ir["interface_sha256"],
         "rust_project_ir_completeness": dict(
@@ -52,6 +78,21 @@ def integrate_verified_project(
     }
     write_json_artifact(candidate_root, "integration/latest-integration.json", report)
     return report
+
+
+def _harness_root(candidate_root: Path, candidate_root_rel: str) -> Path:
+    relative = PurePosixPath(candidate_root_rel)
+    if (
+        relative.is_absolute() or not relative.parts or ".." in relative.parts
+        or "\\" in candidate_root_rel
+    ):
+        raise LedgerError("integration candidate_root_rel is invalid")
+    root = candidate_root.resolve(strict=True)
+    for _part in relative.parts:
+        root = root.parent
+    if (root / Path(*relative.parts)).resolve() != candidate_root.resolve():
+        raise LedgerError("integration candidate root binding drifted")
+    return root
 
 
 __all__ = ["integrate_verified_project"]

@@ -10,6 +10,7 @@ from .artifacts import canonical_json_bytes, content_sha256, write_json_artifact
 from .orchestration_facts import read_artifact_reference
 from .project_interface_coordinator import coordinate_project_interfaces
 from .project_repair_context import validate_project_repair_context
+from .project_repair_authoritative_ir import persist_authoritative_project_ir
 from .project_repair_patch import (
     apply_project_repair_operations, normalize_project_repair_response,
 )
@@ -84,6 +85,9 @@ def ingest_project_repair_response(
         f"project-repair/ir-candidates/{candidate['ir_sha256']}.json",
         candidate,
     )
+    authoritative_ref = persist_authoritative_project_ir(
+        candidate, out_root=out_root, out_root_rel=out_root_rel,
+    )
     receipt_ref = write_json_artifact(
         out_root,
         f"project-repair/coordinator/{receipt['coordinator_receipt_sha256']}.json",
@@ -119,6 +123,14 @@ def ingest_project_repair_response(
             content_sha256=str(reference["sha256"]), status=status,
             metadata=metadata,
         )
+    ledger.record_project_repair_artifact(
+        attempt_id=attempt_id,
+        artifact_id=f"rust-project-ir-authoritative-{authoritative_ref['sha256'][:24]}",
+        kind="rust-project-ir-authoritative",
+        repo_rel_path=str(authoritative_ref["path"]),
+        content_sha256=str(authoritative_ref["sha256"]), status="candidate",
+        metadata={"ir_sha256": candidate["ir_sha256"]},
+    )
     finalized = ledger.finalize_project_repair_candidate(
         run_id=str(request["run_id"]),
         queue_sha256=str(request["project_repair_queue_sha256"]),
@@ -138,6 +150,7 @@ def ingest_project_repair_response(
         "artifacts": {
             "response": _prefix(response_ref, out_root_rel),
             "rust_project_ir_candidate": _prefix(candidate_ref, out_root_rel),
+            "rust_project_ir_authoritative": authoritative_ref,
             "coordinator_receipt": _prefix(receipt_ref, out_root_rel),
         },
         "claim_boundary": {

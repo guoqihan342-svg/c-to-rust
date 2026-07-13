@@ -20,6 +20,10 @@ from .project_repair_prompt import render_project_repair_prompt
 from .project_repair_paths import require_bound_project_repair_out_root
 
 
+class _ProjectRepairLaunchAlreadyClaimed(Exception):
+    pass
+
+
 def run_and_ingest_opencode_project_repair(
     request_reference: Mapping[str, Any], preflight_reference: Mapping[str, Any], *,
     ledger: ProjectLedger, harness_root: Path, out_root: Path,
@@ -39,10 +43,12 @@ def run_and_ingest_opencode_project_repair(
             attempt_id=attempt_id, fencing_token=fencing_token,
         ) as (environment, working_directory, attestation):
             def runner(argv: list[str], seconds: int):
-                ledger.mark_project_repair_command_started(
+                claimed = ledger.mark_project_repair_command_started(
                     attempt_id=attempt_id, worker_id=worker_id,
                     expected_version=fencing_token,
                 )
+                if not claimed:
+                    raise _ProjectRepairLaunchAlreadyClaimed
                 return subprocess_runner_with_environment(
                     argv, seconds, environment=environment,
                     cwd=working_directory,
@@ -77,6 +83,14 @@ def run_and_ingest_opencode_project_repair(
             harness_root=harness_root, out_root=out_root,
             out_root_rel=out_root_rel,
         )
+    except _ProjectRepairLaunchAlreadyClaimed:
+        return {
+            "schema_version": 1, "status": "waiting",
+            "stage": "project-repair-launch-already-claimed",
+            "run_id": request["run_id"], "repair_id": request["repair_id"],
+            "attempt_id": attempt_id, "attempt_consumed": False,
+            "model_launched": False, "semantic_gate": False,
+        }
     except Exception:
         return _recover_unknown(
             request, ledger=ledger, out_root=out_root,

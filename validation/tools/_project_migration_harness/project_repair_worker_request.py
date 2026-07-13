@@ -160,6 +160,7 @@ def materialize_project_repair_request(
         "schema_version": 1, "status": "attempt-started",
         "run_id": run_id, "repair_id": repair_id,
         "attempt_id": started.attempt_id,
+        "attempt_applied": started.applied,
         "effective_input_sha256": request["effective_input_sha256"],
         "request": _prefix(request_ref, out_root_rel),
         "context": bound_context,

@@ -117,6 +117,14 @@ def resume_project_completion(
         project_root=paths["project_root"],
     )
     if integration.get("status") != "integrated":
+        if integration.get("stage") == "project-interface-repair":
+            repair = integration.get("project_repair")
+            blockers = repair.get("blockers", []) if isinstance(repair, dict) else []
+            return _result(
+                paths, run_id, str(integration.get("status", "blocked")),
+                "project-interface-repair", list(blockers), candidate_set,
+                project_repair=repair,
+            )
         return _result(
             paths, run_id, "failed", "project-final-integration", [], candidate_set,
         )
@@ -238,7 +246,7 @@ def _completion_paths(ledger: ProjectLedger, harness_root: Path) -> dict[str, An
 
 def _result(
     paths: dict[str, Any], run_id: str, status: str, stage: str,
-    blockers: list[str], candidate_set: str | None = None,
+    blockers: list[str], candidate_set: str | None = None, **details: Any,
 ) -> dict[str, Any]:
     payload = {
         "schema_version": 1,
@@ -248,6 +256,7 @@ def _result(
         "candidate_set_sha256": candidate_set,
         "blockers": blockers[:64],
         "semantic_gate": False,
+        **details,
     }
     payload["checkpoint_sha256"] = content_sha256(payload)
     write_json_artifact(

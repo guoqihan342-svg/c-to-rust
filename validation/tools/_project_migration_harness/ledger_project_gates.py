@@ -30,7 +30,9 @@ from .ledger_transition_commands import (
     project_run_completed_command, project_unit_completed_command,
 )
 from .project_final_barrier import require_project_final_candidate_passes
-from .project_completion_invariants import require_quiescent_last_good_run
+from .project_completion_invariants import (
+    require_project_interface_ready, require_quiescent_last_good_run,
+)
 from .project_gate_bindings import require_cargo_integration_binding
 
 
@@ -134,6 +136,7 @@ class ProjectGateMixin:
         candidate_set = _require_sha256(candidate_set_sha256, "candidate_set_sha256")
         with self.connect() as connection, atomic(connection):
             require_quiescent_last_good_run(connection, run_id)
+            require_project_interface_ready(connection, run_id)
             assert_current_candidate_set(
                 connection, run_id, candidate_set, database_path=self.path,
             )

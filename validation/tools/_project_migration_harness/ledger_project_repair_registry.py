@@ -12,6 +12,7 @@ from .project_interface_coordinator import (
     COORDINATOR_RECEIPT_SHA256_FIELD, PROJECT_REPAIR_QUEUE_SHA256_FIELD,
     coordinate_project_interfaces,
 )
+from .project_repair_run_domain import assert_project_repair_run_domain
 from .rust_project_ir_validation import validate_rust_project_ir
 
 
@@ -51,19 +52,9 @@ class ProjectRepairRegistry:
             ).fetchone()
             if run is None:
                 raise LedgerError("project repair receipt run does not exist")
-            ledger_units = {
-                str(row["unit_id"]) for row in self.connection.execute(
-                    "select unit_id from migration_units where run_id=?", (run_id,),
-                ).fetchall()
-            }
-            ir_units = {
-                str(item["unit_id"])
-                for item in rust_project_ir["bindings"]["candidates"]
-            }
-            if ledger_units != ir_units:
-                raise LedgerError("project interface receipt RustProjectIR changed the run unit domain")
-            if run["dag_sha256"] != rust_project_ir["bindings"]["migration_dag"]["sha256"]:
-                raise LedgerError("project interface receipt RustProjectIR changed the run DAG")
+            assert_project_repair_run_domain(
+                self.connection, run_id=run_id, rust_project_ir=rust_project_ir,
+            )
             existing = self.connection.execute(
                 """select * from project_interface_receipts where run_id=?
                    and project_repair_queue_sha256=?""",

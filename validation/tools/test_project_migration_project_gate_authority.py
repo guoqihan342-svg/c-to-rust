@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from validation.tools._project_migration_harness.controller_project_gates import (
@@ -22,11 +23,15 @@ from validation.tools.project_migration_gate_authority_test_support import (
 from validation.tools.project_migration_final_barrier_test_support import (
     record_project_final_candidate_bundle,
 )
+from validation.tools.project_migration_project_repair_test_support import (
+    coordinated_case,
+)
 
 
 class ProjectMigrationProjectGateAuthorityTests(ProjectMigrationGateAuthorityCase):
     def test_project_status_is_derived_and_latest_final_must_be_fresh(self) -> None:
         self.promote_current_candidate()
+        self.register_project_interface_ready()
         candidate_set = self.ledger.bind_current_candidate_set(run_id="run")
         with self.assertRaisesRegex(LedgerError, "candidate gate"):
             self.ledger.complete_project_run(
@@ -112,6 +117,7 @@ class ProjectMigrationProjectGateAuthorityTests(ProjectMigrationGateAuthorityCas
         first_set = self.ledger.bind_current_candidate_set(run_id="run")
         self.candidate_id, self.candidate_sha = self.make_candidate("candidate-two")
         self.promote_current_candidate()
+        self.register_project_interface_ready()
         second_set = self.ledger.bind_current_candidate_set(run_id="run")
         self.assertNotEqual(first_set, second_set)
         with self.assertRaisesRegex(LedgerError, "current last-good candidate set"):
@@ -121,6 +127,7 @@ class ProjectMigrationProjectGateAuthorityTests(ProjectMigrationGateAuthorityCas
 
     def test_completion_rejects_a_running_worker_attempt(self) -> None:
         self.promote_current_candidate()
+        self.register_project_interface_ready()
         candidate_set = record_project_final_candidate_bundle(self)
         with self.ledger.connect() as connection:
             connection.execute(
@@ -132,6 +139,27 @@ class ProjectMigrationProjectGateAuthorityTests(ProjectMigrationGateAuthorityCas
                 ("a" * 64, "2026-01-01T00:00:59Z"),
             )
         with self.assertRaisesRegex(LedgerError, "running worker"):
+            self.ledger.complete_project_run(
+                run_id="run", candidate_set_sha256=candidate_set,
+            )
+
+    def test_completion_rejects_an_unfinished_project_repair_queue(self) -> None:
+        self.promote_current_candidate()
+        candidate_set = self.ledger.bind_current_candidate_set(run_id="run")
+        with self.ledger.connect() as connection:
+            metadata = json.loads(str(connection.execute(
+                "select metadata_json from project_runs where run_id='run'"
+            ).fetchone()[0]))
+        dag_sha256 = metadata["migration_contract"]["integration_manifest"][
+            "sha256"
+        ]
+        rust_project_ir, receipt = coordinated_case(
+            "completion-blocked", unit_id="unit", dag_sha256=dag_sha256,
+        )
+        self.ledger.register_project_interface_receipt(
+            run_id="run", receipt=receipt, rust_project_ir=rust_project_ir,
+        )
+        with self.assertRaisesRegex(LedgerError, "candidate-ready"):
             self.ledger.complete_project_run(
                 run_id="run", candidate_set_sha256=candidate_set,
             )
