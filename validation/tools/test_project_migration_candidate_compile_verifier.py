@@ -9,7 +9,7 @@ from validation.tools._project_migration_harness.candidate_compile_verifier impo
     verify_candidate_compile,
 )
 from validation.tools._project_migration_harness.candidate_compile_evidence import (
-    FIXED_CARGO_CHECK,
+    FIXED_CARGO_CHECK, verify_compile_bindings,
 )
 from validation.tools._project_migration_harness.sandbox_contract import (
     SandboxContract,
@@ -21,6 +21,9 @@ from validation.tools._project_migration_harness.integration_validation import (
 )
 from validation.tools.project_migration_controller_test_support import (
     ProjectMigrationControllerCase,
+)
+from validation.tools.project_migration_compile_test_support import (
+    compile_observation_for_ledger,
 )
 from validation.tools.project_migration_sandbox_test_support import (
     bind_execution_plan,
@@ -47,6 +50,40 @@ class ProjectMigrationCandidateCompileVerifierTests(ProjectMigrationControllerCa
         self.assertEqual(candidate_sha, verdict["candidate_sha256"])
         self.assertEqual(1, len(verdict["source_evidence"]))
         self.assertEqual("candidate-ready", ledger.unit_states(plan["run_id"])[0]["status"])
+        observation = self.load(result["observation"]["path"])
+        self.assertEqual(
+            result["materialization"]["rust_project_ir_sha256"],
+            observation["quarantine"]["rust_project_ir_sha256"],
+        )
+        self.assertEqual(
+            "deterministic-rust-project-ir-cargo-v1",
+            observation["quarantine"]["generator"],
+        )
+
+    def test_compile_observation_reopens_ir_and_rejects_ir_file_drift(self) -> None:
+        plan, ledger, unit_id, candidate_id, _ = self.prepare_candidate()
+        candidate_set = ledger.bind_verification_candidate_set(
+            run_id=plan["run_id"], scope="wave-provisional",
+        )
+        payload = compile_observation_for_ledger(
+            ledger, self.harness, run_id=plan["run_id"], unit_id=unit_id,
+            candidate_artifact_id=candidate_id,
+            candidate_set_sha256=candidate_set,
+            execution=_execution("passed"),
+        )
+        with ledger.connect() as connection:
+            verify_compile_bindings(
+                payload, ledger_path=ledger.path, connection=connection,
+            )
+        ir_path = self.harness.joinpath(
+            *Path(payload["quarantine"]["rust_project_ir"]["path"]).parts
+        )
+        ir_path.write_text("{}\n", encoding="utf-8")
+
+        with ledger.connect() as connection, self.assertRaises(LedgerError):
+            verify_compile_bindings(
+                payload, ledger_path=ledger.path, connection=connection,
+            )
 
     def test_runner_uses_detached_generation_without_current_pointer(self) -> None:
         plan, ledger, unit_id, candidate_id, _ = self.prepare_candidate()

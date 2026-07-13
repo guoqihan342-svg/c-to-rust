@@ -80,6 +80,7 @@ class ProjectGateAuthoritySupportMixin:
                 "candidate_count": 1,
                 "manifest_sha256": digest("manifest"),
                 "project_sha256": digest("project"),
+                "interface_complete": passed,
             }
         elif kind in {"cargo-check", "cargo-test"}:
             observation = _cargo_observation(kind, passed)

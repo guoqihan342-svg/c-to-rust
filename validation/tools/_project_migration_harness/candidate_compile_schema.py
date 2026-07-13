@@ -12,6 +12,7 @@ from .sandbox_execution_schema import (
     SANDBOX_EVIDENCE_KEYS as SANDBOX_KEYS,
     validate_sandbox_execution_evidence,
 )
+from .rust_project_cargo import GENERATOR as RUST_PROJECT_IR_GENERATOR
 
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -26,9 +27,11 @@ REFERENCE_KEYS = {"path", "sha256", "size_bytes"}
 RUN_CONTRACT_KEYS = {"context_sha256", "dag_sha256", "integration_manifest"}
 QUARANTINE_KEYS = {
     "generation_sha256", "quarantine_manifest", "generation_manifest",
+    "rust_project_ir", "rust_project_ir_sha256",
+    "rust_project_interface_sha256", "rust_project_ir_scope", "generator",
 }
 FIXED_CARGO_CHECK = [
-    "cargo", "check", "--all-targets", "--offline", "--locked",
+    "cargo", "check", "--all-targets", "--all-features", "--offline", "--locked",
     "--message-format=json",
 ]
 
@@ -70,7 +73,14 @@ def derive_compile_status(
         or not isinstance(quarantine, Mapping) or set(quarantine) != QUARANTINE_KEYS
         or not reference(quarantine.get("quarantine_manifest"))
         or not reference(quarantine.get("generation_manifest"))
+        or not reference(quarantine.get("rust_project_ir"))
         or not is_sha(quarantine.get("generation_sha256"))
+        or not is_sha(quarantine.get("rust_project_ir_sha256"))
+        or not is_sha(quarantine.get("rust_project_interface_sha256"))
+        or quarantine.get("rust_project_ir_scope") not in {
+            "full-project", "verification-cohort",
+        }
+        or quarantine.get("generator") != RUST_PROJECT_IR_GENERATOR
         or quarantine["generation_manifest"].get("sha256")
         != quarantine.get("generation_sha256")
         or not is_sha(run_contract.get("context_sha256"))

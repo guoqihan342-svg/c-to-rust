@@ -11,12 +11,14 @@ from .build_facts import is_linklike
 from .build_ir import canonical_build_ir_bytes, is_sha256
 from .build_ir_validation import BuildIRValidationError, validate_build_ir
 from .rust_project_ir_validation import RustProjectIRError, validate_rust_project_ir
+from .rust_project_ir_cohort import PARENT_DAG_KEY, validate_cohort_dag
 
 
 MAX_BOUND_ARTIFACT_BYTES = 64 * 1024 * 1024
 _DAG_REQUIRED_KEYS = {"schema_version", "dag", "dag_order"}
 _DAG_ALLOWED_KEYS = _DAG_REQUIRED_KEYS | {
     "unsafe_policy", "generated_build_closure", "build_ir", "claim_boundary",
+    PARENT_DAG_KEY,
 }
 _EVIDENCE_SECTIONS = (
     "modules", "public_api", "shared_types", "global_ownership",
@@ -33,6 +35,10 @@ def reopen_rust_project_ir_bindings(
     dag_data = _read_reference(artifact_root, bindings["migration_dag"])
     dag = _strict_json(dag_data, "migration DAG")
     dag_units = _validate_migration_dag(dag)
+    try:
+        validate_cohort_dag(dag, artifact_root)
+    except ValueError as error:
+        raise RustProjectIRError(str(error)) from error
     build_payloads: dict[str, dict[str, Any]] = {}
     build_unit_count = 0
     for reference in bindings["build_ir"]:

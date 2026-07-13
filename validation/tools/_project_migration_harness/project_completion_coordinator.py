@@ -21,7 +21,7 @@ from .ledger import LedgerError, ProjectLedger
 from .ledger_candidate_state import latest_candidate_records
 from .ledger_run_contract import load_migration_contract
 from .project_cargo_verifier import verify_project_cargo
-from .project_host_gates import record_host_project_final
+from .project_host_gates import _record_host_project_final
 from .project_integration import integrate_verified_project
 from .project_integration_verifier import verify_integrated_project
 
@@ -120,6 +120,14 @@ def resume_project_completion(
         return _result(
             paths, run_id, "failed", "project-final-integration", [], candidate_set,
         )
+    completeness = integration.get("rust_project_ir_completeness")
+    if not isinstance(completeness, dict) or completeness.get("status") != "complete":
+        unresolved = completeness.get("unresolved_sections", []) \
+            if isinstance(completeness, dict) else []
+        return _result(
+            paths, run_id, "blocked", "project-final-rust-project-ir-incomplete",
+            [f"unresolved-interface:{item}" for item in unresolved], candidate_set,
+        )
     integration_gate = verify_integrated_project(
         ledger=ledger, run_id=run_id, project_root=paths["project_root"],
         out_root=paths["out_root"], out_root_rel=paths["out_root_rel"],
@@ -139,7 +147,7 @@ def resume_project_completion(
             "project-final-cargo", [], candidate_set,
         )
     try:
-        project_final = record_host_project_final(
+        project_final = _record_host_project_final(
             ledger=ledger, out_root=paths["out_root"],
             out_root_rel=paths["out_root_rel"], run_id=run_id,
         )

@@ -83,7 +83,7 @@ def record_host_project_observation(
     }
 
 
-def record_host_project_final(
+def _record_host_project_final(
     *, ledger: ProjectLedger, out_root: Path, out_root_rel: str,
     run_id: str,
 ) -> dict[str, Any]:
@@ -144,4 +144,4 @@ def _next_record_id(
     return f"host-{gate_kind}-{candidate_set_sha256[:12]}-{epoch}"
 
 
-__all__ = ["record_host_project_final", "record_host_project_observation"]
+__all__ = ["record_host_project_observation"]

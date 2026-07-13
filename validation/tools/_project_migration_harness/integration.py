@@ -4,45 +4,33 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 from . import cargo_project
 from . import integration_generation as generations
 from . import integration_validation as validation
+from .rust_project_cargo import reconstruct_cargo_project_from_ir
 
-
-def reconstruct_cargo_project(
-    migration_manifest: Mapping[str, Any],
-    candidate_descriptors: Sequence[Mapping[str, Any]],
-    candidate_root: Path,
-    *,
-    max_source_bytes: int = cargo_project.MAX_SOURCE_BYTES,
-) -> cargo_project.CargoProjectPlan:
-    candidates = validation.load_candidates(candidate_descriptors, candidate_root, max_source_bytes)
-    normalized = validation.normalize_manifest(migration_manifest)
-    return cargo_project.reconstruct_cargo_project(normalized, candidates)
-
-
-def integrate_candidates(
-    migration_manifest: Mapping[str, Any],
-    candidate_descriptors: Sequence[Mapping[str, Any]],
-    candidate_root: Path,
-    project_root: Path,
-    *,
-    max_source_bytes: int = cargo_project.MAX_SOURCE_BYTES,
+def integrate_rust_project_ir(
+    rust_project_ir: Mapping[str, Any], artifact_root: Path, project_root: Path,
+    *, max_source_bytes: int = cargo_project.MAX_SOURCE_BYTES,
 ) -> dict[str, Any]:
+    """Publish an authoritative generation only after reopening RustProjectIR."""
     stage: Path | None = None
     previous_managed = False
     previous_preserved = True
     try:
-        trusted_root = validation.trusted_root(candidate_root)
+        trusted_root = validation.trusted_root(artifact_root)
         target = validation.project_target(project_root, trusted_root)
         current = generations.recover_current_generation(target)
         previous_state, previous_managed = validation.existing_state(current or target)
-        plan = reconstruct_cargo_project(
-            migration_manifest, candidate_descriptors, trusted_root,
-            max_source_bytes=max_source_bytes,
+        plan = reconstruct_cargo_project_from_ir(
+            rust_project_ir, trusted_root, max_source_bytes=max_source_bytes,
         )
+        if plan.last_good_manifest.get("rust_project_ir_scope") != "full-project":
+            raise cargo_project.ProjectInputError(
+                "rust_project_ir_scope_not_full_project", "rust_project_ir",
+            )
         stage = generations.create_generation_stage(target)
         _write_stage(stage, plan.files)
         staged_state, staged_managed = validation.existing_state(stage)
@@ -52,36 +40,39 @@ def integrate_candidates(
         stage = None
         manifest_bytes = plan.files[cargo_project.LAST_GOOD_MANIFEST]
         return {
-            "schema_version": 1,
-            "status": "integrated",
+            "schema_version": 1, "status": "integrated",
             "integrated_group_ids": list(plan.accepted_group_ids),
+            "rust_project_ir_sha256": rust_project_ir["ir_sha256"],
+            "rust_project_interface_sha256": rust_project_ir["interface_sha256"],
+            "rust_project_ir_completeness": dict(
+                rust_project_ir["interface_completeness"]
+            ),
             "last_good_manifest": {
                 "path": cargo_project.LAST_GOOD_MANIFEST,
                 "sha256": validation.digest(manifest_bytes),
             },
             "unsafe_policy": plan.last_good_manifest["unsafe_policy"],
             "last_good_updated": True,
-            "generation": {
-                "id": generation.name,
-                "current_pointer": generations.CURRENT,
-                "immutable": True,
-            },
-            "cargo_executed": False,
-            "diagnostics": [],
+            "generation": {"id": generation.name, "current_pointer": generations.CURRENT,
+                           "immutable": True},
+            "cargo_executed": False, "diagnostics": [],
         }
     except cargo_project.ProjectInputError as error:
-        return _failure(error.code, error.stage, error.group_id, previous_managed, previous_preserved)
+        return _failure(error.code, error.stage, error.group_id,
+                        previous_managed, previous_preserved)
     except generations.GenerationCommitError as error:
         previous_preserved = error.preserved
-        return _failure(error.code, "generation_publish", None, previous_managed, previous_preserved)
+        return _failure(error.code, "generation_publish", None,
+                        previous_managed, previous_preserved)
     except OSError:
-        return _failure("integration_io_failure", "filesystem", None, previous_managed, previous_preserved)
+        return _failure("integration_io_failure", "filesystem", None,
+                        previous_managed, previous_preserved)
     finally:
         if stage is not None and stage.exists():
             shutil.rmtree(stage, ignore_errors=True)
 
 
-integrate_project = integrate_candidates
+integrate_project = integrate_rust_project_ir
 
 
 def _write_stage(stage: Path, files: Mapping[str, bytes]) -> None:

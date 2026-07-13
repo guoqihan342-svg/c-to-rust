@@ -7,6 +7,7 @@ from typing import Any
 from .accepted_candidates import candidate_set_descriptors
 from .artifacts import content_sha256
 from .candidate_compile_evidence import compile_observation_payload
+from .candidate_compile_schema import cargo_check
 from .gate_authority import candidate_authority, candidate_verdict_payload
 from .gate_candidate_sets import candidate_set_manifest, candidate_set_members
 from .gate_diagnostics import normalize_gate_evidence
@@ -16,7 +17,8 @@ from .ledger_artifact_binding import candidate_source_reference, read_ledger_art
 from .ledger_candidate_state import candidate_row
 from .ledger_run_contract import load_migration_contract
 from .project_verification import run_cargo_generation_gates
-from .quarantine_generation import materialize_quarantine_generation
+from .project_rust_ir import derive_bound_project_ir, persist_project_ir
+from .quarantine_generation import materialize_rust_project_ir_quarantine_generation
 
 
 def verify_candidate_compile(
@@ -46,10 +48,26 @@ def verify_candidate_compile(
         ledger, run_id=run_id, out_root_rel=candidate_root_rel,
         candidate_set_sha256=candidate_set,
     )
-    materialized = materialize_quarantine_generation(
-        migration_manifest, descriptors, candidate_root, quarantine_root,
+    try:
+        rust_project_ir = derive_bound_project_ir(
+            migration_contract=_run_contract,
+            migration_manifest=migration_manifest,
+            candidate_descriptors=descriptors,
+            artifact_root=candidate_root,
+        )
+        ir_reference = persist_project_ir(
+            candidate_root, "quarantine-ir", rust_project_ir,
+        )
+    except LedgerError:
+        return _blocked(
+            run_id, unit_id, candidate_artifact_id, candidate_set,
+            "rust_project_ir_derivation_failed", {"candidate_count": len(descriptors)},
+        )
+    materialized = materialize_rust_project_ir_quarantine_generation(
+        rust_project_ir, descriptors, candidate_root, quarantine_root,
         candidate_set, cohort_manifest,
     )
+    materialized["rust_project_ir_ref"] = ir_reference
     if materialized.get("status") != "materialized":
         return _blocked(
             run_id, unit_id, candidate_artifact_id, candidate_set,
@@ -71,7 +89,7 @@ def verify_candidate_compile(
             _reason_code(execution, "candidate_compile_environment_blocked"),
             {"materialization": materialized, "execution": execution},
         )
-    check = _cargo_check(execution)
+    check = cargo_check(execution)
     gate_status = "passed" if check.get("status") == "passed" else "failed"
     diagnostics = [] if gate_status == "passed" else _target_diagnostics(check, candidate_sha)
     if gate_status == "failed" and not diagnostics:
@@ -99,6 +117,13 @@ def verify_candidate_compile(
                 quarantine_root, materialized.get("generation_manifest_ref"),
                 repository_root, ledger.path,
             ),
+            "rust_project_ir": _repository_reference(
+                candidate_root, ir_reference, repository_root, ledger.path,
+            ),
+            "rust_project_ir_sha256": rust_project_ir["ir_sha256"],
+            "rust_project_interface_sha256": rust_project_ir["interface_sha256"],
+            "rust_project_ir_scope": materialized.get("rust_project_ir_scope"),
+            "generator": materialized.get("generator"),
         }
         observation = compile_observation_payload(
             run_id=run_id, unit_id=unit_id,
@@ -220,19 +245,6 @@ def _repository_reference(
     }
     read_ledger_artifact(ledger_path, reference)
     return reference
-
-
-def _cargo_check(execution: Mapping[str, Any]) -> Mapping[str, Any]:
-    checks = execution.get("checks")
-    values = [
-        item for item in checks or []
-        if isinstance(item, Mapping)
-        and isinstance(item.get("command"), list)
-        and item["command"][:2] == ["cargo", "check"]
-    ]
-    if len(values) != 1:
-        raise LedgerError("candidate compile execution has no unique cargo check")
-    return values[0]
 
 
 def _target_diagnostics(check: Mapping[str, Any], candidate_sha: str) -> list[dict[str, Any]]:

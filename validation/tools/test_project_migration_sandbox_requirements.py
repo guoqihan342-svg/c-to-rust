@@ -17,7 +17,9 @@ from validation.tools._project_migration_harness.sandbox_requirements import (
 
 
 INPUT_SHA256 = "1" * 64
-COMMAND = ("cargo", "check", "--all-targets", "--offline", "--locked")
+COMMAND = (
+    "cargo", "check", "--all-targets", "--all-features", "--offline", "--locked",
+)
 
 
 def canonical_sha256(value: object) -> str:

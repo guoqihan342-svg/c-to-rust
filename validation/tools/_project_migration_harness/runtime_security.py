@@ -9,7 +9,8 @@ from typing import Any
 
 from .context_contracts import canonical as canonical_context_bytes
 from .ledger_security import assert_no_secrets
-from .rust_candidate_facts import derive_boundary_manifest, derive_rust_metadata
+from .rust_candidate_facts import derive_rust_metadata
+from .rust_ffi_facts import derive_boundary_manifest
 
 
 VALUE_KEYS = {

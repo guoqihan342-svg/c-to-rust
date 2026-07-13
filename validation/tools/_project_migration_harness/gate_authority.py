@@ -49,7 +49,7 @@ _OBSERVATION_KEYS = {
 _OBSERVATION_FIELDS = {
     "integration": {
         "managed_project_unchanged", "candidate_count", "manifest_sha256",
-        "project_sha256",
+        "project_sha256", "interface_complete",
     },
     "cargo-check": CARGO_OBSERVATION_KEYS,
     "cargo-test": CARGO_OBSERVATION_KEYS,
@@ -214,6 +214,7 @@ def _observation_passed(gate_kind: str, value: Mapping[str, Any]) -> bool:
     if gate_kind == "integration":
         return (
             value.get("managed_project_unchanged") is True
+            and value.get("interface_complete") is True
             and _positive_int(value.get("candidate_count"))
             and _is_sha(value.get("manifest_sha256"))
             and _is_sha(value.get("project_sha256"))

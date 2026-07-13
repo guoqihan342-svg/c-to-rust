@@ -1,57 +1,43 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
-from . import cargo_project
-from . import integration_validation as validation
-from .quarantine_filesystem import (
-    detached_root,
-    ensure_store,
-    present,
-    publish,
-    remove_tree,
-    trusted_candidate_root,
-    verify_generation,
-    write_stage,
+from validation.tools._project_migration_harness import cargo_project
+from validation.tools._project_migration_harness import integration_validation as validation
+from validation.tools._project_migration_harness.quarantine_filesystem import (
+    detached_root, ensure_store, present, publish, remove_tree,
+    trusted_candidate_root, verify_generation, write_stage,
 )
-from .quarantine_manifest import (
-    QUARANTINE_MANIFEST,
-    candidate_set,
-    generation_files,
+from validation.tools._project_migration_harness.quarantine_manifest import (
+    QUARANTINE_MANIFEST, candidate_set, generation_files,
 )
-from .rust_project_cargo import reconstruct_cargo_project_from_ir
+from validation.tools.project_migration_legacy_cargo_test_support import (
+    reconstruct_cargo_project,
+)
 
-def materialize_rust_project_ir_quarantine_generation(
-    rust_project_ir: Mapping[str, Any],
-    candidate_descriptors: Sequence[Mapping[str, Any]],
-    artifact_root: Path,
-    quarantine_root: Path,
-    candidate_set_sha256: str,
+
+def materialize_quarantine_generation(
+    migration_manifest: Mapping[str, Any],
+    candidate_descriptors: Sequence[Mapping[str, Any]], candidate_root: Path,
+    quarantine_root: Path, candidate_set_sha256: str,
     candidate_set_manifest: Mapping[str, Any],
 ) -> dict[str, Any]:
     stage: Path | None = None
     count = 0
     try:
-        artifacts = trusted_candidate_root(artifact_root)
-        quarantine = detached_root(quarantine_root, artifacts)
+        candidates = trusted_candidate_root(candidate_root)
+        quarantine = detached_root(quarantine_root, candidates)
         members, bindings = candidate_set(
             candidate_descriptors, candidate_set_sha256, candidate_set_manifest,
         )
         count = len(members)
-        ir_members = sorted(({
-            "unit_id": str(item["unit_id"]),
-            "artifact_id": str(item["artifact_id"]),
-            "content_sha256": str(item["source"]["sha256"]),
-        } for item in rust_project_ir["bindings"]["candidates"]),
-            key=lambda item: item["unit_id"])
-        if ir_members != members:
-            _fail("quarantine_rust_project_ir_candidate_set_mismatch", "candidate_set")
-        plan = reconstruct_cargo_project_from_ir(rust_project_ir, artifacts)
-        if sorted(plan.accepted_group_ids) != sorted(
-            item["unit_id"] for item in members
-        ):
+        plan = reconstruct_cargo_project(
+            migration_manifest, candidate_descriptors, candidates,
+        )
+        if len(plan.accepted_group_ids) != count:
             _fail("quarantine_candidate_set_incomplete", "candidate")
         files = generation_files(
             plan, candidate_set_sha256, candidate_set_manifest, members, bindings,
@@ -69,10 +55,6 @@ def materialize_rust_project_ir_quarantine_generation(
             "schema_version": 1, "status": "materialized",
             "candidate_set": {"sha256": candidate_set_sha256, "member_count": count},
             "candidate_count": count,
-            "rust_project_ir_sha256": rust_project_ir["ir_sha256"],
-            "rust_project_interface_sha256": rust_project_ir["interface_sha256"],
-            "rust_project_ir_scope": plan.last_good_manifest["rust_project_ir_scope"],
-            "generator": plan.last_good_manifest["generator"],
             "generation": {"sha256": state, "path": relative, "immutable": True},
             "manifest_ref": {"path": f"{relative}/{QUARANTINE_MANIFEST}",
                              "sha256": validation.digest(manifest),
@@ -80,8 +62,7 @@ def materialize_rust_project_ir_quarantine_generation(
             "generation_manifest_ref": {
                 "path": f"{relative}/{cargo_project.LAST_GOOD_MANIFEST}",
                 "sha256": validation.digest(generation_manifest),
-                "size_bytes": len(generation_manifest),
-            },
+                "size_bytes": len(generation_manifest)},
             "immutable": True, "last_good_updated": False,
             "cargo_executed": False, "diagnostics": [],
         }
@@ -99,15 +80,11 @@ def _fail(code: str, stage: str) -> None:
 
 
 def _failure(code: str, stage: str, count: int) -> dict[str, Any]:
-    return {
-        "schema_version": 1, "status": "failed", "candidate_set": None,
-        "candidate_count": count, "generation": None, "manifest_ref": None,
-        "immutable": False, "last_good_updated": False, "cargo_executed": False,
-        "generation_manifest_ref": None,
-        "diagnostics": [{"code": code[:96], "stage": stage[:48]}],
-    }
+    return {"schema_version": 1, "status": "failed", "candidate_set": None,
+            "candidate_count": count, "generation": None, "manifest_ref": None,
+            "immutable": False, "last_good_updated": False, "cargo_executed": False,
+            "generation_manifest_ref": None,
+            "diagnostics": [{"code": code[:96], "stage": stage[:48]}]}
 
 
-__all__ = [
-    "QUARANTINE_MANIFEST", "materialize_rust_project_ir_quarantine_generation",
-]
+__all__ = ["QUARANTINE_MANIFEST", "materialize_quarantine_generation"]

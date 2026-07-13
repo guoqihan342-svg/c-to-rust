@@ -71,6 +71,10 @@ AI candidate manifest v9 的 `prompt_scope` 由实际 ContextPack 计算，并�
 
 项目级 preflight 固定精确模型、`c2rust-candidate`、`max` 和不可变 agent snapshot。每个 attempt 只继承显式环境白名单，并使用独立 config/data/state/cache/tmp/out；真实调用的 receipt、session export projection、prompt/response SHA 和 provider-execution report 进入同一 ledger attempt/fence。候选接受由固定 host authority 完成：候选 gate、项目 gate、证据 SHA、最新 epoch 和不可变 candidate set 全部进入 SQLite，并在晋升/完成前重新打开内容寻址证据。Cargo 项目使用不可变 generation 和原子 `CURRENT` 指针；候选 `cargo check/test` 只允许在通过 capability probe 的 Linux bubblewrap 无网络沙箱中运行。VerificationPlan 显式绑定固定命令、managed-generation 输入、timeout 与严格能力集；rustup 场景先用 `rustup which` 解析实际 `cargo/rustc/rustdoc`，对受限 toolchain 树做完整内容哈希、执行前复算并只读挂载。candidate compile 与 project Cargo 复用同一 reopener，重新核对 contract、probe、plan、command-start、input 和 cleanup；项目 final/completion 还要求 check/test 输入等于最新 integration manifest。缺沙箱、能力 probe、oracle 或 ABI 证据时返回 blocked，不在宿主机降级执行。
 
+Cargo generation 现在强制经过 canonical RustProjectIR。wave-provisional 会生成“当前候选 + last-good 依赖”的内容寻址子 DAG，并回指不可变完整 DAG；project-final 必须覆盖全部迁移单元。host 从当前 Rust source 复算 public/required/unsafe/FFI facts，重开 BuildIR、DAG 和每个 candidate source，再由唯一 interface coordinator 检查 module parent/cycle/orphan、跨单元 API/type/global/FFI/feature/cfg/init 冲突。只有 `candidate-ready` receipt 才能生成 Cargo；generation 内嵌 IR，并绑定 IR/interface/domain/coordinator SHA，integration verifier 会从原 artifact root 重建并逐字节比较。生产模块已删除 descriptor-only 写入口和直接写 generation 的 `integrate` CLI；只有绑定权威 ledger/run contract 的 `integrate-verified` 可以发布 full-project generation。
+
+这一层尚未完成全部 A19d3：RustProjectIR 和 generation manifest 会固定写入 `interface_completeness.status=partial`，自动派生 signature 仍明确标为 unresolved；候选 cohort 和 full-project candidate generation 可继续用于隔离检查，但 CompletionCoordinator 会阻止它进入 project-final gate 和 completed receipt。当前权威生成只支持 flat library modules；完整 shared-type layout、ownership、init/destruction、native link、多 crate/bin/target 和嵌套模块仍需 host extractor 或受验证 AI interface proposal。project repair queue 已内容哈希并绑定可解析的受影响实体，同时显式保留 unresolved module ID，但尚未接入 TransitionAuthority ledger 和 AI repairer，因此这些缺口不会被写成已完成。
+
 当前正向完成链仍未闭合：CLI 已有 host-owned integration/Cargo adapter 和失败诊断回投，但 candidate 的 oracle/negative/unsafe-alias/ABI/final 正向 runner 尚未全部接通；A19e7 独立 verifier 进程、capability channel、一次性 nonce 和 raw-output 引用也尚未落地。因此当前 in-process receipt 只能证明 canonical 绑定与漂移拒绝，不能声明调用方不可伪造。真实 held-out 模式只重开只读 SQLite，复验 AI provider evidence、每个 candidate gate、不可变 candidate set、项目 final bundle 和原始 repository/build 绑定；任何自报 `semantic_gate=true` 的 JSON 都不能计入成功。
 
 阶段入口如下；它只完成规划、模型预检和条件调度，不代表翻译验收结束：
@@ -115,7 +119,8 @@ flowchart TB
     PROVIDER --> VERIFY["Fixed host candidate gates"]
     VERIFY -->|"failed, bounded diagnostic"| DISPATCH
     VERIFY -->|"latest gates passed"| LASTGOOD["Unit last-good"]
-    LASTGOOD --> CARGO["Immutable Cargo generation"]
+    LASTGOOD --> RUSTIR["Canonical RustProjectIR + interface coordinator"]
+    RUSTIR --> CARGO["Immutable IR-bound Cargo generation"]
     CARGO --> SANDBOX["Networkless bubblewrap check/test"]
     SANDBOX --> PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
     PROJECT -->|"same candidate set passed"| COMPLETE["Completed project evidence"]
@@ -302,6 +307,7 @@ sequenceDiagram
 | `validate_ai_exact_evidence.py` | 重开 fresh oracle、candidate gate-index、router 和 canonical SHA | AI exact strict result |
 | `validate_ai_finite_cross_project_suite.py` | 校验最多 20 项、至少 3 个真实项目/10 类构造的固定套件输入完备性 | ready/blocked preflight，不产生成功率 |
 | `project_migration_harness.py` | 任意仓库 inventory、SCC/DAG、ContextPack、角色调度、门禁和 Cargo generation | project plan、SQLite v3、worker request、last-good project |
+| `rust_project_ir*.py` / `project_interface_*.py` | 重开 BuildIR/DAG/candidate，协调跨单元接口并阻断冲突，确定性生成 IR-bound Cargo generation | canonical RustProjectIR、coordinator receipt、project repair queue、generation manifest |
 | `opencode_agent_harness.py` | run/plan/worker/retry/evaluate、SQLite ledger、隔离和恢复 | worker reports、context pack、agent index、merge plan |
 | `run_competition.py` | 汇总 slice/worker，执行环境、unsafe、summary gates | competition summary、workflow metrics |
 | `judge_demo.py` | 构建 before/after 安全化展品 | before-after exhibit、judge evidence index |

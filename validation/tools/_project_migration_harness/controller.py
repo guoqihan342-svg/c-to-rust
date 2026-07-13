@@ -13,7 +13,6 @@ from .controller_project_gates import (
 from .project_integration import integrate_verified_project
 from .project_verification import run_cargo_project_gates
 from .project_cargo_verifier import verify_project_cargo
-from .project_host_gates import record_host_project_final
 from .project_integration_verifier import verify_integrated_project
 from .candidate_compile_verifier import verify_candidate_compile
 from .candidate_final_verifier import verify_candidate_final
@@ -34,5 +33,4 @@ __all__ = [
     "verify_project_cargo",
     "verify_candidate_compile",
     "verify_candidate_final",
-    "record_host_project_final",
 ]

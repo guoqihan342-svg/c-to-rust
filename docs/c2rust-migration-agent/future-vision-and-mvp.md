@@ -561,9 +561,17 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   - [x] 集成报告改为绑定 ledger 权威 candidate set；host adapter 可重开不可变 generation，验证 accepted group/source SHA，再记录固定 authority 的 integration gate。
   - [ ] **A19d3：canonical RustProjectIR 与跨单元协调**。
     - [ ] A19d3a：定义内容绑定、可版本化和可重算的 RustProjectIR，统一表达 crate/module tree、public API、shared type、global ownership、初始化顺序、FFI/link boundary、`cfg`、feature、target 和 unsafe obligation；每个声明必须回指 BuildIR、Migration DAG 与候选源码证据。
+      - [x] A19d3a1：RustProjectIR v1 已绑定并重开 canonical BuildIR、完整 Migration DAG 或其内容寻址依赖闭包、候选源码与逐声明 evidence；host 会从当前源码复算 public/required/unsafe/FFI facts，IR/source/metadata 任一漂移均阻断。wave IR 额外回指不可变完整 DAG，project-final IR 必须覆盖全部单元；固定 completeness 边界会把尚未提取的接口层声明为 partial，并阻止其进入 project-final gate 和 completed receipt，候选 generation 本身仍可发布供隔离检查。
+      - [ ] A19d3a2：把完整 Rust signature、shared-type layout、global ownership、初始化/析构、link/target 与条件配置事实接入 host extractor 或受验证 AI interface proposal；当前自动派生的 public signature 明确保持 unresolved，不得冒充完整接口证明。
     - [ ] A19d3b：增加唯一 project interface coordinator，在单元候选合并前协调跨单元 API、共享类型布局、符号可见性、全局状态所有权、初始化/析构顺序和 FFI 边界；worker 不得各自生成互相冲突的公共 glue 或 Cargo feature。
+      - [x] A19d3b1：固定 host coordinator 已检测虚拟/候选 crate root、未知 parent、parent/init cycle、orphan/unknown module reference，以及 API/type/global/FFI/feature/cfg/init duplicate/conflict；canonical receipt SHA 在任何 Cargo generation 前复算，冲突时零 generation。
+      - [ ] A19d3b2：让 global planner 和每个 translator/interface proposal 在合并前消费同一 coordinator receipt，并把已解决接口决策作为不可变项目事实回投后续 ContextPack；模型意见本身仍不能授予 pass。
     - [ ] A19d3c：把无法归属单个 unit 的类型、链接、初始化和 feature 诊断放入独立 project-level repair queue，基于完整 RustProjectIR 生成有界修复；不得随机归因、复制共享类型或通过 fixture-specific shim 绕过冲突。
+      - [x] A19d3c1：coordinator 已生成有界、内容哈希的 project-only repair queue；每项绑定 IR SHA、interface SHA、diagnostic SHA、可解析的受影响 module/unit、unresolved module ID 与 attempt cap，并固定禁止随机 unit 归因、generated glue 和 fixture-specific shim。
+      - [ ] A19d3c2：把 queue/event/attempt 持久化进 TransitionAuthority ledger，由 project repairer 只消费最小相关 IR/diagnostic 并产出新的 IR candidate；恢复、预算耗尽、回滚和重新协调必须形成可重放事件。
     - [ ] A19d3d：Cargo generation 只能从已验证 RustProjectIR 确定性生成，并复验所有迁移单元、依赖边、公共接口和配置均被覆盖；IR 漂移、孤立模块、重复符号、临时手写 glue 或真实多文件 build 失败时禁止晋升。
+      - [x] A19d3d1：生产 generation API、`integrate-verified` 与 candidate quarantine 已移除 manifest+descriptor 写入口，只消费重开且无协调冲突的 RustProjectIR；direct `integrate` CLI 已删除。generation 内嵌 canonical IR，并绑定 domain/coordinator/interface SHA；integration verifier 会从原 artifact root 重建同一 generation 逐字节比较，旧 descriptor-only 生成器仅留在测试 support。
+      - [ ] A19d3d2：从当前 flat library module 投影扩展到经验证的嵌套 module tree、多 crate/bin/example、完整 target/feature/cfg、初始化/析构和 native link 配置，并在真实多文件 Cargo build/test 与 project-final 全门禁通过后才关闭 A19d3。
 
   **A19e 项目级验证与精确 repair**
 

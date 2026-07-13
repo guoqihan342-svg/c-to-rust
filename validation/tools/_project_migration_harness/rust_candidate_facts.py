@@ -3,10 +3,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .artifacts import content_sha256
-
-
-SHA256 = re.compile(r"^[0-9a-f]{64}$")
 IDENTIFIER = r"[A-Za-z_][A-Za-z0-9_]*"
 
 
@@ -36,45 +32,6 @@ def derive_rust_metadata(source: str) -> dict[str, Any]:
         "required_symbols": sorted(required - public),
         "unsafe_count": unsafe_count,
     }
-
-
-def derive_boundary_manifest(source: str, candidate_sha256: str) -> dict[str, Any]:
-    if SHA256.fullmatch(candidate_sha256) is None:
-        raise ValueError("boundary manifest candidate SHA-256 is invalid")
-    masked = mask_rust_non_code(source, preserve_string_delimiters=True)
-    direct = set(re.findall(
-        rf"\bextern\s*(?:\"[^\"]*\"\s*)?(?:unsafe\s+)?fn\s+({IDENTIFIER})",
-        masked,
-    ))
-    declared = set(direct)
-    for body in re.findall(
-        r"\b(?:unsafe\s+)?extern\s*(?:\"[^\"]*\"\s*)?\{([^{}]*)\}",
-        masked,
-        re.DOTALL,
-    ):
-        declared.update(re.findall(rf"\b(?:safe\s+|unsafe\s+)?fn\s+({IDENTIFIER})", body))
-        declared.update(re.findall(rf"\bstatic(?:\s+mut)?\s+({IDENTIFIER})", body))
-    exports = set(re.findall(
-        rf"#\s*\[\s*(?:unsafe\s*\(\s*)?(?:no_mangle|export_name)[^\]]*\]"
-        rf"[\s\S]{{0,256}}?\b(?:fn|static)\s+({IDENTIFIER})",
-        masked,
-    ))
-    exports.update(re.findall(
-        rf"\bpub\s+(?:unsafe\s+)?extern\s*(?:\"[^\"]*\"\s*)?fn\s+({IDENTIFIER})",
-        masked,
-    ))
-    if not declared and not exports:
-        raise ValueError("preserved FFI candidate has no host-detectable C ABI boundary")
-    manifest = {
-        "schema_version": 1,
-        "mode": "preserve_ffi_boundary",
-        "candidate_sha256": candidate_sha256,
-        "extern_c_symbols": sorted(declared),
-        "exported_symbols": sorted(exports),
-        "semantic_acceptance": False,
-    }
-    manifest["manifest_sha256"] = content_sha256(manifest)
-    return manifest
 
 
 def mask_rust_non_code(
@@ -171,4 +128,4 @@ def _blank(
         output[position] = "\n" if source[position] == "\n" else " "
 
 
-__all__ = ["derive_boundary_manifest", "derive_rust_metadata", "mask_rust_non_code"]
+__all__ = ["derive_rust_metadata", "mask_rust_non_code"]

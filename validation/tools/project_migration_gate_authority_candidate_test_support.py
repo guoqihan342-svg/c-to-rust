@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 from validation.tools._project_migration_harness.candidate_compile_evidence import (
@@ -26,6 +27,9 @@ from validation.tools._project_migration_harness.sandbox_contract import (
     SandboxContract,
     canonical_sha256,
 )
+from validation.tools._project_migration_harness.rust_candidate_facts import (
+    derive_rust_metadata,
+)
 from validation.tools.project_migration_compile_test_support import (
     compile_observation_for_ledger,
 )
@@ -46,6 +50,9 @@ class CandidateGateAuthoritySupportMixin:
         target = self.harness.joinpath(*Path(source_path).parts)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(label.encode("utf-8"))
+        metadata = json.dumps(
+            derive_rust_metadata(label), sort_keys=True, separators=(",", ":"),
+        )
         with self.ledger.connect() as connection:
             ordinal = int(connection.execute(
                 "select count(*)+1 from attempts where run_id='run' and unit_id='unit'"
@@ -65,7 +72,7 @@ class CandidateGateAuthoritySupportMixin:
                    fencing_token,kind,repo_rel_path,content_sha256,status,created_at,metadata_json)
                    values (?,?,?,?,?,?,?,?,?,'candidate',?,?)""",
                 ("run", candidate_id, "unit", attempt, "translator", ordinal,
-                 "rust-candidate", source_path, candidate_sha, now, "{}"),
+                 "rust-candidate", source_path, candidate_sha, now, metadata),
             )
             authority = TransitionAuthority(connection)
             authority.apply(

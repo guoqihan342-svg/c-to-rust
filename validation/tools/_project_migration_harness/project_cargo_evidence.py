@@ -19,11 +19,11 @@ CARGO_OBSERVATION_KEYS = {
 }
 CARGO_COMMANDS = {
     "cargo-check": [
-        "cargo", "check", "--all-targets", "--offline", "--locked",
+        "cargo", "check", "--all-targets", "--all-features", "--offline", "--locked",
         "--message-format=json",
     ],
     "cargo-test": [
-        "cargo", "test", "--all-targets", "--offline", "--locked",
+        "cargo", "test", "--all-targets", "--all-features", "--offline", "--locked",
         "--message-format=json",
     ],
 }

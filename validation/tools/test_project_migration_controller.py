@@ -155,8 +155,14 @@ class ProjectMigrationControllerTests(ProjectMigrationControllerCase):
             out_root=self.out_root,
             out_root_rel="target/run",
         )
-        self.assertEqual("passed", integration_gate["gate_status"])
+        self.assertEqual("failed", integration_gate["gate_status"])
         self.assertTrue(integration_gate["verification"]["matched_candidate_set"])
+        self.assertFalse(integration_gate["verification"]["interface_complete"])
+        integration_evidence = self.load(integration_gate["evidence"]["path"])
+        self.assertIn(
+            "integration_interface_incomplete",
+            integration_evidence["diagnostic_codes"],
+        )
         project_input_sha256, managed = existing_state(project)
         self.assertTrue(managed)
         contract = SandboxContract(

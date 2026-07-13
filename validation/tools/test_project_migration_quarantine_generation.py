@@ -8,9 +8,9 @@ import tempfile
 import unittest
 
 from validation.tools._project_migration_harness import cargo_project
-from validation.tools._project_migration_harness import integration
+from validation.tools import project_migration_legacy_cargo_test_support as integration
 from validation.tools._project_migration_harness import integration_generation
-from validation.tools._project_migration_harness import quarantine_generation
+from validation.tools import project_migration_legacy_quarantine_test_support as quarantine_generation
 
 
 def _descriptor(

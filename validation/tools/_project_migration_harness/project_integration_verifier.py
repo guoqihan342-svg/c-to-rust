@@ -9,9 +9,13 @@ from . import cargo_project
 from .artifacts import content_sha256
 from .gate_candidate_sets import current_candidate_members
 from .integration_generation import GenerationCommitError, recover_current_generation
-from .integration_validation import existing_state, read_bounded
+from .integration_validation import MAX_MANIFEST_BYTES, existing_state, read_bounded
 from .ledger import ProjectLedger
 from .project_host_gates import record_host_project_observation
+from .rust_project_cargo import (
+    GENERATOR, RUST_PROJECT_IR_FILE, reconstruct_cargo_project_from_ir,
+)
+from .rust_project_ir import canonical_rust_project_ir_bytes
 
 
 def verify_integrated_project(
@@ -24,6 +28,7 @@ def verify_integrated_project(
     manifest_sha = hashlib.sha256(b"").hexdigest()
     project_sha = manifest_sha
     matched = False
+    interface_complete = False
     try:
         generation = recover_current_generation(project_root)
         source = generation or project_root.resolve(strict=True)
@@ -31,7 +36,7 @@ def verify_integrated_project(
         if managed:
             raw = read_bounded(
                 source / cargo_project.LAST_GOOD_MANIFEST,
-                128_000,
+                MAX_MANIFEST_BYTES,
             )
             manifest = json.loads(raw.decode("utf-8"))
             actual = _actual_groups(manifest)
@@ -40,9 +45,19 @@ def verify_integrated_project(
                 "generation_state": state,
                 "files": manifest.get("files"),
             })
-            matched = actual == expected and state == manifest_sha
+            ir_matched = _verified_ir_generation(
+                source, out_root, raw, manifest,
+            )
+            completeness = manifest.get("rust_project_ir_completeness")
+            interface_complete = (
+                isinstance(completeness, dict)
+                and completeness.get("status") == "complete"
+            )
+            matched = actual == expected and state == manifest_sha and ir_matched
             if not matched:
                 diagnostics.append("integration_candidate_set_mismatch")
+            if not interface_complete:
+                diagnostics.append("integration_interface_incomplete")
         else:
             diagnostics.append("integration_generation_unmanaged")
     except (
@@ -55,6 +70,7 @@ def verify_integrated_project(
         "candidate_count": len(expected),
         "manifest_sha256": manifest_sha,
         "project_sha256": project_sha,
+        "interface_complete": interface_complete,
     }
     recorded = record_host_project_observation(
         ledger=ledger,
@@ -72,8 +88,41 @@ def verify_integrated_project(
             "adapter": "managed-generation-v1",
             "expected_group_count": len(expected),
             "matched_candidate_set": matched,
+            "interface_complete": interface_complete,
         },
     }
+
+
+def _verified_ir_generation(
+    generation_root: Path, artifact_root: Path, manifest_raw: bytes,
+    manifest: dict[str, Any],
+) -> bool:
+    if manifest.get("generator") != GENERATOR:
+        return False
+    try:
+        ir_raw = read_bounded(generation_root / RUST_PROJECT_IR_FILE, 2 * 1024 * 1024)
+        ir = json.loads(ir_raw.decode("utf-8"))
+        if not isinstance(ir, dict) or canonical_rust_project_ir_bytes(ir) != ir_raw:
+            return False
+        if (
+            manifest.get("rust_project_ir_sha256") != ir.get("ir_sha256")
+            or manifest.get("rust_project_interface_sha256") != ir.get("interface_sha256")
+            or manifest.get("rust_project_ir_completeness")
+            != ir.get("interface_completeness")
+        ):
+            return False
+        expected = reconstruct_cargo_project_from_ir(ir, artifact_root)
+        if expected.files[cargo_project.LAST_GOOD_MANIFEST] != manifest_raw:
+            return False
+        for relative, data in expected.files.items():
+            if read_bounded(generation_root / relative, max(len(data), 1)) != data:
+                return False
+        return True
+    except (
+        OSError, UnicodeError, ValueError, json.JSONDecodeError,
+        cargo_project.ProjectInputError,
+    ):
+        return False
 
 
 def _expected_groups(ledger: ProjectLedger, run_id: str) -> dict[str, str]:

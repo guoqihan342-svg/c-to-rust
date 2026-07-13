@@ -6,6 +6,7 @@ from typing import Any
 
 from .artifacts import canonical_json_bytes, content_sha256
 from .rust_project_ir_validation import (
+    HOST_INTERFACE_COMPLETENESS,
     RUST_PROJECT_IR_SCHEMA_VERSION,
     interface_projection,
     validate_rust_project_ir,
@@ -81,6 +82,7 @@ def build_rust_project_ir(
             ),
         },
         "crate": _normalized_crate(crate),
+        "interface_completeness": _clone(HOST_INTERFACE_COMPLETENESS),
         **normalized,
     }
     payload["interface_sha256"] = content_sha256(interface_projection(payload))

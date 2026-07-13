@@ -114,6 +114,61 @@ class ProjectMigrationCompletionCoordinatorTests(
         self.assertEqual("awaiting-all-last-good", result["stage"])
         compile_runner.assert_not_called()
 
+    def test_partial_rust_project_ir_blocks_project_final_publication(self) -> None:
+        self.promote_current_candidate()
+        passed = {"schema_version": 1, "status": "passed"}
+        partial = {
+            "schema_version": 1, "status": "integrated",
+            "rust_project_ir_completeness": {
+                "status": "partial",
+                "unresolved_sections": ["public-signature", "shared-type-layout"],
+            },
+        }
+        with (
+            mock.patch(
+                "validation.tools._project_migration_harness."
+                "project_completion_coordinator.verify_candidate_compile",
+                return_value=passed,
+            ),
+            mock.patch(
+                "validation.tools._project_migration_harness."
+                "project_completion_coordinator._semantic_runner",
+                return_value=lambda **_: passed,
+            ),
+            mock.patch(
+                "validation.tools._project_migration_harness."
+                "project_completion_coordinator._missing_candidate_semantic_gates",
+                return_value=[],
+            ),
+            mock.patch(
+                "validation.tools._project_migration_harness."
+                "project_completion_coordinator.verify_candidate_final",
+                return_value=passed,
+            ),
+            mock.patch(
+                "validation.tools._project_migration_harness."
+                "project_completion_coordinator.integrate_verified_project",
+                return_value=partial,
+            ),
+            mock.patch(
+                "validation.tools._project_migration_harness."
+                "project_completion_coordinator.verify_integrated_project",
+            ) as integration_gate,
+        ):
+            result = resume_project_completion(
+                ledger=self.ledger, run_id="run", harness_root=self.harness,
+            )
+
+        self.assertEqual("blocked", result["status"])
+        self.assertEqual(
+            "project-final-rust-project-ir-incomplete", result["stage"],
+        )
+        self.assertEqual([
+            "unresolved-interface:public-signature",
+            "unresolved-interface:shared-type-layout",
+        ], result["blockers"])
+        integration_gate.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

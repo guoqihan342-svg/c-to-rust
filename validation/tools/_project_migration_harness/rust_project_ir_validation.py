@@ -8,12 +8,28 @@ from typing import Any
 from .artifacts import checked_relative_path, content_sha256
 
 RUST_PROJECT_IR_SCHEMA_VERSION = 1
+VIRTUAL_CRATE_ROOT_MODULE_ID = "crate-root"
+HOST_INTERFACE_COMPLETENESS = {
+    "status": "partial",
+    "producer": "host-rust-source-facts-v1",
+    "verified_sections": [
+        "candidate-module-binding", "ffi-boundary-name",
+        "public-symbol-name", "unsafe-token-count",
+    ],
+    "unresolved_sections": [
+        "cfg-feature-extraction", "global-ownership",
+        "initialization-destruction", "native-link-config",
+        "nested-module-multi-target", "public-signature",
+        "shared-type-layout", "target-matrix",
+    ],
+    "semantic_gate": False,
+}
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _TOP_KEYS = {
     "schema_version", "kind", "bindings", "crate", "modules", "public_api",
     "shared_types", "global_ownership", "initialization", "ffi_boundaries",
     "cfgs", "features", "unsafe_obligations", "interface_sha256",
-    "claim_boundary", "ir_sha256",
+    "interface_completeness", "claim_boundary", "ir_sha256",
 }
 _FIELDS = {
     "modules": {
@@ -72,6 +88,8 @@ def validate_rust_project_ir(value: Mapping[str, Any]) -> None:
     module_units = _sections(value, candidates, build_digests)
     _crate(value.get("crate"), candidates, build_digests)
     _cross_references(value, candidates, module_units)
+    if value.get("interface_completeness") != HOST_INTERFACE_COMPLETENESS:
+        _fail("RustProjectIR interface completeness boundary is invalid")
     boundary = value.get("claim_boundary")
     if boundary != {
         "artifact_role": "rust-project-ir-candidate", "semantic_gate": False,
@@ -98,7 +116,11 @@ def interface_projection(value: Mapping[str, Any]) -> dict[str, Any]:
         ]
     for module in sections["modules"]:
         module.pop("unit_id", None)
-    return {"schema_version": 1, "crate": crate, **sections}
+    return {
+        "schema_version": 1, "crate": crate,
+        "interface_completeness": value["interface_completeness"],
+        **sections,
+    }
 def reopen_rust_project_ir_bindings(
     value: Mapping[str, Any], artifact_root: Path,
 ) -> dict[str, Any]:
@@ -260,7 +282,9 @@ def _sha(value: Any, label: str) -> str:
 def _fail(message: str) -> None:
     raise RustProjectIRError(message)
 __all__ = [
-    "RUST_PROJECT_IR_SCHEMA_VERSION", "RustProjectIRError",
+    "HOST_INTERFACE_COMPLETENESS", "RUST_PROJECT_IR_SCHEMA_VERSION",
+    "VIRTUAL_CRATE_ROOT_MODULE_ID",
+    "RustProjectIRError",
     "interface_projection", "module_id_for_candidate", "reopen_rust_project_ir_bindings",
     "validate_rust_project_ir",
 ]

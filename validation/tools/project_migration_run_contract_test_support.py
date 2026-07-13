@@ -8,6 +8,9 @@ from validation.tools._project_migration_harness.artifacts import write_json_art
 from validation.tools._project_migration_harness.ledger_run_contract import (
     derive_migration_contract,
 )
+from validation.tools.project_migration_rust_project_test_support import (
+    valid_build_ir,
+)
 
 
 def migration_run_metadata(
@@ -19,6 +22,15 @@ def migration_run_metadata(
             units, key=lambda item: (int(item["wave_index"]), str(item["unit_id"])),
         )
     ]
+    build = write_json_artifact(out_root, "plan/build-ir.json", valid_build_ir())
+    build_verification = write_json_artifact(
+        out_root, "plan/build-ir-verification.json",
+        {"schema_version": 1, "status": "passed"},
+    )
+    worker_admission = write_json_artifact(
+        out_root, "plan/build-ir-worker-admission.json",
+        {"schema_version": 1, "status": "admitted"},
+    )
     manifest = {
         "schema_version": 1,
         "dag": {unit_id: list(dependencies[unit_id]) for unit_id in sorted(dependencies)},
@@ -26,7 +38,11 @@ def migration_run_metadata(
         "unsafe_policy": {
             "allow_unsafe": True, "max_total": None, "max_per_group": None,
         },
-        "generated_build_closure": {"status": "bound"},
+        "build_ir": {
+            "status": "bound", "artifact": build,
+            "verification": build_verification,
+            "worker_admission": worker_admission,
+        },
         "claim_boundary": {
             "semantic_gate": False, "translation_coverage_numerator": 0,
         },

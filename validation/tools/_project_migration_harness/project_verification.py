@@ -125,8 +125,10 @@ def _run_managed_cargo(
         for name in ("cargo-home", "target"):
             (execution_root / name).mkdir(mode=0o700)
         commands = [
-            ["check", "--all-targets", "--offline", "--locked", "--message-format=json"],
-            ["test", "--all-targets", "--offline", "--locked", "--message-format=json"],
+            ["check", "--all-targets", "--all-features", "--offline", "--locked",
+             "--message-format=json"],
+            ["test", "--all-targets", "--all-features", "--offline", "--locked",
+             "--message-format=json"],
         ]
         for cargo_args in commands:
             checks.append(_run(

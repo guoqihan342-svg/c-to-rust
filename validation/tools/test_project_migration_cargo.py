@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 from validation.tools._project_migration_harness import cargo_project
-from validation.tools._project_migration_harness import integration
+from validation.tools import project_migration_legacy_cargo_test_support as integration
 
 
 def _sha(source: bytes) -> str:

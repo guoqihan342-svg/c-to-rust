@@ -62,6 +62,16 @@ def compile_observation_payload(
             "generation_sha256": detached.get("generation_sha256"),
             "quarantine_manifest": quarantine_manifest,
             "generation_manifest": generation_manifest,
+            "rust_project_ir": _mapping(
+                detached.get("rust_project_ir"),
+                "candidate compile RustProjectIR reference is invalid",
+            ),
+            "rust_project_ir_sha256": detached.get("rust_project_ir_sha256"),
+            "rust_project_interface_sha256": detached.get(
+                "rust_project_interface_sha256"
+            ),
+            "rust_project_ir_scope": detached.get("rust_project_ir_scope"),
+            "generator": detached.get("generator"),
         },
         "sandbox": {
             "contract": dict(contract),

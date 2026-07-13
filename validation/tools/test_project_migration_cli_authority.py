@@ -79,6 +79,10 @@ class ProjectMigrationCliAuthorityTests(unittest.TestCase):
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             parse_args([*base, "--manifest", "target/replacement.json"])
 
+    def test_descriptor_or_ir_direct_integration_cli_is_absent(self) -> None:
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            parse_args(["integrate", "--manifest", "replacement.json"])
+
     def test_candidate_final_and_promotion_cli_derive_latest_records(self) -> None:
         final = parse_args([
             "verify-candidate-final", "--db", "ledger.sqlite3",
@@ -117,7 +121,6 @@ class ProjectMigrationCliAuthorityTests(unittest.TestCase):
                 "verify-cargo",
                 ["--project-root", "project", "--runtime-root", "runtime"],
             ),
-            ("verify-final", []),
         ):
             parsed = parse_args([
                 command,
@@ -129,6 +132,11 @@ class ProjectMigrationCliAuthorityTests(unittest.TestCase):
             self.assertFalse(hasattr(parsed, "status"))
             self.assertFalse(hasattr(parsed, "verifier_id"))
             self.assertFalse(hasattr(parsed, "candidate_set_sha256"))
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            parse_args([
+                "verify-final", "--db", "ledger.sqlite3",
+                "--run-id", "run", "--out-root", "target/run",
+            ])
 
     def test_runtime_cli_fixes_command_and_requires_attempt_fence(self) -> None:
         preflight = parse_args([

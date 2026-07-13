@@ -9,11 +9,13 @@ import stat
 from typing import Any, Mapping, Sequence
 
 from . import cargo_project
+from .rust_project_cargo import GENERATOR as RUST_PROJECT_IR_GENERATOR
 
 
 MAX_CANDIDATES = 512
 MAX_TOTAL_SOURCE_BYTES = 8_000_000
-MAX_MANIFEST_BYTES = 128_000
+MAX_MANIFEST_BYTES = 2 * 1024 * 1024
+MAX_GENERATED_METADATA_BYTES = 2 * 1024 * 1024
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -148,7 +150,9 @@ def existing_state(root: Path) -> tuple[str, bool]:
     if (
         raw != cargo_project.canonical_json_bytes(manifest)
         or manifest.get("schema_version") != cargo_project.SCHEMA_VERSION
-        or manifest.get("generator") != "deterministic-cargo-reconstruction-v1"
+        or manifest.get("generator") not in {
+            "deterministic-cargo-reconstruction-v1", RUST_PROJECT_IR_GENERATOR,
+        }
         or not isinstance(manifest.get("files"), list)
     ):
         raise cargo_project.ProjectInputError("last_good_manifest_invalid", "last_good")
@@ -166,7 +170,12 @@ def existing_state(root: Path) -> tuple[str, bool]:
         ):
             raise cargo_project.ProjectInputError("last_good_manifest_invalid", "last_good")
         try:
-            data = read_bounded(root.joinpath(*relative.parts), cargo_project.MAX_SOURCE_BYTES)
+            limit = (
+                MAX_GENERATED_METADATA_BYTES
+                if relative.as_posix() == "migration-rust-project-ir.json"
+                else cargo_project.MAX_SOURCE_BYTES
+            )
+            data = read_bounded(root.joinpath(*relative.parts), limit)
         except (OSError, ValueError):
             raise cargo_project.ProjectInputError("last_good_file_invalid", "last_good") from None
         if len(data) != ref["size_bytes"] or digest(data) != ref["sha256"]:

@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from validation.tools._project_migration_harness import integration
+from validation.tools import project_migration_legacy_cargo_test_support as integration
 from validation.tools._project_migration_harness import integration_generation
 
 

@@ -4,8 +4,10 @@ import hashlib
 import unittest
 
 from validation.tools._project_migration_harness.rust_candidate_facts import (
-    derive_boundary_manifest,
     derive_rust_metadata,
+)
+from validation.tools._project_migration_harness.rust_ffi_facts import (
+    derive_boundary_manifest,
 )
 
 
@@ -43,7 +45,34 @@ class ProjectMigrationRustFactsTests(unittest.TestCase):
             manifest["extern_c_symbols"],
         )
         self.assertEqual(["exported_write"], manifest["exported_symbols"])
+        self.assertEqual(
+            ["EXTERNAL_FLAG", "external_read"], manifest["imported_symbols"],
+        )
+        self.assertEqual(
+            {"rust_symbol": "exported_write", "link_name": "exported_write", "abi": "C"},
+            manifest["exported_links"][0],
+        )
         self.assertEqual(digest, manifest["candidate_sha256"])
+
+    def test_boundary_manifest_preserves_native_import_and_export_names(self) -> None:
+        source = (
+            "extern \"C\" {\n"
+            "    #[link_name = r#\"native_read\"#]\n"
+            "    fn rust_read(value: i32) -> i32;\n"
+            "}\n"
+            "#[export_name = \"native\\x5fwrite\"]\n"
+            "pub extern \"C\" fn rust_write(value: i32) -> i32 { value }\n"
+        )
+        digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
+
+        manifest = derive_boundary_manifest(source, digest)
+
+        self.assertEqual([{
+            "rust_symbol": "rust_read", "link_name": "native_read", "abi": "C",
+        }], manifest["imported_links"])
+        self.assertEqual([{
+            "rust_symbol": "rust_write", "link_name": "native_write", "abi": "C",
+        }], manifest["exported_links"])
 
     def test_boundary_without_detectable_c_abi_is_rejected(self) -> None:
         source = "pub fn ordinary() {}\n"

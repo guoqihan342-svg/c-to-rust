@@ -74,12 +74,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     promote.add_argument("--unit-id", required=True)
     promote.add_argument("--candidate-artifact-id", required=True)
 
-    integrate = commands.add_parser("integrate")
-    integrate.add_argument("--manifest", type=Path, required=True)
-    integrate.add_argument("--candidates", type=Path, required=True)
-    integrate.add_argument("--candidate-root", type=Path, required=True)
-    integrate.add_argument("--project-root", type=Path, required=True)
-
     verified = commands.add_parser("integrate-verified")
     verified.add_argument("--manifest", type=Path, required=True)
     verified.add_argument("--db", type=Path, required=True)
@@ -125,11 +119,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     candidate_final.add_argument("--unit-id", required=True)
     candidate_final.add_argument("--candidate-artifact-id", required=True)
     candidate_final.add_argument("--out-root", required=True)
-
-    final_gate = commands.add_parser("verify-final")
-    final_gate.add_argument("--db", type=Path, required=True)
-    final_gate.add_argument("--run-id", required=True)
-    final_gate.add_argument("--out-root", required=True)
 
     project_gate = commands.add_parser("record-project-gate")
     project_gate.add_argument("--db", type=Path, required=True)

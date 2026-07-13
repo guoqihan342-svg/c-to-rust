@@ -16,7 +16,6 @@ from validation.tools._project_migration_harness.controller import (
     promote_current_verified_candidate,
     record_candidate_gate,
     record_project_gate_summary,
-    record_host_project_final,
     run_and_ingest_opencode_worker,
     run_cargo_project_gates,
     verify_integrated_project,
@@ -25,7 +24,6 @@ from validation.tools._project_migration_harness.controller import (
     verify_candidate_final,
 )
 from validation.tools._project_migration_harness import project_cli_runtime
-from validation.tools._project_migration_harness.integration import integrate_candidates
 from validation.tools._project_migration_harness.gate_authority import (
     candidate_authority,
     candidate_kind,
@@ -165,11 +163,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             unit_id=args.unit_id,
             candidate_artifact_id=args.candidate_artifact_id,
         )
-    elif command == "integrate":
-        result = integrate_candidates(
-            load_object(args.manifest), load_array(args.candidates),
-            args.candidate_root, args.project_root,
-        )
     elif command == "integrate-verified":
         result = integrate_verified_project(
             load_object(args.manifest),
@@ -229,14 +222,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             run_id=args.run_id,
             unit_id=args.unit_id,
             candidate_artifact_id=args.candidate_artifact_id,
-        )
-    elif command == "verify-final":
-        out_root = _repo_relative(args.out_root)
-        result = record_host_project_final(
-            ledger=_ledger(args.db),
-            out_root=out_root,
-            out_root_rel=args.out_root,
-            run_id=args.run_id,
         )
     elif command == "record-project-gate":
         out_root = _repo_relative(args.out_root)
