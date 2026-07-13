@@ -22,12 +22,11 @@ from validation.tools._project_migration_harness.project_cargo_evidence import (
 from validation.tools._project_migration_harness.sandbox_contract import (
     SandboxContract, canonical_sha256,
 )
-from validation.tools.project_migration_controller_test_support import (
-    ProjectMigrationControllerCase,
-)
+from validation.tools.project_migration_controller_test_support import ProjectMigrationControllerCase
 from validation.tools.project_migration_sandbox_test_support import (
     bind_execution_plan,
 )
+from validation.tools.project_migration_project_diagnostic_test_support import verify_project_compile_intake
 
 
 class ProjectMigrationControllerTests(ProjectMigrationControllerCase):
@@ -239,6 +238,20 @@ class ProjectMigrationControllerTests(ProjectMigrationControllerCase):
                 out_root_rel="target/run",
             )
         self.assertEqual("failed", duplicate_gate["status"])
+        project_failed = verify_project_compile_intake(
+            ledger=ledger, run_id=plan["run_id"], project_root=project,
+            harness_root=self.harness, out_root=self.out_root,
+            cargo_execution=cargo_execution,
+        )
+        self.assertEqual([], project_failed["candidate_repair_gates"])
+        self.assertEqual(1, len(project_failed["project_diagnostic_intakes"]))
+        intakes = ledger.latest_project_diagnostic_intakes(
+            run_id=plan["run_id"],
+            candidate_set_sha256=integrated["candidate_set_sha256"],
+            rust_project_ir_sha256=integrated["rust_project_ir_sha256"],
+            project_input_sha256=project_input_sha256,
+        )
+        self.assertEqual(1, len(intakes))
         candidate_sha = next(
             item["content_sha256"]
             for item in ledger.orchestration_rows(plan["run_id"])["artifacts"]
@@ -255,6 +268,8 @@ class ProjectMigrationControllerTests(ProjectMigrationControllerCase):
                 "file": f"src/unit_{candidate_sha}.rs",
                 "line": 1,
                 "column": 1,
+                "level": "error",
+                "origin": "rustc-compiler-message",
             }],
         })
         failed_execution = {

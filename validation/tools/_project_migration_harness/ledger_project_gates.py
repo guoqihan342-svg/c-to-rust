@@ -22,6 +22,7 @@ from .gate_evidence import (
     require_host_raw_reference,
 )
 from .ledger_schema import _json, _now_text, _require_repo_path, _require_sha256, atomic
+from .ledger_project_diagnostics import insert_project_diagnostic_intake
 from .ledger_security import LedgerError
 from .ledger_transition_authority import (
     TransitionAuthority, load_run_projection, load_unit_projection,
@@ -55,6 +56,8 @@ class ProjectGateMixin:
         self, *, record_id: str, run_id: str, gate_kind: str, status: str,
         candidate_set_sha256: str, verifier_id: str, evidence_path: str,
         evidence_sha256: str, metadata: Mapping[str, Any] | None = None,
+        expected_gate_epoch: int | None = None,
+        diagnostic_intake_reference: Mapping[str, Any] | None = None,
     ) -> int:
         require_portable_id(record_id, "record_id")
         if gate_kind not in PROJECT_GATE_KINDS or status not in {"passed", "failed"}:
@@ -101,6 +104,8 @@ class ProjectGateMixin:
                    where run_id=? and candidate_set_sha256=? and gate_kind=?""",
                 (run_id, candidate_set, gate_kind),
             ).fetchone()[0])
+            if expected_gate_epoch is not None and epoch != expected_gate_epoch:
+                raise LedgerError("project gate epoch changed before host recording")
             connection.execute(
                 """insert into project_gate_records(record_id,run_id,gate_kind,gate_epoch,status,
                    candidate_set_sha256,verifier_id,evidence_path,evidence_sha256,finished_at,
@@ -108,6 +113,11 @@ class ProjectGateMixin:
                 (record_id, run_id, gate_kind, epoch, status, candidate_set, verifier_id,
                  evidence_path, evidence_sha256, _now_text(), _json(metadata)),
             )
+            if diagnostic_intake_reference is not None:
+                insert_project_diagnostic_intake(
+                    connection, database_path=self.path,
+                    reference=diagnostic_intake_reference,
+                )
             return epoch
 
     def project_gate_bundle_sources(

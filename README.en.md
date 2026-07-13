@@ -63,7 +63,9 @@ Project preflight fixes the exact model, `c2rust-candidate`, `max`, and an immut
 
 Cargo generation is forced through canonical RustProjectIR. Wave-provisional generations contain the current candidates plus last-good dependencies and bind back to the immutable complete DAG; project-final generations must cover every migration unit. The host recomputes public, required, unsafe, and FFI facts from current Rust source, reopens BuildIR, DAG, and every candidate, and runs one interface coordinator over module topology and cross-unit API/type/global/FFI/feature/cfg/init conflicts. Only a `candidate-ready` receipt can generate Cargo. Production code has removed descriptor-only generation entrypoints and the direct `integrate` CLI; only ledger-bound `integrate-verified` can publish a full-project generation.
 
-A19d3 is still open. RustProjectIR and generation manifests remain `interface_completeness.status=partial`, automatically derived signatures remain unresolved, and the authoritative generator currently supports flat library modules only. The schema v6 TransitionAuthority ledger and the dedicated AI repairer now persist and execute the project repair queue. Completion first observes the latest receipt without creating an attempt. After isolated zero-call preflight, a host-issued permit binds the exact receipt, queue, item state, model, agent, and runtime input, and one resume can launch at most one provider call. Complete provider results are hash-bound before ingest; after an ingest crash, the next resume reopens all evidence and performs ingest only. Incomplete or unknown results require manual reconciliation. Diagnostic-lineage budgets survive receipt epochs, with hard per-run caps of 64 provider calls and 65 receipt epochs. This repair layer can emit only a new RustProjectIR/receipt and has no semantic-pass, promotion, or completion authority. Real project-verifier diagnostic intake, complete IR/Cargo target modeling, and project-final handoff remain open.
+A19d3 is still open. RustProjectIR and generation manifests remain `interface_completeness.status=partial`, automatically derived signatures remain unresolved, and the authoritative generator currently supports flat library modules only. The schema v7 TransitionAuthority ledger and the dedicated AI repairer now persist and execute the project repair queue. Completion first observes the latest receipt without creating an attempt. After isolated zero-call preflight, a host-issued permit binds the exact receipt, queue, item state, model, agent, and runtime input, and one resume can launch at most one provider call. Complete provider results are hash-bound before ingest; after an ingest crash, the next resume reopens all evidence and performs ingest only. Incomplete or unknown results require manual reconciliation. Diagnostic-lineage budgets survive receipt epochs, with hard per-run caps of 64 provider calls and 65 receipt epochs.
+
+Schema v7 also adds an immutable project-diagnostic intake. The host reopens the current candidate set, managed generation, and canonical RustProjectIR, then admits only structured rustc `error` diagnostics from a proven sandboxed Cargo execution. Errors uniquely mapped to `src/unit_<candidate-sha>.rs` remain unit repairs. An `E####` compile error with a repository-relative project location and no unique unit binds the cohort, IR/interface, generation input, raw observation, and verifier receipt before entering the ledger. Warnings, generic Cargo failures, diagnostic overflow, environment or sandbox blockers, and stale unit paths produce zero intake and zero AI calls. Intake is not yet attached to a v2 receipt or the shared project-repair queue, and dedicated link/init/feature/ABI verifiers remain open, so this is a trusted collection boundary rather than a completed diagnostic-repair loop.
 
 The positive completion path remains open. Host-owned integration/Cargo adapters and compile-failure routing exist, but positive candidate compile/oracle/negative/unsafe-alias/ABI runners are not all connected. `record-candidate-gate` therefore cannot grant a pass, and test-constructed ledger rows do not prove whole-project success. Real held-out mode reopens SQLite read-only and revalidates AI provider evidence, every candidate gate, the immutable candidate set, the project final bundle, and original repository/build bindings. A self-reported JSON `semantic_gate=true` cannot contribute success.
 
@@ -106,7 +108,7 @@ flowchart TB
     INDEX --> DAG["Call graph, SCCs, waves, boundary groups"]
     DAG --> CONTEXT["Hash-bound paged ContextPacks"]
     CONTEXT --> PORTFOLIO["Planner / translator / reviewer / repairer portfolio"]
-    PORTFOLIO <--> LEDGER[("SQLite v6 ledger")]
+    PORTFOLIO <--> LEDGER[("SQLite v7 ledger")]
     LEDGER --> PREFLIGHT["Fixed model/agent/environment preflight"]
     PREFLIGHT --> DISPATCH["Lease + attempt + fence-bound dispatch"]
     DISPATCH --> AI["Tool-free OpenCode candidate workers"]
@@ -125,9 +127,12 @@ flowchart TB
     RINGEST --> RUSTIR
     RUSTIR -->|"candidate-ready"| CARGO["Immutable IR-bound Cargo generation"]
     CARGO --> SANDBOX["Networkless bubblewrap check/test"]
+    SANDBOX -->|"structured project compile error"| INTAKE["Immutable project diagnostic intake"]
+    INTAKE --> LEDGER
+    INTAKE -->|"queue admission pending"| BLOCKED["Blocked with evidence"]
     SANDBOX --> PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
     PROJECT -->|"same candidate set passed"| COMPLETE["Completed project evidence"]
-    PROJECT -->|"project diagnostic intake still open"| BLOCKED["Blocked with evidence"]
+    PROJECT -->|"unclosed verifier or failed gate"| BLOCKED
 ```
 
 ## Whole-Project Data Flow
@@ -311,7 +316,7 @@ The default repair cap is five rounds. Process exit status, model text, and repa
 | `crates/c2r-translator/` | clang AST, typed IR, generic Rust emitter, fail-closed reasons | candidate and lowering report |
 | `auto_migrate.py` | Orchestrate generation, oracle/replay drafts, route/profile, and evidence | auto-translation evidence |
 | `validate_auto_translation_evidence.py` | Cross-check schema, hashes, identity, and semantic gates | strict validation result |
-| `project_migration_harness.py` | Arbitrary-repository inventory, SCC/DAG, ContextPacks, role scheduling, gates, and Cargo generations | project plan, SQLite v6, worker requests, last-good project |
+| `project_migration_harness.py` | Arbitrary-repository inventory, SCC/DAG, ContextPacks, role scheduling, gates, and Cargo generations | project plan, SQLite v7, worker requests, last-good project |
 | `rust_project_ir*.py` / `project_interface_*.py` | Reopen BuildIR/DAG/candidates, coordinate cross-unit interfaces, and deterministically generate IR-bound Cargo generations | canonical RustProjectIR, coordinator receipt, project repair queue, generation manifest |
 | `opencode_agent_harness.py` | Run/plan/worker/retry/evaluate, SQLite state, isolation, recovery | worker reports, indexes, merge plan |
 | `run_competition.py` | Aggregate slices/workers and run environment, unsafe, and summary gates | competition summary and workflow metrics |

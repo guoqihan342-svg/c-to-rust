@@ -11,8 +11,6 @@ from validation.tools._ai_candidate_harness_parts.context_security import (
 def cargo_diagnostics(stdout: str, command: str) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for line in stdout.splitlines():
-        if len(result) >= 64:
-            break
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
@@ -20,14 +18,22 @@ def cargo_diagnostics(stdout: str, command: str) -> list[dict[str, Any]]:
         message = event.get("message") if isinstance(event, dict) else None
         if not isinstance(message, dict) or event.get("reason") != "compiler-message":
             continue
-        if message.get("level") not in {"error", "warning"}:
+        if message.get("level") != "error":
             continue
+        if len(result) >= 64:
+            return [{
+                "code": "cargo_diagnostic_overflow",
+                "stage": f"cargo-{command}",
+                "message": "Cargo emitted more than 64 compiler errors",
+            }]
         code = message.get("code")
         code_value = code.get("code") if isinstance(code, dict) else None
         diagnostic = {
             "code": _code(code_value),
             "stage": f"cargo-{command}",
             "message": _message(message.get("message")),
+            "level": "error",
+            "origin": "rustc-compiler-message",
         }
         diagnostic.update(_location(message.get("spans")))
         result.append(diagnostic)

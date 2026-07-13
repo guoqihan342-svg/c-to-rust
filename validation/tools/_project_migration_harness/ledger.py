@@ -13,6 +13,7 @@ from .ledger_schema import (
     atomic, connect_database, migrate_schema,
 )
 from .ledger_lease import LeaseLifecycleMixin
+from .ledger_project_diagnostics import ProjectDiagnosticLedgerMixin
 from .ledger_project_gates import ProjectGateMixin
 from .ledger_project_repair import ProjectRepairLedgerMixin
 from .ledger_project_repair_artifacts import ProjectRepairArtifactMixin
@@ -33,6 +34,7 @@ _ROLES = {"planner", "translator", "reviewer", "repairer"}
 class ProjectLedger(
     HostVerifierMixin,
     ProjectGateMixin,
+    ProjectDiagnosticLedgerMixin,
     ProjectRepairLedgerMixin,
     ProjectRepairArtifactMixin,
     RuntimeBindingMixin,

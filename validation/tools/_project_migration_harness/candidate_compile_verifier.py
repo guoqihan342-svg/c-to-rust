@@ -95,7 +95,7 @@ def verify_candidate_compile(
     if gate_status == "failed" and not diagnostics:
         return {
             "schema_version": 1,
-            "status": "project-repair-required",
+            "status": "blocked",
             "run_id": run_id,
             "unit_id": unit_id,
             "candidate_artifact_id": candidate_artifact_id,
@@ -104,6 +104,7 @@ def verify_candidate_compile(
             "materialization": materialized,
             "execution": execution,
             "candidate_gate_recorded": False,
+            "project_diagnostic_admitted": False,
             "semantic_gate": False,
         }
     try:
@@ -249,9 +250,15 @@ def _repository_reference(
 
 def _target_diagnostics(check: Mapping[str, Any], candidate_sha: str) -> list[dict[str, Any]]:
     path = f"src/unit_{candidate_sha}.rs"
+    allowed = {"code", "stage", "message", "file", "line", "column"}
     return [
-        dict(item) for item in check.get("diagnostics", [])
-        if isinstance(item, Mapping) and item.get("file") == path
+        {key: value for key, value in item.items() if key in allowed}
+        for item in check.get("diagnostics", [])
+        if (
+            isinstance(item, Mapping) and item.get("file") == path
+            and item.get("origin") == "rustc-compiler-message"
+            and item.get("level") == "error"
+        )
     ][:32]
 
 

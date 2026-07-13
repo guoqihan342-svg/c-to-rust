@@ -9,11 +9,12 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterator, Mapping
 
 from .ledger_security import SchemaVersionError, assert_no_secrets, safe_json
+from .ledger_project_diagnostic_schema import PROJECT_DIAGNOSTIC_SCHEMA
 from .ledger_project_repair_schema import PROJECT_REPAIR_SCHEMA
 from .schema_integrity import assert_schema_integrity
 
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SAVEPOINTS = count()
 
@@ -193,7 +194,7 @@ _SCHEMA = (
     "create index if not exists transitions_by_unit on transitions(run_id,unit_id,transition_id)",
     "create index if not exists verifier_latest_gate on verifier_records(run_id,unit_id,candidate_artifact_id,gate_family,gate_epoch)",
     "create index if not exists project_gates_latest on project_gate_records(run_id,candidate_set_sha256,gate_kind,gate_epoch)",
-) + PROJECT_REPAIR_SCHEMA
+) + PROJECT_DIAGNOSTIC_SCHEMA + PROJECT_REPAIR_SCHEMA
 
 
 class _ClosingConnection(sqlite3.Connection):

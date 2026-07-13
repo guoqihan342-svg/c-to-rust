@@ -11,12 +11,14 @@ from .gate_authority import (
 )
 from .gate_evidence import write_content_addressed_json
 from .ledger import ProjectLedger
+from .project_diagnostic_contract import project_diagnostic_intake_payload
 
 
 def record_host_project_observation(
     *, ledger: ProjectLedger, out_root: Path, out_root_rel: str,
     run_id: str, gate_kind: str, candidate_set_sha256: str,
     observation: Mapping[str, Any], diagnostic_codes: list[str] | None = None,
+    project_diagnostic_input: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     current_set = ledger.bind_current_candidate_set(run_id=run_id)
     if current_set != candidate_set_sha256:
@@ -50,10 +52,24 @@ def record_host_project_observation(
         out_root, f"project/{gate_kind}", summary
     )
     evidence_full = f"{out_root_rel}/{evidence['path']}"
-    record_id = _next_record_id(
+    record_id, expected_epoch = _next_record_identity(
         ledger, run_id=run_id, gate_kind=gate_kind,
         candidate_set_sha256=current_set,
     )
+    intake = _write_project_diagnostic_intake(
+        out_root=out_root, out_root_rel=out_root_rel,
+        run_id=run_id, gate_kind=gate_kind, record_id=record_id,
+        gate_epoch=expected_epoch, candidate_set_sha256=current_set,
+        raw_observation=raw_full,
+        verifier_receipt={**evidence, "path": evidence_full},
+        project_diagnostic_input=project_diagnostic_input,
+    )
+    metadata = {
+        "host_adapter": True,
+        "raw_observation_sha256": raw["sha256"],
+    }
+    if intake is not None:
+        metadata["project_diagnostic_intake"] = intake
     epoch = ledger.record_project_gate(
         record_id=record_id,
         run_id=run_id,
@@ -63,10 +79,8 @@ def record_host_project_observation(
         verifier_id=project_authority(gate_kind),
         evidence_path=evidence_full,
         evidence_sha256=str(evidence["sha256"]),
-        metadata={
-            "host_adapter": True,
-            "raw_observation_sha256": raw["sha256"],
-        },
+        metadata=metadata, expected_gate_epoch=expected_epoch,
+        diagnostic_intake_reference=intake,
     )
     return {
         "schema_version": 1,
@@ -80,6 +94,7 @@ def record_host_project_observation(
         "raw_observation": raw_full,
         "evidence": {**evidence, "path": evidence_full},
         "semantic_gate": False,
+        **({"project_diagnostic_intake": intake} if intake is not None else {}),
     }
 
 
@@ -102,7 +117,7 @@ def _record_host_project_final(
         out_root, "project/final-verification", summary
     )
     full_path = f"{out_root_rel}/{evidence['path']}"
-    record_id = _next_record_id(
+    record_id, expected_epoch = _next_record_identity(
         ledger, run_id=run_id, gate_kind="final-verification",
         candidate_set_sha256=candidate_set,
     )
@@ -116,6 +131,7 @@ def _record_host_project_final(
         evidence_path=full_path,
         evidence_sha256=str(evidence["sha256"]),
         metadata={"host_adapter": True, "source_evidence_count": len(sources)},
+        expected_gate_epoch=expected_epoch,
     )
     return {
         "schema_version": 1,
@@ -130,10 +146,46 @@ def _record_host_project_final(
     }
 
 
-def _next_record_id(
+def _write_project_diagnostic_intake(
+    *, out_root: Path, out_root_rel: str, run_id: str, gate_kind: str,
+    record_id: str, gate_epoch: int, candidate_set_sha256: str,
+    raw_observation: Mapping[str, Any], verifier_receipt: Mapping[str, Any],
+    project_diagnostic_input: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if project_diagnostic_input is None:
+        return None
+    required = {
+        "rust_project_ir_sha256", "rust_project_interface_sha256",
+        "project_input_sha256", "diagnostics",
+    }
+    if set(project_diagnostic_input) != required:
+        raise ValueError("project diagnostic host input fields are invalid")
+    diagnostics = project_diagnostic_input["diagnostics"]
+    if not isinstance(diagnostics, list) or not diagnostics:
+        return None
+    payload = project_diagnostic_intake_payload(
+        run_id=run_id, gate_kind=gate_kind, gate_record_id=record_id,
+        gate_epoch=gate_epoch, candidate_set_sha256=candidate_set_sha256,
+        rust_project_ir_sha256=str(
+            project_diagnostic_input["rust_project_ir_sha256"]
+        ),
+        rust_project_interface_sha256=str(
+            project_diagnostic_input["rust_project_interface_sha256"]
+        ),
+        project_input_sha256=str(project_diagnostic_input["project_input_sha256"]),
+        raw_observation=raw_observation, verifier_receipt=verifier_receipt,
+        diagnostics=diagnostics,
+    )
+    reference = write_content_addressed_json(
+        out_root, f"project-diagnostics/{gate_kind}", payload,
+    )
+    return {**reference, "path": f"{out_root_rel}/{reference['path']}"}
+
+
+def _next_record_identity(
     ledger: ProjectLedger, *, run_id: str, gate_kind: str,
     candidate_set_sha256: str,
-) -> str:
+) -> tuple[str, int]:
     with ledger.connect() as connection:
         row = connection.execute(
             """select coalesce(max(gate_epoch),0) from project_gate_records
@@ -141,7 +193,7 @@ def _next_record_id(
             (run_id, gate_kind, candidate_set_sha256),
         ).fetchone()
     epoch = int(row[0]) + 1
-    return f"host-{gate_kind}-{candidate_set_sha256[:12]}-{epoch}"
+    return f"host-{gate_kind}-{candidate_set_sha256[:12]}-{epoch}", epoch
 
 
 __all__ = ["record_host_project_observation"]

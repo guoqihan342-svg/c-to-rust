@@ -158,7 +158,8 @@ class ProjectMigrationCandidateCompileVerifierTests(ProjectMigrationControllerCa
         plan, ledger, unit_id, candidate_id, _ = self.prepare_candidate()
         execution = _execution("failed", candidate_sha=None)
         result = self.verify(plan, ledger, unit_id, candidate_id, execution)
-        self.assertEqual("project-repair-required", result["status"])
+        self.assertEqual("blocked", result["status"])
+        self.assertFalse(result["project_diagnostic_admitted"])
         self.assertFalse(result["candidate_gate_recorded"])
         self.assertEqual(0, self.verification_count(ledger, plan["run_id"]))
         self.assertEqual("candidate-ready", ledger.unit_states(plan["run_id"])[0]["status"])
@@ -219,6 +220,7 @@ def _execution(status: str, *, candidate_sha: str | None = None) -> dict:
     diagnostic = {
         "code": "rustc-type-error", "stage": "cargo-check",
         "message": "type mismatch", "line": 1, "column": 1,
+        "level": "error", "origin": "rustc-compiler-message",
     }
     if candidate_sha is not None:
         diagnostic["file"] = f"src/unit_{candidate_sha}.rs"
