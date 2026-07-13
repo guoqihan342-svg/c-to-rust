@@ -22,6 +22,7 @@ from .portfolio_roles import boundary_required, roles_for_group, worker_descript
 
 SCHEMA_VERSION = 1
 PortfolioError = PortfolioIntegrityError
+_HEX_DIGITS = frozenset("0123456789abcdefABCDEF")
 
 
 def _explicitly_eligible(group: Mapping[str, Any]) -> bool:
@@ -33,6 +34,24 @@ def _explicitly_eligible(group: Mapping[str, Any]) -> bool:
     if group.get("structural_status") == "eligible":
         return True
     return group.get("classification") in {"independent", "context_group"}
+
+
+def _retrieval_ready(context: Mapping[str, Any]) -> bool:
+    if "retrieval" not in context:
+        return True
+    retrieval = context.get("retrieval")
+    if not isinstance(retrieval, Mapping):
+        return False
+    receipt = retrieval.get("selection_receipt_sha256")
+    blockers = retrieval.get("selection_blockers")
+    return (
+        retrieval.get("selection_status") == "ready"
+        and isinstance(receipt, str)
+        and len(receipt) == 64
+        and all(character in _HEX_DIGITS for character in receipt)
+        and isinstance(blockers, list)
+        and not blockers
+    )
 
 
 def plan_portfolio(
@@ -102,6 +121,8 @@ def plan_portfolio(
             context = contexts[group_id]
             if (_explicitly_eligible(group) or needs_planner) and context is None:
                 reasons.append("routable_group_context_pack_missing")
+            if context is not None and not _retrieval_ready(context):
+                reasons.append("context_retrieval_not_ready")
             if context and context["byte_count"] > byte_budget:
                 reasons.append("context_byte_budget_exceeded")
             if context and context["token_count"] > token_budget:

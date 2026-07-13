@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .artifacts import content_sha256, write_json_artifact
+from .context_frontier import materialize_scheduled_contexts
 from .ledger import LeaseConflict, ProjectLedger
 from .orchestration_facts import build_gate_facts, read_artifact_reference
 from .scheduler import schedule_portfolio
@@ -27,8 +28,19 @@ def dispatch_project_workers(
     states = ledger.unit_states(run_id)
     facts = build_gate_facts(ledger, run_id=run_id, harness_root=harness_root)
     schedule = schedule_portfolio(portfolio, states, facts)
+    context_pages, context_materialization = materialize_scheduled_contexts(
+        schedule,
+        harness_root=harness_root,
+        out_root=out_root,
+        out_root_rel=out_root_rel,
+    )
+    context_binding = {
+        **context_materialization,
+        "path": f"{out_root_rel}/{context_materialization['path']}",
+    }
     references = materialize_worker_requests(
-        schedule, out_root=out_root, out_root_rel=out_root_rel
+        schedule, out_root=out_root, out_root_rel=out_root_rel,
+        context_materialization=context_binding,
     )
     ready = {
         str(item["worker_id"]): item
@@ -54,6 +66,8 @@ def dispatch_project_workers(
                     "assignment_sha256": reference["assignment"]["sha256"],
                     "plan_sha256": portfolio_binding["plan_sha256"],
                     "dag_sha256": portfolio_binding["dag_sha256"],
+                    "context_materialization_path": context_binding["path"],
+                    "context_materialization_sha256": context_binding["sha256"],
                 },
             )
         except LeaseConflict:
@@ -130,6 +144,8 @@ def dispatch_project_workers(
         "launches": launches,
         "skipped": skipped,
         "deferred": schedule["deferred"],
+        "context_materialization": context_binding,
+        "materialized_context_page_count": len(context_pages),
         "execution": {"model_launched": False, "cargo_executed": False},
         "claim_boundary": {
             "semantic_gate": False,

@@ -103,6 +103,21 @@ def require_host_raw_reference(reference: Mapping[str, Any], gate_kind: str) -> 
         raise LedgerError("project observation is outside its host-owned raw evidence root")
 
 
+def require_candidate_raw_reference(
+    reference: Mapping[str, Any], gate_family: str,
+) -> None:
+    require_content_addressed_reference(reference)
+    parts = PurePosixPath(str(reference["path"])).parts
+    expected = ("verification", "raw", "candidate", gate_family)
+    if not any(
+        tuple(parts[index:index + 4]) == expected
+        for index in range(len(parts) - 3)
+    ):
+        raise LedgerError(
+            "candidate observation is outside its host-owned raw evidence root"
+        )
+
+
 def _relative_evidence_path(value: str, digest: str) -> PurePosixPath:
     if _SHA256.fullmatch(digest) is None:
         raise LedgerError("gate evidence SHA-256 is invalid")
@@ -131,6 +146,7 @@ def _verify_bytes(path: Path, expected: bytes) -> None:
 
 __all__ = [
     "MAX_GATE_EVIDENCE_BYTES", "read_content_addressed_json",
-    "require_content_addressed_reference", "require_host_raw_reference",
+    "require_candidate_raw_reference", "require_content_addressed_reference",
+    "require_host_raw_reference",
     "write_content_addressed_json",
 ]

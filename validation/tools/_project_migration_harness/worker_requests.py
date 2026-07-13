@@ -11,10 +11,16 @@ def materialize_worker_requests(
     *,
     out_root: Path,
     out_root_rel: str,
+    context_materialization: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
     ready = schedule.get("ready")
     if not isinstance(ready, list):
         raise ValueError("schedule.ready must be an array")
+    if (
+        not isinstance(context_materialization, Mapping)
+        or set(context_materialization) != {"path", "sha256", "size_bytes"}
+    ):
+        raise ValueError("context materialization reference is invalid")
     results = []
     for item in ready:
         if not isinstance(item, Mapping) or not isinstance(item.get("assignment"), Mapping):
@@ -40,6 +46,7 @@ def materialize_worker_requests(
             },
             "dependencies": assignment.get("dependencies", []),
             "context": assignment.get("context"),
+            "context_materialization": dict(context_materialization),
             "launch_policy": assignment.get("launch_policy"),
             "repair_mode": item.get("repair_mode"),
             "input_facts": item.get("input_facts", {}),

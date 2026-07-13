@@ -26,6 +26,15 @@ from validation.tools.project_migration_gate_authority_test_support import (
 
 
 class ProjectMigrationGateAuthorityTests(ProjectMigrationGateAuthorityCase):
+    def test_identical_host_verifier_record_replay_is_idempotent(self) -> None:
+        self.record_candidate_host_gate("compile", "passed", "same-record")
+        self.record_candidate_host_gate("compile", "passed", "same-record")
+        with self.ledger.connect() as connection:
+            count = connection.execute(
+                "select count(*) from verifier_records where record_id='same-record'"
+            ).fetchone()[0]
+        self.assertEqual(1, count)
+
     def test_cli_candidate_pass_is_denied_and_failure_uses_fixed_identity(self) -> None:
         with self.assertRaisesRegex(LedgerError, "cannot grant a pass"):
             record_candidate_gate(
@@ -42,6 +51,7 @@ class ProjectMigrationGateAuthorityTests(ProjectMigrationGateAuthorityCase):
                 verifier_id="caller-controlled",
                 diagnostics=[],
             )
+        candidate_set = self.ledger.bind_verification_candidate_set(run_id="run")
         payload = candidate_verdict_payload(
             run_id="run",
             unit_id="unit",
@@ -50,12 +60,14 @@ class ProjectMigrationGateAuthorityTests(ProjectMigrationGateAuthorityCase):
             gate_family="compile",
             status="passed",
             diagnostics=[],
+            candidate_set_sha256=candidate_set,
+            source_evidence=self.candidate_sources("compile", "passed", candidate_set),
         )
         reference = write_content_addressed_json(
             self.out_root, "candidate/compile", payload
         )
         with self.assertRaisesRegex(LedgerError, "identity is fixed"):
-            self.ledger.record_host_verification(
+            self.ledger._record_derived_verification(
                 record_id="wrong-authority",
                 run_id="run",
                 unit_id="unit",
@@ -94,7 +106,7 @@ class ProjectMigrationGateAuthorityTests(ProjectMigrationGateAuthorityCase):
         first = self.record_candidate_host_gate("compile", "passed", "compile-pass")
         old_path = self.harness.joinpath(*Path(first["path"]).parts)
         old_bytes = old_path.read_bytes()
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaisesRegex(LedgerError, "replay changed its binding"):
             self.record_candidate_host_gate("compile", "failed", "compile-pass")
         self.assertEqual(old_bytes, old_path.read_bytes())
         records = {"compile": "compile-pass"}
@@ -119,9 +131,38 @@ class ProjectMigrationGateAuthorityTests(ProjectMigrationGateAuthorityCase):
             ).fetchall()
         self.assertEqual([(1, "passed"), (2, "failed")], [tuple(row) for row in epochs])
 
+    def test_verification_candidate_set_stales_when_latest_candidate_changes(self) -> None:
+        first_set = self.ledger.bind_verification_candidate_set(run_id="run")
+        with self.assertRaisesRegex(LedgerError, "last-good"):
+            self.ledger.bind_current_candidate_set(run_id="run")
+        second_id, second_sha = self.make_candidate("candidate-two")
+        self.candidate_id, self.candidate_sha = second_id, second_sha
+        second_set = self.ledger.bind_verification_candidate_set(run_id="run")
+        self.assertNotEqual(first_set, second_set)
+        payload = candidate_verdict_payload(
+            run_id="run", unit_id="unit",
+            candidate_artifact_id=second_id,
+            candidate_sha256=second_sha,
+            gate_family="compile", status="passed", diagnostics=[],
+            candidate_set_sha256=first_set,
+            source_evidence=self.candidate_sources("compile", "passed", first_set),
+        )
+        reference = write_content_addressed_json(
+            self.out_root, "candidate/compile", payload
+        )
+        with self.assertRaisesRegex(LedgerError, "current verification candidate set"):
+            self.ledger._record_derived_verification(
+                record_id="stale-cohort", run_id="run", unit_id="unit",
+                candidate_artifact_id=second_id, kind="verifier", status="passed",
+                verifier_id=candidate_authority("compile"),
+                evidence_path=f"target/run/{reference['path']}",
+                evidence_sha256=str(reference["sha256"]), gate_family="compile",
+            )
+
     def test_promotion_rehashes_content_addressed_evidence(self) -> None:
         records = {}
-        for family in sorted(CANDIDATE_REQUIRED_GATES):
+        ordered = ["compile", *sorted(CANDIDATE_REQUIRED_GATES - {"compile"})]
+        for family in ordered:
             record_id = f"{family}-rehash"
             self.record_candidate_host_gate(family, "passed", record_id)
             records[family] = record_id

@@ -91,6 +91,34 @@ class ProjectMigrationArchiveClosureTests(unittest.TestCase):
             {item["kind"] for item in closure["blockers"]},
         )
 
+    def test_cmake_subdirectory_link_script_uses_subdirectory_cwd(self) -> None:
+        self.write("CMakeLists.txt", "add_subdirectory(lib)\n")
+        self.write("src/unit.c", "int unit(void) { return 1; }\n")
+        self.write("build/lib/CMakeFiles/sample.dir/unit.o", b"object")
+        self.write("build/lib/libsample.a", b"archive")
+        self.write(
+            "build/lib/CMakeFiles/sample.dir/link.txt",
+            "ar qc libsample.a CMakeFiles/sample.dir/unit.o\n"
+            "ranlib libsample.a\n",
+        )
+        database = self.write("build/compile_commands.json", json.dumps([{
+            "directory": str(self.root / "build/lib"),
+            "file": str(self.root / "src/unit.c"),
+            "arguments": [
+                "clang", "-c", str(self.root / "src/unit.c"),
+                "-o", "CMakeFiles/sample.dir/unit.o",
+            ],
+            "output": "lib/CMakeFiles/sample.dir/unit.o",
+        }]))
+
+        closure = discover_project(
+            self.root, compile_database=database
+        )["generated_build_closure"]
+
+        self.assertEqual("ready", closure["status"], closure)
+        target = closure["target_link_closure"]["targets"][0]
+        self.assertEqual("build/lib/libsample.a", target["output"]["path"])
+
 
 if __name__ == "__main__":
     unittest.main()

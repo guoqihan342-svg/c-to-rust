@@ -5,11 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from .build_facts import file_binding, is_linklike
+from .meson_introspection import inspect_meson_introspection
 
 
 MAX_DIRECTORIES = 4_096
 MAX_FILES = 256
-MAX_FILE_BYTES = 1024 * 1024
+MAX_FILE_BYTES = 4 * 1024 * 1024
 MAX_TOTAL_BYTES = 8 * 1024 * 1024
 
 
@@ -21,7 +22,8 @@ def detect_generated_build_facts(
     try:
         scan_root.relative_to(root)
     except ValueError:
-        return _report([], [], ["generated_fact_root_external"])
+        return _report([], [], ["generated_fact_root_external"], {})
+    meson = inspect_meson_introspection(root, compile_database_path)
     link_files: list[dict[str, Any]] = []
     metadata_files: list[dict[str, Any]] = []
     blockers: list[str] = []
@@ -72,13 +74,14 @@ def detect_generated_build_facts(
             "generated_fact_total_size_limit_exceeded",
         }:
             break
-    return _report(link_files, metadata_files, blockers)
+    blockers.extend(meson.get("blockers", []))
+    return _report(link_files, metadata_files, blockers, meson)
 
 
 def _fact_role(name: str) -> str | None:
     if name == "link.txt":
         return "link"
-    if name in {"build.ninja", "intro-targets.json"}:
+    if name == "build.ninja":
         return "metadata"
     return None
 
@@ -87,6 +90,7 @@ def _report(
     link_files: list[dict[str, Any]],
     metadata_files: list[dict[str, Any]],
     blockers: list[str],
+    meson: dict[str, Any],
 ) -> dict[str, Any]:
     link_files.sort(key=lambda item: item["path"])
     metadata_files.sort(key=lambda item: item["path"])
@@ -96,6 +100,7 @@ def _report(
         ),
         "link_command_files": link_files,
         "metadata_files": metadata_files,
+        "meson_introspection": meson,
         "blockers": sorted(set(blockers)),
         "commands_executed": False,
         "scan_limits": {

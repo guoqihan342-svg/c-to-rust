@@ -145,6 +145,27 @@ class ProjectMigrationDiscoverySecurityTests(unittest.TestCase):
         self.assertIn("compile_output_binding_mismatch", reasons)
         self.assertIn("compile_output_outside_repository", reasons)
 
+    def test_cmake_declared_output_may_be_database_directory_relative(self) -> None:
+        self.write("src/unit.c", "int unit(void) { return 0; }\n")
+        (self.root / "build/subdir").mkdir(parents=True)
+        database = self.write("build/compile_commands.json", json.dumps([{
+            "directory": str(self.root / "build/subdir"),
+            "file": str(self.root / "src/unit.c"),
+            "arguments": [
+                "clang", "-c", str(self.root / "src/unit.c"),
+                "-o", "CMakeFiles/unit.dir/unit.c.o",
+            ],
+            "output": "subdir/CMakeFiles/unit.dir/unit.c.o",
+        }]))
+
+        result = discover_project(self.root, compile_database=database)
+
+        self.assertEqual("ready", result["status"], result)
+        self.assertEqual(
+            "build/subdir/CMakeFiles/unit.dir/unit.c.o",
+            result["translation_units"][0]["output"],
+        )
+
     def test_build_fact_scan_limit_blocks_incomplete_discovery(self) -> None:
         self.write("unit.c", "int unit(void) { return 0; }\n")
         self.write("nested/CMakeLists.txt", "project(limit C)\n")

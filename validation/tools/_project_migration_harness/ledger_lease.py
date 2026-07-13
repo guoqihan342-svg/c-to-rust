@@ -8,6 +8,11 @@ from typing import Any
 from .artifacts import content_sha256
 from .ledger_schema import _json, _now_text, _require_sha256, atomic
 from .ledger_security import LedgerError, LeaseConflict, assert_no_semantic_claims
+from .ledger_transition_authority import TransitionAuthority, load_unit_state
+from .ledger_transition_policy import (
+    UnitState, attempt_started_command, lease_recovery_command,
+    lease_recovery_run_command,
+)
 
 
 ROLES = {"planner", "translator", "reviewer", "repairer"}
@@ -142,22 +147,22 @@ class LeaseLifecycleMixin:
                 "previous_status": unit["status"],
                 "previous_resumable_status": unit["resumable_status"],
             }
+            expected = UnitState(str(unit["status"]), str(unit["resumable_status"]))
+            input_digest = _require_sha256(input_sha256, "input_sha256")
             timestamp = _now_text()
             connection.execute(
                 """insert into attempts(attempt_id,run_id,unit_id,role,ordinal,worker_id,status,
                    fencing_token,input_sha256,output_sha256,error_key,started_at,finished_at,metadata_json)
                    values (?,?,?,?,?,?,'running',?,?,null,null,?,null,?)""",
                 (attempt_id, run_id, unit_id, role, ordinal, worker_id, token,
-                 _require_sha256(input_sha256, "input_sha256"), timestamp, _json(attempt_metadata)),
+                 input_digest, timestamp, _json(attempt_metadata)),
             )
-            connection.execute(
-                """update migration_units set status='running',resumable_status='in_progress',updated_at=?
-                   where run_id=? and unit_id=?""", (timestamp, run_id, unit_id),
-            )
-            connection.execute(
-                """insert into transitions(run_id,unit_id,from_status,to_status,reason,attempt_id,
-                   fencing_token,created_at) values (?,?,?,'running','attempt_started',?,?,?)""",
-                (run_id, unit_id, unit["status"], attempt_id, token, timestamp),
+            TransitionAuthority(connection).apply(
+                attempt_started_command(
+                    run_id=run_id, unit_id=unit_id, attempt_id=attempt_id,
+                    fencing_token=token, expected=expected, input_sha256=input_digest,
+                ),
+                created_at=timestamp,
             )
             return {"attempt_id": attempt_id, "fencing_token": token}
 
@@ -206,6 +211,7 @@ class LeaseLifecycleMixin:
                      (l.run_id is null or l.status<>'active' or l.expires_at<=?)
                    order by t.started_at,t.attempt_id""", (run_id, clock),
             ).fetchall()
+            terminal_rows = []
             for row in rows:
                 metadata = _metadata(row["metadata_json"])
                 started = metadata.get("command_started") is True
@@ -218,36 +224,34 @@ class LeaseLifecycleMixin:
                 next_status = "blocked" if started else ("exhausted" if exhausted else "retry-ready")
                 resumable = "terminal" if started else ("exhausted" if exhausted else "retryable")
                 error_key = "worker_command_result_unknown" if started else "lease_expired"
-                previous = connection.execute(
-                    "select status from migration_units where run_id=? and unit_id=?",
-                    (run_id, row["unit_id"]),
-                ).fetchone()[0]
+                unit_id = str(row["unit_id"])
+                expected = load_unit_state(connection, run_id, unit_id)
                 timestamp = _now_text()
                 connection.execute(
                     """update attempts set status=?,error_key=?,finished_at=? where attempt_id=?""",
                     ("blocked" if started else "failed", error_key, timestamp, row["attempt_id"]),
                 )
                 connection.execute(
-                    """update migration_units set status=?,resumable_status=?,updated_at=?
-                       where run_id=? and unit_id=?""",
-                    (next_status, resumable, timestamp, run_id, row["unit_id"]),
-                )
-                connection.execute(
                     "update leases set status='expired',heartbeat_at=? where run_id=? and unit_id=?",
-                    (clock, run_id, row["unit_id"]),
+                    (clock, run_id, unit_id),
                 )
-                connection.execute(
-                    """insert into transitions(run_id,unit_id,from_status,to_status,reason,
-                       attempt_id,fencing_token,created_at) values (?,?,?,?,?,?,?,?)""",
-                    (run_id, row["unit_id"], previous, next_status, error_key,
-                     row["attempt_id"], row["fencing_token"], timestamp),
+                TransitionAuthority(connection).apply(
+                    lease_recovery_command(
+                        run_id=run_id, unit_id=unit_id, row=row,
+                        attempt_count=count, started=started, expected=expected,
+                        target=UnitState(next_status, resumable), reason=error_key,
+                    ),
+                    created_at=timestamp,
                 )
                 if started:
-                    connection.execute(
-                        "update project_runs set status='failed',updated_at=? where run_id=?",
-                        (timestamp, run_id),
-                    )
+                    terminal_rows.append(row)
                 recovered.append(str(row["attempt_id"]))
+            if terminal_rows:
+                TransitionAuthority(connection).apply_run(
+                    lease_recovery_run_command(
+                        run_id=run_id, rows=terminal_rows, clock=clock,
+                    )
+                )
         return recovered
 
 

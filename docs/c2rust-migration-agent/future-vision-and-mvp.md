@@ -497,32 +497,114 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   - [x] 对 CMake `link.txt`、generated include、compile output、target、response file、搜索目录和有序系统链接参数建立 repo-confined 内容绑定；`required` 策略在闭包缺失时把所有 ready worker 转成不可启动的 deferred，`bounded-source` 只能生成非语义候选。
   - [x] 以不执行命令的有界解析器读取仓库内 `build.ninja`、递归 `include/subninja`、变量、rule/build edge、compiler link edge 和 response file；所有支持文件与输入输出都做内容绑定并在执行前复查漂移。
   - [x] 从 CMake 多行 `link.txt` 与 Ninja archive rule 解析 `ar`/`ranlib` 静态归档闭包，绑定操作、归档目标、成员顺序和同目标 `ranlib`，不执行构建命令。
-  - [ ] 接入 Meson introspection/target metadata 与受限 configure/generate 阶段；缺失时保持 fail closed，禁止猜测编译或链接参数。
+  - [ ] **A19a6：Meson 与受限生成事实闭环**。
+    - [ ] A19a6a：只读解析仓库内已有 `meson-info/intro-targets.json`、`intro-buildoptions.json` 与编译器/依赖 metadata，绑定 target、source、generated source、compile/link 参数和 introspection 文件 SHA；schema、路径或闭包不完整时 fail closed。
+    - [ ] A19a6b：仅在明确启用时由宿主在无网络、超时、资源和仓库边界约束下执行一次 configure/generate，输出到独立临时根后再只读提取事实；Meson/configure 缺失或失败属于环境/构建发现阻塞，禁止猜测参数或进入语义 repair。
+  - [ ] **A19a7：canonical BuildIR 与构建 adapter 收敛**。
+    - [x] A19a7a：定义带 schema version 和 canonical serialization 的 BuildIR，统一表达 target、翻译单元变体、source/generated input、compiler/toolchain、compile arguments、include/define、archive/link 顺序、外部依赖和 ABI facts；每个字段都绑定原始路径/SHA、提取器版本和 provenance。
+    - [x] A19a7b：Make、CMake、Ninja、Meson adapter 只允许产出 BuildIR；adapter-specific raw facts 只能作为 BuildIR 引用的审计附件，planner、DAG、ContextPack、Rust 重建和 verifier 不得读取 adapter 私有 shape。无法无损归一化的事实必须显式 blocked/refused，禁止猜测或静默丢弃。
+    - [ ] A19a7c：由单一 BuildIR validator 重开并复算所有 provenance/hash、generated-input closure、target/TU 唯一性和有序 link/archive closure；源文件、构建 metadata、toolchain 或 canonical projection 漂移时，必须在 worker 启动和最终验证前 fail closed。
+      - [x] A19a7c1：重开 raw attachments 并复算 compile database、source/generated bindings、Meson facts、TU/target 唯一性、有序 target DAG 和 canonical projection；计划与 worker admission 前任一仓库事实漂移均 fail closed。
+      - [ ] A19a7c2：在比赛 profile 下绑定并重开 C compiler/archiver/linker 的实际二进制、版本、target/sysroot 与环境指纹，并由 CompletionCoordinator 在 `project-final` 前再次执行同一 BuildIR verifier；compile-database driver token 不能单独关闭 toolchain drift。
+    - [ ] A19a7d：用不含项目身份的等价构建 fixture 证明各 adapter 对同一构建语义产生相同 canonical projection，并用静态边界测试拒绝下游导入 adapter 私有字段；有限 held-out 项目必须先通过 BuildIR 验证才能进入迁移 DAG。
+  - [ ] **A19a8：显式启用、强隔离的 Make dry-run 构建事实采集**。
+    - [ ] A19a8a：仅在 compile database、可验证生成事实和只读 metadata 均无法闭合 BuildIR 时，才允许用户显式选择 `collect-make-facts`；禁止自动 fallback。采集前必须证明无网络、源码只读、独立输出根、子进程约束、环境白名单、超时、CPU/内存/文件/进程数与输出上限及退出清理均生效；能力不足时在执行 Make 前 fail closed。
+    - [ ] A19a8b：固定调用 `make -B -n -j1 --no-print-directory -f <makefile> -- <targets>`，不接受任意 command、flag、环境、shell、configure 或生成脚本。由于 `make -n` 仍可能执行 `$(shell ...)` 和重建 included Makefile，runner 必须始终位于已证明能力的沙箱内，并拒绝 recursive Make、shell control、command chain、libtool/configure、歧义 compile+link、路径逃逸、超时和输出洪泛。
+    - [ ] A19a8c：只把可无损解析的直接 compiler、archiver、ranlib、link invocation 归一化为 BuildIR；采集报告绑定 Makefile/source/toolchain/sandbox 与原始输出 SHA，BuildIR 可把未生成输出标成 `materialized=false`。该报告本身固定为非语义证据、numerator 0，并由同一 BuildIR validator 重开后才能进入迁移 DAG。
+    - [ ] A19a8d：用不含项目身份的等价 fixture 验证 Make dry-run 与 compile database/Ninja/CMake adapter 产生相同 canonical projection，并覆盖 shell/configure/递归 Make 拒绝、timeout/output flood、路径/link escape、输入漂移和 sandbox receipt 漂移。
 
   **A19b 项目级依赖图与有界分解**
 
   - [x] 建立内容绑定的函数/翻译单元节点、直接调用解析、SCC/wave DAG、共享全局状态 context group 和 parser-boundary 路由。
   - [x] 把仓库内 include closure、编译 defines、顶层声明、全局初始化和翻译单元覆盖记录放入去重 ContextPack；单页预算、组级总预算和页数分别受限。
   - [ ] 用 clang AST/type/layout/preprocessor 事实替换 lexical-only 缺口，覆盖宏展开、函数指针、复杂声明和 ABI 布局；无法证明的 span 必须进入明确 boundary/refusal。
+  - [ ] **A19b3：canonical CIndex、内容寻址证据与精确 provenance**。
+    - [ ] A19b3a：区分原始 source/header blob SHA 与规范化 semantic fact SHA；header/include 只保存可重开的内容引用，多个 TU 共用同一 header 时存储增长接近线性于唯一内容而不是引用次数。
+    - [ ] A19b3b：每个 parser/preprocessor/include blocker 绑定 source path、source SHA、可用时的 directive SHA、offset/range 和可重开的 evidence-set 引用；摘要只能压缩展示，不能丢失同 offset 不同文件的来源，也不能让 dangling/tampered evidence 通过验证。
+    - [ ] A19b3c：把当前等长空白投影的 top-level context 替换为 AST/preprocessor 驱动的声明 span、类型布局、宏定义/展开与初始化事实；无法确定边界时明确阻塞，不向 AI 伪造完整上下文。
+    - [ ] A19b3d：增加同 offset 不同 header provenance、证据引用悬空/篡改、共享 header 线性增长、source drift 与 canonical hash 重算测试；所有下游只消费经统一 validator 重开的 CIndex projection。
+  - [ ] **A19b4：确定性分层检索、选择回执与按前沿懒加载的 ContextPack**。
+    - [ ] A19b4a：建立版本化 retrieval catalog/query/selection receipt；回执绑定 policy、query seed、当前 unit/SCC、required/selected/omitted fact refs、materialized page refs、预算与 SHA。排序必须确定，任一必需事实缺失、引用漂移、预算不足或 unresolved symbol 均阻塞 assignment。
+    - [ ] A19b4b：required 层固定包含当前源码、compile context、直接 call/global、blocker summary；exact 层按符号和类型匹配声明、宏、布局及 direct-include segment；expansion 层只按 include adjacency、dependency SCC interface 和已验证失败事实扩展，禁止把完整仓库或无关 header 塞回 prompt。
+    - [ ] A19b4c：调度器只计算当前可运行 frontier，先检索并 materialize 当前 assignments 的最小页面；状态为 `pending_retrieval`、required facts 不完整或 receipt 未验证的 group 不得租约或启动 worker。完成一波后按新 DAG/验证事实再计算下一波，禁止启动前一次性展开全项目 ContextPack。
+      - [x] A19b4c1：为每个 SCC 生成内容绑定且有大小上限的宿主 catalog；plan 阶段不再写 prompt 页面或 worker request，dispatch 只对最新 `schedule.ready` 重开 catalog/receipt/page-set，在租约前增量物化页面，并把不可变 frontier receipt 绑定到 request 与 attempt。同一 frontier 首次执行与恢复会产生相同的内容寻址回执；模型启动前再次重开回执，逐项核对 worker/assignment/catalog/retrieval/page 绑定。已有页面、group index、catalog、receipt 或部分落盘漂移时 fail closed；主路径不复制 omitted fact store。
+      - [ ] A19b4c2：把 selection 计算本身也改为当前 frontier 的 `pending_retrieval -> ready` 状态转移，完成一波后从最新 DAG、失败证据和扩展查询重算下一波；移除计划期全项目 selection/CIndex JSON 单体和重复 portfolio context，保持分片 CAS 近线性增长。
+    - [ ] A19b4d：为 planner、translator、reviewer、repairer 定义不同的最小上下文合同；translator 必须获得完整 required facts，planner 只看项目级摘要和接口风险。若模型需要更多事实，只能提交结构化 retrieval query，由宿主选择、记账并返回新 receipt，模型不得直接读文件或自行声明事实。
+    - [ ] A19b4e：对超过单次预算的超大函数实行层次化分解：先提取签名、控制流区域、局部类型/宏依赖和状态摘要，再按可验证 region 生成候选并在函数级重组；若跨 region 语义或 ABI 无法证明，必须整体 deferred/refused，禁止截断后假装完整翻译。
+    - [ ] A19b4f：增加 exact macro/type 命中、确定性顺序、required-budget 阻塞、receipt 篡改、selected-only materialization、frontier lazy loading、角色隔离、显式 expansion 与超大函数拒绝测试；有限 held-out 项目必须证明 token/页面下降且 build/oracle 结论不退化。
+
+  当前已有 header 去重、blocker 摘要、可恢复函数 span、callee signature、确定性 selection receipt、retrieval segment/seed-page 分离、dispatch 前沿物理物化和模型启动前回执复验；尚未闭合 AST/type 精确选择、按前沿计算 selection、角色合同、显式 expansion 与超大函数分解，因此 A19b3/A19b4 均保持未勾选。
+
+  A19b4c1 有限阶段证据（2026-07-13）：Windows `test_project_migration*.py` 254 项通过、2 项平台条件跳过，WSL 同组 254 项全部通过。固定 mbedTLS 提交 `9e9eb069d6aa3db84bef07b6d83a78bdee9b1da6` 的 WSL 本地模拟在 `required` build-closure 策略下完成 plan：2,410 个 ledger unit、9,252 个 assignment、97 个结构化 blocked group 和 4 个 ready worker；计划期只写 2,410 个分片 catalog，prompt page/group/assignment request/attempt/model invocation 均为 0。该运行耗时 8 分 47 秒、峰值 RSS 约 1.15 GB，且 CIndex、ContextPages、portfolio 仍分别约 50.6 MB、181 MB、96.1 MB，因此它不是比赛等价语义验收，也不能关闭 A19b4c2 或增加翻译成功计数。
 
   **A19c OpenCode 多 worker 候选组合**
 
   - [x] 生成 planner/translator/reviewer/repairer 角色组合、独立 config/data/state/cache/tmp/out-root、DAG 依赖和 SQLite assignments/leases/attempts/artifacts。
   - [x] 关闭 plan/preflight/request/attempt 漂移、租约重入、heartbeat、非原子 ingest、工具事件、secret 输入、父环境泄漏、agent 权限覆盖、spawn 前误记 command-started 和 provider evidence 未落 ledger；本轮 Windows 134 项通过（1 项条件跳过），WSL 134/134。
   - [x] 在 WSL 通过固定项目 preflight 真实调用一次 `opencode/deepseek-v4-flash-free`：1 次 provider invocation，preflight report SHA `f0bc76b6b2489597e782cd1f0e532b7483f03658680b4352401ee12c814913c0`，session export `verified`，execution report SHA `9e04b437135aa9f1e2171a180f2e77272374fc8bba3c1257d314e8a963c10b5d`，candidate SHA `359cb2ef234f85d9aa1cbdf2d77e07a296f55cb8bd7d4ad9dd37afe4d9ea72ef`；状态仅为 `candidate-ready` / `auxiliary-local-validation`。GLM-5.1 仍只有真实比赛主机精确合同才能关闭 P0-H9。
+  - [ ] **A19c4：最大化 AI 项目推理、候选多样性与信息增益**。
+    - [ ] A19c4a：增加跨完整 BuildIR、Migration DAG、RustProjectIR 和历史失败事实工作的 global AI planner；它按依赖、接口风险、验证可用性和项目阻塞生成可重算迁移策略，并在新证据到达后局部重规划，禁止按项目名或固定测试身份选择路线。
+    - [ ] A19c4b：同一高风险 unit 可在共享总预算内生成有明确策略标签的多样候选/接口提案，经 source SHA 去重后由相同 host gates 比较；reviewer/critic 只能提出结构化风险和修复假设，模型投票、自评分或多数意见不得产生 pass。
+      - [x] A19c4b1：按初始生成及 compile/oracle/negative/unsafe/ABI/final failure family 选择固定、内容绑定的通用策略变体，并随既往 translator/repairer 尝试轮换；策略进入 request、prompt 和 candidate metadata，明确禁止模型自评分和语义验收。
+      - [ ] A19c4b2：让同一高风险 unit 在一个共享 token/时间预算内保留多个并行或顺序候选，按 source SHA 去重并在同一 cohort 上运行完全相同的 host gates；选择结果必须由 gate evidence 决定并可恢复重放。
+    - [ ] A19c4c：调度器按 failure fingerprint、未决不确定性、依赖关键路径、预期信息增益、token/时间成本和历史收敛率决定下一次 planner/translator/reviewer/repairer 调用；输入与失败不变、低信息重复或预算耗尽时停止，不机械运行所有角色或固定轮数。
+      - [x] A19c4c1：增加只接受 `external-verifier` evidence 的确定性信息增益排序，并由绑定 DAG 重算关键路径；新失败、输入/策略变化、不确定性、token 估算和收敛次数参与优先级，失败/输入/策略均未变化的重复 repair 被停止，模型自评分或调用方自报关键路径不能改变 fallback 顺序。
+      - [ ] A19c4c2：从 ledger、BuildIR/DAG 和 verifier receipt 自动派生上述 facts，增加跨 worker 的共享 token/时间预算、策略覆盖率和收敛窗口，并把预算耗尽写成可恢复 blocked/deferred evidence。
+    - [ ] A19c4d：建立有界、内容寻址的项目知识记忆，只保存经 host 提取或验证的 API/type/ABI/ownership/build facts、失败分类和候选决策；按当前 unit/接口/repair 查询最小相关上下文，禁止把 oracle 答案、fixture expected/actual、密钥或无关完整仓库反复喂给模型。
+      - [x] A19c4d1：实现严格 allowlist、内容 SHA、evidence SHA、主题相关性、entry/byte 上限和 artifact/request/prompt 绑定；oracle/expected/actual、密钥、原始源码正文和完整仓库字段在入模前 fail closed。
+      - [ ] A19c4d2：由 BuildIR、RustProjectIR、TransitionAuthority 和专属 verifier 自动写入事实，按当前 unit/interface/repair 查询并持久化复用命中率；禁止调用方直接构造知识 pass 或绕过 provenance。
+    - [ ] A19c4e：global planner 与 project-level repair queue 协同处理跨单元 API、共享类型、初始化、链接和 feature 冲突；AI 可以提出成组候选补丁和迁移顺序，但每次落地仍受文件/预算边界、quarantine、回滚和 project-final 全量复验约束。
 
   **A19d Rust 项目重建与增量集成**
 
   - [x] 按内容生成稳定 Cargo module tree、Cargo.lock、符号依赖和 unsafe budget，并以不可变 generation + 原子 `CURRENT` 指针保存 last-good，启动时可恢复中断投影。
   - [x] 集成报告改为绑定 ledger 权威 candidate set；host adapter 可重开不可变 generation，验证 accepted group/source SHA，再记录固定 authority 的 integration gate。
-  - [ ] 补齐跨单元 public API、共享类型、初始化顺序、FFI/link boundary 和 target/features 重建；真实多文件项目 build 未通过前不能声明整项目转换完成。
+  - [ ] **A19d3：canonical RustProjectIR 与跨单元协调**。
+    - [ ] A19d3a：定义内容绑定、可版本化和可重算的 RustProjectIR，统一表达 crate/module tree、public API、shared type、global ownership、初始化顺序、FFI/link boundary、`cfg`、feature、target 和 unsafe obligation；每个声明必须回指 BuildIR、Migration DAG 与候选源码证据。
+    - [ ] A19d3b：增加唯一 project interface coordinator，在单元候选合并前协调跨单元 API、共享类型布局、符号可见性、全局状态所有权、初始化/析构顺序和 FFI 边界；worker 不得各自生成互相冲突的公共 glue 或 Cargo feature。
+    - [ ] A19d3c：把无法归属单个 unit 的类型、链接、初始化和 feature 诊断放入独立 project-level repair queue，基于完整 RustProjectIR 生成有界修复；不得随机归因、复制共享类型或通过 fixture-specific shim 绕过冲突。
+    - [ ] A19d3d：Cargo generation 只能从已验证 RustProjectIR 确定性生成，并复验所有迁移单元、依赖边、公共接口和配置均被覆盖；IR 漂移、孤立模块、重复符号、临时手写 glue 或真实多文件 build 失败时禁止晋升。
 
   **A19e 项目级验证与精确 repair**
 
   - [x] 候选 Cargo 命令只允许进入 Linux bubblewrap 无网络沙箱；实际 `cargo/rustc/rustdoc` 由 `rustup which` 解析，toolchain 树受大小/数量约束、完整内容哈希、执行前复算并只读挂载。当前 WSL 缺 bubblewrap 时返回 `bubblewrap_unavailable` 且零候选执行，不把 `--offline` 冒充沙箱。
   - [x] 完成固定 host authority、内容寻址证据、最新 gate epoch、不可变 candidate set、Schema DDL 指纹和 current last-good 复算；CLI 已移除调用方 pass/verifier/candidate-set 权限参数。
   - [x] 接入 host-owned integration 与 Cargo check/test adapter，并把受限 Cargo JSON 模块诊断回投到对应 candidate compile gate 触发 repair；WSL 当前缺 `bwrap`，因此真实 smoke 零候选执行且不产生 pass。
-  - [ ] 接通正向 candidate runner 与 CLI 完成路径，并实跑沙箱内 compile/link/test、C oracle/Rust replay、negative、unsafe/alias/ABI 和 final verifier；当前 `record-candidate-gate` 不能仅凭调用方记录获得 pass。只有同一 candidate set 的最新 host-owned gates 全绿才能完成项目。
+  - [ ] **A19e4：正向 candidate verifier、quarantine 与完成路径**。
+    - [ ] **A19e4a：不可替换的 run contract 与 DAG cohort**。
+      - [ ] A19e4a1：在创建 ledger 前生成 integration manifest，并把其 path/SHA/size、完整 dependency edges 和 DAG SHA 固化到 run metadata/schema；CLI/worker 不再接受可替换 manifest。
+      - [ ] A19e4a2：只从当前 active roots、最新完成的 Rust candidate 与有效 last-good 依赖计算传递闭包，写入不可变 verification candidate set；成员缺失、candidate 非最新、依赖不闭合、无关成员或 cohort 漂移均 fail closed。
+      - [ ] A19e4a3：区分 `wave-provisional` 与 `project-final` cohort；完成前对全量 last-good 执行 final revalidation barrier，禁止早期 wave gate 冒充最终全项目 gate。
+    - [ ] A19e4b：用 verification candidate set 生成独立、不可变的 quarantine Cargo generation；它不得改写 `CURRENT`/last-good，且只能在已证明的无网络 OS 沙箱中执行 `cargo check/test`。
+    - [ ] **A19e4c：不可伪造的宿主 compile 结论**。
+      - [ ] A19e4c1：由固定宿主 adapter 从实际执行结果派生 candidate compile pass/fail；CLI/API 不接受调用方提供的 pass、verifier id、candidate-set id、manifest 或任意 command。
+      - [ ] A19e4c2：compile evidence 同时绑定并在 final/promotion 重开 candidate source、integration manifest、quarantine manifest/generation state、verification candidate-set、固定 Cargo command、toolchain 和 sandbox contract；任一漂移拒绝晋升。
+    - [ ] A19e4d：把可定位 Rust 模块的编译诊断回投给对应 repairer；沙箱/工具链/超时/资源等环境阻塞保持 blocked/deferred，不能写成候选语义失败。无法定位到单元的项目错误进入项目级 repair，不得随机归因。
+    - [ ] A19e4e：为 C oracle/Rust replay/diff、negative、unsafe/alias、ABI 与 candidate final gate 接入专属 host-owned runner 和专属 raw observation schema；底层通用 ledger API 不允许写入调用方构造的 pass。promotion 前重新派生同一 verification context，任一 gate、源码、generation 或 cohort 过期均拒绝 last-good。
+    - [ ] A19e4f：CLI 完成命令只编排固定 adapter，并在所有单元 last-good 后运行 integration、Cargo、项目 oracle/negative/unsafe-ABI 和 project final；任何 model JSON、测试构造 ledger 或仅 compile 通过都不能完成项目。
+  - [ ] **A19e5：单一状态转移权威、声明式 FSM 与 invariant audit**。
+    - [ ] A19e5a：用声明式 FSM 列出 unit/run 的状态、合法命令、前置条件、事件和后置状态；只有 `TransitionAuthority` 持有更新 `migration_units` 及其他 semantic projection 的数据库能力，lease、worker、verifier、repair、promotion、project gate 和 CLI 模块只能提交 typed command，禁止直接 `UPDATE` 或绕过转移表。
+      - [x] A19e5a1：集中 `migration_units`/`project_runs` 状态投影到 `TransitionAuthority`，增加 typed unit/run command、幂等 command-id/evidence 绑定和静态扫描，拒绝其他生产模块直接更新这两个 projection。
+      - [ ] A19e5a2：增加 command-kind/前置不变量、单调 state version 和数据库 capability 隔离；禁止任意合法边冒充完成命令，禁止删除/修改历史 transition，并把 candidate/project pass 等 semantic tables 一并收口到唯一权威。
+    - [ ] A19e5b：每次合法转移先原子追加不可变事件，再以 expected state/version、幂等 command id 和绑定证据投影当前状态；并发、过期 epoch、重复回放、部分事务和 crash recovery 不得产生双 active attempt、倒退状态或幽灵 pass。
+    - [ ] A19e5c：在 candidate promotion、`project-final` 和 completed 前运行同一 host-owned invariant audit，至少复算 DAG/BuildIR/RustProjectIR、active attempt 唯一性、latest gate epoch、candidate/generation/cohort 绑定、全单元 last-good、project-final 新鲜度和 project gate 完整性；任一未知或不一致均 fail closed。
+    - [ ] A19e5d：用静态扫描、数据库能力测试、非法转移表测试和 fault-injection/replay 测试证明生产模块不能直接改 semantic 状态，且任意中断点恢复后的事件序列与 projection 可确定性重算。
+  - [ ] **A19e6：唯一 CompletionCoordinator 与强制 project-final 完成链**。
+    - [ ] A19e6a：只保留一个可改变整项目 semantic 生命周期的 `migrate/resume` 主入口，由 CompletionCoordinator 固定执行 discover/BuildIR、plan/DAG、dispatch/repair、promotion、RustProjectIR/Cargo generation、`project-final` revalidation、project gates 和 complete；其他入口不能跳步或自行选择 gate。
+    - [ ] A19e6b：所有单元形成 last-good 后，Coordinator 必须生成新的完整 `project-final` cohort 和 quarantine generation，并在该同一 cohort 上重新执行 compile、oracle/replay/diff、negative、unsafe/alias、ABI、integration、Cargo 和 project final；`wave-provisional` 或旧 generation 的 pass 一律不得复用为完成证据。
+    - [ ] A19e6c：低层 debug/admin CLI 只能读取证据、解释计划或在不连接权威 ledger 的临时副本中诊断；它们不得写 semantic tables、插入 pass、晋升 candidate、移动 `CURRENT` 或设置 completed，且 CLI/API 权限测试必须证明这一边界。
+    - [ ] A19e6d：Coordinator 在每个阶段写入幂等 checkpoint 和 hash-bound completion receipt；中断恢复必须从 FSM/事件重新派生下一步，最终 receipt 绑定状态序列、project-final candidate set/generation、所有 verifier receipt、project gates 和 invariant-audit 结果。
+    - [ ] A19e6e：增加单调 `completion_epoch` 与 `active -> finalizing -> completed`；进入 finalizing 后拒绝新 lease/attempt，只在同一 cohort/generation 的全部 gate 和 invariant audit 通过后两阶段发布 verified receipt 与 `CURRENT`，任一失败或崩溃均可幂等恢复且不得提前移动 last-good。
+  - [ ] **A19e7：host verifier 进程级 capability 边界**。
+    - [ ] A19e7a：把 semantic verifier 运行在独立、最小权限的宿主进程中，仅授予只读输入、专属沙箱执行和向 TransitionAuthority 提交 verifier receipt 的能力；AI worker、普通 CLI、测试 fixture 和编排进程均不持有产生 pass 或写 semantic projection 的能力。
+    - [ ] A19e7b：pass 只能由 verifier 进程按固定 VerificationPlan 实际执行后派生，并绑定进程启动合同、输入快照、命令/toolchain、sandbox receipt、原始输出和退出状态；schema 合法、调用方 observation、model JSON、退出码零或可伪造 verifier id 单独均不能产生 pass。
+    - [ ] A19e7c：TransitionAuthority 只接受经当前 run capability channel 返回、可重算且未使用过的 verifier receipt，并重开其全部内容哈希和当前 cohort/context；缺失、重放、跨 run、进程异常、通道伪造、源码/计划漂移或未执行 observation 均记录 blocked/failure，不得提升 semantic 状态。
+    - [ ] A19e7d：增加恶意调用方、伪造 schema/pass、替换 raw observation、receipt 重放、verifier kill/timeout 和并发竞争测试，证明只有真实 host runner 的当前执行结果能够通过状态转移权威。
+  - [ ] **A19e8：不可降级的 SandboxBackend 能力接口**。
+    - [ ] A19e8a：定义与实现无关的 SandboxBackend capability contract，至少要求网络隔离、仓库/候选只读输入、独立可写输出、进程/子进程约束、环境白名单、超时、CPU/内存/文件/进程数限制、工具链只读绑定和退出后清理；VerificationPlan 显式声明每项所需能力。
+    - [ ] A19e8b：每个 bubblewrap 或等价后端必须在候选执行前运行 host-owned capability probe/conformance suite，并把 backend identity/version、实际隔离机制、mount/process/resource policy 和 probe hash 写入 sandbox receipt；命令行 flag、自报 capability 或 `--offline` 不构成隔离证明。
+    - [ ] A19e8c：所有等价后端必须满足同一最小保证和对抗测试，禁止因平台、权限、工具缺失或后端失败自动减少能力、改用普通 subprocess、开放网络/宿主写权限或放宽资源限制；缺少任一必需能力时在启动候选前 fail closed 为环境阻塞。
+    - [ ] A19e8d：compile、semantic runner、final/promotion 与 held-out 复验必须重开同一 sandbox receipt 并复算 backend/plan/toolchain/input 绑定；后端漂移、probe 过期、清理失败或保证不等价时拒绝 pass 和完成。
 
   **A19f 泛化防特判与有限 held-out 验收**
 
@@ -530,7 +612,22 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   - [x] 建立固定有限 held-out 合同工具：5–20 个不重复项目、至少 12 个 construct family、至少 2 个未参与规则开发项目，显式绑定 repo/commit/tree/compile DB，并拒绝身份分派和近重复项目。真实模式禁止 case 自报 translation evidence，只能按 plan 推导 ledger 路径后只读重开 SQLite，复验原仓库树、compile DB、source/generated closure、AI provider evidence、每个 candidate gate、不可变 candidate set 和 project final bundle；资源数量/大小有界，离线合同通过不能冒充翻译成功。
   - [ ] 在不超过 20 个有限 case 中覆盖至少 5 个真实项目、整项目构建和 12 个不同 construct family；至少 2 个项目不得参与对应规则开发。禁止 1,000/10,000 轮和重复近似切片放大成功率。
 
-  **下一执行顺序**：真实辅助模型、Ninja/静态归档闭包与 provider evidence 链已闭合；下一步接入 Meson/configure facts，完成正向 candidate verifier/repair/quarantine 路径，提供可用 bubblewrap 或比赛等价沙箱，再用固定有限清单执行 A19f 真实 held-out 项目 build/oracle 验收。开发阶段不在每个小改动后启动模型，也不运行 1,000/10,000 轮。
+  **下一执行顺序（按完成条件推进，不按测试用例身份推进）**：
+
+  1. A19a7c-A19a8：先闭合 canonical BuildIR validator、真实 toolchain 绑定与显式沙箱 Make 采集；A19a6/A19a7d 可按 adapter 分线程推进，但任何下游不得消费 adapter 私有 shape，也不得把 dry-run 采集冒充语义证据。
+  2. A19b3-A19b4：闭合可重开的 CIndex blocker/source CAS、声明/type/macro facts、确定性选择回执和 frontier 懒加载；required facts、预算或 receipt 未闭合的 assignment 不得启动 AI worker。
+  3. A19e5a-A19e5d：建立 TransitionAuthority、声明式 FSM、事件投影和 invariant audit；并行定义 A19e7 verifier IPC/receipt 与 A19e8 SandboxBackend capability contract，但在单一状态写入权威闭合前不接入 pass。
+  4. A19c4c、A19e4a-A19e4d 与 A19e8：在新状态权威和不可降级沙箱上闭合 candidate set、quarantine、宿主 compile 结论和精确 repair，并先用 verifier-owned failure/critical-path/cost/convergence facts 驱动信息增益调度；模型自评分不得进入优先级。SandboxBackend 可按 bubblewrap/等价实现分线程开发，所有实现共享同一 conformance suite。
+  5. A19d3a-A19d3d：基于 BuildIR 与 Migration DAG 落地 RustProjectIR、跨单元 interface coordinator 和 project-level repair；可与 A19e7 专属 semantic runner 并行，但 Cargo generation 不得绕过 RustProjectIR。
+  6. A19c4a-A19c4e、A19e4e、A19e6 与 A19e7：在 BuildIR/RustProjectIR 上接通 global AI planner、多策略候选、角色化最小检索、可审计 expansion、知识记忆和 project-level repair，同时接通进程隔离的 semantic verifier 与唯一 CompletionCoordinator，强制生成全量 `project-final` cohort/generation 并重跑全部 candidate/project gates；关闭所有可改变 semantic 状态的低层 debug CLI。
+  7. 完成上述合同后再用固定有限清单执行 A19f 真实 held-out 整项目 build/oracle 验收，并按 A19g 做有限 Windows/WSL 门禁、提交、push 与远端 SHA 核对；开发阶段不在每个小改动后启动模型，也不运行 1,000/10,000 轮。
+
+  **A19g 阶段交付规则（每个独立阶段重复执行）**：完成一个可复核阶段后，先运行一次有限 Windows/WSL 门禁与 `git diff --check`，确认没有凭据、宿主缓存、`target/` 运行产物或测试身份特判进入提交；随后创建范围单一的 commit、push 当前分支，并核对本地 `HEAD` 与远端分支 SHA 完全一致。未测试、未提交、未 push 或远端未核对的阶段不得在待办中标成完成。
+
+  **A19h 代码精简与模块边界**
+
+  - [ ] 删除 P0-A19 生产路径中经调用关系、静态扫描和有限回归证明不再使用的重复实现、过期兼容层与不可达入口；不得以“精简”为由删除 fail-closed 校验、证据绑定、拒绝路径或仍被 CLI/测试/发布入口引用的代码。
+  - [ ] 将 P0-A19 新增或修改的生产模块、测试和共享 test-support 按单一职责拆分到每个文件不超过 300 行，并由 source-layout 门禁持续检查；禁止通过压缩排版、生成重复薄包装或把大段逻辑搬到未检查目录规避行数门禁。
 
   完成判据：同一入口可对 held-out 仓库从零生成 translation inventory、迁移 DAG、hash-bound ContextPacks、候选/repair 证据和可复现 Cargo 输出；至少一个此前未参与开发的多文件 C 项目通过项目级 build 与声明边界内 semantic gates。任何按身份分派、手写项目 adapter、未绑定模型输出或只通过函数级 demo 的结果都不能关闭本项，也不能增加 translator numerator。
 

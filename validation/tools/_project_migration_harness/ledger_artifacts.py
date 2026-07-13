@@ -7,6 +7,13 @@ from .ledger_schema import _json, _now_text, _require_repo_path, _require_sha256
 from .ledger_security import (
     LedgerError, assert_no_semantic_claims, sanitize_error_key,
 )
+from .ledger_transition_authority import (
+    TransitionAuthority, load_run_state, load_unit_state,
+)
+from .ledger_transition_policy import (
+    RunTransitionCommand, TransitionCommand, UnitState, stable_transition_command_id,
+    transition_evidence_sha256,
+)
 
 
 ARTIFACT_STATES = {"written", "candidate", "diagnostic", "reviewed", "failed", "blocked"}
@@ -54,28 +61,40 @@ class ArtifactLedgerMixin:
                 """update attempts set status='completed',output_sha256=?,error_key=null,
                    finished_at=? where attempt_id=?""", (digest, timestamp, attempt_id),
             )
-            previous = connection.execute(
-                "select status from migration_units where run_id=? and unit_id=?",
-                (run_id, unit_id),
-            ).fetchone()[0]
-            connection.execute(
-                """update migration_units set status=?,resumable_status=?,updated_at=?
-                   where run_id=? and unit_id=?""",
-                (next_status, "terminal" if terminal else "awaiting_gate", timestamp,
-                 run_id, unit_id),
-            )
-            connection.execute(
-                """insert into transitions(run_id,unit_id,from_status,to_status,reason,
-                   attempt_id,fencing_token,created_at) values (?,?,?,?,?,?,?,?)""",
-                (run_id, unit_id, previous, next_status,
-                 "terminal_worker_result" if terminal else "attempt_completed",
-                 attempt_id, fencing_token, timestamp),
+            expected = load_unit_state(connection, run_id, unit_id)
+            authority = TransitionAuthority(connection)
+            authority.apply(
+                TransitionCommand(
+                    command_id=stable_transition_command_id(
+                        "attempt-finished", run_id, unit_id, attempt_id,
+                    ),
+                    run_id=run_id, unit_id=unit_id, expected=expected,
+                    target=UnitState(
+                        next_status, "terminal" if terminal else "awaiting_gate",
+                    ),
+                    reason="terminal_worker_result" if terminal else "attempt_completed",
+                    evidence_sha256=digest, attempt_id=attempt_id,
+                    fencing_token=fencing_token,
+                ),
+                created_at=timestamp,
             )
             if fail_run:
-                connection.execute(
-                    "update project_runs set status='failed',updated_at=? where run_id=?",
-                    (timestamp, run_id),
-                )
+                run_status = load_run_state(connection, run_id)
+                if run_status == "active":
+                    authority.apply_run(
+                        RunTransitionCommand(
+                            command_id=stable_transition_command_id(
+                                "terminal-worker-run-failed", run_id, unit_id, attempt_id,
+                            ),
+                            run_id=run_id, anchor_unit_id=unit_id,
+                            expected_status="active", target_status="failed",
+                            reason="terminal_worker_result", evidence_sha256=digest,
+                            attempt_id=attempt_id, fencing_token=fencing_token,
+                        ),
+                        created_at=timestamp,
+                    )
+                elif run_status != "failed":
+                    raise LedgerError("terminal worker result cannot overwrite run state")
 
     def finish_attempt(
         self, *, attempt_id: str, owner: str, fencing_token: int, status: str,
@@ -95,29 +114,34 @@ class ArtifactLedgerMixin:
             ).fetchone():
                 raise LedgerError("completed attempt output must match an attempt-bound artifact")
             timestamp = _now_text()
+            safe_error_key = sanitize_error_key(error_key)
             connection.execute(
                 """update attempts set status=?,output_sha256=?,error_key=?,finished_at=?
                    where attempt_id=?""",
-                (status, digest, sanitize_error_key(error_key), timestamp, attempt_id),
+                (status, digest, safe_error_key, timestamp, attempt_id),
             )
             terminal = status == "blocked" or next_status == "blocked"
             resumable = "terminal" if terminal else (
                 "awaiting_gate" if status == "completed" else "retryable"
             )
-            previous = connection.execute(
-                "select status from migration_units where run_id=? and unit_id=?",
-                (attempt["run_id"], attempt["unit_id"]),
-            ).fetchone()[0]
-            connection.execute(
-                """update migration_units set status=?,resumable_status=?,updated_at=?
-                   where run_id=? and unit_id=?""",
-                (next_status, resumable, timestamp, attempt["run_id"], attempt["unit_id"]),
-            )
-            connection.execute(
-                """insert into transitions(run_id,unit_id,from_status,to_status,reason,
-                   attempt_id,fencing_token,created_at) values (?,?,?,?,?,?,?,?)""",
-                (attempt["run_id"], attempt["unit_id"], previous, next_status,
-                 f"attempt_{status}", attempt_id, fencing_token, timestamp),
+            run_id, unit_id = str(attempt["run_id"]), str(attempt["unit_id"])
+            expected = load_unit_state(connection, run_id, unit_id)
+            evidence = digest or transition_evidence_sha256({
+                "attempt_id": attempt_id,
+                "attempt_status": status,
+                "error_key": safe_error_key,
+            })
+            TransitionAuthority(connection).apply(
+                TransitionCommand(
+                    command_id=stable_transition_command_id(
+                        "attempt-finished", run_id, unit_id, attempt_id,
+                    ),
+                    run_id=run_id, unit_id=unit_id, expected=expected,
+                    target=UnitState(next_status, resumable),
+                    reason=f"attempt_{status}", evidence_sha256=evidence,
+                    attempt_id=attempt_id, fencing_token=fencing_token,
+                ),
+                created_at=timestamp,
             )
 
     def completed_orchestration_rows(

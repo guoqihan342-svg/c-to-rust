@@ -36,6 +36,7 @@ def parse_compile_entry(
     entry: Any,
     entry_index: int,
     repo_root: Path,
+    database_directory: Path | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     entry_sha256 = json_sha256(entry)
     if not isinstance(entry, dict):
@@ -145,12 +146,23 @@ def parse_compile_entry(
             entry_index, entry_sha256, "compile_output_outside_repository", True
         )
     if isinstance(declared_output, str):
-        declared = summarize_path(declared_output, repo_root, working_directory)
-        if declared["scope"] != "repository":
+        declared_candidates = [
+            summarize_path(declared_output, repo_root, working_directory)
+        ]
+        if database_directory is not None and database_directory != working_directory:
+            declared_candidates.append(
+                summarize_path(declared_output, repo_root, database_directory)
+            )
+        repository_outputs = {
+            item["path"]
+            for item in declared_candidates
+            if item["scope"] == "repository"
+        }
+        if not repository_outputs:
             return None, rejection(
                 entry_index, entry_sha256, "compile_output_outside_repository", True
             )
-        if declared["path"] != command_output["path"]:
+        if command_output["path"] not in repository_outputs:
             return None, rejection(
                 entry_index, entry_sha256, "compile_output_binding_mismatch", True
             )

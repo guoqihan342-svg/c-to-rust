@@ -7,6 +7,10 @@ import unittest
 from validation.tools._project_migration_harness.project_prompt import (
     render_project_worker_prompt,
 )
+from validation.tools._project_migration_harness.artifacts import (
+    content_sha256,
+    write_json_artifact,
+)
 from validation.tools._project_migration_harness.runtime_security import (
     validate_context_page,
 )
@@ -40,6 +44,28 @@ class ProjectMigrationModelInputSecurityTests(RuntimeHarnessCase):
 
         with self.assertRaisesRegex(ValueError, "not allowlisted"):
             validate_context_page(page)
+
+    def test_rehashed_receipt_with_wrong_assignment_is_rejected(self) -> None:
+        plan = self.plan()
+        ledger = self.ledger()
+        launch = self.dispatch(plan, ledger)["launches"][0]
+        request = self.load(launch["request"])
+        receipt = self.load(request["context_materialization"])
+        receipt["assignments"][0]["assignment_sha256"] = "0" * 64
+        reference = write_json_artifact(
+            self.harness,
+            "target/run/context/materializations/forged.json",
+            receipt,
+        )
+        request["context_materialization"] = reference
+        payload = {
+            key: value for key, value in request.items()
+            if key not in {"effective_input_sha256", "execution_binding"}
+        }
+        request["effective_input_sha256"] = content_sha256(payload)
+
+        with self.assertRaisesRegex(ValueError, "assignment drifted"):
+            render_project_worker_prompt(request, harness_root=self.harness)
 
 
 if __name__ == "__main__":

@@ -1,92 +1,10 @@
 from __future__ import annotations
 
-from collections import defaultdict
-import hashlib
-import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from .artifacts import content_sha256, write_json_artifact
-
-
-def materialize_context_indexes(
-    context_bundle: Mapping[str, Any],
-    *,
-    out_root: Path,
-    out_root_rel: str,
-) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
-    facts = context_bundle.get("shared_facts")
-    pages = context_bundle.get("pages")
-    if not isinstance(facts, Mapping) or not isinstance(pages, list):
-        raise ValueError("context bundle facts/pages contract is invalid")
-    shared_ref = write_json_artifact(out_root, "context/shared-facts.json", {
-        "schema_version": 1,
-        "facts": facts,
-        "model_input_policy": context_bundle.get("model_input_policy"),
-    })
-    by_scc: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    page_refs: list[dict[str, Any]] = []
-    for page in pages:
-        if not isinstance(page, Mapping) or not isinstance(page.get("scc_id"), str):
-            raise ValueError("context page SCC binding is invalid")
-        for digest in page.get("fact_refs", []):
-            if digest not in facts:
-                raise ValueError("context page references an unknown shared fact")
-        expected = page.get("materialized_sha256")
-        materialized = {
-            **{
-                key: page[key]
-                for key in (
-                    "wave_index", "scc_id", "classification", "dependency_count",
-                    "dependency_set_sha256", "part_index",
-                )
-            },
-            "facts": [{"sha256": digest, **facts[digest]} for digest in page["fact_refs"]],
-        }
-        materialized_sha = hashlib.sha256(json.dumps(
-            materialized, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
-        ).encode("utf-8")).hexdigest()
-        if expected != materialized_sha:
-            raise ValueError("context page materialized SHA drift")
-        relative = f"context/pages/{page['page_id']}.json"
-        page_ref = write_json_artifact(out_root, relative, materialized)
-        bound = {**page_ref, **dict(page)}
-        by_scc[str(page["scc_id"])].append(bound)
-        page_refs.append(bound)
-
-    contexts: dict[str, dict[str, Any]] = {}
-    for scc_id, entries in sorted(by_scc.items()):
-        entries.sort(key=lambda item: int(item["part_index"]))
-        index_payload = {
-            "schema_version": 1,
-            "scc_id": scc_id,
-            "shared_facts": shared_ref,
-            "pages": entries,
-            "model_input_policy": context_bundle.get("model_input_policy"),
-            "claim_boundary": context_bundle.get("claim_boundary"),
-        }
-        index_ref = write_json_artifact(
-            out_root,
-            f"context/groups/{scc_id}.json",
-            index_payload,
-        )
-        contexts[scc_id] = {
-            "path": f"{out_root_rel}/{index_ref['path']}",
-            "sha256": index_ref["sha256"],
-            "byte_count": sum(int(item["size_bytes"]) for item in entries),
-            "token_count": sum(int(item["size_bytes"]) for item in entries),
-            "page_count": len(entries),
-            "pages": [
-                {
-                    "path": f"{out_root_rel}/{item['path']}",
-                    "sha256": item["sha256"],
-                    "size_bytes": item["size_bytes"],
-                    "estimated_tokens": item["size_bytes"],
-                }
-                for item in entries
-            ],
-        }
-    return contexts, page_refs
+from .artifacts import content_sha256
+from .context_index_store import materialize_context_indexes
 
 
 def portfolio_dag(

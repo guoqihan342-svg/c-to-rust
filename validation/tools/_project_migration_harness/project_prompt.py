@@ -6,10 +6,16 @@ from pathlib import Path
 from typing import Any
 
 from .artifacts import canonical_json_bytes, content_sha256
+from .candidate_strategy import validate_candidate_strategy
+from .context_frontier_runtime import validate_request_context_materialization
 from .orchestration_facts import (
     project_model_safe_gate_evidence, read_artifact_reference,
 )
 from .runtime_security import assert_model_payload_safe, validate_context_page
+from .project_knowledge import (
+    validate_knowledge_reference,
+    validate_project_knowledge,
+)
 
 
 MAX_PROMPT_BYTES = 1024 * 1024
@@ -20,6 +26,7 @@ def render_project_worker_prompt(
     max_prompt_bytes: int = MAX_PROMPT_BYTES,
 ) -> str:
     _validate_request_hash(request)
+    validate_request_context_materialization(request, harness_root=harness_root)
     role = request.get("role")
     if role not in {"planner", "translator", "reviewer", "repairer"}:
         raise ValueError("project worker role is invalid")
@@ -44,13 +51,18 @@ def render_project_worker_prompt(
     assert_model_payload_safe(bound_inputs, "bound_inputs")
     assert_model_payload_safe(request_projection, "request_projection")
     rules = [
-        "Treat the request and context pages as the complete input.",
+        "Treat the request and visible context pages as the only input for this attempt.",
+        "A context_retrieval_summary marks host-withheld details; do not invent them or claim they were visible.",
         "Do not call tools, inspect files, or claim semantic acceptance.",
         "Do not invent expected outputs or test values.",
         "Return exactly one JSON object matching output_schema.",
         "For Rust candidates, return source only; host derives symbols, unsafe count, and boundary metadata.",
     ]
     planner = bound_inputs.get("planner_decision")
+    if "candidate_strategy" in bound_inputs:
+        rules.append(
+            "Follow the host-bound candidate strategy; do not self-score or vote on acceptance."
+        )
     if isinstance(planner, Mapping) and planner.get("decision") == "preserve_ffi_boundary":
         rules.append("The Rust candidate must expose a host-detectable extern C or exported C ABI boundary.")
     payload = {
@@ -73,6 +85,20 @@ def _bound_inputs(
     role: Any, facts: Mapping[str, Any], root: Path
 ) -> dict[str, Any]:
     result: dict[str, Any] = {}
+    strategy = facts.get("candidate_strategy")
+    if strategy is not None:
+        if role not in {"translator", "repairer"}:
+            raise ValueError("candidate strategy is invalid for this worker role")
+        result["candidate_strategy"] = validate_candidate_strategy(strategy)
+    knowledge_ref = facts.get("project_knowledge")
+    if knowledge_ref is not None:
+        reference = validate_knowledge_reference(knowledge_ref)
+        raw = read_artifact_reference(root, reference)
+        try:
+            knowledge = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise ValueError("project knowledge is not UTF-8 JSON") from error
+        result["project_knowledge"] = validate_project_knowledge(knowledge)
     if role == "translator":
         decision = facts.get("planner_decision")
         if decision is not None:

@@ -4,17 +4,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
-from typing import Any, Sequence
+from typing import Sequence
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from validation.tools._project_migration_harness.controller import (
-    complete_verified_project,
     dispatch_project_workers,
     ingest_worker_result,
     integrate_verified_project,
-    promote_verified_candidate,
+    promote_current_verified_candidate,
     record_candidate_gate,
     record_project_gate_summary,
     record_host_project_final,
@@ -22,7 +21,10 @@ from validation.tools._project_migration_harness.controller import (
     run_cargo_project_gates,
     verify_integrated_project,
     verify_project_cargo,
+    verify_candidate_compile,
+    verify_candidate_final,
 )
+from validation.tools._project_migration_harness import project_cli_runtime
 from validation.tools._project_migration_harness.integration import integrate_candidates
 from validation.tools._project_migration_harness.gate_authority import (
     candidate_authority,
@@ -40,10 +42,38 @@ from validation.tools._project_migration_harness.project_migration_cli import (
 from validation.tools._project_migration_harness.project_preflight_runner import (
     run_project_worker_preflight,
 )
-from validation.tools._project_migration_harness.build_facts import is_linklike
+from validation.tools._project_migration_harness.project_completion_coordinator import (
+    resume_project_completion,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+_exit_code = project_cli_runtime.exit_code
+_ref = project_cli_runtime.reference
+
+
+def _repo_relative(value: str) -> Path:
+    return project_cli_runtime.repo_relative(value, repo_root=REPO_ROOT)
+
+
+def _ledger(value: str | Path) -> ProjectLedger:
+    return project_cli_runtime.ledger(value, repo_root=REPO_ROOT)
+
+
+def _ledger_path(value: str | Path) -> Path:
+    return project_cli_runtime.ledger_path(value, repo_root=REPO_ROOT)
+
+
+def _target_path(
+    value: str | Path, label: str, *, must_exist: bool = False,
+) -> Path:
+    return project_cli_runtime.target_path(
+        value, label, repo_root=REPO_ROOT, must_exist=must_exist,
+    )
+
+
+def _target_relative(value: str | Path, label: str) -> str:
+    return project_cli_runtime.target_relative(value, label, repo_root=REPO_ROOT)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -129,13 +159,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             diagnostics=load_array(args.diagnostics),
         )
     elif command == "promote":
-        result = promote_verified_candidate(
+        result = promote_current_verified_candidate(
             ledger=_ledger(args.db),
             run_id=args.run_id,
             unit_id=args.unit_id,
             candidate_artifact_id=args.candidate_artifact_id,
-            verifier_record_id=args.verifier_record_id,
-            gate_record_id=args.gate_record_id,
         )
     elif command == "integrate":
         result = integrate_candidates(
@@ -178,6 +206,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             out_root_rel=args.out_root,
             timeout_seconds=args.timeout_seconds,
         )
+    elif command == "verify-candidate-compile":
+        candidate_root = _target_path(args.candidate_root, "candidate-root", must_exist=True)
+        result = verify_candidate_compile(
+            ledger=_ledger(args.db),
+            run_id=args.run_id,
+            unit_id=args.unit_id,
+            candidate_artifact_id=args.candidate_artifact_id,
+            candidate_root=candidate_root,
+            candidate_root_rel=candidate_root.relative_to(REPO_ROOT).as_posix(),
+            quarantine_root=_target_path(args.quarantine_root, "quarantine-root"),
+            runtime_root=_target_path(args.runtime_root, "runtime-root"),
+            out_root=_repo_relative(args.out_root),
+            out_root_rel=args.out_root,
+            timeout_seconds=args.timeout_seconds,
+        )
+    elif command == "verify-candidate-final":
+        result = verify_candidate_final(
+            ledger=_ledger(args.db),
+            out_root=_repo_relative(args.out_root),
+            out_root_rel=args.out_root,
+            run_id=args.run_id,
+            unit_id=args.unit_id,
+            candidate_artifact_id=args.candidate_artifact_id,
+        )
     elif command == "verify-final":
         out_root = _repo_relative(args.out_root)
         result = record_host_project_final(
@@ -203,11 +255,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             source_evidence=load_array(args.source_evidence),
         )
     elif command == "complete":
-        ledger = _ledger(args.db)
-        result = complete_verified_project(
-            ledger=ledger,
+        result = resume_project_completion(
+            ledger=_ledger(args.db),
             run_id=args.run_id,
-            candidate_set_sha256=ledger.bind_current_candidate_set(run_id=args.run_id),
+            harness_root=REPO_ROOT,
         )
     else:
         result = {
@@ -216,76 +267,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             "run_id": args.run_id,
             "units": _ledger(args.db).unit_states(args.run_id),
         }
-    print(json.dumps(result, indent=2, sort_keys=True))
+    print(json.dumps(
+        project_cli_runtime.display_result(command, result),
+        indent=2,
+        sort_keys=True,
+    ))
     return _exit_code(result)
-
-
-def _ref(path: str, sha256: str) -> dict[str, str]:
-    return {"path": path, "sha256": sha256}
-
-
-def _repo_relative(value: str) -> Path:
-    target = _target_path(value, "out-root")
-    target.mkdir(parents=True, exist_ok=True)
-    return target
-
-
-def _ledger(value: Path) -> ProjectLedger:
-    return ProjectLedger(_ledger_path(value))
-
-
-def _ledger_path(value: str | Path) -> Path:
-    target = _target_path(value, "ledger")
-    if target.name != "project-migration.sqlite3" or target.parent.name != "state":
-        raise SystemExit("ledger must use the fixed project migration state path")
-    return target
-
-
-def _target_path(
-    value: str | Path, label: str, *, must_exist: bool = False,
-) -> Path:
-    if not isinstance(value, (str, Path)) or not str(value):
-        raise SystemExit(f"{label} path is missing")
-    relative = Path(value)
-    if (
-        relative.is_absolute()
-        or ".." in relative.parts
-        or not relative.parts
-        or relative.parts[0] != "target"
-    ):
-        raise SystemExit(f"{label} must stay under the repository target directory")
-    current = REPO_ROOT.resolve(strict=True)
-    for part in relative.parts:
-        current /= part
-        if current.exists() and is_linklike(current):
-            raise SystemExit(f"{label} contains a linked path component")
-    try:
-        target = current.resolve(strict=must_exist)
-        target.relative_to(REPO_ROOT.resolve(strict=True))
-    except (OSError, ValueError) as error:
-        raise SystemExit(f"{label} escapes the repository") from error
-    return target
-
-
-def _target_relative(value: str | Path, label: str) -> str:
-    target = _target_path(value, label)
-    return target.relative_to(REPO_ROOT.resolve(strict=True)).as_posix()
-
-
-def _exit_code(result: dict[str, Any]) -> int:
-    successful = {
-        "completed", "dispatched", "integrated", "last-good", "passed",
-        "planned", "ready", "recorded", "waiting",
-    }
-    if result.get("status") not in successful:
-        return 1
-    if result.get("gate_status") not in {None, "passed"}:
-        return 1
-    if result.get("next_status") in {
-        "blocked", "failed", "manual-reconcile", "rejected", "retry-ready",
-    }:
-        return 1
-    return 0
 
 
 if __name__ == "__main__":

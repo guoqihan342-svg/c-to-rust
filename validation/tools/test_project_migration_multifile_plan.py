@@ -54,7 +54,7 @@ class ProjectMigrationMultifilePlanTests(unittest.TestCase):
         self.assertEqual(
             {"include/public_api.h"},
             {
-                header["source"]["path"]
+                header["path"]
                 for context in c_index["unit_contexts"]
                 for header in context["headers"]
             },

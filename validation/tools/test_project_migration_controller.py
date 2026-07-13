@@ -1,5 +1,6 @@
 import unittest
 from unittest import mock
+from pathlib import PurePosixPath
 
 from validation.tools._project_migration_harness.controller import (
     ingest_worker_result,
@@ -17,6 +18,45 @@ from validation.tools.project_migration_controller_test_support import (
 
 
 class ProjectMigrationControllerTests(ProjectMigrationControllerCase):
+    def test_dispatch_materializes_context_before_lease_and_binds_request(self) -> None:
+        plan = self.plan("int unit(void) { return 1; }\n")
+        assignment = plan["portfolio"]["assignments"][0]
+        pages = [
+            self.harness.joinpath(*PurePosixPath(item["path"]).parts)
+            for item in assignment["context"]["pages"]
+        ]
+        self.assertTrue(pages)
+        self.assertTrue(all(not page.exists() for page in pages))
+
+        dispatched = self.dispatch(plan, self.ledger())
+
+        self.assertTrue(all(page.is_file() for page in pages))
+        launch = dispatched["launches"][0]
+        request = self.request(launch)
+        self.assertEqual(
+            dispatched["context_materialization"],
+            request["context_materialization"],
+        )
+
+    def test_catalog_drift_creates_no_attempt_or_lease(self) -> None:
+        plan = self.plan("int unit(void) { return 1; }\n")
+        ledger = self.ledger()
+        catalog = plan["portfolio"]["assignments"][0]["context"]["catalog"]
+        self.harness.joinpath(*PurePosixPath(catalog["path"]).parts).write_text(
+            "{}\n", encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ValueError, "SHA-256 drifted"):
+            self.dispatch(plan, ledger)
+        with ledger.connect() as connection:
+            attempts = connection.execute(
+                "select count(*) from attempts where run_id=?", (plan["run_id"],)
+            ).fetchone()[0]
+            leases = connection.execute(
+                "select count(*) from leases where run_id=?", (plan["run_id"],)
+            ).fetchone()[0]
+        self.assertEqual((0, 0), (attempts, leases))
+
     def test_candidate_review_gates_last_good_and_cargo_reconstruction(self) -> None:
         plan = self.plan("int unit(void) { return 1; }\n")
         ledger = self.ledger()
@@ -53,7 +93,8 @@ class ProjectMigrationControllerTests(ProjectMigrationControllerCase):
         )
 
         verifier_ids = []
-        for index, family in enumerate(sorted(CANDIDATE_REQUIRED_GATES)):
+        ordered = ["compile", *sorted(CANDIDATE_REQUIRED_GATES - {"compile"})]
+        for index, family in enumerate(ordered):
             record_id = f"verify-{index}-{family}"
             verifier_ids.append(record_id)
             self.host_pass(

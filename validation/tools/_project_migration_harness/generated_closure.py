@@ -3,18 +3,67 @@ from __future__ import annotations
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .artifacts import write_json_artifact
 from .build_facts import json_sha256, resolve_repository_path
+from .build_ir_projection import project_build_ir
 from .closure_paths import (
     bind_repository_artifact,
     path_error_blocker,
     verify_repository_artifact,
 )
 from .link_closure import discover_link_closure
+from .meson_introspection import verify_meson_introspection
 from .portfolio_integrity import canonical_sha256
 
 
 MAX_GENERATED_INCLUDE_ROOTS = 256
 MAX_COMPILE_OUTPUTS = 10_000
+
+
+def materialize_build_ir_stage(
+    repo_root: Path,
+    output: Path,
+    discovery: dict[str, Any],
+    artifacts: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    from .build_ir_validation import verify_build_ir_artifact
+
+    closure = discovery.get("generated_build_closure", {})
+    artifacts["generated_build_closure"] = write_json_artifact(
+        output, "plan/generated-build-closure.json", closure
+    )
+    closure_verification = verify_generated_build_closure(repo_root, closure)
+    artifacts["generated_build_closure_verification"] = write_json_artifact(
+        output, "plan/generated-build-closure-verification.json",
+        closure_verification,
+    )
+    raw_refs = [
+        {"role": role, **artifacts[key]}
+        for role, key in (
+            ("discovery", "discovery"),
+            ("generated-build-closure", "generated_build_closure"),
+            ("generated-build-closure-verification",
+             "generated_build_closure_verification"),
+        )
+    ]
+    build_ir = project_build_ir(
+        discovery, closure, closure_verification, raw_refs
+    )
+    artifacts["build_ir"] = write_json_artifact(output, "plan/build-ir.json", build_ir)
+    verification = verify_build_ir_artifact(repo_root, output, artifacts["build_ir"])
+    artifacts["build_ir_verification"] = write_json_artifact(
+        output, "plan/build-ir-verification.json", verification
+    )
+    return {
+        "build_ir": build_ir,
+        "closure": closure,
+        "closure_verification": closure_verification,
+        "closure_ready": (
+            closure.get("status") == "ready"
+            and closure_verification.get("status") == "verified"
+        ),
+        "verification": verification,
+    }
 
 
 def discover_generated_build_closure(
@@ -81,6 +130,7 @@ def verify_generated_build_closure(
 ) -> dict[str, Any]:
     root = Path(repo_root).resolve()
     bindings: list[dict[str, Any]] = []
+    blockers: list[dict[str, Any]] = []
     compile_database = closure.get("compile_database")
     if isinstance(compile_database, dict):
         bindings.append(compile_database)
@@ -90,6 +140,17 @@ def verify_generated_build_closure(
     if isinstance(generated, dict):
         bindings.extend(_binding_list(generated.get("link_command_files")))
         bindings.extend(_binding_list(generated.get("metadata_files")))
+        meson = generated.get("meson_introspection")
+        if isinstance(meson, dict):
+            bindings.extend(_binding_list(meson.get("snapshot_files")))
+            bindings.extend(_binding_list(meson.get("referenced_artifacts")))
+            database_path = compile_database.get("path") if isinstance(
+                compile_database, dict
+            ) else None
+            if isinstance(database_path, str):
+                blockers.extend(verify_meson_introspection(
+                    root, root / Path(*PurePosixPath(database_path).parts), meson
+                ))
     link = closure.get("target_link_closure")
     if isinstance(link, dict):
         for target in link.get("targets", []):
@@ -102,7 +163,6 @@ def verify_generated_build_closure(
             for key in ("inputs", "search_roots", "response_files"):
                 bindings.extend(_binding_list(target.get(key)))
         bindings.extend(_binding_list(link.get("support_files")))
-    blockers = []
     seen: set[tuple[str, str]] = set()
     for binding in bindings:
         identity = (str(binding.get("path")), str(binding.get("kind")))
@@ -234,5 +294,6 @@ def _unique_blockers(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 __all__ = [
     "discover_generated_build_closure",
     "apply_generated_closure_admission",
+    "materialize_build_ir_stage",
     "verify_generated_build_closure",
 ]

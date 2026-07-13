@@ -16,12 +16,22 @@ from validation.tools._project_migration_harness.ledger import LedgerError
 from validation.tools.project_migration_gate_authority_test_support import (
     ProjectMigrationGateAuthorityCase,
 )
+from validation.tools.project_migration_final_barrier_test_support import (
+    record_project_final_candidate_bundle,
+)
 
 
 class ProjectMigrationProjectGateAuthorityTests(ProjectMigrationGateAuthorityCase):
     def test_project_status_is_derived_and_latest_final_must_be_fresh(self) -> None:
         self.promote_current_candidate()
         candidate_set = self.ledger.bind_current_candidate_set(run_id="run")
+        with self.assertRaisesRegex(LedgerError, "candidate gate"):
+            self.ledger.complete_project_run(
+                run_id="run", candidate_set_sha256=candidate_set
+            )
+        self.assertEqual(
+            candidate_set, record_project_final_candidate_bundle(self),
+        )
         observation = {
             "schema_version": 1,
             "artifact_kind": "host-project-gate-observation",
@@ -105,6 +115,23 @@ class ProjectMigrationProjectGateAuthorityTests(ProjectMigrationGateAuthorityCas
         with self.assertRaisesRegex(LedgerError, "current last-good candidate set"):
             self.ledger.complete_project_run(
                 run_id="run", candidate_set_sha256=first_set
+            )
+
+    def test_completion_rejects_a_running_worker_attempt(self) -> None:
+        self.promote_current_candidate()
+        candidate_set = record_project_final_candidate_bundle(self)
+        with self.ledger.connect() as connection:
+            connection.execute(
+                """insert into attempts(attempt_id,run_id,unit_id,role,ordinal,worker_id,
+                   status,fencing_token,input_sha256,output_sha256,error_key,started_at,
+                   finished_at,metadata_json)
+                   values ('running-final','run','unit','translator',99,'translator',
+                           'running',99,?,null,null,?,null,'{}')""",
+                ("a" * 64, "2026-01-01T00:00:59Z"),
+            )
+        with self.assertRaisesRegex(LedgerError, "running worker"):
+            self.ledger.complete_project_run(
+                run_id="run", candidate_set_sha256=candidate_set,
             )
 
 

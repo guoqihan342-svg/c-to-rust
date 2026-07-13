@@ -16,18 +16,14 @@ from .closure_paths import bind_repository_artifact, path_error_blocker
 from .compile_security import SUPPORTED_COMPILER
 from .ninja_link_facts import discover_ninja_link_commands
 from .link_response import expand_link_response_files, take_link_output
+from .link_fact_paths import link_fact_working_directory
+from .link_system_arguments import normalize_system_link_argument
 
 
 MAX_LINK_ARGUMENTS = 16_384
 LINK_INPUT_SUFFIXES = {
     ".a", ".dll", ".dylib", ".lib", ".lo", ".o", ".obj", ".so",
 }
-SYSTEM_LINK_FLAGS = {
-    "-Bstatic", "-Bdynamic", "-nostdlib", "-nodefaultlibs", "-pie",
-    "-pthread", "-rdynamic", "-shared", "-static", "/DLL",
-}
-
-
 def discover_link_closure(
     repo_root: Path,
     compile_database_path: Path,
@@ -111,6 +107,7 @@ def _parse_link_fact(
         return None, [path_error_blocker(error, role="link_fact", path=fact_path)]
     if current_fact["sha256"] != fact.get("sha256"):
         return None, [{"kind": "link_fact_sha256_drift", "path": fact_path}]
+    base = link_fact_working_directory(root, fact_path, base)
     try:
         lines = [line.strip() for line in (root / fact_path).read_text(
             encoding="utf-8-sig"
@@ -207,8 +204,9 @@ def _parse_link_argv(
                 search_roots.append(bound)
             index += 1
             continue
-        if _is_system_arg(argument):
-            system_args.append(argument)
+        normalized_system_arg = normalize_system_link_argument(root, base, argument)
+        if normalized_system_arg is not None:
+            system_args.append(normalized_system_arg)
             index += 1
             continue
         if argument.startswith("-") and _contains_external_path(argument):
@@ -270,12 +268,6 @@ def _looks_like_path(value: str) -> bool:
         or value.startswith(".")
         or PureWindowsPath(value).is_absolute()
     )
-
-
-def _is_system_arg(value: str) -> bool:
-    if value in SYSTEM_LINK_FLAGS or value.startswith(("-l", "-Wl,", "/DEFAULTLIB:")):
-        return not _contains_external_path(value)
-    return False
 
 
 def _contains_external_path(value: str) -> bool:

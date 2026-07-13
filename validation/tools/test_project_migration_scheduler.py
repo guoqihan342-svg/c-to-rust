@@ -93,6 +93,126 @@ class ProjectMigrationSchedulerTests(unittest.TestCase):
         self.assertEqual(1, len(result["ready"]))
         self.assertIn("max_concurrency_reached", result["deferred"][0]["reasons"])
 
+    def test_verifier_evidence_prioritizes_novel_critical_repair(self) -> None:
+        portfolio = {
+            "limits": {"max_concurrency": 1},
+            "assignments": [
+                assignment("ordinary", "translator", 0),
+                assignment("critical", "repairer", 1),
+            ],
+        }
+        states = [state("ordinary"), state("critical")]
+        states[1]["status"] = "retry-ready"
+        facts = {"critical": repair_facts(scheduler_evidence(
+            failure="1" * 64,
+            previous_failure="2" * 64,
+        ))}
+
+        result = schedule_portfolio(portfolio, states, facts)
+
+        self.assertEqual(["critical-repairer"], workers(result))
+        self.assertTrue(result["ready"][0]["scheduling_priority"]["fresh_failure"])
+        self.assertEqual("external-verifier", result["ready"][0]["scheduling_priority"]["authority"])
+
+    def test_critical_path_is_derived_from_bound_dependencies(self) -> None:
+        portfolio = {
+            "limits": {"max_concurrency": 1},
+            "assignments": [
+                assignment("leaf", "translator", 0),
+                assignment("root", "translator", 0),
+                assignment("consumer", "translator", 1, ["root"]),
+            ],
+        }
+        evidence = scheduler_evidence(effective_input="4" * 64)
+        result = schedule_portfolio(
+            portfolio,
+            [state("leaf"), state("root"), state("consumer")],
+            {"leaf": {"scheduler_evidence": evidence}, "root": {"scheduler_evidence": evidence}},
+        )
+        self.assertEqual(["root-translator"], workers(result))
+        self.assertEqual(1, result["ready"][0]["scheduling_priority"]["critical_path_weight"])
+
+    def test_known_blocked_dependency_without_assignment_stays_deferred(self) -> None:
+        portfolio = {
+            "limits": {"max_concurrency": 1},
+            "assignments": [
+                assignment("consumer", "translator", 1, ["blocked"]),
+            ],
+        }
+        blocked = state("blocked")
+        blocked.update({"status": "blocked", "resumable_status": "terminal"})
+
+        result = schedule_portfolio(
+            portfolio, [state("consumer"), blocked], {},
+        )
+
+        self.assertEqual([], workers(result))
+        self.assertEqual(
+            ["dependency_gate_pending"], result["deferred"][0]["reasons"],
+        )
+
+    def test_dependency_outside_ledger_is_rejected(self) -> None:
+        portfolio = {
+            "limits": {"max_concurrency": 1},
+            "assignments": [
+                assignment("consumer", "translator", 1, ["invented"]),
+            ],
+        }
+        with self.assertRaisesRegex(ValueError, "unknown groups"):
+            schedule_portfolio(portfolio, [state("consumer")], {})
+
+    def test_unchanged_repair_is_deferred_until_inputs_or_strategy_change(self) -> None:
+        portfolio = {
+            "limits": {"max_concurrency": 1},
+            "assignments": [assignment("stalled", "repairer", 0)],
+        }
+        states = [state("stalled")]
+        states[0]["status"] = "retry-ready"
+        same = "3" * 64
+        evidence = scheduler_evidence(
+            failure=same,
+            previous_failure=same,
+            effective_input=same,
+            previous_input=same,
+            strategy=same,
+            previous_strategy=same,
+            convergence_attempts=1,
+        )
+
+        result = schedule_portfolio(
+            portfolio, states, {"stalled": repair_facts(evidence)}
+        )
+
+        self.assertEqual([], workers(result))
+        self.assertEqual(
+            ["unchanged_failure_input_and_strategy"],
+            result["deferred"][0]["reasons"],
+        )
+
+    def test_model_self_score_cannot_change_deterministic_fallback(self) -> None:
+        portfolio = {
+            "limits": {"max_concurrency": 1},
+            "assignments": [
+                assignment("alpha", "translator", 0),
+                assignment("beta", "translator", 0),
+            ],
+        }
+        result = schedule_portfolio(
+            portfolio,
+            [state("alpha"), state("beta")],
+            {"beta": {"model_score": 999_999_999}},
+        )
+        self.assertEqual(["alpha-translator"], workers(result))
+
+        invalid = scheduler_evidence()
+        invalid["authority"] = "model"
+        with self.assertRaisesRegex(ValueError, "external-verifier"):
+            schedule_portfolio(
+                portfolio,
+                [state("alpha"), state("beta")],
+                {"beta": {"scheduler_evidence": invalid}},
+            )
+
 
 def assignment(
     group_id: str, role: str, wave: int, dependencies: list[str] | None = None
@@ -122,6 +242,43 @@ def state(group_id: str) -> dict:
 
 def workers(result: dict) -> list[str]:
     return [item["worker_id"] for item in result["ready"]]
+
+
+def repair_facts(evidence: dict) -> dict:
+    return {
+        "candidate_artifact_sha256": "a" * 64,
+        "failed_gate_result_sha256": "b" * 64,
+        "scheduler_evidence": evidence,
+    }
+
+
+def scheduler_evidence(
+    *,
+    failure: str | None = None,
+    previous_failure: str | None = None,
+    effective_input: str | None = None,
+    previous_input: str | None = None,
+    strategy: str | None = None,
+    previous_strategy: str | None = None,
+    convergence_attempts: int = 0,
+) -> dict:
+    result = {
+        "schema_version": 1,
+        "authority": "external-verifier",
+        "uncertainty_count": 0,
+        "estimated_token_cost": 1,
+        "convergence_attempts": convergence_attempts,
+    }
+    optional = {
+        "failure_fingerprint_sha256": failure,
+        "previous_failure_fingerprint_sha256": previous_failure,
+        "effective_input_sha256": effective_input,
+        "previous_effective_input_sha256": previous_input,
+        "strategy_sha256": strategy,
+        "previous_strategy_sha256": previous_strategy,
+    }
+    result.update({key: value for key, value in optional.items() if value is not None})
+    return result
 
 
 if __name__ == "__main__":

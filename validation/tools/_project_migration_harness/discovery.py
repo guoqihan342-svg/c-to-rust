@@ -90,7 +90,9 @@ def discover_project(
     blockers = list(selection_blockers)
     blockers.extend(build_blockers)
     for entry_index, entry in enumerate(payload):
-        unit, rejected_entry = parse_compile_entry(entry, entry_index, root)
+        unit, rejected_entry = parse_compile_entry(
+            entry, entry_index, root, database_path.parent
+        )
         if unit is not None:
             parsed.append(unit)
         if rejected_entry is not None:

@@ -9,6 +9,10 @@ from .schedule_facts import (
     sha_fact,
 )
 from .runtime_binding import compute_portfolio_binding
+from .schedule_priority import scheduling_priority
+from .project_knowledge import validate_knowledge_reference
+from .schedule_graph import critical_path_weights
+from .candidate_strategy import validate_candidate_strategy
 
 
 
@@ -27,6 +31,9 @@ def schedule_portfolio(
     if isinstance(max_concurrency, bool) or not isinstance(max_concurrency, int) or max_concurrency < 1:
         raise ValueError("portfolio max_concurrency is invalid")
     states = _unit_state_map(unit_states)
+    critical_paths = critical_path_weights(
+        assignments, known_group_ids=set(states),
+    )
     ready: list[dict[str, Any]] = []
     deferred: list[dict[str, Any]] = []
     for assignment in assignments:
@@ -38,6 +45,11 @@ def schedule_portfolio(
         role = _string(assignment, "role")
         facts = gate_facts.get(group_id, {})
         reasons = _deferred_reasons(assignment, states, facts)
+        priority = scheduling_priority(
+            facts, critical_path_weight=critical_paths[group_id],
+        )
+        if priority is not None and priority["stalled"] and not reasons:
+            reasons = ["unchanged_failure_input_and_strategy"]
         record = {
             "worker_id": _string(assignment, "worker_id"),
             "group_id": group_id,
@@ -46,6 +58,8 @@ def schedule_portfolio(
         }
         if role == "repairer" and not reasons:
             record["repair_mode"] = repair_mode(facts)
+        if priority is not None:
+            record["scheduling_priority"] = priority
         if reasons:
             deferred.append({**record, "reasons": reasons})
         else:
@@ -56,6 +70,7 @@ def schedule_portfolio(
             })
     role_order = {"planner": 0, "translator": 1, "reviewer": 2, "repairer": 3}
     ready.sort(key=lambda item: (
+        -int(item.get("scheduling_priority", {}).get("score", 0)),
         item["wave_index"], role_order.get(item["role"], 99), item["worker_id"],
     ))
     selected = ready[:max_concurrency]
@@ -166,7 +181,16 @@ def _input_facts(role: str, facts: Mapping[str, Any]) -> dict[str, Any]:
             "last_good_artifact_sha256",
         ),
     }
-    return {key: facts[key] for key in allowed.get(role, ()) if key in facts}
+    result = {key: facts[key] for key in allowed.get(role, ()) if key in facts}
+    if role in {"translator", "repairer"} and "candidate_strategy" in facts:
+        result["candidate_strategy"] = validate_candidate_strategy(
+            facts["candidate_strategy"]
+        )
+    if "project_knowledge" in facts:
+        result["project_knowledge"] = validate_knowledge_reference(
+            facts["project_knowledge"]
+        )
+    return result
 
 
 __all__ = ["schedule_portfolio"]

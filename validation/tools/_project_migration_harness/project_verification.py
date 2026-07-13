@@ -38,6 +38,27 @@ def run_cargo_project_gates(
     except GenerationCommitError as error:
         return _blocked("generation_recovery_blocked", detail=error.code)
     source = generation or project.resolve(strict=True)
+    return _run_managed_cargo(
+        source, project, runtime_root, cargo_command, timeout_seconds,
+    )
+
+
+def run_cargo_generation_gates(
+    generation_root: Path, *, runtime_root: Path, cargo_command: str = "cargo",
+    timeout_seconds: int = 300,
+) -> dict[str, Any]:
+    if timeout_seconds < 30 or timeout_seconds > 3_600:
+        raise ValueError("timeout_seconds must be between 30 and 3600")
+    source = _project_target(generation_root).resolve(strict=True)
+    return _run_managed_cargo(
+        source, source, runtime_root, cargo_command, timeout_seconds,
+    )
+
+
+def _run_managed_cargo(
+    source: Path, project: Path, runtime_root: Path,
+    cargo_command: str, timeout_seconds: int,
+) -> dict[str, Any]:
     before, managed = existing_state(source)
     if not managed:
         raise ValueError("Cargo project must be a managed last-good reconstruction")
@@ -270,4 +291,4 @@ def _text(value: Any) -> str:
     return value if isinstance(value, str) else ""
 
 
-__all__ = ["run_cargo_project_gates"]
+__all__ = ["run_cargo_generation_gates", "run_cargo_project_gates"]

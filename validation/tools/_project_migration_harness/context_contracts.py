@@ -55,6 +55,10 @@ def safe_blockers(value: Any) -> list[dict[str, Any]]:
         }
         if isinstance(item.get("byte_offset"), int):
             current["byte_offset"] = item["byte_offset"]
+        if isinstance(item.get("occurrence_count"), int):
+            current["occurrence_count"] = item["occurrence_count"]
+        if isinstance(item.get("evidence_set_sha256"), str):
+            current["evidence_set_sha256"] = item["evidence_set_sha256"]
         result.append(current)
     return sorted(
         result,

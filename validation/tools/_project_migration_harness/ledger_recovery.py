@@ -4,6 +4,11 @@ import time
 
 from .ledger_schema import _now_text, atomic
 from .ledger_security import LedgerError
+from .ledger_transition_authority import TransitionAuthority, load_unit_state
+from .ledger_transition_policy import (
+    TransitionCommand, UnitState, stable_transition_command_id,
+    transition_evidence_sha256,
+)
 
 
 class LedgerRecoveryMixin:
@@ -42,31 +47,36 @@ class LedgerRecoveryMixin:
                 exhausted = count >= int(row["max_attempts"])
                 next_status = "exhausted" if exhausted else "retry-ready"
                 resumable = "exhausted" if exhausted else "retryable"
-                previous = connection.execute(
-                    "select status from migration_units where run_id=? and unit_id=?",
-                    (run_id, row["unit_id"]),
-                ).fetchone()[0]
+                unit_id = str(row["unit_id"])
+                expected = load_unit_state(connection, run_id, unit_id)
                 connection.execute(
                     """update attempts set status='failed',error_key='lease_expired',
                        finished_at=? where attempt_id=?""",
                     (timestamp, row["attempt_id"]),
                 )
                 connection.execute(
-                    """update migration_units set status=?,resumable_status=?,updated_at=?
-                       where run_id=? and unit_id=?""",
-                    (next_status, resumable, timestamp, run_id, row["unit_id"]),
-                )
-                connection.execute(
                     """update leases set status='expired',heartbeat_at=?
                        where run_id=? and unit_id=?""",
                     (clock, run_id, row["unit_id"]),
                 )
-                connection.execute(
-                    """insert into transitions(run_id,unit_id,from_status,to_status,reason,
-                       attempt_id,fencing_token,created_at)
-                       values (?,?,?,?, 'lease_expired_recovered',?,null,?)""",
-                    (run_id, row["unit_id"], previous, next_status,
-                     row["attempt_id"], timestamp),
+                TransitionAuthority(connection).apply(
+                    TransitionCommand(
+                        command_id=stable_transition_command_id(
+                            "lease-expired-recovery", run_id, unit_id, row["attempt_id"],
+                        ),
+                        run_id=run_id, unit_id=unit_id, expected=expected,
+                        target=UnitState(next_status, resumable),
+                        reason="lease_expired_recovered",
+                        evidence_sha256=transition_evidence_sha256({
+                            "attempt_id": row["attempt_id"],
+                            "lease_status": row["lease_status"],
+                            "lease_expires_at": row["expires_at"],
+                            "max_attempts": row["max_attempts"],
+                            "attempt_count": count,
+                        }),
+                        attempt_id=str(row["attempt_id"]),
+                    ),
+                    created_at=timestamp,
                 )
                 recovered.append(str(row["attempt_id"]))
         return recovered

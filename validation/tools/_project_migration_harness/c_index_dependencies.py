@@ -7,7 +7,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from .build_facts import file_binding, repository_path, resolve_repository_path
+from .c_index_dependency_snapshot import DependencySnapshot
+from .c_index_dependency_blockers import dependency_blocker as _blocker
 from .ledger_security import assert_no_secrets
 
 
@@ -20,9 +21,11 @@ _DIRECTIVE = re.compile(r'^\s*#\s*([A-Za-z_]\w*)\b(.*)$', re.DOTALL)
 
 
 def normalize_compile_context(
-    repo_root: Path, item: Mapping[str, Any]
+    repo_root: Path, item: Mapping[str, Any], snapshot: DependencySnapshot
 ) -> dict[str, Any]:
-    working = _repo_value(repo_root, item.get("working_directory", "."), "working_directory")
+    working = _repo_value(
+        repo_root, item.get("working_directory", "."), "working_directory", snapshot
+    )
     includes: list[dict[str, str]] = []
     raw_includes = item.get("includes", [])
     if not _sequence(raw_includes) or not all(isinstance(value, Mapping) for value in raw_includes):
@@ -36,7 +39,9 @@ def normalize_compile_context(
         elif scope == "repository":
             includes.append({
                 "kind": str(kind), "scope": "repository",
-                "path": _repo_value(repo_root, path, "include path"),
+                "path": _repo_value(
+                    repo_root, path, "include path", snapshot
+                ),
             })
         else:
             raise ValueError("translation unit include binding is invalid")
@@ -70,7 +75,9 @@ def normalize_compile_context(
     return context
 
 
-def dependency_context(repo_root: Path, unit: Mapping[str, Any]) -> dict[str, Any]:
+def dependency_context(
+    repo_root: Path, unit: Mapping[str, Any], snapshot: DependencySnapshot
+) -> dict[str, Any]:
     compile_context = dict(unit["compile_context"])
     source_path = repo_root.joinpath(*PurePosixPath(str(unit["path"])).parts)
     search_dirs = _search_directories(repo_root, source_path, compile_context["includes"])
@@ -88,7 +95,7 @@ def dependency_context(repo_root: Path, unit: Mapping[str, Any]) -> dict[str, An
         queued.append((target, 0))
     _queue_directives(
         repo_root, source_path, bytes(unit["raw"]), search_dirs, include_records,
-        blockers, queued, unit, 0,
+        blockers, queued, unit, 0, snapshot,
     )
     visited: set[str] = set()
     total = 0
@@ -98,7 +105,7 @@ def dependency_context(repo_root: Path, unit: Mapping[str, Any]) -> dict[str, An
             blockers.append(_blocker(unit, "include_depth_limit_exceeded", 0))
             continue
         try:
-            binding = file_binding(repo_root, path, max_bytes=MAX_HEADER_BYTES)
+            binding, raw = snapshot.read_header(path, max_bytes=MAX_HEADER_BYTES)
         except (OSError, ValueError):
             blockers.append(_blocker(unit, "include_binding_invalid", 0))
             continue
@@ -107,17 +114,13 @@ def dependency_context(repo_root: Path, unit: Mapping[str, Any]) -> dict[str, An
         if len(visited) >= MAX_HEADERS:
             blockers.append(_blocker(unit, "include_file_limit_exceeded", 0))
             break
-        raw = path.read_bytes()
-        if hashlib.sha256(raw).hexdigest() != binding["sha256"]:
-            blockers.append(_blocker(unit, "include_binding_changed", 0))
-            continue
         total += len(raw)
         if total > MAX_HEADER_TOTAL_BYTES:
             blockers.append(_blocker(unit, "include_total_size_limit_exceeded", 0))
             break
         visited.add(binding["path"])
         content, encoding = _source_content(raw)
-        headers.append({"source": {
+        source = {
             **binding,
             "encoding": encoding,
             "span": {
@@ -126,10 +129,11 @@ def dependency_context(repo_root: Path, unit: Mapping[str, Any]) -> dict[str, An
                 "sha256": binding["sha256"],
             },
             "content": content,
-        }})
+        }
+        headers.append(snapshot.record_header_source(source))
         _queue_directives(
             repo_root, path, raw, search_dirs, include_records, blockers, queued,
-            unit, depth + 1,
+            unit, depth + 1, snapshot,
         )
     if compile_context["redacted_define_count"]:
         blockers.append(_blocker(unit, "redacted_compile_define", 0))
@@ -139,7 +143,7 @@ def dependency_context(repo_root: Path, unit: Mapping[str, Any]) -> dict[str, An
         "includes": sorted(include_records, key=lambda value: (
             value["from_path"], value["byte_offset"], value["target"]
         )),
-        "headers": sorted(headers, key=lambda value: value["source"]["path"]),
+        "headers": sorted(headers, key=lambda value: value["path"]),
         "blockers": sorted(
             {tuple(sorted(item.items())): item for item in blockers}.values(),
             key=lambda value: (value["kind"], value["byte_offset"]),
@@ -179,27 +183,49 @@ def _queue_directives(
     repo_root: Path, source: Path, raw: bytes, search_dirs: Sequence[Path],
     records: list[dict[str, Any]], blockers: list[dict[str, Any]],
     queue: deque[tuple[Path, int]], unit: Mapping[str, Any], depth: int,
+    snapshot: DependencySnapshot,
 ) -> None:
+    from_path = snapshot.repository_path(source)
     for directive in _directives(raw):
         if directive["kind"] in {"if", "ifdef", "ifndef", "elif", "else", "endif"} and depth:
-            blockers.append(_blocker(unit, "header_conditional_preprocessor", directive["byte_offset"]))
+            blockers.append(_blocker(
+                unit, "header_conditional_preprocessor", directive["byte_offset"],
+                source_path=from_path,
+                source_sha256=hashlib.sha256(raw).hexdigest(),
+                directive_sha256=directive["sha256"],
+            ))
         if directive["kind"] != "include":
             continue
         parsed = _INCLUDE.fullmatch(directive["body"])
         if parsed is None:
-            records.append({**directive, "from_path": repository_path(repo_root, source),
+            records.append({**directive, "from_path": from_path,
                             "target": "<dynamic>", "status": "unresolved"})
-            blockers.append(_blocker(unit, "dynamic_include_unresolved", directive["byte_offset"]))
+            blockers.append(_blocker(
+                unit, "dynamic_include_unresolved", directive["byte_offset"],
+                source_path=from_path,
+                source_sha256=hashlib.sha256(raw).hexdigest(),
+                directive_sha256=directive["sha256"],
+            ))
             continue
         style, target = parsed.groups()
-        resolved = _resolve_include(repo_root, source, target, style == '"', search_dirs)
-        record = {**directive, "from_path": repository_path(repo_root, source),
+        resolved = _resolve_include(
+            source, target, style == '"', search_dirs, snapshot
+        )
+        record = {**directive, "from_path": from_path,
                   "target": target, "style": "quote" if style == '"' else "system"}
         if resolved is None:
             records.append({**record, "status": "external_or_unresolved"})
-            blockers.append(_blocker(unit, "include_dependency_unresolved", directive["byte_offset"]))
+            blockers.append(_blocker(
+                unit, "include_dependency_unresolved", directive["byte_offset"],
+                source_path=from_path,
+                source_sha256=hashlib.sha256(raw).hexdigest(),
+                directive_sha256=directive["sha256"],
+            ))
         else:
-            records.append({**record, "status": "bound", "path": repository_path(repo_root, resolved)})
+            records.append({
+                **record, "status": "bound",
+                "path": snapshot.repository_path(resolved),
+            })
             queue.append((resolved, depth))
 
 
@@ -224,20 +250,13 @@ def _directives(raw: bytes) -> list[dict[str, Any]]:
 
 
 def _resolve_include(
-    repo_root: Path, source: Path, target: str, quote: bool, search_dirs: Sequence[Path]
+    source: Path, target: str, quote: bool, search_dirs: Sequence[Path],
+    snapshot: DependencySnapshot,
 ) -> Path | None:
     candidate = PurePosixPath(target)
     if candidate.is_absolute() or ".." in candidate.parts or "\\" in target:
         return None
-    roots = ([source.parent] if quote else []) + list(search_dirs)
-    for base in roots:
-        try:
-            resolved = resolve_repository_path(repo_root, Path(*candidate.parts), base=base)
-        except (OSError, ValueError):
-            continue
-        if resolved.is_file():
-            return resolved
-    return None
+    return snapshot.resolve_include(source, target, quote, search_dirs)
 
 
 def _search_directories(
@@ -253,17 +272,17 @@ def _search_directories(
     return result
 
 
-def _repo_value(repo_root: Path, value: Any, label: str) -> str:
+def _repo_value(
+    repo_root: Path, value: Any, label: str, snapshot: DependencySnapshot
+) -> str:
     if not isinstance(value, str) or not value or "\\" in value:
         raise ValueError(f"translation unit {label} is invalid")
     try:
-        return repository_path(repo_root, resolve_repository_path(repo_root, Path(*PurePosixPath(value).parts)))
+        return snapshot.repository_path(
+            snapshot.resolve(Path(*PurePosixPath(value).parts))
+        )
     except (OSError, ValueError) as error:
         raise ValueError(f"translation unit {label} is outside the repository") from error
-
-
-def _blocker(unit: Mapping[str, Any], kind: str, offset: int) -> dict[str, Any]:
-    return {"unit_id": str(unit["unit_id"]), "kind": kind, "byte_offset": int(offset)}
 
 
 def _source_content(raw: bytes) -> tuple[str, str]:

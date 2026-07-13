@@ -13,6 +13,7 @@ from .gate_authority import (
 from .gate_diagnostics import normalize_gate_evidence
 from .gate_evidence import write_content_addressed_json
 from .ledger import LedgerError, ProjectLedger
+from .ledger_candidate_state import latest_candidate_records
 
 
 def record_candidate_gate(
@@ -46,19 +47,18 @@ def record_candidate_gate(
         gate_family=gate_family,
         status="failed",
         diagnostics=normalized["diagnostics"],
+        candidate_set_sha256=None,
+        source_evidence=(),
     )
     reference = write_content_addressed_json(
         out_root, f"candidate/{gate_family}", evidence
     )
     evidence_path = f"{out_root_rel}/{reference['path']}"
-    ledger.record_host_verification(
+    ledger.record_candidate_failure(
         record_id=record_id,
         run_id=run_id,
         unit_id=unit_id,
         candidate_artifact_id=candidate_artifact_id,
-        kind=expected_kind,
-        status="failed",
-        verifier_id=authority,
         evidence_path=evidence_path,
         evidence_sha256=reference["sha256"],
         gate_family=gate_family,
@@ -114,6 +114,27 @@ def promote_verified_candidate(
     }
 
 
+def promote_current_verified_candidate(
+    *, ledger: ProjectLedger, run_id: str, unit_id: str,
+    candidate_artifact_id: str,
+) -> dict[str, Any]:
+    with ledger.connect() as connection:
+        records = latest_candidate_records(
+            connection, run_id, unit_id, candidate_artifact_id,
+        )
+    by_family = {str(row["gate_family"]): row for row in records}
+    final = by_family.get("final-verification")
+    verifier = by_family.get("compile")
+    if final is None or verifier is None:
+        raise LedgerError("candidate promotion requires current compile and final records")
+    return promote_verified_candidate(
+        ledger=ledger, run_id=run_id, unit_id=unit_id,
+        candidate_artifact_id=candidate_artifact_id,
+        verifier_record_id=str(verifier["record_id"]),
+        gate_record_id=str(final["record_id"]),
+    )
+
+
 def _candidate(
     ledger: ProjectLedger, run_id: str, unit_id: str, artifact_id: str
 ) -> dict[str, Any]:
@@ -127,4 +148,7 @@ def _candidate(
     return matches[0]
 
 
-__all__ = ["promote_verified_candidate", "record_candidate_gate"]
+__all__ = [
+    "promote_current_verified_candidate", "promote_verified_candidate",
+    "record_candidate_gate",
+]

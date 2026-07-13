@@ -14,62 +14,18 @@ from .ledger_schema import (
 from .ledger_lease import LeaseLifecycleMixin
 from .ledger_project_gates import ProjectGateMixin
 from .ledger_recovery import LedgerRecoveryMixin
+from .ledger_run_metadata import prepare_run_metadata
 from .ledger_security import (
     LedgerError, LeaseConflict, SchemaVersionError, StaleFence,
     assert_no_semantic_claims,
 )
+from .ledger_transition_authority import TransitionAuthority, load_unit_state
+from .ledger_transition_policy import attempt_started_command
 from .ledger_verifier import HostVerifierMixin
 from .ledger_views import LedgerViewMixin
-from .orchestration_facts import read_artifact_reference
-from .runtime_binding import RuntimeBindingMixin, compute_portfolio_binding
+from .runtime_binding import RuntimeBindingMixin
 
 _ROLES = {"planner", "translator", "reviewer", "repairer"}
-def _prepare_run_metadata(
-    database_path: Path, metadata: Mapping[str, Any] | None, *, run_id: str,
-    dag_sha256: str, assignments: list[Mapping[str, Any]],
-    units: list[Mapping[str, Any]],
-) -> dict[str, Any]:
-    result = dict(metadata or {})
-    artifacts = result.get("artifacts")
-    reference = artifacts.get("portfolio") if isinstance(artifacts, Mapping) else None
-    if reference is None:
-        return result
-    if not isinstance(reference, Mapping):
-        raise ValueError("portfolio artifact reference is invalid")
-    try:
-        portfolio = json.loads(
-            read_artifact_reference(database_path.parent.parent, reference).decode("utf-8")
-        )
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError("portfolio artifact cannot bind the run") from error
-    if not isinstance(portfolio, Mapping):
-        raise ValueError("portfolio artifact must be an object")
-    binding = compute_portfolio_binding(portfolio)
-    if binding["run_id"] != run_id or binding["dag_sha256"] != dag_sha256:
-        raise ValueError("portfolio run/DAG binding does not match create_run")
-    expected_assignments = sorted(
-        (str(item["unit_id"]), str(item["worker_id"]), str(item["role"]),
-         str(item["out_root"]), int(item["max_attempts"])) for item in assignments
-    )
-    actual_assignments = sorted(
-        (str(item["unit_id"]), str(item["worker_id"]), str(item["role"]),
-         str(item["out_root"]), int(item["max_attempts"]))
-        for item in portfolio["assignments"]
-    )
-    expected_units = sorted(
-        (str(item["unit_id"]), str(item["group_id"]), int(item["wave_index"]),
-         str(item["content_sha256"])) for item in units
-    )
-    actual_units = sorted(
-        (str(item["unit_id"]), str(item["group_id"]), int(item["wave_index"]),
-         str(item["content_sha256"])) for item in portfolio["ledger_units"]
-    )
-    if expected_assignments != actual_assignments or expected_units != actual_units:
-        raise ValueError("portfolio assignment/unit binding does not match create_run")
-    result["runtime_binding"] = binding
-    return result
-
-
 class ProjectLedger(
     HostVerifierMixin,
     ProjectGateMixin,
@@ -118,13 +74,14 @@ class ProjectLedger(
         units: Iterable[Mapping[str, Any]], max_concurrency: int, max_attempts: int,
         metadata: Mapping[str, Any] | None = None,
         assignments: Iterable[Mapping[str, Any]] | None = None,
+        portfolio: Mapping[str, Any] | None = None,
     ) -> None:
         if max_concurrency < 1 or max_attempts < 1:
             raise ValueError("run concurrency and attempt limits must be positive")
         rows, assigned = list(units), list(assignments or ())
-        bound_metadata = _prepare_run_metadata(
+        bound_metadata = prepare_run_metadata(
             self.path, metadata, run_id=run_id, dag_sha256=dag_sha256,
-            assignments=assigned, units=rows,
+            assignments=assigned, units=rows, portfolio_payload=portfolio,
         )
         now = _now_text()
         with self.connect() as connection, atomic(connection):
@@ -158,20 +115,19 @@ class ProjectLedger(
         units = list(kwargs["units"])
         assignments_supplied = "assignments" in kwargs
         assignments = list(kwargs.get("assignments") or ())
-        metadata = _prepare_run_metadata(
-            self.path, kwargs.get("metadata"), run_id=str(kwargs["run_id"]),
-            dag_sha256=str(kwargs["dag_sha256"]), assignments=assignments,
-            units=units,
-        )
         payload = {
             **kwargs, "units": units, "assignments": assignments,
-            "metadata": metadata,
         }
         try:
             self.create_run(**payload)
             return "created"
         except sqlite3.IntegrityError:
             run_id = str(kwargs["run_id"])
+            metadata = prepare_run_metadata(
+                self.path, kwargs.get("metadata"), run_id=run_id,
+                dag_sha256=str(kwargs["dag_sha256"]), assignments=assignments,
+                units=units, portfolio_payload=kwargs.get("portfolio"),
+            )
             with self.connect() as connection:
                 run = connection.execute(
                     """select project_key,source_commit,dag_sha256,max_concurrency,max_attempts,
@@ -196,11 +152,14 @@ class ProjectLedger(
             actual_immutable = tuple(run)[:5] if run is not None else None
             actual_metadata = json.loads(run["metadata_json"]) if run is not None else {}
             expected_binding = metadata.get("runtime_binding")
+            expected_contract = metadata.get("migration_contract")
             if (run is None or actual_immutable != immutable or [tuple(row) for row in actual] != expected
                     or (assignments_supplied and [tuple(row) for row in actual_assignments] != expected_assignments)):
                 raise LedgerError("run_id already exists with different immutable inputs")
             if expected_binding is not None and actual_metadata.get("runtime_binding") != expected_binding:
                 raise LedgerError("run_id already exists with a different runtime binding")
+            if expected_contract is not None and actual_metadata.get("migration_contract") != expected_contract:
+                raise LedgerError("run_id already exists with a different migration contract")
             return "resumed"
 
     @staticmethod
@@ -239,25 +198,23 @@ class ProjectLedger(
             if ordinal > int(assignment["max_attempts"]):
                 raise LedgerError(f"attempt limit reached for {run_id}/{unit_id}/{worker_id}")
             attempt_id = f"{run_id}:{unit_id}:{role}:{ordinal}"
-            previous = connection.execute(
-                "select status from migration_units where run_id=? and unit_id=?", (run_id, unit_id),
-            ).fetchone()[0]
+            expected = load_unit_state(connection, run_id, unit_id)
+            input_digest = _require_sha256(input_sha256, "input_sha256")
             now = _now_text()
             connection.execute(
                 """insert into attempts(attempt_id,run_id,unit_id,role,ordinal,worker_id,status,fencing_token,
                    input_sha256,output_sha256,error_key,started_at,finished_at,metadata_json)
                    values (?,?,?,?,?,?,'running',?,?,null,null,?,null,?)""",
                 (attempt_id, run_id, unit_id, role, ordinal, worker_id, fencing_token,
-                 _require_sha256(input_sha256, "input_sha256"), now, _json(metadata)),
+                 input_digest, now, _json(metadata)),
             )
-            connection.execute(
-                """update migration_units set status='running',resumable_status='in_progress',updated_at=?
-                   where run_id=? and unit_id=?""", (now, run_id, unit_id),
-            )
-            connection.execute(
-                """insert into transitions(run_id,unit_id,from_status,to_status,reason,attempt_id,
-                   fencing_token,created_at) values (?,?,?,'running','attempt_started',?,?,?)""",
-                (run_id, unit_id, previous, attempt_id, fencing_token, now),
+            TransitionAuthority(connection).apply(
+                attempt_started_command(
+                    run_id=run_id, unit_id=unit_id, attempt_id=attempt_id,
+                    fencing_token=fencing_token, expected=expected,
+                    input_sha256=input_digest,
+                ),
+                created_at=now,
             )
             return attempt_id
 

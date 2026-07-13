@@ -7,6 +7,8 @@ from typing import Any
 from .artifacts import content_sha256
 from .ledger_schema import _json, _now_text, _require_repo_path, _require_sha256, atomic
 from .ledger_security import LedgerError
+from .ledger_transition_authority import TransitionAuthority, load_unit_state
+from .ledger_transition_policy import prelaunch_cancel_command, worker_command_started_command
 
 
 REQUIRED_ASSIGNMENT_FIELDS = {
@@ -198,16 +200,17 @@ class RuntimeBindingMixin:
             metadata = _object_json(row[0], "attempt metadata")
             if metadata.get("command_started") is True:
                 raise LedgerError("worker command was already started for this attempt")
+            timestamp = _now_text()
             metadata["command_started"] = True
-            metadata["command_started_at"] = _now_text()
+            metadata["command_started_at"] = timestamp
             connection.execute(
                 "update attempts set metadata_json=? where attempt_id=?", (_json(metadata), attempt_id),
             )
-            connection.execute(
-                """insert into transitions(run_id,unit_id,from_status,to_status,reason,attempt_id,
-                   fencing_token,created_at) values (?,?,'running','running','worker_command_started',?,?,?)""",
-                (attempt["run_id"], attempt["unit_id"], attempt_id, fencing_token, _now_text()),
-            )
+            run_id, unit_id = str(attempt["run_id"]), str(attempt["unit_id"])
+            command = worker_command_started_command(
+                run_id=run_id, unit_id=unit_id, attempt_id=attempt_id, fencing_token=fencing_token,
+                expected=load_unit_state(connection, run_id, unit_id), metadata=metadata)
+            TransitionAuthority(connection).apply(command, created_at=timestamp)
 
     def cancel_prelaunch_attempt(
         self, *, attempt_id: str, owner: str, fencing_token: int,
@@ -223,17 +226,18 @@ class RuntimeBindingMixin:
                 "select 1 from artifacts where attempt_id=?", (attempt_id,),
             ).fetchone():
                 raise LedgerError("prelaunch attempt unexpectedly owns an artifact")
+            run_id, unit_id = str(attempt["run_id"]), str(attempt["unit_id"])
+            expected = load_unit_state(connection, run_id, unit_id)
+            command = prelaunch_cancel_command(
+                run_id=run_id, unit_id=unit_id, attempt_id=attempt_id,
+                fencing_token=fencing_token, expected=expected, metadata=metadata,
+            )
             connection.execute("delete from transitions where attempt_id=?", (attempt_id,))
             connection.execute("delete from attempts where attempt_id=?", (attempt_id,))
-            connection.execute(
-                """update migration_units set status=?,resumable_status=?,updated_at=?
-                   where run_id=? and unit_id=?""",
-                (metadata["previous_status"], metadata["previous_resumable_status"], _now_text(),
-                 attempt["run_id"], attempt["unit_id"]),
-            )
+            TransitionAuthority(connection).apply(command)
             connection.execute(
                 "update leases set status='released',heartbeat_at=? where run_id=? and unit_id=?",
-                (int(__import__("time").time()), attempt["run_id"], attempt["unit_id"]),
+                (int(__import__("time").time()), run_id, unit_id),
             )
 
 def _verify_ledger_rows(
@@ -293,6 +297,4 @@ def _sha(value: Mapping[str, Any], key: str) -> str:
     return _require_sha256(_text(value, key), key)
 
 
-__all__ = [
-    "RuntimeBindingMixin", "compute_portfolio_binding",
-]
+__all__ = ["RuntimeBindingMixin", "compute_portfolio_binding"]

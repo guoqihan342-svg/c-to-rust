@@ -11,7 +11,11 @@ from .gate_authority import (
     require_portable_id,
     validate_project_summary,
 )
-from .gate_candidate_sets import assert_current_candidate_set, bind_current_candidate_set
+from .gate_candidate_sets import (
+    assert_current_candidate_set,
+    bind_current_candidate_set,
+    bind_verification_candidate_set,
+)
 from .gate_evidence import (
     read_content_addressed_json,
     require_content_addressed_reference,
@@ -19,12 +23,29 @@ from .gate_evidence import (
 )
 from .ledger_schema import _json, _now_text, _require_repo_path, _require_sha256, atomic
 from .ledger_security import LedgerError
+from .ledger_transition_authority import TransitionAuthority
+from .ledger_transition_policy import (
+    RunTransitionCommand, TransitionCommand, UnitState,
+    stable_transition_command_id,
+)
+from .project_final_barrier import require_project_final_candidate_passes
+from .project_completion_invariants import require_quiescent_last_good_run
 
 
 class ProjectGateMixin:
     def bind_current_candidate_set(self, *, run_id: str) -> str:
         with self.connect() as connection, atomic(connection):
-            return bind_current_candidate_set(connection, run_id)
+            return bind_current_candidate_set(
+                connection, run_id, database_path=self.path,
+            )
+
+    def bind_verification_candidate_set(
+        self, *, run_id: str, scope: str = "wave-provisional",
+    ) -> str:
+        with self.connect() as connection, atomic(connection):
+            return bind_verification_candidate_set(
+                connection, run_id, database_path=self.path, scope=scope,
+            )
 
     def record_project_gate(
         self, *, record_id: str, run_id: str, gate_kind: str, status: str,
@@ -47,7 +68,9 @@ class ProjectGateMixin:
             ).fetchone()
             if not requirement:
                 raise LedgerError("project gate is not registered for this run")
-            assert_current_candidate_set(connection, run_id, candidate_set)
+            assert_current_candidate_set(
+                connection, run_id, candidate_set, database_path=self.path,
+            )
             payload = read_content_addressed_json(self.path, evidence_path, evidence_sha256)
             validate_project_summary(
                 payload,
@@ -88,7 +111,9 @@ class ProjectGateMixin:
     ) -> list[dict[str, Any]]:
         candidate_set = _require_sha256(candidate_set_sha256, "candidate_set_sha256")
         with self.connect() as connection, atomic(connection, immediate=False):
-            assert_current_candidate_set(connection, run_id, candidate_set)
+            assert_current_candidate_set(
+                connection, run_id, candidate_set, database_path=self.path,
+            )
             records = _require_latest_project_passes(
                 self, connection, run_id, candidate_set, include_final=False
             )
@@ -106,12 +131,13 @@ class ProjectGateMixin:
     ) -> None:
         candidate_set = _require_sha256(candidate_set_sha256, "candidate_set_sha256")
         with self.connect() as connection, atomic(connection):
-            run = connection.execute(
-                "select status from project_runs where run_id=?", (run_id,)
-            ).fetchone()
-            if not run or run["status"] != "active":
-                raise LedgerError("project completion requires an active run")
-            assert_current_candidate_set(connection, run_id, candidate_set)
+            require_quiescent_last_good_run(connection, run_id)
+            assert_current_candidate_set(
+                connection, run_id, candidate_set, database_path=self.path,
+            )
+            require_project_final_candidate_passes(
+                self, connection, run_id, candidate_set,
+            )
             records = _require_latest_project_passes(
                 self, connection, run_id, candidate_set, include_final=True
             )
@@ -120,23 +146,38 @@ class ProjectGateMixin:
                 raise LedgerError("project completion requires independent host authorities")
             now = _now_text()
             units = connection.execute(
-                "select unit_id,status from migration_units where run_id=?", (run_id,)
+                """select unit_id,status,resumable_status from migration_units
+                   where run_id=? order by unit_id""", (run_id,)
             ).fetchall()
+            authority = TransitionAuthority(connection)
             for unit in units:
-                connection.execute(
-                    """insert into transitions(run_id,unit_id,from_status,to_status,reason,
-                       attempt_id,fencing_token,created_at)
-                       values (?,?,?,'completed','project_gate_bundle_passed',null,null,?)""",
-                    (run_id, unit["unit_id"], unit["status"], now),
+                unit_id = str(unit["unit_id"])
+                authority.apply(
+                    TransitionCommand(
+                        command_id=stable_transition_command_id(
+                            "project-unit-completed", run_id, unit_id, candidate_set,
+                        ),
+                        run_id=run_id, unit_id=unit_id,
+                        expected=UnitState(
+                            str(unit["status"]), str(unit["resumable_status"]),
+                        ),
+                        target=UnitState("completed", "terminal"),
+                        reason="project_gate_bundle_passed",
+                        evidence_sha256=candidate_set,
+                    ),
+                    created_at=now,
                 )
-            connection.execute(
-                """update migration_units set status='completed',resumable_status='terminal',
-                   updated_at=? where run_id=?""",
-                (now, run_id),
-            )
-            connection.execute(
-                "update project_runs set status='completed',updated_at=? where run_id=?",
-                (now, run_id),
+            authority.apply_run(
+                RunTransitionCommand(
+                    command_id=stable_transition_command_id(
+                        "project-run-completed", run_id, candidate_set,
+                    ),
+                    run_id=run_id, anchor_unit_id=str(units[0]["unit_id"]),
+                    expected_status="active", target_status="completed",
+                    reason="project_gate_bundle_passed",
+                    evidence_sha256=candidate_set,
+                ),
+                created_at=now,
             )
 
 

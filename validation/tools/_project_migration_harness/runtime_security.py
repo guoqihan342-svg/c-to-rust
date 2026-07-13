@@ -37,9 +37,14 @@ FACT_PAYLOAD_KEYS = {
         "compiler", "language", "redacted_define_count", "unit_id",
         "working_directory",
     },
+    "context_retrieval_summary": {
+        "omitted_fact_count", "scc_id", "selected_fact_count",
+        "selection_receipt_sha256", "selection_status", "visibility",
+    },
     "external_call": {"caller_node_id", "candidate_node_ids", "status", "symbol"},
     "function": {"linkage", "node_id", "node_kind", "symbol", "unit_id"},
     "function_source": {"chunk_count", "chunk_index", "content", "node_id"},
+    "function_signature": {"chunk_count", "chunk_index", "content", "node_id"},
     "global": {"global_id", "linkage", "symbol", "unit_id"},
     "global_source": {"chunk_count", "chunk_index", "content", "owner_id"},
     "global_source_binding": {"owner_id", "source"},
@@ -50,20 +55,28 @@ FACT_PAYLOAD_KEYS = {
         "body", "byte_offset", "from_path", "kind", "path", "sha256",
         "status", "style", "target", "unit_id",
     },
-    "parser_boundary": {"byte_offset", "kind", "unit_id"},
+    "parser_boundary": {
+        "byte_offset", "evidence_set_sha256", "kind", "occurrence_count", "unit_id",
+    },
     "resolved_call": {"callee_node_id", "caller_node_id", "symbol"},
     "scc_dependency": {"dependency_scc_id", "scc_id"},
     "source_binding": {"node_id", "source"},
     "top_level_source": {"chunk_count", "chunk_index", "content", "owner_id"},
     "top_level_source_binding": {"owner_id", "source"},
     "translation_unit_coverage": {
-        "function_spans", "source_size_bytes", "status",
-        "top_level_projection_sha256", "uncovered_ranges", "unit_id",
+        "function_span_count", "source_size_bytes", "status",
+        "top_level_projection_sha256", "uncovered_range_count", "unit_id",
+    },
+    "translation_unit_function_spans": {
+        "chunk_count", "chunk_index", "spans", "unit_id",
+    },
+    "translation_unit_uncovered_ranges": {
+        "chunk_count", "chunk_index", "ranges", "unit_id",
     },
 }
 FACT_OPTIONAL_KEYS = {
     "include_binding": {"path", "style"},
-    "parser_boundary": {"byte_offset"},
+    "parser_boundary": {"byte_offset", "evidence_set_sha256", "occurrence_count"},
 }
 
 

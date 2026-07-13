@@ -8,6 +8,7 @@ from typing import Any
 
 from .artifacts import content_sha256
 from .build_facts import is_linklike
+from .candidate_strategy import select_candidate_strategy
 from .gate_authority import (
     candidate_authority, candidate_kind, validate_candidate_verdict,
 )
@@ -26,6 +27,16 @@ def build_gate_facts(
     rows = ledger.completed_orchestration_rows(run_id)
     artifacts = rows["artifacts"]
     verifications = rows["verifications"]
+    with ledger.connect() as connection:
+        attempt_counts = {
+            str(row["unit_id"]): int(row["attempt_count"])
+            for row in connection.execute(
+                """select unit_id,count(*) as attempt_count from attempts
+                   where run_id=? and role in ('translator','repairer')
+                   group by unit_id""",
+                (run_id,),
+            ).fetchall()
+        }
     by_unit: dict[str, list[dict[str, Any]]] = {}
     by_id: dict[tuple[str, str], dict[str, Any]] = {}
     for artifact in artifacts:
@@ -34,6 +45,7 @@ def build_gate_facts(
     result: dict[str, dict[str, Any]] = {}
     for unit_id, state in states.items():
         facts: dict[str, Any] = {}
+        failed_family: str | None = None
         unit_artifacts = by_unit.get(unit_id, [])
         planners = [item for item in unit_artifacts if item["kind"] == "planner-decision"]
         if planners:
@@ -77,6 +89,7 @@ def build_gate_facts(
                 evidence = _verification_ref(harness_root, record, candidate)
                 facts["failed_gate_result"] = evidence
                 facts["failed_gate_result_sha256"] = evidence["sha256"]
+                failed_family = str(record["gate_family"])
         reviews = [item for item in unit_artifacts if item["kind"] == "structural-review"]
         candidate_sha = facts.get("candidate_artifact_sha256")
         for review in reversed(reviews):
@@ -91,6 +104,14 @@ def build_gate_facts(
                 raise ValueError("last-good artifact is absent from the ledger")
             bound = _artifact_facts("last_good_artifact", harness_root, last_good)
             facts.update(bound)
+        facts["candidate_strategy"] = select_candidate_strategy(
+            gate_family=failed_family,
+            attempt_count=attempt_counts.get(unit_id, 0),
+            failure_fingerprint_sha256=(
+                str(facts["failed_gate_result_sha256"])
+                if failed_family is not None else None
+            ),
+        )
         result[unit_id] = facts
     return result
 
@@ -164,6 +185,10 @@ def project_model_safe_gate_evidence(value: Any) -> dict[str, Any]:
         candidate_artifact_id=str(value.get("candidate_artifact_id")),
         candidate_sha256=str(value.get("candidate_sha256")),
         gate_family=gate_family,
+        candidate_set_sha256=(
+            str(value.get("candidate_set_sha256"))
+            if value.get("candidate_set_sha256") is not None else None
+        ),
         status=str(value.get("status")),
         verifier_id=candidate_authority(gate_family),
         kind=candidate_kind(gate_family),

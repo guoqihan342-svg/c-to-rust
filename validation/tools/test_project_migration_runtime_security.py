@@ -91,6 +91,31 @@ class ProjectMigrationRuntimeSecurityTests(RuntimeHarnessCase):
         with ledger.connect() as connection:
             self.assertEqual(0, connection.execute("select count(*) from attempts").fetchone()[0])
 
+    def test_context_receipt_tamper_is_blocked_before_model_launch(self) -> None:
+        plan = self.plan()
+        ledger = self.ledger()
+        launch = self.dispatch(plan, ledger)["launches"][0]
+        request = self.load(launch["request"])
+        receipt = self.harness / request["context_materialization"]["path"]
+        receipt.write_text("{}\n", encoding="utf-8")
+        preflight = self.preflight(plan["run_id"])
+
+        with mock.patch(
+            "validation.tools._project_migration_harness.controller_runtime."
+            "subprocess_runner_with_environment",
+        ) as runner:
+            result = run_and_ingest_opencode_worker(
+                launch["request"], preflight,
+                ledger=ledger, harness_root=self.harness,
+                logical_model=LOGICAL_MODEL, resolved_model=RESOLVED_MODEL,
+            )
+
+        self.assertEqual("prelaunch-blocked", result["status"])
+        self.assertFalse(result["attempt_consumed"])
+        runner.assert_not_called()
+        with ledger.connect() as connection:
+            self.assertEqual(0, connection.execute("select count(*) from attempts").fetchone()[0])
+
     def test_model_candidate_metadata_claims_are_rejected(self) -> None:
         plan = self.plan()
         ledger = self.ledger()

@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 from validation.tools._project_migration_harness.orchestrator import plan_project
+from validation.tools._project_migration_harness.ledger_schema import SCHEMA_VERSION
 
 
 class ProjectMigrationOrchestratorTests(unittest.TestCase):
@@ -55,7 +56,7 @@ class ProjectMigrationOrchestratorTests(unittest.TestCase):
 
         self.assertEqual("planned", first["status"])
         self.assertEqual("bound", first["ledger"]["status"])
-        self.assertEqual(2, first["ledger"]["schema_version"])
+        self.assertEqual(SCHEMA_VERSION, first["ledger"]["schema_version"])
         self.assertEqual("bound", second["ledger"]["status"])
         self.assertEqual(first["run_id"], second["run_id"])
         self.assertEqual(first["plan_sha256"], second["plan_sha256"])
@@ -66,6 +67,12 @@ class ProjectMigrationOrchestratorTests(unittest.TestCase):
             for assignment in first["portfolio"]["assignments"]
         ))
         self.assertFalse(first["execution"]["model_launched"])
+        self.assertFalse((
+            self.harness / "target/run-one/context/pages"
+        ).exists())
+        self.assertFalse((
+            self.harness / "target/run-one/harness/assignments"
+        ).exists())
         self.assertTrue((
             self.harness / "target/run-one/project-migration-plan.json"
         ).is_file())

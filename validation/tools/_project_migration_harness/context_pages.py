@@ -11,12 +11,13 @@ from .context_contracts import (
     objects as _objects,
     required_string as _required_string,
     safe_blockers as _safe_blockers,
-    source_ref as _source_ref,
-    split_text as _split_text,
     string_list as _string_list,
 )
 from .migration_graph import build_migration_graph
 from .context_source_facts import global_context_refs, unit_context_refs
+from .context_retrieval import partition_context_refs
+from .context_selection_index import ContextSelectionIndex
+from .context_node_facts import node_context_refs
 
 
 DEFAULT_PAGE_BYTES = 16_384
@@ -36,14 +37,15 @@ def build_context_pages(
     if dict(migration_graph) != build_migration_graph(c_index):
         raise ValueError("migration_graph does not match the supplied C index")
     effective_limit = min(byte_limit, token_limit)
+    selection_limit = min(65_536, effective_limit * 16)
     nodes = _objects(c_index.get("nodes"), "c_index.nodes")
     globals_ = _objects(c_index.get("globals", []), "c_index.globals")
     unit_contexts = _objects(c_index.get("unit_contexts", []), "c_index.unit_contexts")
+    header_facts = _mapping(c_index.get("header_facts", {}), "c_index.header_facts")
     graph_nodes = _objects(migration_graph.get("nodes"), "migration_graph.nodes")
     sccs = _objects(migration_graph.get("sccs"), "migration_graph.sccs")
     waves = _objects(migration_graph.get("waves"), "migration_graph.waves")
     facts: dict[str, dict[str, Any]] = {}
-    node_refs: dict[str, list[str]] = {}
     global_refs: dict[str, list[str]] = {}
     parser = _mapping(c_index.get("parser", {}), "c_index.parser")
     parser_blockers = _safe_blockers(parser.get("blockers", []))
@@ -53,45 +55,10 @@ def build_context_pages(
 
     chunk_limit = max(1, (effective_limit - 480) // 6)
     add_fact = lambda kind, payload: _add_fact(facts, kind, payload)
-    unit_refs = unit_context_refs(unit_contexts, chunk_limit, add_fact)
-    node_units: dict[str, str] = {}
-    for node in sorted(nodes, key=lambda item: str(item.get("node_id"))):
-        node_id = _required_string(node, "node_id")
-        source = _mapping(node.get("source"), f"node {node_id} source")
-        content = source.get("content")
-        if not isinstance(content, str):
-            raise ValueError(f"node {node_id} source.content must be a string")
-        unit_id = _required_string(node, "unit_id")
-        if unit_id not in unit_refs:
-            raise ValueError(f"node {node_id} has no translation-unit context")
-        node_units[node_id] = unit_id
-        source_ref = _source_ref(source, include_content=False)
-        refs = [_add_fact(facts, "function", {
-            "node_id": node_id,
-            "unit_id": unit_id,
-            "node_kind": str(node.get("node_kind", "function")),
-            "symbol": _required_string(node, "symbol"),
-            "linkage": _required_string(node, "linkage"),
-        })]
-        refs.append(_add_fact(facts, "source_binding", {
-            "node_id": node_id,
-            "source": source_ref,
-        }))
-        refs.extend(
-            _add_fact(facts, "parser_boundary", blocker)
-            for blocker in blockers_by_unit.get(unit_id, [])
-        )
-        chunks = _split_text(content, chunk_limit)
-        for index, chunk in enumerate(chunks):
-            refs.append(_add_fact(facts, "function_source", {
-                "node_id": node_id,
-                "chunk_index": index,
-                "chunk_count": len(chunks),
-                "content": chunk,
-            }))
-        if node_id in node_refs:
-            raise ValueError("c_index.nodes must have unique node_id values")
-        node_refs[node_id] = refs
+    unit_refs = unit_context_refs(unit_contexts, header_facts, chunk_limit, add_fact)
+    node_refs, interface_refs, node_units, graph_by_node = node_context_refs(
+        nodes, graph_nodes, blockers_by_unit, set(unit_refs), chunk_limit, add_fact
+    )
 
     for item in sorted(globals_, key=lambda value: str(value.get("global_id"))):
         global_id = _required_string(item, "global_id")
@@ -100,35 +67,6 @@ def build_context_pages(
         global_refs[global_id] = global_context_refs(
             item, chunk_limit, add_fact
         )
-
-    graph_by_node: dict[str, Mapping[str, Any]] = {}
-    for binding in graph_nodes:
-        node_id = _required_string(binding, "node_id")
-        if node_id not in node_refs or node_id in graph_by_node:
-            raise ValueError("migration_graph.nodes do not match c_index.nodes")
-        graph_by_node[node_id] = binding
-        for item in _objects(binding.get("resolved_calls", []), "resolved_calls"):
-            node_refs[node_id].append(_add_fact(facts, "resolved_call", {
-                "caller_node_id": node_id,
-                "callee_node_id": _required_string(item, "callee_node_id"),
-                "symbol": _required_string(item, "symbol"),
-            }))
-        for item in _objects(binding.get("external_calls", []), "external_calls"):
-            node_refs[node_id].append(_add_fact(facts, "external_call", {
-                "caller_node_id": node_id,
-                "symbol": _required_string(item, "symbol"),
-                "status": _required_string(item, "status"),
-                "candidate_node_ids": _string_list(item.get("candidate_node_ids", [])),
-            }))
-        for item in _objects(binding.get("global_references", []), "global_references"):
-            node_refs[node_id].append(_add_fact(facts, "global_reference", {
-                "node_id": node_id,
-                "symbol": _required_string(item, "symbol"),
-                "status": _required_string(item, "status"),
-                "global_ids": _string_list(item.get("global_ids", [])),
-            }))
-    if set(graph_by_node) != set(node_refs):
-        raise ValueError("migration_graph.nodes do not match c_index.nodes")
 
     scc_by_id: dict[str, Mapping[str, Any]] = {}
     node_ids_by_scc: dict[str, list[str]] = {}
@@ -154,24 +92,50 @@ def build_context_pages(
         raise ValueError("migration_graph waves must partition SCCs")
 
     pages: list[dict[str, Any]] = []
+    retrieval_bindings: list[dict[str, Any]] = []
+    retrieval_sets: dict[str, dict[str, Any]] = {}
+    retrieval_segments: dict[str, dict[str, Any]] = {}
+    selection_identifier_cache: dict[str, frozenset[str]] = {}
+    selection_index = ContextSelectionIndex(facts)
     for scc_id in sorted(scc_by_id, key=lambda item: (wave_by_scc[item], item)):
         scc = scc_by_id[scc_id]
         dependencies = _string_list(scc.get("dependency_scc_ids", []))
         if any(item not in scc_by_id for item in dependencies):
             raise ValueError("SCC dependency references an unknown SCC")
-        context_nodes = node_ids_by_scc[scc_id] + [
+        own_nodes = node_ids_by_scc[scc_id]
+        dependency_nodes = [
             node_id for dependency in dependencies for node_id in node_ids_by_scc[dependency]
         ]
         refs = [_add_fact(facts, "scc_dependency", {"scc_id": scc_id,
                  "dependency_scc_id": dependency}) for dependency in dependencies]
-        for node_id in context_nodes:
+        for node_id in own_nodes:
             refs.extend(node_refs[node_id])
             refs.extend(unit_refs[node_units[node_id]])
             binding = graph_by_node[node_id]
             for item in _objects(binding.get("global_references", []), "global_references"):
                 for value in _string_list(item.get("global_ids", [])):
                     refs.extend(global_refs.get(value, []))
+        for node_id in dependency_nodes:
+            refs.extend(interface_refs[node_id])
         refs = list(dict.fromkeys(refs))
+        refs, retrieval_binding, retrieval_set, segments = partition_context_refs(
+            scc_id, refs, facts, add_fact,
+            max_selected_bytes=selection_limit,
+            identifier_cache=selection_identifier_cache,
+            selection_index=selection_index,
+        )
+        if retrieval_binding is not None and retrieval_set is not None:
+            set_sha256 = retrieval_binding["retrieval_set_sha256"]
+            existing = retrieval_sets.setdefault(set_sha256, retrieval_set)
+            if existing != retrieval_set:
+                raise ValueError("context retrieval set identity collision")
+            for segment_sha256, segment in segments.items():
+                existing_segment = retrieval_segments.setdefault(
+                    segment_sha256, segment
+                )
+                if existing_segment != segment:
+                    raise ValueError("context retrieval segment identity collision")
+            retrieval_bindings.append(retrieval_binding)
         meta = {
             "wave_index": wave_by_scc[scc_id],
             "scc_id": scc_id,
@@ -187,13 +151,22 @@ def build_context_pages(
         "schema_version": 1,
         "status": "ready_with_boundaries" if blockers else "ready",
         "budgets": {"max_page_bytes": byte_limit, "max_page_tokens": token_limit,
+                    "max_selected_bytes": selection_limit,
                     "token_estimator": "utf8_bytes_upper_bound"},
         "shared_facts": {key: facts[key] for key in sorted(facts)},
         "pages": pages,
+        "retrieval_bindings": retrieval_bindings,
+        "retrieval_segments": {
+            key: retrieval_segments[key] for key in sorted(retrieval_segments)
+        },
+        "retrieval_sets": {key: retrieval_sets[key] for key in sorted(retrieval_sets)},
         "parser_limitations": parser_limitations,
         "blockers": blockers,
-        "model_input_policy": {"source_storage": "shared_fact_store_only",
-                               "oracle_values": "withheld", "expected_actual": "withheld"},
+        "model_input_policy": {
+            "source_storage": "shared_fact_store_only",
+            "visibility": "bounded_seed_with_host_retrieval_index",
+            "oracle_values": "withheld", "expected_actual": "withheld",
+        },
         "claim_boundary": {"semantic_gate": False, "translation_coverage_numerator": 0},
     }
 

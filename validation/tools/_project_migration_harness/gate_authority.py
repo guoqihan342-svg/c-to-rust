@@ -4,6 +4,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from .gate_evidence import require_content_addressed_reference
 from .ledger_security import LedgerError
 
 
@@ -30,7 +31,8 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _CANDIDATE_KEYS = {
     "schema_version", "artifact_kind", "authority_id", "run_id", "unit_id",
     "candidate_artifact_id", "candidate_sha256", "gate_family", "status",
-    "diagnostics", "expected_actual_withheld", "semantic_gate",
+    "candidate_set_sha256", "source_evidence", "diagnostics",
+    "expected_actual_withheld", "semantic_gate",
 }
 _PROJECT_KEYS = {
     "schema_version", "artifact_kind", "authority_id", "run_id", "gate_kind",
@@ -83,6 +85,8 @@ def candidate_verdict_payload(
     *, run_id: str, unit_id: str, candidate_artifact_id: str,
     candidate_sha256: str, gate_family: str, status: str,
     diagnostics: Sequence[Mapping[str, Any]],
+    candidate_set_sha256: str | None = None,
+    source_evidence: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     if status not in {"passed", "failed"}:
         raise ValueError("candidate verdict status is invalid")
@@ -90,16 +94,23 @@ def candidate_verdict_payload(
         raise ValueError("candidate_sha256 is invalid")
     if len(diagnostics) > 64:
         raise ValueError("candidate verdict diagnostics exceed the bound")
+    if candidate_set_sha256 is not None and _SHA256.fullmatch(candidate_set_sha256) is None:
+        raise ValueError("candidate_set_sha256 is invalid")
+    references = _candidate_references(source_evidence)
+    if status == "passed" and (candidate_set_sha256 is None or not references):
+        raise ValueError("candidate pass requires a verification candidate set and source evidence")
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_kind": "candidate-gate-verdict",
         "authority_id": candidate_authority(gate_family),
         "run_id": run_id,
         "unit_id": unit_id,
         "candidate_artifact_id": candidate_artifact_id,
         "candidate_sha256": candidate_sha256,
+        "candidate_set_sha256": candidate_set_sha256,
         "gate_family": gate_family,
         "status": status,
+        "source_evidence": references,
         "diagnostics": [dict(item) for item in diagnostics],
         "expected_actual_withheld": True,
         "semantic_gate": False,
@@ -109,7 +120,7 @@ def candidate_verdict_payload(
 def validate_candidate_verdict(
     payload: Mapping[str, Any], *, run_id: str, unit_id: str,
     candidate_artifact_id: str, candidate_sha256: str, gate_family: str,
-    status: str, verifier_id: str, kind: str,
+    candidate_set_sha256: str | None, status: str, verifier_id: str, kind: str,
 ) -> None:
     _require_exact_keys(payload, _CANDIDATE_KEYS, "candidate gate verdict")
     expected = candidate_verdict_payload(
@@ -120,6 +131,8 @@ def validate_candidate_verdict(
         gate_family=gate_family,
         status=status,
         diagnostics=_diagnostics(payload.get("diagnostics")),
+        candidate_set_sha256=candidate_set_sha256,
+        source_evidence=_candidate_references(payload.get("source_evidence")),
     )
     if dict(payload) != expected:
         raise LedgerError("candidate gate evidence does not match the fixed host schema")
@@ -239,6 +252,22 @@ def _references(value: Any) -> list[Mapping[str, Any]]:
     if not isinstance(value, list) or len(value) > 32 or not all(isinstance(item, Mapping) for item in value):
         raise LedgerError("project gate source evidence is invalid")
     return list(value)
+
+
+def _candidate_references(value: Any) -> list[dict[str, Any]]:
+    if (
+        isinstance(value, (str, bytes))
+        or not isinstance(value, Sequence)
+        or len(value) > 16
+    ):
+        raise LedgerError("candidate gate source evidence is invalid")
+    references = []
+    for item in value:
+        if not isinstance(item, Mapping):
+            raise LedgerError("candidate gate source evidence is invalid")
+        require_content_addressed_reference(item)
+        references.append(dict(item))
+    return references
 
 
 def _codes(value: Any) -> list[str]:

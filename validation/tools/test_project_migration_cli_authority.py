@@ -12,9 +12,32 @@ from validation.tools._project_migration_harness.project_migration_cli import (
     output_binding,
     parse_args,
 )
+from validation.tools._project_migration_harness.ledger_schema import SCHEMA_VERSION
+from validation.tools._project_migration_harness.project_cli_runtime import (
+    display_result,
+)
 
 
 class ProjectMigrationCliAuthorityTests(unittest.TestCase):
+    def test_plan_display_uses_bound_portfolio_summary(self) -> None:
+        full = {
+            "status": "planned",
+            "artifacts": {"portfolio": {"path": "plan/portfolio.json"}},
+            "portfolio": {
+                "schema_version": 1, "status": "planned", "run_id": "run",
+                "dag_sha256": "a" * 64, "plan_sha256": "b" * 64,
+                "assignments": [{"large": "payload"}],
+                "ledger_units": [{"unit_id": "unit"}], "blocked_groups": [],
+            },
+        }
+
+        displayed = display_result("plan", full)
+
+        self.assertEqual(1, displayed["portfolio"]["assignment_count"])
+        self.assertEqual(1, displayed["portfolio"]["unit_count"])
+        self.assertNotIn("assignments", displayed["portfolio"])
+        self.assertEqual(full, display_result("dispatch", full))
+
     def test_candidate_gate_cli_has_no_caller_authority_or_pass_switch(self) -> None:
         base = [
             "record-candidate-gate",
@@ -33,6 +56,45 @@ class ProjectMigrationCliAuthorityTests(unittest.TestCase):
         self.assertFalse(hasattr(parsed, "kind"))
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             parse_args([*base, "--status", "passed"])
+
+    def test_candidate_compile_cli_exposes_only_host_owned_inputs(self) -> None:
+        base = [
+            "verify-candidate-compile",
+            "--db", "target/run/state/project-migration.sqlite3",
+            "--run-id", "run", "--unit-id", "unit",
+            "--candidate-artifact-id", "candidate",
+            "--candidate-root", "target/run",
+            "--quarantine-root", "target/run/quarantine",
+            "--runtime-root", "target/run/runtime",
+            "--out-root", "target/run",
+        ]
+        parsed = parse_args(base)
+        for field in (
+            "status", "verifier_id", "candidate_set_sha256", "cargo_command",
+            "generation_sha256", "sandbox_backend", "manifest",
+        ):
+            self.assertFalse(hasattr(parsed, field))
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            parse_args([*base, "--status", "passed"])
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            parse_args([*base, "--manifest", "target/replacement.json"])
+
+    def test_candidate_final_and_promotion_cli_derive_latest_records(self) -> None:
+        final = parse_args([
+            "verify-candidate-final", "--db", "ledger.sqlite3",
+            "--run-id", "run", "--unit-id", "unit",
+            "--candidate-artifact-id", "candidate", "--out-root", "target/run",
+        ])
+        promote = parse_args([
+            "promote", "--db", "ledger.sqlite3", "--run-id", "run",
+            "--unit-id", "unit", "--candidate-artifact-id", "candidate",
+        ])
+        for parsed in (final, promote):
+            for field in (
+                "status", "verifier_id", "candidate_set_sha256",
+                "verifier_record_id", "gate_record_id", "source_evidence",
+            ):
+                self.assertFalse(hasattr(parsed, field))
 
     def test_project_gate_and_completion_derive_current_candidate_set(self) -> None:
         gate = parse_args([
@@ -154,7 +216,7 @@ def _plan(ledger_path: str) -> dict[str, object]:
         "ledger": {
             "path": ledger_path,
             "resume_policy": "create_or_verify_immutable_inputs",
-            "schema_version": 2,
+            "schema_version": SCHEMA_VERSION,
             "status": "bound",
         },
     }

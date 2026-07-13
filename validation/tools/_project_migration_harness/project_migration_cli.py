@@ -5,6 +5,8 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any, Sequence
 
+from .ledger_schema import SCHEMA_VERSION as LEDGER_SCHEMA_VERSION
+
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -71,8 +73,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     promote.add_argument("--run-id", required=True)
     promote.add_argument("--unit-id", required=True)
     promote.add_argument("--candidate-artifact-id", required=True)
-    promote.add_argument("--verifier-record-id", required=True)
-    promote.add_argument("--gate-record-id", required=True)
 
     integrate = commands.add_parser("integrate")
     integrate.add_argument("--manifest", type=Path, required=True)
@@ -107,6 +107,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     cargo_gate.add_argument("--project-root", type=Path, required=True)
     cargo_gate.add_argument("--runtime-root", type=Path, required=True)
     cargo_gate.add_argument("--timeout-seconds", type=int, default=300)
+
+    candidate_compile = commands.add_parser("verify-candidate-compile")
+    candidate_compile.add_argument("--db", type=Path, required=True)
+    candidate_compile.add_argument("--run-id", required=True)
+    candidate_compile.add_argument("--unit-id", required=True)
+    candidate_compile.add_argument("--candidate-artifact-id", required=True)
+    candidate_compile.add_argument("--candidate-root", type=Path, required=True)
+    candidate_compile.add_argument("--quarantine-root", type=Path, required=True)
+    candidate_compile.add_argument("--runtime-root", type=Path, required=True)
+    candidate_compile.add_argument("--out-root", required=True)
+    candidate_compile.add_argument("--timeout-seconds", type=int, default=300)
+
+    candidate_final = commands.add_parser("verify-candidate-final")
+    candidate_final.add_argument("--db", type=Path, required=True)
+    candidate_final.add_argument("--run-id", required=True)
+    candidate_final.add_argument("--unit-id", required=True)
+    candidate_final.add_argument("--candidate-artifact-id", required=True)
+    candidate_final.add_argument("--out-root", required=True)
 
     final_gate = commands.add_parser("verify-final")
     final_gate.add_argument("--db", type=Path, required=True)
@@ -154,7 +172,7 @@ def output_binding(
         not isinstance(path, str)
         or not isinstance(ledger, dict)
         or set(ledger) != {"path", "resume_policy", "schema_version", "status"}
-        or ledger.get("schema_version") != 2
+        or ledger.get("schema_version") != LEDGER_SCHEMA_VERSION
         or ledger.get("status") != "bound"
         or ledger.get("resume_policy") != "create_or_verify_immutable_inputs"
     ):
