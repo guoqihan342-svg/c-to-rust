@@ -5,6 +5,10 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from .ledger_project_repair_budget import ProjectRepairBudgetAuthority
+from .ledger_project_repair_budget_audit import (
+    assert_project_repair_budget_projection,
+)
 from .ledger_schema import _json, _now_text, atomic
 from .ledger_security import LedgerError, assert_no_secrets
 from .project_interface_contract import validate_coordinator_receipt
@@ -63,6 +67,9 @@ class ProjectRepairRegistry:
             if existing is not None:
                 self._assert_replay(existing, value)
                 self._assert_items(run_id, queue_sha, queue["items"])
+                assert_project_repair_budget_projection(
+                    self.connection, run_id=run_id,
+                )
                 return ProjectRepairRegistration(
                     False, int(existing["receipt_epoch"]), receipt_sha,
                     queue_sha, len(queue["items"]),
@@ -98,21 +105,38 @@ class ProjectRepairRegistry:
                     len(queue["items"]), _json(value), _json(queue), timestamp,
                 ),
             )
+            inherited = ProjectRepairBudgetAuthority(
+                self.connection
+            ).register_receipt(
+                run_id=run_id, receipt_epoch=receipt_epoch,
+                diagnostics=value["diagnostics"], rust_project_ir=rust_project_ir,
+                max_attempts=queue["max_attempts_per_item"],
+            )
             for item in queue["items"]:
+                lineage_id, inherited_count, initial_status = inherited[
+                    item["diagnostic_sha256"]
+                ]
                 self.connection.execute(
                     """insert into project_repair_items(
                        run_id,project_repair_queue_sha256,repair_id,
-                       diagnostic_code,diagnostic_sha256,max_attempts,item_json,
-                       initial_status,status,state_version,attempt_count,
+                       diagnostic_code,diagnostic_sha256,diagnostic_lineage_id,
+                       max_attempts,item_json,
+                       initial_status,status,state_version,
+                       inherited_attempt_count,attempt_count,
                        active_attempt_id,candidate_ir_sha256,updated_at)
-                       values (?,?,?,?,?,?,?,'queued','queued',0,0,null,null,?)""",
+                       values (?,?,?,?,?,?,?,?,?,?,0,?,?,null,null,?)""",
                     (
                         run_id, queue_sha, item["repair_id"],
                         item["diagnostic_code"], item["diagnostic_sha256"],
-                        item["max_attempts"], _json(item), timestamp,
+                        lineage_id, item["max_attempts"], _json(item),
+                        initial_status, initial_status, inherited_count,
+                        inherited_count, timestamp,
                     ),
                 )
             self._assert_items(run_id, queue_sha, queue["items"])
+            assert_project_repair_budget_projection(
+                self.connection, run_id=run_id,
+            )
             return ProjectRepairRegistration(
                 True, receipt_epoch, receipt_sha, queue_sha, len(queue["items"]),
             )
@@ -134,6 +158,9 @@ class ProjectRepairRegistry:
         self._assert_replay(row, value)
         self._assert_items(
             run_id, queue_sha256, value["project_repair_queue"]["items"],
+        )
+        assert_project_repair_budget_projection(
+            self.connection, run_id=run_id,
         )
         return value
 

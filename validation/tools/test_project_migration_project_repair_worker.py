@@ -20,7 +20,7 @@ from validation.tools._project_migration_harness.project_repair_worker_request i
     materialize_project_repair_request,
 )
 from validation.tools.project_migration_project_repair_test_support import (
-    materialized_repair_case,
+    materialized_repair_case, project_repair_test_dispatch_permit,
 )
 
 
@@ -111,6 +111,10 @@ class ProjectRepairWorkerTests(unittest.TestCase):
             base_rust_project_ir=request["base_rust_project_ir"],
             harness_root=self.root, out_root=self.out,
             out_root_rel="target/run",
+            dispatch_permit=project_repair_test_dispatch_permit(
+                self.root, self.out, self.ledger,
+                request["base_rust_project_ir"],
+            ),
         )
         self.assertEqual("attempt-started", retried["status"])
         with self.ledger.connect() as connection:
@@ -188,6 +192,7 @@ class ProjectRepairWorkerTests(unittest.TestCase):
                 base_rust_project_ir=request["base_rust_project_ir"],
                 harness_root=self.root, out_root=self.out,
                 out_root_rel="target/run",
+                dispatch_permit=object(),
             )
 
     def test_project_repair_attempts_are_serialized_per_run(self) -> None:
@@ -202,6 +207,32 @@ class ProjectRepairWorkerTests(unittest.TestCase):
             item for item in receipt["project_repair_queue"]["items"]
             if item["repair_id"] != request["repair_id"]
         )
+        epoch, latest = self.ledger.load_latest_project_interface_receipt(
+            run_id="run",
+        )
+        projection = self.ledger.project_repair_projection(
+            run_id="run", queue_sha256=request["project_repair_queue_sha256"],
+            repair_id=other["repair_id"],
+        )
+        action = {
+            "status": "preflight-required",
+            "stage": "project-repair-preflight-required",
+            "run_id": "run", "receipt_epoch": epoch,
+            "coordinator_receipt_sha256": latest[
+                "coordinator_receipt_sha256"
+            ],
+            "project_repair_queue_sha256": request[
+                "project_repair_queue_sha256"
+            ],
+            "repair_id": other["repair_id"],
+            "item_status": projection.status,
+            "state_version": projection.version,
+            "recovered_attempts": [],
+        }
+        permit = project_repair_test_dispatch_permit(
+            self.root, self.out, self.ledger,
+            request["base_rust_project_ir"], action=action,
+        )
         with self.assertRaisesRegex(LedgerError, "already running"):
             materialize_project_repair_request(
                 ledger=self.ledger, run_id="run",
@@ -210,6 +241,7 @@ class ProjectRepairWorkerTests(unittest.TestCase):
                 base_rust_project_ir=request["base_rust_project_ir"],
                 harness_root=self.root, out_root=self.out,
                 out_root_rel="target/run",
+                dispatch_permit=permit,
             )
 
     def case(

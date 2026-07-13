@@ -3,11 +3,22 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from unittest import mock
 
+from validation.tools._ai_candidate_harness_parts.provider_runtime import ProviderExecution
 from validation.tools._project_migration_harness.artifacts import write_json_artifact
 from validation.tools._project_migration_harness.ledger import ProjectLedger
 from validation.tools._project_migration_harness.project_interface_coordinator import (
     coordinate_project_interfaces,
+)
+from validation.tools._project_migration_harness.project_preflight_runner import (
+    run_project_worker_preflight,
+)
+from validation.tools._project_migration_harness.project_repair_coordinator import (
+    resume_latest_project_repair,
+)
+from validation.tools._project_migration_harness.project_repair_dispatch_permit import (
+    ProjectRepairDispatchPermit, issue_project_repair_dispatch_permit,
 )
 from validation.tools._project_migration_harness.project_repair_worker_request import (
     materialize_project_repair_request,
@@ -171,6 +182,10 @@ def materialized_repair_case(
         repair_id=item["repair_id"], worker_id=worker_id,
         base_rust_project_ir=base_ref, harness_root=root,
         out_root=out_root, out_root_rel=out_root_rel,
+        dispatch_permit=project_repair_test_dispatch_permit(
+            root, out_root, ledger, base_ref, run_id=run_id,
+            out_root_rel=out_root_rel,
+        ),
     )
     request_ref = materialized["request"]
     request = json.loads(
@@ -181,6 +196,45 @@ def materialized_repair_case(
     return request, request_ref, base, duplicate["declaration_id"]
 
 
+def project_repair_test_dispatch_permit(
+    root: Path, out_root: Path, ledger: ProjectLedger,
+    base_rust_project_ir: dict, *, run_id: str = "run",
+    out_root_rel: str = "target/run", action: dict | None = None,
+) -> ProjectRepairDispatchPermit:
+    _ensure_test_agent(root)
+    if action is None:
+        action = resume_latest_project_repair(
+            ledger=ledger, run_id=run_id,
+            base_rust_project_ir=base_rust_project_ir,
+            harness_root=root, out_root=out_root, out_root_rel=out_root_rel,
+        )
+    logical_model = "DeepSeek-V4-Flash"
+    resolved_model = "opencode/deepseek-v4-flash-free"
+    with mock.patch(
+        "validation.tools._project_migration_harness.project_preflight_runner."
+        "subprocess_runner_with_environment",
+        return_value=ProviderExecution(0, f"{resolved_model}\n", ""),
+    ):
+        preflight = run_project_worker_preflight(
+            harness_root=root, out_root_rel="target/preflight", run_id=run_id,
+            logical_model=logical_model, resolved_model=resolved_model,
+        )
+    return issue_project_repair_dispatch_permit(
+        action, preflight["report"], harness_root=root, run_id=run_id,
+        logical_model=logical_model, resolved_model=resolved_model,
+    )
+
+
+def _ensure_test_agent(root: Path) -> None:
+    target = root / ".opencode/agents/c2rust-candidate.md"
+    if target.is_file():
+        return
+    source = Path(__file__).resolve().parents[2] / ".opencode/agents/c2rust-candidate.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(source.read_bytes())
+
+
 __all__ = [
-    "coordinated_case", "evidence", "materialized_repair_case", "sha",
+    "coordinated_case", "evidence", "materialized_repair_case",
+    "project_repair_test_dispatch_permit", "sha",
 ]

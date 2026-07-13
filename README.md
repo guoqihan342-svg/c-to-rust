@@ -73,7 +73,9 @@ AI candidate manifest v9 的 `prompt_scope` 由实际 ContextPack 计算，并�
 
 Cargo generation 现在强制经过 canonical RustProjectIR。wave-provisional 会生成“当前候选 + last-good 依赖”的内容寻址子 DAG，并回指不可变完整 DAG；project-final 必须覆盖全部迁移单元。host 从当前 Rust source 复算 public/required/unsafe/FFI facts，重开 BuildIR、DAG 和每个 candidate source，再由唯一 interface coordinator 检查 module parent/cycle/orphan、跨单元 API/type/global/FFI/feature/cfg/init 冲突。只有 `candidate-ready` receipt 才能生成 Cargo；generation 内嵌 IR，并绑定 IR/interface/domain/coordinator SHA，integration verifier 会从原 artifact root 重建并逐字节比较。生产模块已删除 descriptor-only 写入口和直接写 generation 的 `integrate` CLI；只有绑定权威 ledger/run contract 的 `integrate-verified` 可以发布 full-project generation。
 
-这一层尚未完成全部 A19d3：RustProjectIR 和 generation manifest 会固定写入 `interface_completeness.status=partial`，自动派生 signature 仍明确标为 unresolved；候选 cohort 和 full-project candidate generation 可继续用于隔离检查，但 CompletionCoordinator 会阻止它进入 project-final gate 和 completed receipt。当前权威生成只支持 flat library modules；完整 shared-type layout、ownership、init/destruction、native link、多 crate/bin/target 和嵌套模块仍需 host extractor 或受验证 AI interface proposal。project repair queue 已内容哈希并绑定可解析的受影响实体，同时显式保留 unresolved module ID，但尚未接入 TransitionAuthority ledger 和 AI repairer，因此这些缺口不会被写成已完成。
+这一层尚未完成全部 A19d3：RustProjectIR 和 generation manifest 会固定写入 `interface_completeness.status=partial`，自动派生 signature 仍明确标为 unresolved；候选 cohort 和 full-project candidate generation 可继续用于隔离检查，但 CompletionCoordinator 会阻止它进入 project-final gate 和 completed receipt。当前权威生成只支持 flat library modules；完整 shared-type layout、ownership、init/destruction、native link、多 crate/bin/target 和嵌套模块仍需 host extractor 或受验证 AI interface proposal。
+
+project repair queue 已接入 schema v6 TransitionAuthority ledger 和专属 AI repairer。CompletionCoordinator 首次只观察最新 receipt，不创建 attempt；隔离的零调用 preflight 通过后，host-issued permit 会绑定精确 receipt/queue/item 状态、模型、agent 和运行时输入，再允许一次 resume 最多启动一个 provider call。provider 完整结果先按哈希写入 ledger，摄取阶段崩溃时下一次 resume 只重开证据并摄取，不再调用模型；证据不全或结果未知仍进入人工对账。attempt 预算沿稳定 diagnostic lineage 跨 receipt epoch 单调继承，另有每 run 64 次 provider call 和 65 个 receipt epoch 的硬上限。该 repair 层只产出新的 RustProjectIR/receipt，没有 semantic pass、晋升或 complete 权限；真实 project verifier 诊断入口、完整 IR/Cargo target 表达和 project-final 移交仍是开放项。
 
 当前正向完成链仍未闭合：CLI 已有 host-owned integration/Cargo adapter 和失败诊断回投，但 candidate 的 oracle/negative/unsafe-alias/ABI/final 正向 runner 尚未全部接通；A19e7 独立 verifier 进程、capability channel、一次性 nonce 和 raw-output 引用也尚未落地。因此当前 in-process receipt 只能证明 canonical 绑定与漂移拒绝，不能声明调用方不可伪造。真实 held-out 模式只重开只读 SQLite，复验 AI provider evidence、每个 candidate gate、不可变 candidate set、项目 final bundle 和原始 repository/build 绑定；任何自报 `semantic_gate=true` 的 JSON 都不能计入成功。
 
@@ -93,7 +95,14 @@ python3 -B validation/tools/project_migration_harness.py preflight \
   --resolved-model zai/glm-5.1
 python3 -B validation/tools/project_migration_harness.py dispatch \
   --plan target/project-migration/run-001/project-migration-plan.json
+python3 -B validation/tools/project_migration_harness.py complete \
+  --db target/project-migration/run-001/state/project-migration.sqlite3 \
+  --run-id run-001 \
+  --logical-model GLM-5.1 \
+  --resolved-model zai/glm-5.1
 ```
+
+`complete` 可重复执行；每次恢复最多启动一个 project-repair provider call。只有最新队列已解决且后续全项目门禁通过时才会发布 completion receipt。
 
 真实 WSL 辅助 smoke `a19-deepseek-smoke-20260713` 使用 `opencode/deepseek-v4-flash-free` + `c2rust-candidate` + `max`：preflight report SHA 为 `f0bc76b6b2489597e782cd1f0e532b7483f03658680b4352401ee12c814913c0`，provider-execution SHA 为 `9e04b437135aa9f1e2171a180f2e77272374fc8bba3c1257d314e8a963c10b5d`，candidate SHA 为 `359cb2ef234f85d9aa1cbdf2d77e07a296f55cb8bd7d4ad9dd37afe4d9ea72ef`。该结果仅为 `candidate-ready` / `auxiliary-local-validation` / `semantic_gate=false`；WSL 缺 `bwrap`，未执行候选代码。
 
@@ -109,7 +118,7 @@ flowchart TB
     INDEX --> DAG["Call graph, SCCs, waves, boundary groups"]
     DAG --> CONTEXT["Hash-bound paged ContextPacks"]
     CONTEXT --> PORTFOLIO["Planner / translator / reviewer / repairer portfolio"]
-    PORTFOLIO <--> LEDGER[("SQLite v3 ledger")]
+    PORTFOLIO <--> LEDGER[("SQLite v6 ledger")]
     LEDGER --> PREFLIGHT["Fixed model/agent/environment preflight"]
     PREFLIGHT --> DISPATCH["Lease + attempt + fence-bound dispatch"]
     DISPATCH --> AI["Tool-free OpenCode candidate workers"]
@@ -120,11 +129,17 @@ flowchart TB
     VERIFY -->|"failed, bounded diagnostic"| DISPATCH
     VERIFY -->|"latest gates passed"| LASTGOOD["Unit last-good"]
     LASTGOOD --> RUSTIR["Canonical RustProjectIR + interface coordinator"]
-    RUSTIR --> CARGO["Immutable IR-bound Cargo generation"]
+    RUSTIR -->|"repair-required"| RPRE["Zero-call repair preflight"]
+    RPRE --> PERMIT["Receipt/state-bound host permit"]
+    PERMIT --> RAI["At most one project-repair call per resume"]
+    RAI --> RINGEST["Host rebuild + re-coordinate / ingest-only recovery"]
+    RINGEST --> LEDGER
+    RINGEST --> RUSTIR
+    RUSTIR -->|"candidate-ready"| CARGO["Immutable IR-bound Cargo generation"]
     CARGO --> SANDBOX["Networkless bubblewrap check/test"]
     SANDBOX --> PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
     PROJECT -->|"same candidate set passed"| COMPLETE["Completed project evidence"]
-    PROJECT -->|"failed"| DISPATCH
+    PROJECT -->|"project diagnostic intake still open"| BLOCKED["Blocked with evidence"]
 ```
 
 ## 整项目数据流
@@ -140,10 +155,14 @@ flowchart LR
     G --> H["8. Host candidate gates"]
     H -->|"repairable"| F
     H -->|"passed"| I["9. Unit last-good"]
-    I --> J["10. Cargo generation"]
-    J --> K["11. Sandboxed build/test"]
-    K --> L["12. Project semantic and safety gates"]
-    L --> M["13. Candidate-set completion"]
+    I --> J["10. RustProjectIR + interface receipt"]
+    J -->|"repair-required"| R["11. Preflight + state-bound permit + one AI repair"]
+    R --> S["12. Host rebuild / re-coordinate or ingest-only resume"]
+    S --> J
+    J -->|"candidate-ready"| K["13. Cargo generation"]
+    K --> L["14. Sandboxed build/test"]
+    L --> M["15. Project semantic and safety gates"]
+    M --> N["16. Candidate-set completion"]
 ```
 
 每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已处理已知 runtime/gate-authority 审查项，并补齐 Ninja/静态归档、toolchain、CLI 与只读 held-out 证据约束；当前开放项仍是 Meson/configure 构建事实、正向 candidate verifier、可用比赛等价沙箱和真实 held-out build/oracle。该流程图是实现合同，不是整项目成功声明。
@@ -306,7 +325,7 @@ sequenceDiagram
 | `validate_auto_translation_evidence.py` | schema、hash、identity、semantic gate 交叉校验 | strict validation result |
 | `validate_ai_exact_evidence.py` | 重开 fresh oracle、candidate gate-index、router 和 canonical SHA | AI exact strict result |
 | `validate_ai_finite_cross_project_suite.py` | 校验最多 20 项、至少 3 个真实项目/10 类构造的固定套件输入完备性 | ready/blocked preflight，不产生成功率 |
-| `project_migration_harness.py` | 任意仓库 inventory、SCC/DAG、ContextPack、角色调度、门禁和 Cargo generation | project plan、SQLite v3、worker request、last-good project |
+| `project_migration_harness.py` | 任意仓库 inventory、SCC/DAG、ContextPack、角色调度、门禁和 Cargo generation | project plan、SQLite v6、worker request、last-good project |
 | `rust_project_ir*.py` / `project_interface_*.py` | 重开 BuildIR/DAG/candidate，协调跨单元接口并阻断冲突，确定性生成 IR-bound Cargo generation | canonical RustProjectIR、coordinator receipt、project repair queue、generation manifest |
 | `opencode_agent_harness.py` | run/plan/worker/retry/evaluate、SQLite ledger、隔离和恢复 | worker reports、context pack、agent index、merge plan |
 | `run_competition.py` | 汇总 slice/worker，执行环境、unsafe、summary gates | competition summary、workflow metrics |

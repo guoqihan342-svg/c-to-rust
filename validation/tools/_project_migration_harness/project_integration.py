@@ -10,6 +10,7 @@ from .integration import integrate_rust_project_ir
 from .ledger import LedgerError, ProjectLedger
 from .ledger_run_contract import load_migration_contract
 from .project_interface_orchestration import prepare_project_interfaces
+from .project_repair_dispatch_permit import ProjectRepairDispatchPermit
 from .project_rust_ir import derive_bound_project_ir, persist_project_ir
 
 
@@ -17,6 +18,32 @@ def integrate_verified_project(
     migration_manifest: Mapping[str, Any], *, ledger: ProjectLedger,
     run_id: str, candidate_root: Path, candidate_root_rel: str,
     project_root: Path,
+) -> dict[str, Any]:
+    return _integrate_verified_project(
+        migration_manifest, ledger=ledger, run_id=run_id,
+        candidate_root=candidate_root, candidate_root_rel=candidate_root_rel,
+        project_root=project_root, repair_dispatch_permit=None,
+    )
+
+
+def integrate_verified_project_repair(
+    migration_manifest: Mapping[str, Any], *, ledger: ProjectLedger,
+    run_id: str, candidate_root: Path, candidate_root_rel: str,
+    project_root: Path, repair_dispatch_permit: ProjectRepairDispatchPermit,
+) -> dict[str, Any]:
+    return _integrate_verified_project(
+        migration_manifest, ledger=ledger, run_id=run_id,
+        candidate_root=candidate_root, candidate_root_rel=candidate_root_rel,
+        project_root=project_root,
+        repair_dispatch_permit=repair_dispatch_permit,
+    )
+
+
+def _integrate_verified_project(
+    migration_manifest: Mapping[str, Any], *, ledger: ProjectLedger,
+    run_id: str, candidate_root: Path, candidate_root_rel: str,
+    project_root: Path,
+    repair_dispatch_permit: ProjectRepairDispatchPermit | None,
 ) -> dict[str, Any]:
     with ledger.connect() as connection:
         migration_contract, authoritative_manifest = load_migration_contract(
@@ -37,6 +64,7 @@ def integrate_verified_project(
         rust_project_ir, ledger=ledger, run_id=run_id,
         harness_root=_harness_root(candidate_root, candidate_root_rel),
         out_root=candidate_root, out_root_rel=candidate_root_rel,
+        repair_dispatch_permit=repair_dispatch_permit,
     )
     rust_project_ir = preparation.rust_project_ir
     ir_reference = preparation.rust_project_ir_reference
@@ -95,4 +123,4 @@ def _harness_root(candidate_root: Path, candidate_root_rel: str) -> Path:
     return root
 
 
-__all__ = ["integrate_verified_project"]
+__all__ = ["integrate_verified_project", "integrate_verified_project_repair"]

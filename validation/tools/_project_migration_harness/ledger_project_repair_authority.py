@@ -5,6 +5,7 @@ import re
 import time
 from typing import Any, Mapping
 
+from .ledger_project_repair_budget import ProjectRepairBudgetAuthority
 from .ledger_project_repair_candidate import ProjectRepairCandidateMixin
 from .ledger_project_repair_core import (
     ProjectRepairCore, ProjectRepairTransitionResult, attempt_scope,
@@ -80,6 +81,11 @@ class ProjectRepairAuthority(ProjectRepairCandidateMixin, ProjectRepairCore):
                 raise LedgerError("project repair item is not ready for an attempt")
             if previous.attempt_count >= previous.max_attempts:
                 raise LedgerError("project repair attempt budget is exhausted")
+            ProjectRepairBudgetAuthority(self.connection).start_attempt(
+                run_id=run_id, queue_sha256=queue_sha256,
+                repair_id=repair_id,
+                expected_attempt_count=previous.attempt_count,
+            )
             timestamp = created_at or _now_text()
             self.connection.execute(
                 """insert into project_repair_attempts(
@@ -125,6 +131,9 @@ class ProjectRepairAuthority(ProjectRepairCandidateMixin, ProjectRepairCore):
                 raise LedgerError("project repair command start changed attempt binding")
             if int(attempt["command_started"]) == 1:
                 return False
+            ProjectRepairBudgetAuthority(self.connection).claim_provider_call(
+                run_id=run_id,
+            )
             updated = self.connection.execute(
                 """update project_repair_attempts
                    set command_started=1,command_started_at=?

@@ -21,6 +21,7 @@ from .ledger import LedgerError, ProjectLedger
 from .ledger_candidate_state import latest_candidate_records
 from .ledger_run_contract import load_migration_contract
 from .project_cargo_verifier import verify_project_cargo
+from .project_completion_repair_phase import execute_project_repair_completion_step
 from .project_host_gates import _record_host_project_final
 from .project_integration import integrate_verified_project
 from .project_integration_verifier import verify_integrated_project
@@ -33,7 +34,8 @@ SEMANTIC_RUNNERS = (
 
 def resume_project_completion(
     *, ledger: ProjectLedger, run_id: str, harness_root: Path,
-    timeout_seconds: int = 300,
+    timeout_seconds: int = 300, preflight_timeout_seconds: int = 60,
+    logical_model: str = "GLM-5.1", resolved_model: str = "zai/glm-5.1",
 ) -> dict[str, Any]:
     paths = _completion_paths(ledger, harness_root)
     try:
@@ -118,16 +120,38 @@ def resume_project_completion(
     )
     if integration.get("status") != "integrated":
         if integration.get("stage") == "project-interface-repair":
-            repair = integration.get("project_repair")
-            blockers = repair.get("blockers", []) if isinstance(repair, dict) else []
-            return _result(
-                paths, run_id, str(integration.get("status", "blocked")),
-                "project-interface-repair", list(blockers), candidate_set,
-                project_repair=repair,
+            repair_step = execute_project_repair_completion_step(
+                migration_manifest, initial_integration=integration,
+                ledger=ledger, run_id=run_id, harness_root=harness_root,
+                out_root=paths["out_root"], out_root_rel=paths["out_root_rel"],
+                project_root=paths["project_root"], logical_model=logical_model,
+                resolved_model=resolved_model, timeout_seconds=timeout_seconds,
+                preflight_timeout_seconds=preflight_timeout_seconds,
             )
-        return _result(
-            paths, run_id, "failed", "project-final-integration", [], candidate_set,
-        )
+            if repair_step.get("status") == "integrated":
+                advanced = repair_step.get("integration")
+                if isinstance(advanced, dict):
+                    integration = advanced
+                else:
+                    return _result(
+                        paths, run_id, "blocked", "project-repair-state-drift",
+                        ["project-repair-integrated-result-missing"], candidate_set,
+                        project_repair=repair_step,
+                    )
+            else:
+                blockers = repair_step.get("blockers", [])
+                if not isinstance(blockers, list):
+                    blockers = []
+                return _result(
+                    paths, run_id, str(repair_step.get("status", "blocked")),
+                    str(repair_step.get("stage", "project-interface-repair")),
+                    blockers, candidate_set, project_repair=repair_step,
+                )
+        else:
+            return _result(
+                paths, run_id, "failed", "project-final-integration", [],
+                candidate_set,
+            )
     completeness = integration.get("rust_project_ir_completeness")
     if not isinstance(completeness, dict) or completeness.get("status") != "complete":
         unresolved = completeness.get("unresolved_sections", []) \

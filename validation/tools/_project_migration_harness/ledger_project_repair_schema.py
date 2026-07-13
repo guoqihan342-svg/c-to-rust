@@ -15,21 +15,63 @@ PROJECT_REPAIR_SCHEMA = (
        unique(run_id,receipt_epoch),
        unique(run_id,project_repair_queue_sha256),
        foreign key(run_id) references project_runs(run_id) on delete cascade)""",
+    """create table if not exists project_repair_run_budgets(
+       run_id text primary key,
+       max_provider_calls integer not null check(max_provider_calls between 1 and 256),
+       provider_calls integer not null check(
+       provider_calls>=0 and provider_calls<=max_provider_calls),
+       max_receipt_epochs integer not null check(max_receipt_epochs between 1 and 257),
+       receipt_epochs integer not null check(
+       receipt_epochs>=0 and receipt_epochs<=max_receipt_epochs),
+       foreign key(run_id) references project_runs(run_id) on delete cascade)""",
+    """create table if not exists project_repair_diagnostic_budgets(
+       run_id text not null, diagnostic_lineage_id text not null,
+       lineage_projection_sha256 text not null,
+       latest_diagnostic_sha256 text not null,
+       max_attempts integer not null check(max_attempts between 1 and 5),
+       attempt_count integer not null check(
+       attempt_count>=0 and attempt_count<=max_attempts),
+       first_receipt_epoch integer not null check(first_receipt_epoch>0),
+       last_receipt_epoch integer not null check(
+       last_receipt_epoch>=first_receipt_epoch),
+       primary key(run_id,diagnostic_lineage_id),
+       foreign key(run_id) references project_runs(run_id) on delete cascade)""",
+    """create table if not exists project_repair_diagnostic_observations(
+       run_id text not null, receipt_epoch integer not null,
+       diagnostic_sha256 text not null, diagnostic_lineage_id text not null,
+       lineage_projection_sha256 text not null,
+       max_attempts integer not null check(max_attempts between 1 and 5),
+       primary key(run_id,receipt_epoch,diagnostic_sha256),
+       unique(run_id,receipt_epoch,diagnostic_lineage_id),
+       foreign key(run_id,receipt_epoch)
+       references project_interface_receipts(run_id,receipt_epoch)
+       on delete cascade,
+       foreign key(run_id,diagnostic_lineage_id)
+       references project_repair_diagnostic_budgets(
+       run_id,diagnostic_lineage_id))""",
     """create table if not exists project_repair_items(
        run_id text not null, project_repair_queue_sha256 text not null,
        repair_id text not null, diagnostic_code text not null,
-       diagnostic_sha256 text not null, max_attempts integer not null check(max_attempts>0),
-       item_json text not null, initial_status text not null check(initial_status='queued'),
+       diagnostic_sha256 text not null, diagnostic_lineage_id text not null,
+       max_attempts integer not null check(max_attempts>0),
+       item_json text not null, initial_status text not null check(
+       initial_status in ('queued','exhausted')),
        status text not null check(status in
        ('queued','running','candidate-ready','retry-ready','resolved','failed','exhausted','cancelled')),
        state_version integer not null check(state_version>=0),
-       attempt_count integer not null check(attempt_count>=0 and attempt_count<=max_attempts),
+       inherited_attempt_count integer not null check(
+       inherited_attempt_count>=0 and inherited_attempt_count<=max_attempts),
+       attempt_count integer not null check(
+       attempt_count>=inherited_attempt_count and attempt_count<=max_attempts),
        active_attempt_id text, candidate_ir_sha256 text, updated_at text not null,
        primary key(run_id,project_repair_queue_sha256,repair_id),
        unique(run_id,project_repair_queue_sha256,diagnostic_sha256),
        foreign key(run_id,project_repair_queue_sha256)
        references project_interface_receipts(run_id,project_repair_queue_sha256)
        on delete cascade,
+       foreign key(run_id,diagnostic_lineage_id)
+       references project_repair_diagnostic_budgets(
+       run_id,diagnostic_lineage_id),
        foreign key(active_attempt_id,run_id,project_repair_queue_sha256,repair_id)
        references project_repair_attempts(
        attempt_id,run_id,project_repair_queue_sha256,repair_id)
@@ -103,9 +145,38 @@ PROJECT_REPAIR_SCHEMA = (
        before delete on project_repair_artifacts
        begin select raise(abort,'project repair artifacts are immutable'); end""",
     """create trigger if not exists project_repair_item_identity_no_update
-       before update of initial_status,diagnostic_code,diagnostic_sha256,max_attempts,item_json
+       before update of initial_status,inherited_attempt_count,diagnostic_code,
+       diagnostic_sha256,diagnostic_lineage_id,max_attempts,item_json
        on project_repair_items
        begin select raise(abort,'project repair item identity is immutable'); end""",
+    """create trigger if not exists project_repair_run_budget_no_delete
+       before delete on project_repair_run_budgets
+       begin select raise(abort,'project repair run budget is durable'); end""",
+    """create trigger if not exists project_repair_run_budget_monotonic
+       before update on project_repair_run_budgets
+       when new.max_provider_calls<>old.max_provider_calls
+         or new.max_receipt_epochs<>old.max_receipt_epochs
+         or new.provider_calls<old.provider_calls
+         or new.receipt_epochs<old.receipt_epochs
+       begin select raise(abort,'project repair run budget is monotonic'); end""",
+    """create trigger if not exists project_repair_diagnostic_budget_no_delete
+       before delete on project_repair_diagnostic_budgets
+       begin select raise(abort,'project repair diagnostic budget is durable'); end""",
+    """create trigger if not exists project_repair_diagnostic_budget_monotonic
+       before update on project_repair_diagnostic_budgets
+       when new.max_attempts<>old.max_attempts
+         or new.diagnostic_lineage_id<>old.diagnostic_lineage_id
+         or new.lineage_projection_sha256<>old.lineage_projection_sha256
+         or new.first_receipt_epoch<>old.first_receipt_epoch
+         or new.attempt_count<old.attempt_count
+         or new.last_receipt_epoch<old.last_receipt_epoch
+       begin select raise(abort,'project repair diagnostic budget is monotonic'); end""",
+    """create trigger if not exists project_repair_diagnostic_observation_no_update
+       before update on project_repair_diagnostic_observations
+       begin select raise(abort,'project repair diagnostic observations are immutable'); end""",
+    """create trigger if not exists project_repair_diagnostic_observation_no_delete
+       before delete on project_repair_diagnostic_observations
+       begin select raise(abort,'project repair diagnostic observations are immutable'); end""",
     """create trigger if not exists project_repair_attempt_identity_no_update
        before update of run_id,project_repair_queue_sha256,repair_id,ordinal,worker_id,
        input_sha256,lease_ttl_seconds,lease_expires_at,started_at,metadata_json
@@ -125,6 +196,11 @@ PROJECT_REPAIR_SCHEMA = (
     """create index if not exists project_repair_events_by_item
        on project_repair_events(
        run_id,project_repair_queue_sha256,repair_id,event_id)""",
+    """create index if not exists project_repair_items_by_diagnostic
+       on project_repair_items(run_id,diagnostic_lineage_id,diagnostic_sha256)""",
+    """create index if not exists project_repair_observations_by_lineage
+       on project_repair_diagnostic_observations(
+       run_id,diagnostic_lineage_id,receipt_epoch)""",
 )
 
 

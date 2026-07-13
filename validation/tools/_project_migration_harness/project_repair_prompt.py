@@ -111,7 +111,8 @@ def _validate_request(request: Mapping[str, Any]) -> None:
         raise ValueError("project repair execution binding drifted")
     for key in (
         "coordinator_binding", "base_rust_project_ir", "project_repair_context",
-        "expected_projection", "model_input_policy", "output_contract",
+        "expected_projection", "preflight_binding", "model_input_policy",
+        "output_contract",
     ):
         if not isinstance(request.get(key), Mapping):
             raise ValueError(f"project repair request {key} is invalid")

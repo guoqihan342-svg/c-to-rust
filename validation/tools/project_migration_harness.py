@@ -244,6 +244,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             ledger=_ledger(args.db),
             run_id=args.run_id,
             harness_root=REPO_ROOT,
+            logical_model=args.logical_model,
+            resolved_model=args.resolved_model,
+            timeout_seconds=args.timeout_seconds,
+            preflight_timeout_seconds=args.preflight_timeout_seconds,
         )
     else:
         result = {

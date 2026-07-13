@@ -131,6 +131,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     complete = commands.add_parser("complete")
     complete.add_argument("--db", type=Path, required=True)
     complete.add_argument("--run-id", required=True)
+    complete.add_argument("--logical-model", default="GLM-5.1")
+    complete.add_argument("--resolved-model", default="zai/glm-5.1")
+    complete.add_argument("--timeout-seconds", type=int, default=300)
+    complete.add_argument("--preflight-timeout-seconds", type=int, default=60)
 
     status = commands.add_parser("status")
     status.add_argument("--db", type=Path, required=True)

@@ -7,15 +7,17 @@ from typing import Any
 
 from .artifacts import content_sha256
 from .ledger import LedgerError, ProjectLedger
-from .project_repair_worker_request import (
-    materialize_project_repair_request, read_bound_rust_project_ir,
-)
+from .project_repair_dispatch import dispatch_ready_project_repair_item
+from .project_repair_dispatch_permit import ProjectRepairDispatchPermit
+from .project_repair_recorded_result import load_recorded_project_repair_result
+from .project_repair_worker_request import read_bound_rust_project_ir
 
 
 def resume_latest_project_repair(
     *, ledger: ProjectLedger, run_id: str,
     base_rust_project_ir: Mapping[str, Any], harness_root: Path,
     out_root: Path, out_root_rel: str, now_epoch: int | None = None,
+    dispatch_permit: ProjectRepairDispatchPermit | None = None,
 ) -> dict[str, Any]:
     clock = int(time.time()) if now_epoch is None else _require_epoch(now_epoch)
     latest = ledger.load_latest_project_interface_receipt(run_id=run_id)
@@ -47,12 +49,13 @@ def resume_latest_project_repair(
         if projection.status == "resolved":
             continue
         if projection.status in {"queued", "retry-ready"}:
-            return _dispatch(
+            return dispatch_ready_project_repair_item(
                 ledger=ledger, run_id=run_id, queue_sha256=queue_sha256,
                 repair_id=repair_id, base_rust_project_ir=base_rust_project_ir,
                 harness_root=harness_root, out_root=out_root,
                 out_root_rel=out_root_rel, common=common,
                 recovered_attempts=recovered_attempts,
+                dispatch_permit=dispatch_permit,
             )
         if projection.status == "running":
             attempt = _load_running_attempt(
@@ -60,6 +63,15 @@ def resume_latest_project_repair(
                 repair_id,
             )
             if bool(attempt["command_started"]):
+                recorded = load_recorded_project_repair_result(
+                    ledger, attempt_id=str(attempt["attempt_id"]),
+                )
+                if recorded is not None:
+                    return _item_result(
+                        run_id, "ingest-required",
+                        "project-repair-provider-result-recorded",
+                        repair_id, projection, common, **recorded,
+                    )
                 return _item_result(
                     run_id, "blocked", "project-repair-manual-reconcile",
                     repair_id, projection, common,
@@ -88,13 +100,14 @@ def resume_latest_project_repair(
                 )
             recovered_attempts.append(str(attempt["attempt_id"]))
             if recovered.current.status == "retry-ready":
-                return _dispatch(
+                return dispatch_ready_project_repair_item(
                     ledger=ledger, run_id=run_id, queue_sha256=queue_sha256,
                     repair_id=repair_id,
                     base_rust_project_ir=base_rust_project_ir,
                     harness_root=harness_root, out_root=out_root,
                     out_root_rel=out_root_rel, common=common,
                     recovered_attempts=recovered_attempts,
+                    dispatch_permit=dispatch_permit,
                 )
             return _item_result(
                 run_id, "blocked", "project-repair-attempts-exhausted",
@@ -116,67 +129,6 @@ def resume_latest_project_repair(
     return _result(
         run_id, "blocked", "project-repair-receipt-state-drift",
         blockers=["repair-required-receipt-has-no-actionable-item"], **common,
-    )
-
-
-def _dispatch(
-    *, ledger: ProjectLedger, run_id: str, queue_sha256: str,
-    repair_id: str, base_rust_project_ir: Mapping[str, Any],
-    harness_root: Path, out_root: Path, out_root_rel: str,
-    common: Mapping[str, Any], recovered_attempts: list[str],
-) -> dict[str, Any]:
-    worker_id = "project-repairer-" + content_sha256({
-        "run_id": run_id, "queue_sha256": queue_sha256,
-        "repair_id": repair_id,
-    })[:20]
-    try:
-        request = materialize_project_repair_request(
-            ledger=ledger, run_id=run_id, queue_sha256=queue_sha256,
-            repair_id=repair_id, worker_id=worker_id,
-            base_rust_project_ir=base_rust_project_ir,
-            harness_root=harness_root, out_root=out_root,
-            out_root_rel=out_root_rel,
-        )
-    except (LedgerError, ValueError):
-        projection = ledger.project_repair_projection(
-            run_id=run_id, queue_sha256=queue_sha256, repair_id=repair_id,
-        )
-        if projection.status in {"queued", "retry-ready"}:
-            raise
-        return _observe_dispatch_race(
-            ledger, run_id, queue_sha256, repair_id, common,
-        )
-    if not request["attempt_applied"]:
-        projection = ledger.project_repair_projection(
-            run_id=run_id, queue_sha256=queue_sha256, repair_id=repair_id,
-        )
-        return _item_result(
-            run_id, "waiting", "project-repair-attempt-active",
-            repair_id, projection, common,
-        )
-    return _result(
-        run_id, "repair-dispatched", "project-repair-request-materialized",
-        repair_id=repair_id, attempt_id=request["attempt_id"],
-        request=request["request"], context=request["context"],
-        recovered_attempts=recovered_attempts, **dict(common),
-    )
-
-
-def _observe_dispatch_race(
-    ledger: ProjectLedger, run_id: str, queue_sha256: str, repair_id: str,
-    common: Mapping[str, Any],
-) -> dict[str, Any]:
-    projection = ledger.project_repair_projection(
-        run_id=run_id, queue_sha256=queue_sha256, repair_id=repair_id,
-    )
-    if projection.status == "running":
-        return _item_result(
-            run_id, "waiting", "project-repair-attempt-active",
-            repair_id, projection, common,
-        )
-    return _item_result(
-        run_id, "waiting", "project-repair-state-advanced",
-        repair_id, projection, common,
     )
 
 

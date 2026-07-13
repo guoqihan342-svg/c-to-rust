@@ -4,7 +4,7 @@
 
 本文是项目的中文 canonical backlog，也是当前状态、执行顺序和能力边界的唯一入口。详细实现过程由 Git 历史、coverage matrix 和机器可读 evidence 保存，不再把逐日流水账复制到本文。
 
-最后更新：2026-07-13。
+最后更新：2026-07-14。
 
 ## 1. 当前状态
 
@@ -570,10 +570,10 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [ ] A19d3c：把无法归属单个 unit 的类型、链接、初始化和 feature 诊断放入独立 project-level repair queue，基于完整 RustProjectIR 生成有界修复；不得随机归因、复制共享类型或通过 fixture-specific shim 绕过冲突。
       - [x] A19d3c1：coordinator 已生成有界、内容哈希的 project-only repair queue；每项绑定 IR SHA、interface SHA、diagnostic SHA、可解析的受影响 module/unit、unresolved module ID 与 attempt cap，并固定禁止随机 unit 归因、generated glue 和 fixture-specific shim。
       - [ ] A19d3c2：把 queue/event/attempt 持久化进 TransitionAuthority ledger，由 project repairer 只消费最小相关 IR/diagnostic 并产出新的 IR candidate；恢复、预算耗尽、回滚和重新协调必须形成可重放事件。
-        - [x] A19d3c2a：项目 receipt、queue、item、attempt、CAS event 与 artifact 已进入 schema v5；专属 repair worker 只读取受影响 module/interface 记录，模型只能提交 allowlist patch，宿主重开完整绑定、重建 RustProjectIR、重新协调并决定 resolve/rollback/retry/exhausted。启动意图先于子进程写入 ledger，未启动恢复受 owner/租约约束，已启动但结果未知进入 `failed/manual-reconcile`；终态响应、IR candidate 和 rollback 证据绑定同一 attempt 的不可变 artifact，普通 worker 启动时也必须重验最新 coordinator epoch。request/preflight/fence、隔离运行根、失败恢复、command replay、证据不可变和 IR unit-domain/recomputation 防伪均有有限回归。
+        - [x] A19d3c2a：项目 receipt、queue、item、attempt、CAS event 与 artifact 自 schema v5 起进入 ledger；专属 repair worker 只读取受影响 module/interface 记录，模型只能提交 allowlist patch，宿主重开完整绑定、重建 RustProjectIR、重新协调并决定 resolve/rollback/retry/exhausted。启动意图先于子进程写入 ledger，未启动恢复受 owner/租约约束，已启动但结果未知进入 `failed/manual-reconcile`；终态响应、IR candidate 和 rollback 证据绑定同一 attempt 的不可变 artifact，普通 worker 启动时也必须重验最新 coordinator epoch。request/preflight/fence、隔离运行根、失败恢复、command replay、证据不可变和 IR unit-domain/recomputation 防伪均有有限回归。
         - [ ] A19d3c2b：由唯一 CompletionCoordinator 从最新 receipt 自动调度、执行或恢复未完成项目队列，把无法定位到 unit 的真实 verifier 诊断统一送入该队列；本层只产出新的 RustProjectIR/receipt 并移交 A19e6，不拥有晋升或完成权限，低层 API 与模型结果也不能直接完成项目。
           - [x] A19d3c2b1：在 Cargo generation 前接入 host-owned 最新 receipt 调度内核；每次只选择 canonical queue 中第一个可执行项，权威 RustProjectIR 用通用内容寻址路径持久化并可在重启后重开。双 coordinator 并发时只有首次 CAS 应用者获得模型启动权；过期且未启动的 attempt 可确定性恢复后重派，已启动但结果未知必须人工对账，budget/exhausted 和孤立 candidate 均 fail closed。该内核只物化 request、从不启动模型或完成项目；未排空最新 queue 时 completion 被拒绝，重复 runtime 也不能二次启动同一 attempt。有限回归覆盖并发、latest-only、租约、预算和低层绕过。
-          - [ ] A19d3c2b2：由 CompletionCoordinator 在隔离 provider preflight 后启动一个有界 project-repair attempt，摄取 host 重建/重协调结果并重复 resume，直到最新 queue `candidate-ready`、预算耗尽或进入人工对账；每次 resume 只执行有限步，崩溃后从 ledger 事件恢复，禁止内存循环成为权威。预算必须沿 diagnostic lineage 跨 receipt epoch 单调继承，并另设 run 级 provider-call/epoch 总上限，禁止重协调重置预算。
+          - [x] A19d3c2b2：schema v6 已增加稳定 diagnostic lineage/observation、跨 receipt attempt 继承以及每 run 64 次 provider call/65 个 receipt epoch 的硬上限。CompletionCoordinator 先做零 attempt 观察与隔离 preflight，再签发绑定精确 receipt/queue/status/version/model/agent/runtime 的 host permit；每次 resume 最多启动一次 provider。provider 结果先完整写入 ledger，摄取崩溃后只做零模型调用的 evidence reopen/ingest，终态重放不二次调用，证据不全或结果未知进入人工对账。公开 integration/低层 API 无 dispatch、晋升或 complete 权限；有限回归覆盖双执行器、旧 permit、跨 epoch 预算、preflight 阻断、provider-result 崩溃恢复与终态重放。
           - [ ] A19d3c2b3：把专属 host verifier 无法可靠映射到 unit 的 compile/link/init/feature/ABI 诊断规范化为 project diagnostic，并绑定当前 cohort、generation、raw observation 和 verifier receipt 后进入同一 queue；环境/沙箱故障不得伪装成 repair 诊断。
           - [ ] A19d3c2b4：`candidate-ready` 只允许移交 A19e6 的新 `project-final` cohort/generation；只有整项目全门禁与 invariant audit 通过才能晋升/complete，任何 repair API、模型响应或旧 receipt 都没有该权限。
     - [ ] A19d3d：Cargo generation 只能从已验证 RustProjectIR 确定性生成，并复验所有迁移单元、依赖边、公共接口和配置均被覆盖；IR 漂移、孤立模块、重复符号、临时手写 glue 或真实多文件 build 失败时禁止晋升。
@@ -645,7 +645,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   2. A19b3-A19b4：闭合可重开的 CIndex blocker/source CAS、声明/type/macro facts、确定性选择回执和 frontier 懒加载；required facts、预算或 receipt 未闭合的 assignment 不得启动 AI worker。
   3. A19e5a-A19e5d：建立 TransitionAuthority、声明式 FSM、事件投影和 invariant audit；并行定义 A19e7 verifier IPC/receipt 与 A19e8 SandboxBackend capability contract，但在单一状态写入权威闭合前不接入 pass。
   4. A19c4c、A19e4a-A19e4d 与 A19e8：在新状态权威和不可降级沙箱上闭合 candidate set、quarantine、宿主 compile 结论和精确 repair，并先用 verifier-owned failure/critical-path/cost/convergence facts 驱动信息增益调度；模型自评分不得进入优先级。SandboxBackend 可按 bubblewrap/等价实现分线程开发，所有实现共享同一 conformance suite。
-  5. A19d3c2b2-A19d3c2b3 与 A19d3d2：在已落地的最新队列调度内核上接通有界 AI repair 执行/恢复和真实 project diagnostic intake，并扩展 RustProjectIR/Cargo 到真实多 target/feature/native-link 项目；可与 A19e7 专属 semantic runner 并行，但 Cargo generation 不得绕过 RustProjectIR。
+  5. A19d3c2b3 与 A19d3d2：在已落地的有界 AI repair 执行/恢复链上接通真实 project diagnostic intake，并扩展 RustProjectIR/Cargo 到真实多 target/feature/native-link 项目；可与 A19e7 专属 semantic runner 并行，但 Cargo generation 不得绕过 RustProjectIR。
   6. A19d3c2b4、A19c4a-A19c4e、A19e4e、A19e6 与 A19e7：在 BuildIR/RustProjectIR 上接通 global AI planner、多策略候选、角色化最小检索、可审计 expansion、知识记忆和 project-level repair，同时接通进程隔离的 semantic verifier 与唯一 CompletionCoordinator，强制生成全量 `project-final` cohort/generation 并重跑全部 candidate/project gates；关闭所有可改变 semantic 状态的低层 debug CLI。
   7. 完成上述合同后再用固定有限清单执行 A19f 真实 held-out 整项目 build/oracle 验收，并按 A19g 做有限 Windows/WSL 门禁、提交、push 与远端 SHA 核对；开发阶段不在每个小改动后启动模型，也不运行 1,000/10,000 轮。
 

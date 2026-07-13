@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from .ledger_project_repair_authority import ProjectRepairAuthority
+from .ledger_project_repair_budget import ProjectRepairBudgetAuthority
 from .ledger_project_repair_finalize import ProjectRepairFinalizer
 from .ledger_project_repair_registry import ProjectRepairRegistry
 from .ledger_project_repair_replay import assert_project_repair_projection
@@ -40,6 +41,10 @@ class ProjectRepairLedgerMixin:
                 connection, run_id=run_id, queue_sha256=queue_sha256,
                 repair_id=repair_id,
             )
+
+    def project_repair_budget(self, *, run_id: str) -> Any:
+        with self.connect() as connection:
+            return ProjectRepairBudgetAuthority(connection).load(run_id=run_id)
 
     def start_project_repair_attempt(self, **values: Any) -> Any:
         with self.connect() as connection:

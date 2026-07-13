@@ -28,6 +28,9 @@ from .project_preflight import validate_project_worker_preflight
 from .project_receipt_validation import validate_project_invocation_receipt
 from .project_repair_patch import normalize_project_repair_response
 from .project_repair_prompt import render_project_repair_prompt
+from .project_repair_dispatch_permit import (
+    assert_project_repair_request_preflight_binding,
+)
 
 
 Runner = Callable[[list[str], int], ProviderExecution]
@@ -52,6 +55,9 @@ def execute_opencode_project_repair_worker(
     )
     request = _request(harness_root, request_reference)
     _validate_execution_identity(request, attempt_id, fencing_token)
+    assert_project_repair_request_preflight_binding(
+        request, preflight_reference, logical_model, resolved_model,
+    )
     preflight = validate_project_worker_preflight(
         preflight_reference, harness_root=harness_root,
         run_id=str(request["run_id"]), logical_model=logical_model,

@@ -3,7 +3,9 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 from validation.tools._project_migration_harness.ledger import ProjectLedger
 from validation.tools._project_migration_harness.project_repair_authoritative_ir import (
@@ -14,6 +16,7 @@ from validation.tools._project_migration_harness.project_repair_coordinator impo
 )
 from validation.tools.project_migration_project_repair_test_support import (
     coordinated_case,
+    project_repair_test_dispatch_permit,
     sha,
 )
 
@@ -62,10 +65,52 @@ class ProjectRepairCoordinatorTests(unittest.TestCase):
         self.assertFalse(result["model_launched"])
         self.assertTrue((self.harness / result["request"]["path"]).is_file())
 
+    def test_preflight_boundary_does_not_materialize_an_attempt(self) -> None:
+        _ir, _receipt, reference = self.case("preflight-boundary")
+        result = resume_latest_project_repair(
+            ledger=self.ledger, run_id="run",
+            base_rust_project_ir=reference, harness_root=self.harness,
+            out_root=self.out_root, out_root_rel="target/run",
+        )
+        self.assertEqual("preflight-required", result["status"])
+        with self.ledger.connect() as connection:
+            attempts = connection.execute(
+                "select count(*) from project_repair_attempts"
+            ).fetchone()[0]
+        self.assertEqual(0, attempts)
+
+    def test_exhausted_receipt_budget_blocks_before_preflight_or_attempt(self) -> None:
+        _ir, _receipt, reference = self.case("receipt-budget")
+        exhausted = SimpleNamespace(
+            max_provider_calls=64, provider_calls=0,
+            max_receipt_epochs=1, receipt_epochs=1,
+        )
+        with mock.patch.object(
+            self.ledger, "project_repair_budget", return_value=exhausted,
+        ):
+            result = resume_latest_project_repair(
+                ledger=self.ledger, run_id="run",
+                base_rust_project_ir=reference, harness_root=self.harness,
+                out_root=self.out_root, out_root_rel="target/run",
+            )
+        self.assertEqual("blocked", result["status"])
+        self.assertEqual("project-repair-receipt-budget-exhausted", result["stage"])
+        with self.ledger.connect() as connection:
+            attempts = connection.execute(
+                "select count(*) from project_repair_attempts"
+            ).fetchone()[0]
+        self.assertEqual(0, attempts)
+
     def test_two_coordinators_create_only_one_running_attempt(self) -> None:
         _ir, _receipt, reference = self.case("concurrent")
+        permit = project_repair_test_dispatch_permit(
+            self.harness, self.out_root, self.ledger, reference,
+        )
         with ThreadPoolExecutor(max_workers=2) as executor:
-            results = list(executor.map(lambda _index: self.resume(reference), range(2)))
+            results = list(executor.map(
+                lambda _index: self._resume_with_permit(reference, permit),
+                range(2),
+            ))
         self.assertCountEqual(
             ["repair-dispatched", "waiting"],
             [value["status"] for value in results],
@@ -76,6 +121,29 @@ class ProjectRepairCoordinatorTests(unittest.TestCase):
             ).fetchall()
         self.assertEqual(1, len(rows))
         self.assertEqual("running", rows[0]["status"])
+
+    def test_stale_permit_cannot_dispatch_a_new_receipt_epoch(self) -> None:
+        _first_ir, _first_receipt, first_reference = self.case("permit-first")
+        first_action = resume_latest_project_repair(
+            ledger=self.ledger, run_id="run",
+            base_rust_project_ir=first_reference, harness_root=self.harness,
+            out_root=self.out_root, out_root_rel="target/run",
+        )
+        stale = project_repair_test_dispatch_permit(
+            self.harness, self.out_root, self.ledger, first_reference,
+            action=first_action,
+        )
+        _second_ir, _second_receipt, second_reference = self.case(
+            "permit-second", additional_conflict=True,
+        )
+        result = self._resume_with_permit(second_reference, stale)
+        self.assertEqual("waiting", result["status"])
+        self.assertEqual("project-repair-state-advanced", result["stage"])
+        with self.ledger.connect() as connection:
+            attempts = connection.execute(
+                "select count(*) from project_repair_attempts"
+            ).fetchone()[0]
+        self.assertEqual(0, attempts)
 
     def test_expired_unstarted_attempt_is_recovered_before_redispatch(self) -> None:
         _ir, receipt, reference = self.case("expired")
@@ -160,10 +228,27 @@ class ProjectRepairCoordinatorTests(unittest.TestCase):
         return ir, receipt, reference
 
     def resume(self, reference: dict, *, now_epoch: int | None = None) -> dict:
+        observed = resume_latest_project_repair(
+            ledger=self.ledger, run_id="run", base_rust_project_ir=reference,
+            harness_root=self.harness, out_root=self.out_root,
+            out_root_rel="target/run", now_epoch=now_epoch,
+        )
+        if observed["status"] != "preflight-required":
+            return observed
+        permit = project_repair_test_dispatch_permit(
+            self.harness, self.out_root, self.ledger, reference,
+            action=observed,
+        )
+        return self._resume_with_permit(reference, permit, now_epoch=now_epoch)
+
+    def _resume_with_permit(
+        self, reference: dict, permit, *, now_epoch: int | None = None,
+    ) -> dict:
         return resume_latest_project_repair(
             ledger=self.ledger, run_id="run", base_rust_project_ir=reference,
             harness_root=self.harness, out_root=self.out_root,
             out_root_rel="target/run", now_epoch=now_epoch,
+            dispatch_permit=permit,
         )
 
     def start(self, queue: dict, repair_id: str, *, now_epoch: int):

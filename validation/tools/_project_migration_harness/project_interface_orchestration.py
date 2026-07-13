@@ -12,6 +12,7 @@ from .project_repair_authoritative_ir import (
     load_authoritative_project_ir, persist_authoritative_project_ir,
 )
 from .project_repair_coordinator import resume_latest_project_repair
+from .project_repair_dispatch_permit import ProjectRepairDispatchPermit
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +25,7 @@ class ProjectInterfacePreparation:
 def prepare_project_interfaces(
     initial_rust_project_ir: Mapping[str, Any], *, ledger: ProjectLedger,
     run_id: str, harness_root: Path, out_root: Path, out_root_rel: str,
+    repair_dispatch_permit: ProjectRepairDispatchPermit | None = None,
 ) -> ProjectInterfacePreparation:
     initial = dict(initial_rust_project_ir)
     latest = ledger.load_latest_project_interface_receipt(run_id=run_id)
@@ -57,6 +59,7 @@ def prepare_project_interfaces(
         ledger=ledger, run_id=run_id, base_rust_project_ir=reference,
         harness_root=harness_root, out_root=out_root,
         out_root_rel=out_root_rel,
+        dispatch_permit=repair_dispatch_permit,
     )
     return ProjectInterfacePreparation(selected, reference, action)
 

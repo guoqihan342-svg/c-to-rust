@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -14,10 +13,12 @@ from .ledger import ProjectLedger
 from .ledger_security import LedgerError
 from .opencode_environment import isolated_opencode_environment
 from .opencode_project_repair_worker import execute_opencode_project_repair_worker
-from .orchestration_facts import read_artifact_reference
 from .project_repair_ingest import ingest_project_repair_response
-from .project_repair_prompt import render_project_repair_prompt
 from .project_repair_paths import require_bound_project_repair_out_root
+from .project_repair_request_reopener import (
+    reopen_active_project_repair_request,
+    terminal_project_repair_runtime_replay,
+)
 
 
 class _ProjectRepairLaunchAlreadyClaimed(Exception):
@@ -32,7 +33,21 @@ def run_and_ingest_opencode_project_repair(
     timeout_seconds: int = 300,
 ) -> dict[str, Any]:
     require_bound_project_repair_out_root(harness_root, out_root, out_root_rel)
-    request = _bound_request(request_reference, ledger, harness_root)
+    try:
+        request = reopen_active_project_repair_request(
+            request_reference, preflight_reference, ledger=ledger,
+            root=harness_root, logical_model=logical_model,
+            resolved_model=resolved_model,
+        )
+    except LedgerError:
+        replay = terminal_project_repair_runtime_replay(
+            request_reference, preflight_reference, ledger=ledger,
+            root=harness_root, logical_model=logical_model,
+            resolved_model=resolved_model,
+        )
+        if replay is not None:
+            return replay
+        raise
     binding = request["execution_binding"]
     attempt_id = str(binding["attempt_id"])
     fencing_token = int(binding["fencing_token"])
@@ -78,11 +93,6 @@ def run_and_ingest_opencode_project_repair(
                 **generated, "status": recovered.current.status,
                 "attempt_consumed": True,
             }
-        ingested = ingest_project_repair_response(
-            request, generated["worker_response"], ledger=ledger,
-            harness_root=harness_root, out_root=out_root,
-            out_root_rel=out_root_rel,
-        )
     except _ProjectRepairLaunchAlreadyClaimed:
         return {
             "schema_version": 1, "status": "waiting",
@@ -96,6 +106,41 @@ def run_and_ingest_opencode_project_repair(
             request, ledger=ledger, out_root=out_root,
             out_root_rel=out_root_rel,
         )
+    try:
+        ingested = ingest_project_repair_response(
+            request, generated["worker_response"], ledger=ledger,
+            harness_root=harness_root, out_root=out_root,
+            out_root_rel=out_root_rel,
+        )
+    except Exception:
+        projection = ledger.project_repair_projection(
+            run_id=str(request["run_id"]),
+            queue_sha256=str(request["project_repair_queue_sha256"]),
+            repair_id=str(request["repair_id"]),
+        )
+        if projection.status == "running":
+            return {
+                "schema_version": 1, "status": "ingest-required",
+                "stage": "project-repair-provider-result-recorded",
+                "run_id": request["run_id"], "repair_id": request["repair_id"],
+                "attempt_id": attempt_id, "attempt_consumed": True,
+                "provider_invocations": int(generated["provider_invocations"]),
+                "model_launched": bool(generated["model_launched"]),
+                "semantic_gate": False,
+            }
+        replay = terminal_project_repair_runtime_replay(
+            request_reference, preflight_reference, ledger=ledger,
+            root=harness_root, logical_model=logical_model,
+            resolved_model=resolved_model,
+        )
+        if replay is not None:
+            return replay
+        return {
+            "schema_version": 1, "status": "manual-reconcile",
+            "run_id": request["run_id"], "repair_id": request["repair_id"],
+            "attempt_id": attempt_id, "current_state": projection.status,
+            "semantic_gate": False,
+        }
     return {
         "schema_version": 1, "status": ingested["status"],
         "run_id": request["run_id"], "repair_id": request["repair_id"],
@@ -107,55 +152,6 @@ def run_and_ingest_opencode_project_repair(
         "ledger": ingested,
         "semantic_gate": False,
     }
-
-
-def _bound_request(
-    reference: Mapping[str, Any], ledger: ProjectLedger, root: Path,
-) -> dict[str, Any]:
-    try:
-        value = json.loads(read_artifact_reference(root, reference).decode("utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError("project repair request is unreadable") from error
-    if not isinstance(value, dict):
-        raise ValueError("project repair request must be an object")
-    render_project_repair_prompt(value, harness_root=root)
-    binding = value.get("execution_binding")
-    if not isinstance(binding, Mapping):
-        raise ValueError("project repair execution binding is missing")
-    projection = ledger.project_repair_projection(
-        run_id=str(value["run_id"]),
-        queue_sha256=str(value["project_repair_queue_sha256"]),
-        repair_id=str(value["repair_id"]),
-    )
-    with ledger.connect() as connection:
-        attempt = connection.execute(
-            "select * from project_repair_attempts where attempt_id=?",
-            (binding.get("attempt_id"),),
-        ).fetchone()
-    if (
-        attempt is None or attempt["status"] != "running"
-        or attempt["worker_id"] != value.get("worker_id")
-        or attempt["input_sha256"] != value.get("effective_input_sha256")
-        or projection.status != "running"
-        or projection.active_attempt_id != binding.get("attempt_id")
-        or projection.version != binding.get("fencing_token")
-        or projection.version != binding.get("started_state_version")
-    ):
-        raise LedgerError("project repair request is not bound to the active attempt")
-    latest = ledger.load_latest_project_interface_receipt(
-        run_id=str(value["run_id"]),
-    )
-    coordinator = value.get("coordinator_binding")
-    if (
-        latest is None or not isinstance(coordinator, Mapping)
-        or int(coordinator.get("receipt_epoch", 0)) != int(latest[0])
-        or coordinator.get("coordinator_receipt_sha256")
-        != latest[1]["coordinator_receipt_sha256"]
-        or value["project_repair_queue_sha256"]
-        != latest[1]["project_repair_queue"]["project_repair_queue_sha256"]
-    ):
-        raise LedgerError("project repair request coordinator epoch is stale")
-    return value
 
 
 def _record_provider_artifacts(

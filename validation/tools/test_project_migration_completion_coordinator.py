@@ -149,7 +149,7 @@ class ProjectMigrationCompletionCoordinatorTests(
                 "validation.tools._project_migration_harness."
                 "project_completion_coordinator.integrate_verified_project",
                 return_value=partial,
-            ),
+            ) as integration_runner,
             mock.patch(
                 "validation.tools._project_migration_harness."
                 "project_completion_coordinator.verify_integrated_project",
@@ -167,6 +167,9 @@ class ProjectMigrationCompletionCoordinatorTests(
             "unresolved-interface:public-signature",
             "unresolved-interface:shared-type-layout",
         ], result["blockers"])
+        self.assertNotIn(
+            "repair_dispatch_permit", integration_runner.call_args.kwargs,
+        )
         integration_gate.assert_not_called()
 
 

@@ -13,7 +13,7 @@ from .ledger_project_repair_schema import PROJECT_REPAIR_SCHEMA
 from .schema_integrity import assert_schema_integrity
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SAVEPOINTS = count()
 

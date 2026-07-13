@@ -9,6 +9,9 @@ from .artifacts import canonical_json_bytes, content_sha256, write_json_artifact
 from .ledger_project_repair_registry import ProjectRepairRegistry
 from .orchestration_facts import read_artifact_reference
 from .project_repair_context import build_project_repair_context
+from .project_repair_dispatch_permit import (
+    ProjectRepairDispatchPermit, project_repair_dispatch_binding,
+)
 from .project_repair_paths import require_bound_project_repair_out_root
 from .rust_project_ir import canonical_rust_project_ir_bytes
 from .rust_project_ir_validation import validate_rust_project_ir
@@ -18,6 +21,7 @@ def materialize_project_repair_request(
     *, ledger: Any, run_id: str, queue_sha256: str, repair_id: str,
     worker_id: str, base_rust_project_ir: Mapping[str, Any],
     harness_root: Path, out_root: Path, out_root_rel: str,
+    dispatch_permit: ProjectRepairDispatchPermit,
 ) -> dict[str, Any]:
     require_bound_project_repair_out_root(harness_root, out_root, out_root_rel)
     ir = read_bound_rust_project_ir(harness_root, base_rust_project_ir)
@@ -40,6 +44,13 @@ def materialize_project_repair_request(
     )
     if projection.status not in {"queued", "retry-ready"}:
         raise ValueError("project repair item is not dispatchable")
+    dispatch_binding = project_repair_dispatch_binding(dispatch_permit)
+    _validate_dispatch_binding(
+        dispatch_binding, run_id=run_id, receipt_epoch=receipt_epoch,
+        coordinator_receipt_sha256=receipt["coordinator_receipt_sha256"],
+        queue_sha256=queue_sha256, repair_id=repair_id,
+        status=projection.status, state_version=projection.version,
+    )
     context = build_project_repair_context(
         ir, receipt, receipt_epoch=receipt_epoch, repair_id=repair_id,
     )
@@ -84,6 +95,7 @@ def materialize_project_repair_request(
             "attempt_count": projection.attempt_count,
             "max_attempts": projection.max_attempts,
         },
+        "preflight_binding": dict(dispatch_binding),
         "model_input_policy": {
             "complete_repository": "withheld",
             "candidate_source_bodies": "withheld",
@@ -109,6 +121,8 @@ def materialize_project_repair_request(
             "base_ir_sha256": ir["ir_sha256"],
             "coordinator_receipt_sha256": context["coordinator_receipt_sha256"],
             "context_sha256": context["context_sha256"],
+            "preflight_sha256": dispatch_binding["preflight"]["sha256"],
+            "dispatch_permit_sha256": dispatch_binding["permit_sha256"],
         },
     )
     binding = {
@@ -166,6 +180,27 @@ def materialize_project_repair_request(
         "context": bound_context,
         "model_launched": False,
     }
+
+
+def _validate_dispatch_binding(
+    value: Mapping[str, Any], *, run_id: str, receipt_epoch: int,
+    coordinator_receipt_sha256: str, queue_sha256: str, repair_id: str,
+    status: str, state_version: int,
+) -> None:
+    payload = {key: item for key, item in value.items() if key != "permit_sha256"}
+    expected = {
+        "run_id": run_id, "receipt_epoch": receipt_epoch,
+        "coordinator_receipt_sha256": coordinator_receipt_sha256,
+        "project_repair_queue_sha256": queue_sha256,
+        "repair_id": repair_id, "expected_status": status,
+        "expected_state_version": state_version,
+    }
+    if (
+        content_sha256(payload) != value.get("permit_sha256")
+        or any(value.get(key) != item for key, item in expected.items())
+        or not isinstance(value.get("preflight"), Mapping)
+    ):
+        raise ValueError("project repair dispatch permit is stale or invalid")
 
 
 def read_bound_rust_project_ir(
