@@ -41,7 +41,7 @@
     "external_callee_source_context": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "status", "blocks", "blocked", "dependencies", "source_backed_behavior", "semantics_verified"],
+      "required": ["schema_version", "status", "blocks", "declarations", "blocked", "dependencies", "source_backed_behavior", "semantics_verified"],
       "properties": {
         "schema_version": {"const": 1},
         "status": {"enum": ["not_applicable", "bound", "partial", "unavailable", "blocked"]},
@@ -49,6 +49,30 @@
           "type": "array",
           "maxItems": 24,
           "items": {"type": "object", "required": ["callee", "source_file", "source_span", "allowed_use", "semantics_verified"]}
+        },
+        "declarations": {
+          "type": "array",
+          "maxItems": 24,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["schema_version", "callee", "role", "definition_status", "source_ref", "header", "header_inventory", "signature_ref", "stub_boundary", "allowed_use", "execution_allowed", "semantics_verified", "declaration_sha256"],
+            "properties": {
+              "schema_version": {"const": 1},
+              "callee": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+              "role": {"const": "compiler_header_declaration_only"},
+              "definition_status": {"const": "declared_external_direct_callee"},
+              "source_ref": {"type": "string", "pattern": "^compiler-header:[A-Za-z0-9_.+/-]+#[A-Za-z_][A-Za-z0-9_]*$"},
+              "header": {"type": "string", "pattern": "^[A-Za-z0-9_.+/-]+$"},
+              "header_inventory": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z0-9_.+/-]+$"}},
+              "signature_ref": {"type": "string", "minLength": 1},
+              "stub_boundary": {"const": "compile_only"},
+              "allowed_use": {"const": "compile_context_only"},
+              "execution_allowed": {"const": false},
+              "semantics_verified": {"const": false},
+              "declaration_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }
+          }
         },
         "blocked": {"type": "array", "maxItems": 24},
         "dependencies": {

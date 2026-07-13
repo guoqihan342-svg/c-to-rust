@@ -9,6 +9,10 @@ from .context_callee_behavior import (
     source_backed_behavior,
     source_behavior_disagrees_with_fixture,
 )
+from .context_compiler_headers import (
+    compiler_header_declaration,
+    is_compiler_header_candidate,
+)
 from .context_bound_source import (
     ensure_bound_source_unchanged,
     read_hash_bound_utf8_source,
@@ -33,6 +37,7 @@ def build_external_callee_source_context(
     known_roots: tuple[str, ...],
 ) -> dict[str, Any]:
     declared = spec.get("c_boundary", {}).get("external_direct_callees")
+    signatures = spec.get("c_boundary", {}).get("signatures")
     target_block = _target_behavior_block(
         spec,
         source_root=source_root,
@@ -50,6 +55,7 @@ def build_external_callee_source_context(
         return _context(
             "not_applicable",
             [],
+            [],
             behavior_blocked,
             dependencies,
             behavior_rules,
@@ -57,6 +63,7 @@ def build_external_callee_source_context(
     if len(declared) > MAX_CALLEE_BLOCKS:
         return _context(
             "blocked",
+            [],
             [],
             [{
                 "reason": "callee_count_exceeds_limit",
@@ -68,6 +75,7 @@ def build_external_callee_source_context(
         )
 
     blocks: list[dict[str, Any]] = []
+    declarations: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
     total_bytes = 0
     for item in declared:
@@ -77,6 +85,12 @@ def build_external_callee_source_context(
         name = item.get("name")
         if not isinstance(name, str) or not name:
             blocked.append({"reason": "callee_name_missing"})
+            continue
+        if is_compiler_header_candidate(item):
+            try:
+                declarations.append(compiler_header_declaration(item, signatures))
+            except ValueError as error:
+                blocked.append({"callee": name, "reason": str(error)})
             continue
         try:
             block = _source_block(
@@ -107,8 +121,9 @@ def build_external_callee_source_context(
     if source_behavior_disagrees_with_fixture(spec, behavior_rules):
         behavior_blocked.append({"reason": "source_behavior_expected_output_mismatch"})
     blocked.extend(behavior_blocked)
-    status = "bound" if blocks and not blocked else "partial" if blocks else "unavailable"
-    return _context(status, blocks, blocked, dependencies, behavior_rules)
+    available = bool(blocks or declarations)
+    status = "bound" if available and not blocked else "partial" if available else "unavailable"
+    return _context(status, blocks, declarations, blocked, dependencies, behavior_rules)
 
 
 def _target_behavior_block(
@@ -322,6 +337,7 @@ def _normalized_declared_path(value: Any) -> str | None:
 def _context(
     status: str,
     blocks: list[dict[str, Any]],
+    declarations: list[dict[str, Any]],
     blocked: list[dict[str, Any]],
     dependencies: list[dict[str, Any]],
     behavior_rules: list[dict[str, Any]],
@@ -337,6 +353,7 @@ def _context(
         "schema_version": 1,
         "status": status,
         "blocks": blocks,
+        "declarations": declarations,
         "blocked": blocked,
         "dependencies": dependencies,
         "source_backed_behavior": behavior_payload,

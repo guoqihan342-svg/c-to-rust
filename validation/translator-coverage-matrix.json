@@ -7119,6 +7119,7 @@
         "runtime replay assertions use plan-derived opaque ids and may expose only a hash-bound case_id and observable_field after candidate, replay, fixture, target, plan, and assertion-inventory bindings match; expected/actual values, panic text, source, paths, and line numbers remain excluded",
         "negative mutation flips the first opaque observable guard before considering legacy assert_eq syntax, so metadata assertions cannot impersonate candidate-observable mutation coverage",
         "candidate-source ABI analysis is identity-neutral: ABI-free safe Rust does not inherit replay-failure noise, target-width/config/native-endian dependencies require exact target execution bindings, and repr/raw/extern/layout/union/transmute/assembly dependencies fail closed without current-candidate layout proof",
+        "compiler-header declaration-only context requires an exact namespace, relative header inventory, symbol, signature reference, and compile-only boundary; it creates no repository source block or executable binding",
         "the real libuv function emits a Rust candidate under its explicit ip-to-addr noalias precondition and passes rustc with two compile-only external bindings; candidate+replay preflight now exposes the required safe API mismatch, while callee behavior/no-escape semantics remain non-executable and unverified",
         "no named-slice C/Rust replay, diff, unsafe ledger, or semantic acceptance is claimed"
       ],
@@ -7136,7 +7137,8 @@
         "newline-equivalent external-callee source binding",
         "hash-bound exact replay linker diagnostic projection",
         "plan-derived opaque replay assertion inventory and runtime localization",
-        "masked candidate-source ABI dependency classification"
+        "masked candidate-source ABI dependency classification",
+        "hash-bound compiler-header declaration-only classification"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -7278,6 +7280,14 @@
         {
           "name": "test_target_dependency_families_are_classified_without_identity_rules",
           "path": "validation/tools/test_ai_abi_dependency_patterns.py"
+        },
+        {
+          "name": "test_renamed_declarations_are_compile_context_only",
+          "path": "validation/tools/test_ai_compiler_header_declarations.py"
+        },
+        {
+          "name": "test_real_mixed_context_has_declaration_and_repository_source_separately",
+          "path": "validation/tools/test_ai_compiler_header_declarations.py"
         }
       ],
       "negative_cases": [
@@ -7345,6 +7355,16 @@
           "name": "test_extern_crate_and_safe_non_null_type_do_not_become_layout_dependencies",
           "path": "validation/tools/test_ai_abi_dependency_patterns.py",
           "fail_closed_reason": "extern crate and safe NonNull type syntax cannot be inflated into extern-ABI or raw-pointer layout dependencies"
+        },
+        {
+          "name": "test_namespace_header_symbol_signature_and_boundary_drift_fail_closed",
+          "path": "validation/tools/test_ai_compiler_header_declarations.py",
+          "fail_closed_reason": "malformed namespace, header path or inventory, symbol, signature, definition status, and non-compile-only boundary cannot create a compiler-header declaration"
+        },
+        {
+          "name": "test_readiness_recomputes_declaration_and_rejects_source_block",
+          "path": "validation/tools/test_ai_compiler_header_declarations.py",
+          "fail_closed_reason": "declaration hash drift, omission, or injection as a repository source block invalidates provider readiness"
         }
       ]
     }

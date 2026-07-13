@@ -86,7 +86,8 @@ def render_replay_behavior_rule(context_pack: dict[str, Any]) -> str:
     return (
         "Required replay discipline: concrete replay assertions and oracle values are intentionally "
         "withheld from model input. Implement behavior only from the bound C source, compile context, "
-        "structured call plan, and source-backed external-callee definitions. Do not infer or invent "
+        "structured call plan, source-backed external-callee definitions, and compile-only declarations. "
+        "Do not infer or invent "
         "expected values, branch on project/function/case identifiers, or implement fixture lookup tables."
     )
 
@@ -97,21 +98,32 @@ def render_external_callee_source_rule(context_pack: dict[str, Any]) -> str:
         return ""
     behavior = context.get("source_backed_behavior")
     has_behavior = isinstance(behavior, dict) and bool(behavior.get("rules"))
-    if not context.get("blocks") and not has_behavior:
+    declarations = context.get("declarations")
+    has_declarations = isinstance(declarations, list) and bool(declarations)
+    if not context.get("blocks") and not has_behavior and not has_declarations:
         return ""
     behavior_contract = (
         json.dumps(behavior, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
         if isinstance(behavior, dict) and behavior.get("rules")
         else "null"
     )
-    return (
-        f"Source-backed C behavior contract: {behavior_contract}\n"
-        "Source-backed C dependencies: ContextPack.external_callee_source_context.blocks contains "
-        "the hash-bound C definitions and dependencies from the declared source root. Implement every "
-        "applicable rule in the behavior contract above. Resolved constants may come only from those "
-        "source rules. They are candidate context only and keep semantics_verified=false; they cannot "
-        "replace oracle, replay, diff, or final verification."
-    )
+    contracts = []
+    if context.get("blocks") or has_behavior:
+        contracts.append(
+            f"Source-backed C behavior contract: {behavior_contract}\n"
+            "Source-backed C dependencies: ContextPack.external_callee_source_context.blocks contains "
+            "the hash-bound C definitions and dependencies from the declared source root. Implement every "
+            "applicable rule in the behavior contract above. Resolved constants may come only from those "
+            "source rules. They are candidate context only and keep semantics_verified=false; they cannot "
+            "replace oracle, replay, diff, or final verification."
+        )
+    if has_declarations:
+        contracts.append(
+            "Compiler-header declarations: ContextPack.external_callee_source_context.declarations "
+            "contains compile-context-only signatures. They provide no repository source body, "
+            "executable stub, or semantic proof."
+        )
+    return "\n".join(contracts)
 
 
 def render_source_semantics_contract(context_pack: dict[str, Any]) -> str:

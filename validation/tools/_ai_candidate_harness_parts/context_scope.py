@@ -15,6 +15,7 @@ PROMPT_SCOPE_ORDER = (
     "pointer_graph_excerpt",
     "root_cause_summary",
     "direct_caller_callee_facts",
+    "compiler_header_declarations",
     "external_callee_source_blocks",
 )
 
@@ -70,6 +71,12 @@ def prompt_scope_for_context(context_pack: dict[str, Any]) -> list[str]:
         and value_has_facts(callee_context.get("blocks"))
     ):
         scopes.add("external_callee_source_blocks")
+    if (
+        isinstance(callee_context, dict)
+        and callee_context.get("status") in {"bound", "partial"}
+        and value_has_facts(callee_context.get("declarations"))
+    ):
+        scopes.add("compiler_header_declarations")
     return [scope for scope in PROMPT_SCOPE_ORDER if scope in scopes]
 
 

@@ -5,6 +5,9 @@ import re
 from typing import Any
 
 from .context_security import sha256_bytes
+from .provider_readiness_compiler_headers import (
+    compiler_header_declaration_status,
+)
 
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -21,6 +24,16 @@ def external_callee_source_context_status(context_pack: dict[str, Any]) -> str:
     declared = boundary_payload.get("external_direct_callees")
     if not isinstance(declared, list):
         return "invalid"
+    context = context_pack.get("external_callee_source_context")
+    if not isinstance(context, dict):
+        return "invalid"
+    declaration_status = compiler_header_declaration_status(
+        boundary_payload,
+        declared,
+        context,
+    )
+    if declaration_status != "ready":
+        return declaration_status
     required_source_names = {
         item.get("name")
         for item in declared
@@ -30,9 +43,6 @@ def external_callee_source_context_status(context_pack: dict[str, Any]) -> str:
     }
     if not required_source_names:
         return "ready"
-    context = context_pack.get("external_callee_source_context")
-    if not isinstance(context, dict):
-        return "invalid"
     if context.get("status") not in {"bound", "partial"}:
         return "incomplete"
     if not isinstance(context.get("blocks"), list) or not context["blocks"]:
@@ -88,8 +98,6 @@ def external_callee_source_context_status(context_pack: dict[str, Any]) -> str:
     ):
         return "incomplete"
     return _behavior_status(context, known_span_hashes)
-
-
 def _behavior_status(context: dict[str, Any], known_span_hashes: set[str]) -> str:
     behavior = context.get("source_backed_behavior")
     if not isinstance(behavior, dict) or behavior.get("semantics_verified") is not False:
