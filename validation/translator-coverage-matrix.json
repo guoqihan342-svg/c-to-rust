@@ -7173,7 +7173,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "A18c8h4f rebuilds the AI ContextPack from existing real libuv WSL evidence with typed_ir_status=ready and newline-equivalent hash-bound uv_inet_pton source, making provider readiness ready; no model has yet been invoked for this stage, so AI API repair, executable callee semantics, schema-aware diff, negative diff, and final verification remain incomplete"
+          "reason": "A18c8h4g runs a fresh WSL competition-like DeepSeek AI-first stage with provider readiness ready, one initial call, and three repairs; rounds two and three pass rustc, fresh oracle, unsafe, and alias while replay reaches runtime failure, but ABI, schema-aware diff, negative diff, and final verification remain incomplete"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -7181,7 +7181,7 @@
         },
         "route_evidence": {
           "status": "gap",
-          "reason": "A18c8h4f proves identity-neutral actual/declared/hash-mode binding for external callee and behavior-dependency source and advances the real libuv ContextPack to provider-ready; it is local development evidence with no provider invocation, no accepted candidate, and semantic_pass=false"
+          "reason": "A18c8h4g records a real noncompetition DeepSeek/max invocation plus three bounded repairs and an independent validator reopening 29 hash-bound artifacts without structural errors; no candidate passes all exact gates, selected_candidate_id remains null, and semantic_pass=false"
         }
       },
       "positive_cases": [
