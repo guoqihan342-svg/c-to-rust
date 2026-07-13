@@ -123,7 +123,15 @@ def validate_exact_candidate(
     scan, tokens, policy = unsafe_scan_gate(source, selected_sha, unsafe_policy)
     ledger = unsafe_ledger_gate(selected_sha, unsafe_ledger, tokens, policy)
     alias = alias_gate(selected_sha, source, alias_proof, target_sha, target_error)
-    abi = abi_gate(selected_sha, rustc, replay, oracle, target_sha, target_error)
+    abi = abi_gate(
+        selected_sha,
+        source,
+        rustc,
+        replay,
+        oracle,
+        target_sha,
+        target_error,
+    )
     gates = {
         "rustc": rustc,
         "generated_replay": replay,

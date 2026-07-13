@@ -5,6 +5,11 @@ import re
 from typing import Any
 
 from .context_security import canonical_json_bytes, sha256_bytes
+from .abi_dependencies import (
+    LAYOUT_PROOF,
+    classify_abi_dependencies,
+    dependency_kinds,
+)
 from .exact_validation_artifacts import failed, gate, safe_json
 
 
@@ -169,29 +174,77 @@ def alias_gate(
 
 def abi_gate(
     candidate_sha: str,
+    source: str,
     rustc: Mapping[str, Any],
     replay: Mapping[str, Any],
     oracle: Mapping[str, Any],
     target_sha: str | None,
     target_error: str | None,
 ) -> dict[str, Any]:
+    analysis = classify_abi_dependencies(source)
+    fields = {
+        "required": analysis["required"],
+        "dependency_kinds": dependency_kinds(analysis),
+        "dependency_analysis_sha256": analysis["analysis_sha256"],
+    }
+    if not analysis["required"]:
+        return gate(
+            candidate_sha,
+            "passed",
+            proof_class="not_required",
+            **fields,
+        )
+    layout_kinds = dependency_kinds(analysis, LAYOUT_PROOF)
+    if layout_kinds:
+        return gate(
+            candidate_sha,
+            "failed",
+            failures=[
+                {
+                    "kind": "abi_layout_proof_missing",
+                    "message": (
+                        "Candidate layout or FFI dependencies require "
+                        "current-candidate proof."
+                    ),
+                    "details": {"dependency_kinds": layout_kinds},
+                }
+            ],
+            layout_dependency_kinds=layout_kinds,
+            **fields,
+        )
     passed = (
         target_error is None
         and all(item.get("status") == "passed" for item in (rustc, replay, oracle))
+        and all(
+            item.get("candidate_sha256") == candidate_sha
+            for item in (rustc, replay, oracle)
+        )
         and all(
             item.get("target_contract_sha256") == target_sha
             for item in (rustc, replay, oracle)
         )
     )
     if not passed:
-        return failed(
+        return gate(
             candidate_sha,
-            "abi_target_binding_failed",
-            "ABI target bindings are incomplete.",
+            "failed",
+            failures=[
+                {
+                    "kind": "abi_target_execution_unproven",
+                    "message": (
+                        "Target-dependent candidate behavior lacks complete "
+                        "execution bindings."
+                    ),
+                    "details": {"dependency_kinds": fields["dependency_kinds"]},
+                }
+            ],
+            **fields,
         )
     return gate(
         candidate_sha,
         "passed",
+        proof_class="target_execution_bindings",
+        **fields,
         target_contract_sha256=target_sha,
         replay_compile_proven=True,
     )

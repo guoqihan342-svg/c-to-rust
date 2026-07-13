@@ -7118,6 +7118,7 @@
         "exact compile and replay gates forward at most eight hash-bound compiler-owned code/message pairs into AI repair only after candidate, target, replay, and fixture bindings match; rendered source, spans, fixtures, oracle values, and all extra fields are excluded",
         "runtime replay assertions use plan-derived opaque ids and may expose only a hash-bound case_id and observable_field after candidate, replay, fixture, target, plan, and assertion-inventory bindings match; expected/actual values, panic text, source, paths, and line numbers remain excluded",
         "negative mutation flips the first opaque observable guard before considering legacy assert_eq syntax, so metadata assertions cannot impersonate candidate-observable mutation coverage",
+        "candidate-source ABI analysis is identity-neutral: ABI-free safe Rust does not inherit replay-failure noise, target-width/config/native-endian dependencies require exact target execution bindings, and repr/raw/extern/layout/union/transmute/assembly dependencies fail closed without current-candidate layout proof",
         "the real libuv function emits a Rust candidate under its explicit ip-to-addr noalias precondition and passes rustc with two compile-only external bindings; candidate+replay preflight now exposes the required safe API mismatch, while callee behavior/no-escape semantics remain non-executable and unverified",
         "no named-slice C/Rust replay, diff, unsafe ledger, or semantic acceptance is claimed"
       ],
@@ -7134,7 +7135,8 @@
         "hash-bound AI ContextPack MutableVoidPointerAddress projection",
         "newline-equivalent external-callee source binding",
         "hash-bound exact replay linker diagnostic projection",
-        "plan-derived opaque replay assertion inventory and runtime localization"
+        "plan-derived opaque replay assertion inventory and runtime localization",
+        "masked candidate-source ABI dependency classification"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -7177,7 +7179,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "A18c8h4g runs a fresh WSL competition-like DeepSeek AI-first stage with provider readiness ready, one initial call, and three repairs; rounds two and three pass rustc, fresh oracle, unsafe, and alias while replay reaches runtime failure. A18c8h5b can now localize a bound failing case/field without oracle values, but ABI, schema-aware diff, negative diff, and final verification remain incomplete"
+          "reason": "A18c8h4g runs a fresh WSL competition-like DeepSeek AI-first stage with provider readiness ready, one initial call, and three repairs; rounds two and three pass rustc, fresh oracle, unsafe, and alias while replay reaches runtime failure. A18c8h5b localizes a bound failing case/field without oracle values, and h5c removes replay-derived ABI noise while accurately classifying remaining repr/layout dependencies. Schema-aware diff, negative diff, and final verification remain incomplete"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -7185,7 +7187,7 @@
         },
         "route_evidence": {
           "status": "gap",
-          "reason": "A18c8h5a closes compiler/linker facts and A18c8h5b closes plan-derived runtime case/field feedback through the real wrapper and repair contract, each only after exact hash bindings match. The prior noncompetition DeepSeek run still has no candidate passing all exact gates, selected_candidate_id remains null, and semantic_pass=false"
+          "reason": "A18c8h5a closes compiler/linker facts, h5b closes plan-derived runtime case/field feedback, and h5c emits identity-neutral ABI dependency kinds rather than replay-derived abi_target_binding_failed noise. The prior noncompetition DeepSeek run still has no candidate passing all exact gates, selected_candidate_id remains null, and semantic_pass=false"
         }
       },
       "positive_cases": [
@@ -7260,6 +7262,22 @@
         {
           "name": "test_opaque_observable_guard_is_mutated_before_metadata_assertion",
           "path": "validation/tools/test_replay_negative_mutation.py"
+        },
+        {
+          "name": "test_renamed_safe_candidate_is_independent_of_failed_replay",
+          "path": "validation/tools/test_ai_abi_dependencies.py"
+        },
+        {
+          "name": "test_target_dependencies_require_matching_execution_bindings",
+          "path": "validation/tools/test_ai_abi_dependencies.py"
+        },
+        {
+          "name": "test_layout_dependency_kind_reaches_repair_without_source_text",
+          "path": "validation/tools/test_ai_abi_dependencies.py"
+        },
+        {
+          "name": "test_target_dependency_families_are_classified_without_identity_rules",
+          "path": "validation/tools/test_ai_abi_dependency_patterns.py"
         }
       ],
       "negative_cases": [
@@ -7312,6 +7330,21 @@
           "name": "test_legacy_assertion_fallback_and_missing_assertion_fail_closed",
           "path": "validation/tools/test_replay_negative_mutation.py",
           "fail_closed_reason": "legacy replay remains mutation-compatible while a replay with no recognized key assertion cannot claim negative-mutation coverage"
+        },
+        {
+          "name": "test_comments_strings_and_identifiers_cannot_spoof_dependencies",
+          "path": "validation/tools/test_ai_abi_dependencies.py",
+          "fail_closed_reason": "comments, string literals, and identifier substrings cannot create candidate ABI dependencies"
+        },
+        {
+          "name": "test_layout_and_ffi_dependencies_never_pass_without_specific_proof",
+          "path": "validation/tools/test_ai_abi_dependencies.py",
+          "fail_closed_reason": "repr, raw pointer, extern ABI, linkage, layout intrinsic, transmute, union, and assembly dependencies cannot pass from replay or target bindings alone"
+        },
+        {
+          "name": "test_extern_crate_and_safe_non_null_type_do_not_become_layout_dependencies",
+          "path": "validation/tools/test_ai_abi_dependency_patterns.py",
+          "fail_closed_reason": "extern crate and safe NonNull type syntax cannot be inflated into extern-ABI or raw-pointer layout dependencies"
         }
       ]
     }
