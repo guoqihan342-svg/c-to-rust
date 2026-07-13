@@ -6,6 +6,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from .compiler_diagnostics import validated_compiler_diagnostic_details
 from .context_security import redact_metadata_text, sanitize_value
 from .repair_contract import normalize_validation_result
 
@@ -182,7 +183,20 @@ def _embedded_failures(gate: str, payload: Mapping[str, Any]) -> list[dict[str, 
                     for key, value in entry.items()
                     if key not in {"gate", "kind", "code", "message", "reason", "details"}
                 }
-            facts.append(_fact(gate, str(kind), str(message), details=details))
+            compiler_details = (
+                validated_compiler_diagnostic_details(details)
+                if gate in {"rustc", "generated_replay"}
+                else None
+            )
+            facts.append(
+                _fact(
+                    gate,
+                    str(kind),
+                    str(message),
+                    details=compiler_details if compiler_details is not None else details,
+                    compiler_owned=compiler_details is not None,
+                )
+            )
         else:
             facts.append(_fact(gate, "gate_failure", str(entry)))
     return facts
@@ -194,8 +208,9 @@ def _fact(
     message: str,
     *,
     details: Mapping[str, Any] | None = None,
+    compiler_owned: bool = False,
 ) -> dict[str, Any]:
-    oracle_sensitive = gate in {
+    oracle_sensitive = not compiler_owned and gate in {
         "generated_replay",
         "schema_diff",
         "negative_mutation",

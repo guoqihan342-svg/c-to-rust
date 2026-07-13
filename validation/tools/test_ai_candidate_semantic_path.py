@@ -93,7 +93,9 @@ class AiCandidateSemanticPathTests(unittest.TestCase):
                 },
             )
             self.assertIn("Required generated replay API contract:", prompt)
-            self.assertIn("add_one(0i32)", prompt)
+            self.assertIn('"signature":"pub fn add_one(value: i32) -> i32"', prompt)
+            self.assertIn("<withheld-oracle-bearing-replay-source>", prompt)
+            self.assertNotIn("add_one(0i32)", prompt)
             self.assertEqual(
                 manifest["generator"]["evaluation_scope"],
                 "auxiliary-local-validation",

@@ -329,6 +329,7 @@ def run_generated_rust_replay_once(
             "--edition=2021",
             "--test",
             "--error-format=json",
+            "--json=diagnostic-short",
             str(combined_path),
             "-o",
             str(exe_path),
@@ -349,7 +350,8 @@ def run_generated_rust_replay_once(
         compile_stderr = stable_process_text(compile_result.stderr, aliases)
         stable_compile_command = (
             "rustc --edition=2021 --test --error-format=json "
-            "<generated-replay.rs> -o <generated-replay-executable>"
+            "--json=diagnostic-short <generated-replay.rs> "
+            "-o <generated-replay-executable>"
         )
         if compile_result.returncode != 0:
             return {

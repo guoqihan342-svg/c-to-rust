@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 from typing import Any
 
+from .compiler_diagnostics import compiler_failure_fact
 from .context_security import (
     atomic_write_bytes,
     canonical_json_bytes,
@@ -54,10 +55,17 @@ def compile_gate(
             returncode=0,
             target_contract_sha256=target_sha,
         )
-    return failed(
+    failure_kind = error or "compile_failed"
+    failure_message = "The exact candidate did not compile for the target contract."
+    failure = (
+        {"kind": failure_kind, "message": failure_message}
+        if error is not None
+        else compiler_failure_fact(failure_kind, failure_message, result)
+    )
+    return gate(
         candidate_sha,
-        error or "compile_failed",
-        "The exact candidate did not compile for the target contract.",
+        "failed",
+        failures=[failure],
         returncode=integer(result.get("returncode")),
         target_contract_sha256=target_sha,
     )
@@ -92,10 +100,13 @@ def replay_gate(
         mode="positive",
     )
     error = replay_binding(result, candidate_sha, test_sha, target_sha, fixture_sha)
-    try:
-        outputs = observables(result)
-    except ValueError:
-        outputs, error = None, error or "invalid_observable_outputs"
+    if result.get("phase") == "compile":
+        outputs = None
+    else:
+        try:
+            outputs = observables(result)
+        except ValueError:
+            outputs, error = None, error or "invalid_observable_outputs"
     passed = (
         error is None
         and result.get("status") == "passed"
@@ -114,10 +125,18 @@ def replay_gate(
         "replay_test_sha256": test_sha,
     }
     if not passed:
-        return failed(
+        compile_failed = error is None and result.get("phase") == "compile"
+        failure_kind = "replay_compile_failed" if compile_failed else error or "replay_failed"
+        failure_message = "The exact candidate replay did not run successfully."
+        failure = (
+            compiler_failure_fact(failure_kind, failure_message, result)
+            if compile_failed
+            else {"kind": failure_kind, "message": failure_message}
+        )
+        return gate(
             candidate_sha,
-            error or "replay_failed",
-            "The exact candidate replay did not run successfully.",
+            "failed",
+            failures=[failure],
             **base,
         )
     output_sha = sha256_bytes(canonical_json_bytes(outputs))

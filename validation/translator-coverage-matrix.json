@@ -7114,6 +7114,8 @@
         "direct local or scalar-parameter addresses, raw extern no-escape proof, and post-call field initialization are not modeled",
         "multiple active pointer parameters require a complete slice-spec noalias precondition or source restrict proof against every mutable record root; this is not inferred from project identity or differing C types",
         "rust-check compiles the raw candidate first and selects only exact rustc E0425 unresolved-function diagnostics intersecting declared external callees; self-contained AI candidates remain eligible for replay and partially inlined candidates receive only their required compile-only bindings",
+        "rust-check and generated replay compilation use short JSON diagnostics so multiple candidate API errors remain structured AI-repair input instead of triggering long-renderer compiler crashes; this does not authorize compile-only execution",
+        "exact compile and replay gates forward at most eight hash-bound compiler-owned code/message pairs into AI repair only after candidate, target, replay, and fixture bindings match; rendered source, spans, fixtures, oracle values, and all extra fields are excluded",
         "the real libuv function emits a Rust candidate under its explicit ip-to-addr noalias precondition and passes rustc with two compile-only external bindings; candidate+replay preflight now exposes the required safe API mismatch, while callee behavior/no-escape semantics remain non-executable and unverified",
         "no named-slice C/Rust replay, diff, unsafe ledger, or semantic acceptance is claimed"
       ],
@@ -7168,7 +7170,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "the A18c8h4b probe-10 WSL local simulation selects both candidate-required declared external callees from exact structured rustc diagnostics and passes rust-check after compile-only injection, then fails the non-executing candidate+replay API preflight; required safe API adaptation, executable callee semantics, schema-aware diff, negative diff, and final verification remain incomplete"
+          "reason": "the A18c8h4c probe-11 WSL local simulation selects both candidate-required declared external callees, passes rust-check, and preserves two E0425 plus two E0061 API diagnostics without a compiler ICE in the non-executing replay preflight; required AI API repair, executable callee semantics, schema-aware diff, negative diff, and final verification remain incomplete"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -7176,7 +7178,7 @@
         },
         "route_evidence": {
           "status": "gap",
-          "reason": "the A18c8h4b probe-10 WSL run records a rustc-passing GenericTypedIr L1 candidate, exact candidate-required external resolution, and a failed non-executing replay API preflight; it is unpublished local-simulation diagnostic evidence with skipped C oracle and semantic_pass=false"
+          "reason": "the A18c8h4c probe-11 WSL run records a rustc-passing GenericTypedIr L1 candidate, exact candidate-required external resolution, and complete short-form structured API diagnostics from a failed non-executing replay preflight; it is unpublished local-simulation evidence with no AI invocation, skipped C oracle, and semantic_pass=false"
         }
       },
       "positive_cases": [
@@ -7203,6 +7205,14 @@
         {
           "name": "test_candidate_external_binding_injects_only_unresolved_declared_callee",
           "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_04.pyfrag"
+        },
+        {
+          "name": "test_compile_diagnostics_reach_repair_facts_without_rendered_source",
+          "path": "validation/tools/test_ai_compiler_diagnostics.py"
+        },
+        {
+          "name": "test_replay_compile_diagnostics_reach_repair_without_oracle_values",
+          "path": "validation/tools/test_ai_compiler_diagnostics.py"
         }
       ],
       "negative_cases": [

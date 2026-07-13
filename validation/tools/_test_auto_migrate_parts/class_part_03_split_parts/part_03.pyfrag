@@ -107,6 +107,7 @@ pub fn translate_packet(source: *const core::ffi::c_void) -> i32 {
 #[test]
 fn replay_packet_preflight_fixture_contract() {
     let actual: i32 = translate_packet("payload");
+    let _missing: MissingReplayType = translate_packet("payload");
     assert_eq!(actual, 0i32);
 }
 """,
@@ -148,7 +149,9 @@ fn replay_packet_preflight_fixture_contract() {
             self.assertNotEqual(preflight["compile_returncode"], 0)
             self.assertFalse(preflight["execution_allowed"])
             self.assertFalse(preflight["semantics_verified"])
+            self.assertIn("--json=diagnostic-short", preflight["compile_command"])
             diagnostics = (evidence_dir / preflight["stderr_log"]).read_text(encoding="utf-8")
             self.assertIn("mismatched types", diagnostics)
+            self.assertIn("cannot find type `MissingReplayType`", diagnostics)
             self.assertFalse(result["generated_draft_replay_pass"])
             self.assertFalse(result["generated_draft_semantic_pass"])
