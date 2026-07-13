@@ -6,13 +6,17 @@ from collections.abc import Mapping
 from typing import Any
 
 from .artifacts import content_sha256
+from .ledger_attempt_budget import consumed_attempt_count, next_attempt_ordinal
 from .ledger_schema import _json, _now_text, _require_sha256, atomic
 from .ledger_security import LedgerError, LeaseConflict, assert_no_semantic_claims
-from .ledger_transition_authority import TransitionAuthority, load_unit_state
-from .ledger_transition_policy import (
-    UnitState, attempt_started_command, lease_recovery_command,
+from .ledger_transition_authority import (
+    TransitionAuthority, load_run_projection, load_unit_projection,
+)
+from .ledger_transition_commands import (
+    attempt_started_command, lease_recovery_command,
     lease_recovery_run_command,
 )
+from .ledger_transition_policy import UnitState
 
 
 ROLES = {"planner", "translator", "reviewer", "repairer"}
@@ -127,12 +131,11 @@ class LeaseLifecycleMixin:
                    heartbeat_at=excluded.heartbeat_at""",
                 (run_id, unit_id, worker_id, role, token, clock + ttl_seconds, clock),
             )
-            ordinal = int(connection.execute(
-                """select count(*) from attempts where run_id=? and unit_id=?
-                   and worker_id=? and role=?""", (run_id, unit_id, worker_id, role),
-            ).fetchone()[0]) + 1
-            if ordinal > int(row["max_attempts"]):
-                raise LedgerError(f"attempt limit reached for {run_id}/{unit_id}/{worker_id}")
+            ordinal = next_attempt_ordinal(
+                connection, run_id=run_id, unit_id=unit_id,
+                worker_id=worker_id, role=role,
+                max_attempts=int(row["max_attempts"]),
+            )
             attempt_id = f"{run_id}:{unit_id}:{role}:{ordinal}"
             attempt_metadata = {
                 **dict(metadata or {}),
@@ -147,7 +150,7 @@ class LeaseLifecycleMixin:
                 "previous_status": unit["status"],
                 "previous_resumable_status": unit["resumable_status"],
             }
-            expected = UnitState(str(unit["status"]), str(unit["resumable_status"]))
+            expected = load_unit_projection(connection, run_id, unit_id)
             input_digest = _require_sha256(input_sha256, "input_sha256")
             timestamp = _now_text()
             connection.execute(
@@ -215,17 +218,16 @@ class LeaseLifecycleMixin:
             for row in rows:
                 metadata = _metadata(row["metadata_json"])
                 started = metadata.get("command_started") is True
-                count = int(connection.execute(
-                    """select count(*) from attempts where run_id=? and unit_id=?
-                       and worker_id=? and role=?""",
-                    (run_id, row["unit_id"], row["worker_id"], row["role"]),
-                ).fetchone()[0])
+                count = consumed_attempt_count(
+                    connection, run_id=run_id, unit_id=str(row["unit_id"]),
+                    worker_id=str(row["worker_id"]), role=str(row["role"]),
+                )
                 exhausted = count >= int(row["max_attempts"])
                 next_status = "blocked" if started else ("exhausted" if exhausted else "retry-ready")
                 resumable = "terminal" if started else ("exhausted" if exhausted else "retryable")
                 error_key = "worker_command_result_unknown" if started else "lease_expired"
                 unit_id = str(row["unit_id"])
-                expected = load_unit_state(connection, run_id, unit_id)
+                expected = load_unit_projection(connection, run_id, unit_id)
                 timestamp = _now_text()
                 connection.execute(
                     """update attempts set status=?,error_key=?,finished_at=? where attempt_id=?""",
@@ -239,7 +241,7 @@ class LeaseLifecycleMixin:
                     lease_recovery_command(
                         run_id=run_id, unit_id=unit_id, row=row,
                         attempt_count=count, started=started, expected=expected,
-                        target=UnitState(next_status, resumable), reason=error_key,
+                        target=UnitState(next_status, resumable),
                     ),
                     created_at=timestamp,
                 )
@@ -250,6 +252,7 @@ class LeaseLifecycleMixin:
                 TransitionAuthority(connection).apply_run(
                     lease_recovery_run_command(
                         run_id=run_id, rows=terminal_rows, clock=clock,
+                        expected=load_run_projection(connection, run_id),
                     )
                 )
         return recovered

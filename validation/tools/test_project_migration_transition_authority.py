@@ -15,7 +15,7 @@ from validation.tools._project_migration_harness.ledger_transition_authority imp
     TransitionAuthority,
 )
 from validation.tools._project_migration_harness.ledger_transition_policy import (
-    RunTransitionCommand, TransitionCommand, UnitState,
+    TransitionCommand, UnitState,
 )
 
 
@@ -36,8 +36,19 @@ class ProjectMigrationTransitionAuthorityTests(unittest.TestCase):
                 "unit_id": "unit", "group_id": "unit", "wave_index": 0,
                 "content_sha256": digest("unit"),
             }],
-            assignments=[], max_concurrency=1, max_attempts=2,
+            assignments=[{
+                "unit_id": "unit", "worker_id": "worker", "role": "translator",
+                "out_root": "target/workers/worker/out", "max_attempts": 2,
+            }],
+            max_concurrency=1, max_attempts=2,
         )
+        with self.ledger.connect() as connection:
+            connection.execute(
+                """insert into attempts(attempt_id,run_id,unit_id,role,ordinal,
+                   worker_id,status,fencing_token,input_sha256,started_at,metadata_json)
+                   values ('attempt','run','unit','translator',1,'worker','running',1,?,?,?)""",
+                (digest("input"), "2026-07-13T00:00:00Z", "{}"),
+            )
 
     def test_illegal_transition_is_rejected_without_a_log_entry(self) -> None:
         command = self.command(
@@ -58,7 +69,7 @@ class ProjectMigrationTransitionAuthorityTests(unittest.TestCase):
             target=UnitState("running", "in_progress"),
         )
         with self.ledger.connect() as connection:
-            with self.assertRaisesRegex(LedgerError, "expected unit state is stale"):
+            with self.assertRaisesRegex(LedgerError, "expected unit state/version is stale"):
                 TransitionAuthority(connection).apply(command)
             self.assertEqual(0, self.transition_count(connection))
             self.assertEqual(("pending", "ready"), self.unit_state(connection))
@@ -80,9 +91,11 @@ class ProjectMigrationTransitionAuthorityTests(unittest.TestCase):
             target=first.target,
         )
         unit_drift = TransitionCommand(
-            command_id=first.command_id, run_id="run", unit_id="other-unit",
-            expected=first.expected, target=first.target, reason=first.reason,
-            evidence_sha256=first.evidence_sha256,
+            command_kind=first.command_kind, command_id=first.command_id,
+            run_id="run", unit_id="other-unit", expected=first.expected,
+            expected_version=first.expected_version, target=first.target,
+            reason=first.reason, evidence_sha256=first.evidence_sha256,
+            attempt_id=first.attempt_id, fencing_token=first.fencing_token,
         )
         drift = self.command(
             command_id=first.command_id,
@@ -104,37 +117,14 @@ class ProjectMigrationTransitionAuthorityTests(unittest.TestCase):
             with self.assertRaisesRegex(LedgerError, "changed its evidence binding"):
                 TransitionAuthority(connection).apply(drift)
             self.assertEqual(1, self.transition_count(connection))
-            reason = connection.execute(
-                "select reason from transitions where transition_id=?",
+            event = connection.execute(
+                """select command_kind,command_id,evidence_sha256
+                   from transitions where transition_id=?""",
                 (applied.transition_id,),
-            ).fetchone()[0]
-            self.assertIn(first.command_id, reason)
-            self.assertIn(first.evidence_sha256, reason)
-
-    def test_run_transition_is_typed_idempotent_and_expected_bound(self) -> None:
-        first = RunTransitionCommand(
-            command_id="run-failed:one", run_id="run", anchor_unit_id="unit",
-            expected_status="active", target_status="failed",
-            reason="test_run_transition", evidence_sha256=digest("run-evidence"),
-        )
-        expected_drift = RunTransitionCommand(
-            command_id=first.command_id, run_id="run", anchor_unit_id="unit",
-            expected_status="failed", target_status="failed",
-            reason=first.reason, evidence_sha256=first.evidence_sha256,
-        )
-        with self.ledger.connect() as connection:
-            authority = TransitionAuthority(connection)
-            applied = authority.apply_run(first)
-            replay = authority.apply_run(first)
-            self.assertTrue(applied.applied)
-            self.assertFalse(replay.applied)
-            with self.assertRaisesRegex(LedgerError, "changed its evidence binding"):
-                authority.apply_run(expected_drift)
-            run_status = connection.execute(
-                "select status from project_runs where run_id='run'"
-            ).fetchone()[0]
-            self.assertEqual("failed", run_status)
-            self.assertEqual(1, self.transition_count(connection))
+            ).fetchone()
+            self.assertEqual("attempt_started", event["command_kind"])
+            self.assertEqual(first.command_id, event["command_id"])
+            self.assertEqual(first.evidence_sha256, event["evidence_sha256"])
 
     def test_outer_transaction_rollback_removes_log_and_projection(self) -> None:
         command = self.command(
@@ -208,13 +198,14 @@ class ProjectMigrationTransitionAuthorityTests(unittest.TestCase):
             attempt_status = connection.execute(
                 "select status from attempts where attempt_id=?", (attempt,),
             ).fetchone()[0]
-            reason = connection.execute(
-                """select reason from transitions where run_id='recovery'
+            event = connection.execute(
+                """select command_kind,reason from transitions where run_id='recovery'
                    order by transition_id desc limit 1"""
-            ).fetchone()[0]
+            ).fetchone()
         self.assertEqual(("retry-ready", "retryable"), tuple(unit))
         self.assertEqual("failed", attempt_status)
-        self.assertIn("lease-expired-recovery", reason)
+        self.assertEqual("lease_expired_recovery", event["command_kind"])
+        self.assertEqual("lease_expired_recovered", event["reason"])
 
     def test_started_attempt_recovery_projects_unit_and_run_terminal_states(self) -> None:
         self.ledger.create_run(
@@ -262,12 +253,12 @@ class ProjectMigrationTransitionAuthorityTests(unittest.TestCase):
             run_status = connection.execute(
                 "select status from project_runs where run_id='terminal-recovery'"
             ).fetchone()[0]
-            reasons = [row[0] for row in connection.execute(
-                "select reason from transitions where run_id='terminal-recovery'"
+            kinds = [tuple(row) for row in connection.execute(
+                "select scope,command_kind from transitions where run_id='terminal-recovery'"
             )]
         self.assertEqual(("blocked", "terminal"), tuple(unit))
         self.assertEqual("failed", run_status)
-        self.assertTrue(any(reason.startswith("fsm-run-v1:") for reason in reasons))
+        self.assertIn(("run", "lease_recovery_run_failed"), kinds)
 
     @staticmethod
     def command(
@@ -275,9 +266,11 @@ class ProjectMigrationTransitionAuthorityTests(unittest.TestCase):
         evidence_sha256: str | None = None,
     ) -> TransitionCommand:
         return TransitionCommand(
-            command_id=command_id, run_id="run", unit_id="unit",
-            expected=expected, target=target, reason="test_transition",
+            command_kind="attempt_started", command_id=command_id,
+            run_id="run", unit_id="unit", expected=expected,
+            expected_version=0, target=target, reason="attempt_started",
             evidence_sha256=evidence_sha256 or digest("evidence"),
+            attempt_id="attempt", fencing_token=1,
         )
 
     @staticmethod

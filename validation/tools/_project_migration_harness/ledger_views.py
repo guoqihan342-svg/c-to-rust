@@ -23,7 +23,8 @@ class LedgerViewMixin:
                         or exists (select 1 from assignments a where a.run_id=u.run_id and a.unit_id=u.unit_id
                                    and a.status='active' and (select count(*) from attempts q
                                        where q.run_id=a.run_id and q.unit_id=a.unit_id
-                                       and q.worker_id=a.worker_id and q.role=a.role) < a.max_attempts))
+                                       and q.worker_id=a.worker_id and q.role=a.role
+                                       and q.status<>'cancelled') < a.max_attempts))
                    order by u.wave_index,u.group_id,u.unit_id""", (run_id, clock),
             ).fetchall()
         return [dict(row) for row in rows]

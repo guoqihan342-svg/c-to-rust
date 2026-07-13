@@ -15,6 +15,13 @@ from validation.tools._project_migration_harness.gate_authority import (
 from validation.tools._project_migration_harness.gate_evidence import (
     write_content_addressed_json,
 )
+from validation.tools._project_migration_harness.ledger_transition_authority import (
+    TransitionAuthority, load_unit_projection,
+)
+from validation.tools._project_migration_harness.ledger_transition_commands import (
+    attempt_finished_command, attempt_started_command,
+)
+from validation.tools._project_migration_harness.ledger_transition_policy import UnitState
 from validation.tools._project_migration_harness.sandbox_contract import (
     SandboxContract,
     canonical_sha256,
@@ -60,11 +67,25 @@ class CandidateGateAuthoritySupportMixin:
                 ("run", candidate_id, "unit", attempt, "translator", ordinal,
                  "rust-candidate", source_path, candidate_sha, now, "{}"),
             )
-            connection.execute(
-                """update migration_units set status='gate-pending',
-                   resumable_status='awaiting_gate',updated_at=?
-                   where run_id='run' and unit_id='unit'""",
-                (now,),
+            authority = TransitionAuthority(connection)
+            authority.apply(
+                attempt_started_command(
+                    run_id="run", unit_id="unit", attempt_id=attempt,
+                    fencing_token=ordinal,
+                    expected=load_unit_projection(connection, "run", "unit"),
+                    input_sha256=digest(f"input-{label}"),
+                ),
+                created_at=now,
+            )
+            authority.apply(
+                attempt_finished_command(
+                    run_id="run", unit_id="unit", attempt_id=attempt,
+                    fencing_token=ordinal,
+                    expected=load_unit_projection(connection, "run", "unit"),
+                    target=UnitState("gate-pending", "awaiting_gate"),
+                    reason="attempt_completed", evidence_sha256=candidate_sha,
+                ),
+                created_at=now,
             )
         return candidate_id, candidate_sha
 

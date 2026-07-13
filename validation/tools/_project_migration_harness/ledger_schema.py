@@ -12,7 +12,7 @@ from .ledger_security import SchemaVersionError, assert_no_secrets, safe_json
 from .schema_integrity import assert_schema_integrity
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SAVEPOINTS = count()
 
@@ -63,16 +63,23 @@ _SCHEMA = (
         check(version={SCHEMA_VERSION}), applied_at text not null, schema_sha256 text not null
         check(length(schema_sha256)=64))""",
     """create table if not exists project_runs(run_id text primary key, project_key text not null,
-       source_commit text not null, dag_sha256 text not null, status text not null check(status in
+       source_commit text not null, dag_sha256 text not null, initial_status text not null check(initial_status in
+       ('active','completed','failed','cancelled')), status text not null check(status in
        ('active','completed','failed','cancelled')), max_concurrency integer not null check(max_concurrency>0),
        max_attempts integer not null check(max_attempts>0), created_at text not null, updated_at text not null,
-       metadata_json text not null)""",
+       state_version integer not null check(state_version>=0), metadata_json text not null)""",
     """create table if not exists migration_units(run_id text not null, unit_id text not null,
-       group_id text not null, wave_index integer not null check(wave_index>=0), status text not null check(status in
+       group_id text not null, wave_index integer not null check(wave_index>=0),
+       initial_status text not null check(initial_status in
+       ('pending','running','candidate-ready','gate-pending','retry-ready','failed','blocked','resume-ready',
+        'completed','cancelled','exhausted')), initial_resumable_status text not null check(initial_resumable_status in
+       ('ready','in_progress','awaiting_gate','retryable','last_good','terminal','exhausted')),
+       status text not null check(status in
        ('pending','running','candidate-ready','gate-pending','retry-ready','failed','blocked','resume-ready',
         'completed','cancelled','exhausted')), resumable_status text not null check(resumable_status in
        ('ready','in_progress','awaiting_gate','retryable','last_good','terminal','exhausted')),
-       content_sha256 text not null, last_good_artifact_id text, updated_at text not null,
+       state_version integer not null check(state_version>=0), content_sha256 text not null,
+       last_good_artifact_id text, updated_at text not null,
        primary key(run_id,unit_id), foreign key(run_id) references project_runs(run_id) on delete cascade,
        foreign key(run_id,last_good_artifact_id,unit_id) references artifacts(run_id,artifact_id,unit_id)
        deferrable initially deferred)""",
@@ -89,7 +96,7 @@ _SCHEMA = (
     """create table if not exists attempts(attempt_id text primary key, run_id text not null, unit_id text not null,
        role text not null check(role in ('planner','translator','reviewer','repairer')),
        ordinal integer not null check(ordinal>0), worker_id text not null,
-       status text not null check(status in ('running','completed','failed','blocked')),
+       status text not null check(status in ('running','completed','failed','blocked','cancelled')),
        fencing_token integer not null check(fencing_token>0), input_sha256 text not null, output_sha256 text,
        error_key text, started_at text not null, finished_at text, metadata_json text not null,
        unique(run_id,unit_id,worker_id,role,ordinal), unique(attempt_id,run_id,unit_id),
@@ -111,8 +118,20 @@ _SCHEMA = (
        metadata_json text not null, unique(run_id,unit_id,candidate_artifact_id,gate_family,gate_epoch),
        foreign key(run_id,candidate_artifact_id,unit_id) references artifacts(run_id,artifact_id,unit_id))""",
     """create table if not exists transitions(transition_id integer primary key autoincrement,
-       run_id text not null, unit_id text not null, from_status text not null, to_status text not null,
-       reason text not null, attempt_id text, fencing_token integer, created_at text not null,
+       run_id text not null, unit_id text not null, scope text not null check(scope in ('unit','run')),
+       command_kind text not null check(length(command_kind)>0),
+       command_id text not null check(length(command_id)>0),
+       from_status text not null, to_status text not null,
+       from_resumable_status text, to_resumable_status text,
+       from_version integer not null check(from_version>=0),
+       to_version integer not null check(to_version=from_version+1),
+       reason text not null, evidence_sha256 text not null check(length(evidence_sha256)=64),
+       attempt_id text, fencing_token integer, clear_last_good_if text,
+       set_last_good_artifact_id text, created_at text not null,
+       unique(run_id,scope,command_id),
+       check((scope='unit' and from_resumable_status is not null and to_resumable_status is not null)
+          or (scope='run' and from_resumable_status is null and to_resumable_status is null
+              and clear_last_good_if is null and set_last_good_artifact_id is null)),
        foreign key(run_id,unit_id) references migration_units(run_id,unit_id) on delete cascade,
        foreign key(attempt_id,run_id,unit_id) references attempts(attempt_id,run_id,unit_id))""",
     """create table if not exists leases(run_id text not null, unit_id text not null, owner text not null,
@@ -158,6 +177,16 @@ _SCHEMA = (
        begin select raise(abort,'candidate sets are immutable'); end""",
     """create trigger if not exists candidate_set_members_no_update before update on candidate_set_members
        begin select raise(abort,'candidate set members are immutable'); end""",
+    """create trigger if not exists transitions_no_update before update on transitions
+       begin select raise(abort,'transition events are immutable'); end""",
+    """create trigger if not exists transitions_no_delete before delete on transitions
+       begin select raise(abort,'transition events are immutable'); end""",
+    """create trigger if not exists project_run_initial_state_no_update
+       before update of initial_status on project_runs
+       begin select raise(abort,'project run initial state is immutable'); end""",
+    """create trigger if not exists migration_unit_initial_state_no_update
+       before update of initial_status,initial_resumable_status on migration_units
+       begin select raise(abort,'migration unit initial state is immutable'); end""",
     "create unique index if not exists one_running_attempt_per_unit on attempts(run_id,unit_id) where status='running'",
     "create index if not exists attempts_by_assignment on attempts(run_id,unit_id,worker_id,role,ordinal)",
     "create index if not exists transitions_by_unit on transitions(run_id,unit_id,transition_id)",

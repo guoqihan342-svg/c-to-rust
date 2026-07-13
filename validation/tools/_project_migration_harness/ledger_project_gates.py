@@ -23,10 +23,11 @@ from .gate_evidence import (
 )
 from .ledger_schema import _json, _now_text, _require_repo_path, _require_sha256, atomic
 from .ledger_security import LedgerError
-from .ledger_transition_authority import TransitionAuthority
-from .ledger_transition_policy import (
-    RunTransitionCommand, TransitionCommand, UnitState,
-    stable_transition_command_id,
+from .ledger_transition_authority import (
+    TransitionAuthority, load_run_projection, load_unit_projection,
+)
+from .ledger_transition_commands import (
+    project_run_completed_command, project_unit_completed_command,
 )
 from .project_final_barrier import require_project_final_candidate_passes
 from .project_completion_invariants import require_quiescent_last_good_run
@@ -153,29 +154,18 @@ class ProjectGateMixin:
             for unit in units:
                 unit_id = str(unit["unit_id"])
                 authority.apply(
-                    TransitionCommand(
-                        command_id=stable_transition_command_id(
-                            "project-unit-completed", run_id, unit_id, candidate_set,
-                        ),
+                    project_unit_completed_command(
                         run_id=run_id, unit_id=unit_id,
-                        expected=UnitState(
-                            str(unit["status"]), str(unit["resumable_status"]),
-                        ),
-                        target=UnitState("completed", "terminal"),
-                        reason="project_gate_bundle_passed",
-                        evidence_sha256=candidate_set,
+                        expected=load_unit_projection(connection, run_id, unit_id),
+                        candidate_set_sha256=candidate_set,
                     ),
                     created_at=now,
                 )
             authority.apply_run(
-                RunTransitionCommand(
-                    command_id=stable_transition_command_id(
-                        "project-run-completed", run_id, candidate_set,
-                    ),
+                project_run_completed_command(
                     run_id=run_id, anchor_unit_id=str(units[0]["unit_id"]),
-                    expected_status="active", target_status="completed",
-                    reason="project_gate_bundle_passed",
-                    evidence_sha256=candidate_set,
+                    expected=load_run_projection(connection, run_id),
+                    candidate_set_sha256=candidate_set,
                 ),
                 created_at=now,
             )

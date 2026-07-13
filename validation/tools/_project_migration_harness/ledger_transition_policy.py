@@ -4,11 +4,12 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _COMMAND_ID = re.compile(r"^[a-z][a-z0-9_.:-]{0,191}$")
+_KIND = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _REASON = re.compile(r"^[a-z][a-z0-9_.-]{0,95}$")
 
 UNIT_RESUMABLE_STATES = {
@@ -25,33 +26,88 @@ UNIT_RESUMABLE_STATES = {
     "exhausted": frozenset({"exhausted"}),
 }
 
-UNIT_TRANSITIONS = {
-    "pending": frozenset({"running", "blocked", "cancelled"}),
-    "running": frozenset({
-        "pending", "running", "candidate-ready", "gate-pending", "retry-ready",
-        "failed", "blocked", "resume-ready", "cancelled", "exhausted",
-    }),
-    "candidate-ready": frozenset({
-        "running", "gate-pending", "retry-ready", "resume-ready", "completed",
-    }),
-    "gate-pending": frozenset({
-        "running", "retry-ready", "resume-ready", "completed",
-    }),
-    "retry-ready": frozenset({"running", "blocked", "cancelled", "exhausted"}),
-    "failed": frozenset({"running", "retry-ready", "blocked", "cancelled", "exhausted"}),
-    "resume-ready": frozenset({"running", "retry-ready", "completed", "cancelled"}),
-    "blocked": frozenset(),
-    "completed": frozenset(),
-    "cancelled": frozenset(),
-    "exhausted": frozenset(),
+_ATTEMPT_SOURCES = {
+    "pending", "candidate-ready", "gate-pending", "retry-ready",
+    "failed", "resume-ready",
+}
+_WORKER_RESULTS = {
+    "candidate-ready", "gate-pending", "retry-ready", "failed", "blocked",
 }
 
-RUN_TRANSITIONS = {
-    "active": frozenset({"completed", "failed", "cancelled"}),
-    "completed": frozenset(),
-    "failed": frozenset(),
-    "cancelled": frozenset(),
+
+@dataclass(frozen=True, slots=True)
+class UnitCommandPolicy:
+    edges: frozenset[tuple[str, str]]
+    reasons: frozenset[str]
+    last_good_mode: str = "none"
+    attempt_binding: str = "none"
+
+
+UNIT_COMMAND_POLICIES = {
+    "attempt_started": UnitCommandPolicy(
+        frozenset((source, "running") for source in _ATTEMPT_SOURCES),
+        frozenset({"attempt_started"}), attempt_binding="fenced",
+    ),
+    "worker_command_started": UnitCommandPolicy(
+        frozenset({("running", "running")}),
+        frozenset({"worker_command_started"}), attempt_binding="fenced",
+    ),
+    "prelaunch_attempt_cancelled": UnitCommandPolicy(
+        frozenset(("running", target) for target in _ATTEMPT_SOURCES),
+        frozenset({"prelaunch_attempt_cancelled"}), attempt_binding="fenced",
+    ),
+    "lease_expired_recovery": UnitCommandPolicy(
+        frozenset({("running", "retry-ready"), ("running", "exhausted")}),
+        frozenset({"lease_expired_recovered"}), attempt_binding="attempt",
+    ),
+    "started_attempt_recovery": UnitCommandPolicy(
+        frozenset({("running", "blocked")}),
+        frozenset({"worker_command_result_unknown"}), attempt_binding="fenced",
+    ),
+    "attempt_finished": UnitCommandPolicy(
+        frozenset(("running", target) for target in _WORKER_RESULTS),
+        frozenset({
+            "attempt_completed", "attempt_failed", "attempt_blocked",
+            "terminal_worker_result",
+        }),
+        attempt_binding="fenced",
+    ),
+    "host_verification_failed": UnitCommandPolicy(
+        frozenset((source, "retry-ready") for source in {
+            "candidate-ready", "gate-pending", "resume-ready",
+        }),
+        frozenset({"host_verification_failed"}),
+        last_good_mode="clear", attempt_binding="attempt",
+    ),
+    "host_verifier_promoted": UnitCommandPolicy(
+        frozenset({
+            ("candidate-ready", "resume-ready"),
+            ("gate-pending", "resume-ready"),
+        }),
+        frozenset({"host_verifier_promoted"}),
+        last_good_mode="set", attempt_binding="attempt",
+    ),
+    "project_unit_completed": UnitCommandPolicy(
+        frozenset({("resume-ready", "completed")}),
+        frozenset({"project_gate_bundle_passed"}),
+    ),
 }
+
+RUN_COMMAND_POLICIES = {
+    "terminal_worker_run_failed": (
+        frozenset({("active", "failed")}),
+        frozenset({"terminal_worker_result"}), "fenced",
+    ),
+    "lease_recovery_run_failed": (
+        frozenset({("active", "failed")}),
+        frozenset({"worker_command_result_unknown"}), "fenced",
+    ),
+    "project_run_completed": (
+        frozenset({("active", "completed")}),
+        frozenset({"project_gate_bundle_passed"}), "none",
+    ),
+}
+RUN_STATUSES = frozenset({"active", "completed", "failed", "cancelled"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,11 +122,33 @@ class UnitState:
 
 
 @dataclass(frozen=True, slots=True)
+class UnitProjection:
+    state: UnitState
+    version: int
+
+    def __post_init__(self) -> None:
+        _version(self.version)
+
+
+@dataclass(frozen=True, slots=True)
+class RunProjection:
+    status: str
+    version: int
+
+    def __post_init__(self) -> None:
+        if self.status not in RUN_STATUSES:
+            raise ValueError("run status is invalid")
+        _version(self.version)
+
+
+@dataclass(frozen=True, slots=True)
 class TransitionCommand:
+    command_kind: str
     command_id: str
     run_id: str
     unit_id: str
     expected: UnitState
+    expected_version: int
     target: UnitState
     reason: str
     evidence_sha256: str
@@ -80,28 +158,28 @@ class TransitionCommand:
     set_last_good_artifact_id: str | None = None
 
     def __post_init__(self) -> None:
-        _validate_command_common(
-            self.command_id, self.run_id, self.reason, self.evidence_sha256,
-            self.attempt_id, self.fencing_token,
-        )
+        _validate_common(self)
+        _version(self.expected_version)
         if not _identity(self.unit_id):
             raise ValueError("transition unit_id is invalid")
-        if self.clear_last_good_if is not None and not _identity(self.clear_last_good_if):
-            raise ValueError("clear_last_good_if is invalid")
-        if self.set_last_good_artifact_id is not None and not _identity(
-            self.set_last_good_artifact_id
+        for value, label in (
+            (self.clear_last_good_if, "clear_last_good_if"),
+            (self.set_last_good_artifact_id, "set_last_good_artifact_id"),
         ):
-            raise ValueError("set_last_good_artifact_id is invalid")
+            if value is not None and not _identity(value):
+                raise ValueError(f"{label} is invalid")
         if self.clear_last_good_if and self.set_last_good_artifact_id:
             raise ValueError("last-good projection cannot clear and set simultaneously")
 
 
 @dataclass(frozen=True, slots=True)
 class RunTransitionCommand:
+    command_kind: str
     command_id: str
     run_id: str
     anchor_unit_id: str
     expected_status: str
+    expected_version: int
     target_status: str
     reason: str
     evidence_sha256: str
@@ -109,132 +187,47 @@ class RunTransitionCommand:
     fencing_token: int | None = None
 
     def __post_init__(self) -> None:
-        _validate_command_common(
-            self.command_id, self.run_id, self.reason, self.evidence_sha256,
-            self.attempt_id, self.fencing_token,
-        )
+        _validate_common(self)
+        _version(self.expected_version)
         if not _identity(self.anchor_unit_id):
             raise ValueError("run transition anchor_unit_id is invalid")
-        if self.expected_status not in RUN_TRANSITIONS or self.target_status not in RUN_TRANSITIONS:
+        if self.expected_status not in RUN_STATUSES or self.target_status not in RUN_STATUSES:
             raise ValueError("run transition status is invalid")
 
 
 def assert_transition_allowed(command: TransitionCommand) -> None:
-    if command.target.status not in UNIT_TRANSITIONS[command.expected.status]:
-        raise ValueError(
-            f"unit transition is not permitted: "
-            f"{command.expected.status}->{command.target.status}"
-        )
+    policy = UNIT_COMMAND_POLICIES.get(command.command_kind)
+    if policy is None:
+        raise ValueError("unit transition command kind is not registered")
+    if (command.expected.status, command.target.status) not in policy.edges:
+        raise ValueError("unit transition is not permitted for its command kind")
+    if command.reason not in policy.reasons:
+        raise ValueError("unit transition reason is not permitted for its command kind")
+    _assert_attempt_binding(command, policy.attempt_binding)
+    if policy.last_good_mode == "none" and (
+        command.clear_last_good_if or command.set_last_good_artifact_id
+    ):
+        raise ValueError("unit transition kind cannot change last-good")
+    if policy.last_good_mode == "clear" and (
+        not command.clear_last_good_if or command.set_last_good_artifact_id
+    ):
+        raise ValueError("unit transition kind requires a last-good clear binding")
+    if policy.last_good_mode == "set" and (
+        not command.set_last_good_artifact_id or command.clear_last_good_if
+    ):
+        raise ValueError("unit transition kind requires a last-good set binding")
 
 
 def assert_run_transition_allowed(command: RunTransitionCommand) -> None:
-    if command.target_status not in RUN_TRANSITIONS[command.expected_status]:
-        raise ValueError(
-            f"run transition is not permitted: "
-            f"{command.expected_status}->{command.target_status}"
-        )
-
-
-def attempt_started_command(
-    *, run_id: str, unit_id: str, attempt_id: str, fencing_token: int,
-    expected: UnitState, input_sha256: str,
-) -> TransitionCommand:
-    return TransitionCommand(
-        command_id=stable_transition_command_id(
-            "attempt-started", run_id, unit_id, attempt_id,
-        ),
-        run_id=run_id, unit_id=unit_id, expected=expected,
-        target=UnitState("running", "in_progress"), reason="attempt_started",
-        evidence_sha256=input_sha256, attempt_id=attempt_id,
-        fencing_token=fencing_token,
-    )
-
-
-def worker_command_started_command(
-    *, run_id: str, unit_id: str, attempt_id: str, fencing_token: int,
-    expected: UnitState, metadata: Mapping[str, Any],
-) -> TransitionCommand:
-    evidence = transition_evidence_sha256({
-        "attempt_id": attempt_id,
-        "fencing_token": fencing_token,
-        "request_sha256": metadata.get("request_sha256"),
-        "preflight_sha256": metadata.get("preflight_sha256"),
-    })
-    return TransitionCommand(
-        command_id=stable_transition_command_id(
-            "worker-command-started", run_id, unit_id, attempt_id,
-        ),
-        run_id=run_id, unit_id=unit_id, expected=expected, target=expected,
-        reason="worker_command_started", evidence_sha256=evidence,
-        attempt_id=attempt_id, fencing_token=fencing_token,
-    )
-
-
-def lease_recovery_command(
-    *, run_id: str, unit_id: str, row: Any, attempt_count: int,
-    started: bool, expected: UnitState, target: UnitState, reason: str,
-) -> TransitionCommand:
-    return TransitionCommand(
-        command_id=stable_transition_command_id(
-            "lease-recovery", run_id, unit_id, row["attempt_id"],
-        ),
-        run_id=run_id, unit_id=unit_id, expected=expected, target=target,
-        reason=reason,
-        evidence_sha256=transition_evidence_sha256({
-            "attempt_id": row["attempt_id"], "attempt_count": attempt_count,
-            "max_attempts": row["max_attempts"], "started": started,
-            "lease_status": row["lease_status"],
-            "lease_expires_at": row["expires_at"],
-        }),
-        attempt_id=str(row["attempt_id"]),
-        fencing_token=int(row["fencing_token"]),
-    )
-
-
-def lease_recovery_run_command(
-    *, run_id: str, rows: list[Any], clock: int,
-) -> RunTransitionCommand:
-    anchor = rows[0]
-    attempt_ids = [str(row["attempt_id"]) for row in rows]
-    return RunTransitionCommand(
-        command_id=stable_transition_command_id(
-            "lease-recovery-run-failed", run_id, attempt_ids,
-        ),
-        run_id=run_id, anchor_unit_id=str(anchor["unit_id"]),
-        expected_status="active", target_status="failed",
-        reason="worker_command_result_unknown",
-        evidence_sha256=transition_evidence_sha256({
-            "attempt_ids": attempt_ids, "clock": clock,
-        }),
-        attempt_id=str(anchor["attempt_id"]),
-        fencing_token=int(anchor["fencing_token"]),
-    )
-
-
-def prelaunch_cancel_command(
-    *, run_id: str, unit_id: str, attempt_id: str, fencing_token: int,
-    expected: UnitState, metadata: Mapping[str, Any],
-) -> TransitionCommand:
-    target = UnitState(
-        str(metadata["previous_status"]),
-        str(metadata["previous_resumable_status"]),
-    )
-    evidence = transition_evidence_sha256({
-        "attempt_id": attempt_id,
-        "fencing_token": fencing_token,
-        "previous_status": target.status,
-        "previous_resumable_status": target.resumable_status,
-        "request_sha256": metadata.get("request_sha256"),
-        "preflight_sha256": metadata.get("preflight_sha256"),
-    })
-    return TransitionCommand(
-        command_id=stable_transition_command_id(
-            "prelaunch-attempt-cancelled", run_id, unit_id, attempt_id,
-        ),
-        run_id=run_id, unit_id=unit_id, expected=expected, target=target,
-        reason="prelaunch_attempt_cancelled", evidence_sha256=evidence,
-        fencing_token=fencing_token,
-    )
+    policy = RUN_COMMAND_POLICIES.get(command.command_kind)
+    if policy is None:
+        raise ValueError("run transition command kind is not registered")
+    edges, reasons, attempt_binding = policy
+    if (command.expected_status, command.target_status) not in edges:
+        raise ValueError("run transition is not permitted for its command kind")
+    if command.reason not in reasons:
+        raise ValueError("run transition reason is not permitted for its command kind")
+    _assert_attempt_binding(command, attempt_binding)
 
 
 def stable_transition_command_id(action: str, *identity: Any) -> str:
@@ -251,33 +244,51 @@ def transition_evidence_sha256(value: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _validate_command_common(
-    command_id: str, run_id: str, reason: str, evidence_sha256: str,
-    attempt_id: str | None, fencing_token: int | None,
-) -> None:
-    if _COMMAND_ID.fullmatch(command_id) is None or not _identity(run_id):
+def _validate_common(command: Any) -> None:
+    if _KIND.fullmatch(command.command_kind) is None:
+        raise ValueError("transition command kind is invalid")
+    if _COMMAND_ID.fullmatch(command.command_id) is None or not _identity(command.run_id):
         raise ValueError("transition command_id/run_id is invalid")
-    if _REASON.fullmatch(reason) is None or _SHA256.fullmatch(evidence_sha256) is None:
+    if _REASON.fullmatch(command.reason) is None or _SHA256.fullmatch(
+        command.evidence_sha256
+    ) is None:
         raise ValueError("transition reason/evidence_sha256 is invalid")
-    if attempt_id is not None and not _identity(attempt_id):
+    if command.attempt_id is not None and not _identity(command.attempt_id):
         raise ValueError("transition attempt_id is invalid")
-    if fencing_token is not None and fencing_token < 1:
-        raise ValueError("transition fencing_token must be positive")
+    if command.fencing_token is not None and (
+        isinstance(command.fencing_token, bool) or command.fencing_token < 1
+    ):
+        raise ValueError("transition fencing_token is invalid")
+
+
+def _assert_attempt_binding(command: Any, mode: str) -> None:
+    if mode == "none" and (
+        command.attempt_id is not None or command.fencing_token is not None
+    ):
+        raise ValueError("transition kind cannot bind an attempt")
+    if mode == "attempt" and command.attempt_id is None:
+        raise ValueError("transition kind requires an attempt binding")
+    if mode == "fenced" and (
+        command.attempt_id is None or command.fencing_token is None
+    ):
+        raise ValueError("transition kind requires an attempt and fence")
+
+
+def _version(value: Any) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("transition state version is invalid")
 
 
 def _identity(value: Any) -> bool:
-    return (
-        isinstance(value, str) and 0 < len(value) <= 512
-        and not any(character in value for character in "\x00\r\n")
+    return isinstance(value, str) and bool(value) and len(value) <= 256 and all(
+        character.isalnum() or character in "-_.:" for character in value
     )
 
 
 __all__ = [
-    "RUN_TRANSITIONS", "RunTransitionCommand", "TransitionCommand",
-    "UNIT_RESUMABLE_STATES", "UNIT_TRANSITIONS", "UnitState",
+    "RUN_COMMAND_POLICIES", "RUN_STATUSES", "RunProjection",
+    "RunTransitionCommand", "TransitionCommand", "UNIT_COMMAND_POLICIES",
+    "UNIT_RESUMABLE_STATES", "UnitProjection", "UnitState",
     "assert_run_transition_allowed", "assert_transition_allowed",
-    "attempt_started_command", "prelaunch_cancel_command",
-    "lease_recovery_command", "lease_recovery_run_command",
     "stable_transition_command_id", "transition_evidence_sha256",
-    "worker_command_started_command",
 ]

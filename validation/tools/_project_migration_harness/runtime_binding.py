@@ -7,8 +7,9 @@ from typing import Any
 from .artifacts import content_sha256
 from .ledger_schema import _json, _now_text, _require_repo_path, _require_sha256, atomic
 from .ledger_security import LedgerError
-from .ledger_transition_authority import TransitionAuthority, load_unit_state
-from .ledger_transition_policy import prelaunch_cancel_command, worker_command_started_command
+from .ledger_transition_authority import TransitionAuthority, load_unit_projection
+from .ledger_transition_commands import worker_command_started_command
+from .runtime_prelaunch_cancel import PrelaunchCancellationMixin
 
 
 REQUIRED_ASSIGNMENT_FIELDS = {
@@ -95,7 +96,7 @@ def compute_portfolio_binding(portfolio: Mapping[str, Any]) -> dict[str, Any]:
     return binding
 
 
-class RuntimeBindingMixin:
+class RuntimeBindingMixin(PrelaunchCancellationMixin):
     def require_portfolio_binding(self, portfolio: Mapping[str, Any]) -> dict[str, Any]:
         expected = compute_portfolio_binding(portfolio)
         with self.connect() as connection:
@@ -209,36 +210,8 @@ class RuntimeBindingMixin:
             run_id, unit_id = str(attempt["run_id"]), str(attempt["unit_id"])
             command = worker_command_started_command(
                 run_id=run_id, unit_id=unit_id, attempt_id=attempt_id, fencing_token=fencing_token,
-                expected=load_unit_state(connection, run_id, unit_id), metadata=metadata)
+                expected=load_unit_projection(connection, run_id, unit_id), metadata=metadata)
             TransitionAuthority(connection).apply(command, created_at=timestamp)
-
-    def cancel_prelaunch_attempt(
-        self, *, attempt_id: str, owner: str, fencing_token: int,
-    ) -> None:
-        with self.connect() as connection, atomic(connection):
-            attempt = self._running_attempt(connection, attempt_id, owner, fencing_token)
-            metadata = _object_json(connection.execute(
-                "select metadata_json from attempts where attempt_id=?", (attempt_id,),
-            ).fetchone()[0], "attempt metadata")
-            if metadata.get("command_started") is True:
-                raise LedgerError("started worker command requires manual reconciliation")
-            if connection.execute(
-                "select 1 from artifacts where attempt_id=?", (attempt_id,),
-            ).fetchone():
-                raise LedgerError("prelaunch attempt unexpectedly owns an artifact")
-            run_id, unit_id = str(attempt["run_id"]), str(attempt["unit_id"])
-            expected = load_unit_state(connection, run_id, unit_id)
-            command = prelaunch_cancel_command(
-                run_id=run_id, unit_id=unit_id, attempt_id=attempt_id,
-                fencing_token=fencing_token, expected=expected, metadata=metadata,
-            )
-            connection.execute("delete from transitions where attempt_id=?", (attempt_id,))
-            connection.execute("delete from attempts where attempt_id=?", (attempt_id,))
-            TransitionAuthority(connection).apply(command)
-            connection.execute(
-                "update leases set status='released',heartbeat_at=? where run_id=? and unit_id=?",
-                (int(__import__("time").time()), run_id, unit_id),
-            )
 
 def _verify_ledger_rows(
     portfolio: Mapping[str, Any], assignments: Any, units: Any,

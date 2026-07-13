@@ -51,7 +51,13 @@ class ProjectMigrationRuntimeFailClosedTests(RuntimeHarnessCase):
         self.assertFalse(result["attempt_consumed"])
         self.assertFalse(result["model_launched"])
         with ledger.connect() as connection:
-            self.assertEqual(0, connection.execute("select count(*) from attempts").fetchone()[0])
+            attempt = connection.execute(
+                "select status,error_key from attempts"
+            ).fetchone()
+            self.assertEqual(("cancelled", "prelaunch_cancelled"), tuple(attempt))
+            self.assertEqual(
+                2, connection.execute("select count(*) from transitions").fetchone()[0]
+            )
 
     def test_tool_event_after_command_is_manual_and_never_retried(self) -> None:
         plan = self.plan()

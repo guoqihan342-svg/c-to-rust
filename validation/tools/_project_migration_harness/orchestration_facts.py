@@ -33,6 +33,7 @@ def build_gate_facts(
             for row in connection.execute(
                 """select unit_id,count(*) as attempt_count from attempts
                    where run_id=? and role in ('translator','repairer')
+                     and status<>'cancelled'
                    group by unit_id""",
                 (run_id,),
             ).fetchall()

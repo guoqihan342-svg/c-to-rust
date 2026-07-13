@@ -89,7 +89,12 @@ class ProjectMigrationRuntimeSecurityTests(RuntimeHarnessCase):
         )
         self.assertEqual("prelaunch-blocked", result["status"])
         with ledger.connect() as connection:
-            self.assertEqual(0, connection.execute("select count(*) from attempts").fetchone()[0])
+            self.assertEqual(
+                [("cancelled", "prelaunch_cancelled")],
+                [tuple(row) for row in connection.execute(
+                    "select status,error_key from attempts"
+                )],
+            )
 
     def test_context_receipt_tamper_is_blocked_before_model_launch(self) -> None:
         plan = self.plan()
@@ -114,7 +119,12 @@ class ProjectMigrationRuntimeSecurityTests(RuntimeHarnessCase):
         self.assertFalse(result["attempt_consumed"])
         runner.assert_not_called()
         with ledger.connect() as connection:
-            self.assertEqual(0, connection.execute("select count(*) from attempts").fetchone()[0])
+            self.assertEqual(
+                [("cancelled", "prelaunch_cancelled")],
+                [tuple(row) for row in connection.execute(
+                    "select status,error_key from attempts"
+                )],
+            )
 
     def test_model_candidate_metadata_claims_are_rejected(self) -> None:
         plan = self.plan()

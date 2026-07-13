@@ -586,7 +586,11 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [ ] A19e5a：用声明式 FSM 列出 unit/run 的状态、合法命令、前置条件、事件和后置状态；只有 `TransitionAuthority` 持有更新 `migration_units` 及其他 semantic projection 的数据库能力，lease、worker、verifier、repair、promotion、project gate 和 CLI 模块只能提交 typed command，禁止直接 `UPDATE` 或绕过转移表。
       - [x] A19e5a1：集中 `migration_units`/`project_runs` 状态投影到 `TransitionAuthority`，增加 typed unit/run command、幂等 command-id/evidence 绑定和静态扫描，拒绝其他生产模块直接更新这两个 projection。
       - [ ] A19e5a2：增加 command-kind/前置不变量、单调 state version 和数据库 capability 隔离；禁止任意合法边冒充完成命令，禁止删除/修改历史 transition，并把 candidate/project pass 等 semantic tables 一并收口到唯一权威。
+        - [x] A19e5a2a：ledger schema v4 为 run/unit 增加不可变初始状态和单调 `state_version`；所有生产转移改用注册 command-kind/factory，由 kind 固定 edge、reason、attempt 与 last-good 权限，错误 kind 不能借合法状态边完成单元或项目。
+        - [ ] A19e5a2b：隔离数据库写 capability，并把 candidate/project pass 等 semantic tables 收口到同一唯一权威，禁止低层模块持有可直接改写语义投影的连接能力。
     - [ ] A19e5b：每次合法转移先原子追加不可变事件，再以 expected state/version、幂等 command id 和绑定证据投影当前状态；并发、过期 epoch、重复回放、部分事务和 crash recovery 不得产生双 active attempt、倒退状态或幽灵 pass。
+      - [x] A19e5b1：unit/run 转移在同一事务中先追加显式不可变事件，再用 expected state/version CAS 投影；trigger 拒绝事件 `UPDATE`/`DELETE`，每次转移和完成前从 initial state 重放并核对 current state/version/last-good；prelaunch cancel 只从不可变 start event 恢复原状态，保留 cancelled attempt/event 且不消耗重试预算。
+      - [ ] A19e5b2：把 assignment、attempt、lease、candidate 与 project-gate 语义投影纳入同一可重算事件体系，并补齐并发、部分事务及 crash 点的系统 fault-injection 覆盖。
     - [ ] A19e5c：在 candidate promotion、`project-final` 和 completed 前运行同一 host-owned invariant audit，至少复算 DAG/BuildIR/RustProjectIR、active attempt 唯一性、latest gate epoch、candidate/generation/cohort 绑定、全单元 last-good、project-final 新鲜度和 project gate 完整性；任一未知或不一致均 fail closed。
     - [ ] A19e5d：用静态扫描、数据库能力测试、非法转移表测试和 fault-injection/replay 测试证明生产模块不能直接改 semantic 状态，且任意中断点恢复后的事件序列与 projection 可确定性重算。
   - [ ] **A19e6：唯一 CompletionCoordinator 与强制 project-final 完成链**。

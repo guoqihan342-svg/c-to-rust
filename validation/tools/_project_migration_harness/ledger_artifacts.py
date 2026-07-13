@@ -8,12 +8,12 @@ from .ledger_security import (
     LedgerError, assert_no_semantic_claims, sanitize_error_key,
 )
 from .ledger_transition_authority import (
-    TransitionAuthority, load_run_state, load_unit_state,
+    TransitionAuthority, load_run_projection, load_unit_projection,
 )
-from .ledger_transition_policy import (
-    RunTransitionCommand, TransitionCommand, UnitState, stable_transition_command_id,
-    transition_evidence_sha256,
+from .ledger_transition_commands import (
+    attempt_finished_command, terminal_worker_run_failed_command,
 )
+from .ledger_transition_policy import UnitState, transition_evidence_sha256
 
 
 ARTIFACT_STATES = {"written", "candidate", "diagnostic", "reviewed", "failed", "blocked"}
@@ -61,13 +61,10 @@ class ArtifactLedgerMixin:
                 """update attempts set status='completed',output_sha256=?,error_key=null,
                    finished_at=? where attempt_id=?""", (digest, timestamp, attempt_id),
             )
-            expected = load_unit_state(connection, run_id, unit_id)
+            expected = load_unit_projection(connection, run_id, unit_id)
             authority = TransitionAuthority(connection)
             authority.apply(
-                TransitionCommand(
-                    command_id=stable_transition_command_id(
-                        "attempt-finished", run_id, unit_id, attempt_id,
-                    ),
+                attempt_finished_command(
                     run_id=run_id, unit_id=unit_id, expected=expected,
                     target=UnitState(
                         next_status, "terminal" if terminal else "awaiting_gate",
@@ -79,21 +76,17 @@ class ArtifactLedgerMixin:
                 created_at=timestamp,
             )
             if fail_run:
-                run_status = load_run_state(connection, run_id)
-                if run_status == "active":
+                run = load_run_projection(connection, run_id)
+                if run.status == "active":
                     authority.apply_run(
-                        RunTransitionCommand(
-                            command_id=stable_transition_command_id(
-                                "terminal-worker-run-failed", run_id, unit_id, attempt_id,
-                            ),
-                            run_id=run_id, anchor_unit_id=unit_id,
-                            expected_status="active", target_status="failed",
-                            reason="terminal_worker_result", evidence_sha256=digest,
+                        terminal_worker_run_failed_command(
+                            run_id=run_id, unit_id=unit_id, expected=run,
+                            evidence_sha256=digest,
                             attempt_id=attempt_id, fencing_token=fencing_token,
                         ),
                         created_at=timestamp,
                     )
-                elif run_status != "failed":
+                elif run.status != "failed":
                     raise LedgerError("terminal worker result cannot overwrite run state")
 
     def finish_attempt(
@@ -125,17 +118,14 @@ class ArtifactLedgerMixin:
                 "awaiting_gate" if status == "completed" else "retryable"
             )
             run_id, unit_id = str(attempt["run_id"]), str(attempt["unit_id"])
-            expected = load_unit_state(connection, run_id, unit_id)
+            expected = load_unit_projection(connection, run_id, unit_id)
             evidence = digest or transition_evidence_sha256({
                 "attempt_id": attempt_id,
                 "attempt_status": status,
                 "error_key": safe_error_key,
             })
             TransitionAuthority(connection).apply(
-                TransitionCommand(
-                    command_id=stable_transition_command_id(
-                        "attempt-finished", run_id, unit_id, attempt_id,
-                    ),
+                attempt_finished_command(
                     run_id=run_id, unit_id=unit_id, expected=expected,
                     target=UnitState(next_status, resumable),
                     reason=f"attempt_{status}", evidence_sha256=evidence,

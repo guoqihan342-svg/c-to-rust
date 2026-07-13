@@ -116,6 +116,24 @@ class ProjectMigrationLedgerSchemaTests(unittest.TestCase):
                     re.search(r"insert\s+into\s+\w+\s+values\s*\(", source, re.IGNORECASE)
                 )
 
+    def test_unit_initial_state_pair_is_validated_before_insert(self) -> None:
+        ledger = ProjectLedger(self.root / "invalid-unit-state.sqlite3")
+        unit = {
+            **self.unit("unit"),
+            "status": "pending",
+            "resumable_status": "terminal",
+        }
+        with self.assertRaisesRegex(ValueError, "pair is invalid"):
+            ledger.create_run(
+                run_id="run", project_key="project", source_commit="commit",
+                dag_sha256=digest("dag"), units=[unit], assignments=[],
+                max_concurrency=1, max_attempts=1,
+            )
+        with ledger.connect() as connection:
+            self.assertEqual(0, connection.execute(
+                "select count(*) from project_runs"
+            ).fetchone()[0])
+
     @staticmethod
     def unit(unit_id: str) -> dict:
         return {

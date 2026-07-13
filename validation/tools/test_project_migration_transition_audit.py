@@ -26,8 +26,18 @@ FORBIDDEN = {
     "direct transition append": re.compile(
         r"\binsert\s+into\s+transitions\s*\(", re.IGNORECASE,
     ),
+    "transition history mutation": re.compile(
+        r"\b(?:update\s+transitions\s+set|delete\s+from\s+transitions)\b",
+        re.IGNORECASE,
+    ),
 }
 EXEMPT = {"ledger_schema.py", "ledger_transition_authority.py"}
+COMMAND_CONSTRUCTOR_EXEMPT = {
+    "ledger_transition_commands.py", "ledger_transition_replay.py",
+}
+AUTHORITY_PRIMITIVES = {
+    "direct unit projection", "direct run projection", "direct transition append",
+}
 
 
 def _digest(label: str) -> str:
@@ -46,19 +56,36 @@ class ProjectMigrationTransitionAuditTests(unittest.TestCase):
                     "status": "candidate-ready", "resumable_status": "awaiting_gate",
                     "content_sha256": _digest("unit"),
                 }],
-                assignments=[], max_concurrency=1, max_attempts=1,
+                assignments=[{
+                    "unit_id": "unit", "worker_id": "worker", "role": "translator",
+                    "out_root": "target/workers/worker/out", "max_attempts": 1,
+                }],
+                max_concurrency=1, max_attempts=1,
             )
+            with ledger.connect() as connection:
+                connection.execute(
+                    """insert into attempts(attempt_id,run_id,unit_id,role,ordinal,
+                       worker_id,status,fencing_token,input_sha256,started_at,metadata_json)
+                       values ('attempt','run','unit','translator',1,'worker','completed',
+                               1,?,?,?)""",
+                    (_digest("input"), "2026-07-13T00:00:00Z", "{}"),
+                )
             first = TransitionCommand(
+                command_kind="host_verification_failed",
                 command_id="expected-resumable:one", run_id="run", unit_id="unit",
                 expected=UnitState("candidate-ready", "awaiting_gate"),
-                target=UnitState("retry-ready", "retryable"),
-                reason="test_transition", evidence_sha256=_digest("evidence"),
+                expected_version=0, target=UnitState("retry-ready", "retryable"),
+                reason="host_verification_failed", evidence_sha256=_digest("evidence"),
+                attempt_id="attempt", clear_last_good_if="candidate",
             )
             drift = TransitionCommand(
-                command_id=first.command_id, run_id="run", unit_id="unit",
+                command_kind=first.command_kind, command_id=first.command_id,
+                run_id="run", unit_id="unit",
                 expected=UnitState("candidate-ready", "retryable"),
-                target=first.target, reason=first.reason,
-                evidence_sha256=first.evidence_sha256,
+                expected_version=first.expected_version, target=first.target,
+                reason=first.reason, evidence_sha256=first.evidence_sha256,
+                attempt_id=first.attempt_id,
+                clear_last_good_if=first.clear_last_good_if,
             )
             with ledger.connect() as connection:
                 TransitionAuthority(connection).apply(first)
@@ -83,8 +110,20 @@ class ProjectMigrationTransitionAuditTests(unittest.TestCase):
             / "ledger_transition_authority.py"
         ).read_text(encoding="utf-8")
         for label, pattern in FORBIDDEN.items():
+            if label not in AUTHORITY_PRIMITIVES:
+                continue
             with self.subTest(label=label):
                 self.assertIsNotNone(pattern.search(authority))
+
+    def test_production_modules_use_registered_transition_factories(self) -> None:
+        harness = Path(__file__).parent / "_project_migration_harness"
+        constructor = re.compile(r"\b(?:Run)?TransitionCommand\s*\(")
+        offenders = [
+            path.name for path in sorted(harness.glob("*.py"))
+            if path.name not in COMMAND_CONSTRUCTOR_EXEMPT
+            and constructor.search(path.read_text(encoding="utf-8"))
+        ]
+        self.assertEqual([], offenders)
 
 
 if __name__ == "__main__":

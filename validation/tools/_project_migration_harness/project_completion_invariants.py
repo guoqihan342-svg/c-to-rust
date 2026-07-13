@@ -3,11 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from .ledger_security import LedgerError
+from .ledger_transition_replay import audit_transition_projections
 
 
 def require_quiescent_last_good_run(
     connection: Any, run_id: str,
 ) -> None:
+    audit_transition_projections(connection, run_id)
     run = connection.execute(
         "select status from project_runs where run_id=?", (run_id,),
     ).fetchone()

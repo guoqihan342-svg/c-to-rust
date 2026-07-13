@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import time
 
+from .ledger_attempt_budget import consumed_attempt_count
 from .ledger_schema import _now_text, atomic
 from .ledger_security import LedgerError
-from .ledger_transition_authority import TransitionAuthority, load_unit_state
-from .ledger_transition_policy import (
-    TransitionCommand, UnitState, stable_transition_command_id,
-    transition_evidence_sha256,
-)
+from .ledger_transition_authority import TransitionAuthority, load_unit_projection
+from .ledger_transition_commands import lease_recovery_command
+from .ledger_transition_policy import UnitState
 
 
 class LedgerRecoveryMixin:
@@ -26,7 +25,7 @@ class LedgerRecoveryMixin:
             if run["status"] != "active":
                 return recovered
             rows = connection.execute(
-                """select t.attempt_id,t.unit_id,t.worker_id,t.role,
+                """select t.attempt_id,t.unit_id,t.worker_id,t.role,t.fencing_token,
                           a.max_attempts,l.status as lease_status,l.expires_at
                    from attempts t join assignments a
                      on a.run_id=t.run_id and a.unit_id=t.unit_id
@@ -39,16 +38,15 @@ class LedgerRecoveryMixin:
             ).fetchall()
             timestamp = _now_text()
             for row in rows:
-                count = int(connection.execute(
-                    """select count(*) from attempts where run_id=? and unit_id=?
-                       and worker_id=? and role=?""",
-                    (run_id, row["unit_id"], row["worker_id"], row["role"]),
-                ).fetchone()[0])
+                count = consumed_attempt_count(
+                    connection, run_id=run_id, unit_id=str(row["unit_id"]),
+                    worker_id=str(row["worker_id"]), role=str(row["role"]),
+                )
                 exhausted = count >= int(row["max_attempts"])
                 next_status = "exhausted" if exhausted else "retry-ready"
                 resumable = "exhausted" if exhausted else "retryable"
                 unit_id = str(row["unit_id"])
-                expected = load_unit_state(connection, run_id, unit_id)
+                expected = load_unit_projection(connection, run_id, unit_id)
                 connection.execute(
                     """update attempts set status='failed',error_key='lease_expired',
                        finished_at=? where attempt_id=?""",
@@ -60,21 +58,10 @@ class LedgerRecoveryMixin:
                     (clock, run_id, row["unit_id"]),
                 )
                 TransitionAuthority(connection).apply(
-                    TransitionCommand(
-                        command_id=stable_transition_command_id(
-                            "lease-expired-recovery", run_id, unit_id, row["attempt_id"],
-                        ),
-                        run_id=run_id, unit_id=unit_id, expected=expected,
+                    lease_recovery_command(
+                        run_id=run_id, unit_id=unit_id, row=row,
+                        attempt_count=count, started=False, expected=expected,
                         target=UnitState(next_status, resumable),
-                        reason="lease_expired_recovered",
-                        evidence_sha256=transition_evidence_sha256({
-                            "attempt_id": row["attempt_id"],
-                            "lease_status": row["lease_status"],
-                            "lease_expires_at": row["expires_at"],
-                            "max_attempts": row["max_attempts"],
-                            "attempt_count": count,
-                        }),
-                        attempt_id=str(row["attempt_id"]),
                     ),
                     created_at=timestamp,
                 )

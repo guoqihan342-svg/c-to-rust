@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from .ledger_artifacts import ArtifactLedgerMixin
+from .ledger_attempt_budget import next_attempt_ordinal
 from .ledger_schema import (
     SCHEMA_VERSION, _json, _now_text, _require_repo_path, _require_sha256,
     atomic, connect_database, migrate_schema,
@@ -19,8 +20,9 @@ from .ledger_security import (
     LedgerError, LeaseConflict, SchemaVersionError, StaleFence,
     assert_no_semantic_claims,
 )
-from .ledger_transition_authority import TransitionAuthority, load_unit_state
-from .ledger_transition_policy import attempt_started_command
+from .ledger_transition_authority import TransitionAuthority, load_unit_projection
+from .ledger_transition_commands import attempt_started_command
+from .ledger_transition_policy import UnitState
 from .ledger_verifier import HostVerifierMixin
 from .ledger_views import LedgerViewMixin
 from .runtime_binding import RuntimeBindingMixin
@@ -86,17 +88,24 @@ class ProjectLedger(
         now = _now_text()
         with self.connect() as connection, atomic(connection):
             connection.execute(
-                """insert into project_runs(run_id,project_key,source_commit,dag_sha256,status,max_concurrency,
-                   max_attempts,created_at,updated_at,metadata_json) values (?,?,?,?,'active',?,?,?,?,?)""",
+                """insert into project_runs(run_id,project_key,source_commit,dag_sha256,
+                   initial_status,status,max_concurrency,max_attempts,created_at,updated_at,
+                   state_version,metadata_json)
+                   values (?,?,?,?,'active','active',?,?,?,?,0,?)""",
                 (run_id, project_key, source_commit, _require_sha256(dag_sha256, "dag_sha256"),
                  max_concurrency, max_attempts, now, now, _json(bound_metadata)),
             )
             for unit in rows:
+                status = str(unit.get("status", "pending"))
+                resumable = str(unit.get("resumable_status", "ready"))
+                UnitState(status, resumable)
                 connection.execute(
-                    """insert into migration_units(run_id,unit_id,group_id,wave_index,status,resumable_status,
-                       content_sha256,last_good_artifact_id,updated_at) values (?,?,?,?,?,?,?,null,?)""",
+                    """insert into migration_units(run_id,unit_id,group_id,wave_index,
+                       initial_status,initial_resumable_status,status,resumable_status,state_version,
+                       content_sha256,last_good_artifact_id,updated_at)
+                       values (?,?,?,?,?,?,?,?,0,?,null,?)""",
                     (run_id, str(unit["unit_id"]), str(unit["group_id"]), int(unit["wave_index"]),
-                     str(unit.get("status", "pending")), str(unit.get("resumable_status", "ready")),
+                     status, resumable, status, resumable,
                      _require_sha256(str(unit["content_sha256"]), "content_sha256"), now),
                 )
             for item in assigned:
@@ -191,14 +200,13 @@ class ProjectLedger(
             ).fetchone()
             if not assignment or assignment["role"] != role:
                 raise LedgerError("attempt role does not match the active worker assignment")
-            ordinal = int(connection.execute(
-                """select count(*) from attempts where run_id=? and unit_id=? and worker_id=? and role=?""",
-                (run_id, unit_id, worker_id, role),
-            ).fetchone()[0]) + 1
-            if ordinal > int(assignment["max_attempts"]):
-                raise LedgerError(f"attempt limit reached for {run_id}/{unit_id}/{worker_id}")
+            ordinal = next_attempt_ordinal(
+                connection, run_id=run_id, unit_id=unit_id,
+                worker_id=worker_id, role=role,
+                max_attempts=int(assignment["max_attempts"]),
+            )
             attempt_id = f"{run_id}:{unit_id}:{role}:{ordinal}"
-            expected = load_unit_state(connection, run_id, unit_id)
+            expected = load_unit_projection(connection, run_id, unit_id)
             input_digest = _require_sha256(input_sha256, "input_sha256")
             now = _now_text()
             connection.execute(

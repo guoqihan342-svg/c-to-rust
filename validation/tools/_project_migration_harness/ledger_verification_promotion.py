@@ -17,10 +17,10 @@ from .gate_evidence import read_content_addressed_json
 from .ledger_candidate_state import candidate_row, latest_candidate_records
 from .ledger_schema import _now_text, atomic
 from .ledger_security import LedgerError
-from .ledger_transition_authority import TransitionAuthority, load_unit_state
+from .ledger_transition_authority import TransitionAuthority, load_unit_projection
+from .ledger_transition_commands import host_verifier_promoted_command
 from .ledger_transition_policy import (
-    TransitionCommand, UnitState, stable_transition_command_id,
-    transition_evidence_sha256,
+    stable_transition_command_id, transition_evidence_sha256,
 )
 from .ledger_verification_sources import verify_candidate_sources
 
@@ -105,23 +105,23 @@ def promote_last_good(
         )
         authority = TransitionAuthority(connection)
         expected = authority.bound_unit_expected(
-            run_id=run_id, unit_id=unit_id, command_id=command_id,
-        ) or load_unit_state(connection, run_id, unit_id)
+            run_id=run_id, unit_id=unit_id,
+            command_kind="host_verifier_promoted", command_id=command_id,
+        ) or load_unit_projection(connection, run_id, unit_id)
         now = _now_text()
+        evidence = transition_evidence_sha256({
+            "candidate_artifact_id": candidate_artifact_id,
+            "candidate_sha256": candidate["content_sha256"],
+            "candidate_set_sha256": candidate_set,
+            "verifier_record_id": verifier_record_id,
+            "gate_record_id": gate_record_id,
+        })
         authority.apply(
-            TransitionCommand(
+            host_verifier_promoted_command(
                 command_id=command_id, run_id=run_id, unit_id=unit_id,
-                expected=expected, target=UnitState("resume-ready", "last_good"),
-                reason="host_verifier_promoted",
-                evidence_sha256=transition_evidence_sha256({
-                    "candidate_artifact_id": candidate_artifact_id,
-                    "candidate_sha256": candidate["content_sha256"],
-                    "candidate_set_sha256": candidate_set,
-                    "verifier_record_id": verifier_record_id,
-                    "gate_record_id": gate_record_id,
-                }),
+                expected=expected, evidence_sha256=evidence,
                 attempt_id=str(candidate["attempt_id"]),
-                set_last_good_artifact_id=candidate_artifact_id,
+                candidate_artifact_id=candidate_artifact_id,
             ),
             created_at=now,
         )

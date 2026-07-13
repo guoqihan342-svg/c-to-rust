@@ -5,10 +5,9 @@ from typing import Any
 from .gate_evidence import read_content_addressed_json
 from .ledger_schema import atomic
 from .ledger_security import LedgerError
-from .ledger_transition_authority import TransitionAuthority, load_unit_state
-from .ledger_transition_policy import (
-    TransitionCommand, UnitState, stable_transition_command_id,
-)
+from .ledger_transition_authority import TransitionAuthority, load_unit_projection
+from .ledger_transition_commands import host_verification_failed_command
+from .ledger_transition_policy import stable_transition_command_id
 
 
 class CandidateStateMixin:
@@ -42,17 +41,16 @@ class CandidateStateMixin:
             )
             authority = TransitionAuthority(connection)
             expected = authority.bound_unit_expected(
-                run_id=run_id, unit_id=unit_id, command_id=command_id,
-            ) or load_unit_state(connection, run_id, unit_id)
+                run_id=run_id, unit_id=unit_id,
+                command_kind="host_verification_failed", command_id=command_id,
+            ) or load_unit_projection(connection, run_id, unit_id)
             authority.apply(
-                TransitionCommand(
+                host_verification_failed_command(
                     command_id=command_id,
                     run_id=run_id, unit_id=unit_id, expected=expected,
-                    target=UnitState("retry-ready", "retryable"),
-                    reason="host_verification_failed",
                     evidence_sha256=str(failed["evidence_sha256"]),
                     attempt_id=str(failed["attempt_id"]),
-                    clear_last_good_if=candidate_artifact_id,
+                    candidate_artifact_id=candidate_artifact_id,
                 )
             )
 
