@@ -28,7 +28,7 @@ input.c + compile context
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 / libuv AI-first 0/1 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑。新 libuv DeepSeek 辅助实跑完成 1 次 initial + 3 次 repair，provider-ready 但 exact 未通过，明确不具备比赛资格 |
 | 当前翻译主线 | P0-A19 / P0-A10 / P0-A18c | h5a-h5d 已闭合 compiler/runtime/ABI repair facts 与 compiler-header declaration-only 分类；下一步进入陌生仓库整项目发现、拆解、并行候选、Cargo 集成与项目级 repair，不再围绕单个已知切片扩语法 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A19 构建闭包、验证权威与真实辅助模型通道 | 任意仓库 inventory、SCC/DAG、CMake/Ninja/link/archive closure、分页 ContextPack、隔离 OpenCode、SQLite ledger、Cargo generation、toolchain 内容绑定、SandboxBackend capability/probe、host project gate 与只读 held-out 复验已落地；正向 semantic verifier、Meson/configure、A19e7 进程级 receipt、比赛等价聚合沙箱和真实 held-out 语义验收仍未完成。本轮有限门禁为 Windows 288 项通过（2 项条件跳过）和 WSL 288/288，成功计数保持 38 |
+| 最近开发阶段 | P0-A19 项目接口协调与 AI repair 权威 | 任意仓库 inventory、SCC/DAG、构建闭包、分页 ContextPack、隔离 OpenCode、SQLite ledger、RustProjectIR/Cargo generation、不可变 coordinator receipt epoch、项目级 repair 状态机与最小上下文候选重协调已落地；global planner、唯一 CompletionCoordinator 自动排空项目队列、正向 semantic verifier、比赛等价聚合沙箱和真实 held-out 语义验收仍未完成。本轮有限门禁为 Windows 341 项（339 通过、2 项条件跳过）和 WSL 341/341，成功计数保持 38 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -488,7 +488,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   目标不是继续增加已知函数的 translator 分支，而是让比赛平台把一个此前未见的 C 仓库交给 OpenCode 后，harness 能自动形成可审计的项目级翻译计划、隔离并行候选、可编译 Rust 项目和验证驱动 repair。所有决策只允许读取源码/AST/编译数据库/构建文件/类型/调用图/ABI/诊断和 hash-bound evidence；项目名、函数名、目录名、slice id、fixture 常量和 golden case 身份不得选择翻译器、prompt、adapter、stub 或修复策略。
 
-  **当前边界（2026-07-13）**：A19 已完成一次真实 WSL DeepSeek 辅助 worker，并完成有界 Ninja/CMake 链接与静态归档闭包、实际 rustup toolchain 内容绑定、不可降级 SandboxBackend requirements/VerificationPlan、bubblewrap host capability probe、candidate/project Cargo 证据重开、CLI 路径/退出码权威和只读 ledger held-out 复验；但 A19e7 独立 verifier capability/nonce、正向 oracle/negative/unsafe-alias/ABI/final 链、项目级 oracle、聚合 cgroup/等价 backend、沙箱内真实 Cargo build 和真实 held-out 语义验收尚未闭合。父项保持未勾选，translator numerator 仍不增加。本轮有限门禁在 Windows 运行 288 项并通过（2 项条件跳过），WSL 288/288；真实 WSL smoke 在缺 `bwrap` 时以 `bubblewrap_unavailable`、零候选执行 fail closed，这些仍只是 `local-simulation` / `wsl-local-simulation`。
+  **当前边界（2026-07-13）**：A19 已完成一次真实 WSL DeepSeek 辅助 worker，并完成有界 Ninja/CMake 链接与静态归档闭包、实际 rustup toolchain 内容绑定、不可降级 SandboxBackend requirements/VerificationPlan、bubblewrap host capability probe、candidate/project Cargo 证据重开、不可变 coordinator receipt epoch、项目级 repair CAS/event/artifact ledger、最小相关 IR 上下文、隔离 Provider 合同模拟、宿主重建 IR 与重新协调；但 global planner、唯一 CompletionCoordinator 自动排空项目队列、A19e7 独立 verifier capability/nonce、正向 oracle/negative/unsafe-alias/ABI/final 链、项目级 oracle、聚合 cgroup/等价 backend、沙箱内真实 Cargo build 和真实 held-out 语义验收尚未闭合。父项保持未勾选，translator numerator 仍不增加。本轮有限门禁在 Windows 运行 341 项（339 通过、2 项条件跳过），WSL 341/341；Provider 合同模拟不等于真实模型运行，真实 WSL smoke 在缺 `bwrap` 时仍以 `bubblewrap_unavailable`、零候选执行 fail closed，这些都不是 `competition-exact`。
 
   **A19a 任意仓库入口与构建闭包发现**
 
@@ -540,7 +540,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   **A19c OpenCode 多 worker 候选组合**
 
   - [x] 生成 planner/translator/reviewer/repairer 角色组合、独立 config/data/state/cache/tmp/out-root、DAG 依赖和 SQLite assignments/leases/attempts/artifacts。
-  - [x] 关闭 plan/preflight/request/attempt 漂移、租约重入、heartbeat、非原子 ingest、工具事件、secret 输入、父环境泄漏、agent 权限覆盖、spawn 前误记 command-started 和 provider evidence 未落 ledger；当前有限回归为 Windows 288 项通过（2 项条件跳过），WSL 288/288。
+  - [x] 关闭 plan/preflight/request/attempt 漂移、租约重入、heartbeat、非原子 ingest、工具事件、secret 输入、父环境泄漏、agent 权限覆盖、spawn 前误记 command-started 和 provider evidence 未落 ledger；当前有限回归为 Windows 341 项（339 通过、2 项条件跳过），WSL 341/341。
   - [x] 在 WSL 通过固定项目 preflight 真实调用一次 `opencode/deepseek-v4-flash-free`：1 次 provider invocation，preflight report SHA `f0bc76b6b2489597e782cd1f0e532b7483f03658680b4352401ee12c814913c0`，session export `verified`，execution report SHA `9e04b437135aa9f1e2171a180f2e77272374fc8bba3c1257d314e8a963c10b5d`，candidate SHA `359cb2ef234f85d9aa1cbdf2d77e07a296f55cb8bd7d4ad9dd37afe4d9ea72ef`；状态仅为 `candidate-ready` / `auxiliary-local-validation`。GLM-5.1 仍只有真实比赛主机精确合同才能关闭 P0-H9。
   - [ ] **A19c4：最大化 AI 项目推理、候选多样性与信息增益**。
     - [ ] A19c4a：增加跨完整 BuildIR、Migration DAG、RustProjectIR 和历史失败事实工作的 global AI planner；它按依赖、接口风险、验证可用性和项目阻塞生成可重算迁移策略，并在新证据到达后局部重规划，禁止按项目名或固定测试身份选择路线。
@@ -566,9 +566,12 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [ ] A19d3b：增加唯一 project interface coordinator，在单元候选合并前协调跨单元 API、共享类型布局、符号可见性、全局状态所有权、初始化/析构顺序和 FFI 边界；worker 不得各自生成互相冲突的公共 glue 或 Cargo feature。
       - [x] A19d3b1：固定 host coordinator 已检测虚拟/候选 crate root、未知 parent、parent/init cycle、orphan/unknown module reference，以及 API/type/global/FFI/feature/cfg/init duplicate/conflict；canonical receipt SHA 在任何 Cargo generation 前复算，冲突时零 generation。
       - [ ] A19d3b2：让 global planner 和每个 translator/interface proposal 在合并前消费同一 coordinator receipt，并把已解决接口决策作为不可变项目事实回投后续 ContextPack；模型意见本身仍不能授予 pass。
+        - [x] A19d3b2a：现有 unit planner、translator 与 repairer 在事实物化时统一读取 ledger 最新不可变 coordinator receipt epoch，只接收与自身 group 相关的 diagnostics；context、request 与 prompt 对 epoch、receipt SHA、group 和内容 SHA fail closed。真正 global planner 与已解决接口事实回投仍留在父项。
     - [ ] A19d3c：把无法归属单个 unit 的类型、链接、初始化和 feature 诊断放入独立 project-level repair queue，基于完整 RustProjectIR 生成有界修复；不得随机归因、复制共享类型或通过 fixture-specific shim 绕过冲突。
       - [x] A19d3c1：coordinator 已生成有界、内容哈希的 project-only repair queue；每项绑定 IR SHA、interface SHA、diagnostic SHA、可解析的受影响 module/unit、unresolved module ID 与 attempt cap，并固定禁止随机 unit 归因、generated glue 和 fixture-specific shim。
       - [ ] A19d3c2：把 queue/event/attempt 持久化进 TransitionAuthority ledger，由 project repairer 只消费最小相关 IR/diagnostic 并产出新的 IR candidate；恢复、预算耗尽、回滚和重新协调必须形成可重放事件。
+        - [x] A19d3c2a：项目 receipt、queue、item、attempt、CAS event 与 artifact 已进入 schema v5；专属 repair worker 只读取受影响 module/interface 记录，模型只能提交 allowlist patch，宿主重开完整绑定、重建 RustProjectIR、重新协调并决定 resolve/rollback/retry/exhausted。启动意图先于子进程写入 ledger，未启动恢复受 owner/租约约束，已启动但结果未知进入 `failed/manual-reconcile`；终态响应、IR candidate 和 rollback 证据绑定同一 attempt 的不可变 artifact，普通 worker 启动时也必须重验最新 coordinator epoch。request/preflight/fence、隔离运行根、失败恢复、command replay、证据不可变和 IR unit-domain/recomputation 防伪均有有限回归。
+        - [ ] A19d3c2b：由唯一 CompletionCoordinator 从最新 receipt 自动调度或恢复未完成项目队列，把无法定位到 unit 的真实 verifier 诊断统一送入该队列，并在整项目 final 重验后才晋升；低层 API 或模型结果不能直接完成项目。
     - [ ] A19d3d：Cargo generation 只能从已验证 RustProjectIR 确定性生成，并复验所有迁移单元、依赖边、公共接口和配置均被覆盖；IR 漂移、孤立模块、重复符号、临时手写 glue 或真实多文件 build 失败时禁止晋升。
       - [x] A19d3d1：生产 generation API、`integrate-verified` 与 candidate quarantine 已移除 manifest+descriptor 写入口，只消费重开且无协调冲突的 RustProjectIR；direct `integrate` CLI 已删除。generation 内嵌 canonical IR，并绑定 domain/coordinator/interface SHA；integration verifier 会从原 artifact root 重建同一 generation 逐字节比较，旧 descriptor-only 生成器仅留在测试 support。
       - [ ] A19d3d2：从当前 flat library module 投影扩展到经验证的嵌套 module tree、多 crate/bin/example、完整 target/feature/cfg、初始化/析构和 native link 配置，并在真实多文件 Cargo build/test 与 project-final 全门禁通过后才关闭 A19d3。

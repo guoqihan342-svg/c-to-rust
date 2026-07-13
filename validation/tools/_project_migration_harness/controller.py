@@ -16,6 +16,7 @@ from .project_cargo_verifier import verify_project_cargo
 from .project_integration_verifier import verify_integrated_project
 from .candidate_compile_verifier import verify_candidate_compile
 from .candidate_final_verifier import verify_candidate_final
+from .project_repair_runtime import run_and_ingest_opencode_project_repair
 
 __all__ = [
     "dispatch_project_workers",
@@ -29,6 +30,7 @@ __all__ = [
     "record_project_gate_summary",
     "run_cargo_project_gates",
     "run_and_ingest_opencode_worker",
+    "run_and_ingest_opencode_project_repair",
     "verify_integrated_project",
     "verify_project_cargo",
     "verify_candidate_compile",

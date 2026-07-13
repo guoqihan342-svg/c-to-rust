@@ -14,6 +14,8 @@ from .ledger_schema import (
 )
 from .ledger_lease import LeaseLifecycleMixin
 from .ledger_project_gates import ProjectGateMixin
+from .ledger_project_repair import ProjectRepairLedgerMixin
+from .ledger_project_repair_artifacts import ProjectRepairArtifactMixin
 from .ledger_recovery import LedgerRecoveryMixin
 from .ledger_run_metadata import prepare_run_metadata
 from .ledger_security import (
@@ -31,6 +33,8 @@ _ROLES = {"planner", "translator", "reviewer", "repairer"}
 class ProjectLedger(
     HostVerifierMixin,
     ProjectGateMixin,
+    ProjectRepairLedgerMixin,
+    ProjectRepairArtifactMixin,
     RuntimeBindingMixin,
     LeaseLifecycleMixin,
     LedgerRecoveryMixin,

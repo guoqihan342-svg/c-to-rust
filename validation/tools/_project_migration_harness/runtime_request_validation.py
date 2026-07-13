@@ -8,6 +8,7 @@ from typing import Any
 from .artifacts import content_sha256
 from .ledger import ProjectLedger
 from .orchestration_facts import read_artifact_reference
+from .project_interface_model_context import build_model_coordinator_context
 
 
 def bound_worker_request(
@@ -51,6 +52,7 @@ def bound_worker_request(
     if content_sha256(assignment) != metadata.get("assignment_sha256"):
         raise ValueError("worker assignment digest drifted")
     _validate_request_fields(request, assignment, attempt)
+    _validate_latest_coordinator_context(request, ledger)
     return request, attempt
 
 
@@ -97,6 +99,33 @@ def _validate_request_fields(
         or effective != execution.get("effective_input_sha256")
     ):
         raise ValueError("worker effective input binding drifted")
+
+
+def _validate_latest_coordinator_context(
+    request: Mapping[str, Any], ledger: ProjectLedger,
+) -> None:
+    facts = request.get("input_facts")
+    context = facts.get("coordinator_context") if isinstance(facts, Mapping) else None
+    latest = ledger.load_latest_project_interface_receipt(
+        run_id=str(request["run_id"]),
+    )
+    if context is None:
+        if (
+            latest is not None
+            and request.get("role") in {"planner", "translator", "repairer"}
+        ):
+            raise ValueError("worker coordinator context is missing the latest receipt")
+        return
+    if not isinstance(context, Mapping):
+        raise ValueError("worker coordinator context is invalid")
+    if latest is None:
+        raise ValueError("worker coordinator context has no ledger receipt")
+    expected = build_model_coordinator_context(
+        latest[1], receipt_epoch=int(latest[0]),
+        subject_unit_ids=context.get("subject_unit_ids"),
+    )
+    if dict(context) != expected:
+        raise ValueError("worker coordinator context is stale")
 
 
 __all__ = ["bound_worker_request"]

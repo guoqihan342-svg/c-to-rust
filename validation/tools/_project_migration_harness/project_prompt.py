@@ -16,6 +16,7 @@ from .project_knowledge import (
     validate_knowledge_reference,
     validate_project_knowledge,
 )
+from .project_interface_model_context import validate_model_coordinator_context
 
 
 MAX_PROMPT_BYTES = 1024 * 1024
@@ -46,7 +47,9 @@ def render_project_worker_prompt(
     facts = request.get("input_facts")
     if not isinstance(facts, Mapping):
         raise ValueError("project worker input_facts are invalid")
-    bound_inputs = _bound_inputs(role, facts, harness_root)
+    bound_inputs = _bound_inputs(
+        role, facts, harness_root, group_id=request.get("group_id"),
+    )
     request_projection = _request_projection(request)
     assert_model_payload_safe(bound_inputs, "bound_inputs")
     assert_model_payload_safe(request_projection, "request_projection")
@@ -62,6 +65,11 @@ def render_project_worker_prompt(
     if "candidate_strategy" in bound_inputs:
         rules.append(
             "Follow the host-bound candidate strategy; do not self-score or vote on acceptance."
+        )
+    if "coordinator_context" in bound_inputs:
+        rules.append(
+            "Use the host-bound coordinator receipt as the shared project interface state; "
+            "do not mask its diagnostics with local glue or project-specific shims."
         )
     if isinstance(planner, Mapping) and planner.get("decision") == "preserve_ffi_boundary":
         rules.append("The Rust candidate must expose a host-detectable extern C or exported C ABI boundary.")
@@ -82,9 +90,18 @@ def render_project_worker_prompt(
 
 
 def _bound_inputs(
-    role: Any, facts: Mapping[str, Any], root: Path
+    role: Any, facts: Mapping[str, Any], root: Path, *, group_id: Any,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {}
+    coordinator = facts.get("coordinator_context")
+    if coordinator is not None:
+        if role not in {"planner", "translator", "repairer"}:
+            raise ValueError("coordinator context is invalid for this worker role")
+        context = validate_model_coordinator_context(coordinator)
+        subjects = context["subject_unit_ids"]
+        if context["visibility"] == "subject-filtered" and subjects != [group_id]:
+            raise ValueError("coordinator context is not bound to this worker group")
+        result["coordinator_context"] = context
     strategy = facts.get("candidate_strategy")
     if strategy is not None:
         if role not in {"translator", "repairer"}:

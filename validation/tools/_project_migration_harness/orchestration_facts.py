@@ -15,6 +15,7 @@ from .gate_authority import (
 from .gate_diagnostics import (
     normalize_gate_evidence, validate_model_safe_gate_evidence,
 )
+from .project_interface_model_context import build_model_coordinator_context
 
 
 MAX_FACT_ARTIFACT_BYTES = 2 * 1024 * 1024
@@ -38,6 +39,7 @@ def build_gate_facts(
                 (run_id,),
             ).fetchall()
         }
+    latest_receipt = ledger.load_latest_project_interface_receipt(run_id=run_id)
     by_unit: dict[str, list[dict[str, Any]]] = {}
     by_id: dict[tuple[str, str], dict[str, Any]] = {}
     for artifact in artifacts:
@@ -46,6 +48,12 @@ def build_gate_facts(
     result: dict[str, dict[str, Any]] = {}
     for unit_id, state in states.items():
         facts: dict[str, Any] = {}
+        if latest_receipt is not None:
+            receipt_epoch, coordinator_receipt = latest_receipt
+            facts["coordinator_context"] = build_model_coordinator_context(
+                coordinator_receipt, receipt_epoch=receipt_epoch,
+                subject_unit_ids=[unit_id],
+            )
         failed_family: str | None = None
         unit_artifacts = by_unit.get(unit_id, [])
         planners = [item for item in unit_artifacts if item["kind"] == "planner-decision"]
