@@ -66,7 +66,7 @@ def external_callee_source_context_status(context_pack: dict[str, Any]) -> str:
         identity = _context_source_identity(item, kind, name_key)
         if identity is None or identity not in source_bindings:
             return "invalid"
-        known_span_hashes.add(identity[5])
+        known_span_hashes.add(item["source_span"]["sha256"])
     source_span = context_pack.get("source", {}).get("span")
     if isinstance(source_span, dict):
         for key in ("sha256", "declared_sha256"):
@@ -133,6 +133,8 @@ def _context_source_identity(
         or not isinstance(source_span, dict)
         or not isinstance(source_file.get("path"), str)
         or not _is_sha256(source_file.get("sha256"))
+        or not _is_sha256(source_file.get("declared_sha256"))
+        or source_file.get("hash_match_mode") not in {"exact", "newline_equivalent"}
         or not _is_sha256(source_span.get("sha256"))
         or not isinstance(source_span.get("line_start"), int)
         or not isinstance(source_span.get("line_end"), int)
@@ -143,6 +145,8 @@ def _context_source_identity(
         name,
         source_file["path"],
         source_file["sha256"],
+        source_file["declared_sha256"],
+        source_file["hash_match_mode"],
         source_span["line_start"],
         source_span["sha256"],
         source_span["line_end"],
@@ -155,6 +159,8 @@ def _callee_binding_identity(item: dict[str, Any]) -> tuple[Any, ...]:
         item.get("name"),
         item.get("path"),
         item.get("sha256"),
+        item.get("declared_sha256"),
+        item.get("hash_match_mode"),
         item.get("line_start"),
         item.get("source_span_sha256"),
         item.get("line_end"),

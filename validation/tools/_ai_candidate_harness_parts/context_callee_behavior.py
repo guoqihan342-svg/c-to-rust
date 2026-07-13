@@ -5,7 +5,12 @@ import re
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from .context_security import logical_path, redact_text, sha256_bytes, sha256_path
+from .context_bound_source import (
+    BoundSourceFile,
+    read_hash_bound_utf8_source,
+    source_file_descriptor,
+)
+from .context_security import redact_text, sha256_bytes
 from validation.tools.extract_source_slice import mask_comments_and_strings
 
 
@@ -132,7 +137,7 @@ def source_behavior_disagrees_with_fixture(
 def _verified_declared_sources(
     spec: dict[str, Any],
     source_root: Path,
-) -> list[tuple[str, Path, str, str]]:
+) -> list[tuple[str, BoundSourceFile]]:
     source = spec.get("source")
     hashes = source.get("source_file_hashes") if isinstance(source, dict) else None
     if not isinstance(hashes, dict):
@@ -140,32 +145,26 @@ def _verified_declared_sources(
     if not isinstance(hashes, dict):
         return []
     verified = []
-    resolved_root = source_root.resolve()
     for raw_path, raw_sha in sorted(hashes.items(), key=lambda item: str(item[0])):
         path = _normalized_declared_path(raw_path)
         if path is None or not isinstance(raw_sha, str) or SHA256_RE.fullmatch(raw_sha) is None:
             continue
-        resolved = (resolved_root / PurePosixPath(path)).resolve()
         try:
-            resolved.relative_to(resolved_root)
+            bound = read_hash_bound_utf8_source(
+                source_root,
+                path,
+                raw_sha,
+                max_bytes=MAX_CALLEE_FILE_BYTES,
+            )
         except ValueError:
             continue
-        if not resolved.is_file() or resolved.stat().st_size > MAX_CALLEE_FILE_BYTES:
-            continue
-        if sha256_path(resolved) != raw_sha:
-            continue
-        try:
-            text = resolved.read_text(encoding="utf-8-sig")
-        except UnicodeError:
-            continue
-        if sha256_path(resolved) == raw_sha:
-            verified.append((path, resolved, raw_sha, text))
+        verified.append((path, bound))
     return verified
 
 
 def _find_macro_dependency(
     symbol: str,
-    sources: list[tuple[str, Path, str, str]],
+    sources: list[tuple[str, BoundSourceFile]],
     source_root: Path,
     known_roots: tuple[str, ...],
 ) -> dict[str, Any] | None:
@@ -174,32 +173,28 @@ def _find_macro_dependency(
         re.MULTILINE,
     )
     matches = []
-    for path, resolved, digest, text in sources:
-        for match in pattern.finditer(text):
+    for path, bound in sources:
+        for match in pattern.finditer(bound.text):
             projection = re.search(r"->\s*([A-Za-z_]\w*)", match.group("body"))
             if projection is not None:
-                matches.append((path, resolved, digest, text, match, projection.group(1)))
+                matches.append((path, bound, match, projection.group(1)))
     if len(matches) != 1:
         return None
-    path, resolved, digest, text, match, field = matches[0]
+    path, bound, match, field = matches[0]
     return _dependency(
         kind="function_like_macro_projection",
         symbol=symbol,
-        path=path,
-        resolved=resolved,
-        file_sha256=digest,
-        text=text,
+        bound=bound,
         start=match.start(),
         end=match.end(),
         known_roots=known_roots,
         extra={"projection_field": field},
-        source_root=source_root,
     )
 
 
 def _find_enum_dependency(
     symbol: str,
-    sources: list[tuple[str, Path, str, str]],
+    sources: list[tuple[str, BoundSourceFile]],
     source_root: Path,
     known_roots: tuple[str, ...],
 ) -> dict[str, Any] | None:
@@ -208,27 +203,23 @@ def _find_enum_dependency(
         re.DOTALL,
     )
     matches = []
-    for path, resolved, digest, text in sources:
-        masked = mask_comments_and_strings(text)
+    for path, bound in sources:
+        masked = mask_comments_and_strings(bound.text)
         for match in enum_pattern.finditer(masked):
             resolved_value = _enum_member_value(match.group("body"), symbol)
             if resolved_value is not None:
-                matches.append((path, resolved, digest, text, match, resolved_value))
+                matches.append((path, bound, match, resolved_value))
     if len(matches) != 1:
         return None
-    path, resolved, digest, text, match, value = matches[0]
+    path, bound, match, value = matches[0]
     return _dependency(
         kind="enum_constant",
         symbol=symbol,
-        path=path,
-        resolved=resolved,
-        file_sha256=digest,
-        text=text,
+        bound=bound,
         start=match.start(),
         end=match.end(),
         known_roots=known_roots,
         extra={"resolved_integer": value, "resolution": "c_enum_ordinal_v1"},
-        source_root=source_root,
     )
 
 
@@ -258,26 +249,19 @@ def _dependency(
     *,
     kind: str,
     symbol: str,
-    path: str,
-    resolved: Path,
-    file_sha256: str,
-    text: str,
+    bound: BoundSourceFile,
     start: int,
     end: int,
     known_roots: tuple[str, ...],
     extra: dict[str, Any],
-    source_root: Path,
 ) -> dict[str, Any]:
+    text = bound.text
     content = text[start:end]
     data = content.encode("utf-8")
     return {
         "kind": kind,
         "symbol": symbol,
-        "source_file": {
-            "path": logical_path(source_root.resolve(), resolved),
-            "sha256": file_sha256,
-            "size_bytes": resolved.stat().st_size,
-        },
+        "source_file": source_file_descriptor(bound),
         "source_span": {
             "line_start": text.count("\n", 0, start) + 1,
             "line_end": text.count("\n", 0, end) + 1,

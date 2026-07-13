@@ -7129,7 +7129,8 @@
         "temporary mutable safe-adapter borrow",
         "same-call overlapping mutable borrow refusal",
         "hash-bound AI ContextPack RecordMemset projection",
-        "hash-bound AI ContextPack MutableVoidPointerAddress projection"
+        "hash-bound AI ContextPack MutableVoidPointerAddress projection",
+        "newline-equivalent external-callee source binding"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -7172,7 +7173,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "A18c8h4e rebuilds the AI ContextPack from the existing real libuv WSL evidence with complete RecordMemset and MutableVoidPointerAddress projections, typed_ir_status=ready, and no unsupported nodes; provider invocation remains blocked by incomplete external-callee source context, so AI API repair, executable callee semantics, schema-aware diff, negative diff, and final verification remain incomplete"
+          "reason": "A18c8h4f rebuilds the AI ContextPack from existing real libuv WSL evidence with typed_ir_status=ready and newline-equivalent hash-bound uv_inet_pton source, making provider readiness ready; no model has yet been invoked for this stage, so AI API repair, executable callee semantics, schema-aware diff, negative diff, and final verification remain incomplete"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -7180,7 +7181,7 @@
         },
         "route_evidence": {
           "status": "gap",
-          "reason": "A18c8h4e proves a hash-bound identity-neutral AI typed-IR projection against existing real libuv WSL artifacts and advances provider readiness to external_callee_source_context_incomplete; it is local development evidence with no provider invocation, no accepted candidate, and semantic_pass=false"
+          "reason": "A18c8h4f proves identity-neutral actual/declared/hash-mode binding for external callee and behavior-dependency source and advances the real libuv ContextPack to provider-ready; it is local development evidence with no provider invocation, no accepted candidate, and semantic_pass=false"
         }
       },
       "positive_cases": [
@@ -7223,6 +7224,14 @@
         {
           "name": "test_extended_projection_is_identifier_independent",
           "path": "validation/tools/test_ai_context_typed_ir_extensions.py"
+        },
+        {
+          "name": "test_crlf_checkout_binds_lf_declared_hash",
+          "path": "validation/tools/test_ai_external_callee_newline_binding.py"
+        },
+        {
+          "name": "test_behavior_dependencies_use_the_same_newline_binding",
+          "path": "validation/tools/test_ai_external_callee_newline_binding.py"
         }
       ],
       "negative_cases": [
@@ -7240,6 +7249,11 @@
           "name": "test_layout_and_pointer_contract_drift_remain_fail_closed",
           "path": "validation/tools/test_ai_context_typed_ir_extensions.py",
           "fail_closed_reason": "record-size mismatch, incomplete ABI evidence, integer width drift, const void targets, and unknown typed-IR nodes invalidate the AI projection"
+        },
+        {
+          "name": "test_newline_binding_tamper_and_content_drift_fail_closed",
+          "path": "validation/tools/test_ai_external_callee_newline_binding.py",
+          "fail_closed_reason": "hash-match-mode tampering or non-newline source-content drift invalidates the external-callee source binding"
         }
       ]
     }

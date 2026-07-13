@@ -9,7 +9,12 @@ from .context_callee_behavior import (
     source_backed_behavior,
     source_behavior_disagrees_with_fixture,
 )
-from .context_security import logical_path, redact_text, sha256_bytes, sha256_path
+from .context_bound_source import (
+    ensure_bound_source_unchanged,
+    read_hash_bound_utf8_source,
+    source_file_descriptor,
+)
+from .context_security import redact_text, sha256_bytes
 from .context_source import bytes_hash_match_mode, expected_source_sha256, extract_span
 from validation.tools.extract_source_slice import extract_function
 
@@ -141,20 +146,18 @@ def _target_behavior_block(
     declared_file_sha = expected_source_sha256(spec, source_path_text)
     if not isinstance(declared_file_sha, str) or SHA256_RE.fullmatch(declared_file_sha) is None:
         return None
-    resolved_root = source_root.resolve()
-    resolved = (resolved_root / PurePosixPath(source_path_text)).resolve()
     try:
-        resolved.relative_to(resolved_root)
+        bound = read_hash_bound_utf8_source(
+            source_root,
+            source_path_text,
+            declared_file_sha,
+            max_bytes=MAX_CALLEE_FILE_BYTES,
+        )
     except ValueError:
-        return None
-    if not resolved.is_file() or resolved.stat().st_size > MAX_CALLEE_FILE_BYTES:
-        return None
-    full_sha = sha256_path(resolved)
-    if full_sha != declared_file_sha:
         return None
     try:
         content_bytes, coordinates = extract_span(
-            resolved,
+            bound.path,
             source_span,
             signature.get("c_source"),
         )
@@ -169,17 +172,15 @@ def _target_behavior_block(
         content = content_bytes.decode("utf-8-sig")
     except UnicodeError:
         return None
-    if sha256_path(resolved) != full_sha:
+    try:
+        ensure_bound_source_unchanged(bound)
+    except ValueError:
         return None
     redacted = redact_text(content, known_roots)
     return {
         "callee": function_name,
         "role": "target_function",
-        "source_file": {
-            "path": logical_path(resolved_root, resolved),
-            "sha256": full_sha,
-            "size_bytes": resolved.stat().st_size,
-        },
+        "source_file": source_file_descriptor(bound),
         "source_span": {
             "content": redacted,
             "sha256": content_sha,
@@ -226,6 +227,8 @@ def _input_binding(
         "name": name,
         "path": source_file.get("path"),
         "sha256": source_file.get("sha256"),
+        "declared_sha256": source_file.get("declared_sha256"),
+        "hash_match_mode": source_file.get("hash_match_mode"),
         "source_span_sha256": source_span.get("sha256"),
         "line_start": source_span.get("line_start"),
         "line_end": source_span.get("line_end"),
@@ -264,30 +267,17 @@ def _source_block(
     if not isinstance(declared_sha256, str) or SHA256_RE.fullmatch(declared_sha256) is None:
         raise ValueError("source_file_sha256_invalid")
 
-    resolved_root = source_root.resolve()
-    resolved = (resolved_root / PurePosixPath(source_path)).resolve()
+    bound = read_hash_bound_utf8_source(
+        source_root,
+        source_path,
+        declared_sha256,
+        max_bytes=MAX_CALLEE_FILE_BYTES,
+    )
     try:
-        resolved.relative_to(resolved_root)
-    except ValueError as error:
-        raise ValueError("source_path_outside_root") from error
-    if not resolved.is_file():
-        raise ValueError("source_file_missing")
-    if resolved.stat().st_size > MAX_CALLEE_FILE_BYTES:
-        raise ValueError("source_file_exceeds_limit")
-
-    full_sha256 = sha256_path(resolved)
-    if full_sha256 != declared_sha256:
-        raise ValueError("source_file_sha256_mismatch")
-    try:
-        text = resolved.read_text(encoding="utf-8-sig")
-    except UnicodeError as error:
-        raise ValueError("source_file_not_utf8") from error
-    try:
-        extracted = extract_function(text, name)
+        extracted = extract_function(bound.text, name)
     except SystemExit as error:
         raise ValueError("callee_definition_not_found") from error
-    if sha256_path(resolved) != full_sha256:
-        raise ValueError("source_file_changed_during_read")
+    ensure_bound_source_unchanged(bound)
 
     content_bytes = extracted.c_source.encode("utf-8")
     if len(content_bytes) > MAX_CALLEE_BLOCK_BYTES:
@@ -297,11 +287,7 @@ def _source_block(
         "callee": name,
         "source_ref": source_ref,
         "definition_status": item.get("definition_status"),
-        "source_file": {
-            "path": logical_path(resolved_root, resolved),
-            "sha256": full_sha256,
-            "size_bytes": resolved.stat().st_size,
-        },
+        "source_file": source_file_descriptor(bound),
         "source_span": {
             "line_start": extracted.line_start,
             "line_end": extracted.line_end,
