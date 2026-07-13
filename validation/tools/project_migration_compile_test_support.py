@@ -16,6 +16,9 @@ from validation.tools._project_migration_harness.ledger_artifact_binding import 
 from validation.tools._project_migration_harness.ledger_run_contract import (
     load_migration_contract,
 )
+from validation.tools.project_migration_sandbox_test_support import (
+    bind_execution_plan,
+)
 
 
 def compile_observation_for_ledger(
@@ -65,7 +68,7 @@ def compile_observation_for_ledger(
             "quarantine_manifest": quarantine,
             "generation_manifest": generation,
         },
-        execution=execution,
+        execution=bind_execution_plan(execution, generation["sha256"]),
     )
 
 

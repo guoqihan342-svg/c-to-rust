@@ -6,6 +6,9 @@ from typing import Any
 
 from .gate_evidence import require_content_addressed_reference
 from .ledger_security import LedgerError
+from .project_cargo_evidence import (
+    CARGO_OBSERVATION_KEYS, derive_project_cargo_status,
+)
 
 
 CANDIDATE_REQUIRED_GATES = frozenset({
@@ -48,8 +51,8 @@ _OBSERVATION_FIELDS = {
         "managed_project_unchanged", "candidate_count", "manifest_sha256",
         "project_sha256",
     },
-    "cargo-check": {"executed", "returncode", "timed_out", "sandbox_profile"},
-    "cargo-test": {"executed", "returncode", "timed_out", "sandbox_profile"},
+    "cargo-check": CARGO_OBSERVATION_KEYS,
+    "cargo-test": CARGO_OBSERVATION_KEYS,
     "oracle-replay": {
         "case_count", "mismatch_count", "crash_count", "oracle_sha256",
         "candidate_sha256",
@@ -216,12 +219,7 @@ def _observation_passed(gate_kind: str, value: Mapping[str, Any]) -> bool:
             and _is_sha(value.get("project_sha256"))
         )
     if gate_kind in {"cargo-check", "cargo-test"}:
-        return (
-            value.get("executed") is True
-            and value.get("returncode") == 0
-            and value.get("timed_out") is False
-            and value.get("sandbox_profile") == "os-isolated-v1"
-        )
+        return derive_project_cargo_status(gate_kind, value) == "passed"
     if gate_kind == "oracle-replay":
         return (
             _positive_int(value.get("case_count"))

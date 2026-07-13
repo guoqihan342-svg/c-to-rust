@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 from pathlib import Path
 import re
 import subprocess
-from typing import Protocol, Sequence
+from collections.abc import Mapping
+from typing import Any, Protocol, Sequence
+
+from .sandbox_requirements import (
+    SandboxRequirements, SandboxVerificationPlan, requirements_from_payload,
+    strict_sandbox_requirements,
+)
 
 
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -17,15 +23,17 @@ class SandboxContract:
     backend: str
     launcher_sha256: str
     toolchain_sha256: str
-    cpu_seconds: int = 300
-    address_space_bytes: int = 4 * 1024 * 1024 * 1024
-    file_size_bytes: int = 512 * 1024 * 1024
-    process_count: int = 128
-    open_files: int = 256
+    requirements: SandboxRequirements = field(
+        default_factory=strict_sandbox_requirements,
+    )
+
+    def __post_init__(self) -> None:
+        if type(self.requirements) is not SandboxRequirements:
+            raise ValueError("sandbox contract requirements type is invalid")
 
     def payload(self) -> dict[str, object]:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "backend": self.backend,
             "os_family": "linux",
             "launcher_sha256": self.launcher_sha256,
@@ -38,18 +46,34 @@ class SandboxContract:
             "user_namespace": "isolated",
             "process_namespace": "isolated",
             "privileges": "all-capabilities-dropped",
-            "resource_limits": {
-                "cpu_seconds": self.cpu_seconds,
-                "address_space_bytes": self.address_space_bytes,
-                "file_size_bytes": self.file_size_bytes,
-                "process_count": self.process_count,
-                "open_files": self.open_files,
-            },
+            "requirements": self.requirements.payload(),
+            "requirements_sha256": self.requirements.sha256,
+            "resource_limits": dict(self.requirements.payload()["resource_limits"]),
         }
 
     @property
     def sha256(self) -> str:
         return canonical_sha256(self.payload())
+
+    @property
+    def cpu_seconds(self) -> int:
+        return self.requirements.cpu_seconds
+
+    @property
+    def address_space_bytes(self) -> int:
+        return self.requirements.address_space_bytes
+
+    @property
+    def file_size_bytes(self) -> int:
+        return self.requirements.file_size_bytes
+
+    @property
+    def process_count(self) -> int:
+        return self.requirements.process_count
+
+    @property
+    def open_files(self) -> int:
+        return self.requirements.open_files
 
 
 @dataclass(frozen=True)
@@ -59,6 +83,9 @@ class SandboxRunResult:
     command_sha256: str
     command_started: bool
     launcher_argv_sha256: str
+    requirements_sha256: str
+    verification_plan_sha256: str
+    probe_receipt_sha256: str
 
 
 class SandboxBackend(Protocol):
@@ -67,7 +94,9 @@ class SandboxBackend(Protocol):
 
     def execute(
         self, cargo_binary: Path, cargo_args: Sequence[str], *,
-        project_root: Path, runtime_root: Path, timeout_seconds: int,
+        project_root: Path, runtime_root: Path,
+        verification_plan: SandboxVerificationPlan,
+        probe_receipt: object,
     ) -> SandboxRunResult: ...
 
 
@@ -75,15 +104,22 @@ class SandboxBackend(Protocol):
 class SandboxDiscovery:
     backend: SandboxBackend | None
     reason_code: str | None
+    probe_receipt: object | None = None
 
 
 def validate_contract(contract: SandboxContract) -> None:
     if not isinstance(contract, SandboxContract):
         raise ValueError("sandbox contract type is invalid")
     payload = contract.payload()
+    try:
+        reopened_requirements = requirements_from_payload(payload.get("requirements"))
+    except ValueError as error:
+        raise ValueError("sandbox contract requirements are invalid") from error
     if (
         contract.backend != "bubblewrap-v1"
+        or not isinstance(contract.launcher_sha256, str)
         or SHA256.fullmatch(contract.launcher_sha256) is None
+        or not isinstance(contract.toolchain_sha256, str)
         or SHA256.fullmatch(contract.toolchain_sha256) is None
         or payload["network"] != "unshared"
         or payload["project_input"] != "read-only"
@@ -91,6 +127,10 @@ def validate_contract(contract: SandboxContract) -> None:
         or payload["temporary_directory"] != "isolated-tmpfs"
         or payload["user_namespace"] != "isolated"
         or payload["privileges"] != "all-capabilities-dropped"
+        or reopened_requirements != contract.requirements
+        or payload.get("requirements_sha256") != contract.requirements.sha256
+        or payload.get("resource_limits")
+        != contract.requirements.payload()["resource_limits"]
     ):
         raise ValueError("sandbox contract policy is invalid")
     limits = (
@@ -106,17 +146,45 @@ def validate_contract(contract: SandboxContract) -> None:
         raise ValueError("sandbox resource limits exceed policy")
 
 
+def contract_from_payload(value: Any) -> SandboxContract:
+    if not isinstance(value, Mapping):
+        raise ValueError("sandbox contract payload is invalid")
+    requirements = requirements_from_payload(value.get("requirements"))
+    contract = SandboxContract(
+        backend=value.get("backend"),
+        launcher_sha256=value.get("launcher_sha256"),
+        toolchain_sha256=value.get("toolchain_sha256"),
+        requirements=requirements,
+    )
+    validate_contract(contract)
+    if contract.payload() != dict(value):
+        raise ValueError("sandbox contract payload is not canonical")
+    return contract
+
+
 def validate_run_result(
-    result: SandboxRunResult, contract: SandboxContract, command: Sequence[str],
+    result: SandboxRunResult, contract: SandboxContract,
+    plan: SandboxVerificationPlan, probe_receipt: object,
 ) -> None:
+    from .sandbox_probe import SandboxProbeReceipt, validate_probe_receipt
+
     if not isinstance(result, SandboxRunResult):
         raise ValueError("sandbox result type is invalid")
-    expected_command = canonical_sha256(list(command))
+    if not isinstance(plan, SandboxVerificationPlan):
+        raise ValueError("sandbox verification plan type is invalid")
+    if not isinstance(probe_receipt, SandboxProbeReceipt):
+        raise ValueError("sandbox probe receipt type is invalid")
+    validate_probe_receipt(probe_receipt, contract, plan.requirements)
+    expected_command = canonical_sha256(list(plan.command))
     if (
         result.contract_sha256 != contract.sha256
         or result.command_sha256 != expected_command
         or not result.command_started
         or SHA256.fullmatch(result.launcher_argv_sha256) is None
+        or plan.requirements != contract.requirements
+        or result.requirements_sha256 != contract.requirements.sha256
+        or result.verification_plan_sha256 != plan.sha256
+        or result.probe_receipt_sha256 != probe_receipt.sha256
     ):
         raise ValueError("sandbox execution binding is invalid")
 
@@ -132,6 +200,7 @@ __all__ = [
     "SandboxDiscovery",
     "SandboxRunResult",
     "canonical_sha256",
+    "contract_from_payload",
     "validate_contract",
     "validate_run_result",
 ]

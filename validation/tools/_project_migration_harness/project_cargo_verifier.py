@@ -7,9 +7,13 @@ from typing import Any
 from .artifacts import content_sha256
 from .controller_gates import record_candidate_gate
 from .gate_candidate_sets import current_candidate_members
+from .integration_generation import GenerationCommitError
 from .ledger import ProjectLedger
+from .project_cargo_evidence import project_cargo_observation
 from .project_host_gates import record_host_project_observation
-from .project_verification import run_cargo_project_gates
+from .project_verification import (
+    managed_project_input_sha256, run_cargo_project_gates,
+)
 
 
 def verify_project_cargo(
@@ -24,18 +28,30 @@ def verify_project_cargo(
         cargo_command="cargo",
         timeout_seconds=timeout_seconds,
     )
-    checks = {
-        command: item
-        for item in execution.get("checks", [])
-        if isinstance(item, dict)
-        for command in [_command_stage(item)]
-        if command is not None
-    }
+    raw_checks = execution.get("checks")
+    checks: dict[str, dict[str, Any]] = {}
+    if isinstance(raw_checks, list):
+        for command in ("check", "test"):
+            matches = [
+                item for item in raw_checks
+                if isinstance(item, dict) and _command_stage(item) == command
+            ]
+            if len(matches) == 1:
+                checks[command] = matches[0]
+    try:
+        project_input_sha256 = managed_project_input_sha256(project_root)
+    except (GenerationCommitError, OSError, ValueError):
+        project_input_sha256 = None
     records = []
     for gate_kind, command in (("cargo-check", "check"), ("cargo-test", "test")):
         check = checks.get(command)
         diagnostics = _diagnostic_codes(execution, check, gate_kind)
-        observation = _observation(execution, check)
+        observation = project_cargo_observation(
+            execution,
+            check,
+            gate_kind=gate_kind,
+            expected_input_sha256=project_input_sha256,
+        )
         records.append(record_host_project_observation(
             ledger=ledger,
             out_root=out_root,
@@ -67,24 +83,6 @@ def verify_project_cargo(
         "candidate_repair_gates": repairs,
         "execution": execution,
         "semantic_gate": False,
-    }
-
-
-def _observation(execution: dict[str, Any], check: Any) -> dict[str, Any]:
-    executed = isinstance(check, dict) and check.get("cargo_executed") is True
-    sandbox = execution.get("sandbox")
-    contract = sandbox.get("contract") if isinstance(sandbox, dict) else None
-    isolated = (
-        isinstance(contract, dict)
-        and contract.get("backend") == "bubblewrap-v1"
-        and contract.get("network") == "unshared"
-        and contract.get("project_input") == "read-only"
-    )
-    return {
-        "executed": executed,
-        "returncode": check.get("returncode") if isinstance(check, dict) else None,
-        "timed_out": bool(check.get("timed_out")) if isinstance(check, dict) else False,
-        "sandbox_profile": "os-isolated-v1" if isolated else "unavailable",
     }
 
 

@@ -16,8 +16,14 @@ from validation.tools._project_migration_harness.sandbox_contract import (
     canonical_sha256,
 )
 from validation.tools._project_migration_harness.ledger import LedgerError
+from validation.tools._project_migration_harness.integration_validation import (
+    existing_state,
+)
 from validation.tools.project_migration_controller_test_support import (
     ProjectMigrationControllerCase,
+)
+from validation.tools.project_migration_sandbox_test_support import (
+    bind_execution_plan,
 )
 
 
@@ -47,7 +53,10 @@ class ProjectMigrationCandidateCompileVerifierTests(ProjectMigrationControllerCa
         quarantine = self.harness / "target/quarantine-real"
         with mock.patch(
             "validation.tools._project_migration_harness.candidate_compile_verifier."
-            "run_cargo_generation_gates", return_value=_execution("passed"),
+            "run_cargo_generation_gates",
+            side_effect=lambda generation, **_: _bound_execution(
+                _execution("passed"), generation,
+            ),
         ):
             result = verify_candidate_compile(
                 ledger=ledger, run_id=plan["run_id"], unit_id=unit_id,
@@ -140,7 +149,10 @@ class ProjectMigrationCandidateCompileVerifierTests(ProjectMigrationControllerCa
     ) -> dict:
         with mock.patch(
             "validation.tools._project_migration_harness.candidate_compile_verifier."
-            "run_cargo_generation_gates", return_value=execution,
+            "run_cargo_generation_gates",
+            side_effect=lambda generation, **_: _bound_execution(
+                execution, generation,
+            ),
         ):
             return verify_candidate_compile(
                 ledger=ledger, run_id=plan["run_id"], unit_id=unit_id,
@@ -193,6 +205,15 @@ def _execution(status: str, *, candidate_sha: str | None = None) -> dict:
         },
         "diagnostics": [],
     }
+
+
+def _bound_execution(execution: dict, generation: Path) -> dict:
+    if execution.get("status") == "blocked":
+        return execution
+    input_sha256, managed = existing_state(generation)
+    if not managed:
+        raise AssertionError("test quarantine generation is not managed")
+    return bind_execution_plan(execution, input_sha256)
 
 
 if __name__ == "__main__":

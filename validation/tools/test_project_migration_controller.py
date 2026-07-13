@@ -1,5 +1,6 @@
 import unittest
 from unittest import mock
+from copy import deepcopy
 from pathlib import PurePosixPath
 
 from validation.tools._project_migration_harness.controller import (
@@ -12,8 +13,20 @@ from validation.tools._project_migration_harness.controller import (
 from validation.tools._project_migration_harness.ledger_verifier import (
     CANDIDATE_REQUIRED_GATES,
 )
+from validation.tools._project_migration_harness.integration_validation import (
+    existing_state,
+)
+from validation.tools._project_migration_harness.project_cargo_evidence import (
+    CARGO_COMMANDS,
+)
+from validation.tools._project_migration_harness.sandbox_contract import (
+    SandboxContract, canonical_sha256,
+)
 from validation.tools.project_migration_controller_test_support import (
     ProjectMigrationControllerCase,
+)
+from validation.tools.project_migration_sandbox_test_support import (
+    bind_execution_plan,
 )
 
 
@@ -144,30 +157,46 @@ class ProjectMigrationControllerTests(ProjectMigrationControllerCase):
         )
         self.assertEqual("passed", integration_gate["gate_status"])
         self.assertTrue(integration_gate["verification"]["matched_candidate_set"])
-        cargo_execution = {
+        project_input_sha256, managed = existing_state(project)
+        self.assertTrue(managed)
+        contract = SandboxContract(
+            backend="bubblewrap-v1",
+            launcher_sha256="1" * 64,
+            toolchain_sha256="2" * 64,
+        )
+        cargo_execution = bind_execution_plan({
             "schema_version": 1,
             "status": "passed",
+            "cargo_executed": True,
+            "project_input_sha256": project_input_sha256,
+            "project_state_before": project_input_sha256,
+            "project_state_after": project_input_sha256,
+            "project_state_unchanged": True,
             "checks": [
                 {
-                    "command": ["cargo", command],
+                    "command": CARGO_COMMANDS[f"cargo-{command}"],
                     "status": "passed",
                     "returncode": 0,
                     "timed_out": False,
                     "cargo_executed": True,
+                    "stdout_sha256": "3" * 64,
+                    "stderr_sha256": "4" * 64,
+                    "sandbox_contract_sha256": contract.sha256,
+                    "sandbox_command_sha256": canonical_sha256(
+                        CARGO_COMMANDS[f"cargo-{command}"],
+                    ),
+                    "sandbox_launcher_argv_sha256": "5" * 64,
                     "diagnostics": [],
                 }
                 for command in ("check", "test")
             ],
             "sandbox": {
                 "status": "executed",
-                "contract": {
-                    "backend": "bubblewrap-v1",
-                    "network": "unshared",
-                    "project_input": "read-only",
-                },
+                "contract": contract.payload(),
+                "contract_sha256": contract.sha256,
             },
             "diagnostics": [],
-        }
+        }, project_input_sha256)
         with mock.patch(
             "validation.tools._project_migration_harness.project_cargo_verifier."
             "run_cargo_project_gates",
@@ -186,29 +215,46 @@ class ProjectMigrationControllerTests(ProjectMigrationControllerCase):
             ["passed", "passed"],
             [item["gate_status"] for item in cargo_gate["records"]],
         )
+        duplicate_execution = deepcopy(cargo_execution)
+        duplicate_execution["checks"].append(
+            deepcopy(duplicate_execution["checks"][0]),
+        )
+        with mock.patch(
+            "validation.tools._project_migration_harness.project_cargo_verifier."
+            "run_cargo_project_gates",
+            return_value=duplicate_execution,
+        ):
+            duplicate_gate = verify_project_cargo(
+                ledger=ledger,
+                run_id=plan["run_id"],
+                project_root=project,
+                runtime_root=self.harness / "target/cargo-runtime-duplicate",
+                out_root=self.out_root,
+                out_root_rel="target/run",
+            )
+        self.assertEqual("failed", duplicate_gate["status"])
         candidate_sha = next(
             item["content_sha256"]
             for item in ledger.orchestration_rows(plan["run_id"])["artifacts"]
             if item["artifact_id"] == candidate_id
         )
-        failed_execution = {
-            **cargo_execution,
+        failed_check = deepcopy(cargo_execution["checks"][0])
+        failed_check.update({
             "status": "failed",
-            "checks": [{
-                "command": ["cargo", "check"],
-                "status": "failed",
-                "returncode": 1,
-                "timed_out": False,
-                "cargo_executed": True,
-                "diagnostics": [{
-                    "code": "rustc-type-error",
-                    "stage": "cargo-check",
-                    "message": "type mismatch",
-                    "file": f"src/unit_{candidate_sha}.rs",
-                    "line": 1,
-                    "column": 1,
-                }],
+            "returncode": 1,
+            "diagnostics": [{
+                "code": "rustc-type-error",
+                "stage": "cargo-check",
+                "message": "type mismatch",
+                "file": f"src/unit_{candidate_sha}.rs",
+                "line": 1,
+                "column": 1,
             }],
+        })
+        failed_execution = {
+            **deepcopy(cargo_execution),
+            "status": "failed",
+            "checks": [failed_check],
         }
         with mock.patch(
             "validation.tools._project_migration_harness.project_cargo_verifier."

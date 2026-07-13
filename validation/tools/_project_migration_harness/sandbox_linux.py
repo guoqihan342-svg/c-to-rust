@@ -14,6 +14,9 @@ from .sandbox_contract import (
     canonical_sha256,
     validate_contract,
 )
+from .sandbox_requirements import SandboxVerificationPlan
+from .sandbox_linux_probe import bubblewrap_version, run_bubblewrap_probe
+from .sandbox_probe import SandboxProbeReceipt, validate_probe_receipt
 from .sandbox_toolchain import (
     file_sha256,
     resolve_toolchain,
@@ -29,7 +32,7 @@ class BubblewrapBackend:
     def __init__(
         self, launcher: Path, tools: dict[str, Path], contract: SandboxContract,
         *, executor: Executor | None = None, requested_cargo: Path | None = None,
-        toolchain_root: Path | None = None,
+        toolchain_root: Path | None = None, backend_version: str = "test-only",
     ) -> None:
         validate_contract(contract)
         self._launcher = launcher
@@ -42,6 +45,7 @@ class BubblewrapBackend:
         self._toolchain_root = (
             toolchain_root.resolve(strict=True) if toolchain_root is not None else None
         )
+        self._backend_version = backend_version
         if self._toolchain_root is not None and any(
             path.parent != self._toolchain_root / "bin" for path in self._tools.values()
         ):
@@ -53,24 +57,36 @@ class BubblewrapBackend:
 
     def execute(
         self, cargo_binary: Path, cargo_args: Sequence[str], *,
-        project_root: Path, runtime_root: Path, timeout_seconds: int,
+        project_root: Path, runtime_root: Path,
+        verification_plan: SandboxVerificationPlan,
+        probe_receipt: object,
     ) -> SandboxRunResult:
         if cargo_binary.resolve(strict=True) != self._requested_cargo:
             raise ValueError("Cargo binary drifted after sandbox discovery")
-        if toolchain_sha256(
-            self._tools, self._toolchain_root
-        ) != self._contract.toolchain_sha256:
-            raise ValueError("Rust toolchain content drifted after sandbox discovery")
+        self._validate_runtime_binding()
         command = ["cargo", *cargo_args]
+        if (
+            not isinstance(verification_plan, SandboxVerificationPlan)
+            or verification_plan.command != tuple(command)
+            or verification_plan.requirements != self._contract.requirements
+        ):
+            raise ValueError("Sandbox verification plan does not match execution")
+        if not isinstance(probe_receipt, SandboxProbeReceipt):
+            raise ValueError("Sandbox execution requires a capability probe receipt")
+        if probe_receipt.backend_version != self._backend_version:
+            raise ValueError("Sandbox capability probe backend version drifted")
+        validate_probe_receipt(
+            probe_receipt, self._contract, verification_plan.requirements,
+        )
         command_sha256 = canonical_sha256(command)
-        marker = runtime_root / f"{cargo_args[0]}-command-started"
+        marker = runtime_root / f"sandbox-{command_sha256}.started"
         marker.unlink(missing_ok=True)
         argv = self._argv(
             project_root, runtime_root, cargo_args, marker.name,
             command_sha256,
         )
-        stdout_path = runtime_root / f"sandbox-{cargo_args[0]}.stdout"
-        stderr_path = runtime_root / f"sandbox-{cargo_args[0]}.stderr"
+        stdout_path = runtime_root / f"sandbox-{command_sha256}.stdout"
+        stderr_path = runtime_root / f"sandbox-{command_sha256}.stderr"
         with stdout_path.open("wb") as stdout_handle, stderr_path.open("wb") as stderr_handle:
             completed = self._executor(
                 argv,
@@ -78,7 +94,7 @@ class BubblewrapBackend:
                 env={"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
                 stdout=stdout_handle,
                 stderr=stderr_handle,
-                timeout=timeout_seconds,
+                timeout=verification_plan.timeout_seconds,
                 check=False,
                 preexec_fn=_resource_limiter(self._contract),
             )
@@ -95,8 +111,29 @@ class BubblewrapBackend:
             command_sha256=command_sha256,
             command_started=command_started,
             launcher_argv_sha256=canonical_sha256(_redacted_argv(argv)),
+            requirements_sha256=self._contract.requirements.sha256,
+            verification_plan_sha256=verification_plan.sha256,
+            probe_receipt_sha256=probe_receipt.sha256,
         )
 
+    def probe(self, project_root: Path) -> object:
+        self._validate_runtime_binding()
+        return run_bubblewrap_probe(
+            contract=self._contract,
+            backend_version=self._backend_version,
+            project_root=project_root,
+            argv_builder=lambda runtime, command: self._probe_argv(
+                project_root, runtime, command,
+            ),
+            executor=self._executor,
+            preexec_fn=_resource_limiter(self._contract),
+        )
+
+    def _validate_runtime_binding(self) -> None:
+        if file_sha256(self._launcher) != self._contract.launcher_sha256:
+            raise ValueError("Sandbox launcher content drifted after discovery")
+        if toolchain_sha256(self._tools, self._toolchain_root) != self._contract.toolchain_sha256:
+            raise ValueError("Sandbox toolchain content drifted after discovery")
     def _argv(
         self, project: Path, runtime: Path, cargo_args: Sequence[str],
         marker_name: str, command_sha256: str,
@@ -137,6 +174,15 @@ class BubblewrapBackend:
         ))
         return argv
 
+    def _probe_argv(
+        self, project: Path, runtime: Path, command: Sequence[str],
+    ) -> list[str]:
+        argv = self._argv(
+            project, runtime, ("check",), "probe-unused", "0" * 64,
+        )
+        boundary = argv.index("--chdir")
+        return [*argv[:boundary], "--chdir", "/workspace", "--", *command]
+
 
 def discover_sandbox_backend(
     cargo_binary: Path, project_root: Path | None = None,
@@ -156,13 +202,20 @@ def discover_sandbox_backend(
             launcher_sha256=launcher_sha256,
             toolchain_sha256=toolchain.sha256,
         )
+        backend_version = bubblewrap_version(launcher)
         backend = BubblewrapBackend(
             launcher, toolchain.paths(), contract,
             requested_cargo=cargo_binary, toolchain_root=toolchain.root,
+            backend_version=backend_version,
         )
     except (OSError, ValueError):
         return SandboxDiscovery(None, "sandbox_toolchain_untrusted")
-    return SandboxDiscovery(backend, None)
+    try:
+        probe_root = Path(project_root or Path.cwd()).resolve(strict=True)
+        receipt = backend.probe(probe_root)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return SandboxDiscovery(None, "sandbox_capability_probe_failed")
+    return SandboxDiscovery(backend, None, receipt)
 
 
 def _validate_launcher(path: Path) -> None:

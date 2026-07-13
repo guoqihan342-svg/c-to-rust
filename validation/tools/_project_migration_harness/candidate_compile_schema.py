@@ -7,6 +7,11 @@ from typing import Any
 from .gate_authority import candidate_authority
 from .ledger_security import LedgerError
 from .sandbox_contract import canonical_sha256
+from .sandbox_execution_schema import (
+    CHECK_EVIDENCE_KEYS as CHECK_KEYS,
+    SANDBOX_EVIDENCE_KEYS as SANDBOX_KEYS,
+    validate_sandbox_execution_evidence,
+)
 
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -21,22 +26,6 @@ REFERENCE_KEYS = {"path", "sha256", "size_bytes"}
 RUN_CONTRACT_KEYS = {"context_sha256", "dag_sha256", "integration_manifest"}
 QUARANTINE_KEYS = {
     "generation_sha256", "quarantine_manifest", "generation_manifest",
-}
-SANDBOX_KEYS = {"contract", "contract_sha256"}
-CONTRACT_KEYS = {
-    "schema_version", "backend", "os_family", "launcher_sha256",
-    "toolchain_sha256", "network", "project_input", "runtime_output", "home",
-    "temporary_directory", "user_namespace", "process_namespace", "privileges",
-    "resource_limits",
-}
-RESOURCE_LIMIT_KEYS = {
-    "cpu_seconds", "address_space_bytes", "file_size_bytes", "process_count",
-    "open_files",
-}
-CHECK_KEYS = {
-    "command", "status", "cargo_executed", "returncode", "timed_out",
-    "stdout_sha256", "stderr_sha256", "sandbox_contract_sha256",
-    "sandbox_command_sha256", "sandbox_launcher_argv_sha256",
 }
 FIXED_CARGO_CHECK = [
     "cargo", "check", "--all-targets", "--offline", "--locked",
@@ -89,70 +78,21 @@ def derive_compile_status(
         or payload.get("verification_context_sha256") != verification_context(payload)
     ):
         raise LedgerError("candidate compile execution schema is invalid")
-    validated_contract(sandbox)
-    if (
-        check.get("sandbox_contract_sha256") != sandbox.get("contract_sha256")
-        or check.get("command") != FIXED_CARGO_CHECK
-        or check.get("sandbox_command_sha256") != canonical_sha256(FIXED_CARGO_CHECK)
-        or not all(is_sha(check.get(key)) for key in (
-            "stdout_sha256", "stderr_sha256", "sandbox_command_sha256",
-            "sandbox_launcher_argv_sha256",
-        ))
-        or check.get("cargo_executed") is not True
-        or check.get("timed_out") is not False
-        or payload.get("project_state_unchanged") is not True
-    ):
-        raise LedgerError("candidate compile execution was not proven in the fixed sandbox")
-    returncode = check.get("returncode")
-    if check.get("status") == "passed" and returncode == 0:
-        return "passed"
-    if (
-        check.get("status") == "failed"
-        and isinstance(returncode, int) and not isinstance(returncode, bool)
-        and returncode != 0
-    ):
-        return "failed"
-    raise LedgerError("candidate compile result is environmental or ambiguous")
-
-
-def validated_contract(sandbox: Mapping[str, Any]) -> Mapping[str, Any]:
-    contract = sandbox.get("contract")
-    contract_sha256 = sandbox.get("contract_sha256")
-    if (
-        not isinstance(contract, Mapping)
-        or set(contract) != CONTRACT_KEYS
-        or not is_sha(contract_sha256)
-    ):
-        raise LedgerError("candidate compile sandbox contract schema is invalid")
     try:
-        calculated = canonical_sha256(dict(contract))
+        verified = validate_sandbox_execution_evidence(
+            sandbox,
+            check,
+            expected_command=FIXED_CARGO_CHECK,
+            expected_input_sha256=str(quarantine["generation_sha256"]),
+            expected_purpose="cargo-check",
+        )
     except (TypeError, ValueError) as error:
-        raise LedgerError("candidate compile sandbox contract is not canonical") from error
-    limits = contract.get("resource_limits")
-    if (
-        calculated != contract_sha256
-        or contract.get("schema_version") != 1
-        or contract.get("backend") != "bubblewrap-v1"
-        or contract.get("os_family") != "linux"
-        or not is_sha(contract.get("launcher_sha256"))
-        or not is_sha(contract.get("toolchain_sha256"))
-        or contract.get("network") != "unshared"
-        or contract.get("project_input") != "read-only"
-        or contract.get("runtime_output") != "isolated-read-write"
-        or contract.get("home") != "isolated-empty"
-        or contract.get("temporary_directory") != "isolated-tmpfs"
-        or contract.get("user_namespace") != "isolated"
-        or contract.get("process_namespace") != "isolated"
-        or contract.get("privileges") != "all-capabilities-dropped"
-        or not isinstance(limits, Mapping)
-        or set(limits) != RESOURCE_LIMIT_KEYS
-        or not all(positive_int(limits.get(key)) for key in RESOURCE_LIMIT_KEYS)
-        or limits.get("cpu_seconds", 0) > 3_600
-        or limits.get("process_count", 0) > 512
-        or limits.get("open_files", 0) > 4_096
-    ):
-        raise LedgerError("candidate compile sandbox contract policy is invalid")
-    return contract
+        raise LedgerError(
+            "candidate compile execution was not proven in the fixed sandbox"
+        ) from error
+    if payload.get("project_state_unchanged") is not True:
+        raise LedgerError("candidate compile managed generation changed")
+    return verified.status
 
 
 def cargo_check(execution: Mapping[str, Any]) -> Mapping[str, Any]:

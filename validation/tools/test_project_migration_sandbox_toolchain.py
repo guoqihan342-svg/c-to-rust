@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 import hashlib
 from pathlib import Path
 import subprocess
@@ -18,12 +19,19 @@ from validation.tools._project_migration_harness.sandbox_linux import (
     BubblewrapBackend,
     discover_sandbox_backend,
 )
+from validation.tools._project_migration_harness.sandbox_requirements import (
+    cargo_verification_plan, strict_sandbox_requirements,
+)
+from validation.tools._project_migration_harness.sandbox_probe import (
+    make_probe_receipt,
+)
 from validation.tools._project_migration_harness.sandbox_toolchain import (
-    resolve_toolchain,
+    ResolvedToolchain, resolve_toolchain,
     toolchain_sha256,
 )
 from validation.tools.project_migration_sandbox_test_support import (
     executable,
+    passing_probe_receipt,
     toolchain,
     triples,
 )
@@ -90,16 +98,17 @@ class ProjectMigrationSandboxToolchainTests(unittest.TestCase):
 
             contract = SandboxContract(
                 backend="bubblewrap-v1",
-                launcher_sha256="4" * 64,
+                launcher_sha256=hashlib.sha256(launcher.read_bytes()).hexdigest(),
                 toolchain_sha256=first.sha256,
-                cpu_seconds=60,
+                requirements=strict_sandbox_requirements(cpu_seconds=60),
             )
             observed: list[list[str]] = []
 
             def executor(argv: list[str], **_: object) -> subprocess.CompletedProcess[str]:
                 observed.append(argv)
-                (runtime / "check-command-started").write_text(
-                    f"{contract.sha256}\n{canonical_sha256(['cargo', 'check'])}\n",
+                command_sha256 = canonical_sha256(["cargo", "check"])
+                (runtime / f"sandbox-{command_sha256}.started").write_text(
+                    f"{contract.sha256}\n{command_sha256}\n",
                     encoding="ascii",
                 )
                 return subprocess.CompletedProcess(argv, 0)
@@ -108,9 +117,15 @@ class ProjectMigrationSandboxToolchainTests(unittest.TestCase):
                 launcher, first.paths(), contract, executor=executor,
                 requested_cargo=proxies["cargo"], toolchain_root=first.root,
             )
+            plan = cargo_verification_plan(
+                "cargo-check", ("cargo", "check"), "5" * 64,
+                timeout_seconds=60, requirements=contract.requirements,
+            )
+            probe = passing_probe_receipt(contract)
             result = backend.execute(
                 proxies["cargo"], ["check"], project_root=project,
-                runtime_root=runtime, timeout_seconds=60,
+                runtime_root=runtime, verification_plan=plan,
+                probe_receipt=probe,
             )
 
             argv = observed[0]
@@ -126,7 +141,8 @@ class ProjectMigrationSandboxToolchainTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "content drifted"):
                 backend.execute(
                     proxies["cargo"], ["check"], project_root=project,
-                    runtime_root=runtime, timeout_seconds=60,
+                    runtime_root=runtime, verification_plan=plan,
+                    probe_receipt=probe,
                 )
             self.assertEqual(1, len(observed))
 
@@ -137,7 +153,36 @@ class ProjectMigrationSandboxToolchainTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "content drifted"):
                 backend.execute(
                     proxies["cargo"], ["check"], project_root=project,
-                    runtime_root=runtime, timeout_seconds=60,
+                    runtime_root=runtime, verification_plan=plan,
+                    probe_receipt=probe,
+                )
+            self.assertEqual(1, len(observed))
+
+            library.write_bytes(b"a-library")
+            launcher.write_bytes(b"drifted bubblewrap")
+            with self.assertRaisesRegex(ValueError, "launcher content drifted"):
+                backend.execute(
+                    proxies["cargo"], ["check"], project_root=project,
+                    runtime_root=runtime, verification_plan=plan,
+                    probe_receipt=probe,
+                )
+            self.assertEqual(1, len(observed))
+
+            launcher.write_bytes(b"bubblewrap")
+            launcher.chmod(0o755)
+            wrong_version = make_probe_receipt(
+                contract=contract, backend_version="different",
+                capability_results={
+                    name: True for name in contract.requirements.capabilities
+                },
+                raw_observation={"fixture": "wrong-version"},
+                cleanup_verified=True,
+            )
+            with self.assertRaisesRegex(ValueError, "backend version drifted"):
+                backend.execute(
+                    proxies["cargo"], ["check"], project_root=project,
+                    runtime_root=runtime, verification_plan=plan,
+                    probe_receipt=wrong_version,
                 )
             self.assertEqual(1, len(observed))
 
@@ -187,6 +232,63 @@ class ProjectMigrationSandboxToolchainTests(unittest.TestCase):
                 discovery = discover_sandbox_backend(rustup, project)
             self.assertIsNone(discovery.backend)
             self.assertEqual("sandbox_toolchain_untrusted", discovery.reason_code)
+
+    def test_discovery_requires_a_successful_capability_probe(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="migration-probe-discovery-") as temporary:
+            root = Path(temporary)
+            project = root / "project"
+            project.mkdir()
+            launcher = executable(root / "bwrap", b"bubblewrap")
+            tools = toolchain(root / "toolchain", "stable")
+            selected = ResolvedToolchain(
+                cargo=tools["cargo"], rustc=tools["rustc"],
+                rustdoc=tools["rustdoc"], root=tools["cargo"].parent.parent,
+                sha256=toolchain_sha256(
+                    tools, tools["cargo"].parent.parent,
+                ),
+            )
+
+            def discover(probe_effect: object):
+                with ExitStack() as stack:
+                    stack.enter_context(mock.patch(
+                        "validation.tools._project_migration_harness."
+                        "sandbox_linux.platform.system", return_value="Linux",
+                    ))
+                    stack.enter_context(mock.patch(
+                        "validation.tools._project_migration_harness."
+                        "sandbox_linux.shutil.which", return_value=str(launcher),
+                    ))
+                    stack.enter_context(mock.patch(
+                        "validation.tools._project_migration_harness."
+                        "sandbox_linux._validate_launcher",
+                    ))
+                    stack.enter_context(mock.patch(
+                        "validation.tools._project_migration_harness."
+                        "sandbox_linux.resolve_toolchain", return_value=selected,
+                    ))
+                    stack.enter_context(mock.patch(
+                        "validation.tools._project_migration_harness."
+                        "sandbox_linux.bubblewrap_version", return_value="0.11.0",
+                    ))
+                    probe = stack.enter_context(mock.patch.object(
+                        BubblewrapBackend, "probe", autospec=True,
+                        side_effect=probe_effect,
+                    ))
+                    result = discover_sandbox_backend(tools["cargo"], project)
+                    return result, probe.call_count
+
+            discovered, probe_count = discover(
+                lambda backend, _project: passing_probe_receipt(backend.contract),
+            )
+            self.assertIsNotNone(discovered.backend)
+            self.assertIsNotNone(discovered.probe_receipt)
+            self.assertEqual(1, probe_count)
+
+            rejected, _ = discover(ValueError("probe failed"))
+            self.assertIsNone(rejected.backend)
+            self.assertEqual(
+                "sandbox_capability_probe_failed", rejected.reason_code,
+            )
 
 
 if __name__ == "__main__":

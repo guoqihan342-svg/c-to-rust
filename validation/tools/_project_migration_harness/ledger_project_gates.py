@@ -31,6 +31,7 @@ from .ledger_transition_commands import (
 )
 from .project_final_barrier import require_project_final_candidate_passes
 from .project_completion_invariants import require_quiescent_last_good_run
+from .project_gate_bindings import require_cargo_integration_binding
 
 
 class ProjectGateMixin:
@@ -222,6 +223,7 @@ def _require_latest_project_passes(
             status="passed",
         )
         verified.append((row, payload))
+    require_cargo_integration_binding(ledger, verified)
     if include_final:
         by_kind = {str(row["gate_kind"]): (row, payload) for row, payload in verified}
         final_row, final_payload = by_kind["final-verification"]

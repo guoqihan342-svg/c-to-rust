@@ -66,6 +66,9 @@ def compile_observation_payload(
         "sandbox": {
             "contract": dict(contract),
             "contract_sha256": sandbox.get("contract_sha256"),
+            "probe_receipt": sandbox.get("probe_receipt"),
+            "probe_receipt_sha256": sandbox.get("probe_receipt_sha256"),
+            "cleanup_verified": sandbox.get("cleanup_verified"),
         },
         "check": {key: check.get(key) for key in CHECK_KEYS},
         "project_state_unchanged": execution.get("project_state_unchanged"),

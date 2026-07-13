@@ -7,8 +7,20 @@ from validation.tools._project_migration_harness.gate_authority import (
 from validation.tools._project_migration_harness.gate_evidence import (
     write_content_addressed_json,
 )
+from validation.tools._project_migration_harness.project_cargo_evidence import (
+    CARGO_COMMANDS,
+)
+from validation.tools._project_migration_harness.sandbox_contract import (
+    SandboxContract, canonical_sha256,
+)
+from validation.tools._project_migration_harness.sandbox_requirements import (
+    cargo_verification_plan,
+)
 from validation.tools.project_migration_gate_authority_candidate_test_support import (
     digest,
+)
+from validation.tools.project_migration_sandbox_test_support import (
+    passing_probe_receipt,
 )
 
 
@@ -42,7 +54,25 @@ class ProjectGateAuthoritySupportMixin:
 
     def project_observation(
         self, kind: str, status: str, candidate_set: str,
-    ) -> dict[str, str | int]:
+    ) -> dict[str, object]:
+        observation = self.project_observation_value(kind, status)
+        payload = {
+            "schema_version": 1,
+            "artifact_kind": "host-project-gate-observation",
+            "authority_id": project_authority(kind),
+            "run_id": "run",
+            "gate_kind": kind,
+            "candidate_set_sha256": candidate_set,
+            "observation": observation,
+        }
+        reference = write_content_addressed_json(
+            self.out_root, f"raw/{kind}", payload,
+        )
+        return {**reference, "path": f"target/run/{reference['path']}"}
+
+    def project_observation_value(
+        self, kind: str, status: str,
+    ) -> dict[str, object]:
         passed = status == "passed"
         if kind == "integration":
             observation = {
@@ -52,12 +82,7 @@ class ProjectGateAuthoritySupportMixin:
                 "project_sha256": digest("project"),
             }
         elif kind in {"cargo-check", "cargo-test"}:
-            observation = {
-                "executed": True,
-                "returncode": 0 if passed else 1,
-                "timed_out": False,
-                "sandbox_profile": "os-isolated-v1",
-            }
+            observation = _cargo_observation(kind, passed)
         elif kind == "oracle-replay":
             observation = {
                 "case_count": 1,
@@ -78,19 +103,7 @@ class ProjectGateAuthoritySupportMixin:
             }
         else:
             raise ValueError("unsupported raw project observation")
-        payload = {
-            "schema_version": 1,
-            "artifact_kind": "host-project-gate-observation",
-            "authority_id": project_authority(kind),
-            "run_id": "run",
-            "gate_kind": kind,
-            "candidate_set_sha256": candidate_set,
-            "observation": observation,
-        }
-        reference = write_content_addressed_json(
-            self.out_root, f"raw/{kind}", payload,
-        )
-        return {**reference, "path": f"target/run/{reference['path']}"}
+        return observation
 
     def record_project_final(self, record_id: str, candidate_set: str) -> None:
         sources = self.ledger.project_gate_bundle_sources(
@@ -99,6 +112,51 @@ class ProjectGateAuthoritySupportMixin:
         self.record_project_host_gate(
             "final-verification", "passed", record_id, candidate_set, sources,
         )
+
+
+def _cargo_observation(kind: str, passed: bool) -> dict[str, object]:
+    contract = SandboxContract(
+        backend="bubblewrap-v1",
+        launcher_sha256=digest("launcher"),
+        toolchain_sha256=digest("toolchain"),
+    )
+    probe = passing_probe_receipt(contract)
+    command = CARGO_COMMANDS[kind]
+    input_sha256 = digest("manifest")
+    plan = cargo_verification_plan(
+        kind, tuple(command), input_sha256,
+        requirements=contract.requirements,
+    )
+    return {
+        "outcome": "executed",
+        "project_input_sha256": input_sha256,
+        "project_state_unchanged": True,
+        "blocker_code": None,
+        "sandbox": {
+            "contract": contract.payload(),
+            "contract_sha256": contract.sha256,
+            "probe_receipt": probe.payload(),
+            "probe_receipt_sha256": probe.sha256,
+            "cleanup_verified": True,
+        },
+        "check": {
+            "command": command,
+            "status": "passed" if passed else "failed",
+            "cargo_executed": True,
+            "returncode": 0 if passed else 1,
+            "timed_out": False,
+            "stdout_sha256": digest("stdout"),
+            "stderr_sha256": digest("stderr"),
+            "sandbox_contract_sha256": contract.sha256,
+            "sandbox_command_sha256": canonical_sha256(command),
+            "sandbox_command_started": True,
+            "sandbox_launcher_argv_sha256": digest("argv"),
+            "sandbox_requirements_sha256": contract.requirements.sha256,
+            "sandbox_verification_plan": plan.payload(),
+            "sandbox_verification_plan_sha256": plan.sha256,
+            "sandbox_probe_receipt_sha256": probe.sha256,
+        },
+    }
 
 
 __all__ = ["ProjectGateAuthoritySupportMixin"]

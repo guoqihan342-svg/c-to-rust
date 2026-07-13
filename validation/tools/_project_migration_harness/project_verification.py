@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
+import re
 import shutil
-import subprocess
 import tempfile
 from typing import Any
 
@@ -14,16 +13,22 @@ from .integration_generation import (
 )
 from .integration_validation import existing_state
 from .sandbox_contract import (
-    SandboxBackend,
-    SandboxContract,
     validate_contract,
-    validate_run_result,
 )
-from .sandbox_diagnostics import cargo_diagnostics
 from .sandbox_linux import discover_sandbox_backend
+from .sandbox_probe import (
+    SandboxProbeReceipt, validate_probe_receipt,
+)
+from .project_verification_execution import (
+    MAX_OUTPUT_BYTES,
+    blocked_result as _blocked,
+    environment_policy as _environment_policy,
+    run_cargo_check as _run,
+    sandbox_evidence as _sandbox_evidence,
+)
 
 
-MAX_OUTPUT_BYTES = 1024 * 1024
+SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 
 
 def run_cargo_project_gates(
@@ -34,10 +39,13 @@ def run_cargo_project_gates(
         raise ValueError("timeout_seconds must be between 30 and 3600")
     project = _project_target(project_root)
     try:
-        generation = recover_current_generation(project)
+        source = _current_managed_source(project)
     except GenerationCommitError as error:
-        return _blocked("generation_recovery_blocked", detail=error.code)
-    source = generation or project.resolve(strict=True)
+        return _blocked(
+            "generation_recovery_blocked",
+            project_input_sha256=None,
+            detail=error.code,
+        )
     return _run_managed_cargo(
         source, project, runtime_root, cargo_command, timeout_seconds,
     )
@@ -55,6 +63,17 @@ def run_cargo_generation_gates(
     )
 
 
+def managed_project_input_sha256(project_root: Path) -> str:
+    project = _project_target(project_root)
+    source = _current_managed_source(project)
+    state, managed = existing_state(source)
+    if not managed or not isinstance(state, str) or SHA256.fullmatch(state) is None:
+        raise ValueError(
+            "Cargo project must be a managed last-good reconstruction with a SHA-256 state"
+        )
+    return state
+
+
 def _run_managed_cargo(
     source: Path, project: Path, runtime_root: Path,
     cargo_command: str, timeout_seconds: int,
@@ -66,177 +85,120 @@ def _run_managed_cargo(
     try:
         cargo = _cargo_binary(cargo_command)
     except (OSError, ValueError):
-        return _blocked("cargo_tool_unavailable", project_state=before)
+        return _blocked(
+            "cargo_tool_unavailable",
+            project_state=before,
+            project_input_sha256=before,
+        )
     discovery = discover_sandbox_backend(cargo, source)
     if discovery.backend is None:
         return _blocked(
             discovery.reason_code or "cargo_sandbox_unavailable",
             project_state=before,
+            project_input_sha256=before,
         )
     backend = discovery.backend
     try:
         validate_contract(backend.contract)
     except ValueError:
-        return _blocked("sandbox_contract_invalid", project_state=before)
-    execution_root = Path(tempfile.mkdtemp(prefix="cargo-sandbox-", dir=runtime))
-    for name in ("cargo-home", "target"):
-        (execution_root / name).mkdir(mode=0o700)
-    commands = [
-        ["check", "--all-targets", "--offline", "--locked", "--message-format=json"],
-        ["test", "--all-targets", "--offline", "--locked", "--message-format=json"],
-    ]
-    checks = []
-    for cargo_args in commands:
-        checks.append(_run(cargo, cargo_args, source, execution_root, timeout_seconds, backend))
-        if checks[-1]["status"] != "passed":
-            break
+        return _blocked(
+            "sandbox_contract_invalid",
+            project_state=before,
+            project_input_sha256=before,
+        )
     try:
-        after, still_managed = existing_state(source)
+        probe_receipt = discovery.probe_receipt
+        if not isinstance(probe_receipt, SandboxProbeReceipt):
+            raise ValueError("sandbox probe receipt is missing")
+        validate_probe_receipt(
+            probe_receipt, backend.contract, backend.contract.requirements,
+        )
     except ValueError:
-        after, still_managed = "unreadable", False
+        return _blocked(
+            "sandbox_capability_probe_invalid",
+            project_state=before,
+            project_input_sha256=before,
+        )
+    execution_root = Path(tempfile.mkdtemp(prefix="cargo-sandbox-", dir=runtime))
+    checks = []
+    try:
+        for name in ("cargo-home", "target"):
+            (execution_root / name).mkdir(mode=0o700)
+        commands = [
+            ["check", "--all-targets", "--offline", "--locked", "--message-format=json"],
+            ["test", "--all-targets", "--offline", "--locked", "--message-format=json"],
+        ]
+        for cargo_args in commands:
+            checks.append(_run(
+                cargo, cargo_args, source, execution_root,
+                timeout_seconds, backend, before, probe_receipt,
+            ))
+            if checks[-1]["status"] != "passed":
+                break
+        try:
+            after, still_managed = existing_state(source)
+        except ValueError:
+            after, still_managed = "unreadable", False
+    finally:
+        cleanup_verified = _cleanup_execution_root(execution_root)
     unchanged = still_managed and after == before
-    passed = unchanged and len(checks) == 2 and all(
+    passed = cleanup_verified and unchanged and len(checks) == 2 and all(
         item["status"] == "passed" for item in checks
     )
+    blocked = (
+        not cleanup_verified or not unchanged
+        or any(item["status"] == "blocked" for item in checks)
+    )
+    diagnostics = [
+        diagnostic
+        for check in checks if check["status"] == "blocked"
+        for diagnostic in check.get("diagnostics", [])
+    ]
+    if not unchanged:
+        diagnostics.append({
+            "code": "managed_project_state_drift",
+            "stage": "cargo-sandbox",
+            "message": "Managed generation changed during sandboxed verification",
+        })
+    if not cleanup_verified:
+        diagnostics.append({
+            "code": "sandbox_cleanup_failed",
+            "stage": "cargo-sandbox",
+            "message": "Sandbox execution root could not be proven removed",
+        })
     return {
         "schema_version": 1,
-        "status": "passed" if passed else "failed",
+        "status": "passed" if passed else "blocked" if blocked else "failed",
         "cargo_executed": any(item["cargo_executed"] for item in checks),
+        "project_input_sha256": before,
         "project_state_before": before,
         "project_state_after": after,
         "project_state_unchanged": unchanged,
         "checks": checks,
-        "sandbox": _sandbox_evidence(backend.contract, "executed"),
+        "sandbox": _sandbox_evidence(
+            backend.contract, "executed", cleanup_verified=cleanup_verified,
+            probe_receipt=probe_receipt,
+        ),
         "environment_policy": _environment_policy(),
-        "diagnostics": [] if unchanged else [{
-            "code": "managed_project_state_drift",
-            "stage": "cargo-sandbox",
-            "message": "Managed generation changed during sandboxed verification",
-        }],
+        "diagnostics": diagnostics,
         "semantic_gate": False,
         "proof_boundary": "Sandboxed Cargo compile/test only; oracle and final verification remain separate",
     }
 
 
-def _run(
-    cargo: Path, cargo_args: list[str], project: Path, runtime: Path,
-    timeout_seconds: int, backend: SandboxBackend,
-) -> dict[str, Any]:
-    command = ["cargo", *cargo_args]
-    stage = f"cargo-{cargo_args[0]}"
+def _cleanup_execution_root(root: Path) -> bool:
     try:
-        result = backend.execute(
-            cargo, cargo_args, project_root=project, runtime_root=runtime,
-            timeout_seconds=timeout_seconds,
-        )
-    except subprocess.TimeoutExpired:
-        return _execution_failure(command, stage, "cargo_timeout", timed_out=True)
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return _execution_failure(command, stage, "sandbox_execution_rejected")
-    try:
-        validate_run_result(result, backend.contract, command)
-    except ValueError:
-        code = "sandbox_command_not_started" if not result.command_started else "sandbox_contract_mismatch"
-        return _execution_failure(command, stage, code)
-    stdout = _text(result.completed.stdout)
-    stderr = _text(result.completed.stderr)
-    stdout_bytes = stdout.encode("utf-8")
-    stderr_bytes = stderr.encode("utf-8")
-    oversized = len(stdout_bytes) > MAX_OUTPUT_BYTES or len(stderr_bytes) > MAX_OUTPUT_BYTES
-    returncode = int(result.completed.returncode)
-    diagnostics = cargo_diagnostics(stdout, cargo_args[0])
-    if returncode != 0 and not diagnostics:
-        diagnostics = [{
-            "code": "cargo_command_failed",
-            "stage": stage,
-            "message": f"cargo {cargo_args[0]} exited with code {returncode}",
-        }]
-    if oversized:
-        diagnostics = [{
-            "code": "cargo_output_too_large",
-            "stage": stage,
-            "message": "Cargo output exceeded the bounded capture size",
-        }]
-    return {
-        "command": command,
-        "status": "passed" if returncode == 0 and not oversized else "failed",
-        "returncode": returncode,
-        "timed_out": False,
-        "cargo_executed": True,
-        "stdout_sha256": hashlib.sha256(stdout_bytes).hexdigest(),
-        "stderr_sha256": hashlib.sha256(stderr_bytes).hexdigest(),
-        "sandbox_contract_sha256": result.contract_sha256,
-        "sandbox_command_sha256": result.command_sha256,
-        "sandbox_launcher_argv_sha256": result.launcher_argv_sha256,
-        "diagnostics": diagnostics[:64],
-    }
+        if _is_linklike(root):
+            return False
+        shutil.rmtree(root)
+        return not root.exists()
+    except OSError:
+        return False
 
 
-def _execution_failure(
-    command: list[str], stage: str, code: str, *, timed_out: bool = False,
-) -> dict[str, Any]:
-    return {
-        "command": command,
-        "status": "failed",
-        "returncode": 124 if timed_out else None,
-        "timed_out": timed_out,
-        "cargo_executed": False,
-        "stdout_sha256": hashlib.sha256(b"").hexdigest(),
-        "stderr_sha256": hashlib.sha256(b"").hexdigest(),
-        "diagnostics": [{
-            "code": code,
-            "stage": stage,
-            "message": "Cargo execution was not proven inside the required sandbox",
-        }],
-    }
-
-
-def _blocked(
-    code: str, *, project_state: str = "unavailable", detail: str | None = None,
-) -> dict[str, Any]:
-    diagnostic = {
-        "code": code,
-        "stage": "cargo-sandbox",
-        "message": "Required OS isolation is unavailable; candidate code was not executed",
-    }
-    if detail:
-        diagnostic["detail_code"] = detail[:96]
-    return {
-        "schema_version": 1,
-        "status": "blocked",
-        "cargo_executed": False,
-        "project_state_before": project_state,
-        "project_state_after": project_state,
-        "project_state_unchanged": True,
-        "checks": [],
-        "sandbox": {"status": "blocked", "reason_code": code},
-        "environment_policy": _environment_policy(),
-        "diagnostics": [diagnostic],
-        "semantic_gate": False,
-        "proof_boundary": "No Cargo claim without supported OS isolation",
-    }
-
-
-def _sandbox_evidence(contract: SandboxContract, status: str) -> dict[str, Any]:
-    return {
-        "status": status,
-        "contract": contract.payload(),
-        "contract_sha256": contract.sha256,
-    }
-
-
-def _environment_policy() -> dict[str, Any]:
-    return {
-        "network": "namespace-unshared",
-        "locked": True,
-        "cargo_offline_is_supplementary": True,
-        "project_input_read_only": True,
-        "isolated_cargo_home": True,
-        "isolated_target_dir": True,
-        "isolated_home": True,
-        "isolated_tmp": True,
-        "resource_limits": True,
-    }
+def _current_managed_source(project: Path) -> Path:
+    generation = recover_current_generation(project)
+    return generation or project.resolve(strict=True)
 
 
 def _project_target(value: Path) -> Path:
@@ -285,10 +247,8 @@ def _cargo_binary(value: str) -> Path:
     return path
 
 
-def _text(value: Any) -> str:
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return value if isinstance(value, str) else ""
-
-
-__all__ = ["run_cargo_generation_gates", "run_cargo_project_gates"]
+__all__ = [
+    "managed_project_input_sha256",
+    "run_cargo_generation_gates",
+    "run_cargo_project_gates",
+]

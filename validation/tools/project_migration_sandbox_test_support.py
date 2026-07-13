@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import hashlib
 from pathlib import Path
 import subprocess
@@ -10,6 +11,13 @@ from validation.tools._project_migration_harness.sandbox_contract import (
     SandboxRunResult,
     canonical_sha256,
 )
+from validation.tools._project_migration_harness.sandbox_requirements import (
+    SandboxVerificationPlan, cargo_verification_plan,
+    requirements_from_payload, strict_sandbox_requirements,
+)
+from validation.tools._project_migration_harness.sandbox_probe import (
+    SandboxProbeReceipt, make_probe_receipt, validate_probe_receipt,
+)
 
 
 class BoundBackend:
@@ -18,7 +26,7 @@ class BoundBackend:
             backend="bubblewrap-v1",
             launcher_sha256="1" * 64,
             toolchain_sha256="2" * 64,
-            cpu_seconds=60,
+            requirements=strict_sandbox_requirements(cpu_seconds=60),
         )
         self.tamper_contract = tamper_contract
         self.calls: list[dict[str, object]] = []
@@ -30,15 +38,22 @@ class BoundBackend:
         *,
         project_root: Path,
         runtime_root: Path,
-        timeout_seconds: int,
+        verification_plan: SandboxVerificationPlan,
+        probe_receipt: object,
     ) -> SandboxRunResult:
+        if not isinstance(probe_receipt, SandboxProbeReceipt):
+            raise ValueError("test backend requires a sandbox probe receipt")
+        validate_probe_receipt(
+            probe_receipt, self.contract, verification_plan.requirements,
+        )
         command = ["cargo", *cargo_args]
         self.calls.append({
             "cargo_binary": cargo_binary,
             "cargo_args": list(cargo_args),
             "project_root": project_root,
             "runtime_root": runtime_root,
-            "timeout_seconds": timeout_seconds,
+            "timeout_seconds": verification_plan.timeout_seconds,
+            "verification_plan_sha256": verification_plan.sha256,
         })
         return SandboxRunResult(
             completed=subprocess.CompletedProcess(command, 0, "", ""),
@@ -48,6 +63,9 @@ class BoundBackend:
             command_sha256=canonical_sha256(command),
             command_started=True,
             launcher_argv_sha256="3" * 64,
+            requirements_sha256=self.contract.requirements.sha256,
+            verification_plan_sha256=verification_plan.sha256,
+            probe_receipt_sha256=probe_receipt.sha256,
         )
 
 
@@ -79,6 +97,54 @@ def managed_project(root: Path) -> tuple[Path, Path]:
     return project, cargo
 
 
+def bind_execution_plan(
+    execution: dict[str, object], input_sha256: str, *,
+    timeout_seconds: int = 300,
+) -> dict[str, object]:
+    bound = deepcopy(execution)
+    sandbox = bound.get("sandbox")
+    checks = bound.get("checks")
+    if not isinstance(sandbox, dict) or not isinstance(checks, list):
+        raise AssertionError("test sandbox execution is invalid")
+    contract = sandbox.get("contract")
+    if not isinstance(contract, dict):
+        raise AssertionError("test sandbox contract is invalid")
+    requirements = requirements_from_payload(contract.get("requirements"))
+    reopened_contract = SandboxContract(
+        backend=str(contract.get("backend")),
+        launcher_sha256=str(contract.get("launcher_sha256")),
+        toolchain_sha256=str(contract.get("toolchain_sha256")),
+        requirements=requirements,
+    )
+    probe = passing_probe_receipt(reopened_contract)
+    sandbox["probe_receipt"] = probe.payload()
+    sandbox["probe_receipt_sha256"] = probe.sha256
+    sandbox["cleanup_verified"] = True
+    for check in checks:
+        if not isinstance(check, dict) or not isinstance(check.get("command"), list):
+            raise AssertionError("test sandbox check is invalid")
+        command = tuple(check["command"])
+        plan = cargo_verification_plan(
+            f"cargo-{command[1]}", command, input_sha256,
+            timeout_seconds=timeout_seconds, requirements=requirements,
+        )
+        check["sandbox_requirements_sha256"] = requirements.sha256
+        check["sandbox_command_started"] = True
+        check["sandbox_verification_plan"] = plan.payload()
+        check["sandbox_verification_plan_sha256"] = plan.sha256
+        check["sandbox_probe_receipt_sha256"] = probe.sha256
+    return bound
+
+
+def passing_probe_receipt(contract: SandboxContract) -> SandboxProbeReceipt:
+    return make_probe_receipt(
+        contract=contract, backend_version="test-only",
+        capability_results={name: True for name in contract.requirements.capabilities},
+        raw_observation={"fixture": "host-owned-test-probe"},
+        cleanup_verified=True,
+    )
+
+
 def triples(values: list[str]) -> list[list[str]]:
     return [values[index:index + 3] for index in range(len(values) - 2)]
 
@@ -103,4 +169,7 @@ def toolchain(root: Path, version: str) -> dict[str, Path]:
     }
 
 
-__all__ = ["BoundBackend", "executable", "managed_project", "toolchain", "triples"]
+__all__ = [
+    "BoundBackend", "bind_execution_plan", "executable", "managed_project",
+    "passing_probe_receipt", "toolchain", "triples",
+]

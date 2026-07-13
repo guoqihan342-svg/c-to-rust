@@ -28,7 +28,7 @@ input.c + compile context
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 / libuv AI-first 0/1 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑。新 libuv DeepSeek 辅助实跑完成 1 次 initial + 3 次 repair，provider-ready 但 exact 未通过，明确不具备比赛资格 |
 | 当前翻译主线 | P0-A19 / P0-A10 / P0-A18c | h5a-h5d 已闭合 compiler/runtime/ABI repair facts 与 compiler-header declaration-only 分类；下一步进入陌生仓库整项目发现、拆解、并行候选、Cargo 集成与项目级 repair，不再围绕单个已知切片扩语法 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A19 构建闭包、验证权威与真实辅助模型通道 | 任意仓库 inventory、SCC/DAG、CMake/Ninja/link/archive closure、分页 ContextPack、隔离 OpenCode、SQLite ledger、Cargo generation、toolchain 内容绑定、host project gate 与只读 held-out 复验已落地；正向 candidate verifier、Meson/configure、可用比赛等价沙箱和真实 held-out 语义验收仍未完成。本轮有限门禁为 Windows 134 项通过（1 项符号链接权限条件跳过）和 WSL 134/134，成功计数保持 38 |
+| 最近开发阶段 | P0-A19 构建闭包、验证权威与真实辅助模型通道 | 任意仓库 inventory、SCC/DAG、CMake/Ninja/link/archive closure、分页 ContextPack、隔离 OpenCode、SQLite ledger、Cargo generation、toolchain 内容绑定、SandboxBackend capability/probe、host project gate 与只读 held-out 复验已落地；正向 semantic verifier、Meson/configure、A19e7 进程级 receipt、比赛等价聚合沙箱和真实 held-out 语义验收仍未完成。本轮有限门禁为 Windows 288 项通过（2 项条件跳过）和 WSL 288/288，成功计数保持 38 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -488,7 +488,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   目标不是继续增加已知函数的 translator 分支，而是让比赛平台把一个此前未见的 C 仓库交给 OpenCode 后，harness 能自动形成可审计的项目级翻译计划、隔离并行候选、可编译 Rust 项目和验证驱动 repair。所有决策只允许读取源码/AST/编译数据库/构建文件/类型/调用图/ABI/诊断和 hash-bound evidence；项目名、函数名、目录名、slice id、fixture 常量和 golden case 身份不得选择翻译器、prompt、adapter、stub 或修复策略。
 
-  **当前边界（2026-07-13）**：A19 已完成一次真实 WSL DeepSeek 辅助 worker，并完成有界 Ninja/CMake 链接与静态归档闭包、实际 rustup toolchain 内容绑定、CLI 路径/退出码权威和只读 ledger held-out 复验；但正向 candidate 的 compile/oracle/negative/unsafe-alias/ABI/final 链尚未全部接通，也没有完成项目级 oracle、沙箱内真实 Cargo build 和真实 held-out 语义验收。父项保持未勾选，translator numerator 仍不增加。本轮有限门禁在 Windows 运行 134 项并通过（1 项符号链接权限条件跳过），WSL 134/134；这些仍只是 `local-simulation` / `wsl-local-simulation`。
+  **当前边界（2026-07-13）**：A19 已完成一次真实 WSL DeepSeek 辅助 worker，并完成有界 Ninja/CMake 链接与静态归档闭包、实际 rustup toolchain 内容绑定、不可降级 SandboxBackend requirements/VerificationPlan、bubblewrap host capability probe、candidate/project Cargo 证据重开、CLI 路径/退出码权威和只读 ledger held-out 复验；但 A19e7 独立 verifier capability/nonce、正向 oracle/negative/unsafe-alias/ABI/final 链、项目级 oracle、聚合 cgroup/等价 backend、沙箱内真实 Cargo build 和真实 held-out 语义验收尚未闭合。父项保持未勾选，translator numerator 仍不增加。本轮有限门禁在 Windows 运行 288 项并通过（2 项条件跳过），WSL 288/288；真实 WSL smoke 在缺 `bwrap` 时以 `bubblewrap_unavailable`、零候选执行 fail closed，这些仍只是 `local-simulation` / `wsl-local-simulation`。
 
   **A19a 任意仓库入口与构建闭包发现**
 
@@ -540,7 +540,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   **A19c OpenCode 多 worker 候选组合**
 
   - [x] 生成 planner/translator/reviewer/repairer 角色组合、独立 config/data/state/cache/tmp/out-root、DAG 依赖和 SQLite assignments/leases/attempts/artifacts。
-  - [x] 关闭 plan/preflight/request/attempt 漂移、租约重入、heartbeat、非原子 ingest、工具事件、secret 输入、父环境泄漏、agent 权限覆盖、spawn 前误记 command-started 和 provider evidence 未落 ledger；本轮 Windows 134 项通过（1 项条件跳过），WSL 134/134。
+  - [x] 关闭 plan/preflight/request/attempt 漂移、租约重入、heartbeat、非原子 ingest、工具事件、secret 输入、父环境泄漏、agent 权限覆盖、spawn 前误记 command-started 和 provider evidence 未落 ledger；当前有限回归为 Windows 288 项通过（2 项条件跳过），WSL 288/288。
   - [x] 在 WSL 通过固定项目 preflight 真实调用一次 `opencode/deepseek-v4-flash-free`：1 次 provider invocation，preflight report SHA `f0bc76b6b2489597e782cd1f0e532b7483f03658680b4352401ee12c814913c0`，session export `verified`，execution report SHA `9e04b437135aa9f1e2171a180f2e77272374fc8bba3c1257d314e8a963c10b5d`，candidate SHA `359cb2ef234f85d9aa1cbdf2d77e07a296f55cb8bd7d4ad9dd37afe4d9ea72ef`；状态仅为 `candidate-ready` / `auxiliary-local-validation`。GLM-5.1 仍只有真实比赛主机精确合同才能关闭 P0-H9。
   - [ ] **A19c4：最大化 AI 项目推理、候选多样性与信息增益**。
     - [ ] A19c4a：增加跨完整 BuildIR、Migration DAG、RustProjectIR 和历史失败事实工作的 global AI planner；它按依赖、接口风险、验证可用性和项目阻塞生成可重算迁移策略，并在新证据到达后局部重规划，禁止按项目名或固定测试身份选择路线。
@@ -606,9 +606,17 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [ ] A19e7d：增加恶意调用方、伪造 schema/pass、替换 raw observation、receipt 重放、verifier kill/timeout 和并发竞争测试，证明只有真实 host runner 的当前执行结果能够通过状态转移权威。
   - [ ] **A19e8：不可降级的 SandboxBackend 能力接口**。
     - [ ] A19e8a：定义与实现无关的 SandboxBackend capability contract，至少要求网络隔离、仓库/候选只读输入、独立可写输出、进程/子进程约束、环境白名单、超时、CPU/内存/文件/进程数限制、工具链只读绑定和退出后清理；VerificationPlan 显式声明每项所需能力。
+      - [x] A19e8a1：新增实现无关的严格 capability 集、环境白名单、资源上限与 canonical `VerificationPlan`；计划固定 purpose/argv/input/timeout/requirements SHA，shell/control syntax、超限输入或任一能力缺失均在执行前拒绝。
+      - [ ] A19e8a2：为内存/CPU/进程树增加 cgroup v2 或比赛环境等价的聚合约束与实机证明；当前 rlimit 只证明进程继承上限，不能冒充整个进程树的聚合配额。
     - [ ] A19e8b：每个 bubblewrap 或等价后端必须在候选执行前运行 host-owned capability probe/conformance suite，并把 backend identity/version、实际隔离机制、mount/process/resource policy 和 probe hash 写入 sandbox receipt；命令行 flag、自报 capability 或 `--offline` 不构成隔离证明。
+      - [x] A19e8b1：bubblewrap discovery 在返回 backend 前运行固定 host probe，实测 user/pid/mount/network namespace、零 capability、只读项目/工具链、隔离 HOME/tmp/runtime、环境白名单、rlimit 和退出清理，并把 backend version、contract/requirements/probe/raw-observation SHA 与逐能力结果写入 receipt。
+      - [ ] A19e8b2：把 probe 原始文件、launcher/toolchain manifests 与执行 stdout/stderr 写成独立 verifier 进程签发的内容寻址引用；当前 in-process receipt 只能证明 canonical 绑定，不能替代 A19e7 capability channel 的不可伪造性。
     - [ ] A19e8c：所有等价后端必须满足同一最小保证和对抗测试，禁止因平台、权限、工具缺失或后端失败自动减少能力、改用普通 subprocess、开放网络/宿主写权限或放宽资源限制；缺少任一必需能力时在启动候选前 fail closed 为环境阻塞。
+      - [x] A19e8c1：Linux 以外、`bwrap`/toolchain/probe 缺失或失败均返回固定环境 blocker，零候选执行且无 subprocess fallback；Windows 288 项通过（2 项条件跳过）、WSL 288/288，真实 WSL smoke 在缺 `bwrap` 时得到 `bubblewrap_unavailable` 与 `cargo_executed=false`。
+      - [ ] A19e8c2：增加至少一个非 bubblewrap 等价 backend，并让所有实现通过同一不含 backend 身份特判的实机 conformance/对抗套件；在此之前不能声明跨平台等价沙箱。
     - [ ] A19e8d：compile、semantic runner、final/promotion 与 held-out 复验必须重开同一 sandbox receipt 并复算 backend/plan/toolchain/input 绑定；后端漂移、probe 过期、清理失败或保证不等价时拒绝 pass 和完成。
+      - [x] A19e8d1：candidate compile 与 project Cargo raw observation 共用一个严格 reopener，复算 contract/probe/plan/command-start/input/cleanup；project final/completion 重新打开原始 observation，并要求 check/test 输入等于最新 integration managed-generation manifest SHA。旧四字段 Cargo observation、probe/plan/input/cleanup 漂移均不能授予 pass。
+      - [ ] A19e8d2：让 oracle/negative/unsafe/ABI/final、promotion 与 held-out 全部消费 A19e7 独立进程签发的同一一次性 receipt，并重开 raw output 与 issuer/nonce；完成前仍不得勾选 A19e8 父项。
 
   **A19f 泛化防特判与有限 held-out 验收**
 
