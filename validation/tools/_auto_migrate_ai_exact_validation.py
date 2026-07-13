@@ -15,6 +15,9 @@ from validation.tools._ai_candidate_harness_parts.context import (
     canonical_json_bytes,
     sha256_path as _sha256_path,
 )
+from validation.tools._auto_migrate_ai_exact_results import (
+    exact_replay_runner_result,
+)
 
 
 CompileRunner = Callable[[Path], dict[str, Any]]
@@ -145,27 +148,18 @@ def validate_auto_migrate_candidate(
         path = Path(kwargs["candidate_path"])
         replay_path = Path(kwargs["replay_test_path"])
         result = replay_runner(path, replay_path)
-        phase = str(result.get("phase", "compile"))
-        returncode = (
-            result.get("run_returncode")
-            if phase == "run"
-            else result.get("compile_returncode")
-        )
-        return {
-            "status": str(result.get("status", "failed")),
-            "phase": phase,
-            "returncode": int(returncode if isinstance(returncode, int) else 1),
-            "candidate_sha256": sha256_path(path),
-            "replay_test_sha256": sha256_path(replay_path),
-            "shared_fixture_identity_sha256": fixture_sha,
-            "target_contract_sha256": target_sha,
-            "observable_outputs": observable_outputs,
-            "observable_outputs_sha256": (
-                sha256_bytes(canonical_json_bytes(observable_outputs))
-                if observable_outputs is not None
-                else None
+        return exact_replay_runner_result(
+            result,
+            candidate_path=path,
+            replay_path=replay_path,
+            target_sha256=target_sha,
+            fixture_sha256=fixture_sha,
+            observable_outputs=observable_outputs,
+            sha256_path=sha256_path,
+            sha256_observables=lambda value: sha256_bytes(
+                canonical_json_bytes(value)
             ),
-        }
+        )
 
     exact_oracle_proof = {
         key: oracle_proof.get(key)

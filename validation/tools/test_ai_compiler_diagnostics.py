@@ -148,6 +148,5 @@ class AiCompilerDiagnosticsTests(unittest.TestCase):
             self.assertNotIn("compiler_diagnostics", json.dumps(rustc_fact))
             self.assertNotIn("E0308", json.dumps(rustc_fact))
 
-
 if __name__ == "__main__":
     unittest.main()

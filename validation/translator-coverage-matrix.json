@@ -7130,7 +7130,8 @@
         "same-call overlapping mutable borrow refusal",
         "hash-bound AI ContextPack RecordMemset projection",
         "hash-bound AI ContextPack MutableVoidPointerAddress projection",
-        "newline-equivalent external-callee source binding"
+        "newline-equivalent external-callee source binding",
+        "hash-bound exact replay linker diagnostic projection"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -7181,7 +7182,7 @@
         },
         "route_evidence": {
           "status": "gap",
-          "reason": "A18c8h4g records a real noncompetition DeepSeek/max invocation plus three bounded repairs and an independent validator reopening 29 hash-bound artifacts without structural errors; no candidate passes all exact gates, selected_candidate_id remains null, and semantic_pass=false"
+          "reason": "A18c8h5a closes the real exact replay compile-diagnostic wrapper and projects strict rust-lld undefined-symbol facts only after candidate, replay, fixture, and target bindings match; the prior noncompetition DeepSeek run still has no candidate passing all exact gates, selected_candidate_id remains null, and semantic_pass=false"
         }
       },
       "positive_cases": [
@@ -7232,6 +7233,14 @@
         {
           "name": "test_behavior_dependencies_use_the_same_newline_binding",
           "path": "validation/tools/test_ai_external_callee_newline_binding.py"
+        },
+        {
+          "name": "test_real_replay_wrapper_forwards_compile_diagnostics_only",
+          "path": "validation/tools/test_auto_migrate_ai_exact_diagnostics.py"
+        },
+        {
+          "name": "test_linker_symbol_reaches_repair_without_linker_metadata",
+          "path": "validation/tools/test_ai_linker_diagnostics.py"
         }
       ],
       "negative_cases": [
@@ -7254,6 +7263,16 @@
           "name": "test_newline_binding_tamper_and_content_drift_fail_closed",
           "path": "validation/tools/test_ai_external_callee_newline_binding.py",
           "fail_closed_reason": "hash-match-mode tampering or non-newline source-content drift invalidates the external-callee source binding"
+        },
+        {
+          "name": "test_replay_diagnostics_require_all_exact_bindings",
+          "path": "validation/tools/test_ai_linker_diagnostics.py",
+          "fail_closed_reason": "candidate, replay, fixture, or target SHA drift discards every compiler or linker repair diagnostic"
+        },
+        {
+          "name": "test_linker_symbol_text_without_exact_parent_contract_is_not_classified",
+          "path": "validation/tools/test_ai_linker_diagnostics.py",
+          "fail_closed_reason": "linker-like child text without the exact compiler-owned parent diagnostic cannot spoof undefined-symbol classification"
         }
       ]
     }

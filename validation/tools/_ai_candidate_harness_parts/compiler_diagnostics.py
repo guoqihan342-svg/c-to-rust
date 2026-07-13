@@ -12,6 +12,13 @@ MAX_COMPILER_DIAGNOSTICS = 8
 MAX_CODE_BYTES = 32
 MAX_MESSAGE_BYTES = 1_024
 CODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+LINKER_FAILURE_PATTERN = re.compile(
+    r"^linking with `[A-Za-z0-9_.+-]{1,32}` failed: exit status: [1-9][0-9]*$"
+)
+UNDEFINED_SYMBOL_PATTERN = re.compile(
+    r"^rust-lld: error: undefined symbol: (?P<symbol>[A-Za-z_][A-Za-z0-9_]*)$",
+    re.MULTILINE,
+)
 
 
 def normalize_compiler_diagnostics(result: Mapping[str, Any]) -> list[dict[str, str]]:
@@ -25,16 +32,14 @@ def normalize_compiler_diagnostics(result: Mapping[str, Any]) -> list[dict[str, 
     diagnostics: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for entry in entries:
-        normalized = _normalize_diagnostic(entry)
-        if normalized is None:
-            continue
-        identity = (normalized["code"], normalized["message"])
-        if identity in seen:
-            continue
-        seen.add(identity)
-        diagnostics.append(normalized)
-        if len(diagnostics) >= MAX_COMPILER_DIAGNOSTICS:
-            break
+        for normalized in _normalize_diagnostics(entry):
+            identity = (normalized["code"], normalized["message"])
+            if identity in seen:
+                continue
+            seen.add(identity)
+            diagnostics.append(normalized)
+            if len(diagnostics) >= MAX_COMPILER_DIAGNOSTICS:
+                return diagnostics
     return diagnostics
 
 
@@ -101,6 +106,48 @@ def _normalize_diagnostic(
         "code": _bounded_text(code, MAX_CODE_BYTES),
         "message": message,
     }
+
+
+def _normalize_diagnostics(value: Any) -> list[dict[str, str]]:
+    linker_symbols = _linker_undefined_symbols(value)
+    if linker_symbols:
+        return [
+            {
+                "code": "linker_undefined_symbol",
+                "message": f"undefined external symbol `{symbol}`",
+            }
+            for symbol in linker_symbols
+        ]
+    normalized = _normalize_diagnostic(value)
+    return [normalized] if normalized is not None else []
+
+
+def _linker_undefined_symbols(value: Any) -> list[str]:
+    if (
+        not isinstance(value, Mapping)
+        or value.get("level") != "error"
+        or value.get("code") is not None
+        or not isinstance(value.get("message"), str)
+        or LINKER_FAILURE_PATTERN.fullmatch(value["message"]) is None
+    ):
+        return []
+    children = value.get("children")
+    if not isinstance(children, list):
+        return []
+    symbols: list[str] = []
+    for child in children[:32]:
+        if not isinstance(child, Mapping) or child.get("level") != "note":
+            continue
+        message = child.get("message")
+        if not isinstance(message, str):
+            continue
+        for match in UNDEFINED_SYMBOL_PATTERN.finditer(message):
+            symbol = match.group("symbol")
+            if symbol not in symbols:
+                symbols.append(symbol)
+                if len(symbols) >= MAX_COMPILER_DIAGNOSTICS:
+                    return symbols
+    return symbols
 
 
 def _bounded_text(value: str, maximum: int) -> str:
