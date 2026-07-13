@@ -1,0 +1,281 @@
+from __future__ import annotations
+
+import json
+import sqlite3
+import time
+from pathlib import Path
+from typing import Any, Iterable, Mapping
+
+from .ledger_artifacts import ArtifactLedgerMixin
+from .ledger_schema import (
+    SCHEMA_VERSION, _json, _now_text, _require_repo_path, _require_sha256,
+    atomic, connect_database, migrate_schema,
+)
+from .ledger_lease import LeaseLifecycleMixin
+from .ledger_project_gates import ProjectGateMixin
+from .ledger_recovery import LedgerRecoveryMixin
+from .ledger_security import (
+    LedgerError, LeaseConflict, SchemaVersionError, StaleFence,
+    assert_no_semantic_claims,
+)
+from .ledger_verifier import HostVerifierMixin
+from .ledger_views import LedgerViewMixin
+from .orchestration_facts import read_artifact_reference
+from .runtime_binding import RuntimeBindingMixin, compute_portfolio_binding
+
+_ROLES = {"planner", "translator", "reviewer", "repairer"}
+def _prepare_run_metadata(
+    database_path: Path, metadata: Mapping[str, Any] | None, *, run_id: str,
+    dag_sha256: str, assignments: list[Mapping[str, Any]],
+    units: list[Mapping[str, Any]],
+) -> dict[str, Any]:
+    result = dict(metadata or {})
+    artifacts = result.get("artifacts")
+    reference = artifacts.get("portfolio") if isinstance(artifacts, Mapping) else None
+    if reference is None:
+        return result
+    if not isinstance(reference, Mapping):
+        raise ValueError("portfolio artifact reference is invalid")
+    try:
+        portfolio = json.loads(
+            read_artifact_reference(database_path.parent.parent, reference).decode("utf-8")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("portfolio artifact cannot bind the run") from error
+    if not isinstance(portfolio, Mapping):
+        raise ValueError("portfolio artifact must be an object")
+    binding = compute_portfolio_binding(portfolio)
+    if binding["run_id"] != run_id or binding["dag_sha256"] != dag_sha256:
+        raise ValueError("portfolio run/DAG binding does not match create_run")
+    expected_assignments = sorted(
+        (str(item["unit_id"]), str(item["worker_id"]), str(item["role"]),
+         str(item["out_root"]), int(item["max_attempts"])) for item in assignments
+    )
+    actual_assignments = sorted(
+        (str(item["unit_id"]), str(item["worker_id"]), str(item["role"]),
+         str(item["out_root"]), int(item["max_attempts"]))
+        for item in portfolio["assignments"]
+    )
+    expected_units = sorted(
+        (str(item["unit_id"]), str(item["group_id"]), int(item["wave_index"]),
+         str(item["content_sha256"])) for item in units
+    )
+    actual_units = sorted(
+        (str(item["unit_id"]), str(item["group_id"]), int(item["wave_index"]),
+         str(item["content_sha256"])) for item in portfolio["ledger_units"]
+    )
+    if expected_assignments != actual_assignments or expected_units != actual_units:
+        raise ValueError("portfolio assignment/unit binding does not match create_run")
+    result["runtime_binding"] = binding
+    return result
+
+
+class ProjectLedger(
+    HostVerifierMixin,
+    ProjectGateMixin,
+    RuntimeBindingMixin,
+    LeaseLifecycleMixin,
+    LedgerRecoveryMixin,
+    LedgerViewMixin,
+    ArtifactLedgerMixin,
+):
+    def __init__(
+        self, path: str | Path, *, busy_timeout_ms: int = 5_000,
+        read_only: bool = False,
+    ) -> None:
+        self.path = Path(path)
+        self.busy_timeout_ms = busy_timeout_ms
+        self.read_only = read_only
+        with self.connect() as connection:
+            migrate_schema(connection)
+
+    def connect(self) -> sqlite3.Connection:
+        return connect_database(
+            self.path, busy_timeout_ms=self.busy_timeout_ms,
+            read_only=self.read_only,
+        )
+
+    @staticmethod
+    def _insert_assignment(
+        connection: sqlite3.Connection, run_id: str, item: Mapping[str, Any], now: str,
+    ) -> None:
+        role = str(item.get("role", ""))
+        if role not in _ROLES:
+            raise ValueError(f"unsupported worker role: {role}")
+        worker_id = str(item.get("worker_id", ""))
+        unit_id = str(item.get("unit_id", item.get("group_id", "")))
+        if not worker_id or not unit_id:
+            raise ValueError("assignment worker_id and unit_id are required")
+        connection.execute(
+            """insert into assignments(run_id,unit_id,worker_id,role,out_root,max_attempts,status,created_at)
+               values (?,?,?,?,?,?,?,?)""",
+            (run_id, unit_id, worker_id, role, _require_repo_path(str(item.get("out_root", "")), "out_root"),
+             int(item.get("max_attempts", 0)), "active", now),
+        )
+
+    def create_run(
+        self, *, run_id: str, project_key: str, source_commit: str, dag_sha256: str,
+        units: Iterable[Mapping[str, Any]], max_concurrency: int, max_attempts: int,
+        metadata: Mapping[str, Any] | None = None,
+        assignments: Iterable[Mapping[str, Any]] | None = None,
+    ) -> None:
+        if max_concurrency < 1 or max_attempts < 1:
+            raise ValueError("run concurrency and attempt limits must be positive")
+        rows, assigned = list(units), list(assignments or ())
+        bound_metadata = _prepare_run_metadata(
+            self.path, metadata, run_id=run_id, dag_sha256=dag_sha256,
+            assignments=assigned, units=rows,
+        )
+        now = _now_text()
+        with self.connect() as connection, atomic(connection):
+            connection.execute(
+                """insert into project_runs(run_id,project_key,source_commit,dag_sha256,status,max_concurrency,
+                   max_attempts,created_at,updated_at,metadata_json) values (?,?,?,?,'active',?,?,?,?,?)""",
+                (run_id, project_key, source_commit, _require_sha256(dag_sha256, "dag_sha256"),
+                 max_concurrency, max_attempts, now, now, _json(bound_metadata)),
+            )
+            for unit in rows:
+                connection.execute(
+                    """insert into migration_units(run_id,unit_id,group_id,wave_index,status,resumable_status,
+                       content_sha256,last_good_artifact_id,updated_at) values (?,?,?,?,?,?,?,null,?)""",
+                    (run_id, str(unit["unit_id"]), str(unit["group_id"]), int(unit["wave_index"]),
+                     str(unit.get("status", "pending")), str(unit.get("resumable_status", "ready")),
+                     _require_sha256(str(unit["content_sha256"]), "content_sha256"), now),
+                )
+            for item in assigned:
+                self._insert_assignment(connection, run_id, item, now)
+
+    def register_assignments(self, *, run_id: str, assignments: Iterable[Mapping[str, Any]]) -> None:
+        now = _now_text()
+        with self.connect() as connection, atomic(connection):
+            run = connection.execute("select status from project_runs where run_id=?", (run_id,)).fetchone()
+            if not run or run["status"] != "active":
+                raise LedgerError("assignments require an active run")
+            for item in assignments:
+                self._insert_assignment(connection, run_id, item, now)
+
+    def create_or_resume_run(self, **kwargs: Any) -> str:
+        units = list(kwargs["units"])
+        assignments_supplied = "assignments" in kwargs
+        assignments = list(kwargs.get("assignments") or ())
+        metadata = _prepare_run_metadata(
+            self.path, kwargs.get("metadata"), run_id=str(kwargs["run_id"]),
+            dag_sha256=str(kwargs["dag_sha256"]), assignments=assignments,
+            units=units,
+        )
+        payload = {
+            **kwargs, "units": units, "assignments": assignments,
+            "metadata": metadata,
+        }
+        try:
+            self.create_run(**payload)
+            return "created"
+        except sqlite3.IntegrityError:
+            run_id = str(kwargs["run_id"])
+            with self.connect() as connection:
+                run = connection.execute(
+                    """select project_key,source_commit,dag_sha256,max_concurrency,max_attempts,
+                              metadata_json
+                       from project_runs where run_id=?""", (run_id,),
+                ).fetchone()
+                actual = connection.execute(
+                    """select unit_id,group_id,wave_index,content_sha256 from migration_units
+                       where run_id=? order by unit_id""", (run_id,),
+                ).fetchall()
+                actual_assignments = connection.execute(
+                    """select unit_id,worker_id,role,out_root,max_attempts from assignments
+                       where run_id=? order by unit_id,worker_id""", (run_id,),
+                ).fetchall()
+            expected = sorted((str(x["unit_id"]), str(x["group_id"]), int(x["wave_index"]),
+                               str(x["content_sha256"])) for x in units)
+            expected_assignments = sorted((str(x.get("unit_id", x.get("group_id", ""))),
+                                           str(x["worker_id"]), str(x["role"]), str(x["out_root"]),
+                                           int(x["max_attempts"])) for x in assignments)
+            immutable = (kwargs["project_key"], kwargs["source_commit"], kwargs["dag_sha256"],
+                         kwargs["max_concurrency"], kwargs["max_attempts"])
+            actual_immutable = tuple(run)[:5] if run is not None else None
+            actual_metadata = json.loads(run["metadata_json"]) if run is not None else {}
+            expected_binding = metadata.get("runtime_binding")
+            if (run is None or actual_immutable != immutable or [tuple(row) for row in actual] != expected
+                    or (assignments_supplied and [tuple(row) for row in actual_assignments] != expected_assignments)):
+                raise LedgerError("run_id already exists with different immutable inputs")
+            if expected_binding is not None and actual_metadata.get("runtime_binding") != expected_binding:
+                raise LedgerError("run_id already exists with a different runtime binding")
+            return "resumed"
+
+    @staticmethod
+    def _require_fence(
+        connection: sqlite3.Connection, run_id: str, unit_id: str, owner: str,
+        fencing_token: int, now: int | None = None,
+    ) -> None:
+        clock = int(time.time()) if now is None else int(now)
+        row = connection.execute(
+            "select owner,status,fencing_token,expires_at from leases where run_id=? and unit_id=?",
+            (run_id, unit_id),
+        ).fetchone()
+        if (not row or row["owner"] != owner or row["status"] != "active"
+                or row["fencing_token"] != fencing_token or row["expires_at"] <= clock):
+            raise StaleFence(f"stale fencing token for {run_id}/{unit_id}")
+
+    def start_attempt(
+        self, *, run_id: str, unit_id: str, role: str, worker_id: str,
+        fencing_token: int, input_sha256: str, metadata: Mapping[str, Any] | None = None,
+    ) -> str:
+        if role not in _ROLES:
+            raise ValueError(f"unsupported worker role: {role}")
+        assert_no_semantic_claims(metadata or {})
+        with self.connect() as connection, atomic(connection):
+            self._require_fence(connection, run_id, unit_id, worker_id, fencing_token)
+            assignment = connection.execute(
+                """select role,max_attempts from assignments where run_id=? and unit_id=?
+                   and worker_id=? and status='active'""", (run_id, unit_id, worker_id),
+            ).fetchone()
+            if not assignment or assignment["role"] != role:
+                raise LedgerError("attempt role does not match the active worker assignment")
+            ordinal = int(connection.execute(
+                """select count(*) from attempts where run_id=? and unit_id=? and worker_id=? and role=?""",
+                (run_id, unit_id, worker_id, role),
+            ).fetchone()[0]) + 1
+            if ordinal > int(assignment["max_attempts"]):
+                raise LedgerError(f"attempt limit reached for {run_id}/{unit_id}/{worker_id}")
+            attempt_id = f"{run_id}:{unit_id}:{role}:{ordinal}"
+            previous = connection.execute(
+                "select status from migration_units where run_id=? and unit_id=?", (run_id, unit_id),
+            ).fetchone()[0]
+            now = _now_text()
+            connection.execute(
+                """insert into attempts(attempt_id,run_id,unit_id,role,ordinal,worker_id,status,fencing_token,
+                   input_sha256,output_sha256,error_key,started_at,finished_at,metadata_json)
+                   values (?,?,?,?,?,?,'running',?,?,null,null,?,null,?)""",
+                (attempt_id, run_id, unit_id, role, ordinal, worker_id, fencing_token,
+                 _require_sha256(input_sha256, "input_sha256"), now, _json(metadata)),
+            )
+            connection.execute(
+                """update migration_units set status='running',resumable_status='in_progress',updated_at=?
+                   where run_id=? and unit_id=?""", (now, run_id, unit_id),
+            )
+            connection.execute(
+                """insert into transitions(run_id,unit_id,from_status,to_status,reason,attempt_id,
+                   fencing_token,created_at) values (?,?,?,'running','attempt_started',?,?,?)""",
+                (run_id, unit_id, previous, attempt_id, fencing_token, now),
+            )
+            return attempt_id
+
+    def _running_attempt(
+        self, connection: sqlite3.Connection, attempt_id: str, owner: str, fencing_token: int,
+    ) -> sqlite3.Row:
+        attempt = connection.execute(
+            """select run_id,unit_id,role,status,worker_id,fencing_token from attempts
+               where attempt_id=?""", (attempt_id,),
+        ).fetchone()
+        if not attempt or attempt["status"] != "running":
+            raise LedgerError(f"attempt is not running: {attempt_id}")
+        if attempt["worker_id"] != owner or attempt["fencing_token"] != fencing_token:
+            raise StaleFence("attempt identity does not match worker_id/fencing_token")
+        self._require_fence(connection, attempt["run_id"], attempt["unit_id"], owner, fencing_token)
+        return attempt
+
+__all__ = [
+    "LedgerError", "LeaseConflict", "ProjectLedger", "SCHEMA_VERSION",
+    "SchemaVersionError", "StaleFence",
+]

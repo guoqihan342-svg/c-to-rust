@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import uuid
 from pathlib import Path
+from unittest import mock
 
 from validation.tools._project_migration_harness.held_out_acceptance import (
     HeldOutContractError,
@@ -108,6 +109,23 @@ class ProjectMigrationHeldOutTests(unittest.TestCase):
         with self.assertRaisesRegex(HeldOutContractError, "compile_database.sha256 mismatch"):
             self._validate()
 
+    def test_rejects_case_supplied_translation_evidence(self) -> None:
+        self.manifest["cases"][0]["translation_evidence"] = {
+            "path": "self-reported.json", "sha256": "0" * 64,
+        }
+
+        with self.assertRaisesRegex(HeldOutContractError, "fields are forbidden"):
+            self._validate()
+
+    def test_repository_tree_resource_limit_is_fail_closed(self) -> None:
+        with mock.patch(
+            "validation.tools._project_migration_harness."
+            "held_out_integrity.MAX_TREE_FILES",
+            1,
+        ):
+            with self.assertRaisesRegex(HeldOutContractError, "resource limit"):
+                repository_tree_sha256(self.repos[0])
+
     def test_offline_plans_are_content_addressed_but_not_translation_success(self) -> None:
         calls: list[list[str]] = []
 
@@ -120,7 +138,7 @@ class ProjectMigrationHeldOutTests(unittest.TestCase):
 
         result = run_acceptance_suite(
             self.manifest, manifest_dir=self.root, harness_root=self.root,
-            mode="offline-contract", out_root="out", plan_runner=plan,
+            mode="offline-contract", out_root="target/out", plan_runner=plan,
         )
 
         self.assertEqual(len(calls), 5)
@@ -129,7 +147,42 @@ class ProjectMigrationHeldOutTests(unittest.TestCase):
         self.assertFalse(result["claim_boundary"]["semantic_gate"])
         for ref in result["case_evidence"] + [result["summary_evidence"]]:
             self.assertEqual(Path(ref["path"]).stem, ref["sha256"])
-            self.assertEqual(file_sha256(self.root / "out" / ref["path"]), ref["sha256"])
+            self.assertEqual(
+                file_sha256(self.root / "target" / "out" / ref["path"]),
+                ref["sha256"],
+            )
+
+    def test_rejects_output_outside_target_before_plan(self) -> None:
+        plan = mock.Mock()
+
+        with self.assertRaisesRegex(HeldOutContractError, "target directory"):
+            run_acceptance_suite(
+                self.manifest, manifest_dir=self.root,
+                harness_root=self.root, mode="offline-contract",
+                out_root="out", plan_runner=plan,
+            )
+
+        plan.assert_not_called()
+        self.assertFalse((self.root / "out").exists())
+
+    def test_rejects_linklike_output_component_before_plan(self) -> None:
+        linked = self.root / "target" / "linked"
+        linked.mkdir(parents=True)
+        plan = mock.Mock()
+        original = Path.resolve(linked)
+
+        with mock.patch(
+            "validation.tools._project_migration_harness.held_out_integrity._linklike",
+            side_effect=lambda path: path.resolve() == original,
+        ):
+            with self.assertRaisesRegex(HeldOutContractError, "linked or reparse"):
+                run_acceptance_suite(
+                    self.manifest, manifest_dir=self.root,
+                    harness_root=self.root, mode="offline-contract",
+                    out_root="target/linked", plan_runner=plan,
+                )
+
+        plan.assert_not_called()
 
     def test_rejects_plan_that_claims_translation_success(self) -> None:
         def invalid_plan(_: list[str]) -> dict:
@@ -141,8 +194,49 @@ class ProjectMigrationHeldOutTests(unittest.TestCase):
         with self.assertRaisesRegex(HeldOutContractError, "planning must not claim"):
             run_acceptance_suite(
                 self.manifest, manifest_dir=self.root, harness_root=self.root,
-                mode="offline-contract", out_root="out", plan_runner=invalid_plan,
+                mode="offline-contract", out_root="target/out", plan_runner=invalid_plan,
             )
+
+    def test_real_mode_cannot_accept_a_self_reported_json_file(self) -> None:
+        commits = {
+            repo.resolve(): self.manifest["cases"][index]["repository"]["source_commit"]
+            for index, repo in enumerate(self.repos)
+        }
+
+        def fake_workflow(argv: list[str]) -> dict:
+            out_root = argv[argv.index("--out-root") + 1]
+            ledger = self.root / out_root / "state" / "project-migration.sqlite3"
+            ledger.parent.mkdir(parents=True, exist_ok=True)
+            ledger.write_text(
+                json.dumps({"status": "passed", "semantic_gate": True}),
+                encoding="utf-8",
+            )
+            return {
+                "schema_version": 1,
+                "status": "planned",
+                "plan_sha256": "c" * 64,
+                "ledger": {
+                    "path": f"{out_root}/state/project-migration.sqlite3",
+                    "status": "bound",
+                },
+                "claim_boundary": {
+                    "semantic_gate": False,
+                    "translation_coverage_numerator": 0,
+                },
+            }
+
+        with mock.patch(
+            "validation.tools._project_migration_harness.held_out_acceptance._git_head",
+            side_effect=lambda repo: commits[repo.resolve()],
+        ):
+            result = run_acceptance_suite(
+                self.manifest, manifest_dir=self.root, harness_root=self.root,
+                mode="real-projects", out_root="target/out", plan_runner=fake_workflow,
+            )
+
+        self.assertEqual("incomplete", result["status"])
+        self.assertEqual(0, result["accepted_projects"])
+        self.assertFalse(result["claim_boundary"]["semantic_gate"])
 
     def _validate(self) -> dict:
         return validate_manifest(

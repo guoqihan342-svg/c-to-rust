@@ -1,0 +1,102 @@
+from __future__ import annotations
+
+import json
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
+from .artifacts import content_sha256
+from .ledger import ProjectLedger
+from .orchestration_facts import read_artifact_reference
+
+
+def bound_worker_request(
+    reference: Mapping[str, Any], *, ledger: ProjectLedger, harness_root: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    try:
+        request = json.loads(read_artifact_reference(harness_root, reference).decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("worker request is unreadable") from error
+    if not isinstance(request, dict):
+        raise ValueError("worker request must be an object")
+    execution = request.get("execution_binding")
+    if not isinstance(execution, Mapping):
+        raise ValueError("worker request has no attempt/fence binding")
+    attempt_id = execution.get("attempt_id")
+    token = execution.get("fencing_token")
+    worker_id = request.get("worker_id")
+    if not isinstance(attempt_id, str) or not isinstance(token, int) or not isinstance(worker_id, str):
+        raise ValueError("worker request execution identity is invalid")
+    attempt = ledger.bound_attempt(
+        attempt_id=attempt_id, owner=worker_id, fencing_token=token
+    )
+    metadata = attempt["metadata"]
+    if (
+        reference.get("path") != metadata.get("request_path")
+        or reference.get("sha256") != metadata.get("request_sha256")
+    ):
+        raise ValueError("worker request reference is not bound to the running attempt")
+    assignment_ref = {
+        "path": metadata.get("assignment_path"),
+        "sha256": metadata.get("assignment_sha256"),
+    }
+    try:
+        assignment = json.loads(
+            read_artifact_reference(harness_root, assignment_ref).decode("utf-8")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("worker assignment is unreadable") from error
+    if not isinstance(assignment, Mapping):
+        raise ValueError("worker assignment must be an object")
+    if content_sha256(assignment) != metadata.get("assignment_sha256"):
+        raise ValueError("worker assignment digest drifted")
+    _validate_request_fields(request, assignment, attempt)
+    return request, attempt
+
+
+def _validate_request_fields(
+    request: Mapping[str, Any], assignment: Mapping[str, Any], attempt: Mapping[str, Any],
+) -> None:
+    fields = (
+        "run_id", "worker_id", "role", "group_id", "unit_id", "wave_index",
+        "dependencies", "context", "launch_policy", "runtime_roots",
+        "max_attempts", "authority",
+    )
+    if any(request.get(key) != assignment.get(key) for key in fields):
+        raise ValueError("worker request fields drifted from its assignment")
+    if request.get("group_id") != request.get("unit_id"):
+        raise ValueError("worker request group/unit identity drifted")
+    if (
+        request.get("run_id") != attempt.get("run_id")
+        or request.get("worker_id") != attempt.get("worker_id")
+        or request.get("role") != attempt.get("role")
+        or request.get("unit_id") != attempt.get("unit_id")
+        or request.get("runtime_roots", {}).get("out") != attempt.get("out_root")
+    ):
+        raise ValueError("worker request does not match the running attempt")
+    binding = request.get("assignment_binding")
+    ledger_binding = assignment.get("ledger_binding")
+    if (
+        not isinstance(binding, Mapping) or not isinstance(ledger_binding, Mapping)
+        or binding.get("assignment_sha256") != content_sha256(assignment)
+        or binding.get("group_sha256") != assignment.get("group_sha256")
+        or binding.get("ledger_binding_sha256") != ledger_binding.get("binding_sha256")
+    ):
+        raise ValueError("worker request assignment binding drifted")
+    execution = request["execution_binding"]
+    execution_payload = {
+        key: value for key, value in execution.items() if key != "binding_sha256"
+    }
+    if content_sha256(execution_payload) != execution.get("binding_sha256"):
+        raise ValueError("worker execution binding SHA-256 drifted")
+    base = {key: value for key, value in request.items() if key != "execution_binding"}
+    effective = base.pop("effective_input_sha256", None)
+    if (
+        content_sha256(base) != effective
+        or effective != attempt.get("input_sha256")
+        or effective != execution.get("effective_input_sha256")
+    ):
+        raise ValueError("worker effective input binding drifted")
+
+
+__all__ = ["bound_worker_request"]

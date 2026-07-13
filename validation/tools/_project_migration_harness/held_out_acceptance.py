@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
@@ -10,7 +9,17 @@ from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from .artifacts import canonical_json_bytes, checked_relative_path, content_sha256, write_json_artifact
+from .artifacts import checked_relative_path, content_sha256, write_json_artifact
+from .held_out_integrity import (
+    IntegrityError,
+    bound_file,
+    compile_database,
+    confined_path,
+    file_sha256,
+    repository_tree_sha256,
+    source_shape,
+)
+from .held_out_ledger import HeldOutLedgerError, verify_completed_project
 from .identity_guard import scan_identity_dispatch
 MAX_CASES = 20
 MIN_PROJECTS = 5
@@ -21,28 +30,7 @@ SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-fA-F]{40,64}$")
 GENERIC_IDENTITIES = {"case", "held-out", "project", "repo", "repository", "source", "test"}
 PlanRunner = Callable[[list[str]], dict[str, Any]]
-class HeldOutContractError(ValueError):
-    pass
-def file_sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-def repository_tree_sha256(repo_root: Path) -> str:
-    root = repo_root.resolve(strict=True)
-    entries: list[dict[str, Any]] = []
-    for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
-        relative = path.relative_to(root)
-        if ".git" in relative.parts:
-            continue
-        if path.is_symlink():
-            raise HeldOutContractError(f"repository contains a link: {relative.as_posix()}")
-        if path.is_file():
-            entries.append({
-                "path": relative.as_posix(),
-                "sha256": file_sha256(path),
-                "size_bytes": path.stat().st_size,
-            })
-    if not entries:
-        raise HeldOutContractError("repository must contain files")
-    return hashlib.sha256(canonical_json_bytes(entries)).hexdigest()
+HeldOutContractError = IntegrityError
 def validate_manifest(
     manifest: Mapping[str, Any], *, manifest_dir: Path, harness_root: Path, mode: str,
 ) -> dict[str, Any]:
@@ -50,7 +38,7 @@ def validate_manifest(
     _require(manifest.get("schema_version") == 1, "schema_version must be 1")
     suite_id = _identifier(manifest.get("suite_id"), "suite_id")
     harness = harness_root.resolve(strict=True)
-    entrypoint = _bound_file(manifest.get("generic_plan_entrypoint"), harness, "generic_plan_entrypoint")
+    entrypoint = bound_file(manifest.get("generic_plan_entrypoint"), harness, "generic_plan_entrypoint")
     cases = manifest.get("cases")
     _require(isinstance(cases, list), "cases must be a list")
     _require(MIN_PROJECTS <= len(cases) <= MAX_CASES, "cases must contain 5 to 20 projects")
@@ -66,7 +54,10 @@ def validate_manifest(
     held_out = 0
     for raw in cases:
         _require(isinstance(raw, Mapping), "each case must be an object")
-        forbidden = {"plan_entrypoint", "adapter", "translator", "prompt", "dispatch"} & set(raw)
+        forbidden = {
+            "plan_entrypoint", "adapter", "translator", "prompt", "dispatch",
+            "translation_evidence",
+        } & set(raw)
         _require(not forbidden, f"case-level identity dispatch fields are forbidden: {sorted(forbidden)}")
         case_id = _identifier(raw.get("case_id"), "case_id")
         project_id = _identifier(raw.get("project_id"), "project_id")
@@ -96,8 +87,8 @@ def validate_manifest(
         seen_paths.add(repo)
         seen_trees[tree_sha] = case_id
 
-        compile_db, compile_sha, sources = _compile_database(raw.get("compile_database"), repo)
-        shape, shape_sha = _source_shape(sources)
+        compile_db, compile_sha, sources = compile_database(raw.get("compile_database"), repo)
+        shape, shape_sha = source_shape(sources)
         for prior_id, prior_shape, prior_sha in source_shapes:
             _require(shape_sha != prior_sha, f"duplicate normalized project: {prior_id}/{case_id}")
             union = shape | prior_shape
@@ -116,13 +107,12 @@ def validate_manifest(
             "compile_database": compile_db, "compile_database_sha256": compile_sha,
             "participated_in_rule_development": participated,
             "construct_families": sorted(case_families),
-            "translation_evidence": raw.get("translation_evidence"),
         })
 
     _require(len(families) >= MIN_CONSTRUCT_FAMILIES, "suite must cover at least 12 construct families")
     _require(held_out >= MIN_HELD_OUT_PROJECTS, "suite must include at least two true held-out projects")
     scan_ids = sorted(value for value in identities if len(value) >= 4 and value not in GENERIC_IDENTITIES)
-    identity_scan = scan_identity_dispatch(_production_paths(entrypoint), scan_ids)
+    identity_scan = scan_identity_dispatch(_production_paths(entrypoint, harness), scan_ids)
     _require(identity_scan["status"] == "passed", "generic plan entrypoint contains identity dispatch")
     return {
         "schema_version": 1, "suite_id": suite_id, "mode": mode,
@@ -134,10 +124,20 @@ def run_acceptance_suite(
     manifest: Mapping[str, Any], *, manifest_dir: Path, harness_root: Path,
     mode: str, out_root: str, plan_runner: PlanRunner | None = None,
 ) -> dict[str, Any]:
-    validated = validate_manifest(manifest, manifest_dir=manifest_dir, harness_root=harness_root, mode=mode)
-    out_rel = checked_relative_path(out_root.rstrip("/"))
     harness = harness_root.resolve(strict=True)
-    output = harness.joinpath(*PurePosixPath(out_rel).parts)
+    out_rel = checked_relative_path(out_root.rstrip("/"))
+    out_path = PurePosixPath(out_rel)
+    _require(
+        len(out_path.parts) > 1 and out_path.parts[0] == "target",
+        "out_root must stay under the harness target directory",
+    )
+    output = confined_path(
+        harness, out_rel, "held-out output root", must_exist=False,
+    )
+    validated = validate_manifest(
+        manifest, manifest_dir=manifest_dir,
+        harness_root=harness, mode=mode,
+    )
     runner = plan_runner or _subprocess_runner(validated["generic_plan_entrypoint"], harness)
     refs: list[dict[str, Any]] = []
     accepted = 0
@@ -157,7 +157,9 @@ def run_acceptance_suite(
         _require(boundary.get("semantic_gate") is False, "planning must not claim semantic success")
         _require(boundary.get("translation_coverage_numerator") == 0, "planning must not increase translation coverage")
         planned += int(plan_ok)
-        translation = _translation_result(case, plan, harness, mode)
+        translation = _translation_result(
+            case, plan, harness, mode, case_out=case_out
+        )
         accepted += int(translation["status"] == "accepted")
         evidence = {
             "schema_version": 1, "case_id": case["case_id"], "project_id": case["project_id"],
@@ -185,64 +187,40 @@ def run_acceptance_suite(
     }
     summary_ref = write_json_artifact(output, f"evidence/sha256/{content_sha256(summary)}.json", summary)
     return {**summary, "summary_evidence": summary_ref}
-def _compile_database(value: Any, repo: Path) -> tuple[Path, str, list[Path]]:
-    _require(isinstance(value, Mapping), "compile_database must be an object")
-    relative = checked_relative_path(value.get("path"))
-    path = (repo / Path(*PurePosixPath(relative).parts)).resolve(strict=True)
-    _require(path.is_relative_to(repo), "compile database must stay inside repository")
-    digest = file_sha256(path)
-    _match_sha(value.get("sha256"), digest, "compile_database.sha256")
-    payload = json.loads(path.read_text(encoding="utf-8-sig"))
-    _require(isinstance(payload, list) and payload, "compile database must be a non-empty array")
-    sources: list[Path] = []
-    for entry in payload:
-        _require(isinstance(entry, Mapping) and isinstance(entry.get("file"), str), "compile command requires file")
-        directory = Path(entry.get("directory", "."))
-        directory = directory if directory.is_absolute() else repo / directory
-        source = Path(entry["file"])
-        source = source if source.is_absolute() else directory / source
-        source = source.resolve(strict=True)
-        _require(source.is_relative_to(repo) and source.suffix.lower() == ".c", "compile source must be confined C")
-        sources.append(source)
-    return path, digest, sorted(set(sources))
-def _source_shape(sources: list[Path]) -> tuple[set[str], str]:
-    text = "\n".join(path.read_text(encoding="utf-8", errors="strict") for path in sources)
-    text = re.sub(r"/\*.*?\*/|//[^\n]*", " ", text, flags=re.S)
-    tokens = re.findall(r'"(?:\\.|[^"\\])*"|\b\d+(?:\.\d+)?\b|[A-Za-z_]\w*|==|!=|<=|>=|->|&&|\|\||\S', text)
-    keywords = {"if", "else", "for", "while", "do", "switch", "case", "return", "struct", "union", "enum",
-                "typedef", "const", "static", "extern", "sizeof", "void", "char", "short", "int", "long",
-                "float", "double", "signed", "unsigned", "break", "continue", "goto"}
-    normalized = [token if token in keywords or not re.match(r"[A-Za-z_]", token) else "ID" for token in tokens]
-    normalized = ["STR" if token.startswith('"') else "NUM" if token[:1].isdigit() else token for token in normalized]
-    shingles = {" ".join(normalized[index:index + 5]) for index in range(max(1, len(normalized) - 4))}
-    return shingles, hashlib.sha256("\n".join(normalized).encode()).hexdigest()
-def _translation_result(case: Mapping[str, Any], plan: Mapping[str, Any], harness: Path, mode: str) -> dict[str, Any]:
+def _translation_result(
+    case: Mapping[str, Any], plan: Mapping[str, Any], harness: Path,
+    mode: str, *, case_out: str,
+) -> dict[str, Any]:
     if mode != "real-projects":
         return {"status": "not_evaluated", "reason": "offline_contract_is_planning_only", "translation_coverage_numerator": 0}
-    ref = case.get("translation_evidence")
-    if not isinstance(ref, Mapping):
-        return {"status": "not_provided", "reason": "semantic_evidence_required", "translation_coverage_numerator": 0}
-    path = _bound_file(ref, harness, "translation_evidence")
-    payload = json.loads(path.read_text(encoding="utf-8-sig"))
-    binding = payload.get("input_binding", {})
-    boundary = payload.get("claim_boundary", {})
-    ok = (payload.get("status") == "passed" and boundary.get("semantic_gate") is True
-          and isinstance(boundary.get("translation_coverage_numerator"), int)
-          and boundary["translation_coverage_numerator"] > 0
-          and binding.get("repository_tree_sha256") == case["tree_sha256"]
-          and binding.get("source_commit") == case["source_commit"]
-          and binding.get("compile_database_sha256") == case["compile_database_sha256"]
-          and payload.get("plan_sha256") == plan.get("plan_sha256"))
-    _require(ok, f"translation evidence is not bound semantic proof: {case['case_id']}")
-    return {"status": "accepted", "evidence_sha256": file_sha256(path),
-            "translation_coverage_numerator": boundary["translation_coverage_numerator"]}
-def _bound_file(value: Any, root: Path, label: str) -> Path:
-    _require(isinstance(value, Mapping), f"{label} must be a path/sha256 object")
-    relative = checked_relative_path(value.get("path"))
-    path = root.joinpath(*PurePosixPath(relative).parts).resolve(strict=True)
-    _require(path.is_relative_to(root) and path.is_file(), f"{label} must stay inside harness root")
-    _match_sha(value.get("sha256"), file_sha256(path), f"{label}.sha256")
-    return path
+    ledger = plan.get("ledger")
+    ledger_path = ledger.get("path") if isinstance(ledger, Mapping) else None
+    expected = f"{case_out}/state/project-migration.sqlite3"
+    if ledger_path != expected:
+        return _not_accepted("authoritative_ledger_binding_missing")
+    try:
+        path = confined_path(harness, expected, "project ledger", must_exist=True)
+        result = verify_completed_project(
+            ledger_path=path,
+            harness_root=harness,
+            run_id=f"heldout-{case['case_id']}",
+            plan_sha256=str(plan.get("plan_sha256", "")),
+            repo_root=case["repo"],
+            source_commit=case["source_commit"],
+            repository_tree_sha256_expected=case["tree_sha256"],
+            compile_database=case["compile_database"],
+            compile_database_sha256=case["compile_database_sha256"],
+        )
+    except (HeldOutLedgerError, IntegrityError, OSError, ValueError):
+        return _not_accepted("authoritative_ledger_not_complete")
+    return result
+
+
+def _not_accepted(reason: str) -> dict[str, Any]:
+    return {
+        "status": "not_accepted", "reason": reason,
+        "translation_coverage_numerator": 0, "semantic_gate": False,
+    }
 
 
 def _resolve_path(value: Any, base: Path, label: str) -> Path:
@@ -261,9 +239,13 @@ def _match_sha(actual: Any, expected: str, label: str) -> None:
     _require(actual == expected, f"{label} mismatch")
 
 
-def _production_paths(entrypoint: Path) -> list[Path]:
+def _production_paths(entrypoint: Path, harness: Path) -> list[Path]:
     package = entrypoint.parent / "_project_migration_harness"
-    return [entrypoint, *(package.rglob("*.py") if package.is_dir() else [])]
+    paths = [entrypoint, *(package.rglob("*.py") if package.is_dir() else [])]
+    agent = harness / ".opencode" / "agents" / "c2rust-candidate.md"
+    if agent.is_file():
+        paths.append(agent)
+    return paths
 
 
 def _git_head(repo: Path) -> str:

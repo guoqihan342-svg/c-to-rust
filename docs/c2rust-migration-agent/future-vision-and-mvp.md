@@ -28,7 +28,7 @@ input.c + compile context
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 / libuv AI-first 0/1 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑。新 libuv DeepSeek 辅助实跑完成 1 次 initial + 3 次 repair，provider-ready 但 exact 未通过，明确不具备比赛资格 |
 | 当前翻译主线 | P0-A19 / P0-A10 / P0-A18c | h5a-h5d 已闭合 compiler/runtime/ABI repair facts 与 compiler-header declaration-only 分类；下一步进入陌生仓库整项目发现、拆解、并行候选、Cargo 集成与项目级 repair，不再围绕单个已知切片扩语法 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A18c8h5d | 新增 121 行 compiler-header 声明分类模块，把严格绑定的系统头 inline 投影为 declaration-only，不生成仓库源码 block/binding，也不允许执行；namespace/header/symbol/signature/hash 漂移由独立 readiness 模块重算拒绝。Windows 阶段 95/95、WSL 功能阶段 91/91；全量保持既有失败基线，成功计数仍为 38 |
+| 最近开发阶段 | P0-A19 构建闭包、验证权威与真实辅助模型通道 | 任意仓库 inventory、SCC/DAG、CMake/Ninja/link/archive closure、分页 ContextPack、隔离 OpenCode、SQLite ledger、Cargo generation、toolchain 内容绑定、host project gate 与只读 held-out 复验已落地；正向 candidate verifier、Meson/configure、可用比赛等价沙箱和真实 held-out 语义验收仍未完成。本轮有限门禁为 Windows 134 项通过（1 项符号链接权限条件跳过）和 WSL 134/134，成功计数保持 38 |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -182,7 +182,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 顺序 | 待办 | 状态 | 本轮完成判据 |
 | ---: | --- | --- | --- |
 | 1 | P0-A18c7 跨项目 AI 输入与证据合同闭包 | 完成 | Windows/WSL 125 项回归通过；固定 12 项生成 12 个候选、0 contract failure、6 exact pass |
-| 2 | P0-A19 陌生 C 项目整项目 AI harness | 待开始 | 从任意 repo root 自动发现构建闭包和翻译单元，按依赖图分解并用隔离 OpenCode workers 生成候选，重建可编译 Cargo 项目并按通用 gate repair；禁止项目/函数/路径/fixture 身份分派 |
+| 2 | P0-A19 陌生 C 项目整项目 AI harness | 进行中：生成闭包与正向验证链 | 任意 repo root 的发现、分页 DAG、角色组合、SQLite ledger、Cargo generation、CMake/Ninja/link/archive 闭包和 fail-closed 沙箱合同已落地；当前补 Meson/configure、正向 candidate verifier、可用比赛等价沙箱和真实 held-out build/oracle。禁止项目/函数/路径/fixture 身份分派 |
 | 3 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | h5a-h5d 已完成且不扩大语义覆盖；保留父项未完成边界，后续只在 P0-A19 项目级 gate 暴露真实阻塞时回收，不再围绕单个已知切片顺序加规则 |
 | 4 | P0-A10 有限 held-out 跨项目验收 | 待开始 | 固定 12 项继续作为非回归基线，新增有限的未参与规则开发的整项目验收；只运行有限集合一次，不用重复轮次放大成功率 |
 | 5 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
@@ -488,12 +488,49 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   目标不是继续增加已知函数的 translator 分支，而是让比赛平台把一个此前未见的 C 仓库交给 OpenCode 后，harness 能自动形成可审计的项目级翻译计划、隔离并行候选、可编译 Rust 项目和验证驱动 repair。所有决策只允许读取源码/AST/编译数据库/构建文件/类型/调用图/ABI/诊断和 hash-bound evidence；项目名、函数名、目录名、slice id、fixture 常量和 golden case 身份不得选择翻译器、prompt、adapter、stub 或修复策略。
 
-  1. **A19a 任意仓库入口与构建闭包发现（待开始）**：从 repo root 自动识别受支持的 compile database、Make/CMake/Meson 等构建事实，展开 response file、generated include、defines、target 与 link closure，生成 translation-unit inventory。没有足够事实时按缺失类别 fail closed，不要求用户预先手写每函数 spec，也不能猜测编译参数。
-  2. **A19b 项目级依赖图与有界分解（待开始）**：由 AST/符号表/调用图/SCC/全局状态/类型布局/宏依赖/FFI 边界生成稳定迁移 DAG，区分可独立安全翻译、需上下文共同翻译和必须保留边界的单元；ContextPack 按依赖分页并去重，不能靠固定函数列表分片。
-  3. **A19c OpenCode 多 worker 候选组合（待开始）**：运行阶段由现有 harness 调度隔离的 planner/translator/reviewer/repairer worker，每个 worker 使用独立 state/cache/tmp/out-root 和绑定的上下文预算；AI 为主候选，typed IR/C2Rust 只提供候选或事实。并行只用于独立单元，合并顺序由 DAG 和 gate 决定，模型投票不能替代语义门禁。
-  4. **A19d Rust 项目重建与增量集成（待开始）**：自动生成稳定 module tree、Cargo targets/features、public API/FFI boundary、共享类型和初始化顺序，将已通过的单元集成为可构建项目；符号冲突、循环依赖、布局需求和链接缺口必须回到结构化诊断，不得通过手写项目模板掩盖。
-  5. **A19e 项目级验证与精确 repair（待开始）**：把 rustc/linker、测试、C oracle/Rust replay、schema diff、negative、unsafe/alias/ABI 和集成失败归一为候选绑定事实，只把允许的最小诊断送回对应 worker；支持 last-good、失败去重、预算上限、断点恢复和失败单元重排，禁止把 expected/actual 或测试答案喂给模型。
-  6. **A19f 泛化防特判与有限 held-out 验收（待开始）**：增加标识符/路径/项目名全改名等价测试、未知项目导入测试和身份分派静态检查；在不超过 20 个有限 case 中覆盖至少 5 个真实项目、整项目构建和 12 个不同 construct family，其中至少 2 个项目不得参与对应规则开发。只发布 initial/repair/compile/integration/semantic/refusal 指标，不执行 1,000/10,000 轮，不用重复近似切片放大成功率。
+  **当前边界（2026-07-13）**：A19 已完成一次真实 WSL DeepSeek 辅助 worker，并完成有界 Ninja/CMake 链接与静态归档闭包、实际 rustup toolchain 内容绑定、CLI 路径/退出码权威和只读 ledger held-out 复验；但正向 candidate 的 compile/oracle/negative/unsafe-alias/ABI/final 链尚未全部接通，也没有完成项目级 oracle、沙箱内真实 Cargo build 和真实 held-out 语义验收。父项保持未勾选，translator numerator 仍不增加。本轮有限门禁在 Windows 运行 134 项并通过（1 项符号链接权限条件跳过），WSL 134/134；这些仍只是 `local-simulation` / `wsl-local-simulation`。
+
+  **A19a 任意仓库入口与构建闭包发现**
+
+  - [x] 自动选择显式或唯一 compile database，识别 Make/CMake/Meson 构建事实，展开有界 response files，保留 C 编译变体并安全跳过 C++ 翻译单元。
+  - [x] 对仓库根、源码、数据库、输出、include/response 路径执行 repo confinement、link/junction、大小、数量和 SHA-256 漂移检查；外部路径和敏感 defines 不进入模型事实。
+  - [x] 对 CMake `link.txt`、generated include、compile output、target、response file、搜索目录和有序系统链接参数建立 repo-confined 内容绑定；`required` 策略在闭包缺失时把所有 ready worker 转成不可启动的 deferred，`bounded-source` 只能生成非语义候选。
+  - [x] 以不执行命令的有界解析器读取仓库内 `build.ninja`、递归 `include/subninja`、变量、rule/build edge、compiler link edge 和 response file；所有支持文件与输入输出都做内容绑定并在执行前复查漂移。
+  - [x] 从 CMake 多行 `link.txt` 与 Ninja archive rule 解析 `ar`/`ranlib` 静态归档闭包，绑定操作、归档目标、成员顺序和同目标 `ranlib`，不执行构建命令。
+  - [ ] 接入 Meson introspection/target metadata 与受限 configure/generate 阶段；缺失时保持 fail closed，禁止猜测编译或链接参数。
+
+  **A19b 项目级依赖图与有界分解**
+
+  - [x] 建立内容绑定的函数/翻译单元节点、直接调用解析、SCC/wave DAG、共享全局状态 context group 和 parser-boundary 路由。
+  - [x] 把仓库内 include closure、编译 defines、顶层声明、全局初始化和翻译单元覆盖记录放入去重 ContextPack；单页预算、组级总预算和页数分别受限。
+  - [ ] 用 clang AST/type/layout/preprocessor 事实替换 lexical-only 缺口，覆盖宏展开、函数指针、复杂声明和 ABI 布局；无法证明的 span 必须进入明确 boundary/refusal。
+
+  **A19c OpenCode 多 worker 候选组合**
+
+  - [x] 生成 planner/translator/reviewer/repairer 角色组合、独立 config/data/state/cache/tmp/out-root、DAG 依赖和 SQLite assignments/leases/attempts/artifacts。
+  - [x] 关闭 plan/preflight/request/attempt 漂移、租约重入、heartbeat、非原子 ingest、工具事件、secret 输入、父环境泄漏、agent 权限覆盖、spawn 前误记 command-started 和 provider evidence 未落 ledger；本轮 Windows 134 项通过（1 项条件跳过），WSL 134/134。
+  - [x] 在 WSL 通过固定项目 preflight 真实调用一次 `opencode/deepseek-v4-flash-free`：1 次 provider invocation，preflight report SHA `f0bc76b6b2489597e782cd1f0e532b7483f03658680b4352401ee12c814913c0`，session export `verified`，execution report SHA `9e04b437135aa9f1e2171a180f2e77272374fc8bba3c1257d314e8a963c10b5d`，candidate SHA `359cb2ef234f85d9aa1cbdf2d77e07a296f55cb8bd7d4ad9dd37afe4d9ea72ef`；状态仅为 `candidate-ready` / `auxiliary-local-validation`。GLM-5.1 仍只有真实比赛主机精确合同才能关闭 P0-H9。
+
+  **A19d Rust 项目重建与增量集成**
+
+  - [x] 按内容生成稳定 Cargo module tree、Cargo.lock、符号依赖和 unsafe budget，并以不可变 generation + 原子 `CURRENT` 指针保存 last-good，启动时可恢复中断投影。
+  - [x] 集成报告改为绑定 ledger 权威 candidate set；host adapter 可重开不可变 generation，验证 accepted group/source SHA，再记录固定 authority 的 integration gate。
+  - [ ] 补齐跨单元 public API、共享类型、初始化顺序、FFI/link boundary 和 target/features 重建；真实多文件项目 build 未通过前不能声明整项目转换完成。
+
+  **A19e 项目级验证与精确 repair**
+
+  - [x] 候选 Cargo 命令只允许进入 Linux bubblewrap 无网络沙箱；实际 `cargo/rustc/rustdoc` 由 `rustup which` 解析，toolchain 树受大小/数量约束、完整内容哈希、执行前复算并只读挂载。当前 WSL 缺 bubblewrap 时返回 `bubblewrap_unavailable` 且零候选执行，不把 `--offline` 冒充沙箱。
+  - [x] 完成固定 host authority、内容寻址证据、最新 gate epoch、不可变 candidate set、Schema DDL 指纹和 current last-good 复算；CLI 已移除调用方 pass/verifier/candidate-set 权限参数。
+  - [x] 接入 host-owned integration 与 Cargo check/test adapter，并把受限 Cargo JSON 模块诊断回投到对应 candidate compile gate 触发 repair；WSL 当前缺 `bwrap`，因此真实 smoke 零候选执行且不产生 pass。
+  - [ ] 接通正向 candidate runner 与 CLI 完成路径，并实跑沙箱内 compile/link/test、C oracle/Rust replay、negative、unsafe/alias/ABI 和 final verifier；当前 `record-candidate-gate` 不能仅凭调用方记录获得 pass。只有同一 candidate set 的最新 host-owned gates 全绿才能完成项目。
+
+  **A19f 泛化防特判与有限 held-out 验收**
+
+  - [x] 生产编排包与相关 agent 配置通过已知项目/函数/路径身份静态扫描，覆盖 raw text、常量拼接、bytes、SHA 前缀/全值、hex/base64 编码；图结构与 Cargo 输出已有重命名等价测试，并新增无项目身份的双翻译单元规划用例。
+  - [x] 建立固定有限 held-out 合同工具：5–20 个不重复项目、至少 12 个 construct family、至少 2 个未参与规则开发项目，显式绑定 repo/commit/tree/compile DB，并拒绝身份分派和近重复项目。真实模式禁止 case 自报 translation evidence，只能按 plan 推导 ledger 路径后只读重开 SQLite，复验原仓库树、compile DB、source/generated closure、AI provider evidence、每个 candidate gate、不可变 candidate set 和 project final bundle；资源数量/大小有界，离线合同通过不能冒充翻译成功。
+  - [ ] 在不超过 20 个有限 case 中覆盖至少 5 个真实项目、整项目构建和 12 个不同 construct family；至少 2 个项目不得参与对应规则开发。禁止 1,000/10,000 轮和重复近似切片放大成功率。
+
+  **下一执行顺序**：真实辅助模型、Ninja/静态归档闭包与 provider evidence 链已闭合；下一步接入 Meson/configure facts，完成正向 candidate verifier/repair/quarantine 路径，提供可用 bubblewrap 或比赛等价沙箱，再用固定有限清单执行 A19f 真实 held-out 项目 build/oracle 验收。开发阶段不在每个小改动后启动模型，也不运行 1,000/10,000 轮。
 
   完成判据：同一入口可对 held-out 仓库从零生成 translation inventory、迁移 DAG、hash-bound ContextPacks、候选/repair 证据和可复现 Cargo 输出；至少一个此前未参与开发的多文件 C 项目通过项目级 build 与声明边界内 semantic gates。任何按身份分派、手写项目 adapter、未绑定模型输出或只通过函数级 demo 的结果都不能关闭本项，也不能增加 translator numerator。
 
@@ -527,7 +564,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   当前 WSL 已能解析 provider-qualified `zai/glm-5.1`，但完整 preflight/worker marker 尚未在真实比赛主机闭合。OpenCode + GLM-5.1 是新的比赛翻译默认通道；本地无法调用时必须明确标为 blocked/unavailable，不能用确定性结果冒充 AI 比赛路径。
 
-  完成条件：真实主机设置 `COMPETITION_EXACT_HOST=1`，`opencode models` 精确列出 GLM-5.1，preflight 使用 `opencode` + `GLM-5.1` + `c2rust-migrator` + `max`，hash-bound probe/session/worker artifacts 完整，judge bundle 和 public packet 重新验证通过。
+  完成条件：真实主机设置 `COMPETITION_EXACT_HOST=1`，`opencode models` 精确列出 GLM-5.1；P0-A19 project preflight/worker 使用 `opencode` + `GLM-5.1` + `c2rust-candidate` + `max` 并形成完整 hash-bound probe/session/worker artifacts。保留的切片级 `opencode_agent_harness` 命令执行通道若进入发布包，则另行复验 `c2rust-migrator` + `max`；judge bundle 和 public packet 必须重新验证通过。
 
   WSL、本机和 CI 结果只能分别标为 `wsl-local-simulation`、`local-simulation` 和 `ci-approximation`，不能关闭 H9。
 
@@ -540,6 +577,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 - [ ] **P0-C1：历史 evidence 漂移**。修复 run `20260711T-finite-p0-t31` 再确认的 8 个失败项，按 artifact 所有权分批处理，不与翻译层功能改动混交。
 - [ ] **P0-C2：全功能 Clippy**。commit `81a772d1` 已清理 9 个低风险告警；当前剩余 8 个（2 个 `large_enum_variant`、1 个 `redundant_guards`、1 个 `needless_lifetimes`、4 个 `too_many_arguments`）。新切片不得增加告警。
 - [x] **P0-C3：第一方 Rust 大文件拆分闭环**。`crates/c2r-translator`、`flashDB_rust` 和 `validation/l2_slices` 中所有 Git 跟踪的第一方 `.rs` 文件经格式化后均不超过 400 行；拆分只发生在完整 item/test 边界，单个超限报告函数已提取独立 helper，测试源码自检会递归覆盖拆分叶子。唯一豁免是 `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/` 下两份 733/704 行的 hash-bound C2Rust 历史证据快照，禁止为满足行数门禁改写证据内容。
+- [ ] **P0-C4：第一方 Python 大文件按职责拆分**。
+  - [x] P0-A19 新增的 `_project_migration_harness` 生产模块、`test_project_migration_*.py` 与共享测试支持文件均不超过 300 行；本轮已把 controller、gate-authority、sandbox 测试和 provider runtime/session/process/readiness 按职责拆开，并由源码布局测试持续约束。
+  - [ ] 对 `validation/tools` 其余活跃生产模块和测试建立 Git-tracked 行数清单并逐模块降到 300 行以内，优先 AI candidate/context/repair/provider 与有限套件调用链。拆分必须保持公开导入和测试发现兼容；hash-bound evidence、生成快照和 canonical 文档不因行数门禁改写。
 
 ## 4. 后续 Backlog
 

@@ -12,9 +12,10 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | --- | --- |
 | Translator-generated semantic pass | `38` named slices, derived from `validation/translator-coverage-matrix.json` |
 | Accepted-evidence authoritative | `1`, reported separately from the translator numerator |
-| Latest development stage | P0-A18c4: use a safe proxy type for unobserved null-pointer defaults |
-| Active translator task | P0-A18c: re-evaluate AI exact and first-round API match rates on the fixed cross-project suite |
+| Latest development stage | P0-A19: unfamiliar-repository build closure, verification authority, and real held-out contract closure |
+| Active translator task | P0-A19 project orchestration first; P0-A18c/P0-A10 remain finite regression and held-out acceptance tracks |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
+| P0-A19 finite gate | 134 tests pass on Windows with one symlink-permission conditional skip; 134/134 pass on WSL |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | Superpowers specs/plans, canonical roadmap, and harness evidence gates |
 
@@ -50,9 +51,89 @@ Candidate and repair prompts place the same generated replay source contract bef
 
 AI candidate manifest v9 derives `prompt_scope` from the actual ContextPack and records `generated_replay_api_contract`. ReplayCallPlan also derives a recomputable `required_candidate_api` containing the exact function signature, required supporting structs, ABI, unsafe marker, and reference-return lifetime. Provider readiness and the fresh validator independently recompute it and fail closed on drift. The required API also carries a closed self-contained source contract: nonempty `supporting_types_source` must appear exactly once, the harness does not inject missing types, and the model must not replace the compiler-owned fixture model with invented extern, FFI, or opaque types. Every real invocation binds its response, minimal invocation receipt, and session-export identity. One same-prompt retry is allowed only for valid tool-free JSONL that has no assistant text, ends at `step_finish`, and reports zero output and reasoning tokens. Balance, authentication, timeout, nonzero exit, tool events, and ordinary malformed responses are not retried. The competition lane accepts only `zai/glm-5.1`; when GLM balance is unavailable, `opencode/deepseek-v4-flash-free` is used only for `auxiliary-local-validation` and never enters competition or translator numerators. AI output remains `semantic_gate=false`; only common gates can accept it.
 
-Candidate generation uses the tool-free `c2rust-candidate` agent, and any nested OpenCode `tool` or `tool_use` event fails closed. Worker/preflight execution retains `c2rust-migrator`, so candidate and command-execution agents are no longer conflated. Competition probing uses logical model `GLM-5.1`, while candidate CLI calls use resolved id `zai/glm-5.1`. The parser accepts strict JSON or explanatory text containing exactly one complete JSON fence; multiple or incomplete fences, extra tool access, and unbounded fields remain rejected. OpenCode 1.17.18 uses the `opencode-file-attachment-v2` order: fixed short message first and `--file=<prompt>` second, preventing `--file` from consuming the message as another file.
+Slice candidate generation uses the tool-free `c2rust-candidate`; the existing `opencode_agent_harness` command-execution lane retains `c2rust-migrator`. P0-A19 project preflight and workers use a separate fixed contract with `c2rust-candidate` + `max` for both. Any nested OpenCode `tool` or `tool_use` event fails closed. Competition probing uses logical model `GLM-5.1`, while candidate CLI calls use resolved id `zai/glm-5.1`. The parser accepts strict JSON or explanatory text containing exactly one complete JSON fence; multiple or incomplete fences, extra tool access, and unbounded fields remain rejected. OpenCode 1.17.18 uses the `opencode-file-attachment-v2` order: fixed short message first and `--file=<prompt>` second, preventing `--file` from consuming the message as another file.
 
-## Harness Architecture
+## Whole-Project AI Orchestration
+
+The outer OpenCode process on the competition platform does not need one hand-written spec per function. It calls `project_migration_harness.py plan` with a repository root. The harness discovers compile databases, CMake/Ninja/Meson build facts, compile outputs, static archives, link edges, and translation units, then materializes SCC/DAG structure, paged ContextPacks, role portfolios, and SQLite state. The CLI defaults to `--build-closure-policy required`; incomplete closure defers every ready worker. `bounded-source` may produce only investigative `semantic_gate=false` candidates and cannot complete a project.
+
+AI is primary at runtime. Boundary groups first use a planner to select translation with context, preservation of a verifiable FFI boundary, or an explicit refusal. Translators emit Rust source, reviewers provide structural findings only, and repairers consume only allowlisted failure diagnostics. Typed IR and C2Rust are fact or candidate sources rather than a default routing priority. No model may write semantic pass, last-good, or project-complete state.
+
+Project preflight fixes the exact model, `c2rust-candidate`, `max`, and an immutable agent snapshot. Each attempt inherits an explicit environment allowlist and isolated config/data/state/cache/tmp/out roots. Invocation receipts, the session-export projection, prompt/response SHAs, and provider-execution reports share the same ledger attempt/fence. Fixed host authorities own acceptance. Candidate gates, project gates, evidence hashes, latest epochs, and immutable candidate sets are stored in SQLite and content-addressed evidence is reopened before promotion or completion. Cargo output uses immutable generations behind an atomic `CURRENT` pointer. Candidate `cargo check/test` runs only in a networkless Linux bubblewrap sandbox. Under rustup, `rustup which` resolves the actual `cargo/rustc/rustdoc`; the bounded toolchain tree is fully content-hashed, rehashed before execution, and mounted read-only. Missing sandbox, oracle, or ABI evidence blocks instead of executing on the host.
+
+The positive completion path remains open. Host-owned integration/Cargo adapters and compile-failure routing exist, but positive candidate compile/oracle/negative/unsafe-alias/ABI runners are not all connected. `record-candidate-gate` therefore cannot grant a pass, and test-constructed ledger rows do not prove whole-project success. Real held-out mode reopens SQLite read-only and revalidates AI provider evidence, every candidate gate, the immutable candidate set, the project final bundle, and original repository/build bindings. A self-reported JSON `semantic_gate=true` cannot contribute success.
+
+These commands establish planning, model preflight, and conditional dispatch only; they are not a completed translation claim:
+
+```bash
+python3 -B validation/tools/project_migration_harness.py plan \
+  --repo-root /path/to/c-project \
+  --compile-database /path/to/c-project/build/compile_commands.json \
+  --out-root target/project-migration/run-001 \
+  --run-id run-001 \
+  --build-closure-policy required
+python3 -B validation/tools/project_migration_harness.py preflight \
+  --out-root target/project-migration/run-001 \
+  --run-id run-001 \
+  --logical-model GLM-5.1 \
+  --resolved-model zai/glm-5.1
+python3 -B validation/tools/project_migration_harness.py dispatch \
+  --plan target/project-migration/run-001/project-migration-plan.json
+```
+
+The real WSL auxiliary smoke `a19-deepseek-smoke-20260713` used `opencode/deepseek-v4-flash-free` + `c2rust-candidate` + `max`. Its preflight-report SHA is `f0bc76b6b2489597e782cd1f0e532b7483f03658680b4352401ee12c814913c0`, provider-execution SHA is `9e04b437135aa9f1e2171a180f2e77272374fc8bba3c1257d314e8a963c10b5d`, and candidate SHA is `359cb2ef234f85d9aa1cbdf2d77e07a296f55cb8bd7d4ad9dd37afe4d9ea72ef`. This is only `candidate-ready` / `auxiliary-local-validation` / `semantic_gate=false`; WSL has no `bwrap`, so candidate code was not executed.
+
+LangGraph and LangChain are not runtime dependencies. This layer needs an auditable fixed state machine, transactions, foreign keys, leases, fencing, and evidence replay; repository-owned Python plus SQLite currently provides those properties directly. A framework should be introduced only if it reduces code without weakening these contracts.
+
+```mermaid
+flowchart TB
+    OUTER["Competition OpenCode / caller"] --> PLAN["project_migration_harness plan"]
+    REPO["Unseen C repository"] --> DISCOVERY["Compile DB and build-fact discovery"]
+    PLAN --> DISCOVERY
+    DISCOVERY --> CLOSURE["Hash-bound generated/archive/link closure"]
+    CLOSURE --> INDEX["C index and include/global/top-level facts"]
+    INDEX --> DAG["Call graph, SCCs, waves, boundary groups"]
+    DAG --> CONTEXT["Hash-bound paged ContextPacks"]
+    CONTEXT --> PORTFOLIO["Planner / translator / reviewer / repairer portfolio"]
+    PORTFOLIO <--> LEDGER[("SQLite v3 ledger")]
+    LEDGER --> PREFLIGHT["Fixed model/agent/environment preflight"]
+    PREFLIGHT --> DISPATCH["Lease + attempt + fence-bound dispatch"]
+    DISPATCH --> AI["Tool-free OpenCode candidate workers"]
+    AI --> PROVIDER["Receipt + session + provider-execution evidence"]
+    PROVIDER --> LEDGER
+    TIR["Typed IR / C2Rust candidates and facts"] --> VERIFY
+    PROVIDER --> VERIFY["Fixed host candidate gates"]
+    VERIFY -->|"failed, bounded diagnostic"| DISPATCH
+    VERIFY -->|"latest gates passed"| LASTGOOD["Unit last-good"]
+    LASTGOOD --> CARGO["Immutable Cargo generation"]
+    CARGO --> SANDBOX["Networkless bubblewrap check/test"]
+    SANDBOX --> PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
+    PROJECT -->|"same candidate set passed"| COMPLETE["Completed project evidence"]
+    PROJECT -->|"failed"| DISPATCH
+```
+
+## Whole-Project Data Flow
+
+```mermaid
+flowchart LR
+    A["1. Repo root"] --> B["2. Inventory"]
+    B --> C["3. Generated/archive/link closure"]
+    C --> D["4. Include, symbol, SCC migration DAG"]
+    D --> E["5. Paged ContextPack"]
+    E --> F["6. Preflight-bound worker request"]
+    F --> G["7. AI candidate + provider evidence"]
+    G --> H["8. Host candidate gates"]
+    H -->|"repairable"| F
+    H -->|"passed"| I["9. Unit last-good"]
+    I --> J["10. Cargo generation"]
+    J --> K["11. Sandboxed build/test"]
+    K --> L["12. Project semantic and safety gates"]
+    L --> M["13. Candidate-set completion"]
+```
+
+Every edge carries schema-bound artifacts with repository-relative paths and SHA-256, not chat conclusions. This stage addresses the known runtime/gate-authority findings and adds Ninja/static-archive, toolchain, CLI, and read-only-held-out evidence constraints. Remaining work is Meson/configure build facts, positive candidate verifiers, a usable competition-equivalent sandbox, and real held-out build/oracle acceptance. The diagram is an implementation contract, not a whole-project success claim.
+
+## Slice Verification and Publication Architecture
 
 ```mermaid
 flowchart TB
@@ -135,7 +216,7 @@ flowchart TB
     BUNDLE --> PACKET
 ```
 
-## Artifact Data Flow
+## Slice Artifact Data Flow
 
 ```mermaid
 flowchart LR
@@ -208,6 +289,7 @@ The default repair cap is five rounds. Process exit status, model text, and repa
 | `crates/c2r-translator/` | clang AST, typed IR, generic Rust emitter, fail-closed reasons | candidate and lowering report |
 | `auto_migrate.py` | Orchestrate generation, oracle/replay drafts, route/profile, and evidence | auto-translation evidence |
 | `validate_auto_translation_evidence.py` | Cross-check schema, hashes, identity, and semantic gates | strict validation result |
+| `project_migration_harness.py` | Arbitrary-repository inventory, SCC/DAG, ContextPacks, role scheduling, gates, and Cargo generations | project plan, SQLite v3, worker requests, last-good project |
 | `opencode_agent_harness.py` | Run/plan/worker/retry/evaluate, SQLite state, isolation, recovery | worker reports, indexes, merge plan |
 | `run_competition.py` | Aggregate slices/workers and run environment, unsafe, and summary gates | competition summary and workflow metrics |
 | `judge_demo.py` | Build the before/after safety exhibit | exhibit and judge evidence index |
@@ -317,7 +399,7 @@ python3 -B -m validation.tools.run_judge_entrypoints \
 
 On the real competition host, set `COMPETITION_EXACT_HOST=1` and add `--proof-class competition-exact`.
 
-OpenCode preflight:
+Slice OpenCode preflight (not the P0-A19 project preflight):
 
 ```bash
 python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \

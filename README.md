@@ -16,9 +16,10 @@
 | --- | --- |
 | Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
-| 最近开发阶段 | P0-A18c4：未观测 null pointer 默认字段使用安全代理类型 |
-| 当前翻译任务 | P0-A18c：用固定跨项目样本复验 AI exact 成功率与首轮 API 匹配率 |
+| 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
+| 当前翻译任务 | P0-A19 项目级编排优先；P0-A18c/P0-A10 保留为有限回归与 held-out 验收 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
+| P0-A19 有限门禁 | Windows 134 项通过（1 项符号链接权限条件跳过）；WSL 134/134 |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
 
@@ -60,9 +61,89 @@ clang typed IR 会进一步投影为 hash-bound ordered behavior digest，保留
 
 AI candidate manifest v9 的 `prompt_scope` 由实际 ContextPack 计算，并显式记录 `generated_replay_api_contract`。ReplayCallPlan 现在额外生成可复算的 `required_candidate_api`，把精确函数签名、必要 supporting structs、ABI、unsafe 和引用返回生命周期在模型调用前单独展示；provider readiness 与 fresh validator 都从同一 plan 复算，漂移即 fail closed。required API 还声明闭合的 self-contained source 合同：非空 `supporting_types_source` 必须原样出现一次，harness 不补注入缺失类型，模型不能用自造 extern/FFI/opaque 类型替代 compiler-owned fixture model。manifest 把 provider、logical/resolved model、`competition_eligible` 和 `evaluation_scope` 绑定到 generator 与 candidate；每次真实调用都绑定独立 response、最小 invocation receipt 和 session-export identity。仅当合法 JSONL 无工具、无 assistant 文本、以 `step_finish` 结束且 output/reasoning token 都为 0 时，才允许原 prompt 原模型再调用一次；余额、鉴权、timeout、非零退出、工具事件和普通 malformed response 均不重试。比赛主通道只认 `zai/glm-5.1`；GLM 余额不足时改用 `opencode/deepseek-v4-flash-free` 做 `auxiliary-local-validation`，但不能关闭比赛待办或进入比赛成功率分子。AI 输出始终保持 `semantic_gate=false`，最终接受只由共同门禁决定。
 
-候选生成使用无工具 `c2rust-candidate` agent，OpenCode 事件中出现任何层级的 `tool`/`tool_use` 都会 fail closed；worker/preflight 仍使用执行命令所需的 `c2rust-migrator`，两类 agent 不再混用。比赛探针使用逻辑模型名 `GLM-5.1`，candidate CLI 使用 resolved id `zai/glm-5.1`。解析器接受严格 JSON，或带少量说明但只有一个完整 JSON 围栏的响应；多围栏、不完整围栏、额外工具访问和不受限字段仍会拒绝。OpenCode 1.17.18 的文件参数按“固定短消息在前，`--file=<prompt>` 在后”的 `opencode-file-attachment-v2` 合同传输，避免 `--file` 把消息误解析为第二个文件。
+切片级候选生成使用无工具 `c2rust-candidate`；既有 `opencode_agent_harness` 命令执行通道继续使用 `c2rust-migrator`。P0-A19 项目级 preflight/worker 属于独立固定合同，两者均使用 `c2rust-candidate` + `max`。OpenCode 事件中出现任何层级的 `tool`/`tool_use` 都会 fail closed。比赛探针使用逻辑模型名 `GLM-5.1`，candidate CLI 使用 resolved id `zai/glm-5.1`。解析器接受严格 JSON，或带少量说明但只有一个完整 JSON 围栏的响应；多围栏、不完整围栏、额外工具访问和不受限字段仍会拒绝。OpenCode 1.17.18 的文件参数按“固定短消息在前，`--file=<prompt>` 在后”的 `opencode-file-attachment-v2` 合同传输，避免 `--file` 把消息误解析为第二个文件。
 
-## Harness 架构图
+## 整项目 AI 编排
+
+比赛平台上的外层 OpenCode 不需要逐函数编写 spec。它只调用 `project_migration_harness.py plan` 并提供仓库根；后续由 harness 自己发现 compile database、CMake/Ninja/Meson 构建事实、编译输出、静态归档和链接边，生成 SCC/DAG、分页 ContextPack、角色组合和 SQLite 状态。CLI 默认使用 `--build-closure-policy required`；闭包不完整时所有 ready worker 都 deferred。`bounded-source` 只允许生成 `semantic_gate=false` 的调查候选，不能进入项目完成路径。
+
+运行时以 AI 为主：boundary group 先由 planner 选择“带上下文翻译、保留可验证 FFI 边界或明确拒绝”，translator 输出 Rust source，reviewer 只给结构审查，repairer 只消费允许的失败诊断。typed IR/C2Rust 是事实或候选来源，不是默认路由优先级；任何模型都不能写 semantic pass、last-good 或项目完成状态。
+
+项目级 preflight 固定精确模型、`c2rust-candidate`、`max` 和不可变 agent snapshot。每个 attempt 只继承显式环境白名单，并使用独立 config/data/state/cache/tmp/out；真实调用的 receipt、session export projection、prompt/response SHA 和 provider-execution report 进入同一 ledger attempt/fence。候选接受由固定 host authority 完成：候选 gate、项目 gate、证据 SHA、最新 epoch 和不可变 candidate set 全部进入 SQLite，并在晋升/完成前重新打开内容寻址证据。Cargo 项目使用不可变 generation 和原子 `CURRENT` 指针；候选 `cargo check/test` 只允许在 Linux bubblewrap 无网络沙箱中运行。rustup 场景先用 `rustup which` 解析实际 `cargo/rustc/rustdoc`，对受限 toolchain 树做完整内容哈希、执行前复算并只读挂载。缺沙箱、缺 oracle 或缺 ABI 证据时返回 blocked，不在宿主机降级执行。
+
+当前正向完成链仍未闭合：CLI 已有 host-owned integration/Cargo adapter 和失败诊断回投，但 candidate 的 compile/oracle/negative/unsafe-alias/ABI 正向 runner 尚未全部接通，因此不能仅靠 `record-candidate-gate` 获得 pass，也不能从测试构造的 ledger 记录推导整项目成功。真实 held-out 模式只重开只读 SQLite，复验 AI provider evidence、每个 candidate gate、不可变 candidate set、项目 final bundle 和原始 repository/build 绑定；任何自报 `semantic_gate=true` 的 JSON 都不能计入成功。
+
+阶段入口如下；它只完成规划、模型预检和条件调度，不代表翻译验收结束：
+
+```bash
+python3 -B validation/tools/project_migration_harness.py plan \
+  --repo-root /path/to/c-project \
+  --compile-database /path/to/c-project/build/compile_commands.json \
+  --out-root target/project-migration/run-001 \
+  --run-id run-001 \
+  --build-closure-policy required
+python3 -B validation/tools/project_migration_harness.py preflight \
+  --out-root target/project-migration/run-001 \
+  --run-id run-001 \
+  --logical-model GLM-5.1 \
+  --resolved-model zai/glm-5.1
+python3 -B validation/tools/project_migration_harness.py dispatch \
+  --plan target/project-migration/run-001/project-migration-plan.json
+```
+
+真实 WSL 辅助 smoke `a19-deepseek-smoke-20260713` 使用 `opencode/deepseek-v4-flash-free` + `c2rust-candidate` + `max`：preflight report SHA 为 `f0bc76b6b2489597e782cd1f0e532b7483f03658680b4352401ee12c814913c0`，provider-execution SHA 为 `9e04b437135aa9f1e2171a180f2e77272374fc8bba3c1257d314e8a963c10b5d`，candidate SHA 为 `359cb2ef234f85d9aa1cbdf2d77e07a296f55cb8bd7d4ad9dd37afe4d9ea72ef`。该结果仅为 `candidate-ready` / `auxiliary-local-validation` / `semantic_gate=false`；WSL 缺 `bwrap`，未执行候选代码。
+
+当前没有运行时依赖 LangGraph 或 LangChain。这里需要的是可审计的固定状态机、事务、外键、租约、围栏和证据重放；这些由仓库内 Python 编排器与 SQLite 实现。以后只有在框架能减少代码且不削弱上述合同校验时才考虑引入。
+
+```mermaid
+flowchart TB
+    OUTER["Competition OpenCode / caller"] --> PLAN["project_migration_harness plan"]
+    REPO["Unseen C repository"] --> DISCOVERY["Compile DB and build-fact discovery"]
+    PLAN --> DISCOVERY
+    DISCOVERY --> CLOSURE["Hash-bound generated/archive/link closure"]
+    CLOSURE --> INDEX["C index and include/global/top-level facts"]
+    INDEX --> DAG["Call graph, SCCs, waves, boundary groups"]
+    DAG --> CONTEXT["Hash-bound paged ContextPacks"]
+    CONTEXT --> PORTFOLIO["Planner / translator / reviewer / repairer portfolio"]
+    PORTFOLIO <--> LEDGER[("SQLite v3 ledger")]
+    LEDGER --> PREFLIGHT["Fixed model/agent/environment preflight"]
+    PREFLIGHT --> DISPATCH["Lease + attempt + fence-bound dispatch"]
+    DISPATCH --> AI["Tool-free OpenCode candidate workers"]
+    AI --> PROVIDER["Receipt + session + provider-execution evidence"]
+    PROVIDER --> LEDGER
+    TIR["Typed IR / C2Rust candidates and facts"] --> VERIFY
+    PROVIDER --> VERIFY["Fixed host candidate gates"]
+    VERIFY -->|"failed, bounded diagnostic"| DISPATCH
+    VERIFY -->|"latest gates passed"| LASTGOOD["Unit last-good"]
+    LASTGOOD --> CARGO["Immutable Cargo generation"]
+    CARGO --> SANDBOX["Networkless bubblewrap check/test"]
+    SANDBOX --> PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
+    PROJECT -->|"same candidate set passed"| COMPLETE["Completed project evidence"]
+    PROJECT -->|"failed"| DISPATCH
+```
+
+## 整项目数据流
+
+```mermaid
+flowchart LR
+    A["1. Repo root"] --> B["2. Inventory"]
+    B --> C["3. Generated/archive/link closure"]
+    C --> D["4. Include, symbol, SCC migration DAG"]
+    D --> E["5. Paged ContextPack"]
+    E --> F["6. Preflight-bound worker request"]
+    F --> G["7. AI candidate + provider evidence"]
+    G --> H["8. Host candidate gates"]
+    H -->|"repairable"| F
+    H -->|"passed"| I["9. Unit last-good"]
+    I --> J["10. Cargo generation"]
+    J --> K["11. Sandboxed build/test"]
+    K --> L["12. Project semantic and safety gates"]
+    L --> M["13. Candidate-set completion"]
+```
+
+每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已处理已知 runtime/gate-authority 审查项，并补齐 Ninja/静态归档、toolchain、CLI 与只读 held-out 证据约束；当前开放项仍是 Meson/configure 构建事实、正向 candidate verifier、可用比赛等价沙箱和真实 held-out build/oracle。该流程图是实现合同，不是整项目成功声明。
+
+## 切片验证与发布架构
 
 ```mermaid
 flowchart TB
@@ -145,7 +226,7 @@ flowchart TB
     BUNDLE --> PACKET
 ```
 
-## 数据流图
+## 切片证据数据流
 
 ```mermaid
 flowchart LR
@@ -220,6 +301,7 @@ sequenceDiagram
 | `validate_auto_translation_evidence.py` | schema、hash、identity、semantic gate 交叉校验 | strict validation result |
 | `validate_ai_exact_evidence.py` | 重开 fresh oracle、candidate gate-index、router 和 canonical SHA | AI exact strict result |
 | `validate_ai_finite_cross_project_suite.py` | 校验最多 20 项、至少 3 个真实项目/10 类构造的固定套件输入完备性 | ready/blocked preflight，不产生成功率 |
+| `project_migration_harness.py` | 任意仓库 inventory、SCC/DAG、ContextPack、角色调度、门禁和 Cargo generation | project plan、SQLite v3、worker request、last-good project |
 | `opencode_agent_harness.py` | run/plan/worker/retry/evaluate、SQLite ledger、隔离和恢复 | worker reports、context pack、agent index、merge plan |
 | `run_competition.py` | 汇总 slice/worker，执行环境、unsafe、summary gates | competition summary、workflow metrics |
 | `judge_demo.py` | 构建 before/after 安全化展品 | before-after exhibit、judge evidence index |
@@ -376,7 +458,7 @@ python3 -B -m validation.tools.run_judge_entrypoints \
 
 真实比赛主机运行时追加 `--proof-class competition-exact` 并设置 `COMPETITION_EXACT_HOST=1`。
 
-### 6. OpenCode preflight
+### 6. 切片级 OpenCode preflight（非 P0-A19 project preflight）
 
 ```bash
 python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \

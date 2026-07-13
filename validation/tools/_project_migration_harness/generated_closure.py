@@ -1,0 +1,238 @@
+from __future__ import annotations
+
+from pathlib import Path, PurePosixPath
+from typing import Any
+
+from .build_facts import json_sha256, resolve_repository_path
+from .closure_paths import (
+    bind_repository_artifact,
+    path_error_blocker,
+    verify_repository_artifact,
+)
+from .link_closure import discover_link_closure
+from .portfolio_integrity import canonical_sha256
+
+
+MAX_GENERATED_INCLUDE_ROOTS = 256
+MAX_COMPILE_OUTPUTS = 10_000
+
+
+def discover_generated_build_closure(
+    repo_root: Path,
+    compile_database_path: Path,
+    generated_facts: dict[str, Any],
+    translation_units: list[dict[str, Any]],
+) -> dict[str, Any]:
+    root = repo_root.resolve()
+    blockers: list[dict[str, Any]] = [
+        {"kind": reason}
+        for reason in generated_facts.get("blockers", [])
+        if isinstance(reason, str) and reason
+    ]
+    try:
+        compile_database = bind_repository_artifact(
+            root, compile_database_path, kind="file"
+        )
+    except (OSError, ValueError) as error:
+        compile_database = None
+        blockers.append(path_error_blocker(
+            error, role="compile_database", path="<compile-database>"
+        ))
+    generated_roots = _generated_include_roots(
+        root, compile_database_path, translation_units, blockers
+    )
+    compile_outputs = _compile_outputs(root, translation_units, blockers)
+    link = discover_link_closure(root, compile_database_path, generated_facts)
+    blockers.extend(link["blockers"])
+    if link["status"] == "ready":
+        linked_paths = {
+            item["path"]
+            for target in link["targets"]
+            for item in target["inputs"]
+        }
+        for output in compile_outputs:
+            if output["path"] not in linked_paths:
+                blockers.append({
+                    "kind": "compile_output_unlinked",
+                    "path": output["path"],
+                })
+    blockers = _unique_blockers(blockers)
+    return {
+        "schema_version": 1,
+        "status": "ready" if not blockers else "blocked",
+        "compile_database": compile_database,
+        "generated_stage_facts": generated_facts,
+        "generated_include_roots": generated_roots,
+        "compile_outputs": compile_outputs,
+        "target_link_closure": link,
+        "blockers": blockers,
+        "claim_boundary": {
+            "role": "generated_build_input_closure_only",
+            "parameters_guessed": False,
+            "commands_executed": False,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+        },
+    }
+
+
+def verify_generated_build_closure(
+    repo_root: str | Path, closure: dict[str, Any]
+) -> dict[str, Any]:
+    root = Path(repo_root).resolve()
+    bindings: list[dict[str, Any]] = []
+    compile_database = closure.get("compile_database")
+    if isinstance(compile_database, dict):
+        bindings.append(compile_database)
+    bindings.extend(_binding_list(closure.get("generated_include_roots")))
+    bindings.extend(_binding_list(closure.get("compile_outputs")))
+    generated = closure.get("generated_stage_facts")
+    if isinstance(generated, dict):
+        bindings.extend(_binding_list(generated.get("link_command_files")))
+        bindings.extend(_binding_list(generated.get("metadata_files")))
+    link = closure.get("target_link_closure")
+    if isinstance(link, dict):
+        for target in link.get("targets", []):
+            if not isinstance(target, dict):
+                continue
+            for key in ("fact_file", "output"):
+                value = target.get(key)
+                if isinstance(value, dict):
+                    bindings.append(value)
+            for key in ("inputs", "search_roots", "response_files"):
+                bindings.extend(_binding_list(target.get(key)))
+        bindings.extend(_binding_list(link.get("support_files")))
+    blockers = []
+    seen: set[tuple[str, str]] = set()
+    for binding in bindings:
+        identity = (str(binding.get("path")), str(binding.get("kind")))
+        if identity in seen:
+            continue
+        seen.add(identity)
+        blocker = verify_repository_artifact(root, binding)
+        if blocker is not None:
+            blockers.append(blocker)
+    blockers = _unique_blockers(blockers)
+    return {
+        "schema_version": 1,
+        "status": "verified" if not blockers else "blocked",
+        "verified_binding_count": len(seen),
+        "blockers": blockers,
+    }
+
+
+def apply_generated_closure_admission(
+    portfolio: dict[str, Any], *, closure_ready: bool,
+) -> dict[str, Any]:
+    if closure_ready:
+        return portfolio
+    requirement = "generated_build_closure_verified"
+    newly_deferred: list[str] = []
+    for assignment in portfolio.get("assignments", []):
+        if not isinstance(assignment, dict):
+            continue
+        policy = assignment.get("launch_policy")
+        if not isinstance(policy, dict) or policy.get("state") != "ready":
+            continue
+        policy["state"] = "deferred"
+        policy["condition"] = "hash_bound_generated_build_closure_required"
+        requires = policy.get("requires")
+        policy["requires"] = sorted({
+            *(requires if isinstance(requires, list) else []), requirement,
+        })
+        policy["gate_triggered"] = True
+        newly_deferred.append(str(assignment.get("worker_id")))
+    initial = portfolio.get("initial_ready")
+    if isinstance(initial, dict):
+        existing = initial.get("deferred_worker_ids")
+        initial["selected_worker_ids"] = []
+        initial["deferred_worker_ids"] = sorted({
+            *(existing if isinstance(existing, list) else []), *newly_deferred,
+        })
+    portfolio["units"] = []
+    execution = portfolio.get("execution")
+    if isinstance(execution, dict):
+        execution["build_closure_admission"] = "blocked"
+    payload = {key: value for key, value in portfolio.items() if key != "plan_sha256"}
+    portfolio["plan_sha256"] = canonical_sha256(payload)
+    return portfolio
+
+
+def _generated_include_roots(
+    root: Path,
+    database_path: Path,
+    units: list[dict[str, Any]],
+    blockers: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    build_root = database_path.parent.resolve()
+    candidates: set[str] = set()
+    for unit in units:
+        for include in unit.get("includes", []):
+            if not isinstance(include, dict):
+                continue
+            path = include.get("path")
+            if include.get("scope") != "repository":
+                blockers.append({
+                    "kind": "external_include_path",
+                    "unit_id": unit.get("unit_id"),
+                })
+                continue
+            if include.get("kind") in {"forced", "macros"} or not isinstance(path, str):
+                continue
+            try:
+                candidate = resolve_repository_path(root, Path(*PurePosixPath(path).parts))
+                candidate.relative_to(build_root)
+            except (OSError, ValueError):
+                continue
+            if build_root != root:
+                candidates.add(path)
+    if len(candidates) > MAX_GENERATED_INCLUDE_ROOTS:
+        blockers.append({"kind": "generated_include_root_limit_exceeded"})
+        candidates = set(sorted(candidates)[:MAX_GENERATED_INCLUDE_ROOTS])
+    result = []
+    for path in sorted(candidates):
+        try:
+            result.append(bind_repository_artifact(root, path, kind="directory"))
+        except (OSError, ValueError) as error:
+            blockers.append(path_error_blocker(
+                error, role="generated_include", path=path
+            ))
+    return result
+
+
+def _compile_outputs(
+    root: Path,
+    units: list[dict[str, Any]],
+    blockers: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    paths = sorted({
+        str(unit.get("output")) for unit in units if isinstance(unit.get("output"), str)
+    })
+    if len(paths) > MAX_COMPILE_OUTPUTS:
+        blockers.append({"kind": "compile_output_limit_exceeded"})
+        paths = paths[:MAX_COMPILE_OUTPUTS]
+    result = []
+    for path in paths:
+        try:
+            result.append(bind_repository_artifact(root, path, kind="file"))
+        except (OSError, ValueError) as error:
+            blockers.append(path_error_blocker(error, role="compile_output", path=path))
+    return result
+
+
+def _binding_list(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _unique_blockers(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    keyed = {json_sha256(item): item for item in items}
+    return [keyed[key] for key in sorted(keyed)]
+
+
+__all__ = [
+    "discover_generated_build_closure",
+    "apply_generated_closure_admission",
+    "verify_generated_build_closure",
+]
