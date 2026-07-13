@@ -53,30 +53,37 @@ def run_rust_check(
     else:
         original_draft = path.read_bytes()
         stub_contract_error = None
+        candidate_context = candidate_external_callee_context(external_context, set())
         try:
-            if external_context["status"] == "recorded":
-                try:
-                    inject_external_callee_stubs(path, external_context, spec)
-                except ValueError as error:
-                    stub_contract_error = str(error)
-            first = (
-                rust_check_once(path)
-                if stub_contract_error is None
-                else {
-                    "command": None,
-                    "returncode": 1,
-                    "stdout": "",
-                    "stderr": "",
-                    "errors": [{
-                        "level": "error",
-                        "message": stub_contract_error,
-                        "code": {"code": "external_callee_stub_contract_failed"},
-                    }],
-                }
-            )
+            first = rust_check_once(path)
             write_log_text(evidence_dir / "rust-check-initial.stdout.log", first["stdout"])
             write_log_text(evidence_dir / "rust-check-initial.stderr.jsonl", first["stderr"])
+            required_callees = unresolved_declared_external_callee_names(
+                first, external_context
+            )
+            candidate_context = candidate_external_callee_context(
+                external_context, required_callees
+            )
             final = first
+            if first["returncode"] != 0 and candidate_context["status"] == "recorded":
+                try:
+                    inject_external_callee_stubs(path, candidate_context, spec)
+                except ValueError as error:
+                    stub_contract_error = str(error)
+                if stub_contract_error is None:
+                    final = rust_check_once(path)
+                else:
+                    final = {
+                        "command": None,
+                        "returncode": 1,
+                        "stdout": "",
+                        "stderr": stub_contract_error,
+                        "errors": [{
+                            "level": "error",
+                            "message": stub_contract_error,
+                            "code": {"code": "external_callee_stub_contract_failed"},
+                        }],
+                    }
         finally:
             path.write_bytes(original_draft)
         patch = write_no_patch_required(spec, evidence_dir, path)
@@ -99,8 +106,16 @@ def run_rust_check(
             "command": final["command"],
             "error_count": len(final["errors"]),
             "errors": final["errors"],
-            "external_callee_context": rust_check_external_context(external_context),
-            "rust_check_harness_only_bindings": rust_check_external_binding_report(external_context),
+            "external_callee_context": rust_check_external_context(candidate_context),
+            "candidate_external_resolution": {
+                "status": candidate_context["status"],
+                "source": "rustc_unresolved_function_diagnostics",
+                "required_names": candidate_context["candidate_required_names"],
+                "declared_spec_names": candidate_context["declared_spec_names"],
+            },
+            "rust_check_harness_only_bindings": rust_check_external_binding_report(
+                candidate_context
+            ),
             "external_callee_stub_contract": {
                 "status": "failed" if stub_contract_error is not None else "passed",
                 "reason": stub_contract_error,

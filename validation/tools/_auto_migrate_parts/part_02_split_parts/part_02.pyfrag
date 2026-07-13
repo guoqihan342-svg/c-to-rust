@@ -2,6 +2,56 @@
     return payload, patch
 
 
+def unresolved_declared_external_callee_names(
+    rust_check: dict[str, Any], context: dict[str, Any]
+) -> set[str]:
+    declared_names = {
+        str(item.get("name") or "")
+        for item in [*context.get("declared", []), *context.get("blocked", [])]
+        if item.get("name")
+    }
+    unresolved: set[str] = set()
+    pattern = re.compile(r"^cannot find function `([^`]+)` in this scope$")
+    for error in rust_check.get("errors", []):
+        if not isinstance(error, dict):
+            continue
+        code = error.get("code")
+        code_value = code.get("code") if isinstance(code, dict) else code
+        if code_value != "E0425":
+            continue
+        match = pattern.fullmatch(str(error.get("message") or ""))
+        if match is not None and match.group(1) in declared_names:
+            unresolved.add(match.group(1))
+    return unresolved
+
+
+def candidate_external_callee_context(
+    context: dict[str, Any], required_names: set[str]
+) -> dict[str, Any]:
+    selected_declared = [
+        item for item in context.get("declared", []) if item.get("name") in required_names
+    ]
+    selected_blocked = [
+        item for item in context.get("blocked", []) if item.get("name") in required_names
+    ]
+    status = (
+        "blocked"
+        if selected_blocked
+        else "recorded"
+        if selected_declared
+        else "not_applicable"
+    )
+    return {
+        **context,
+        "status": status,
+        "declared": selected_declared,
+        "blocked": selected_blocked,
+        "declared_count": len(selected_declared),
+        "blocked_count": len(selected_blocked),
+        "candidate_required_names": sorted(required_names),
+    }
+
+
 def rust_check_bindings_are_fixture_bound(context: dict[str, Any]) -> bool:
     bindings = rust_check_external_binding_report(context).get("bindings", [])
     return bool(bindings) and all(
@@ -17,6 +67,7 @@ def rust_check_once(path: Path) -> dict[str, Any]:
             "--edition=2021",
             "--crate-type=lib",
             "--error-format=json",
+            "--json=diagnostic-short",
             "--out-dir",
             build_dir,
             str(path),
@@ -44,7 +95,7 @@ def rust_check_once(path: Path) -> dict[str, Any]:
     return {
         "command": (
             "rustc --edition=2021 --crate-type=lib --error-format=json "
-            "--out-dir <rust-check-output> <draft>"
+            "--json=diagnostic-short --out-dir <rust-check-output> <draft>"
         ),
         "returncode": result.returncode,
         "stdout": stdout,

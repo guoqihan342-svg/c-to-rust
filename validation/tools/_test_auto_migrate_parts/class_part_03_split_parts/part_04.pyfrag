@@ -1,0 +1,199 @@
+    def test_self_contained_candidate_ignores_unused_declared_external_callee(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "schema_version": 1,
+            "target_id": "neutral",
+            "slice_id": "self-contained-candidate",
+            "level": "L3",
+            "function_name": "transform_value",
+            "fixture_hash": "self-contained-candidate-fixture",
+            "fixture_contract": {
+                "observable_outputs": ["return_code"],
+                "cases": [],
+            },
+            "c_boundary": {
+                "direct_dependencies": [
+                    {"kind": "callee", "name": "helper_increment"},
+                ],
+                "external_direct_callees": [
+                    {
+                        "name": "helper_increment",
+                        "signature_ref": "sig-helper-increment",
+                        "definition_status": "real_source_bound",
+                        "stub_boundary": "compile_only",
+                    }
+                ],
+                "signatures": [
+                    {
+                        "id": "sig-helper-increment",
+                        "role": "external_direct_callee",
+                        "function": "helper_increment",
+                        "return_type": "int",
+                        "definition_status": "real_source_bound",
+                        "parameters": [{"name": "value", "c_type": "int"}],
+                    }
+                ],
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-self-contained-") as tmp:
+            evidence_dir = Path(tmp)
+            draft_path = evidence_dir / "l3-self-contained-candidate-rust-draft.rs"
+            draft_path.write_text(
+                """\
+pub fn transform_value(value: i32) -> i32 {
+    let _diagnostic_text = "cannot find function `helper_increment` in this scope";
+    value + 1
+}
+""",
+                encoding="utf-8",
+            )
+            (evidence_dir / "l3-self-contained-candidate-rust-replay-test-draft.rs").write_text(
+                """\
+#[test]
+fn replay_self_contained_candidate_fixture_contract() {
+    assert_eq!(transform_value(6i32), 7i32);
+}
+""",
+                encoding="utf-8",
+            )
+            (evidence_dir / "l3-self-contained-candidate-auto-translation-plan.json").write_text(
+                json.dumps(
+                    {
+                        "translation_summary": {
+                            "translation_rule_ids": ["clang-lowered-typed-ir"],
+                            "call_expressions": [{"callee": "helper_increment"}],
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            rust_check, _ = module.run_rust_check(evidence_dir, False, spec)
+
+            self.assertEqual(rust_check["status"], "passed", rust_check["errors"])
+            self.assertEqual(
+                rust_check["candidate_external_resolution"]["status"],
+                "not_applicable",
+            )
+            self.assertEqual(
+                rust_check["candidate_external_resolution"]["required_names"], []
+            )
+            self.assertEqual(
+                rust_check["rust_check_harness_only_bindings"]["bindings"], []
+            )
+            replay = {
+                "schema_version": 1,
+                "status": "recorded",
+                "generated_draft_replay_pass": False,
+                "generated_draft_semantic_pass": False,
+            }
+            replay = module.run_generated_rust_replay(
+                spec, evidence_dir, replay, rust_check
+            )
+            self.assertEqual(replay["status"], "passed")
+            self.assertTrue(replay["generated_draft_replay_pass"])
+            self.assertFalse(replay["generated_draft_semantic_pass"])
+            self.assertEqual(
+                draft_path.read_text(encoding="utf-8").count("fn helper_increment"), 0
+            )
+
+    def test_candidate_external_binding_injects_only_unresolved_declared_callee(self) -> None:
+        module = load_auto_migrate_module()
+        external_callees = [
+            {
+                "name": name,
+                "signature_ref": f"sig-{name}",
+                "definition_status": "real_source_bound",
+                "stub_boundary": "compile_only",
+            }
+            for name in ("helper_alpha", "helper_beta", "helper_gamma")
+        ]
+        signatures = [
+            {
+                "id": f"sig-{name}",
+                "role": "external_direct_callee",
+                "function": name,
+                "return_type": "int",
+                "definition_status": "real_source_bound",
+                "parameters": [{"name": "value", "c_type": "int"}],
+            }
+            for name in ("helper_alpha", "helper_beta", "helper_gamma")
+        ]
+        spec = {
+            "schema_version": 1,
+            "target_id": "neutral",
+            "slice_id": "partial-external-candidate",
+            "level": "L3",
+            "function_name": "transform_value",
+            "fixture_hash": "partial-external-candidate-fixture",
+            "c_boundary": {
+                "direct_dependencies": [
+                    {"kind": "callee", "name": item["name"]}
+                    for item in external_callees
+                ],
+                "external_direct_callees": external_callees,
+                "signatures": signatures,
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-partial-external-") as tmp:
+            evidence_dir = Path(tmp)
+            (evidence_dir / "l3-partial-external-candidate-rust-draft.rs").write_text(
+                """\
+pub fn transform_value(value: i32) -> i32 {
+    helper_alpha(value) + helper_beta(value) + 1
+}
+""",
+                encoding="utf-8",
+            )
+            (evidence_dir / "l3-partial-external-candidate-auto-translation-plan.json").write_text(
+                json.dumps(
+                    {
+                        "translation_summary": {
+                            "call_expressions": [
+                                {"callee": "helper_alpha"},
+                                {"callee": "helper_beta"},
+                                {"callee": "helper_gamma"},
+                            ]
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            rust_check, _ = module.run_rust_check(evidence_dir, False, spec)
+
+            self.assertEqual(rust_check["status"], "passed", rust_check["errors"])
+            self.assertEqual(
+                rust_check["candidate_external_resolution"]["required_names"],
+                ["helper_alpha", "helper_beta"],
+            )
+            bindings = rust_check["rust_check_harness_only_bindings"]["bindings"]
+            self.assertEqual(
+                [item["name"] for item in bindings],
+                ["helper_alpha", "helper_beta"],
+            )
+            self.assertTrue(
+                all(item["status"] == "generated_compile_only" for item in bindings)
+            )
+
+            context = module.external_direct_callee_context(spec, None)
+            spoofed = {
+                "errors": [
+                    {
+                        "code": {"code": "E0308"},
+                        "message": "cannot find function `helper_beta` in this scope",
+                    },
+                    {
+                        "code": {"code": "E0425"},
+                        "message": "cannot find value `helper_beta` in this scope",
+                    },
+                    {
+                        "code": {"code": "E0425"},
+                        "message": "cannot find function `undeclared_helper` in this scope",
+                    },
+                ]
+            }
+            self.assertEqual(
+                module.unresolved_declared_external_callee_names(spoofed, context),
+                set(),
+            )

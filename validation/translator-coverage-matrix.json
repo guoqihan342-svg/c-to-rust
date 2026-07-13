@@ -7113,6 +7113,7 @@
         "emits a temporary Rust mutable reference only for a compile-checked safe adapter contract; it does not synthesize or trust a raw extern binding",
         "direct local or scalar-parameter addresses, raw extern no-escape proof, and post-call field initialization are not modeled",
         "multiple active pointer parameters require a complete slice-spec noalias precondition or source restrict proof against every mutable record root; this is not inferred from project identity or differing C types",
+        "rust-check compiles the raw candidate first and selects only exact rustc E0425 unresolved-function diagnostics intersecting declared external callees; self-contained AI candidates remain eligible for replay and partially inlined candidates receive only their required compile-only bindings",
         "the real libuv function emits a Rust candidate under its explicit ip-to-addr noalias precondition and passes rustc with two compile-only external bindings; candidate+replay preflight now exposes the required safe API mismatch, while callee behavior/no-escape semantics remain non-executable and unverified",
         "no named-slice C/Rust replay, diff, unsafe ledger, or semantic acceptance is claimed"
       ],
@@ -7167,7 +7168,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "the A18c8h4a WSL libuv probe emits a Rust draft and passes rustc, then fails the non-executing candidate+replay API preflight; required safe API adaptation, executable callee semantics, schema-aware diff, negative diff, and final verification remain incomplete"
+          "reason": "the A18c8h4b probe-10 WSL local simulation selects both candidate-required declared external callees from exact structured rustc diagnostics and passes rust-check after compile-only injection, then fails the non-executing candidate+replay API preflight; required safe API adaptation, executable callee semantics, schema-aware diff, negative diff, and final verification remain incomplete"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -7175,7 +7176,7 @@
         },
         "route_evidence": {
           "status": "gap",
-          "reason": "the A18c8h4a WSL probe records a rustc-passing GenericTypedIr L1 candidate plus a failed non-executing replay API preflight; it is unpublished local-simulation diagnostic evidence with semantic_pass=false"
+          "reason": "the A18c8h4b probe-10 WSL run records a rustc-passing GenericTypedIr L1 candidate, exact candidate-required external resolution, and a failed non-executing replay API preflight; it is unpublished local-simulation diagnostic evidence with skipped C oracle and semantic_pass=false"
         }
       },
       "positive_cases": [
@@ -7194,6 +7195,14 @@
         {
           "name": "test_compile_only_external_preflight_reports_required_api_mismatch",
           "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_03.pyfrag"
+        },
+        {
+          "name": "test_self_contained_candidate_ignores_unused_declared_external_callee",
+          "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_04.pyfrag"
+        },
+        {
+          "name": "test_candidate_external_binding_injects_only_unresolved_declared_callee",
+          "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_04.pyfrag"
         }
       ],
       "negative_cases": [
