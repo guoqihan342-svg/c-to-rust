@@ -10,13 +10,20 @@ def run_generated_rust_replay(
     if rust_check.get("status") != "passed":
         return replay
     if rust_check_has_harness_only_external_bindings(rust_check):
+        preflight = compile_only_external_replay_preflight(spec, evidence_dir)
         replay["status"] = "not_applicable"
         replay["skip_reason"] = "compile_only_external_bindings_not_executable"
         replay["not_applicable_reason"] = "compile_only_external_bindings_not_executable"
         replay["generated_draft_replay_pass"] = False
         replay["generated_draft_semantic_pass"] = False
+        replay["candidate_replay_compile_preflight"] = preflight
         replay["known_gaps"] = [
-            "Rust-check harness-only external callee bindings are compile-only and must not be executed as replay proof."
+            "Rust-check harness-only external callee bindings are compile-only and must not be executed as replay proof.",
+            (
+                "The generated candidate does not compile against the required replay API."
+                if preflight["status"] == "failed"
+                else "The generated candidate compiles against the replay API, but external callee behavior remains unavailable."
+            ),
         ]
         write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", replay)
         return replay
@@ -151,6 +158,53 @@ def run_generated_rust_replay(
     return replay
 
 
+def compile_only_external_replay_preflight(
+    spec: dict[str, Any], evidence_dir: Path
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
+    replay_path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
+    stdout_path = evidence_dir / "generated-rust-replay-preflight-compile.stdout.log"
+    stderr_path = evidence_dir / "generated-rust-replay-preflight-compile.stderr.jsonl"
+    if not draft_path.is_file() or not replay_path.is_file():
+        return {
+            "status": "failed",
+            "reason": "candidate_or_replay_source_missing",
+            "compile_command": None,
+            "compile_returncode": None,
+            "execution_allowed": False,
+            "semantics_verified": False,
+        }
+    external_context = external_direct_callee_context(
+        spec,
+        load_plan_call_expressions(evidence_dir, slice_id),
+    )
+    with tempfile.TemporaryDirectory(prefix="c2r-generated-replay-preflight-input-") as tmp:
+        preflight_draft = Path(tmp) / draft_path.name
+        preflight_draft.write_text(
+            draft_path.read_text(encoding="utf-8-sig"), encoding="utf-8"
+        )
+        if external_context["status"] == "recorded":
+            inject_external_callee_stubs(preflight_draft, external_context, spec)
+        result = run_generated_rust_replay_once(
+            preflight_draft,
+            replay_path,
+            execute=False,
+        )
+    write_text(stdout_path, result["compile_stdout"])
+    write_text(stderr_path, result["compile_stderr"])
+    return {
+        "status": result["status"],
+        "reason": None if result["status"] == "passed" else "candidate_replay_api_compile_failed",
+        "compile_command": result["compile_command"],
+        "compile_returncode": result["compile_returncode"],
+        "stdout_log": rel(stdout_path),
+        "stderr_log": rel(stderr_path),
+        "execution_allowed": False,
+        "semantics_verified": False,
+    }
+
+
 def record_generated_rust_replay_safety_failure(
     spec: dict[str, Any],
     evidence_dir: Path,
@@ -257,7 +311,9 @@ def ai_generated_candidate_replay_supported(
     )
 
 
-def run_generated_rust_replay_once(draft_path: Path, replay_path: Path) -> dict[str, Any]:
+def run_generated_rust_replay_once(
+    draft_path: Path, replay_path: Path, *, execute: bool = True
+) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="c2r-generated-replay-") as build_dir_text:
         build_dir = Path(build_dir_text)
         combined_path = build_dir / "generated_replay.rs"
@@ -298,6 +354,19 @@ def run_generated_rust_replay_once(draft_path: Path, replay_path: Path) -> dict[
         if compile_result.returncode != 0:
             return {
                 "status": "failed",
+                "phase": "compile",
+                "compile_command": stable_compile_command,
+                "compile_returncode": compile_result.returncode,
+                "compile_stdout": compile_stdout,
+                "compile_stderr": compile_stderr,
+                "run_command": None,
+                "run_returncode": None,
+                "run_stdout": "",
+                "run_stderr": "",
+            }
+        if not execute:
+            return {
+                "status": "passed",
                 "phase": "compile",
                 "compile_command": stable_compile_command,
                 "compile_returncode": compile_result.returncode,

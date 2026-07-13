@@ -26,9 +26,9 @@ input.c + compile context
 | `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
 | `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 + A18c8a targeted 2/4 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑，定向 4 项中 2 项新增 exact pass，均明确不具备比赛资格 |
-| 当前翻译主线 | P0-A18c / P0-A10 | A18c8h3 已让真实 libuv candidate 在两个 external direct callee 的 compile-only 合同下通过 rustc；下一步补齐可执行 callee 语义/no-escape，再处理直接局部标量与 zlib 函数表间接调用 |
+| 当前翻译主线 | P0-A18c / P0-A10 | A18c8h4a 已在禁止执行 compile-only callee 的前提下编译 candidate+replay，机器可读地暴露真实 libuv candidate 与安全 replay API 的差异；下一步修复 API 形状并补齐可执行 callee 语义/no-escape |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A18c8h3 | `__bswap_16` 与 `uv_inet_pton` 已由 hash-bound slice spec 声明；通用 compile-only 指针桩只擦除 pointee、保留 const/mut 方向并显式报告非语义适配。WSL clang 18.1.3 TU 的无 `unsafe` candidate 已通过 rustc，replay 仍按合同跳过且 `semantic_pass=false` |
+| 最近开发阶段 | P0-A18c8h4a | compile-only external binding 现在仍会触发 candidate+replay 编译预检，但 `execution_allowed=false`。WSL clang 18.1.3 探针确认 draft rustc 通过、预检因缺少 `Ip4AddrReport`/安全 API 形状失败，replay 继续跳过且 `semantic_pass=false` |
 | 当前严格回归 | `25/33` | run `20260711T-finite-p0-t31`；`stress_loops=0`，8 项历史 evidence 漂移仍未修复 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -182,7 +182,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 顺序 | 待办 | 状态 | 本轮完成判据 |
 | ---: | --- | --- | --- |
 | 1 | P0-A18c7 跨项目 AI 输入与证据合同闭包 | 完成 | Windows/WSL 125 项回归通过；固定 12 项生成 12 个候选、0 contract failure、6 exact pass |
-| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | A18c8h3 已让真实 candidate 在 external-callee compile context 下通过 rustc；A18h 仍需可执行 callee 语义/no-escape、直接局部标量、原始 extern 边界和写后初始化证明，然后处理函数表间接调用缺口 |
+| 2 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | A18c8h4a 已将真实 candidate 的 replay API mismatch 变成编译预检证据；A18h 仍需安全 API 适配、可执行 callee 语义/no-escape、直接局部标量、原始 extern 边界和写后初始化证明 |
 | 3 | P0-A10 AI golden set | 待开始 | 以多项目、陌生标识符和最近邻负例扩充能力集，禁止按测试用例修补 |
 | 4 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
 | 5 | P0-C 阶段收口 | 待开始 | 修复历史 evidence 漂移并清理 all-feature Clippy 剩余项 |
@@ -452,7 +452,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
         - [x] **P0-A18c8h2：显式 noalias 前置合同与等价整数 typedef**。旧 libuv slice spec 已补齐通用 `pointer_contract`，声明 `ip` 只读输入、`addr` 可变输出及完整 `ip -> addr` noalias 前置条件，同时保持 `aliasing_proven=false` 和“无全程序别名证明”边界；translator 不从项目名、函数名或不同 C 类型推断 noalias。A18h 专用校验现在仅在 const 属性、signedness 和 width 全相同时接受 typedef/基础整数的不同 spelling，signed-32 与 width-16 漂移继续拒绝。
         - [x] **P0-A18c8h3：外部直接调用 compile context 与指针适配**。libuv slice spec 以真实 C 签名声明 `__bswap_16` 和 `uv_inet_pton`，`inet.c` 绑定规范化 SHA；system-header inline 只绑定调用点与 header 来源，不冒充源码实现。通用 rustc-only 桩对每个 C 指针参数使用独立泛型 pointee，保留 `const`/mutable 方向，并在报告中写入 `compile_only_pointer_pointee_erasure`。该适配只用于 `rustc_compile_only`，fixture/replay 专用模型仍保留精确签名。
         - WSL clang 18.1.3、同一 hash-bound libuv compile database 和 `x86_64-unknown-linux-gnu` ABI 的 `target/a18c8h-probe-07` 已生成 `GenericTypedIr` candidate，两个 callee 均为 `generated_compile_only`，`blocked_count=0`、stub contract 通过且 `rust_check.status=passed`。replay 明确以 `compile_only_external_bindings_not_executable` 跳过，C oracle 本轮也由 `--skip-c-oracle` 跳过，因此 `semantic_pass=false`、成功计数仍为 38。
-        - A18h 父项保持未完成：可执行 external-callee 语义/no-escape、直接局部/参数标量地址、原始 extern 边界和调用写后字段初始化仍需独立收敛。const、nullable、可变参数、间接调用、signedness/width 漂移、不完整记录和同根兄弟读取已有 fail-closed 回归测试。
+        - [x] **P0-A18c8h4a：compile-only candidate/replay API 编译预检**。只要 rust-check 报告包含 `rustc_compile_only` 绑定，harness 就把注入桩后的 candidate 与 generated replay 合并执行一次 `rustc --test`，持久化 stdout/stderr、返回码和 `candidate_replay_compile_preflight`；无论预检成败都保持 `execution_allowed=false`，不运行桩、不产生 replay pass。改名正例证明 API 匹配时预检通过但仍跳过执行，改名负例证明 API 不匹配时保存编译诊断且语义保持 false。
+        - `target/a18c8h-probe-08` 的真实 WSL local simulation 仍为 `rust_check.status=passed`，但预检返回 101 和 `candidate_replay_api_compile_failed`，明确报告缺少 `Ip4AddrReport` 及调用形状不匹配；replay 仍以 `compile_only_external_bindings_not_executable` 跳过。该阶段只改善 repair 诊断，不增加成功计数。
+        - A18h 父项保持未完成：required safe candidate API 适配、可执行 external-callee 语义/no-escape、直接局部/参数标量地址、原始 extern 边界和调用写后字段初始化仍需独立收敛。const、nullable、可变参数、间接调用、signedness/width 漂移、不完整记录和同根兄弟读取已有 fail-closed 回归测试。
 
       前序失败证据：同配置 `kv_set` router `4a6b7b99095e2c91fde2c40a9eac9ca141a9bb276d4c981dd886115350d6f6a0` 的 rustc/unsafe/oracle 通过，但候选把外部 callee 结果实现为 `-1`，与 oracle 的 `7` 不一致。三项 WSL worktree 运行均报告 `repo_commit=UNKNOWN0`，因此只属于本地 hash-bound AI 路由证据。
 

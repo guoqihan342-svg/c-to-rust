@@ -4613,6 +4613,7 @@
         "readonly pointer-return nested direct-call argument",
         "mixed generated_compile_only external binding skips generated Rust replay",
         "compile-only external pointer bindings erase pointee identity per argument while preserving const/mutable direction and semantic false",
+        "compile-only external bindings still compile candidate plus replay for API diagnostics while execution remains forbidden",
         "modeled C assert(int) direct call",
         "modeled C abs(int) direct call with checked runtime precondition",
         "modeled C strlen(const char *) direct call with NUL-termination precondition",
@@ -4971,6 +4972,10 @@
             },
             {
               "name": "test_compile_only_pointer_stub_erases_pointee_without_semantic_claim",
+              "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_03.pyfrag"
+            },
+            {
+              "name": "test_compile_only_external_preflight_reports_required_api_mismatch",
               "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_03.pyfrag"
             },
             {
@@ -5634,6 +5639,10 @@
         },
         {
           "name": "test_compile_only_pointer_stub_erases_pointee_without_semantic_claim",
+          "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_03.pyfrag"
+        },
+        {
+          "name": "test_compile_only_external_preflight_reports_required_api_mismatch",
           "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_03.pyfrag"
         },
         {
@@ -7104,7 +7113,7 @@
         "emits a temporary Rust mutable reference only for a compile-checked safe adapter contract; it does not synthesize or trust a raw extern binding",
         "direct local or scalar-parameter addresses, raw extern no-escape proof, and post-call field initialization are not modeled",
         "multiple active pointer parameters require a complete slice-spec noalias precondition or source restrict proof against every mutable record root; this is not inferred from project identity or differing C types",
-        "the real libuv function now emits a Rust candidate under its explicit ip-to-addr noalias precondition and passes rustc with two compile-only external bindings, but their behavior/no-escape semantics are not executable or verified",
+        "the real libuv function emits a Rust candidate under its explicit ip-to-addr noalias precondition and passes rustc with two compile-only external bindings; candidate+replay preflight now exposes the required safe API mismatch, while callee behavior/no-escape semantics remain non-executable and unverified",
         "no named-slice C/Rust replay, diff, unsafe ledger, or semantic acceptance is claimed"
       ],
       "ir_constructs": [
@@ -7158,7 +7167,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "the A18c8h3 WSL libuv probe emits a Rust draft and passes rustc, but compile-only external bindings deliberately disable replay; executable callee semantics, schema-aware diff, negative diff, and final verification remain incomplete"
+          "reason": "the A18c8h4a WSL libuv probe emits a Rust draft and passes rustc, then fails the non-executing candidate+replay API preflight; required safe API adaptation, executable callee semantics, schema-aware diff, negative diff, and final verification remain incomplete"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -7166,7 +7175,7 @@
         },
         "route_evidence": {
           "status": "gap",
-          "reason": "the A18c8h3 WSL probe records a rustc-passing GenericTypedIr L1 candidate under target; it is unpublished local-simulation compile evidence with semantic_pass=false"
+          "reason": "the A18c8h4a WSL probe records a rustc-passing GenericTypedIr L1 candidate plus a failed non-executing replay API preflight; it is unpublished local-simulation diagnostic evidence with semantic_pass=false"
         }
       },
       "positive_cases": [
@@ -7180,6 +7189,10 @@
         },
         {
           "name": "test_compile_only_pointer_stub_erases_pointee_without_semantic_claim",
+          "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_03.pyfrag"
+        },
+        {
+          "name": "test_compile_only_external_preflight_reports_required_api_mismatch",
           "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_03.pyfrag"
         }
       ],

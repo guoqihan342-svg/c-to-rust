@@ -76,3 +76,79 @@ pub fn translate_packet(source: *const core::ffi::c_void, output: &mut PacketEnv
             self.assertFalse(bindings[0]["semantics_verified"])
             self.assertFalse(module.inject_external_callee_stubs(draft_path, context, spec))
             self.assertEqual(updated.count("fn exchange_bytes<"), 1)
+
+    def test_compile_only_external_preflight_reports_required_api_mismatch(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "schema_version": 1,
+            "target_id": "neutral",
+            "slice_id": "packet-preflight",
+            "level": "L3",
+            "function_name": "translate_packet",
+            "fixture_hash": "packet-preflight-fixture",
+            "fixture_contract": {
+                "observable_outputs": ["return_code"],
+                "cases": [],
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-api-preflight-") as tmp:
+            evidence_dir = Path(tmp)
+            (evidence_dir / "l3-packet-preflight-rust-draft.rs").write_text(
+                """\
+fn inspect_bytes<T>(_source: *const T) -> i32 { 0 }
+pub fn translate_packet(source: *const core::ffi::c_void) -> i32 {
+    inspect_bytes(source)
+}
+""",
+                encoding="utf-8",
+            )
+            (evidence_dir / "l3-packet-preflight-rust-replay-test-draft.rs").write_text(
+                """\
+#[test]
+fn replay_packet_preflight_fixture_contract() {
+    let actual: i32 = translate_packet("payload");
+    assert_eq!(actual, 0i32);
+}
+""",
+                encoding="utf-8",
+            )
+            replay = {
+                "schema_version": 1,
+                "status": "recorded",
+                "generated_draft_replay_pass": False,
+                "generated_draft_semantic_pass": False,
+            }
+            result = module.run_generated_rust_replay(
+                spec,
+                evidence_dir,
+                replay,
+                {
+                    "status": "passed",
+                    "rust_check_harness_only_bindings": {
+                        "status": "emitted",
+                        "allowed_use": "rustc_compile_only",
+                        "semantics_verified": False,
+                        "bindings": [
+                            {
+                                "name": "inspect_bytes",
+                                "status": "generated_compile_only",
+                                "allowed_use": "rustc_compile_only",
+                                "signature": "fn inspect_bytes<T>(source: *const T) -> i32",
+                                "semantics_verified": False,
+                            }
+                        ],
+                    },
+                },
+            )
+
+            preflight = result["candidate_replay_compile_preflight"]
+            self.assertEqual(result["status"], "not_applicable")
+            self.assertEqual(preflight["status"], "failed")
+            self.assertEqual(preflight["reason"], "candidate_replay_api_compile_failed")
+            self.assertNotEqual(preflight["compile_returncode"], 0)
+            self.assertFalse(preflight["execution_allowed"])
+            self.assertFalse(preflight["semantics_verified"])
+            diagnostics = (evidence_dir / preflight["stderr_log"]).read_text(encoding="utf-8")
+            self.assertIn("mismatched types", diagnostics)
+            self.assertFalse(result["generated_draft_replay_pass"])
+            self.assertFalse(result["generated_draft_semantic_pass"])

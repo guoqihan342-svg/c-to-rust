@@ -316,6 +316,13 @@ fn replay_mixed_external_fixture_contract() {
                 skipped_replay["skip_reason"],
                 "compile_only_external_bindings_not_executable",
             )
+            self.assertEqual(
+                skipped_replay["candidate_replay_compile_preflight"]["status"],
+                "passed",
+            )
+            self.assertFalse(
+                skipped_replay["candidate_replay_compile_preflight"]["execution_allowed"]
+            )
             self.assertFalse(skipped_replay["generated_draft_replay_pass"])
             self.assertFalse(skipped_replay["generated_draft_semantic_pass"])
 
