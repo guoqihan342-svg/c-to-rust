@@ -8,6 +8,18 @@ from validation.tools import auto_migrate
 
 
 class ReuseC2RustBaselineTest(unittest.TestCase):
+    def test_cache_arguments_bind_reuse_and_skip_modes(self) -> None:
+        arguments = auto_migrate.auto_migrate_command_arguments(
+            auto_migrate.REPO_ROOT / "validation" / "slice-specs" / "sample.json",
+            accept_existing_evidence=True,
+            reuse_existing_c2rust_baseline=True,
+            skip_c_oracle=True,
+            skip_rust_check=True,
+        )
+        self.assertIn("--reuse-existing-c2rust-baseline", arguments)
+        self.assertIn("--skip-c-oracle", arguments)
+        self.assertIn("--skip-rust-check", arguments)
+
     def test_accepts_generated_hash_valid_baseline_and_rejects_drift(self) -> None:
         target_root = auto_migrate.REPO_ROOT / "target"
         target_root.mkdir(parents=True, exist_ok=True)

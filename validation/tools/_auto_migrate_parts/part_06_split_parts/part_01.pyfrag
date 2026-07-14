@@ -442,10 +442,42 @@ def cache_keys(spec: dict[str, Any], slice_spec_path: Path) -> list[str]:
     ]
 
 
+def auto_migrate_command_arguments(
+    slice_spec_path: Path,
+    *,
+    accept_existing_evidence: bool = False,
+    reuse_existing_c2rust_baseline: bool = False,
+    skip_c_oracle: bool = False,
+    skip_rust_check: bool = False,
+    emit_clang_dry_run: bool = False,
+    emit_clang_lowering_report: bool = False,
+    competition_clang_lane: bool = False,
+) -> list[str]:
+    command_arguments = ["auto_migrate.py", "--slice-spec", rel(slice_spec_path)]
+    if accept_existing_evidence:
+        command_arguments.append("--accept-existing-evidence")
+    if reuse_existing_c2rust_baseline:
+        command_arguments.append("--reuse-existing-c2rust-baseline")
+    if skip_c_oracle:
+        command_arguments.append("--skip-c-oracle")
+    if skip_rust_check:
+        command_arguments.append("--skip-rust-check")
+    if emit_clang_dry_run:
+        command_arguments.append("--emit-clang-dry-run")
+    if emit_clang_lowering_report:
+        command_arguments.append("--emit-clang-lowering-report")
+    if competition_clang_lane:
+        command_arguments.append("--competition-clang-lane")
+    return command_arguments
+
+
 def cache_identity(
     spec: dict[str, Any],
     slice_spec_path: Path,
     accept_existing_evidence: bool = False,
+    reuse_existing_c2rust_baseline: bool = False,
+    skip_c_oracle: bool = False,
+    skip_rust_check: bool = False,
     emit_clang_dry_run: bool = False,
     emit_clang_lowering_report: bool = False,
     competition_clang_lane: bool = False,
@@ -463,15 +495,16 @@ def cache_identity(
     semantically relevant artifact changes.
     """
     effective_emit_clang_lowering_report = emit_clang_lowering_report or competition_clang_lane
-    command_arguments = ["auto_migrate.py", "--slice-spec", rel(slice_spec_path)]
-    if accept_existing_evidence:
-        command_arguments.append("--accept-existing-evidence")
-    if emit_clang_dry_run:
-        command_arguments.append("--emit-clang-dry-run")
-    if effective_emit_clang_lowering_report:
-        command_arguments.append("--emit-clang-lowering-report")
-    if competition_clang_lane:
-        command_arguments.append("--competition-clang-lane")
+    command_arguments = auto_migrate_command_arguments(
+        slice_spec_path,
+        accept_existing_evidence=accept_existing_evidence,
+        reuse_existing_c2rust_baseline=reuse_existing_c2rust_baseline,
+        skip_c_oracle=skip_c_oracle,
+        skip_rust_check=skip_rust_check,
+        emit_clang_dry_run=emit_clang_dry_run,
+        emit_clang_lowering_report=effective_emit_clang_lowering_report,
+        competition_clang_lane=competition_clang_lane,
+    )
     identity = {
         "source_commit": source_commit(spec),
         "source_file_hashes": source_file_hashes(spec),
