@@ -250,7 +250,10 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
             provenance["harness_draft_ref"]["sha256"],
             self._sha256(REPO_ROOT / provenance["harness_draft_ref"]["path"]),
         )
-        self.assertIn(provenance["compile_execution"]["toolchain_adapter"], {"not_executed", "wsl", "native"})
+        self.assertIn(
+            provenance["compile_execution"]["toolchain_adapter"],
+            {"not_executed", "local", "wsl", "native"},
+        )
         self.assertIn(
             provenance["compile_execution"]["status"],
             {

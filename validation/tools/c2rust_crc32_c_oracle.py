@@ -139,14 +139,21 @@ def _verified_source_refs(
     for relative, expected_sha in declared:
         path = (repo_root / relative).resolve()
         stable_sha = judge_validator.sha256_file(path)
-        raw_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+        source_bytes = path.read_bytes()
+        raw_sha = hashlib.sha256(source_bytes).hexdigest()
+        crlf_sha = hashlib.sha256(
+            source_bytes.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+        ).hexdigest()
         if expected_sha == stable_sha:
             declared_hash_mode = "lf_stable"
         elif expected_sha == raw_sha:
             declared_hash_mode = "raw_bytes_legacy"
+        elif expected_sha == crlf_sha:
+            declared_hash_mode = "crlf_raw_bytes_legacy"
         else:
             raise ValueError(
-                f"real C source sha256 mismatch: {relative}: {expected_sha} != {stable_sha}/{raw_sha}"
+                "real C source sha256 mismatch: "
+                f"{relative}: {expected_sha} != {stable_sha}/{raw_sha}/{crlf_sha}"
             )
         refs.append(
             {
@@ -156,6 +163,7 @@ def _verified_source_refs(
                 "declared_source_sha256": expected_sha,
                 "declared_hash_mode": declared_hash_mode,
                 "raw_sha256": raw_sha,
+                "crlf_sha256": crlf_sha,
             }
         )
     return refs
