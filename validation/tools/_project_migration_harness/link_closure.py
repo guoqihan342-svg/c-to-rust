@@ -89,7 +89,7 @@ def discover_link_closure(
         "schema_version": 1,
         "status": "ready" if targets and not blockers else "blocked",
         "fact_files": fact_files,
-        "support_files": _unique_bindings(support_files),
+        "support_files": _canonical_binding_set(support_files),
         "targets": targets,
         "blockers": blockers,
         "parameters_guessed": False,
@@ -233,8 +233,8 @@ def _parse_link_argv(
         "driver": compiler_name(argv[0]).lower(),
         "argv_sha256": json_sha256(argv),
         "output": output,
-        "inputs": _unique_bindings(inputs),
-        "search_roots": _unique_bindings(search_roots),
+        "inputs": inputs,
+        "search_roots": search_roots,
         "response_files": response_files or [],
         "ordered_system_link_args": system_args,
     }
@@ -278,7 +278,7 @@ def _contains_external_path(value: str) -> bool:
     )
 
 
-def _unique_bindings(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _canonical_binding_set(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     by_path = {item["path"]: item for item in items}
     return [by_path[path] for path in sorted(by_path)]
 

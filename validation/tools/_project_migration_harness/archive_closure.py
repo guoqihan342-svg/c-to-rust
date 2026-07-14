@@ -53,7 +53,7 @@ def parse_archive_command(
         "driver": driver,
         "argv_sha256": json_sha256(argv),
         "output": output,
-        "inputs": _unique(inputs),
+        "inputs": inputs,
         "search_roots": [],
         "response_files": response_files or [],
         "ordered_system_link_args": [],
@@ -105,13 +105,6 @@ def _bind(
     except (OSError, ValueError) as error:
         blockers.append(path_error_blocker(error, role=role, path=value))
         return None
-
-
-def _unique(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    by_path = {item["path"]: item for item in items}
-    return [by_path[path] for path in sorted(by_path)]
-
-
 __all__ = [
     "is_archiver_command", "is_ranlib_command", "parse_archive_command",
     "ranlib_output",
