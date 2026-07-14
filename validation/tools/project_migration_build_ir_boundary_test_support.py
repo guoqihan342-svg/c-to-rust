@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-import subprocess
 
 
 PACKAGE = "validation.tools._project_migration_harness"
@@ -258,26 +257,23 @@ def declared_all(source: str) -> frozenset[str]:
     raise AssertionError("facade __all__ must be a literal string sequence")
 
 
-def tracked_production_sources(root: Path) -> dict[str, str]:
-    result = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=root, check=True,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )
+def repository_production_sources(root: Path) -> dict[str, str]:
     sources = {}
-    prefix = "validation/tools/_project_migration_harness/"
-    for raw in result.stdout.split(b"\0"):
-        if not raw:
-            continue
-        relative = raw.decode("utf-8")
-        if not relative.endswith(".py") or not (
-            relative.startswith(prefix)
-            or relative == "validation/tools/project_migration_harness.py"
-        ):
-            continue
-        path = root / relative
+    package = root / "validation" / "tools" / "_project_migration_harness"
+    entrypoint = root / "validation" / "tools" / "project_migration_harness.py"
+    paths = [
+        *(
+            path for path in package.iterdir()
+            if path.suffix in {".py", ".pyi"}
+        ),
+        entrypoint,
+    ]
+    for path in sorted(paths):
+        relative = path.relative_to(root).as_posix()
         if path.is_symlink() or not path.is_file():
-            raise AssertionError(f"tracked production module is not regular: {relative}")
+            raise AssertionError(f"production module is not regular: {relative}")
         source = path.read_bytes().decode("utf-8")
         ast.parse(source, filename=relative)
-        sources[relative[:-3].replace("/", ".")] = source
+        module = path.relative_to(root).with_suffix("").as_posix().replace("/", ".")
+        sources[module] = source
     return sources

@@ -15,7 +15,7 @@ from validation.tools.project_migration_build_ir_boundary_test_support import (
     import_records,
     is_private_make_module,
     module_name,
-    tracked_production_sources,
+    repository_production_sources,
 )
 
 
@@ -88,9 +88,9 @@ from .make_build_ir_adapter import (
 """
         self.assertEqual([], audit_source(module_name("build_adapter"), private_source))
 
-    def test_tracked_production_matches_exact_boundary_contract(self) -> None:
+    def test_repository_production_matches_exact_boundary_contract(self) -> None:
         root = Path(__file__).resolve().parents[2]
-        sources = tracked_production_sources(root)
+        sources = repository_production_sources(root)
         candidates = {
             module for module in sources
             if module in GENERIC_FACADES
