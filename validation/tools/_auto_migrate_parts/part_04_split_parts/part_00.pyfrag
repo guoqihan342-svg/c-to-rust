@@ -276,13 +276,17 @@ def ai_candidate_binding(evidence_dir: Path, prefix: str) -> dict[str, Any]:
             "source_artifact": {"path": rel(manifest_path), "status": "missing"},
         }
     manifest = read_json(manifest_path)
+    manifest_status = str(manifest.get("status", "incomplete"))
+    source_artifact = evidence_ref(manifest_path, manifest_status)
+    if manifest_status != "generated":
+        source_artifact.pop("sha256", None)
     binding: dict[str, Any] = {
         "candidate_id": "opencode-ai:unavailable",
         "kind": "opencode-ai",
-        "status": str(manifest.get("status", "incomplete")),
+        "status": manifest_status,
         "role": "ai_primary_rust_draft",
         "semantic_pass": False,
-        "source_artifact": evidence_ref(manifest_path, str(manifest.get("status", "recorded"))),
+        "source_artifact": source_artifact,
     }
     generator = manifest.get("generator")
     if isinstance(generator, dict):

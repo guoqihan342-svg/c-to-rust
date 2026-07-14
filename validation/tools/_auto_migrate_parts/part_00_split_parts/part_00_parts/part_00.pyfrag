@@ -319,6 +319,12 @@ def main() -> int:
             validation_profile,
             accepted,
         )
+        bind_non_generated_ai_manifest(
+            spec,
+            evidence_dir,
+            route_decision,
+            validation_profile,
+        )
         return {
             "manifest": manifest,
             "oracle": oracle,
