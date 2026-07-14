@@ -44,6 +44,12 @@ def bound_context(evidence_dir: Path) -> tuple[dict[str, object], Path]:
                 "function_name": "migrated",
                 "status": "bound",
                 "call_count": 1,
+                "model_input_policy": {
+                    "replay_source_content": "withheld_oracle_bearing",
+                    "oracle_values": "withheld",
+                    "call_plan": "included",
+                    "required_candidate_api": "included_when_bound",
+                },
                 "source": {
                     "path": replay_path.name,
                     "sha256": replay_sha,
