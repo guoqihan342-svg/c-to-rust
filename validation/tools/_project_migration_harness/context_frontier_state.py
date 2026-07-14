@@ -26,6 +26,11 @@ _INPUT_KEYS = {
 _LIMIT_KEYS = {
     "context_byte_budget", "context_token_budget", "context_page_limit",
 }
+_SCHEDULE_KEYS = {
+    "status", "state_version", "head_sha256", "mode", "query_epoch",
+    "selection_input_sha256", "catalog", "selection_receipt_sha256",
+    "materialized_page_set_sha256", "selection_materialization_sha256",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +78,10 @@ def build_initial_context_frontier(
         ),
         "materialized_page_set_sha256": (
             retrieval.get("materialized_page_set_sha256")
-            if ready else (_static_page_set(context) if not host_retrieval else None)
+            if ready else (
+                static_context_page_set_sha256(context)
+                if not host_retrieval else None
+            )
         ),
         "selection_materialization_sha256": (
             retrieval.get("selection_materialization_sha256") if ready else None
@@ -130,6 +138,59 @@ def context_frontier_head_sha256(value: Mapping[str, Any]) -> str:
     return content_sha256(validate_context_frontier_head(value))
 
 
+def context_frontier_schedule_binding(
+    projection: ContextFrontierProjection,
+) -> dict[str, Any]:
+    head = validate_context_frontier_head(projection.head)
+    if projection.status != head["status"] or projection.head_sha256 != content_sha256(head):
+        raise ValueError("context frontier projection binding drifted")
+    return {
+        "status": projection.status,
+        "state_version": projection.version,
+        "head_sha256": projection.head_sha256,
+        "mode": head["mode"],
+        "query_epoch": head["query_epoch"],
+        "selection_input_sha256": head["selection_input_sha256"],
+        "catalog": head["catalog"],
+        "selection_receipt_sha256": head["selection_receipt_sha256"],
+        "materialized_page_set_sha256": head["materialized_page_set_sha256"],
+        "selection_materialization_sha256": head["selection_materialization_sha256"],
+    }
+
+
+def validate_context_frontier_schedule_binding(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping) or set(value) != _SCHEDULE_KEYS:
+        raise ValueError("context frontier schedule binding shape is invalid")
+    status = value.get("status")
+    version = value.get("state_version")
+    mode = value.get("mode")
+    epoch = value.get("query_epoch")
+    if (
+        status not in FRONTIER_STATUSES
+        or isinstance(version, bool) or not isinstance(version, int) or version < 0
+        or mode not in {"static_context", "host_retrieval"}
+        or isinstance(epoch, bool) or not isinstance(epoch, int) or epoch < 0
+        or not _sha(value.get("head_sha256"))
+        or not _sha(value.get("selection_input_sha256"))
+    ):
+        raise ValueError("context frontier schedule binding header is invalid")
+    catalog = _reference(value.get("catalog"), "catalog")
+    receipt = value.get("selection_receipt_sha256")
+    pages = value.get("materialized_page_set_sha256")
+    materialization = value.get("selection_materialization_sha256")
+    if status == FRONTIER_PENDING:
+        if mode != "host_retrieval" or any(
+            item is not None for item in (receipt, pages, materialization)
+        ):
+            raise ValueError("pending frontier schedule binding carries ready output")
+    elif mode == "host_retrieval":
+        if not all(_sha(item) for item in (receipt, pages, materialization)):
+            raise ValueError("ready frontier schedule binding is incomplete")
+    elif receipt is not None or materialization is not None or not _sha(pages):
+        raise ValueError("static frontier schedule binding is invalid")
+    return {**dict(value), "catalog": catalog}
+
+
 def _input_binding(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping) or set(value) != _INPUT_KEYS:
         raise ValueError("context frontier input binding shape is invalid")
@@ -158,7 +219,7 @@ def _selection_seed(retrieval: Mapping[str, Any] | None, unit_id: str) -> dict[s
     return {key: retrieval.get(key) for key in keys}
 
 
-def _static_page_set(context: Mapping[str, Any]) -> str:
+def static_context_page_set_sha256(context: Mapping[str, Any]) -> str:
     pages = context.get("pages")
     if (
         not isinstance(pages, list)
@@ -198,5 +259,7 @@ def _text(value: Mapping[str, Any], key: str) -> str:
 __all__ = [
     "ContextFrontierProjection", "FRONTIER_PENDING", "FRONTIER_READY",
     "build_initial_context_frontier", "context_frontier_head_sha256",
-    "validate_context_frontier_head",
+    "context_frontier_schedule_binding", "validate_context_frontier_head",
+    "validate_context_frontier_schedule_binding",
+    "static_context_page_set_sha256",
 ]

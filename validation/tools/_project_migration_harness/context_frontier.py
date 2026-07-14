@@ -14,6 +14,8 @@ from .artifact_write_once import (
 )
 from .context_catalog import validate_context_catalog
 from .context_selection_materialization import require_selection_materialization
+from .context_frontier_binding import validate_context_against_frontier
+from .context_frontier_state import static_context_page_set_sha256
 from .orchestration_facts import read_artifact_reference
 
 
@@ -25,6 +27,7 @@ def materialize_scheduled_contexts(
     if not isinstance(ready, list):
         raise ValueError("context frontier schedule.ready is invalid")
     contexts: dict[str, dict[str, Any]] = {}
+    frontiers: dict[str, dict[str, Any]] = {}
     assignments: list[dict[str, Any]] = []
     for item in ready:
         assignment = item.get("assignment") if isinstance(item, Mapping) else None
@@ -37,6 +40,12 @@ def materialize_scheduled_contexts(
         previous = contexts.setdefault(group_id, dict(context))
         if previous != context:
             raise ValueError("context frontier group has conflicting context bindings")
+        frontier = validate_context_against_frontier(
+            item.get("context_frontier"), context,
+        )
+        previous_frontier = frontiers.setdefault(group_id, frontier)
+        if previous_frontier != frontier:
+            raise ValueError("context frontier group has conflicting ledger heads")
         assignments.append({
             "worker_id": assignment.get("worker_id"),
             "role": assignment.get("role"),
@@ -63,8 +72,14 @@ def materialize_scheduled_contexts(
             ),
             "materialized_page_set_sha256": (
                 retrieval.get("materialized_page_set_sha256")
-                if isinstance(retrieval, Mapping) else content_sha256(refs)
+                if isinstance(retrieval, Mapping)
+                else static_context_page_set_sha256(context)
             ),
+            "selection_materialization_sha256": (
+                retrieval.get("selection_materialization_sha256")
+                if isinstance(retrieval, Mapping) else None
+            ),
+            "context_frontier": frontiers[group_id],
             "pages": refs,
         })
     report = {

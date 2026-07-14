@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 from .ledger_security import LedgerError
+from .ledger_frontier_gate import context_frontier_for_unit_state
 
 
 class LedgerViewMixin:
@@ -12,9 +13,11 @@ class LedgerViewMixin:
         with self.connect() as connection:
             rows = connection.execute(
                 """select u.*,r.max_attempts from migration_units u join project_runs r using(run_id)
+                   left join context_frontiers f on f.run_id=u.run_id and f.unit_id=u.unit_id
                    where u.run_id=? and r.status='active' and u.status not in
                    ('running','completed','cancelled','exhausted')
                    and u.resumable_status not in ('terminal','exhausted')
+                   and (f.unit_id is null or f.status='ready')
                    and not exists (select 1 from leases l where l.run_id=u.run_id and l.unit_id=u.unit_id
                                    and l.status='active' and l.expires_at>?)
                    and not exists (select 1 from attempts t where t.run_id=u.run_id and t.unit_id=u.unit_id
@@ -37,7 +40,16 @@ class LedgerViewMixin:
                    where u.run_id=? order by u.wave_index,u.group_id,u.unit_id""",
                 (run_id,),
             ).fetchall()
-        return [dict(row) for row in rows]
+            result = []
+            for row in rows:
+                state = dict(row)
+                frontier = context_frontier_for_unit_state(
+                    connection, run_id=run_id, unit_id=str(row["unit_id"]),
+                )
+                if frontier is not None:
+                    state["context_frontier"] = frontier
+                result.append(state)
+        return result
 
     def running_attempt_for_worker(
         self, *, run_id: str, worker_id: str

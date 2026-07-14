@@ -61,6 +61,9 @@ def dispatch_project_workers(
                 assignment=assignment,
                 ttl_seconds=lease_ttl_seconds,
                 input_sha256=str(reference["effective_input_sha256"]),
+                context_frontier=scheduled.get("context_frontier"),
+                launch_claim=scheduled.get("launch_claim"),
+                schedule_sha256=str(schedule["schedule_sha256"]),
                 metadata={
                     "assignment_path": reference["assignment"]["path"],
                     "assignment_sha256": reference["assignment"]["sha256"],

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -9,6 +8,13 @@ from .artifacts import content_sha256
 from .ledger_attempt_budget import consumed_attempt_count, next_attempt_ordinal
 from .ledger_schema import _json, _now_text, _require_sha256, atomic
 from .ledger_security import LedgerError, LeaseConflict, assert_no_semantic_claims
+from .ledger_frontier_gate import (
+    reject_split_lease_for_context_frontier, require_ready_context_frontier,
+)
+from .ledger_lease_contract import (
+    metadata as _metadata, require_assignment_digest as _require_assignment_digest,
+    require_launch_claim, text as _text,
+)
 from .ledger_transition_authority import (
     TransitionAuthority, load_run_projection, load_unit_projection,
 )
@@ -43,6 +49,9 @@ class LeaseLifecycleMixin:
                 or assignment["resumable_status"] in {"terminal", "exhausted"}
             ):
                 raise LeaseConflict("lease owner is not actively assigned to this runnable unit")
+            reject_split_lease_for_context_frontier(
+                connection, run_id=run_id, unit_id=unit_id,
+            )
             row = connection.execute(
                 "select status,fencing_token,expires_at from leases where run_id=? and unit_id=?",
                 (run_id, unit_id),
@@ -70,6 +79,9 @@ class LeaseLifecycleMixin:
     def begin_worker_attempt(
         self, *, run_id: str, assignment: Mapping[str, Any], ttl_seconds: int,
         input_sha256: str, metadata: Mapping[str, Any] | None = None,
+        context_frontier: Mapping[str, Any] | None = None,
+        launch_claim: Mapping[str, Any] | None = None,
+        schedule_sha256: str | None = None,
         now: int | None = None,
     ) -> dict[str, Any]:
         if ttl_seconds < 30 or ttl_seconds > 86_400:
@@ -88,7 +100,7 @@ class LeaseLifecycleMixin:
                 (run_id,),
             ).fetchone()
             unit = connection.execute(
-                """select group_id,status,resumable_status from migration_units
+                """select group_id,status,resumable_status,state_version from migration_units
                    where run_id=? and unit_id=?""", (run_id, unit_id),
             ).fetchone()
             row = connection.execute(
@@ -105,6 +117,15 @@ class LeaseLifecycleMixin:
             ):
                 raise LeaseConflict("assignment is not an active immutable runnable unit")
             _require_assignment_digest(run["metadata_json"], assignment)
+            frontier = require_ready_context_frontier(
+                connection, run_id=run_id, unit_id=unit_id,
+                expected=context_frontier,
+            )
+            bound_claim = require_launch_claim(
+                run_id=run_id, assignment=assignment, unit=dict(unit),
+                frontier=frontier, claim=launch_claim,
+                schedule_sha256=schedule_sha256,
+            )
             lease = connection.execute(
                 "select status,fencing_token,expires_at from leases where run_id=? and unit_id=?",
                 (run_id, unit_id),
@@ -150,6 +171,12 @@ class LeaseLifecycleMixin:
                 "previous_status": unit["status"],
                 "previous_resumable_status": unit["resumable_status"],
             }
+            if bound_claim is not None:
+                attempt_metadata["launch_claim"] = {
+                    key: value for key, value in bound_claim.items()
+                    if key != "schedule_sha256"
+                }
+                attempt_metadata["schedule_sha256"] = bound_claim["schedule_sha256"]
             expected = load_unit_projection(connection, run_id, unit_id)
             input_digest = _require_sha256(input_sha256, "input_sha256")
             timestamp = _now_text()
@@ -256,36 +283,6 @@ class LeaseLifecycleMixin:
                     )
                 )
         return recovered
-
-
-def _require_assignment_digest(metadata_json: str, assignment: Mapping[str, Any]) -> None:
-    metadata = _metadata(metadata_json)
-    binding = metadata.get("runtime_binding")
-    records = binding.get("assignments") if isinstance(binding, Mapping) else None
-    if not isinstance(records, list):
-        raise LedgerError("run has no immutable runtime assignment binding")
-    digest = content_sha256(assignment)
-    matches = [item for item in records if isinstance(item, Mapping)
-               and item.get("worker_id") == assignment.get("worker_id")]
-    if len(matches) != 1 or matches[0].get("assignment_sha256") != digest:
-        raise LedgerError("assignment does not match the immutable run binding")
-
-
-def _metadata(value: Any) -> dict[str, Any]:
-    try:
-        result = json.loads(value) if isinstance(value, str) else None
-    except json.JSONDecodeError as error:
-        raise LedgerError("ledger metadata is invalid JSON") from error
-    if not isinstance(result, dict):
-        raise LedgerError("ledger metadata must be an object")
-    return result
-
-
-def _text(value: Mapping[str, Any], key: str) -> str:
-    result = value.get(key)
-    if not isinstance(result, str) or not result:
-        raise ValueError(f"assignment {key} is invalid")
-    return result
 
 
 __all__ = ["LeaseLifecycleMixin"]

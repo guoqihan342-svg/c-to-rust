@@ -15,6 +15,10 @@ from .schedule_graph import critical_path_weights
 from .candidate_strategy import validate_candidate_strategy
 from .project_interface_model_context import validate_model_coordinator_context
 from .context_required_facts import context_retrieval_ready
+from .context_frontier_state import (
+    FRONTIER_READY, validate_context_frontier_schedule_binding,
+)
+from .artifacts import content_sha256
 
 
 
@@ -58,6 +62,9 @@ def schedule_portfolio(
             "role": role,
             "wave_index": int(assignment.get("wave_index", -1)),
         }
+        frontier = _frontier_binding(states[group_id])
+        if frontier is not None:
+            record["context_frontier"] = frontier
         if role == "repairer" and not reasons:
             record["repair_mode"] = repair_mode(facts)
         if priority is not None:
@@ -65,11 +72,16 @@ def schedule_portfolio(
         if reasons:
             deferred.append({**record, "reasons": reasons})
         else:
-            ready.append({
+            ready_item = {
                 **record,
                 "assignment": dict(assignment),
                 "input_facts": _input_facts(role, facts),
-            })
+            }
+            if frontier is not None:
+                ready_item["launch_claim"] = _launch_claim(
+                    assignment, states[group_id], frontier,
+                )
+            ready.append(ready_item)
     role_order = {"planner": 0, "translator": 1, "reviewer": 2, "repairer": 3}
     ready.sort(key=lambda item: (
         -int(item.get("scheduling_priority", {}).get("score", 0)),
@@ -81,7 +93,7 @@ def schedule_portfolio(
             **{key: item[key] for key in ("worker_id", "group_id", "role", "wave_index")},
             "reasons": ["max_concurrency_reached"],
         })
-    return {
+    result = {
         "schema_version": 1,
         "status": "ready" if selected else "waiting",
         "ready": selected,
@@ -95,6 +107,8 @@ def schedule_portfolio(
             "repair_requires_failed_gate": True,
         },
     }
+    result["schedule_sha256"] = content_sha256(result)
+    return result
 
 
 def _unit_state_map(values: Sequence[Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
@@ -119,11 +133,16 @@ def _deferred_reasons(
     state = states.get(group_id)
     if state is None:
         return ["unit_state_missing"]
-    context = assignment.get("context")
-    if not isinstance(context, Mapping):
-        raise ValueError("assignment context must be an object")
-    if not context_retrieval_ready(context):
-        return ["context_retrieval_pending"]
+    frontier = _frontier_binding(state)
+    if frontier is not None:
+        if frontier["status"] != FRONTIER_READY:
+            return ["context_retrieval_pending"]
+    else:
+        context = assignment.get("context")
+        if not isinstance(context, Mapping):
+            raise ValueError("assignment context must be an object")
+        if not context_retrieval_ready(context):
+            return ["context_retrieval_pending"]
     dependencies = assignment.get("dependencies", [])
     if not isinstance(dependencies, list) or not all(isinstance(item, str) for item in dependencies):
         raise ValueError("assignment dependencies must be strings")
@@ -164,6 +183,37 @@ def _string(value: Mapping[str, Any], key: str) -> str:
     if not isinstance(result, str) or not result:
         raise ValueError(f"{key} must be a non-empty string")
     return result
+
+
+def _frontier_binding(state: Mapping[str, Any]) -> dict[str, Any] | None:
+    value = state.get("context_frontier")
+    if value is None:
+        return None
+    return validate_context_frontier_schedule_binding(value)
+
+
+def _launch_claim(
+    assignment: Mapping[str, Any], state: Mapping[str, Any],
+    frontier: Mapping[str, Any],
+) -> dict[str, Any]:
+    version = state.get("state_version")
+    if isinstance(version, bool) or not isinstance(version, int) or version < 0:
+        raise ValueError("unit state version is invalid")
+    payload = {
+        "schema_version": 1,
+        "run_id": _string(assignment, "run_id"),
+        "unit_id": _string(assignment, "unit_id"),
+        "worker_id": _string(assignment, "worker_id"),
+        "role": _string(assignment, "role"),
+        "assignment_sha256": content_sha256(assignment),
+        "unit_state": {
+            "status": state.get("status"),
+            "resumable_status": state.get("resumable_status"),
+            "state_version": version,
+        },
+        "context_frontier": dict(frontier),
+    }
+    return {**payload, "sha256": content_sha256(payload)}
 
 
 def _input_facts(role: str, facts: Mapping[str, Any]) -> dict[str, Any]:

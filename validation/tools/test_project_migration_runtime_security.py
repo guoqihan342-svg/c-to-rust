@@ -126,6 +126,81 @@ class ProjectMigrationRuntimeSecurityTests(RuntimeHarnessCase):
                 )],
             )
 
+    def test_frontier_drift_is_blocked_before_provider_process_creation(self) -> None:
+        plan = self.plan()
+        ledger = self.ledger()
+        launch = self.dispatch(plan, ledger)["launches"][0]
+        with ledger.connect() as connection:
+            connection.execute(
+                """update context_frontiers set head_sha256=?
+                   where run_id=? and unit_id=?""",
+                ("f" * 64, plan["run_id"], launch["unit_id"]),
+            )
+
+        with mock.patch(
+            "validation.tools._project_migration_harness.controller_runtime."
+            "subprocess_runner_with_environment",
+        ) as runner:
+            result = run_and_ingest_opencode_worker(
+                launch["request"], self.preflight(plan["run_id"]),
+                ledger=ledger, harness_root=self.harness,
+                logical_model=LOGICAL_MODEL, resolved_model=RESOLVED_MODEL,
+            )
+
+        self.assertEqual("prelaunch-blocked", result["status"])
+        self.assertFalse(result["attempt_consumed"])
+        runner.assert_not_called()
+        with ledger.connect() as connection:
+            self.assertEqual(
+                [("cancelled", False)],
+                [
+                    (row["status"], json.loads(row["metadata_json"])["command_started"])
+                    for row in connection.execute(
+                        "select status,metadata_json from attempts"
+                    )
+                ],
+            )
+
+    def test_provider_success_without_started_callback_is_not_ingested(self) -> None:
+        plan = self.plan()
+        ledger = self.ledger()
+        launch = self.dispatch(plan, ledger)["launches"][0]
+        request = self.load(launch["request"])
+        response = self.common(request) | {
+            "candidate_source": "pub fn unit() -> i32 { 1 }\n",
+        }
+
+        def runner(*_args: object, **_kwargs: object) -> ProviderExecution:
+            event = {
+                "type": "text", "text": json.dumps(response), "sessionID": "s1",
+            }
+            return ProviderExecution(
+                0, json.dumps(event) + "\n", "", identity_receipt={
+                    "source": "runner-contract", "session_id": "s1",
+                    "provider_id": "opencode", "model_id": "deepseek-v4-flash-free",
+                    "agent": "c2rust-candidate", "variant": "max",
+                    "opencode_version": "test",
+                },
+            )
+
+        with mock.patch(
+            "validation.tools._project_migration_harness.controller_runtime."
+            "subprocess_runner_with_environment",
+            side_effect=runner,
+        ):
+            result = run_and_ingest_opencode_worker(
+                launch["request"], self.preflight(plan["run_id"]),
+                ledger=ledger, harness_root=self.harness,
+                logical_model=LOGICAL_MODEL, resolved_model=RESOLVED_MODEL,
+            )
+
+        self.assertEqual("prelaunch-blocked", result["status"])
+        self.assertFalse(result["attempt_consumed"])
+        with ledger.connect() as connection:
+            self.assertEqual(0, connection.execute(
+                "select count(*) from artifacts where run_id=?", (plan["run_id"],),
+            ).fetchone()[0])
+
     def test_model_candidate_metadata_claims_are_rejected(self) -> None:
         plan = self.plan()
         ledger = self.ledger()

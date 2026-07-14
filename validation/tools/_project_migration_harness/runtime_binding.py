@@ -5,11 +5,14 @@ from collections.abc import Mapping
 from typing import Any
 
 from .artifacts import content_sha256
-from .ledger_schema import _json, _now_text, _require_repo_path, _require_sha256, atomic
+from .ledger_schema import _json, _require_repo_path, _require_sha256, atomic
 from .ledger_security import LedgerError
-from .ledger_transition_authority import TransitionAuthority, load_unit_projection
-from .ledger_transition_commands import worker_command_started_command
+from .runtime_attempt_launch import RuntimeAttemptLaunchMixin
 from .runtime_prelaunch_cancel import PrelaunchCancellationMixin
+from .runtime_frontier_binding import (
+    context_frontier_set_sha256, portfolio_frontier_binding_records,
+    verify_context_frontier_binding,
+)
 
 
 REQUIRED_ASSIGNMENT_FIELDS = {
@@ -80,10 +83,13 @@ def compute_portfolio_binding(portfolio: Mapping[str, Any]) -> dict[str, Any]:
         })
     if {item["unit_id"] for item in records} - seen_units:
         raise ValueError("portfolio assignment references an unknown unit")
+    frontier_records = portfolio_frontier_binding_records(
+        portfolio, run_id=run_id, unit_ids=sorted(seen_units),
+    )
     records.sort(key=lambda item: (item["unit_id"], item["role"], item["worker_id"]))
     unit_records.sort(key=lambda item: item["unit_id"])
     binding = {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": run_id,
         "dag_sha256": dag_sha256,
         "plan_sha256": claimed,
@@ -91,12 +97,14 @@ def compute_portfolio_binding(portfolio: Mapping[str, Any]) -> dict[str, Any]:
         "assignment_set_sha256": content_sha256(records),
         "units": unit_records,
         "unit_set_sha256": content_sha256(unit_records),
+        "context_frontiers": frontier_records,
+        "context_frontier_set_sha256": context_frontier_set_sha256(frontier_records),
     }
     binding["binding_sha256"] = content_sha256(binding)
     return binding
 
 
-class RuntimeBindingMixin(PrelaunchCancellationMixin):
+class RuntimeBindingMixin(RuntimeAttemptLaunchMixin, PrelaunchCancellationMixin):
     def require_portfolio_binding(self, portfolio: Mapping[str, Any]) -> dict[str, Any]:
         expected = compute_portfolio_binding(portfolio)
         with self.connect() as connection:
@@ -118,6 +126,10 @@ class RuntimeBindingMixin(PrelaunchCancellationMixin):
                 """select unit_id,group_id,wave_index,content_sha256 from migration_units
                    where run_id=? order by unit_id""", (expected["run_id"],),
             ).fetchall()
+            verify_context_frontier_binding(
+                connection, run_id=expected["run_id"],
+                expected=expected["context_frontiers"],
+            )
         _verify_ledger_rows(portfolio, assignments, units)
         return expected
 
@@ -189,29 +201,6 @@ class RuntimeBindingMixin(PrelaunchCancellationMixin):
                 "update attempts set metadata_json=? where attempt_id=?",
                 (_json(metadata), attempt_id),
             )
-
-    def mark_command_started(
-        self, *, attempt_id: str, owner: str, fencing_token: int,
-    ) -> None:
-        with self.connect() as connection, atomic(connection):
-            attempt = self._running_attempt(connection, attempt_id, owner, fencing_token)
-            row = connection.execute(
-                "select metadata_json from attempts where attempt_id=?", (attempt_id,),
-            ).fetchone()
-            metadata = _object_json(row[0], "attempt metadata")
-            if metadata.get("command_started") is True:
-                raise LedgerError("worker command was already started for this attempt")
-            timestamp = _now_text()
-            metadata["command_started"] = True
-            metadata["command_started_at"] = timestamp
-            connection.execute(
-                "update attempts set metadata_json=? where attempt_id=?", (_json(metadata), attempt_id),
-            )
-            run_id, unit_id = str(attempt["run_id"]), str(attempt["unit_id"])
-            command = worker_command_started_command(
-                run_id=run_id, unit_id=unit_id, attempt_id=attempt_id, fencing_token=fencing_token,
-                expected=load_unit_projection(connection, run_id, unit_id), metadata=metadata)
-            TransitionAuthority(connection).apply(command, created_at=timestamp)
 
 def _verify_ledger_rows(
     portfolio: Mapping[str, Any], assignments: Any, units: Any,

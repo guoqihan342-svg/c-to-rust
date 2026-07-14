@@ -22,7 +22,8 @@ CONTEXT_FRONTIER_SCHEMA = (
        from_head_sha256 text not null check(length(from_head_sha256)=64),
        to_head_json text not null, to_head_sha256 text not null check(length(to_head_sha256)=64),
        evidence_sha256 text not null check(length(evidence_sha256)=64), created_at text not null,
-       unique(run_id,command_id), foreign key(run_id,unit_id)
+       unique(run_id,command_id), unique(run_id,unit_id,to_version),
+       foreign key(run_id,unit_id)
        references context_frontiers(run_id,unit_id) on delete cascade)""",
     """create trigger if not exists context_frontier_events_no_update
        before update on context_frontier_events

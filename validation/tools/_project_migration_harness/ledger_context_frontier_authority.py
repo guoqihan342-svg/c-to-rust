@@ -86,6 +86,17 @@ class ContextFrontierAuthority:
                 raise LedgerError("context frontier expected state/version/head is stale")
             target = validate_context_frontier_head(command.target_head)
             _require_edge(command.command_kind, current.head, target)
+            if command.command_kind == "selection_invalidated" and (
+                self.connection.execute(
+                    """select 1 from leases where run_id=? and unit_id=?
+                       and status='active'""", (command.run_id, command.unit_id),
+                ).fetchone()
+                or self.connection.execute(
+                    """select 1 from attempts where run_id=? and unit_id=?
+                       and status='running'""", (command.run_id, command.unit_id),
+                ).fetchone()
+            ):
+                raise LedgerError("active lease or attempt prevents frontier invalidation")
             target_sha = content_sha256(target)
             timestamp = created_at or _now_text()
             cursor = self.connection.execute(

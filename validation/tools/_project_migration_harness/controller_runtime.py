@@ -65,8 +65,13 @@ def run_and_ingest_opencode_worker(
             attempt_id=attempt_id,
             fencing_token=token,
         ) as (environment, working_directory, environment_attestation):
-            command_runner = (
-                lambda argv, seconds: subprocess_runner_with_environment(
+            def command_runner(argv: list[str], seconds: int) -> Any:
+                ledger.authorize_command_launch(
+                    attempt_id=attempt_id,
+                    owner=worker_id,
+                    fencing_token=token,
+                )
+                return subprocess_runner_with_environment(
                     argv,
                     seconds,
                     environment=environment,
@@ -77,7 +82,6 @@ def run_and_ingest_opencode_worker(
                         fencing_token=token,
                     ),
                 )
-            )
             wrapped_runner = heartbeat_runner(
                 command_runner,
                 heartbeat,
@@ -152,6 +156,18 @@ def run_and_ingest_opencode_worker(
             retryable=False,
         )
         return {**generated, "status": "manual-reconcile", "ledger": failed}
+    current = ledger.bound_attempt(
+        attempt_id=attempt_id, owner=worker_id, fencing_token=token,
+    )
+    if current["metadata"].get("command_started") is not True:
+        ledger.cancel_prelaunch_attempt(
+            attempt_id=attempt_id, owner=worker_id, fencing_token=token,
+        )
+        return {
+            **generated,
+            "status": "prelaunch-blocked",
+            "attempt_consumed": False,
+        }
     try:
         execution_ref = generated["artifacts"]["execution_report"]
         execution_id = "execution-" + content_sha256({

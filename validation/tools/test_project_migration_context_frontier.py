@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 from pathlib import Path, PurePosixPath
 import tempfile
@@ -7,6 +8,16 @@ import unittest
 
 from validation.tools._project_migration_harness.context_frontier import (
     materialize_scheduled_contexts,
+)
+from validation.tools._project_migration_harness.context_frontier_state import (
+    ContextFrontierProjection, build_initial_context_frontier,
+    context_frontier_schedule_binding,
+)
+from validation.tools._project_migration_harness.context_frontier_runtime import (
+    validate_request_context_materialization,
+)
+from validation.tools._project_migration_harness.artifacts import (
+    canonical_json_bytes, content_sha256,
 )
 from validation.tools._project_migration_harness.orchestrator import plan_project
 
@@ -45,7 +56,7 @@ class ProjectMigrationContextFrontierTests(unittest.TestCase):
         self.assertTrue(all(not path.exists() for path in page_paths))
 
         refs, materialization = materialize_scheduled_contexts(
-            {"ready": [{"assignment": assignment}]},
+            {"ready": [self.ready(plan, assignment)]},
             harness_root=self.harness,
             out_root=self.output,
             out_root_rel="target/frontier",
@@ -60,7 +71,7 @@ class ProjectMigrationContextFrontierTests(unittest.TestCase):
             receipt["write_policy"],
         )
         repeated_refs, repeated = materialize_scheduled_contexts(
-            {"ready": [{"assignment": assignment}]},
+            {"ready": [self.ready(plan, assignment)]},
             harness_root=self.harness,
             out_root=self.output,
             out_root_rel="target/frontier",
@@ -78,7 +89,7 @@ class ProjectMigrationContextFrontierTests(unittest.TestCase):
             for page in second["context"]["pages"]
         ]
         materialize_scheduled_contexts(
-            {"ready": [{"assignment": second}]},
+            {"ready": [self.ready(plan, second)]},
             harness_root=self.harness,
             out_root=self.output,
             out_root_rel="target/frontier",
@@ -98,7 +109,7 @@ class ProjectMigrationContextFrontierTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "SHA-256 drifted"):
             materialize_scheduled_contexts(
-                {"ready": [{"assignment": assignment}]},
+                {"ready": [self.ready(plan, assignment)]},
                 harness_root=self.harness,
                 out_root=self.output,
                 out_root_rel="target/frontier",
@@ -107,6 +118,62 @@ class ProjectMigrationContextFrontierTests(unittest.TestCase):
             not self.harness.joinpath(*PurePosixPath(page["path"]).parts).exists()
             for page in assignment["context"]["pages"]
         ))
+
+    def test_static_context_page_set_stays_bound_through_runtime(self) -> None:
+        plan = self.plan()
+        assignment = deepcopy(plan["portfolio"]["assignments"][0])
+        context = assignment["context"]
+        context.pop("retrieval", None)
+        catalog_path = self.harness.joinpath(
+            *PurePosixPath(context["catalog"]["path"]).parts
+        )
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        catalog["retrieval"] = None
+        catalog_bytes = canonical_json_bytes(catalog)
+        catalog_path.write_bytes(catalog_bytes)
+        context["catalog"] = {
+            **context["catalog"],
+            "sha256": content_sha256(catalog),
+            "size_bytes": len(catalog_bytes),
+        }
+        frontier = build_initial_context_frontier(
+            run_id=plan["run_id"], unit_id=assignment["unit_id"],
+            dag_sha256=plan["portfolio"]["dag_sha256"],
+            group_sha256=assignment["group_sha256"], context=context,
+            limits=plan["portfolio"]["limits"],
+        )
+        projection = ContextFrontierProjection(
+            frontier["initial_status"], 0, frontier["initial_head"],
+            frontier["initial_head_sha256"],
+        )
+        binding = context_frontier_schedule_binding(projection)
+        _refs, materialization = materialize_scheduled_contexts(
+            {"ready": [{"assignment": assignment, "context_frontier": binding}]},
+            harness_root=self.harness, out_root=self.output,
+            out_root_rel="target/frontier",
+        )
+        report = self.read_local(materialization)
+        self.assertEqual(
+            binding["materialized_page_set_sha256"],
+            report["groups"][0]["materialized_page_set_sha256"],
+        )
+        request = {
+            "worker_id": assignment["worker_id"],
+            "role": assignment["role"],
+            "group_id": assignment["group_id"],
+            "context": context,
+            "context_frontier": binding,
+            "assignment_binding": {
+                "assignment_sha256": content_sha256(assignment),
+            },
+            "context_materialization": {
+                **materialization,
+                "path": f"target/frontier/{materialization['path']}",
+            },
+        }
+        validate_request_context_materialization(
+            request, harness_root=self.harness,
+        )
 
     def test_partial_previous_materialization_fails_closed(self) -> None:
         plan = self.plan()
@@ -130,7 +197,7 @@ class ProjectMigrationContextFrontierTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "materialization is incomplete"):
             materialize_scheduled_contexts(
-                {"ready": [{"assignment": assignment}]},
+                {"ready": [self.ready(plan, assignment)]},
                 harness_root=self.harness,
                 out_root=self.output,
                 out_root_rel="target/frontier",
@@ -139,7 +206,7 @@ class ProjectMigrationContextFrontierTests(unittest.TestCase):
     def test_existing_page_drift_is_not_silently_repaired(self) -> None:
         plan = self.plan()
         assignment = plan["portfolio"]["assignments"][0]
-        schedule = {"ready": [{"assignment": assignment}]}
+        schedule = {"ready": [self.ready(plan, assignment)]}
         materialize_scheduled_contexts(
             schedule,
             harness_root=self.harness,
@@ -162,7 +229,7 @@ class ProjectMigrationContextFrontierTests(unittest.TestCase):
     def test_existing_group_index_drift_is_not_silently_accepted(self) -> None:
         plan = self.plan()
         assignment = plan["portfolio"]["assignments"][0]
-        schedule = {"ready": [{"assignment": assignment}]}
+        schedule = {"ready": [self.ready(plan, assignment)]}
         materialize_scheduled_contexts(
             schedule,
             harness_root=self.harness,
@@ -212,6 +279,21 @@ class ProjectMigrationContextFrontierTests(unittest.TestCase):
             (self.output / Path(*PurePosixPath(reference["path"]).parts))
             .read_text(encoding="utf-8")
         )
+
+    @staticmethod
+    def ready(plan: dict, assignment: dict) -> dict:
+        frontier = next(
+            item for item in plan["portfolio"]["context_frontiers"]
+            if item["unit_id"] == assignment["unit_id"]
+        )
+        projection = ContextFrontierProjection(
+            frontier["initial_status"], 0, frontier["initial_head"],
+            frontier["initial_head_sha256"],
+        )
+        return {
+            "assignment": assignment,
+            "context_frontier": context_frontier_schedule_binding(projection),
+        }
 
 
 if __name__ == "__main__":

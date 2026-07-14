@@ -13,6 +13,7 @@ from .ledger_schema import (
     atomic, connect_database, migrate_schema,
 )
 from .ledger_lease import LeaseLifecycleMixin
+from .ledger_frontier_gate import reject_split_lease_for_context_frontier
 from .ledger_context_frontier import (
     ContextFrontierLedgerMixin, insert_context_frontiers,
     prepare_portfolio_frontiers, verify_initial_context_frontiers,
@@ -135,6 +136,10 @@ class ProjectLedger(
             run = connection.execute("select status from project_runs where run_id=?", (run_id,)).fetchone()
             if not run or run["status"] != "active":
                 raise LedgerError("assignments require an active run")
+            if connection.execute(
+                "select 1 from context_frontiers where run_id=? limit 1", (run_id,),
+            ).fetchone():
+                raise LedgerError("portfolio-bound assignments are immutable")
             for item in assignments:
                 self._insert_assignment(connection, run_id, item, now)
 
@@ -223,6 +228,9 @@ class ProjectLedger(
             raise ValueError(f"unsupported worker role: {role}")
         assert_no_semantic_claims(metadata or {})
         with self.connect() as connection, atomic(connection):
+            reject_split_lease_for_context_frontier(
+                connection, run_id=run_id, unit_id=unit_id,
+            )
             self._require_fence(connection, run_id, unit_id, worker_id, fencing_token)
             assignment = connection.execute(
                 """select role,max_attempts from assignments where run_id=? and unit_id=?

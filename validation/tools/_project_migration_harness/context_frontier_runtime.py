@@ -7,6 +7,8 @@ from typing import Any
 
 from .artifacts import canonical_json_bytes, checked_relative_path
 from .orchestration_facts import read_artifact_reference
+from .context_frontier_binding import validate_context_against_frontier
+from .context_frontier_state import FRONTIER_READY
 
 
 def validate_request_context_materialization(
@@ -127,18 +129,27 @@ def _validate_group(
     if len(matches) != 1:
         raise ValueError("worker context materialization group binding drifted")
     group = matches[0]
+    frontier = validate_context_against_frontier(
+        request.get("context_frontier"), context,
+    )
+    if group.get("context_frontier") != frontier or frontier["status"] != FRONTIER_READY:
+        raise ValueError("worker context frontier ledger binding drifted")
     catalog = context.get("catalog")
-    retrieval = context.get("retrieval")
-    if not isinstance(catalog, Mapping) or not isinstance(retrieval, Mapping):
-        raise ValueError("worker context catalog or retrieval binding is invalid")
+    if not isinstance(catalog, Mapping):
+        raise ValueError("worker context catalog binding is invalid")
     if (
         group.get("catalog_sha256") != catalog.get("sha256")
-        or group.get("selection_receipt_sha256")
-        != retrieval.get("selection_receipt_sha256")
-        or group.get("materialized_page_set_sha256")
-        != retrieval.get("materialized_page_set_sha256")
+        or frontier.get("catalog") != catalog
     ):
-        raise ValueError("worker context materialization retrieval drifted")
+        raise ValueError("worker context materialization catalog drifted")
+    if any(
+        group.get(key) != frontier.get(key)
+        for key in (
+            "selection_receipt_sha256", "materialized_page_set_sha256",
+            "selection_materialization_sha256",
+        )
+    ):
+        raise ValueError("worker context materialization frontier output drifted")
     _validate_pages(group.get("pages"), context.get("pages"), prefix)
 
 

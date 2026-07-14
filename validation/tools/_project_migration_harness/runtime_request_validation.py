@@ -85,6 +85,15 @@ def _validate_request_fields(
         or binding.get("ledger_binding_sha256") != ledger_binding.get("binding_sha256")
     ):
         raise ValueError("worker request assignment binding drifted")
+    metadata = attempt.get("metadata")
+    if (
+        not isinstance(metadata, Mapping)
+        or request.get("context_frontier")
+        != metadata.get("launch_claim", {}).get("context_frontier")
+        or request.get("launch_claim") != metadata.get("launch_claim")
+        or request.get("schedule_sha256") != metadata.get("schedule_sha256")
+    ):
+        raise ValueError("worker request context frontier launch binding drifted")
     execution = request["execution_binding"]
     execution_payload = {
         key: value for key, value in execution.items() if key != "binding_sha256"
