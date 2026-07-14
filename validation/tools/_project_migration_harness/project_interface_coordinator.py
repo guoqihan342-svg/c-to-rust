@@ -1,11 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .artifacts import content_sha256
 from .project_interface_diagnostics import collect_project_interface_diagnostics
 from .rust_project_ir_validation import validate_rust_project_ir
+from .project_verifier_receipt import (
+    PROJECT_DIAGNOSTIC_INTAKES_FIELD,
+    PROJECT_DIAGNOSTIC_INTAKE_SET_SHA256_FIELD,
+    PROJECT_VERIFIER_DIAGNOSTIC_SHA256S_FIELD,
+    normalize_verifier_receipt_inputs,
+)
 
 
 COORDINATOR_ID = "deterministic-project-interface-coordinator-v1"
@@ -19,12 +25,19 @@ MAX_DIAGNOSTICS = 256
 def coordinate_project_interfaces(
     rust_project_ir: Mapping[str, Any], *, max_repairs: int = DEFAULT_MAX_REPAIRS,
     max_attempts_per_item: int = 3,
+    project_diagnostic_intakes: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """Diagnose project assembly conflicts without generating or accepting Rust."""
     validate_rust_project_ir(rust_project_ir)
     _validate_bounds(max_repairs, max_attempts_per_item)
+    verifier = normalize_verifier_receipt_inputs(
+        rust_project_ir, project_diagnostic_intakes,
+    )
     diagnostics = collect_project_interface_diagnostics(rust_project_ir)
+    diagnostics.extend(verifier.diagnostics)
+    verifier_hashes = set(verifier.diagnostic_sha256s)
     diagnostics.sort(key=lambda item: (
+        0 if item["diagnostic_sha256"] in verifier_hashes else 1,
         item["code"], item["entity_ids"], item["affected_module_ids"],
     ))
     diagnostic_overflow = max(0, len(diagnostics) - MAX_DIAGNOSTICS)
@@ -34,7 +47,7 @@ def coordinate_project_interfaces(
         for item in published[:max_repairs]
     ]
     queue = {
-        "schema_version": 1,
+        "schema_version": 2 if verifier.references else 1,
         "scope": "project",
         "rust_project_ir_sha256": rust_project_ir["ir_sha256"],
         "rust_project_interface_sha256": rust_project_ir["interface_sha256"],
@@ -50,11 +63,15 @@ def coordinate_project_interfaces(
             "fixture_specific_shim_allowed": False,
         },
     }
+    if verifier.intake_set_sha256 is not None:
+        queue[PROJECT_DIAGNOSTIC_INTAKE_SET_SHA256_FIELD] = (
+            verifier.intake_set_sha256
+        )
     queue[PROJECT_REPAIR_QUEUE_SHA256_FIELD] = content_sha256(
         project_repair_queue_projection(queue)
     )
     receipt = {
-        "schema_version": 1,
+        "schema_version": 2 if verifier.references else 1,
         "coordinator": COORDINATOR_ID,
         "rust_project_ir_sha256": rust_project_ir["ir_sha256"],
         "rust_project_interface_sha256": rust_project_ir["interface_sha256"],
@@ -63,12 +80,23 @@ def coordinate_project_interfaces(
         "diagnostic_overflow_count": diagnostic_overflow,
         "project_repair_queue": queue,
         "claim_boundary": {
-            "artifact_role": "project-interface-diagnostic",
+            "artifact_role": (
+                "project-interface-and-verifier-diagnostic"
+                if verifier.references else "project-interface-diagnostic"
+            ),
             "semantic_gate": False,
             "semantic_pass": False,
             "translation_coverage_numerator": 0,
         },
     }
+    if verifier.intake_set_sha256 is not None:
+        receipt[PROJECT_DIAGNOSTIC_INTAKES_FIELD] = verifier.references
+        receipt[PROJECT_DIAGNOSTIC_INTAKE_SET_SHA256_FIELD] = (
+            verifier.intake_set_sha256
+        )
+        receipt[PROJECT_VERIFIER_DIAGNOSTIC_SHA256S_FIELD] = (
+            verifier.diagnostic_sha256s
+        )
     receipt[COORDINATOR_RECEIPT_SHA256_FIELD] = content_sha256(
         coordinator_receipt_projection(receipt)
     )

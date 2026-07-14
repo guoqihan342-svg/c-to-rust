@@ -61,6 +61,15 @@ def prepare_project_interfaces(
         out_root_rel=out_root_rel,
         dispatch_permit=repair_dispatch_permit,
     )
+    if action.get("status") == "pending-reverification":
+        candidate_sha = str(action.get("candidate_ir_sha256", ""))
+        candidate_ir, candidate_reference = load_authoritative_project_ir(
+            candidate_sha, harness_root=harness_root, out_root=out_root,
+            out_root_rel=out_root_rel,
+        )
+        if not candidate_cohort_matches(initial, candidate_ir):
+            raise ValueError("project repair candidate changed its candidate cohort")
+        selected, reference = candidate_ir, candidate_reference
     return ProjectInterfacePreparation(selected, reference, action)
 
 

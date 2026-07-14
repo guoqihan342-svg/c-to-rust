@@ -65,6 +65,15 @@ def require_project_interface_ready(connection: Any, run_id: str) -> None:
     ).fetchone()
     if running is None or int(running[0]) != 0:
         raise LedgerError("project completion rejects running project repair attempts")
+    unsettled = connection.execute(
+        """select count(*) from project_repair_items
+           where run_id=? and status not in ('resolved','cancelled')""",
+        (run_id,),
+    ).fetchone()
+    if unsettled is None or int(unsettled[0]) != 0:
+        raise LedgerError(
+            "project completion rejects unsettled historical repair obligations"
+        )
 
 
 __all__ = ["require_project_interface_ready", "require_quiescent_last_good_run"]

@@ -106,6 +106,17 @@ def load_latest_project_diagnostic_intakes(
 
 
 class ProjectDiagnosticLedgerMixin:
+    def bound_project_diagnostic_intakes(
+        self, *, run_id: str, references: Sequence[Mapping[str, Any]],
+        rust_project_ir_sha256: str | None = None,
+    ) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            return load_bound_project_diagnostic_intakes(
+                connection, database_path=self.path, run_id=run_id,
+                references=references,
+                rust_project_ir_sha256=rust_project_ir_sha256,
+            )
+
     def latest_project_diagnostic_intakes(
         self, *, run_id: str, candidate_set_sha256: str,
         rust_project_ir_sha256: str, project_input_sha256: str,

@@ -19,7 +19,7 @@
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
 | 当前翻译任务 | P0-A19 项目级编排优先；P0-A18c/P0-A10 保留为有限回归与 held-out 验收 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
-| P0-A19 有限门禁 | Windows 288 项通过（2 项条件跳过）；WSL 288/288 |
+| P0-A19 有限门禁 | Windows 386 项（2 项平台条件跳过）；WSL 386/386 |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
 
@@ -77,7 +77,11 @@ Cargo generation 现在强制经过 canonical RustProjectIR。wave-provisional �
 
 project repair queue 已接入 schema v7 TransitionAuthority ledger 和专属 AI repairer。CompletionCoordinator 首次只观察最新 receipt，不创建 attempt；隔离的零调用 preflight 通过后，host-issued permit 会绑定精确 receipt/queue/item 状态、模型、agent 和运行时输入，再允许一次 resume 最多启动一个 provider call。provider 完整结果先按哈希写入 ledger，摄取阶段崩溃时下一次 resume 只重开证据并摄取，不再调用模型；证据不全或结果未知仍进入人工对账。attempt 预算沿稳定 diagnostic lineage 跨 receipt epoch 单调继承，另有每 run 64 次 provider call 和 65 个 receipt epoch 的硬上限。
 
-schema v7 还增加了不可变 project diagnostic intake：host 会重开当前 candidate set、managed generation 和 canonical RustProjectIR，只接纳沙箱内 Cargo 实际执行后产生的结构化 rustc `error`。能唯一映射到 `src/unit_<candidate-sha>.rs` 的错误仍进入 unit repair；带项目内位置、无法归到 unit 的 `E####` 编译错误则绑定 cohort、IR/interface、generation input、raw observation 和 verifier receipt 后写入 ledger。warning、generic Cargo failure、诊断溢出、环境/沙箱阻塞和旧 unit 路径均为零 intake、零 AI 调用。该 intake 尚未进入 receipt v2/同一 project repair queue，link/init/feature/ABI 也仍需专属 verifier，因此当前只完成可信采集边界，不能声明 project diagnostic repair 已闭环。
+schema v7 还增加了不可变 project diagnostic intake：host 会重开当前 candidate set、managed generation 和 canonical RustProjectIR，只接纳沙箱内 Cargo 实际执行后产生的结构化 rustc `error`。能唯一映射到 `src/unit_<candidate-sha>.rs` 的错误仍进入 unit repair；带项目内位置、无法归到 unit 的 `E####` 编译错误则绑定 cohort、IR/interface、generation input、raw observation 和 verifier receipt。warning、generic Cargo failure、诊断溢出、环境/沙箱阻塞和旧 unit 路径均为零 intake、零 AI 调用。
+
+已验证 intake 现在进入兼容 schema v7 数据库的 coordinator receipt v2，并与静态接口诊断共用 project repair queue；verifier-origin 项优先调度。request 物化和 provider 启动前都会重开内容寻址 intake、当前 candidate set、原始 managed generation、RustProjectIR/interface 和 verifier receipt。AI 只提交有界 IR 操作，host 重建候选后对外状态只能是 `pending-reverification`；内部 `candidate-ready` 只是等待 host 复验的 ledger 状态，普通静态 receipt 和低层 resolve API 均不能关闭外部诊断。CompletionCoordinator 还会拒绝任何未 `resolved/cancelled` 的历史项目 repair 义务。
+
+只有在新 managed generation 上由同一 host gate 产生更高 epoch 的新 pass，才能写出内容寻址 revalidation receipt。结算事务会同时重开 source intake、当前 cohort、原始与新 project input、ledger gate record、raw observation/evidence、候选 IR/interface 和当前 generation，然后注册 successor receipt、resolve 目标并取消已被 successor 取代的同队列项；复验失败则回滚旧候选、登记新诊断并继承 attempt 预算。该闭环目前只覆盖 project compile diagnostic；link/init/feature/ABI 专属 verifier、A19e7 独立进程 capability 和完整 project-final 语义验收仍未完成，AI 候选不会增加 translator numerator。
 
 当前正向完成链仍未闭合：CLI 已有 host-owned integration/Cargo adapter 和失败诊断回投，但 candidate 的 oracle/negative/unsafe-alias/ABI/final 正向 runner 尚未全部接通；A19e7 独立 verifier 进程、capability channel、一次性 nonce 和 raw-output 引用也尚未落地。因此当前 in-process receipt 只能证明 canonical 绑定与漂移拒绝，不能声明调用方不可伪造。真实 held-out 模式只重开只读 SQLite，复验 AI provider evidence、每个 candidate gate、不可变 candidate set、项目 final bundle 和原始 repository/build 绑定；任何自报 `semantic_gate=true` 的 JSON 都不能计入成功。
 
@@ -136,13 +140,19 @@ flowchart TB
     PERMIT --> RAI["At most one project-repair call per resume"]
     RAI --> RINGEST["Host rebuild + re-coordinate / ingest-only recovery"]
     RINGEST --> LEDGER
-    RINGEST --> RUSTIR
+    RINGEST -->|"static repair"| RUSTIR
+    RINGEST -->|"verifier-origin candidate"| PENDING["pending-reverification"]
     RUSTIR -->|"candidate-ready"| CARGO["Immutable IR-bound Cargo generation"]
+    PENDING --> CARGO
     CARGO --> SANDBOX["Networkless bubblewrap check/test"]
     SANDBOX -->|"structured project compile error"| INTAKE["Immutable project diagnostic intake"]
     INTAKE --> LEDGER
-    INTAKE -->|"queue admission pending"| BLOCKED["Blocked with evidence"]
-    SANDBOX --> PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
+    INTAKE --> V2["Receipt v2 + shared project repair queue"]
+    V2 --> RPRE
+    SANDBOX -->|"same gate passes on new generation"| SETTLE["Atomic revalidation settlement"]
+    SETTLE --> LEDGER
+    SETTLE --> RUSTIR
+    SANDBOX -->|"no pending repair"| PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
     PROJECT -->|"same candidate set passed"| COMPLETE["Completed project evidence"]
     PROJECT -->|"unclosed verifier or failed gate"| BLOCKED
 ```
@@ -163,13 +173,17 @@ flowchart LR
     I --> J["10. RustProjectIR + interface receipt"]
     J -->|"repair-required"| R["11. Preflight + state-bound permit + one AI repair"]
     R --> S["12. Host rebuild / re-coordinate or ingest-only resume"]
-    S --> J
-    J -->|"candidate-ready"| K["13. Cargo generation"]
-    K --> L["14. Sandboxed build/test"]
-    L -->|"project compile error"| P["15. Bound diagnostic intake"]
-    P -->|"queue admission pending"| Q["Blocked with evidence"]
-    L --> M["16. Project semantic and safety gates"]
-    M --> N["17. Candidate-set completion"]
+    S -->|"static repair"| J
+    S -->|"verifier-origin"| T["13. pending-reverification"]
+    J -->|"candidate-ready"| K["14. Cargo generation"]
+    T --> K
+    K --> L["15. Sandboxed build/test"]
+    L -->|"project compile error"| P["16. Bound intake + receipt v2 queue"]
+    P --> R
+    L -->|"fresh same-gate pass"| U["17. Atomic revalidation settlement"]
+    U --> J
+    L --> M["18. Project semantic and safety gates"]
+    M --> N["19. Candidate-set completion"]
 ```
 
 每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已处理已知 runtime/gate-authority 审查项，并补齐 Ninja/静态归档、toolchain、CLI 与只读 held-out 证据约束；当前开放项仍是 Meson/configure 构建事实、正向 candidate verifier、可用比赛等价沙箱和真实 held-out build/oracle。该流程图是实现合同，不是整项目成功声明。

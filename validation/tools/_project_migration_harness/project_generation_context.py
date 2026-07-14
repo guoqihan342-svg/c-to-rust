@@ -16,6 +16,13 @@ from .sandbox_execution_schema import is_sha256
 MAX_RUST_PROJECT_IR_BYTES = 2 * 1024 * 1024
 
 
+def managed_project_root(out_root: Path) -> Path:
+    root = Path(out_root)
+    if not root.name or root.name in {".", ".."}:
+        raise ValueError("managed project out root is invalid")
+    return root.parent / f"{root.name}-managed-project"
+
+
 def load_managed_project_context(
     project_root: Path, candidate_members: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
@@ -76,4 +83,4 @@ def _require_candidate_cohort(
         raise ValueError("managed RustProjectIR candidate cohort drifted")
 
 
-__all__ = ["load_managed_project_context"]
+__all__ = ["load_managed_project_context", "managed_project_root"]

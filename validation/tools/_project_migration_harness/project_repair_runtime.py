@@ -15,10 +15,14 @@ from .opencode_environment import isolated_opencode_environment
 from .opencode_project_repair_worker import execute_opencode_project_repair_worker
 from .project_repair_ingest import ingest_project_repair_response
 from .project_repair_paths import require_bound_project_repair_out_root
+from .project_repair_generation_authority import (
+    require_project_repair_source_generation,
+)
 from .project_repair_request_reopener import (
     reopen_active_project_repair_request,
     terminal_project_repair_runtime_replay,
 )
+from .project_repair_worker_request import read_bound_rust_project_ir
 
 
 class _ProjectRepairLaunchAlreadyClaimed(Exception):
@@ -52,6 +56,11 @@ def run_and_ingest_opencode_project_repair(
     attempt_id = str(binding["attempt_id"])
     fencing_token = int(binding["fencing_token"])
     worker_id = str(request["worker_id"])
+    generation_block = _recover_generation_drift(
+        request, ledger=ledger, harness_root=harness_root, out_root=out_root,
+    )
+    if generation_block is not None:
+        return generation_block
     try:
         with isolated_opencode_environment(
             harness_root=harness_root, runtime_roots=request["runtime_roots"],
@@ -250,6 +259,42 @@ def _recover_unknown(
         **payload, "status": recovered.current.status,
         "failure": {**reference, "path": f"{out_root_rel}/{reference['path']}"},
     }
+
+
+def _recover_generation_drift(
+    request: Mapping[str, Any], *, ledger: ProjectLedger,
+    harness_root: Path, out_root: Path,
+) -> dict[str, Any] | None:
+    try:
+        rust_project_ir = read_bound_rust_project_ir(
+            harness_root, request["base_rust_project_ir"],
+        )
+        require_project_repair_source_generation(
+            ledger=ledger, run_id=str(request["run_id"]),
+            queue_sha256=str(request["project_repair_queue_sha256"]),
+            rust_project_ir=rust_project_ir, out_root=out_root,
+        )
+        return None
+    except (LedgerError, OSError, TypeError, ValueError):
+        binding = request["execution_binding"]
+        evidence = content_sha256({
+            "kind": "project-repair-generation-drift",
+            "attempt_id": binding["attempt_id"], "error": "source_generation_binding_rejected",
+        })
+        recovered = ledger.recover_project_repair_attempt(
+            attempt_id=str(binding["attempt_id"]),
+            command_id=f"project-repair-generation-recover-{evidence[:24]}",
+            expected_version=int(binding["fencing_token"]),
+            worker_id=str(request["worker_id"]), result_known=False,
+            evidence_sha256=evidence,
+        )
+        return {
+            "schema_version": 1, "status": recovered.current.status,
+            "stage": "project-repair-source-generation-drift",
+            "run_id": request["run_id"], "repair_id": request["repair_id"],
+            "attempt_id": binding["attempt_id"], "attempt_consumed": True,
+            "model_launched": False, "semantic_gate": False,
+        }
 
 
 __all__ = ["run_and_ingest_opencode_project_repair"]

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-from .artifacts import canonical_json_bytes, content_sha256
+from .artifacts import canonical_json_bytes, checked_relative_path, content_sha256
+from .project_diagnostic_contract import PROJECT_DIAGNOSTIC_GATE_FAMILIES
 from .project_interface_contract import validate_coordinator_receipt
 from .project_interface_coordinator import (
     COORDINATOR_RECEIPT_SHA256_FIELD, PROJECT_REPAIR_QUEUE_SHA256_FIELD,
@@ -13,6 +14,7 @@ from .project_interface_coordinator import (
 )
 from .runtime_security import assert_model_payload_safe
 from .rust_project_ir_validation import validate_rust_project_ir
+from .project_verifier_receipt import verifier_diagnostic_detail
 
 
 MAX_PROJECT_REPAIR_CONTEXT_BYTES = 131_072
@@ -59,6 +61,7 @@ _MODEL_FIELDS = {
 def build_project_repair_context(
     rust_project_ir: Mapping[str, Any], receipt: Mapping[str, Any], *,
     receipt_epoch: int, repair_id: str,
+    project_diagnostic_intakes: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     validate_rust_project_ir(rust_project_ir)
     value = validate_coordinator_receipt(receipt)
@@ -68,6 +71,7 @@ def build_project_repair_context(
     expected = coordinate_project_interfaces(
         rust_project_ir, max_repairs=queue["max_items"],
         max_attempts_per_item=queue["max_attempts_per_item"],
+        project_diagnostic_intakes=project_diagnostic_intakes,
     )
     if expected != value:
         raise ValueError("project repair context receipt is not recomputable")
@@ -80,6 +84,9 @@ def build_project_repair_context(
     diagnostic = next(
         entry for entry in value["diagnostics"]
         if entry["diagnostic_sha256"] == item["diagnostic_sha256"]
+    )
+    verifier_detail = verifier_diagnostic_detail(
+        project_diagnostic_intakes, item["diagnostic_sha256"],
     )
     affected = set(item["affected_module_ids"])
     visible: dict[str, list[dict[str, Any]]] = {}
@@ -96,7 +103,7 @@ def build_project_repair_context(
     if record_count > MAX_PROJECT_REPAIR_RECORDS:
         raise ValueError("project repair context record bound is exceeded")
     payload = {
-        "schema_version": 1,
+        "schema_version": 2 if verifier_detail is not None else 1,
         "authority": "host-project-repair-context-builder",
         "receipt_epoch": receipt_epoch,
         "coordinator_receipt_sha256": value[COORDINATOR_RECEIPT_SHA256_FIELD],
@@ -109,6 +116,7 @@ def build_project_repair_context(
             "diagnostic_sha256": diagnostic["diagnostic_sha256"],
             "entity_ids": list(diagnostic["entity_ids"]),
             "affected_module_ids": list(diagnostic["affected_module_ids"]),
+            **(_verifier_model_detail(verifier_detail) if verifier_detail else {}),
         },
         "repair_item": dict(item),
         "crate": _model_record(rust_project_ir["crate"]),
@@ -145,7 +153,7 @@ def validate_project_repair_context(value: Any) -> dict[str, Any]:
     if not isinstance(claimed, str) or content_sha256(projection) != claimed:
         raise ValueError("project repair context SHA drifted")
     if (
-        result.get("schema_version") != 1
+        result.get("schema_version") not in {1, 2}
         or result.get("authority") != "host-project-repair-context-builder"
         or set(result.get("visible_records", {})) != set(_SECTIONS)
         or set(result.get("withheld_record_counts", {})) != set(_SECTIONS)
@@ -191,9 +199,7 @@ def validate_project_repair_context(value: Any) -> dict[str, Any]:
         or not isinstance(result.get("repair_id"), str)
         or not result["repair_id"].startswith("project-repair-")
         or not isinstance(result.get("diagnostic"), dict)
-        or set(result["diagnostic"]) != {
-            "code", "diagnostic_sha256", "entity_ids", "affected_module_ids",
-        }
+        or set(result["diagnostic"]) != _diagnostic_keys(result["schema_version"])
         or not isinstance(result.get("repair_item"), dict)
         or result["repair_item"].get("repair_id") != result["repair_id"]
         or result["repair_item"].get("assigned_unit_id") is not None
@@ -204,6 +210,7 @@ def validate_project_repair_context(value: Any) -> dict[str, Any]:
         }
     ):
         raise ValueError("project repair context identity binding is invalid")
+    _validate_verifier_diagnostic(result["diagnostic"], result["schema_version"])
     if sum(len(records[name]) for name in _SECTIONS) > MAX_PROJECT_REPAIR_RECORDS:
         raise ValueError("project repair context record bound is exceeded")
     if len(canonical_json_bytes(result)) > MAX_PROJECT_REPAIR_CONTEXT_BYTES:
@@ -233,6 +240,54 @@ def _model_record(value: Mapping[str, Any]) -> dict[str, Any]:
         key: json.loads(json.dumps(item, ensure_ascii=True))
         for key, item in value.items() if key != "evidence"
     }
+
+
+def _verifier_model_detail(value: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "origin": "host-project-verifier",
+        "family": value["family"], "stage": value["stage"],
+        "message": value["message"], "location": dict(value["location"]),
+    }
+
+
+def _diagnostic_keys(schema_version: int) -> set[str]:
+    base = {"code", "diagnostic_sha256", "entity_ids", "affected_module_ids"}
+    if schema_version == 2:
+        return base | {"origin", "family", "stage", "message", "location"}
+    return base
+
+
+def _validate_verifier_diagnostic(value: Mapping[str, Any], schema_version: int) -> None:
+    if schema_version == 1:
+        return
+    stage = value.get("stage")
+    location = value.get("location")
+    message = value.get("message")
+    if (
+        value.get("origin") != "host-project-verifier"
+        or not isinstance(stage, str)
+        or value.get("family") not in PROJECT_DIAGNOSTIC_GATE_FAMILIES.get(
+            stage, frozenset()
+        )
+        or not isinstance(message, str) or not message or len(message) > 512
+        or not isinstance(location, dict)
+        or set(location) != {"file", "line", "column"}
+    ):
+        raise ValueError("project verifier diagnostic context is invalid")
+    file_value = location["file"]
+    if file_value is not None and (
+        not isinstance(file_value, str)
+        or checked_relative_path(file_value) != file_value
+    ):
+        raise ValueError("project verifier diagnostic location is invalid")
+    numbers = (location["line"], location["column"])
+    if any(
+        value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 1
+        )
+        for value in numbers
+    ) or (file_value is None and any(value is not None for value in numbers)):
+        raise ValueError("project verifier diagnostic location is invalid")
 
 
 __all__ = [

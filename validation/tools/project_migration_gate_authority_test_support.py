@@ -79,7 +79,7 @@ class ProjectMigrationGateAuthorityCase(
         )
         self.candidate_id, self.candidate_sha = self.make_candidate("candidate-one")
 
-    def register_project_interface_ready(self) -> None:
+    def register_project_interface_ready(self) -> dict:
         with self.ledger.connect() as connection:
             contract, manifest = load_migration_contract(
                 self.ledger.path, connection, "run",
@@ -100,6 +100,7 @@ class ProjectMigrationGateAuthorityCase(
         self.ledger.register_project_interface_receipt(
             run_id="run", receipt=receipt, rust_project_ir=rust_project_ir,
         )
+        return rust_project_ir
 
 
 __all__ = ["ProjectMigrationGateAuthorityCase", "digest"]

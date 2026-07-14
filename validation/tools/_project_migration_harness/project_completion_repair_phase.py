@@ -121,7 +121,7 @@ def _from_runtime(
     status = str(runtime.get("status", "blocked"))
     if status in {
         "resolved", "retry-ready", "waiting", "ingest-required",
-        "terminal-replay",
+        "terminal-replay", "candidate-ready", "pending-reverification",
     }:
         coordinator_status = "waiting"
     else:
@@ -136,6 +136,8 @@ def _from_runtime(
         stage = "project-repair-provider-result-recorded"
     elif status == "terminal-replay":
         stage = "project-repair-state-advanced"
+    elif status in {"candidate-ready", "pending-reverification"}:
+        stage = "project-repair-pending-reverification"
     elif status == "exhausted":
         stage = "project-repair-attempts-exhausted"
     elif status == "manual-reconcile":

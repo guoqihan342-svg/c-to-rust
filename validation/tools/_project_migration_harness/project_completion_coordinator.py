@@ -8,10 +8,8 @@ from .candidate_compile_verifier import verify_candidate_compile
 from .candidate_final_verifier import verify_candidate_final
 from .candidate_semantic_evidence import revalidate_candidate_semantic_verdict
 from .candidate_semantic_runners import (
-    run_abi_layout_candidate,
-    run_negative_candidate,
-    run_oracle_replay_diff_candidate,
-    run_unsafe_alias_candidate,
+    run_abi_layout_candidate, run_negative_candidate,
+    run_oracle_replay_diff_candidate, run_unsafe_alias_candidate,
 )
 from .controller_project_gates import complete_verified_project
 from .gate_authority import CANDIDATE_REQUIRED_GATES
@@ -21,16 +19,16 @@ from .ledger import LedgerError, ProjectLedger
 from .ledger_candidate_state import latest_candidate_records
 from .ledger_run_contract import load_migration_contract
 from .project_cargo_verifier import verify_project_cargo
+from .project_generation_context import managed_project_root
 from .project_completion_repair_phase import execute_project_repair_completion_step
+from .project_completion_verifier_phase import advance_project_verifier_phase
 from .project_host_gates import _record_host_project_final
 from .project_integration import integrate_verified_project
 from .project_integration_verifier import verify_integrated_project
 
-
 SEMANTIC_RUNNERS = (
     "oracle-replay-diff", "negative", "unsafe-alias", "abi-layout",
 )
-
 
 def resume_project_completion(
     *, ledger: ProjectLedger, run_id: str, harness_root: Path,
@@ -173,6 +171,16 @@ def resume_project_completion(
         runtime_root=paths["runtime_root"], out_root=paths["out_root"],
         out_root_rel=paths["out_root_rel"], timeout_seconds=timeout_seconds,
     )
+    verifier_repair = advance_project_verifier_phase(
+        ledger=ledger, run_id=run_id, harness_root=harness_root,
+        integration=integration, cargo_result=cargo,
+    )
+    if verifier_repair is not None:
+        return _result(
+            paths, run_id, str(verifier_repair["status"]),
+            str(verifier_repair["stage"]), list(verifier_repair["blockers"]),
+            candidate_set, project_repair=verifier_repair["project_repair"],
+        )
     if cargo.get("status") != "passed":
         return _result(
             paths, run_id, str(cargo.get("status", "blocked")),
@@ -264,7 +272,7 @@ def _completion_paths(ledger: ProjectLedger, harness_root: Path) -> dict[str, An
         "out_root_rel": out_rel,
         "quarantine_root": out_root / "completion" / "quarantine",
         "runtime_root": out_root / "completion" / "runtime",
-        "project_root": out_root / "completion" / "project",
+        "project_root": managed_project_root(out_root),
     }
 
 

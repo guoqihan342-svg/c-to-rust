@@ -117,9 +117,10 @@ def resume_latest_project_repair(
             )
         if projection.status == "candidate-ready":
             return _item_result(
-                run_id, "blocked", "project-repair-manual-reconcile",
+                run_id, "pending-reverification",
+                "project-repair-candidate-pending-reverification",
                 repair_id, projection, common,
-                blockers=["candidate-lacks-atomic-host-recoordination"],
+                candidate_ir_sha256=projection.candidate_ir_sha256,
             )
         return _item_result(
             run_id, "blocked", "project-repair-terminal-blocker",

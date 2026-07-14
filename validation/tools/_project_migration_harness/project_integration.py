@@ -69,7 +69,9 @@ def _integrate_verified_project(
     rust_project_ir = preparation.rust_project_ir
     ir_reference = preparation.rust_project_ir_reference
     action = preparation.coordinator_action
-    if action["status"] != "ready-for-project-final":
+    if action["status"] not in {
+        "ready-for-project-final", "pending-reverification",
+    }:
         report = {
             "schema_version": 1, "status": action["status"],
             "stage": "project-interface-repair", "run_id": run_id,
@@ -104,6 +106,8 @@ def _integrate_verified_project(
         "semantic_gate": False,
         "proof_boundary": "validated RustProjectIR Cargo reconstruction only; project gates not yet run",
     }
+    if action["status"] == "pending-reverification":
+        report["project_repair_verification"] = action
     write_json_artifact(candidate_root, "integration/latest-integration.json", report)
     return report
 

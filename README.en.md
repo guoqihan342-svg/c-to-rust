@@ -15,7 +15,7 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | Latest development stage | P0-A19: unfamiliar-repository build closure, verification authority, and real held-out contract closure |
 | Active translator task | P0-A19 project orchestration first; P0-A18c/P0-A10 remain finite regression and held-out acceptance tracks |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
-| P0-A19 finite gate | 134 tests pass on Windows with one symlink-permission conditional skip; 134/134 pass on WSL |
+| P0-A19 finite gate | 386 Windows cases with two platform-conditional skips; 386/386 pass on WSL |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | Superpowers specs/plans, canonical roadmap, and harness evidence gates |
 
@@ -65,7 +65,11 @@ Cargo generation is forced through canonical RustProjectIR. Wave-provisional gen
 
 A19d3 is still open. RustProjectIR and generation manifests remain `interface_completeness.status=partial`, automatically derived signatures remain unresolved, and the authoritative generator currently supports flat library modules only. The schema v7 TransitionAuthority ledger and the dedicated AI repairer now persist and execute the project repair queue. Completion first observes the latest receipt without creating an attempt. After isolated zero-call preflight, a host-issued permit binds the exact receipt, queue, item state, model, agent, and runtime input, and one resume can launch at most one provider call. Complete provider results are hash-bound before ingest; after an ingest crash, the next resume reopens all evidence and performs ingest only. Incomplete or unknown results require manual reconciliation. Diagnostic-lineage budgets survive receipt epochs, with hard per-run caps of 64 provider calls and 65 receipt epochs.
 
-Schema v7 also adds an immutable project-diagnostic intake. The host reopens the current candidate set, managed generation, and canonical RustProjectIR, then admits only structured rustc `error` diagnostics from a proven sandboxed Cargo execution. Errors uniquely mapped to `src/unit_<candidate-sha>.rs` remain unit repairs. An `E####` compile error with a repository-relative project location and no unique unit binds the cohort, IR/interface, generation input, raw observation, and verifier receipt before entering the ledger. Warnings, generic Cargo failures, diagnostic overflow, environment or sandbox blockers, and stale unit paths produce zero intake and zero AI calls. Intake is not yet attached to a v2 receipt or the shared project-repair queue, and dedicated link/init/feature/ABI verifiers remain open, so this is a trusted collection boundary rather than a completed diagnostic-repair loop.
+Schema v7 also adds an immutable project-diagnostic intake. The host reopens the current candidate set, managed generation, and canonical RustProjectIR, then admits only structured rustc `error` diagnostics from a proven sandboxed Cargo execution. Errors uniquely mapped to `src/unit_<candidate-sha>.rs` remain unit repairs. An `E####` compile error with a repository-relative project location and no unique unit binds the cohort, IR/interface, generation input, raw observation, and verifier receipt. Warnings, generic Cargo failures, diagnostic overflow, environment or sandbox blockers, and stale unit paths produce zero intake and zero AI calls.
+
+Validated intakes now enter a coordinator receipt v2 that remains compatible with the schema v7 database and shares the project-repair queue with static interface diagnostics; verifier-origin items dispatch first. Request materialization and provider launch reopen the content-addressed intake, current candidate set, original managed generation, RustProjectIR/interface, and verifier receipt. AI submits only bounded IR operations. After host reconstruction, the public state can be only `pending-reverification`; internal `candidate-ready` means that the ledger is awaiting host revalidation, and neither an ordinary static receipt nor a low-level resolve API can close the external diagnostic. CompletionCoordinator also rejects every historical project-repair obligation not in `resolved/cancelled`.
+
+Closure requires a higher-epoch pass from the same host gate on a new managed generation and a content-addressed revalidation receipt. One settlement transaction reopens the source intake, current cohort, old and new project inputs, ledger gate record, raw observation/evidence, candidate IR/interface, and current generation before it registers the successor receipt, resolves the target, and cancels queue siblings superseded by that successor. A failed recheck rolls back the old candidate, records the new diagnostics, and inherits the attempt budget. This loop currently covers only project compile diagnostics. Dedicated link/init/feature/ABI verifiers, the A19e7 process capability boundary, and complete project-final semantic acceptance remain open; AI candidates add nothing to the translator numerator.
 
 The positive completion path remains open. Host-owned integration/Cargo adapters and compile-failure routing exist, but positive candidate compile/oracle/negative/unsafe-alias/ABI runners are not all connected. `record-candidate-gate` therefore cannot grant a pass, and test-constructed ledger rows do not prove whole-project success. Real held-out mode reopens SQLite read-only and revalidates AI provider evidence, every candidate gate, the immutable candidate set, the project final bundle, and original repository/build bindings. A self-reported JSON `semantic_gate=true` cannot contribute success.
 
@@ -124,13 +128,19 @@ flowchart TB
     PERMIT --> RAI["At most one project-repair call per resume"]
     RAI --> RINGEST["Host rebuild + re-coordinate / ingest-only recovery"]
     RINGEST --> LEDGER
-    RINGEST --> RUSTIR
+    RINGEST -->|"static repair"| RUSTIR
+    RINGEST -->|"verifier-origin candidate"| PENDING["pending-reverification"]
     RUSTIR -->|"candidate-ready"| CARGO["Immutable IR-bound Cargo generation"]
+    PENDING --> CARGO
     CARGO --> SANDBOX["Networkless bubblewrap check/test"]
     SANDBOX -->|"structured project compile error"| INTAKE["Immutable project diagnostic intake"]
     INTAKE --> LEDGER
-    INTAKE -->|"queue admission pending"| BLOCKED["Blocked with evidence"]
-    SANDBOX --> PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
+    INTAKE --> V2["Receipt v2 + shared project repair queue"]
+    V2 --> RPRE
+    SANDBOX -->|"same gate passes on new generation"| SETTLE["Atomic revalidation settlement"]
+    SETTLE --> LEDGER
+    SETTLE --> RUSTIR
+    SANDBOX -->|"no pending repair"| PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
     PROJECT -->|"same candidate set passed"| COMPLETE["Completed project evidence"]
     PROJECT -->|"unclosed verifier or failed gate"| BLOCKED
 ```
@@ -151,11 +161,17 @@ flowchart LR
     I --> J["10. RustProjectIR + interface receipt"]
     J -->|"repair-required"| R["11. Preflight + state-bound permit + one AI repair"]
     R --> S["12. Host rebuild / re-coordinate or ingest-only resume"]
-    S --> J
-    J -->|"candidate-ready"| K["13. Cargo generation"]
-    K --> L["14. Sandboxed build/test"]
-    L --> M["15. Project semantic and safety gates"]
-    M --> N["16. Candidate-set completion"]
+    S -->|"static repair"| J
+    S -->|"verifier-origin"| T["13. pending-reverification"]
+    J -->|"candidate-ready"| K["14. Cargo generation"]
+    T --> K
+    K --> L["15. Sandboxed build/test"]
+    L -->|"project compile error"| P["16. Bound intake + receipt v2 queue"]
+    P --> R
+    L -->|"fresh same-gate pass"| U["17. Atomic revalidation settlement"]
+    U --> J
+    L --> M["18. Project semantic and safety gates"]
+    M --> N["19. Candidate-set completion"]
 ```
 
 Every edge carries schema-bound artifacts with repository-relative paths and SHA-256, not chat conclusions. This stage addresses the known runtime/gate-authority findings and adds Ninja/static-archive, toolchain, CLI, and read-only-held-out evidence constraints. Remaining work is Meson/configure build facts, positive candidate verifiers, a usable competition-equivalent sandbox, and real held-out build/oracle acceptance. The diagram is an implementation contract, not a whole-project success claim.

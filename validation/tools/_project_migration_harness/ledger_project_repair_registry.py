@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Mapping
 
 from .ledger_project_repair_budget import ProjectRepairBudgetAuthority
@@ -11,6 +12,9 @@ from .ledger_project_repair_budget_audit import (
 )
 from .ledger_schema import _json, _now_text, atomic
 from .ledger_security import LedgerError, assert_no_secrets
+from .ledger_project_repair_intakes import (
+    load_receipt_project_diagnostic_intakes,
+)
 from .project_interface_contract import validate_coordinator_receipt
 from .project_interface_coordinator import (
     COORDINATOR_RECEIPT_SHA256_FIELD, PROJECT_REPAIR_QUEUE_SHA256_FIELD,
@@ -30,8 +34,9 @@ class ProjectRepairRegistration:
 
 
 class ProjectRepairRegistry:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: sqlite3.Connection, database_path: Path) -> None:
         self.connection = connection
+        self.database_path = database_path
 
     def register(
         self, *, run_id: str, receipt: Mapping[str, Any],
@@ -41,16 +46,23 @@ class ProjectRepairRegistry:
         value = validate_coordinator_receipt(receipt)
         validate_rust_project_ir(rust_project_ir)
         queue = value["project_repair_queue"]
-        recomputed = coordinate_project_interfaces(
-            rust_project_ir, max_repairs=queue["max_items"],
-            max_attempts_per_item=queue["max_attempts_per_item"],
-        )
-        if recomputed != value:
-            raise LedgerError("project interface receipt is not recomputable from RustProjectIR")
         assert_no_secrets(value, "project_interface_receipt")
         receipt_sha = value[COORDINATOR_RECEIPT_SHA256_FIELD]
         queue_sha = queue[PROJECT_REPAIR_QUEUE_SHA256_FIELD]
         with atomic(self.connection):
+            intakes = load_receipt_project_diagnostic_intakes(
+                self.connection, database_path=self.database_path, run_id=run_id,
+                receipt=value, rust_project_ir=rust_project_ir,
+            )
+            recomputed = coordinate_project_interfaces(
+                rust_project_ir, max_repairs=queue["max_items"],
+                max_attempts_per_item=queue["max_attempts_per_item"],
+                project_diagnostic_intakes=intakes,
+            )
+            if recomputed != value:
+                raise LedgerError(
+                    "project interface receipt is not recomputable from RustProjectIR"
+                )
             run = self.connection.execute(
                 "select status,dag_sha256 from project_runs where run_id=?", (run_id,),
             ).fetchone()
@@ -156,6 +168,13 @@ class ProjectRepairRegistry:
         except (json.JSONDecodeError, TypeError, ValueError) as error:
             raise LedgerError("stored project interface receipt is invalid") from error
         self._assert_replay(row, value)
+        load_receipt_project_diagnostic_intakes(
+            self.connection, database_path=self.database_path, run_id=run_id,
+            receipt=value, rust_project_ir={
+                "ir_sha256": value["rust_project_ir_sha256"],
+                "interface_sha256": value["rust_project_interface_sha256"],
+            },
+        )
         self._assert_items(
             run_id, queue_sha256, value["project_repair_queue"]["items"],
         )

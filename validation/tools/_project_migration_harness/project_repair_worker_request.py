@@ -12,7 +12,13 @@ from .project_repair_context import build_project_repair_context
 from .project_repair_dispatch_permit import (
     ProjectRepairDispatchPermit, project_repair_dispatch_binding,
 )
+from .project_repair_generation_authority import (
+    require_project_repair_source_generation,
+)
 from .project_repair_paths import require_bound_project_repair_out_root
+from .project_verifier_receipt import (
+    receipt_project_diagnostic_references, verifier_diagnostic_detail,
+)
 from .rust_project_ir import canonical_rust_project_ir_bytes
 from .rust_project_ir_validation import validate_rust_project_ir
 
@@ -29,7 +35,7 @@ def materialize_project_repair_request(
         run_id=run_id, queue_sha256=queue_sha256,
     )
     with ledger.connect() as connection:
-        receipt_epoch = ProjectRepairRegistry(connection).receipt_epoch(
+        receipt_epoch = ProjectRepairRegistry(connection, ledger.path).receipt_epoch(
             run_id=run_id, queue_sha256=queue_sha256,
         )
     latest = ledger.load_latest_project_interface_receipt(run_id=run_id)
@@ -51,8 +57,28 @@ def materialize_project_repair_request(
         queue_sha256=queue_sha256, repair_id=repair_id,
         status=projection.status, state_version=projection.version,
     )
+    intake_references = receipt_project_diagnostic_references(receipt)
+    intakes = ledger.bound_project_diagnostic_intakes(
+        run_id=run_id, references=intake_references,
+        rust_project_ir_sha256=str(ir["ir_sha256"]),
+    )
+    selected = next(
+        item for item in receipt["project_repair_queue"]["items"]
+        if item["repair_id"] == repair_id
+    )
+    if intakes and verifier_diagnostic_detail(
+        intakes, selected["diagnostic_sha256"],
+    ) is None:
+        raise ValueError(
+            "project verifier diagnostics must settle before static repair"
+        )
+    require_project_repair_source_generation(
+        ledger=ledger, run_id=run_id, queue_sha256=queue_sha256,
+        rust_project_ir=ir, out_root=out_root,
+    )
     context = build_project_repair_context(
         ir, receipt, receipt_epoch=receipt_epoch, repair_id=repair_id,
+        project_diagnostic_intakes=intakes,
     )
     context_ref = write_json_artifact(
         out_root,

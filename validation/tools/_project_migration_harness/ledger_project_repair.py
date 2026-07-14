@@ -7,6 +7,10 @@ from .ledger_project_repair_budget import ProjectRepairBudgetAuthority
 from .ledger_project_repair_finalize import ProjectRepairFinalizer
 from .ledger_project_repair_registry import ProjectRepairRegistry
 from .ledger_project_repair_replay import assert_project_repair_projection
+from .ledger_schema import atomic
+from .ledger_project_verifier_settlement import (
+    settle_project_verifier_failure, settle_project_verifier_pass,
+)
 
 
 class ProjectRepairLedgerMixin:
@@ -15,23 +19,25 @@ class ProjectRepairLedgerMixin:
         rust_project_ir: Mapping[str, Any],
     ) -> Any:
         with self.connect() as connection:
-            return ProjectRepairRegistry(connection).register(
+            return ProjectRepairRegistry(connection, self.path).register(
                 run_id=run_id, receipt=receipt, rust_project_ir=rust_project_ir,
             )
 
     def load_project_interface_receipt(
         self, *, run_id: str, queue_sha256: str,
     ) -> dict[str, Any]:
-        with self.connect() as connection:
-            return ProjectRepairRegistry(connection).load_receipt(
+        with self.connect() as connection, atomic(connection, immediate=False):
+            return ProjectRepairRegistry(connection, self.path).load_receipt(
                 run_id=run_id, queue_sha256=queue_sha256,
             )
 
     def load_latest_project_interface_receipt(
         self, *, run_id: str,
     ) -> Any:
-        with self.connect() as connection:
-            return ProjectRepairRegistry(connection).load_latest_receipt(run_id=run_id)
+        with self.connect() as connection, atomic(connection, immediate=False):
+            return ProjectRepairRegistry(connection, self.path).load_latest_receipt(
+                run_id=run_id,
+            )
 
     def project_repair_projection(
         self, *, run_id: str, queue_sha256: str, repair_id: str,
@@ -68,11 +74,23 @@ class ProjectRepairLedgerMixin:
 
     def finalize_project_repair_candidate(self, **values: Any) -> Any:
         with self.connect() as connection:
-            return ProjectRepairFinalizer(connection).finalize(**values)
+            return ProjectRepairFinalizer(connection, self.path).finalize(**values)
 
     def resolve_project_repair_candidate(self, **values: Any) -> Any:
         with self.connect() as connection:
             return ProjectRepairAuthority(connection).resolve_candidate(**values)
+
+    def settle_project_verifier_pass(self, **values: Any) -> Any:
+        with self.connect() as connection:
+            return settle_project_verifier_pass(
+                connection, database_path=self.path, **values,
+            )
+
+    def settle_project_verifier_failure(self, **values: Any) -> Any:
+        with self.connect() as connection:
+            return settle_project_verifier_failure(
+                connection, database_path=self.path, **values,
+            )
 
 
 __all__ = ["ProjectRepairLedgerMixin"]

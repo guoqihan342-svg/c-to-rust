@@ -104,6 +104,15 @@ def audit_project_repair_event_evidence(
         ).fetchone()
         if receipt is None:
             raise LedgerError("project repair resolution evidence has no receipt")
+        return
+    if kind == "repair_cancelled" and attempt_id is None:
+        receipt = connection.execute(
+            """select 1 from project_interface_receipts
+               where run_id=? and coordinator_receipt_sha256=?""",
+            (row["run_id"], evidence),
+        ).fetchone()
+        if receipt is None:
+            raise LedgerError("project repair supersession has no successor receipt")
 
 
 def _artifact_evidence_exists(

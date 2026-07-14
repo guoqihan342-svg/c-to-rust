@@ -45,6 +45,11 @@ _ITEM_KEYS = {
 def validate_coordinator_receipt(value: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise ValueError("coordinator receipt must be an object")
+    if value.get("schema_version") == 2:
+        from .project_verifier_receipt_contract import (
+            validate_verifier_coordinator_receipt,
+        )
+        return validate_verifier_coordinator_receipt(value)
     receipt = json.loads(canonical_json_bytes(value).decode("utf-8"))
     _exact_keys(receipt, _RECEIPT_KEYS, "coordinator receipt")
     if receipt["schema_version"] != 1 or receipt["coordinator"] != COORDINATOR_ID:
@@ -97,6 +102,12 @@ def coordinator_receipt_accepts_repair_candidate(
     }
     if diagnostic_sha256 not in before_hashes:
         raise ValueError("project repair target diagnostic is absent from its receipt")
+    if before.get("schema_version") == 2:
+        from .project_verifier_receipt import (
+            PROJECT_VERIFIER_DIAGNOSTIC_SHA256S_FIELD,
+        )
+        if diagnostic_sha256 in before[PROJECT_VERIFIER_DIAGNOSTIC_SHA256S_FIELD]:
+            return False
     before_queue = before["project_repair_queue"]
     after_queue = after["project_repair_queue"]
     if (

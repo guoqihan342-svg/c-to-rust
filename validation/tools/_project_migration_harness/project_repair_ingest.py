@@ -60,7 +60,7 @@ def ingest_project_repair_response(
     context = _read_context(harness_root, request["project_repair_context"])
     try:
         candidate = apply_project_repair_operations(base_ir, context, normalized)
-        reopen_rust_project_ir_bindings(candidate, harness_root)
+        _reopen_candidate_bindings(candidate, out_root, harness_root)
     except (OSError, TypeError, ValueError):
         return _record_failure(
             request, response_bytes, ledger=ledger, out_root=out_root,
@@ -142,8 +142,12 @@ def ingest_project_repair_response(
         coordinator_evidence_sha256=str(receipt_ref["sha256"]),
     )
     terminal = finalized.terminal
+    public_status = (
+        "pending-reverification"
+        if finalized.requires_reverification else terminal.current.status
+    )
     report = {
-        "schema_version": 1, "status": terminal.current.status,
+        "schema_version": 1, "status": public_status,
         "run_id": request["run_id"], "repair_id": request["repair_id"],
         "attempt_id": attempt_id, "candidate_ir_sha256": candidate["ir_sha256"],
         "coordinator_status": receipt["status"],
@@ -159,6 +163,8 @@ def ingest_project_repair_response(
             "project_final_gate": False,
         },
     }
+    if finalized.requires_reverification:
+        report["ledger_status"] = terminal.current.status
     report["ingest_sha256"] = content_sha256(report)
     return report
 
@@ -199,6 +205,19 @@ def _record_failure(
         **payload, "status": finished.current.status,
         "failure": _prefix(reference, out_root_rel),
     }
+
+
+def _reopen_candidate_bindings(
+    candidate: Mapping[str, Any], out_root: Path, harness_root: Path,
+) -> None:
+    failures = []
+    for root in dict.fromkeys((out_root.resolve(), harness_root.resolve())):
+        try:
+            reopen_rust_project_ir_bindings(candidate, root)
+            return
+        except (OSError, TypeError, ValueError) as error:
+            failures.append(error)
+    raise ValueError("project repair candidate bindings cannot be reopened") from failures[-1]
 
 
 def _read_context(root: Path, reference: Mapping[str, Any]) -> dict[str, Any]:

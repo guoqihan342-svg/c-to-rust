@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Mapping
 
 from .ledger_project_repair_authority import ProjectRepairAuthority
@@ -9,6 +10,12 @@ from .ledger_project_repair_core import ProjectRepairTransitionResult
 from .ledger_project_repair_registry import (
     ProjectRepairRegistration,
     ProjectRepairRegistry,
+)
+from .ledger_project_repair_intakes import (
+    load_receipt_project_diagnostic_intakes,
+)
+from .ledger_project_repair_supersession import (
+    cancel_superseded_items, receipt_repair_ids,
 )
 from .ledger_security import LedgerError
 from .ledger_schema import atomic
@@ -19,19 +26,22 @@ from .project_interface_contract import (
 from .project_interface_coordinator import coordinate_project_interfaces
 from .project_repair_run_domain import assert_project_repair_run_domain
 from .rust_project_ir_validation import validate_rust_project_ir
+from .project_verifier_receipt import verifier_diagnostic_detail
 
 
 @dataclass(frozen=True, slots=True)
 class ProjectRepairFinalization:
     accepted: bool
+    requires_reverification: bool
     finished: ProjectRepairTransitionResult
     terminal: ProjectRepairTransitionResult
     registration: ProjectRepairRegistration | None
 
 
 class ProjectRepairFinalizer:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: sqlite3.Connection, database_path: Path) -> None:
         self.connection = connection
+        self.database_path = database_path
 
     def finalize(
         self, *, run_id: str, queue_sha256: str, repair_id: str,
@@ -39,7 +49,7 @@ class ProjectRepairFinalizer:
         response_sha256: str, rust_project_ir: Mapping[str, Any],
         receipt: Mapping[str, Any], coordinator_evidence_sha256: str,
     ) -> ProjectRepairFinalization:
-        registry = ProjectRepairRegistry(self.connection)
+        registry = ProjectRepairRegistry(self.connection, self.database_path)
         authority = ProjectRepairAuthority(self.connection)
         with atomic(self.connection):
             attempt = self.connection.execute(
@@ -82,9 +92,29 @@ class ProjectRepairFinalizer:
                 value for value in original["project_repair_queue"]["items"]
                 if value["repair_id"] == repair_id
             )
-            accepted = coordinator_receipt_accepts_repair_candidate(
-                original, coordinated,
-                diagnostic_sha256=item["diagnostic_sha256"],
+            intakes = load_receipt_project_diagnostic_intakes(
+                self.connection, database_path=self.database_path, run_id=run_id,
+                receipt=original, rust_project_ir={
+                    "ir_sha256": original["rust_project_ir_sha256"],
+                    "interface_sha256": original["rust_project_interface_sha256"],
+                },
+            )
+            verifier_origin = verifier_diagnostic_detail(
+                intakes, item["diagnostic_sha256"],
+            ) is not None
+            if intakes and not verifier_origin:
+                raise LedgerError(
+                    "static repair cannot bypass verifier-origin obligations"
+                )
+            pending_verifier = (
+                verifier_origin and coordinated["status"] == "candidate-ready"
+            )
+            accepted = (
+                False if verifier_origin else
+                coordinator_receipt_accepts_repair_candidate(
+                    original, coordinated,
+                    diagnostic_sha256=item["diagnostic_sha256"],
+                )
             )
             authority._require_artifact_evidence(
                 run_id=run_id, queue_sha256=queue_sha256, repair_id=repair_id,
@@ -105,7 +135,9 @@ class ProjectRepairFinalizer:
                 "coordinator_evidence_sha256": coordinator_evidence_sha256,
             })[:24]
             registration = None
-            if accepted:
+            if pending_verifier:
+                terminal = finished
+            elif accepted:
                 registration = registry.register(
                     run_id=run_id, receipt=coordinated,
                     rust_project_ir=rust_project_ir,
@@ -117,6 +149,12 @@ class ProjectRepairFinalizer:
                     expected_version=finished.current.version,
                     coordinator_receipt_sha256=receipt_sha,
                 )
+                cancel_superseded_items(
+                    authority, run_id=run_id, queue_sha256=queue_sha256,
+                    repair_ids=receipt_repair_ids(original),
+                    successor_receipt_sha256=receipt_sha,
+                    excluded=[repair_id],
+                )
             else:
                 terminal = authority.rollback_candidate(
                     run_id=run_id, queue_sha256=queue_sha256,
@@ -126,7 +164,7 @@ class ProjectRepairFinalizer:
                     evidence_sha256=coordinator_evidence_sha256,
                 )
             return ProjectRepairFinalization(
-                accepted, finished, terminal, registration,
+                accepted, pending_verifier, finished, terminal, registration,
             )
 
 
