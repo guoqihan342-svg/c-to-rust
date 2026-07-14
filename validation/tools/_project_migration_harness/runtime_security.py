@@ -40,7 +40,9 @@ FACT_PAYLOAD_KEYS = {
     },
     "context_retrieval_summary": {
         "omitted_fact_count", "scc_id", "selected_fact_count",
-        "selection_receipt_sha256", "selection_status", "visibility",
+        "selection_receipt_sha256", "selection_status",
+        "required_fact_query_count", "unresolved_required_fact_count",
+        "visibility",
     },
     "external_call": {"caller_node_id", "candidate_node_ids", "status", "symbol"},
     "function": {"linkage", "node_id", "node_kind", "symbol", "unit_id"},

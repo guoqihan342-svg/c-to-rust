@@ -77,7 +77,7 @@ class ProjectMigrationOrchestratorTests(unittest.TestCase):
             self.harness / "target/run-one/project-migration-plan.json"
         ).is_file())
 
-    def test_unknown_external_routes_affected_group_through_planner(self) -> None:
+    def test_unknown_external_without_declaration_blocks_affected_group(self) -> None:
         database = self.write_project(
             "int closed(void) { return 1; }\n"
             "int boundary(void) { return external_api(); }\n"
@@ -96,16 +96,14 @@ class ProjectMigrationOrchestratorTests(unittest.TestCase):
             for item in result["portfolio"]["assignments"]
             if item["role"] == "planner"
         ]
-        self.assertEqual(1, len(boundary))
-        self.assertEqual("ready", boundary[0]["launch_policy"]["state"])
-        self.assertEqual([], result["portfolio"]["blocked_groups"])
-        self.assertTrue(
-            any(
-                item["role"] == "translator"
-                and "planner_decision_sha256" in item["launch_policy"]["requires"]
-                for item in result["portfolio"]["assignments"]
-            )
+        self.assertEqual([], boundary)
+        self.assertEqual(3, len(result["portfolio"]["assignments"]))
+        self.assertEqual(1, len(result["portfolio"]["blocked_groups"]))
+        self.assertEqual(
+            ["context_retrieval_not_ready"],
+            result["portfolio"]["blocked_groups"][0]["reasons"],
         )
+        self.assertFalse(result["execution"]["model_launched"])
 
     def test_missing_compile_database_stops_before_model_and_ledger(self) -> None:
         (self.source / "unit.c").write_text("int unit(void) { return 1; }\n", encoding="utf-8")

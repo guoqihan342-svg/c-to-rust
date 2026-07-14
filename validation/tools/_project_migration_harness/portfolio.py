@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .ledger_security import assert_no_secrets
+from .context_required_facts import required_fact_binding_ready
 from .portfolio_integrity import (
     PortfolioIntegrityError,
     bind_context,
@@ -51,6 +52,7 @@ def _retrieval_ready(context: Mapping[str, Any]) -> bool:
         and all(character in _HEX_DIGITS for character in receipt)
         and isinstance(blockers, list)
         and not blockers
+        and required_fact_binding_ready(retrieval)
     )
 
 

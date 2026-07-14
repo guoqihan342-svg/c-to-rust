@@ -11,6 +11,23 @@ from validation.tools._project_migration_harness.portfolio import plan_portfolio
 _ABSENT = object()
 
 
+def _ready_retrieval(**updates: Any) -> dict[str, Any]:
+    value = {
+        "selection_status": "ready",
+        "selection_receipt_sha256": "a" * 64,
+        "selection_blockers": [],
+        "required_fact_query_policy": "host-required-symbol-facts-v1",
+        "required_fact_query_sha256": "b" * 64,
+        "required_fact_query_count": 1,
+        "required_fact_match_count": 1,
+        "required_fact_match_set_sha256": "c" * 64,
+        "unresolved_required_fact_count": 0,
+        "unresolved_required_fact_set_sha256": "d" * 64,
+    }
+    value.update(updates)
+    return value
+
+
 def _plan(retrieval: Any = _ABSENT) -> dict[str, Any]:
     page_path = "target/neutral/context/pages/group.json"
     page_payload = canonical_json_bytes({"facts": ["neutral"]})
@@ -52,11 +69,7 @@ def _plan(retrieval: Any = _ABSENT) -> dict[str, Any]:
 
 class RetrievalAdmissionTests(unittest.TestCase):
     def test_ready_retrieval_contract_is_assignable(self) -> None:
-        result = _plan({
-            "selection_status": "ready",
-            "selection_receipt_sha256": "a" * 64,
-            "selection_blockers": [],
-        })
+        result = _plan(_ready_retrieval())
 
         self.assertTrue(result["assignments"])
         self.assertEqual(result["blocked_groups"], [])
@@ -70,25 +83,32 @@ class RetrievalAdmissionTests(unittest.TestCase):
     def test_non_ready_retrieval_contract_never_creates_assignments(self) -> None:
         valid_receipt = "b" * 64
         cases = {
-            "blocked_status": {
-                "selection_status": "blocked",
-                "selection_receipt_sha256": valid_receipt,
-                "selection_blockers": [],
-            },
-            "selection_blockers": {
-                "selection_status": "ready",
-                "selection_receipt_sha256": valid_receipt,
-                "selection_blockers": ["selection_budget_exceeded"],
-            },
-            "tampered_receipt": {
-                "selection_status": "ready",
-                "selection_receipt_sha256": "b" * 63 + "x",
-                "selection_blockers": [],
-            },
+            "blocked_status": _ready_retrieval(
+                selection_status="blocked", selection_receipt_sha256=valid_receipt,
+            ),
+            "selection_blockers": _ready_retrieval(
+                selection_receipt_sha256=valid_receipt,
+                selection_blockers=["selection_budget_exceeded"],
+            ),
+            "tampered_receipt": _ready_retrieval(
+                selection_receipt_sha256="b" * 63 + "x",
+            ),
             "missing_receipt": {
+                key: value for key, value in _ready_retrieval().items()
+                if key != "selection_receipt_sha256"
+            },
+            "missing_required_fact_contract": {
                 "selection_status": "ready",
+                "selection_receipt_sha256": valid_receipt,
                 "selection_blockers": [],
             },
+            "unresolved_required_fact": _ready_retrieval(
+                required_fact_match_count=0,
+                unresolved_required_fact_count=1,
+            ),
+            "required_fact_hash_drift": _ready_retrieval(
+                required_fact_match_set_sha256="c" * 63 + "x",
+            ),
         }
 
         for label, retrieval in cases.items():

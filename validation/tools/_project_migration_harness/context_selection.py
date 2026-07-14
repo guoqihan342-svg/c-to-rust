@@ -5,6 +5,9 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .context_contracts import canonical
+from .context_required_facts import (
+    build_required_fact_query, required_fact_resolution,
+)
 from .context_selection_index import ContextSelectionIndex
 from .context_selection_query import (
     IDENTIFIER, identifiers as extract_identifiers, semantic_identifiers,
@@ -39,6 +42,7 @@ def select_deferred_context(
         raise ValueError("context selection fact classes overlap")
 
     query = _query_seed(scc_id, required, facts)
+    required_fact_query = build_required_fact_query(scc_id, required, facts)
     ranked = _ranked_candidates(
         query, deferred, facts,
         identifier_cache={} if identifier_cache is None else identifier_cache,
@@ -56,8 +60,15 @@ def select_deferred_context(
         selected_bytes += size
     selected_refs = sorted(selected)
     omitted_refs = sorted(set(deferred) - selected)
-    status = "blocked" if overflow else "ready"
-    blockers = ["exact_context_selection_budget_exceeded"] if overflow else []
+    resolution = required_fact_resolution(
+        required_fact_query, [*required, *selected_refs], facts,
+    )
+    blockers = []
+    if overflow:
+        blockers.append("exact_context_selection_budget_exceeded")
+    if resolution["unresolved_required_fact_count"]:
+        blockers.append("required_fact_query_unresolved")
+    status = "blocked" if blockers else "ready"
     binding = {
         "selection_policy": SELECTION_POLICY,
         "query_seed_sha256": query["sha256"],
@@ -71,6 +82,7 @@ def select_deferred_context(
         "selection_status": status,
         "selection_blockers": blockers,
         "selection_overflow_fact_count": overflow,
+        **resolution,
     }
     return {
         "selected_fact_refs": selected_refs,

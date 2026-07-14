@@ -6,6 +6,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from .context_contracts import canonical
+from .context_required_facts import build_required_fact_query
 from .context_selection import select_deferred_context
 from .context_selection_index import ContextSelectionIndex
 
@@ -41,7 +42,8 @@ def partition_context_refs(
             deferred.append(digest)
         else:
             visible.append(digest)
-    if not deferred:
+    required_query = build_required_fact_query(scc_id, visible, facts)
+    if not deferred and not required_query["requests"]:
         return visible, None, None, {}
     selection = select_deferred_context(
         scc_id, visible, deferred, facts,
@@ -235,6 +237,7 @@ def _summary_payload(binding: Mapping[str, Any]) -> dict[str, Any]:
         key: binding[key] for key in (
             "scc_id", "omitted_fact_count", "selected_fact_count",
             "selection_status", "selection_receipt_sha256",
+            "required_fact_query_count", "unresolved_required_fact_count",
         )
     } | {"visibility": "host_retrieval_required"}
 

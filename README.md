@@ -19,7 +19,7 @@
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
 | 当前翻译任务 | P0-A19 项目级编排优先；P0-A18c/P0-A10 保留为有限回归与 held-out 验收 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
-| P0-A19 有限门禁 | Windows 518/518（5 项平台条件跳过）；WSL 518/518（3 项平台条件跳过） |
+| P0-A19 有限门禁 | Windows 525/525（5 项平台条件跳过）；WSL 525/525（3 项平台条件跳过） |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
 
@@ -72,6 +72,8 @@ competition profile 在发现完成后、任何 worker/AI 启动前，从发现�
 competition 的 canonical BuildIR 把 TU、ABI facts 以及 object/link/archive target 的 `toolchain_id` 作为到 host-probed toolchain records 的外键，缺失或未知外键以及 token-only evidence 不能通过。每次重开时，verifier 都从 BuildIR raw-fact refs 读取原始 `c-toolchain-evidence` attachment，复核 base64/hash/size，重新解析 profile、repository bindings 和绝对 executable，重跑固定探针，重新派生 linker/role mapping，并逐字节重投影 BuildIR；PATH、环境、binary、probe 或 projection 任一漂移都会阻断。
 
 BuildIR 适配器收敛由同源 Git-tracked fixture 锁定：CMake、Ninja、Meson 对两个 TU、静态归档、ranlib、最终多输入链接和外部依赖产生相同 canonical projection；Meson 私有 target/source/compiler 摘要只能留在 provenance，不能进入下游 DAG 或 ContextPack。编排器在 CIndex/DAG 前再次重开同一 BuildIR 引用；首次验证或 admission 重开失败时，不生成 migration graph、portfolio、ledger，也不启动模型。该证据固定为 `semantic_gate=false`，不代表 build 或程序语义已经通过。
+
+ContextPack 检索不再只靠 lexical identifier seed 判断可启动性。每个 `unresolved_external` call/global 都会生成 `host-required-symbol-facts-v1` 查询，selection receipt 绑定来源事实、查询 SHA、实际声明匹配集合和未解析集合；只有进入当前 required/selected 页面中的结构化同名声明或受限 lexical declaration 才能关闭请求。声明缺失、预算未选中、receipt 漂移或没有 deferred facts 时都会在 portfolio assignment 前 fail closed，普通调用文本不能冒充声明。当前这仍是非语义的符号事实门禁；AST type/layout/macro、verifier-failure 动态查询和 `pending_retrieval -> ready` 前沿重算尚未完成。
 
 运行时以 AI 为主：boundary group 先由 planner 选择“带上下文翻译、保留可验证 FFI 边界或明确拒绝”，translator 输出 Rust source，reviewer 只给结构审查，repairer 只消费允许的失败诊断。typed IR/C2Rust 是事实或候选来源，不是默认路由优先级；任何模型都不能写 semantic pass、last-good 或项目完成状态。
 

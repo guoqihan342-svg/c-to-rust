@@ -554,6 +554,8 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [ ] A19b4a：建立版本化 retrieval catalog/query/selection receipt；回执绑定 policy、query seed、当前 unit/SCC、required/selected/omitted fact refs、materialized page refs、预算与 SHA。排序必须确定，任一必需事实缺失、引用漂移、预算不足或 unresolved symbol 均阻塞 assignment。
       - [x] A19b4a1：宿主 catalog、确定性 symbol selection 和 selection/materialization receipt 已绑定 policy、query seed、SCC、required/selected/omitted 集合 SHA、字节预算与 materialized page-set SHA；引用、预算或 receipt 漂移 fail closed。
       - [ ] A19b4a2：把 unresolved symbol、AST type/layout/macro 与 verifier failure facts 纳入统一 query/required-fact 合同；缺失时进入可恢复 retrieval 阻塞，而不是只依赖 lexical identifier seed。
+        - [x] A19b4a2a：`unresolved_external` call/global 会派生版本化 `host-required-symbol-facts-v1` 查询；回执绑定 SCC、来源事实、查询 SHA、匹配集合和未解析集合。只有当前 required/selected facts 中的结构化同名声明或受限 lexical declaration 能关闭请求，普通调用文本不能冒充声明；声明缺失、因预算未选中、回执漂移以及零 deferred-fact 绕过都会阻断 assignment，且不启动模型。
+        - [ ] A19b4a2b：接入 A19b3c 的 AST declaration/type/layout/macro producer 和 verifier-owned failure fact，并把缺失状态从当前静态 `blocked` 提升为 A19b4c2 可恢复的 `pending_retrieval -> ready` 前沿转移；在此之前 A19b4a2 保持未勾选。
     - [ ] A19b4b：required 层固定包含当前源码、compile context、直接 call/global、blocker summary；exact 层按符号和类型匹配声明、宏、布局及 direct-include segment；expansion 层只按 include adjacency、dependency SCC interface 和已验证失败事实扩展，禁止把完整仓库或无关 header 塞回 prompt。
       - [x] A19b4b1：当前 source/direct-call/global/blocker facts 保持可见，deferred header/top-level chunk 按确定性精确 identifier、直接 include binding 与相邻 chunk 选取；未选择事实只以 host-withheld 摘要暴露给模型。
       - [ ] A19b4b2：改用 A19b3c 的 AST/type/layout/macro facts，并只沿 include adjacency、dependency SCC interface 与已验证 failure facts 扩展；补全 unresolved symbol 的 fail-closed 规则。
@@ -564,7 +566,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [ ] A19b4e：对超过单次预算的超大函数实行层次化分解：先提取签名、控制流区域、局部类型/宏依赖和状态摘要，再按可验证 region 生成候选并在函数级重组；若跨 region 语义或 ABI 无法证明，必须整体 deferred/refused，禁止截断后假装完整翻译。
     - [ ] A19b4f：增加 exact macro/type 命中、确定性顺序、required-budget 阻塞、receipt 篡改、selected-only materialization、frontier lazy loading、角色隔离、显式 expansion 与超大函数拒绝测试；有限 held-out 项目必须证明 token/页面下降且 build/oracle 结论不退化。
 
-  当前已有 header 去重、blocker 摘要、可恢复函数 span、callee signature、确定性 selection receipt、retrieval segment/seed-page 分离、dispatch 前沿物理物化和模型启动前回执复验；尚未闭合 AST/type 精确选择、按前沿计算 selection、角色合同、显式 expansion 与超大函数分解，因此 A19b3/A19b4 均保持未勾选。
+  当前已有 header 去重、blocker 摘要、可恢复函数 span、callee signature、未解析外部符号 required-fact 回执、确定性 selection receipt、retrieval segment/seed-page 分离、dispatch 前沿物理物化和模型启动前回执复验；尚未闭合 AST/type/layout/macro 与 verifier-failure 精确选择、按前沿计算 selection、角色合同、显式 expansion 与超大函数分解，因此 A19b3/A19b4 均保持未勾选。
+
+  A19b4a2a 有限阶段证据（2026-07-14）：Windows `test_project_migration_*.py` 525 项通过、5 项平台条件跳过；WSL 同组 525 项通过、3 项平台条件跳过。该阶段未调用 provider/model，也未执行项目 semantic gate；它只证明 required-symbol 查询、回执重算和 assignment fail-closed，translator numerator 仍为 0。
 
   A19b4c1 有限阶段证据（2026-07-13）：Windows `test_project_migration*.py` 254 项通过、2 项平台条件跳过，WSL 同组 254 项全部通过。固定 mbedTLS 提交 `9e9eb069d6aa3db84bef07b6d83a78bdee9b1da6` 的 WSL 本地模拟在 `required` build-closure 策略下完成 plan：2,410 个 ledger unit、9,252 个 assignment、97 个结构化 blocked group 和 4 个 ready worker；计划期只写 2,410 个分片 catalog，prompt page/group/assignment request/attempt/model invocation 均为 0。该运行耗时 8 分 47 秒、峰值 RSS 约 1.15 GB，且 CIndex、ContextPages、portfolio 仍分别约 50.6 MB、181 MB、96.1 MB，因此它不是比赛等价语义验收，也不能关闭 A19b4c2 或增加翻译成功计数。
 

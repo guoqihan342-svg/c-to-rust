@@ -15,7 +15,7 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | Latest development stage | P0-A19: unfamiliar-repository build closure, verification authority, and real held-out contract closure |
 | Active translator task | P0-A19 project orchestration first; P0-A18c/P0-A10 remain finite regression and held-out acceptance tracks |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
-| P0-A19 finite gate | 518/518 on Windows with five platform-conditional skips; 518/518 on WSL with three platform-conditional skips |
+| P0-A19 finite gate | 525/525 on Windows with five platform-conditional skips; 525/525 on WSL with three platform-conditional skips |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | Superpowers specs/plans, canonical roadmap, and harness evidence gates |
 
@@ -62,6 +62,8 @@ After discovery and before any worker or AI launch, the competition profile cons
 Competition canonical BuildIR uses each TU, ABI fact, and object/link/archive target's `toolchain_id` as a foreign key into host-probed toolchain records; missing or unknown foreign keys and token-only evidence cannot pass. On every reopen, the verifier reads the original `c-toolchain-evidence` attachment through BuildIR raw-fact references, rechecks base64/hash/size, reparses the profile, repository bindings, and absolute executables, reruns the fixed probes, rederives linker/role mappings, and reprojects BuildIR byte for byte. Any PATH, environment, binary, probe, or projection drift blocks.
 
 BuildIR adapter convergence is locked by a same-source Git-tracked fixture: CMake, Ninja, and Meson produce one canonical projection for two TUs, a static archive, a ranlib pass, a final multi-input link, and an external dependency. Meson-private target/source/compiler summaries remain provenance only and cannot enter the downstream DAG or ContextPack. The orchestrator reopens the same BuildIR reference again before CIndex or DAG work; failure during initial validation or admission creates no migration graph, portfolio, ledger, or model call. This evidence remains `semantic_gate=false` and does not claim build or program-semantic success.
+
+ContextPack retrieval no longer decides launch readiness from a lexical identifier seed alone. Every `unresolved_external` call/global produces a `host-required-symbol-facts-v1` query whose selection receipt binds the origin facts, query SHA, matched declaration set, and unresolved set. A request closes only when a structured matching declaration or bounded lexical declaration is present in the current required/selected pages. A missing declaration, budget omission, receipt drift, or absence of deferred facts fails closed before portfolio assignment, and ordinary call text cannot impersonate a declaration. This remains a non-semantic symbol-fact gate; AST type/layout/macro facts, verifier-failure dynamic queries, and frontier `pending_retrieval -> ready` recomputation are still open.
 
 AI is primary at runtime. Boundary groups first use a planner to select translation with context, preservation of a verifiable FFI boundary, or an explicit refusal. Translators emit Rust source, reviewers provide structural findings only, and repairers consume only allowlisted failure diagnostics. Typed IR and C2Rust are fact or candidate sources rather than a default routing priority. No model may write semantic pass, last-good, or project-complete state.
 
