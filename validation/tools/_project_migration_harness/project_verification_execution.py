@@ -10,7 +10,7 @@ from .sandbox_contract import (
     SandboxContract,
     validate_run_result,
 )
-from .sandbox_diagnostics import cargo_diagnostics
+from .sandbox_diagnostics import cargo_check_diagnostics
 from .sandbox_probe import SandboxProbeReceipt
 from .sandbox_requirements import cargo_verification_plan
 
@@ -22,6 +22,7 @@ def run_cargo_check(
     cargo: Path, cargo_args: list[str], project: Path, runtime: Path,
     timeout_seconds: int, backend: SandboxBackend, input_sha256: str,
     probe_receipt: SandboxProbeReceipt,
+    *, capture_raw_output: bool = False,
 ) -> dict[str, Any]:
     command = ["cargo", *cargo_args]
     stage = f"cargo-{cargo_args[0]}"
@@ -57,20 +58,14 @@ def run_cargo_check(
         or len(stderr_bytes) > MAX_OUTPUT_BYTES
     )
     returncode = int(result.completed.returncode)
-    diagnostics = cargo_diagnostics(stdout, cargo_args[0])
-    if returncode != 0 and not diagnostics:
-        diagnostics = [{
-            "code": "cargo_command_failed",
-            "stage": stage,
-            "message": f"cargo {cargo_args[0]} exited with code {returncode}",
-        }]
+    diagnostics = cargo_check_diagnostics(stdout, cargo_args[0], returncode)
     if oversized:
         diagnostics = [{
             "code": "cargo_output_too_large",
             "stage": stage,
             "message": "Cargo output exceeded the bounded capture size",
         }]
-    return {
+    output = {
         "command": command,
         "status": (
             "blocked" if oversized else "passed" if returncode == 0 else "failed"
@@ -80,6 +75,8 @@ def run_cargo_check(
         "cargo_executed": True,
         "stdout_sha256": hashlib.sha256(stdout_bytes).hexdigest(),
         "stderr_sha256": hashlib.sha256(stderr_bytes).hexdigest(),
+        "stdout_ref": None,
+        "stderr_ref": None,
         "sandbox_contract_sha256": result.contract_sha256,
         "sandbox_command_sha256": result.command_sha256,
         "sandbox_command_started": bool(result.command_started),
@@ -90,6 +87,10 @@ def run_cargo_check(
         "sandbox_probe_receipt_sha256": result.probe_receipt_sha256,
         "diagnostics": diagnostics[:64],
     }
+    if capture_raw_output and not oversized:
+        output["_captured_stdout"] = stdout
+        output["_captured_stderr"] = stderr
+    return output
 
 
 def blocked_result(
@@ -149,6 +150,8 @@ def _execution_failure(
         "cargo_executed": False,
         "stdout_sha256": hashlib.sha256(b"").hexdigest(),
         "stderr_sha256": hashlib.sha256(b"").hexdigest(),
+        "stdout_ref": None,
+        "stderr_ref": None,
         "diagnostics": [{
             "code": code,
             "stage": stage,

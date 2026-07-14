@@ -4,15 +4,25 @@ from pathlib import Path
 from typing import Any
 
 from .artifacts import content_sha256
+from .cargo_raw_output_evidence import persist_captured_cargo_outputs
 from .controller_gates import record_candidate_gate
 from .gate_candidate_sets import current_candidate_members
 from .integration_generation import GenerationCommitError
 from .ledger import ProjectLedger
-from .project_cargo_evidence import project_cargo_observation
+from .ledger_security import LedgerError
+from .project_cargo_classification_receipt import (
+    write_cargo_classification_receipt,
+)
+from .project_cargo_evidence import (
+    bind_project_cargo_classification, blocked_project_cargo_observation,
+    project_cargo_observation,
+)
 from .project_cargo_diagnostic_intake import (
     CargoDiagnosticPartition, partition_cargo_diagnostics,
 )
-from .project_cargo_diagnostic_cohort import decide_cargo_diagnostic_cohort
+from .project_cargo_diagnostic_cohort import (
+    CargoDiagnosticCohortDecision, decide_cargo_diagnostic_cohort,
+)
 from .project_generation_context import load_managed_project_context
 from .project_host_gates import record_host_project_observation
 from .project_verification import run_cargo_project_gates
@@ -30,11 +40,15 @@ def verify_project_cargo(
         context = load_managed_project_context(project_root, members)
     except (GenerationCommitError, OSError, UnicodeError, ValueError):
         context = None
-    execution = run_cargo_project_gates(
-        project_root,
-        runtime_root=runtime_root,
-        cargo_command="cargo",
-        timeout_seconds=timeout_seconds,
+    execution = persist_captured_cargo_outputs(
+        run_cargo_project_gates(
+            project_root,
+            runtime_root=runtime_root,
+            cargo_command="cargo",
+            timeout_seconds=timeout_seconds,
+            capture_raw_output=True,
+        ),
+        out_root=out_root, out_root_rel=out_root_rel,
     )
     raw_checks = execution.get("checks")
     checks: dict[str, dict[str, Any]] = {}
@@ -76,6 +90,39 @@ def verify_project_cargo(
         partitions=partitions,
         candidate_members=members,
     )
+    classification_receipt = None
+    if _classification_required(context, gate_checks, observations):
+        try:
+            ir = context["rust_project_ir"]
+            classification_receipt = write_cargo_classification_receipt(
+                out_root, out_root_rel, run_id=run_id,
+                candidate_set_sha256=candidate_set,
+                project_input_sha256=str(context["project_input_sha256"]),
+                rust_project_ir=ir,
+                candidate_members=members, checks=gate_checks,
+                partitions=partitions, admission=admission.payload(),
+            )
+            bound = {
+                gate: bind_project_cargo_classification(
+                    observation, classification_receipt,
+                )
+                for gate, observation in observations.items()
+            }
+        except (KeyError, OSError, TypeError, ValueError, LedgerError):
+            classification_receipt = None
+            admission = CargoDiagnosticCohortDecision(
+                "blocked", "classification-receipt-unavailable",
+            )
+            observations = {
+                gate: blocked_project_cargo_observation(
+                    project_input_sha256,
+                    unchanged=execution.get("project_state_unchanged") is True,
+                    blocker_code="classification-receipt-unavailable",
+                )
+                for gate in observations
+            }
+        else:
+            observations = bound
     records = []
     for gate_kind, command in (("cargo-check", "check"), ("cargo-test", "test")):
         check = checks.get(command)
@@ -123,7 +170,30 @@ def verify_project_cargo(
         "diagnostic_admission": admission.payload(),
         "execution": execution,
         "semantic_gate": False,
+        **(
+            {"classification_receipt": classification_receipt}
+            if classification_receipt is not None else {}
+        ),
     }
+
+
+def _classification_required(
+    context: dict[str, Any] | None,
+    checks: dict[str, dict[str, Any]],
+    observations: dict[str, dict[str, Any]],
+) -> bool:
+    check_observation = observations.get("cargo-check", {})
+    return (
+        context is not None
+        and "cargo-check" in checks
+        and check_observation.get("schema_version") == 2
+        and check_observation.get("outcome") == "executed"
+        and all(
+            item.get("status") in {"passed", "failed"}
+            and observations.get(gate, {}).get("outcome") == "executed"
+            for gate, item in checks.items()
+        )
+    )
 
 
 def _command_stage(check: dict[str, Any]) -> str | None:

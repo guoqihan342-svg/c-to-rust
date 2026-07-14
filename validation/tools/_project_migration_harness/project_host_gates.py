@@ -23,6 +23,14 @@ def record_host_project_observation(
     current_set = ledger.bind_current_candidate_set(run_id=run_id)
     if current_set != candidate_set_sha256:
         raise ValueError("host project verifier candidate set drifted")
+    if (
+        project_diagnostic_input is not None
+        and gate_kind in {"cargo-check", "cargo-test"}
+        and observation.get("schema_version") != 3
+    ):
+        raise ValueError(
+            "new Cargo diagnostic intake requires a v3 classification"
+        )
     raw_payload = {
         "schema_version": 1,
         "artifact_kind": "host-project-gate-observation",

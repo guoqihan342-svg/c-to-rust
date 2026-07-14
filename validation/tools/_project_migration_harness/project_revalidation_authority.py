@@ -18,6 +18,9 @@ from .integration_generation import GenerationCommitError
 from .project_generation_context import (
     load_managed_project_context, managed_project_root,
 )
+from .project_cargo_evidence import (
+    verify_project_cargo_classification, verify_project_cargo_raw_outputs,
+)
 from .project_revalidation_receipt import (
     validate_project_revalidation_receipt,
 )
@@ -77,6 +80,7 @@ def validate_project_revalidation_authority(
         project_inputs.add(_validate_gate(
             connection, database_path=database_path, run_id=run_id,
             intake=wrapper["intake"], record=by_kind[wrapper["intake"]["gate_kind"]],
+            candidate_ir=candidate_ir,
         ))
     members = current_candidate_members(connection, run_id)
     try:
@@ -98,6 +102,7 @@ def validate_project_revalidation_authority(
 def _validate_gate(
     connection: sqlite3.Connection, *, database_path: Path, run_id: str,
     intake: Mapping[str, Any], record: Mapping[str, Any],
+    candidate_ir: Mapping[str, Any],
 ) -> str:
     gate_kind = str(intake["gate_kind"])
     if (
@@ -148,6 +153,17 @@ def _validate_gate(
         candidate_set_sha256=str(intake["candidate_set_sha256"]),
     )
     observation = raw.get("observation")
+    if isinstance(observation, Mapping):
+        verify_project_cargo_raw_outputs(
+            database_path, observation, gate_kind=gate_kind,
+        )
+        verify_project_cargo_classification(
+            database_path, observation, run_id=run_id,
+            candidate_set_sha256=str(intake["candidate_set_sha256"]),
+            gate_kind=gate_kind,
+            rust_project_ir_sha256=str(candidate_ir["ir_sha256"]),
+            rust_project_interface_sha256=str(candidate_ir["interface_sha256"]),
+        )
     project_input = (
         observation.get("project_input_sha256")
         if isinstance(observation, Mapping) else None

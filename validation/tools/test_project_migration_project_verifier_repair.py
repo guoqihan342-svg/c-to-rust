@@ -103,7 +103,10 @@ class ProjectMigrationProjectVerifierRepairTests(
         )
         self.assertEqual(2, context["schema_version"])
         self.assertEqual("host-project-verifier", context["diagnostic"]["origin"])
-        self.assertEqual("unresolved import `shared`", context["diagnostic"]["message"])
+        self.assertEqual(
+            "unresolved import `shared_feature`",
+            context["diagnostic"]["message"],
+        )
         self.assertNotIn("raw_output", context["diagnostic"])
 
         tampered = copy.deepcopy(context)

@@ -8,6 +8,7 @@ from .gate_evidence import require_content_addressed_reference
 from .ledger_security import LedgerError
 from .project_cargo_evidence import (
     CARGO_OBSERVATION_KEYS, derive_project_cargo_status,
+    is_project_cargo_observation_fields,
 )
 
 
@@ -209,6 +210,12 @@ def derive_project_observation(
 
 
 def _observation_passed(gate_kind: str, value: Mapping[str, Any]) -> bool:
+    if gate_kind in {"cargo-check", "cargo-test"}:
+        if not is_project_cargo_observation_fields(value):
+            raise LedgerError(
+                "project gate observation fields are not fixed by the host adapter"
+            )
+        return derive_project_cargo_status(gate_kind, value) == "passed"
     if set(value) != _OBSERVATION_FIELDS.get(gate_kind):
         raise LedgerError("project gate observation fields are not fixed by the host adapter")
     if gate_kind == "integration":
@@ -219,8 +226,6 @@ def _observation_passed(gate_kind: str, value: Mapping[str, Any]) -> bool:
             and _is_sha(value.get("manifest_sha256"))
             and _is_sha(value.get("project_sha256"))
         )
-    if gate_kind in {"cargo-check", "cargo-test"}:
-        return derive_project_cargo_status(gate_kind, value) == "passed"
     if gate_kind == "oracle-replay":
         return (
             _positive_int(value.get("case_count"))

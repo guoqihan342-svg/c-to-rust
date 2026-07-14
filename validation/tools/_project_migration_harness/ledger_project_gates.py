@@ -6,7 +6,6 @@ from typing import Any
 from .artifacts import canonical_json_bytes
 from .gate_authority import (
     PROJECT_GATE_KINDS,
-    derive_project_observation,
     project_authority,
     require_portable_id,
     validate_project_summary,
@@ -18,8 +17,6 @@ from .gate_candidate_sets import (
 )
 from .gate_evidence import (
     read_content_addressed_json,
-    require_content_addressed_reference,
-    require_host_raw_reference,
 )
 from .ledger_schema import _json, _now_text, _require_repo_path, _require_sha256, atomic
 from .ledger_project_diagnostics import insert_project_diagnostic_intake
@@ -35,6 +32,7 @@ from .project_completion_invariants import (
     require_project_interface_ready, require_quiescent_last_good_run,
 )
 from .project_gate_bindings import require_cargo_integration_binding
+from .project_gate_source_verification import verify_project_sources
 
 
 class ProjectGateMixin:
@@ -87,7 +85,7 @@ class ProjectGateMixin:
                 candidate_set_sha256=candidate_set,
                 verifier_id=verifier_id,
             )
-            _verify_project_sources(
+            verify_project_sources(
                 self,
                 payload,
                 run_id=run_id,
@@ -227,7 +225,7 @@ def _require_latest_project_passes(
             candidate_set_sha256=candidate_set_sha256,
             verifier_id=str(row["verifier_id"]),
         )
-        _verify_project_sources(
+        verify_project_sources(
             ledger,
             payload,
             run_id=run_id,
@@ -258,31 +256,6 @@ def _require_latest_project_passes(
         if actual_sources != expected_sources:
             raise LedgerError("final project gate is not bound to the latest prerequisite evidence")
     return verified
-
-
-def _verify_project_sources(
-    ledger: Any, payload: Mapping[str, Any], *, run_id: str, gate_kind: str,
-    candidate_set_sha256: str, status: str,
-) -> None:
-    references = payload["source_evidence"]
-    if gate_kind != "final-verification" and len(references) != 1:
-        raise LedgerError("non-final project gates require one host raw observation")
-    for reference in references:
-        require_content_addressed_reference(reference)
-        if gate_kind != "final-verification":
-            require_host_raw_reference(reference, gate_kind)
-        source = read_content_addressed_json(
-            ledger.path, str(reference["path"]), str(reference["sha256"])
-        )
-        if len(canonical_json_bytes(source)) != int(reference["size_bytes"]):
-            raise LedgerError("project gate source evidence size changed")
-        if gate_kind != "final-verification" and derive_project_observation(
-            source,
-            run_id=run_id,
-            gate_kind=gate_kind,
-            candidate_set_sha256=candidate_set_sha256,
-        ) != status:
-            raise LedgerError("project gate status does not match its host observation")
 
 
 __all__ = ["PROJECT_GATE_KINDS", "ProjectGateMixin"]

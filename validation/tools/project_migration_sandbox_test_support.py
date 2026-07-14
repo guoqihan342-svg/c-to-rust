@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import hashlib
+import json
 from pathlib import Path
 import subprocess
 
@@ -10,6 +11,9 @@ from validation.tools._project_migration_harness.sandbox_contract import (
     SandboxContract,
     SandboxRunResult,
     canonical_sha256,
+)
+from validation.tools._project_migration_harness.sandbox_diagnostics import (
+    cargo_check_diagnostics,
 )
 from validation.tools._project_migration_harness.sandbox_requirements import (
     SandboxVerificationPlan, cargo_verification_plan,
@@ -133,7 +137,46 @@ def bind_execution_plan(
         check["sandbox_verification_plan"] = plan.payload()
         check["sandbox_verification_plan_sha256"] = plan.sha256
         check["sandbox_probe_receipt_sha256"] = probe.sha256
+        for stream in ("stdout", "stderr"):
+            check[f"{stream}_sha256"] = hashlib.sha256(b"").hexdigest()
+            check[f"{stream}_ref"] = None
+            check[f"_captured_{stream}"] = ""
     return bound
+
+
+def bind_cargo_output(
+    check: dict[str, object], *, stdout: str, stderr: str = "",
+) -> None:
+    command = check.get("command")
+    returncode = check.get("returncode")
+    if (
+        not isinstance(command, list) or len(command) < 2
+        or command[1] not in {"check", "test"}
+        or isinstance(returncode, bool) or not isinstance(returncode, int)
+    ):
+        raise AssertionError("test Cargo output binding is invalid")
+    for stream, text in (("stdout", stdout), ("stderr", stderr)):
+        check[f"{stream}_sha256"] = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        check[f"{stream}_ref"] = None
+        check[f"_captured_{stream}"] = text
+    check["diagnostics"] = cargo_check_diagnostics(
+        stdout, str(command[1]), returncode,
+    )
+
+
+def cargo_compiler_message(
+    *, code: str, message: str, file: str, line: int = 1, column: int = 1,
+) -> str:
+    return json.dumps({
+        "reason": "compiler-message",
+        "message": {
+            "level": "error", "code": {"code": code}, "message": message,
+            "spans": [{
+                "is_primary": True, "file_name": f"/workspace/{file}",
+                "line_start": line, "column_start": column,
+            }],
+        },
+    }, sort_keys=True, separators=(",", ":")) + "\n"
 
 
 def passing_probe_receipt(contract: SandboxContract) -> SandboxProbeReceipt:
@@ -170,6 +213,7 @@ def toolchain(root: Path, version: str) -> dict[str, Path]:
 
 
 __all__ = [
-    "BoundBackend", "bind_execution_plan", "executable", "managed_project",
+    "BoundBackend", "bind_cargo_output", "bind_execution_plan",
+    "cargo_compiler_message", "executable", "managed_project",
     "passing_probe_receipt", "toolchain", "triples",
 ]

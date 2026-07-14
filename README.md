@@ -77,13 +77,13 @@ Cargo generation 现在强制经过 canonical RustProjectIR。wave-provisional �
 
 project repair queue 已接入 schema v7 TransitionAuthority ledger 和专属 AI repairer。CompletionCoordinator 首次只观察最新 receipt，不创建 attempt；隔离的零调用 preflight 通过后，host-issued permit 会绑定精确 receipt/queue/item 状态、模型、agent 和运行时输入，再允许一次 resume 最多启动一个 provider call。provider 完整结果先按哈希写入 ledger，摄取阶段崩溃时下一次 resume 只重开证据并摄取，不再调用模型；证据不全或结果未知仍进入人工对账。attempt 预算沿稳定 diagnostic lineage 跨 receipt epoch 单调继承，另有每 run 64 次 provider call 和 65 个 receipt epoch 的硬上限。
 
-schema v7 还增加了不可变 project diagnostic intake：host 会重开当前 candidate set、managed generation 和 canonical RustProjectIR，只接纳沙箱内 Cargo 实际执行后产生的结构化 rustc `error`。Cargo check/test 现在先冻结整个 candidate cohort，并在任何 repair 落账前统一验证 gate 顺序、执行状态、candidate identity/content owner 和每条 error 的唯一分类；unit owner 来自 RustProjectIR module path 与 candidate set 的交叉绑定，跨 module unresolved symbol 会进入 project queue。任一未知、混合、重复 owner、旧 unit 路径或 toolchain-sensitive rustc 错误都会阻断整批 repair；project-derived unit failure 在记录和状态迁移时还会再次核对原 cohort。只有整批准入后，唯一 unit 错误才进入 unit repair；带项目内位置、无法归到 unit 的 `E####` 编译错误则绑定 cohort、IR/interface、generation input、raw observation 和 verifier receipt。warning、generic Cargo failure、诊断溢出、环境/沙箱阻塞均为零 intake、零 AI 调用。
+schema v7 还增加了不可变 project diagnostic intake：host 会重开当前 candidate set、managed generation 和 canonical RustProjectIR，只接纳沙箱内 Cargo 实际执行后产生的结构化 rustc `error`。Cargo check/test 现在先冻结整个 candidate cohort，并在任何 repair 落账前统一验证 gate 顺序、执行状态、candidate identity/content owner 和每条 error 的唯一分类；unit owner 来自 RustProjectIR module path 与 candidate set 的交叉绑定，跨 module unresolved symbol 会进入 project queue。每个 gate 的有界 stdout/stderr 先写入私有内容寻址 artifact，observation v3 再绑定一个可从原始引用复算的 classification receipt；该 receipt 同时交叉绑定 run、cohort、project input、RustProjectIR/interface、unit partition 和准入 diagnostics。共享 linker parser 只接纳受限 GNU/lld/MSVC unresolved-symbol 形态，并要求 symbol 由当前 RustProjectIR 唯一映射到一个 module。任一未知、歧义、混合、重复 owner、旧 unit 路径、toolchain-sensitive rustc、环境故障或诊断溢出都会阻断整批 repair。只有整批准入后，唯一 unit 错误才进入 unit repair；带项目内位置、无法归到 unit 的 `E####` 编译错误或唯一 project link symbol 才绑定 cohort、IR/interface、generation input、raw observation 和 verifier receipt。warning、generic Cargo failure、环境/沙箱阻塞均为零 intake、零 AI 调用；私有原始文本不会进入模型上下文。
 
 已验证 intake 现在进入兼容 schema v7 数据库的 coordinator receipt v2，并与静态接口诊断共用 project repair queue；verifier-origin 项优先调度。request 物化和 provider 启动前都会重开内容寻址 intake、当前 candidate set、原始 managed generation、RustProjectIR/interface 和 verifier receipt。AI 只提交有界 IR 操作，host 重建候选后对外状态只能是 `pending-reverification`；内部 `candidate-ready` 只是等待 host 复验的 ledger 状态，普通静态 receipt 和低层 resolve API 均不能关闭外部诊断。CompletionCoordinator 还会拒绝任何未 `resolved/cancelled` 的历史项目 repair 义务。
 
-只有在新 managed generation 上由同一 host gate 产生更高 epoch 的新 pass，才能写出内容寻址 revalidation receipt。结算事务会同时重开 source intake、当前 cohort、原始与新 project input、ledger gate record、raw observation/evidence、候选 IR/interface 和当前 generation，然后注册 successor receipt、resolve 目标并取消已被 successor 取代的同队列项；复验失败则回滚旧候选、登记新诊断并继承 attempt 预算。该闭环目前只覆盖 project compile diagnostic；link/init/feature/ABI 专属 verifier、A19e7 独立进程 capability 和完整 project-final 语义验收仍未完成，AI 候选不会增加 translator numerator。
+只有在新 managed generation 上由同一 host gate 产生更高 epoch 的新 pass，才能写出内容寻址 revalidation receipt。结算事务会同时重开 source intake、当前 cohort、原始与新 project input、ledger gate record、raw observation/evidence、分类回执、候选 IR/interface 和当前 generation，然后注册 successor receipt、resolve 目标并取消已被 successor 取代的同队列项；复验失败则回滚旧候选、登记新诊断并继承 attempt 预算。该闭环已接入 Cargo compile/link 的严格分类路径；initialization、feature/cfg、ABI 专属 verifier、A19e7 独立进程 capability 和完整 project-final 语义验收仍未完成，AI 候选不会增加 translator numerator。
 
-当前正向完成链仍未闭合：CLI 已有 host-owned integration/Cargo adapter 和失败诊断回投，但 candidate 的 oracle/negative/unsafe-alias/ABI/final 正向 runner 尚未全部接通；A19e7 独立 verifier 进程、capability channel、一次性 nonce 和 raw-output 引用也尚未落地。因此当前 in-process receipt 只能证明 canonical 绑定与漂移拒绝，不能声明调用方不可伪造。真实 held-out 模式只重开只读 SQLite，复验 AI provider evidence、每个 candidate gate、不可变 candidate set、项目 final bundle 和原始 repository/build 绑定；任何自报 `semantic_gate=true` 的 JSON 都不能计入成功。
+当前正向完成链仍未闭合：CLI 已有 host-owned integration/Cargo adapter 和失败诊断回投，但 candidate 的 oracle/negative/unsafe-alias/ABI/final 正向 runner 尚未全部接通。进程内 raw-output 引用与可复算 classification receipt 已落地；A19e7 独立 verifier 进程、capability channel 和一次性 nonce 尚未落地，因此当前 host-issued receipt 仍只能证明 canonical 绑定与漂移拒绝，不能声明调用方不可伪造。真实 held-out 模式只重开只读 SQLite，复验 AI provider evidence、每个 candidate gate、不可变 candidate set、项目 final bundle 和原始 repository/build 绑定；任何自报 `semantic_gate=true` 的 JSON 都不能计入成功。
 
 阶段入口如下；它只完成规划、模型预检和条件调度，不代表翻译验收结束：
 
@@ -145,7 +145,9 @@ flowchart TB
     RUSTIR -->|"candidate-ready"| CARGO["Immutable IR-bound Cargo generation"]
     PENDING --> CARGO
     CARGO --> SANDBOX["Networkless bubblewrap check/test"]
-    SANDBOX -->|"structured project compile error"| INTAKE["Immutable project diagnostic intake"]
+    SANDBOX --> RAW["Private content-addressed stdout/stderr"]
+    RAW --> CLASSIFY["Recomputed whole-cohort classification receipt"]
+    CLASSIFY -->|"uniquely classified compile/link error"| INTAKE["Immutable project diagnostic intake"]
     INTAKE --> LEDGER
     INTAKE --> V2["Receipt v2 + shared project repair queue"]
     V2 --> RPRE
@@ -178,12 +180,13 @@ flowchart LR
     J -->|"candidate-ready"| K["14. Cargo generation"]
     T --> K
     K --> L["15. Sandboxed build/test"]
-    L -->|"project compile error"| P["16. Bound intake + receipt v2 queue"]
+    L --> O["16. Private raw refs + classification receipt"]
+    O -->|"uniquely classified compile/link error"| P["17. Bound intake + receipt v2 queue"]
     P --> R
-    L -->|"fresh same-gate pass"| U["17. Atomic revalidation settlement"]
+    L -->|"fresh same-gate pass"| U["18. Atomic revalidation settlement"]
     U --> J
-    L --> M["18. Project semantic and safety gates"]
-    M --> N["19. Candidate-set completion"]
+    L --> M["19. Project semantic and safety gates"]
+    M --> N["20. Candidate-set completion"]
 ```
 
 每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已处理已知 runtime/gate-authority 审查项，并补齐 Ninja/静态归档、toolchain、CLI 与只读 held-out 证据约束；当前开放项仍是 Meson/configure 构建事实、正向 candidate verifier、可用比赛等价沙箱和真实 held-out build/oracle。该流程图是实现合同，不是整项目成功声明。

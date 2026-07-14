@@ -5,6 +5,10 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from validation.tools.linker_diagnostic_parser import (
+    rustc_linker_undefined_symbols,
+)
+
 from .context_security import redact_metadata_text
 
 
@@ -12,13 +16,6 @@ MAX_COMPILER_DIAGNOSTICS = 8
 MAX_CODE_BYTES = 32
 MAX_MESSAGE_BYTES = 1_024
 CODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
-LINKER_FAILURE_PATTERN = re.compile(
-    r"^linking with `[A-Za-z0-9_.+-]{1,32}` failed: exit status: [1-9][0-9]*$"
-)
-UNDEFINED_SYMBOL_PATTERN = re.compile(
-    r"^rust-lld: error: undefined symbol: (?P<symbol>[A-Za-z_][A-Za-z0-9_]*)$",
-    re.MULTILINE,
-)
 
 
 def normalize_compiler_diagnostics(result: Mapping[str, Any]) -> list[dict[str, str]]:
@@ -109,7 +106,7 @@ def _normalize_diagnostic(
 
 
 def _normalize_diagnostics(value: Any) -> list[dict[str, str]]:
-    linker_symbols = _linker_undefined_symbols(value)
+    linker_symbols = rustc_linker_undefined_symbols(value)
     if linker_symbols:
         return [
             {
@@ -120,35 +117,6 @@ def _normalize_diagnostics(value: Any) -> list[dict[str, str]]:
         ]
     normalized = _normalize_diagnostic(value)
     return [normalized] if normalized is not None else []
-
-
-def _linker_undefined_symbols(value: Any) -> list[str]:
-    if (
-        not isinstance(value, Mapping)
-        or value.get("level") != "error"
-        or value.get("code") is not None
-        or not isinstance(value.get("message"), str)
-        or LINKER_FAILURE_PATTERN.fullmatch(value["message"]) is None
-    ):
-        return []
-    children = value.get("children")
-    if not isinstance(children, list):
-        return []
-    symbols: list[str] = []
-    for child in children[:32]:
-        if not isinstance(child, Mapping) or child.get("level") != "note":
-            continue
-        message = child.get("message")
-        if not isinstance(message, str):
-            continue
-        for match in UNDEFINED_SYMBOL_PATTERN.finditer(message):
-            symbol = match.group("symbol")
-            if symbol not in symbols:
-                symbols.append(symbol)
-                if len(symbols) >= MAX_COMPILER_DIAGNOSTICS:
-                    return symbols
-    return symbols
-
 
 def _bounded_text(value: str, maximum: int) -> str:
     encoded = value.strip().encode("utf-8")

@@ -24,7 +24,7 @@ from validation.tools._project_migration_harness.sandbox_contract import (
 )
 from validation.tools.project_migration_controller_test_support import ProjectMigrationControllerCase
 from validation.tools.project_migration_sandbox_test_support import (
-    bind_execution_plan,
+    bind_cargo_output, bind_execution_plan, cargo_compiler_message,
 )
 from validation.tools.project_migration_project_diagnostic_test_support import verify_project_compile_intake
 
@@ -258,20 +258,14 @@ class ProjectMigrationControllerTests(ProjectMigrationControllerCase):
             if item["artifact_id"] == candidate_id
         )
         failed_check = deepcopy(cargo_execution["checks"][0])
-        failed_check.update({
-            "status": "failed",
-            "returncode": 1,
-            "diagnostics": [{
-                "code": "rustc-type-error",
-                "stage": "cargo-check",
-                "message": "type mismatch",
-                "file": f"src/unit_{candidate_sha}.rs",
-                "line": 1,
-                "column": 1,
-                "level": "error",
-                "origin": "rustc-compiler-message",
-            }],
-        })
+        failed_check.update({"status": "failed", "returncode": 1})
+        bind_cargo_output(
+            failed_check,
+            stdout=cargo_compiler_message(
+                code="rustc-type-error", message="type mismatch",
+                file=f"src/unit_{candidate_sha}.rs",
+            ),
+        )
         failed_execution = {
             **deepcopy(cargo_execution),
             "status": "failed",

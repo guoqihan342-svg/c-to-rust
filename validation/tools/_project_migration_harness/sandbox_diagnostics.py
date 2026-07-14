@@ -6,6 +6,9 @@ from typing import Any
 from validation.tools._ai_candidate_harness_parts.context_security import (
     redact_metadata_text,
 )
+from validation.tools.linker_diagnostic_parser import (
+    parse_rustc_linker_diagnostic,
+)
 
 
 def cargo_diagnostics(stdout: str, command: str) -> list[dict[str, Any]]:
@@ -20,12 +23,29 @@ def cargo_diagnostics(stdout: str, command: str) -> list[dict[str, Any]]:
             continue
         if message.get("level") != "error":
             continue
-        if len(result) >= 64:
-            return [{
-                "code": "cargo_diagnostic_overflow",
+        linker = parse_rustc_linker_diagnostic(message)
+        if linker.blocker_code is not None:
+            result.append({
+                "code": linker.blocker_code,
                 "stage": f"cargo-{command}",
-                "message": "Cargo emitted more than 64 compiler errors",
-            }]
+                "message": "Linker diagnostics exceeded the bounded parser contract",
+            })
+            continue
+        if linker.symbols:
+            for symbol in linker.symbols:
+                if len(result) >= 64:
+                    return [_overflow(command)]
+                result.append({
+                    "code": "linker-undefined-symbol",
+                    "stage": f"cargo-{command}",
+                    "message": f"undefined linker symbol `{symbol}`",
+                    "linker_symbol": symbol,
+                    "level": "error",
+                    "origin": "rustc-linker-message",
+                })
+            continue
+        if len(result) >= 64:
+            return [_overflow(command)]
         code = message.get("code")
         code_value = code.get("code") if isinstance(code, dict) else None
         diagnostic = {
@@ -40,12 +60,33 @@ def cargo_diagnostics(stdout: str, command: str) -> list[dict[str, Any]]:
     return result
 
 
+def cargo_check_diagnostics(
+    stdout: str, command: str, returncode: int,
+) -> list[dict[str, Any]]:
+    diagnostics = cargo_diagnostics(stdout, command)
+    if returncode != 0 and not diagnostics:
+        return [{
+            "code": "cargo_command_failed",
+            "stage": f"cargo-{command}",
+            "message": f"cargo {command} exited with code {returncode}",
+        }]
+    return diagnostics
+
+
 def _code(value: Any) -> str:
     if isinstance(value, str) and len(value) <= 32 and all(
         char.isalnum() or char in "_-" for char in value
     ):
         return value.lower().replace("_", "-")
     return "rustc-diagnostic"
+
+
+def _overflow(command: str) -> dict[str, str]:
+    return {
+        "code": "cargo_diagnostic_overflow",
+        "stage": f"cargo-{command}",
+        "message": "Cargo emitted more than 64 compiler errors",
+    }
 
 
 def _message(value: Any) -> str:
@@ -82,4 +123,4 @@ def _location(value: Any) -> dict[str, Any]:
     return result
 
 
-__all__ = ["cargo_diagnostics"]
+__all__ = ["cargo_check_diagnostics", "cargo_diagnostics"]

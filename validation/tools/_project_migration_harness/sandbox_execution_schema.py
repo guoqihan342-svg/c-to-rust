@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import re
 from typing import Any
 
+from .cargo_raw_output_evidence import validate_cargo_raw_output_reference
 from .sandbox_contract import (
     SandboxContract, canonical_sha256, contract_from_payload,
 )
@@ -21,13 +22,16 @@ SANDBOX_EVIDENCE_KEYS = {
     "contract", "contract_sha256", "probe_receipt",
     "probe_receipt_sha256", "cleanup_verified",
 }
-CHECK_EVIDENCE_KEYS = {
+LEGACY_CHECK_EVIDENCE_KEYS = {
     "command", "status", "cargo_executed", "returncode", "timed_out",
     "stdout_sha256", "stderr_sha256", "sandbox_contract_sha256",
     "sandbox_command_sha256", "sandbox_command_started",
     "sandbox_launcher_argv_sha256", "sandbox_requirements_sha256",
     "sandbox_verification_plan", "sandbox_verification_plan_sha256",
     "sandbox_probe_receipt_sha256",
+}
+CHECK_EVIDENCE_KEYS = LEGACY_CHECK_EVIDENCE_KEYS | {
+    "stdout_ref", "stderr_ref",
 }
 
 
@@ -46,11 +50,16 @@ def validate_sandbox_execution_evidence(
     expected_command: Sequence[str],
     expected_input_sha256: str,
     expected_purpose: str,
+    require_raw_output: bool = False,
 ) -> ValidatedSandboxExecution:
     if not isinstance(sandbox, Mapping) or set(sandbox) != SANDBOX_EVIDENCE_KEYS:
         raise ValueError("sandbox execution evidence schema is invalid")
-    if not isinstance(check, Mapping) or set(check) != CHECK_EVIDENCE_KEYS:
+    check_keys = frozenset(check) if isinstance(check, Mapping) else frozenset()
+    if check_keys not in {frozenset(LEGACY_CHECK_EVIDENCE_KEYS), frozenset(CHECK_EVIDENCE_KEYS)}:
         raise ValueError("sandbox check evidence schema is invalid")
+    has_raw_output = check_keys == frozenset(CHECK_EVIDENCE_KEYS)
+    if require_raw_output and not has_raw_output:
+        raise ValueError("sandbox check raw output references are required")
     command = list(expected_command)
     if not command or not all(type(item) is str for item in command):
         raise ValueError("expected sandbox command is invalid")
@@ -80,6 +89,10 @@ def validate_sandbox_execution_evidence(
         ))
     ):
         raise ValueError("sandbox execution bindings are invalid")
+    _validated_raw_output_references(
+        check, expected_purpose=expected_purpose,
+        required=require_raw_output, present=has_raw_output,
+    )
     status = _derived_status(check)
     return ValidatedSandboxExecution(contract, probe, plan, status)
 
@@ -135,12 +148,28 @@ def _derived_status(check: Mapping[str, Any]) -> str:
     raise ValueError("sandbox execution result is environmental or ambiguous")
 
 
+def _validated_raw_output_references(
+    check: Mapping[str, Any], *, expected_purpose: str,
+    required: bool, present: bool,
+) -> None:
+    if not present:
+        return
+    for stream in ("stdout", "stderr"):
+        reference = check.get(f"{stream}_ref")
+        if reference is None and not required:
+            continue
+        validate_cargo_raw_output_reference(
+            reference, gate_kind=expected_purpose, stream=stream,
+            expected_sha256=str(check.get(f"{stream}_sha256")),
+        )
+
+
 def is_sha256(value: Any) -> bool:
     return type(value) is str and SHA256.fullmatch(value) is not None
 
 
 __all__ = [
-    "CHECK_EVIDENCE_KEYS", "SANDBOX_EVIDENCE_KEYS",
+    "CHECK_EVIDENCE_KEYS", "LEGACY_CHECK_EVIDENCE_KEYS", "SANDBOX_EVIDENCE_KEYS",
     "ValidatedSandboxExecution", "is_sha256",
     "validate_sandbox_execution_evidence",
 ]

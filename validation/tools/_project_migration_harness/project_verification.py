@@ -33,7 +33,7 @@ SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 
 def run_cargo_project_gates(
     project_root: Path, *, runtime_root: Path, cargo_command: str = "cargo",
-    timeout_seconds: int = 300,
+    timeout_seconds: int = 300, capture_raw_output: bool = False,
 ) -> dict[str, Any]:
     if timeout_seconds < 30 or timeout_seconds > 3_600:
         raise ValueError("timeout_seconds must be between 30 and 3600")
@@ -48,18 +48,20 @@ def run_cargo_project_gates(
         )
     return _run_managed_cargo(
         source, project, runtime_root, cargo_command, timeout_seconds,
+        capture_raw_output,
     )
 
 
 def run_cargo_generation_gates(
     generation_root: Path, *, runtime_root: Path, cargo_command: str = "cargo",
-    timeout_seconds: int = 300,
+    timeout_seconds: int = 300, capture_raw_output: bool = False,
 ) -> dict[str, Any]:
     if timeout_seconds < 30 or timeout_seconds > 3_600:
         raise ValueError("timeout_seconds must be between 30 and 3600")
     source = _project_target(generation_root).resolve(strict=True)
     return _run_managed_cargo(
         source, source, runtime_root, cargo_command, timeout_seconds,
+        capture_raw_output,
     )
 
 
@@ -76,7 +78,7 @@ def managed_project_input_sha256(project_root: Path) -> str:
 
 def _run_managed_cargo(
     source: Path, project: Path, runtime_root: Path,
-    cargo_command: str, timeout_seconds: int,
+    cargo_command: str, timeout_seconds: int, capture_raw_output: bool,
 ) -> dict[str, Any]:
     before, managed = existing_state(source)
     if not managed:
@@ -134,6 +136,7 @@ def _run_managed_cargo(
             checks.append(_run(
                 cargo, cargo_args, source, execution_root,
                 timeout_seconds, backend, before, probe_receipt,
+                capture_raw_output=capture_raw_output,
             ))
             if checks[-1]["status"] != "passed":
                 break

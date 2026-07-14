@@ -14,6 +14,9 @@ from .gate_evidence import (
 from .ledger_schema import _now_text
 from .ledger_security import LedgerError
 from .project_diagnostic_contract import validate_project_diagnostic_intake
+from .project_cargo_evidence import (
+    verify_project_cargo_classification, verify_project_cargo_raw_outputs,
+)
 
 
 def insert_project_diagnostic_intake(
@@ -32,7 +35,7 @@ def insert_project_diagnostic_intake(
     if record is None:
         raise LedgerError("project diagnostic intake gate record is missing")
     _assert_record_binding(record, intake)
-    _assert_source_evidence(database_path, intake)
+    _assert_source_evidence(database_path, intake, require_classification=True)
     connection.execute(
         """insert into project_diagnostic_intakes(
            intake_sha256,run_id,candidate_set_sha256,rust_project_ir_sha256,
@@ -179,7 +182,10 @@ def _assert_record_binding(record: sqlite3.Row, intake: Mapping[str, Any]) -> No
         raise LedgerError("project diagnostic intake changed its verifier receipt")
 
 
-def _assert_source_evidence(database_path: Path, intake: Mapping[str, Any]) -> None:
+def _assert_source_evidence(
+    database_path: Path, intake: Mapping[str, Any], *,
+    require_classification: bool = False,
+) -> None:
     raw_ref = intake["raw_observation"]
     receipt_ref = intake["verifier_receipt"]
     raw = read_content_addressed_json(
@@ -200,6 +206,27 @@ def _assert_source_evidence(database_path: Path, intake: Mapping[str, Any]) -> N
         candidate_set_sha256=intake["candidate_set_sha256"],
     )
     observation = raw.get("observation")
+    if isinstance(observation, Mapping):
+        verify_project_cargo_raw_outputs(
+            database_path, observation, gate_kind=str(intake["gate_kind"]),
+        )
+        classification = verify_project_cargo_classification(
+            database_path, observation, run_id=str(intake["run_id"]),
+            candidate_set_sha256=str(intake["candidate_set_sha256"]),
+            gate_kind=str(intake["gate_kind"]),
+            rust_project_ir_sha256=str(intake["rust_project_ir_sha256"]),
+            rust_project_interface_sha256=str(
+                intake["rust_project_interface_sha256"]
+            ),
+        )
+        if observation.get("schema_version") == 3:
+            _assert_classified_project_diagnostics(
+                classification, intake,
+            )
+        elif require_classification:
+            raise LedgerError(
+                "new project diagnostic intake requires v3 classification"
+            )
     observed_input = (
         observation.get("project_input_sha256")
         if isinstance(observation, Mapping) else None
@@ -214,6 +241,23 @@ def _assert_source_evidence(database_path: Path, intake: Mapping[str, Any]) -> N
         )
     ):
         raise LedgerError("project diagnostic intake is not a failed host observation")
+
+
+def _assert_classified_project_diagnostics(
+    receipt: Mapping[str, Any] | None, intake: Mapping[str, Any],
+) -> None:
+    if receipt is None or receipt["admission"]["status"] != "admitted":
+        raise LedgerError("project diagnostic intake lacks admitted classification")
+    target = next(
+        item for item in receipt["gates"]
+        if item["gate_kind"] == intake["gate_kind"]
+    )
+    expected = sorted(
+        item["project_diagnostic"]["diagnostic_sha256"]
+        for item in intake["diagnostics"]
+    )
+    if target["project_diagnostic_sha256s"] != expected:
+        raise LedgerError("project diagnostic intake changed its classification")
 
 
 def _reference(value: Mapping[str, Any]) -> dict[str, Any]:

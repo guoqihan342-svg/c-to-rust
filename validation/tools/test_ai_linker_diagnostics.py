@@ -117,7 +117,7 @@ class AiLinkerDiagnosticsTests(unittest.TestCase):
                 self.assertNotIn("compiler_diagnostics", json.dumps(replay_fact))
                 self.assertNotIn("E0425", json.dumps(replay_fact))
 
-    def test_linker_child_exposes_only_identifier_shaped_undefined_symbol(self) -> None:
+    def test_mixed_linker_child_falls_back_to_bounded_parent_error(self) -> None:
         diagnostics = normalize_compiler_diagnostics(
             {
                 "compile_stderr": json.dumps(
@@ -148,8 +148,8 @@ class AiLinkerDiagnosticsTests(unittest.TestCase):
         self.assertEqual(
             diagnostics,
             [{
-                "code": "linker_undefined_symbol",
-                "message": "undefined external symbol `renamed_external`",
+                "code": "compile_error",
+                "message": "linking with `cc` failed: exit status: 1",
             }],
         )
         serialized = json.dumps(diagnostics)

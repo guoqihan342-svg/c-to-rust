@@ -9,6 +9,7 @@ from .ledger_security import LedgerError
 from .sandbox_contract import canonical_sha256
 from .sandbox_execution_schema import (
     CHECK_EVIDENCE_KEYS as CHECK_KEYS,
+    LEGACY_CHECK_EVIDENCE_KEYS as LEGACY_CHECK_KEYS,
     SANDBOX_EVIDENCE_KEYS as SANDBOX_KEYS,
     validate_sandbox_execution_evidence,
 )
@@ -66,7 +67,10 @@ def derive_compile_status(
     quarantine = payload.get("quarantine")
     if (
         not isinstance(sandbox, Mapping) or set(sandbox) != SANDBOX_KEYS
-        or not isinstance(check, Mapping) or set(check) != CHECK_KEYS
+        or not isinstance(check, Mapping)
+        or frozenset(check) not in {
+            frozenset(LEGACY_CHECK_KEYS), frozenset(CHECK_KEYS),
+        }
         or not reference(candidate_source)
         or not isinstance(run_contract, Mapping) or set(run_contract) != RUN_CONTRACT_KEYS
         or not reference(run_contract.get("integration_manifest"))

@@ -132,6 +132,8 @@ def evidence() -> tuple[dict, dict]:
         "timed_out": False,
         "stdout_sha256": "3" * 64,
         "stderr_sha256": "4" * 64,
+        "stdout_ref": _raw_ref("cargo-check", "stdout", "3" * 64),
+        "stderr_ref": _raw_ref("cargo-check", "stderr", "4" * 64),
         "sandbox_contract_sha256": contract.sha256,
         "sandbox_command_sha256": canonical_sha256(command),
         "sandbox_command_started": True,
@@ -142,6 +144,16 @@ def evidence() -> tuple[dict, dict]:
         "sandbox_probe_receipt_sha256": probe.sha256,
     }
     return sandbox, check
+
+
+def _raw_ref(gate: str, stream: str, digest: str) -> dict:
+    return {
+        "path": (
+            f"target/run/verification/raw-output/{gate}/{stream}/{digest}.bin"
+        ),
+        "sha256": digest,
+        "size_bytes": 1,
+    }
 
 
 def execution(sandbox: dict, check: dict) -> dict:

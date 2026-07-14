@@ -7,6 +7,9 @@ from typing import Any
 
 from .artifacts import content_sha256
 from .project_diagnostic_shape import build_project_diagnostic
+from .project_link_diagnostic import (
+    LINK_DIAGNOSTIC_CODE, project_link_diagnostic,
+)
 
 
 _RUSTC_CODE = re.compile(r"e[0-9]{4}\Z")
@@ -56,6 +59,14 @@ def partition_cargo_diagnostics(
             return CargoDiagnosticPartition(
                 {}, [], "diagnostic-environment-failure",
             )
+        if diagnostic.get("code") == LINK_DIAGNOSTIC_CODE:
+            normalized, blocker = project_link_diagnostic(
+                diagnostic, gate_kind, rust_project_ir,
+            )
+            if blocker is not None:
+                return CargoDiagnosticPartition({}, [], blocker)
+            project.append(normalized)
+            continue
         location = str(diagnostic.get("file", ""))
         owner = path_owners.get(location)
         if owner is not None:
@@ -93,9 +104,13 @@ def partition_cargo_diagnostics(
 def _structured_error(value: Any, gate_kind: str) -> bool:
     return (
         isinstance(value, Mapping)
-        and value.get("origin") == "rustc-compiler-message"
         and value.get("level") == "error"
         and value.get("stage") == gate_kind
+        and (
+            value.get("origin") == "rustc-compiler-message"
+            or value.get("origin") == "rustc-linker-message"
+            and value.get("code") == LINK_DIAGNOSTIC_CODE
+        )
     )
 
 
@@ -133,6 +148,7 @@ def _project_diagnostic(
     })
     stable_entities = sorted({
         code, f"event:{event_sha}", f"file:{file_value}", *entity_ids,
+        *module_ids, *extra_module_ids,
     })
     diagnostic = build_project_diagnostic(
         code=f"project-verifier-{code}",

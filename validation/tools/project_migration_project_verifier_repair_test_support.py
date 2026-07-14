@@ -44,15 +44,23 @@ from validation.tools._project_migration_harness.sandbox_requirements import (
     cargo_verification_plan,
 )
 from validation.tools.project_migration_gate_authority_test_support import digest
+from validation.tools.project_migration_cargo_receipt_test_support import (
+    classified_cargo_observation, register_verifier_project_ir,
+)
 from validation.tools.project_migration_project_repair_test_support import (
     project_repair_test_dispatch_permit,
+)
+from validation.tools.project_migration_sandbox_test_support import (
+    cargo_compiler_message,
 )
 
 
 class ProjectVerifierRepairFlowSupportMixin:
     def _prepare_verifier_case(self) -> None:
         self.promote_current_candidate()
-        self.rust_project_ir = self.register_project_interface_ready()
+        self.rust_project_ir = register_verifier_project_ir(
+            self.ledger, self.out_root, "target/run",
+        )
         self.candidate_set = self.ledger.bind_current_candidate_set(run_id="run")
         self._prepare_source_generation()
         self.reference = self._record_intake()
@@ -160,16 +168,16 @@ class ProjectVerifierRepairFlowSupportMixin:
             project_input = load_managed_project_context(
                 managed_project_root(self.out_root), members,
             )["project_input_sha256"]
-        observation = self._cargo_observation(status, project_input)
+        observation, partition = self._classified_cargo_observation(
+            status, project_input, candidate,
+        )
         diagnostic_input = None
         if status == "failed":
             diagnostic_input = {
                 "rust_project_ir_sha256": candidate["ir_sha256"],
                 "rust_project_interface_sha256": candidate["interface_sha256"],
                 "project_input_sha256": project_input,
-                "diagnostics": [project_verifier_diagnostic(
-                    candidate["modules"][0]["module_id"], "e0425",
-                )],
+                "diagnostics": partition.project_diagnostics,
             }
         return record_host_project_observation(
             ledger=self.ledger, out_root=self.out_root,
@@ -196,6 +204,31 @@ class ProjectVerifierRepairFlowSupportMixin:
         observation["check"]["sandbox_verification_plan_sha256"] = plan.sha256
         return observation
 
+    def _classified_cargo_observation(
+        self, status: str, project_input: str, rust_project_ir: dict[str, Any],
+    ) -> tuple[dict[str, Any], Any]:
+        with self.ledger.connect() as connection:
+            members = current_candidate_members(connection, "run")
+        stdout = ""
+        if status == "failed":
+            stdout = "".join(
+                cargo_compiler_message(
+                    code=code.upper(),
+                    message="unresolved import `shared_feature`",
+                    file="src/project.rs",
+                )
+                for code in ("e0425", "e0432")
+            )
+        return classified_cargo_observation(
+            out_root=self.out_root, out_root_rel="target/run", run_id="run",
+            gate_kind="cargo-check",
+            candidate_set_sha256=self.candidate_set,
+            project_input_sha256=project_input, candidate_members=members,
+            rust_project_ir=rust_project_ir,
+            observation=self._cargo_observation(status, project_input),
+            stdout=stdout,
+        )
+
     def _cargo_result(self, status: str, record: dict[str, Any]) -> dict[str, Any]:
         return {
             "schema_version": 1, "status": status, "run_id": "run",
@@ -206,14 +239,14 @@ class ProjectVerifierRepairFlowSupportMixin:
         }
 
     def _record_intake(self) -> dict[str, Any]:
-        module_id = self.rust_project_ir["modules"][0]["module_id"]
+        observation, partition = self._classified_cargo_observation(
+            "failed", self.source_project_input, self.rust_project_ir,
+        )
         recorded = record_host_project_observation(
             ledger=self.ledger, out_root=self.out_root,
             out_root_rel="target/run", run_id="run", gate_kind="cargo-check",
             candidate_set_sha256=self.candidate_set,
-            observation=self._cargo_observation(
-                "failed", self.source_project_input,
-            ),
+            observation=observation,
             diagnostic_codes=["e0425", "e0432"],
             project_diagnostic_input={
                 "rust_project_ir_sha256": self.rust_project_ir["ir_sha256"],
@@ -221,10 +254,7 @@ class ProjectVerifierRepairFlowSupportMixin:
                     "interface_sha256"
                 ],
                 "project_input_sha256": self.source_project_input,
-                "diagnostics": [
-                    project_verifier_diagnostic(module_id, code)
-                    for code in ("e0425", "e0432")
-                ],
+                "diagnostics": partition.project_diagnostics,
             },
         )
         return recorded["project_diagnostic_intake"]
