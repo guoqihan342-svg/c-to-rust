@@ -1,0 +1,37 @@
+{
+  "artifact_kind": "project-migration-build-ir-equivalence-extended-fixture",
+  "claim_boundary": {
+    "does_not_prove": [
+      "build success",
+      "program semantic equivalence",
+      "real toolchain identity"
+    ],
+    "semantic_gate": false,
+    "translation_coverage_numerator": 0
+  },
+  "compile_databases": {
+    "cmake": "cmake/compile_commands.json",
+    "meson": "meson/compile_commands.json",
+    "ninja": "ninja/compile_commands.json"
+  },
+  "expected": {
+    "archive": "artifacts/libcore.a",
+    "archive_inputs": [
+      "artifacts/core.o"
+    ],
+    "external_link_arguments": [
+      "-pthread"
+    ],
+    "link": "artifacts/program",
+    "link_inputs": [
+      "artifacts/main.o",
+      "artifacts/libcore.a"
+    ],
+    "sources": [
+      "src/core.c",
+      "src/main.c"
+    ]
+  },
+  "meson_path_placeholder": "@ROOT@",
+  "schema_version": 1
+}

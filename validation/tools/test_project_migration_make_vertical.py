@@ -182,17 +182,20 @@ class MakeVerticalClosureTests(unittest.TestCase):
                 require_build_closure=False,
             )
 
-        self.assertEqual("planned", plan["status"], plan)
-        self.assertFalse(plan["execution"]["build_ir_ready"])
-        self.assertEqual([], plan["scheduler"]["ready_worker_ids"])
+        self.assertEqual("blocked", plan["status"], plan)
+        self.assertEqual(
+            ["build_ir_worker_admission_blocked"], plan["blockers"],
+        )
         admission = self.read(
             bundle["harness"] / "target/run/plan/build-ir-worker-admission.json"
         )
         self.assertEqual("blocked", admission["status"], admission)
-        self.assertFalse(any(
-            item["launch_policy"]["state"] == "ready"
-            for item in plan["portfolio"]["assignments"]
-        ))
+        self.assertNotIn("portfolio_dag", plan["artifacts"])
+        self.assertNotIn("migration_graph", plan["artifacts"])
+        self.assertFalse(
+            (bundle["harness"] / "target/run/state/project-migration.sqlite3")
+            .exists()
+        )
 
     def test_root_rename_is_semantically_equivalent(self) -> None:
         projections = []

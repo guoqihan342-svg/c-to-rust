@@ -9,11 +9,11 @@ from typing import Any
 from .artifacts import canonical_json_bytes, content_sha256
 
 
-BUILD_IR_SCHEMA_VERSION = 1
+BUILD_IR_SCHEMA_VERSION = 2
 BUILD_IR_KIND = "c2r-canonical-build-ir"
 BUILD_IR_EXTRACTOR = {
     "name": "project-migration-build-ir",
-    "version": "1",
+    "version": "2",
 }
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -96,101 +96,6 @@ def target_record(
         "ordered_link_arguments": link_args,
         "provenance": provenance,
     }
-
-
-def merge_meson_targets(
-    closure: Mapping[str, Any],
-    targets: list[dict[str, Any]],
-    owners: dict[str, str],
-    external: list[dict[str, Any]],
-) -> None:
-    generated = closure.get("generated_stage_facts")
-    meson = generated.get("meson_introspection") if isinstance(generated, Mapping) else None
-    if not isinstance(meson, Mapping) or meson.get("status") != "ready":
-        return
-    by_id = {item["target_id"]: item for item in targets}
-    meson_ids: dict[str, str] = {}
-    raw_targets = list_value(meson.get("targets"))
-    for raw in raw_targets:
-        outputs = [
-            normalize_binding(value, materialized=value.get("materialized", True))
-            for value in list_value(raw.get("outputs"))
-        ]
-        matches = {owners[item["path"]] for item in outputs if item["path"] in owners}
-        if len(matches) > 1:
-            raise ValueError("build_ir_meson_target_ambiguous")
-        target_id = next(iter(matches), stable_build_id("target", {
-            "kind": raw.get("type"),
-            "outputs": [item["path"] for item in outputs],
-            "fallback": raw.get("id"),
-        }))
-        meson_ids[str(raw.get("id"))] = target_id
-        if target_id not in by_id:
-            item = target_record(
-                target_id, str(raw.get("name")), str(raw.get("type")), outputs,
-                [], [], [], [], {
-                    "raw_fact_role": "generated-build-closure",
-                    "meson_target_id": raw.get("id"),
-                },
-            )
-            targets.append(item)
-            by_id[target_id] = item
-            for output in outputs:
-                if output["path"] in owners:
-                    raise ValueError("build_ir_target_output_duplicate")
-                owners[output["path"]] = target_id
-        else:
-            by_id[target_id]["kind"] = str(raw.get("type"))
-            by_id[target_id]["provenance"]["meson_target_id"] = raw.get("id")
-    for raw in raw_targets:
-        target_id = meson_ids[str(raw.get("id"))]
-        target = by_id[target_id]
-        existing_inputs = {
-            item["binding"]["path"] for item in target["ordered_inputs"]
-        }
-        for group in list_value(raw.get("source_groups")):
-            target["compile_argument_sets"].append({
-                key: copy.deepcopy(group[key])
-                for key in (
-                    "kind", "language", "machine", "compiler_summary",
-                    "linker_summary", "parameters_summary",
-                ) if key in group
-            })
-            for role, key in (("source", "sources"),
-                              ("generated-source", "generated_sources")):
-                for source in list_value(group.get(key)):
-                    binding = normalize_binding(
-                        source, materialized=source.get("materialized", True)
-                    )
-                    if binding["path"] in existing_inputs:
-                        continue
-                    dependency = owners.get(binding["path"])
-                    if dependency == target_id:
-                        dependency = None
-                    target["ordered_inputs"].append({
-                        "ordinal": len(target["ordered_inputs"]),
-                        "role": role,
-                        "binding": binding,
-                        "dependency_target_id": dependency,
-                    })
-                    existing_inputs.add(binding["path"])
-                    if dependency and dependency not in target["dependency_target_ids"]:
-                        target["dependency_target_ids"].append(dependency)
-        for dependency in string_list(raw.get("target_dependency_ids")):
-            resolved = meson_ids.get(dependency)
-            if resolved and resolved not in target["dependency_target_ids"]:
-                target["dependency_target_ids"].append(resolved)
-        for name in string_list(raw.get("external_dependency_names")):
-            external.append({
-                "dependency_id": stable_build_id(
-                    "external", {"target": target_id, "name": name}
-                ),
-                "kind": "declared-external-dependency",
-                "name": name,
-                "consumer_target_ids": [target_id],
-                "ordinal": None,
-                "provenance": {"raw_fact_role": "generated-build-closure"},
-            })
 
 
 def list_value(value: Any) -> list[Any]:
@@ -286,7 +191,6 @@ __all__ = [
     "canonical_build_ir_bytes",
     "finalize_build_ir",
     "list_value",
-    "merge_meson_targets",
     "normalize_binding",
     "is_sha256",
     "safe_posix_path",

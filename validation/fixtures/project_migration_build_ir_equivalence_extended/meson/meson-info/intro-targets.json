@@ -1,0 +1,65 @@
+[
+  {
+    "build_by_default": true,
+    "defined_in": "@ROOT@/meson.build",
+    "dependencies": [],
+    "depends": [],
+    "extra_files": [],
+    "filename": [
+      "@ROOT@/artifacts/libcore.a"
+    ],
+    "id": "core@sta",
+    "installed": false,
+    "name": "core",
+    "target_sources": [
+      {
+        "compiler": [
+          "clang"
+        ],
+        "language": "c",
+        "machine": "host",
+        "parameters": [
+          "-std=c11",
+          "-Iinclude",
+          "-DCORE_SCALE=3"
+        ],
+        "sources": [
+          "@ROOT@/src/core.c"
+        ]
+      }
+    ],
+    "type": "static library"
+  },
+  {
+    "build_by_default": true,
+    "defined_in": "@ROOT@/meson.build",
+    "dependencies": [],
+    "depends": [
+      "core@sta"
+    ],
+    "extra_files": [],
+    "filename": [
+      "@ROOT@/artifacts/program"
+    ],
+    "id": "program@exe",
+    "installed": false,
+    "name": "program",
+    "target_sources": [
+      {
+        "compiler": [
+          "clang"
+        ],
+        "language": "c",
+        "machine": "host",
+        "parameters": [
+          "-std=c11",
+          "-Iinclude"
+        ],
+        "sources": [
+          "@ROOT@/src/main.c"
+        ]
+      }
+    ],
+    "type": "executable"
+  }
+]

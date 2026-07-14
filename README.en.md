@@ -15,7 +15,7 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | Latest development stage | P0-A19: unfamiliar-repository build closure, verification authority, and real held-out contract closure |
 | Active translator task | P0-A19 project orchestration first; P0-A18c/P0-A10 remain finite regression and held-out acceptance tracks |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
-| P0-A19 finite gate | 386 Windows cases with two platform-conditional skips; 386/386 pass on WSL |
+| P0-A19 finite gate | 518/518 on Windows with five platform-conditional skips; 518/518 on WSL with three platform-conditional skips |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | Superpowers specs/plans, canonical roadmap, and harness evidence gates |
 
@@ -60,6 +60,8 @@ The outer OpenCode process on the competition platform does not need one hand-wr
 After discovery and before any worker or AI launch, the competition profile constructs `c-toolchain-evidence` from the discovered compiler drivers/wrappers, linker drivers/linkers, archivers, and ranlib tools. It binds the path/SHA/size/profile id of `config/competition-env/environment.json`, the environment allowlist and PATH-snapshot hashes, host/WSL fingerprints, absolute resolved paths, and binary SHA/size, then runs only fixed bounded version, target, sysroot, resource-dir, and derived-linker probes. Each probe's raw stdout/stderr is stored as bounded base64, SHA-256, and size inside a content-addressed attachment bound by BuildIR. A missing tool, failed or drifted probe, platform mismatch, or competition GCC-version mismatch fails closed before scheduling.
 
 Competition canonical BuildIR uses each TU, ABI fact, and object/link/archive target's `toolchain_id` as a foreign key into host-probed toolchain records; missing or unknown foreign keys and token-only evidence cannot pass. On every reopen, the verifier reads the original `c-toolchain-evidence` attachment through BuildIR raw-fact references, rechecks base64/hash/size, reparses the profile, repository bindings, and absolute executables, reruns the fixed probes, rederives linker/role mappings, and reprojects BuildIR byte for byte. Any PATH, environment, binary, probe, or projection drift blocks.
+
+BuildIR adapter convergence is locked by a same-source Git-tracked fixture: CMake, Ninja, and Meson produce one canonical projection for two TUs, a static archive, a ranlib pass, a final multi-input link, and an external dependency. Meson-private target/source/compiler summaries remain provenance only and cannot enter the downstream DAG or ContextPack. The orchestrator reopens the same BuildIR reference again before CIndex or DAG work; failure during initial validation or admission creates no migration graph, portfolio, ledger, or model call. This evidence remains `semantic_gate=false` and does not claim build or program-semantic success.
 
 AI is primary at runtime. Boundary groups first use a planner to select translation with context, preservation of a verifiable FFI boundary, or an explicit refusal. Translators emit Rust source, reviewers provide structural findings only, and repairers consume only allowlisted failure diagnostics. Typed IR and C2Rust are fact or candidate sources rather than a default routing priority. No model may write semantic pass, last-good, or project-complete state.
 
@@ -121,7 +123,8 @@ flowchart TB
     CLOSURE --> TOOLCHAIN
     CLOSURE --> BUILDIR["Canonical manifest-bound BuildIR"]
     TOOLCHAIN --> BUILDIR
-    BUILDIR --> INDEX["C index and include/global/top-level facts"]
+    BUILDIR --> ADMISSION["BuildIR admission reverify\nsame artifact before any DAG work"]
+    ADMISSION --> INDEX["C index and include/global/top-level facts"]
     INDEX --> DAG["Call graph, SCCs, waves, boundary groups"]
     DAG --> CONTEXT["Hash-bound paged ContextPacks"]
     CONTEXT --> PORTFOLIO["Planner / translator / reviewer / repairer portfolio"]
@@ -172,7 +175,8 @@ flowchart LR
     B --> C
     B --> D["4. Canonical manifest-bound BuildIR"]
     C --> D
-    D --> E["5. Include, symbol, SCC migration DAG"]
+    D --> BIRADMIT["4b. BuildIR admission reverify"]
+    BIRADMIT --> E["5. Include, symbol, SCC migration DAG"]
     E --> F["6. Paged ContextPack"]
     F --> G["7. Preflight-bound worker request"]
     G --> H["8. AI candidate + provider evidence"]
@@ -199,7 +203,7 @@ flowchart LR
     V2 --> N["24. Completed receipt binds both verifications"]
 ```
 
-Every edge carries schema-bound artifacts with repository-relative paths and SHA-256, not chat conclusions. This stage addresses the known runtime/gate-authority findings and adds Ninja/static-archive support, competition-profile C-toolchain input closure, canonical BuildIR reopen/reprojection, two CompletionCoordinator checkpoints, CLI constraints, and read-only held-out evidence. Remaining work includes Meson/configure build facts, positive candidate verifiers, the A19e7 independent process capability, the A19e8 non-degrading sandbox, a usable competition-equivalent environment, and real held-out build/oracle semantic acceptance. This profile-bound input evidence keeps `competition_exact=false`; the diagram is an implementation contract, not a whole-project success claim.
+Every edge carries schema-bound artifacts with repository-relative paths and SHA-256, not chat conclusions. This stage adds same-source CMake/Ninja/Meson BuildIR convergence, multi-TU/static-archive/ranlib/multi-input-link facts, competition-profile C-toolchain input closure, a pre-DAG BuildIR admission reopen, two CompletionCoordinator checkpoints, CLI constraints, and read-only held-out evidence. Remaining work includes constrained Meson/configure generation, positive candidate verifiers, the A19e7 independent process capability, the A19e8 non-degrading sandbox, a usable competition-equivalent environment, and real held-out build/oracle semantic acceptance. This profile-bound input evidence keeps `competition_exact=false`; the diagram is an implementation contract, not a whole-project success claim.
 
 ## Slice Verification and Publication Architecture
 

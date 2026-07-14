@@ -19,6 +19,7 @@ from .build_ir_reopen import (
 )
 from .build_ir_host_toolchains import validate_host_bound_toolchains
 from .build_ir_toolchain_validation import validate_toolchain_references
+from .build_ir_target_extensions import validate_target_extensions
 from .build_ir_projection import target_closure
 from .c_toolchain_schema import C_TOOLCHAIN_RAW_ROLE
 from .closure_paths import verify_repository_artifact
@@ -206,6 +207,10 @@ def _validate_targets(targets: list[Mapping[str, Any]], identifiers: set[str]) -
     for target in targets:
         _require_provenance(target)
         target_id = str(target["target_id"])
+        try:
+            validate_target_extensions(target)
+        except ValueError as error:
+            raise BuildIRValidationError(str(error)) from error
         dependencies = target.get("dependency_target_ids")
         if not _strings(dependencies) or len(dependencies) != len(set(dependencies)):
             raise BuildIRValidationError("build_ir_target_dependencies_invalid")

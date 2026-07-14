@@ -224,6 +224,11 @@ def _project_targets(
             [output], inputs, dependencies, argument_sets, link_arguments,
             {"raw_fact_role": MAKE_RAW_ROLE, "command_ordinal": command["ordinal"]},
         )
+        if kind == "archive":
+            target["archive_semantics"] = {
+                "operation": command["argv"][1].lstrip("-"),
+                "ranlib_passes": 0,
+            }
         if projector and kind == "compile":
             target["toolchain_id"] = unit["toolchain_id"]
         elif projector:
@@ -266,6 +271,7 @@ def _merge_ranlib(
     if target is None or target["kind"] != "archive":
         raise ValueError("make_build_ir_ranlib_without_archive")
     target["compile_argument_sets"].append(_command_arguments(command))
+    target["archive_semantics"]["ranlib_passes"] += 1
     if projector:
         identifiers = target.setdefault("auxiliary_toolchain_ids", [])
         identifiers.append(projector.command(command["tool"], "ranlib"))

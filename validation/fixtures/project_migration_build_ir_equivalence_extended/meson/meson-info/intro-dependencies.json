@@ -1,0 +1,13 @@
+[
+  {
+    "compile_args": [],
+    "dependencies": [],
+    "depends": [],
+    "link_args": [
+      "-pthread"
+    ],
+    "name": "threads",
+    "type": "system",
+    "version": "unknown"
+  }
+]

@@ -51,6 +51,16 @@ def generated_inputs(
                     "consumer_target_ids": [target["target_id"]],
                     "provenance": {"raw_fact_role": "generated-build-closure"},
                 })
+        for item in list_value(target.get("declared_inputs")):
+            if not isinstance(item, dict) or item.get("role") != "generated-source":
+                continue
+            records.append({
+                "binding": copy.deepcopy(item["binding"]),
+                "role": item["role"],
+                "producer_target_id": item.get("dependency_target_id"),
+                "consumer_target_ids": [target["target_id"]],
+                "provenance": {"raw_fact_role": "generated-build-closure"},
+            })
     keyed = {item["binding"]["path"]: item for item in records}
     return [keyed[path] for path in sorted(keyed)]
 

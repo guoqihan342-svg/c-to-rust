@@ -1,0 +1,21 @@
+{
+  "build": {},
+  "host": {
+    "c": {
+      "default_suffix": "c",
+      "exelist": [
+        "clang"
+      ],
+      "file_suffixes": [
+        "c"
+      ],
+      "full_version": "fixture compiler metadata",
+      "id": "clang",
+      "linker_exelist": [
+        "clang"
+      ],
+      "linker_id": "ld",
+      "version": "0"
+    }
+  }
+}

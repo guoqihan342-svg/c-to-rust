@@ -7,9 +7,10 @@ from typing import Any
 from .artifacts import content_sha256
 from .build_ir import (
     BUILD_IR_EXTRACTOR, BUILD_IR_KIND, BUILD_IR_SCHEMA_VERSION,
-    finalize_build_ir, list_value, merge_meson_targets,
-    normalize_binding, stable_build_id, string_list, target_record,
+    finalize_build_ir, list_value, normalize_binding, stable_build_id,
+    string_list, target_record,
 )
+from .build_ir_meson import merge_meson_targets
 from .build_ir_host_toolchains import HostToolchainProjection
 from .build_ir_projection_inputs import generated_inputs, source_inputs
 from .build_ir_projection_legacy import (
@@ -207,6 +208,11 @@ def _targets(
             [output], inputs, dependencies, [], arguments,
             {"raw_fact_role": "generated-build-closure", "fact_path": fact.get("path")},
         )
+        if kind == "archive":
+            target["archive_semantics"] = {
+                "operation": raw.get("archive_operation"),
+                "ranlib_passes": len(string_list(raw.get("ranlib_drivers"))),
+            }
         if projector:
             target["toolchain_id"] = projector.command(
                 raw.get("driver"),

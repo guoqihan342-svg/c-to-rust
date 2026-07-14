@@ -1,0 +1,1 @@
+clang ../artifacts/main.o ../artifacts/libcore.a -pthread -o ../artifacts/program

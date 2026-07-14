@@ -1,0 +1,31 @@
+[
+  {
+    "arguments": [
+      "clang",
+      "-std=c11",
+      "-Iinclude",
+      "-DCORE_SCALE=3",
+      "-c",
+      "src/core.c",
+      "-o",
+      "artifacts/core.o"
+    ],
+    "directory": ".",
+    "file": "src/core.c",
+    "output": "artifacts/core.o"
+  },
+  {
+    "arguments": [
+      "clang",
+      "-std=c11",
+      "-Iinclude",
+      "-c",
+      "src/main.c",
+      "-o",
+      "artifacts/main.o"
+    ],
+    "directory": ".",
+    "file": "src/main.c",
+    "output": "artifacts/main.o"
+  }
+]

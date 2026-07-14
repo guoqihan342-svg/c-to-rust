@@ -1,0 +1,12 @@
+[
+  {
+    "choices": [
+      "ninja"
+    ],
+    "machine": "any",
+    "name": "backend",
+    "section": "core",
+    "type": "combo",
+    "value": "ninja"
+  }
+]

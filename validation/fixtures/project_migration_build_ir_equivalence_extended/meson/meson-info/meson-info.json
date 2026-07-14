@@ -1,0 +1,37 @@
+{
+  "directories": {
+    "build": "@ROOT@/meson",
+    "info": "@ROOT@/meson/meson-info",
+    "source": "@ROOT@"
+  },
+  "error": false,
+  "introspection": {
+    "information": {
+      "buildoptions": {
+        "file": "intro-buildoptions.json",
+        "updated": true
+      },
+      "buildsystem_files": {
+        "file": "intro-buildsystem_files.json",
+        "updated": true
+      },
+      "compilers": {
+        "file": "intro-compilers.json",
+        "updated": true
+      },
+      "dependencies": {
+        "file": "intro-dependencies.json",
+        "updated": true
+      },
+      "targets": {
+        "file": "intro-targets.json",
+        "updated": true
+      }
+    },
+    "version": {
+      "full": "1.0.0",
+      "major": 1,
+      "minor": 0
+    }
+  }
+}

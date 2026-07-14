@@ -1,0 +1,2 @@
+ar qc ../artifacts/libcore.a ../artifacts/core.o
+ranlib ../artifacts/libcore.a

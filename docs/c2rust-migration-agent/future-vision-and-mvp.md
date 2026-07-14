@@ -518,9 +518,14 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
         - [x] A19a7c2c：把 canonical C toolchain evidence 作为 BuildIR raw attachment；同一个 BuildIR verifier 必须重开二进制和原始 probe CAS、重跑固定 probe、重新导出角色映射并逐字节重投影，PATH、symlink/reparse、binary、version、target、sysroot、environment 或 profile 漂移一律阻塞。
         - [x] A19a7c2d：`CompletionCoordinator` 从 immutable migration manifest 取得唯一 BuildIR reference；比赛 `complete` 的 repo root 仅作重开 locator，在任何候选/AI/Cargo 执行前和写入 host project-final 前各运行一次同一 verifier，并把两次内容寻址 receipt 绑定到 completion receipt。
         - [x] A19a7c2e：补齐身份无关的 Windows 合同测试、WSL/Linux 真实 GCC/Clang/binutils probe、跨 host/profile 拒绝和 project-final 零后续调用断言；A19e7/A19e8 未完成前保持 `semantic_gate=false`，不得把本机 probe 称为独立 verifier 或 `competition-exact`。
-    - [ ] A19a7d：用不含项目身份的等价构建 fixture 证明各 adapter 对同一构建语义产生相同 canonical projection，并用静态边界测试拒绝下游导入 adapter 私有字段；有限 held-out 项目必须先通过 BuildIR 验证才能进入迁移 DAG。
+    - [x] A19a7d：用不含项目身份的等价构建 fixture 证明各 adapter 对同一构建语义产生相同 canonical projection，并用静态边界测试拒绝下游导入 adapter 私有字段；有限 held-out 项目必须先通过 BuildIR 验证才能进入迁移 DAG。
       - [x] A19a7d1：Git-tracked 同源 fixture 已证明 compile-database+CMake 与 compile-database+Ninja 产生完全相同的 canonical BuildIR/`semantic_sha256`；Make 路径经同一 validator 重开，只在严格受限、test-only、非语义的公共合同上与二者相等。compile target id 已统一使用 canonical `kind=object`，define 漂移会改变公共合同；status、boundaries、raw refs、物化、toolchain、direct argv/link args 与 provenance 差异全部保留并显式断言不等。
-      - [ ] A19a7d2：把同源 fixture 扩展到 Meson、multi-TU、archive/ranlib、多输入和 external dependency/toolchain 语义，并让有限 held-out 项目通过 BuildIR validator 后再进入迁移 DAG。当前公共合同不证明 build 成功、程序语义、真实 toolchain 或完整 adapter 等价。
+      - [x] A19a7d2：把同源 fixture 扩展到 Meson、multi-TU、archive/ranlib、多输入和 external dependency/toolchain 语义，并让有限 held-out 项目通过 BuildIR validator 后再进入迁移 DAG。
+        - [x] A19a7d2a：Git-tracked 扩展 fixture 以相同两个 TU、object、static archive、ranlib、最终多输入 link 和 `-pthread` 事实证明 CMake、Ninja、Meson 三条路径产生逐字段相同的 canonical projection/`semantic_sha256`；repository rename 不改变语义，compile/link 事实从 clang 切到 GCC 时三者共同改变 toolchain 语义。
+        - [x] A19a7d2b：BuildIR schema/extractor 已升为 v2；Meson target type/source summary 只保存在被 semantic projection 排除的 provenance；canonical target kind、ordered input、archive operation/ranlib count、声明式 external dependency 和生成源使用 adapter-independent 字段。静态边界测试禁止所有下游生产模块读取 Meson 私有字段，Meson 自报 compiler metadata 漂移不能覆盖 compile/toolchain 权威事实。
+        - [x] A19a7d2c：两个随机身份的有限 held-out 项目在 CIndex、migration graph、ContextPack、portfolio 和 ledger 之前连续重开同一 BuildIR 引用；首次验证失败或 worker-admission 时 source/hash 漂移均立即 blocked，后续 DAG、ledger、model 零调用。
+
+        该完成项只证明受绑定构建事实的 canonical adapter convergence、漂移拒绝和 DAG 入场顺序；不证明命令已执行、build 成功、程序语义、独立 verifier 身份、真实 held-out 翻译成功或 `competition-exact`。真实 host toolchain 身份仍由 A19a7c2 证据链负责。
   - [ ] **A19a8：显式启用、强隔离的 Make dry-run 构建事实采集**。
     - [ ] A19a8a：仅在 compile database、可验证生成事实和只读 metadata 均无法闭合 BuildIR 时，才允许用户显式选择 `collect-make-facts`；禁止自动 fallback。采集前必须证明无网络、源码只读、独立输出根、子进程约束、环境白名单、超时、CPU/内存/文件/进程数与输出上限及退出清理均生效；能力不足时在执行 Make 前 fail closed。
       - [x] A19a8a1：当前入口只接受显式 path/SHA/size 绑定的预采集 Make 报告；不会从 compile database 或普通发现自动 fallback，双输入会在 discovery/CLI 前置校验中阻塞。

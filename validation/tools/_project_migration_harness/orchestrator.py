@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .artifacts import checked_relative_path, content_sha256, write_json_artifact
 from .build_adapter import (
@@ -16,10 +16,13 @@ from .discovery import discover_project
 from .ledger import ProjectLedger, SCHEMA_VERSION as LEDGER_SCHEMA_VERSION
 from .migration_graph import build_migration_graph
 from .orchestrator_context import ContextPortfolioError, build_context_portfolio
+from .orchestrator_stages import blocked_plan as _blocked, run_stage as _stage
 from .scheduler import schedule_portfolio
 
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
 PROJECT_PROFILES = {"competition", "development"}
+
+
 def plan_project(
     repo_root: str | Path,
     *,
@@ -78,6 +81,13 @@ def plan_project(
     generated_closure = build_stage["closure"]
     closure_verification = build_stage["closure_verification"]
     closure_ready = bool(build_stage["closure_ready"])
+    admission = verify_build_ir_artifact(source, output, artifacts["build_ir"])
+    artifacts["build_ir_worker_admission"] = write_json_artifact(
+        output, "plan/build-ir-worker-admission.json", admission,
+    )
+    if admission.get("status") != "verified":
+        return _blocked(output, artifacts, "build_ir_worker_admission_blocked")
+    build_ir_ready = True
 
     project_key = content_sha256({
         "build_ir": artifacts["build_ir"],
@@ -121,10 +131,6 @@ def plan_project(
     if contexts.get("status") not in {"ready", "ready_with_boundaries"}:
         return _blocked(output, artifacts, "context_pages_blocked")
 
-    admission = verify_build_ir_artifact(source, output, artifacts["build_ir"])
-    artifacts["build_ir_worker_admission"] = write_json_artifact(
-        output, "plan/build-ir-worker-admission.json", admission)
-    build_ir_ready = admission.get("status") == "verified"
     try:
         dag, portfolio, page_refs, materialization_ref = build_context_portfolio(
             contexts, graph, output=output, out_rel=out_rel,
@@ -266,34 +272,6 @@ def plan_project(
     plan["plan_sha256"] = content_sha256(plan)
     write_json_artifact(output, "project-migration-plan.json", plan)
     return plan
-def _stage(name: str, operation: Callable[[], dict[str, Any]]) -> dict[str, Any] | None:
-    try:
-        return operation()
-    except (OSError, UnicodeError, ValueError):
-        _ = name
-        return None
-
-
-def _blocked(
-    output: Path,
-    artifacts: dict[str, dict[str, Any]],
-    reason: str,
-) -> dict[str, Any]:
-    result = {
-        "schema_version": 1,
-        "status": "blocked",
-        "blockers": [reason],
-        "artifacts": artifacts,
-        "execution": {"model_launched": False, "cargo_executed": False},
-        "claim_boundary": {
-            "semantic_gate": False,
-            "translation_coverage_numerator": 0,
-            "proof_class": "project-plan-only",
-        },
-    }
-    result["plan_sha256"] = content_sha256(result)
-    write_json_artifact(output, "project-migration-plan.json", result)
-    return result
 
 
 __all__ = ["plan_project"]

@@ -163,8 +163,9 @@ class ProjectMigrationBuildIRTests(unittest.TestCase):
             item["binding"]["path"] for item in projected["generated_inputs"]
         })
         executable = next(item for item in projected["targets"]
-                          if item["kind"] == "executable")
-        self.assertTrue(executable["compile_argument_sets"])
+                          if item["kind"] == "link")
+        self.assertFalse(executable["compile_argument_sets"])
+        self.assertTrue(executable["provenance"]["meson_source_groups"])
 
     def test_source_and_build_metadata_drift_fail_closed(self) -> None:
         root, output, _build_ir, reference = self._materialize("input-drift")
@@ -219,7 +220,7 @@ class ProjectMigrationBuildIRTests(unittest.TestCase):
             item["kind"] for item in duplicate["blockers"]
         })
 
-    def test_worker_admission_reopens_build_ir_and_defers_every_worker(self) -> None:
+    def test_worker_admission_drift_stops_before_dag_and_ledger(self) -> None:
         root, database = self._project("admission")
         harness = self.base / "admission-harness"
         harness.mkdir()
@@ -237,14 +238,16 @@ class ProjectMigrationBuildIRTests(unittest.TestCase):
                 compile_database=database, require_build_closure=True,
             )
 
-        self.assertFalse(plan["execution"]["build_ir_ready"])
-        self.assertEqual([], plan["scheduler"]["ready_worker_ids"])
-        self.assertNotIn("initial_worker_requests", plan["artifacts"])
+        self.assertEqual("blocked", plan["status"])
+        self.assertEqual(
+            ["build_ir_worker_admission_blocked"], plan["blockers"],
+        )
+        self.assertNotIn("migration_graph", plan["artifacts"])
+        self.assertNotIn("portfolio_dag", plan["artifacts"])
         self.assertFalse((harness / "target/run/harness/assignments").exists())
-        self.assertFalse(any(
-            item["launch_policy"]["state"] == "ready"
-            for item in plan["portfolio"]["assignments"]
-        ))
+        self.assertFalse(
+            (harness / "target/run/state/project-migration.sqlite3").exists()
+        )
 
 
 if __name__ == "__main__":

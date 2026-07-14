@@ -19,7 +19,7 @@
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
 | 当前翻译任务 | P0-A19 项目级编排优先；P0-A18c/P0-A10 保留为有限回归与 held-out 验收 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
-| P0-A19 有限门禁 | Windows 386 项（2 项平台条件跳过）；WSL 386/386 |
+| P0-A19 有限门禁 | Windows 518/518（5 项平台条件跳过）；WSL 518/518（3 项平台条件跳过） |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
 
@@ -70,6 +70,8 @@ AI candidate manifest v9 的 `prompt_scope` 由实际 ContextPack 计算，并�
 competition profile 在发现完成后、任何 worker/AI 启动前，从发现到的 compiler driver/wrapper、linker driver/linker、archiver 和 ranlib 构造 `c-toolchain-evidence`。证据绑定 `config/competition-env/environment.json` 的 path/SHA/size/profile id、环境白名单与 PATH 快照哈希、host/WSL 指纹、绝对解析路径和 binary SHA/size，并只运行固定且有界的 version、target、sysroot、resource-dir 和 derived-linker 探针。每个探针的原始 stdout/stderr 以有界 base64、SHA-256 和 size 保存在 BuildIR 哈希绑定的内容寻址 attachment；工具缺失、探针失败或漂移、平台不符以及 competition GCC 版本不符都会在调度前 fail closed。
 
 competition 的 canonical BuildIR 把 TU、ABI facts 以及 object/link/archive target 的 `toolchain_id` 作为到 host-probed toolchain records 的外键，缺失或未知外键以及 token-only evidence 不能通过。每次重开时，verifier 都从 BuildIR raw-fact refs 读取原始 `c-toolchain-evidence` attachment，复核 base64/hash/size，重新解析 profile、repository bindings 和绝对 executable，重跑固定探针，重新派生 linker/role mapping，并逐字节重投影 BuildIR；PATH、环境、binary、probe 或 projection 任一漂移都会阻断。
+
+BuildIR 适配器收敛由同源 Git-tracked fixture 锁定：CMake、Ninja、Meson 对两个 TU、静态归档、ranlib、最终多输入链接和外部依赖产生相同 canonical projection；Meson 私有 target/source/compiler 摘要只能留在 provenance，不能进入下游 DAG 或 ContextPack。编排器在 CIndex/DAG 前再次重开同一 BuildIR 引用；首次验证或 admission 重开失败时，不生成 migration graph、portfolio、ledger，也不启动模型。该证据固定为 `semantic_gate=false`，不代表 build 或程序语义已经通过。
 
 运行时以 AI 为主：boundary group 先由 planner 选择“带上下文翻译、保留可验证 FFI 边界或明确拒绝”，translator 输出 Rust source，reviewer 只给结构审查，repairer 只消费允许的失败诊断。typed IR/C2Rust 是事实或候选来源，不是默认路由优先级；任何模型都不能写 semantic pass、last-good 或项目完成状态。
 
@@ -133,7 +135,8 @@ flowchart TB
     CLOSURE --> TOOLCHAIN
     CLOSURE --> BUILDIR["Canonical manifest-bound BuildIR"]
     TOOLCHAIN --> BUILDIR
-    BUILDIR --> INDEX["C index and include/global/top-level facts"]
+    BUILDIR --> ADMISSION["BuildIR admission reverify\nsame artifact before any DAG work"]
+    ADMISSION --> INDEX["C index and include/global/top-level facts"]
     INDEX --> DAG["Call graph, SCCs, waves, boundary groups"]
     DAG --> CONTEXT["Hash-bound paged ContextPacks"]
     CONTEXT --> PORTFOLIO["Planner / translator / reviewer / repairer portfolio"]
@@ -184,7 +187,8 @@ flowchart LR
     B --> C
     B --> D["4. Canonical manifest-bound BuildIR"]
     C --> D
-    D --> E["5. Include, symbol, SCC migration DAG"]
+    D --> BIRADMIT["4b. BuildIR admission reverify"]
+    BIRADMIT --> E["5. Include, symbol, SCC migration DAG"]
     E --> F["6. Paged ContextPack"]
     F --> G["7. Preflight-bound worker request"]
     G --> H["8. AI candidate + provider evidence"]
@@ -211,7 +215,7 @@ flowchart LR
     V2 --> N["24. Completed receipt binds both verifications"]
 ```
 
-每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已处理已知 runtime/gate-authority 审查项，并补齐 Ninja/静态归档、competition profile C toolchain input closure、canonical BuildIR 重开重投影、CompletionCoordinator 双 checkpoint、CLI 与只读 held-out 证据约束。当前开放项仍包括 Meson/configure 构建事实、正向 candidate verifier、A19e7 独立进程 capability、A19e8 non-degrading sandbox、可用比赛等价环境和真实 held-out build/oracle semantic acceptance；这些 profile-bound 输入证据保持 `competition_exact=false`，该流程图是实现合同，不是整项目成功声明。
+每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已处理已知 runtime/gate-authority 审查项，并补齐 CMake/Ninja/Meson 同源 BuildIR 收敛、multi-TU/静态归档/ranlib/多输入 link、competition profile C toolchain input closure、DAG 前 BuildIR admission 重开、CompletionCoordinator 双 checkpoint、CLI 与只读 held-out 证据约束。当前开放项仍包括受限 Meson/configure 生成、正向 candidate verifier、A19e7 独立进程 capability、A19e8 non-degrading sandbox、可用比赛等价环境和真实 held-out build/oracle semantic acceptance；这些 profile-bound 输入证据保持 `competition_exact=false`，该流程图是实现合同，不是整项目成功声明。
 
 ## 切片验证与发布架构
 
