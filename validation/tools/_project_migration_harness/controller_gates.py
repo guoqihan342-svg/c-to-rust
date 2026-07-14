@@ -21,8 +21,12 @@ def record_candidate_gate(
     run_id: str, unit_id: str, candidate_artifact_id: str,
     record_id: str, kind: str, gate_family: str, status: str,
     verifier_id: str, diagnostics: list[Mapping[str, Any]],
+    candidate_set_sha256: str | None = None,
+    project_record_id: str | None = None,
 ) -> dict[str, Any]:
     require_portable_id(record_id, "record_id")
+    if project_record_id is not None:
+        require_portable_id(project_record_id, "project_record_id")
     expected_kind = candidate_kind(gate_family)
     if kind != expected_kind:
         raise ValueError("candidate gate kind is fixed by its family")
@@ -47,13 +51,20 @@ def record_candidate_gate(
         gate_family=gate_family,
         status="failed",
         diagnostics=normalized["diagnostics"],
-        candidate_set_sha256=None,
+        candidate_set_sha256=candidate_set_sha256,
         source_evidence=(),
     )
     reference = write_content_addressed_json(
         out_root, f"candidate/{gate_family}", evidence
     )
     evidence_path = f"{out_root_rel}/{reference['path']}"
+    metadata: dict[str, Any] = {
+        "diagnostic_count": len(normalized["diagnostics"]),
+    }
+    if candidate_set_sha256 is not None:
+        metadata["candidate_set_sha256"] = candidate_set_sha256
+    if project_record_id is not None:
+        metadata["project_record_id"] = project_record_id
     ledger.record_candidate_failure(
         record_id=record_id,
         run_id=run_id,
@@ -62,7 +73,7 @@ def record_candidate_gate(
         evidence_path=evidence_path,
         evidence_sha256=reference["sha256"],
         gate_family=gate_family,
-        metadata={"diagnostic_count": len(normalized["diagnostics"])},
+        metadata=metadata,
     )
     state = next(
         (item for item in ledger.unit_states(run_id) if item["unit_id"] == unit_id),
@@ -76,6 +87,7 @@ def record_candidate_gate(
             unit_id=unit_id,
             candidate_artifact_id=candidate_artifact_id,
             failed_record_id=record_id,
+            expected_candidate_set_sha256=candidate_set_sha256,
         )
     return {
         "schema_version": 1,
@@ -86,6 +98,10 @@ def record_candidate_gate(
         "gate_status": "failed",
         "authority_id": authority,
         "candidate_artifact_id": candidate_artifact_id,
+        **(
+            {"candidate_set_sha256": candidate_set_sha256}
+            if candidate_set_sha256 is not None else {}
+        ),
         "evidence": {**reference, "path": evidence_path},
         "semantic_gate": False,
         "proof_boundary": "fail-closed CLI path; passing verdicts require a host verifier adapter",

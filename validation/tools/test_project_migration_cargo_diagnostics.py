@@ -88,6 +88,10 @@ class ProjectMigrationCargoDiagnosticTests(unittest.TestCase):
         unit_error = _error("e0308", f"src/unit_{digest}.rs")
         project_error = _error("e0432", "src/lib.rs", "unresolved import `shared`")
         ir = {
+            "modules": [{
+                "unit_id": "unit", "candidate_sha256": digest,
+                "rust_path": f"src/unit_{digest}.rs", "module_id": "module-unit",
+            }],
             "public_api": [{"symbol": "shared", "module_id": "module-a"}],
             "shared_types": [], "global_ownership": [], "initialization": [],
             "ffi_boundaries": [], "features": [],
@@ -112,11 +116,116 @@ class ProjectMigrationCargoDiagnosticTests(unittest.TestCase):
                 "unit_id": "unit", "artifact_id": "candidate",
                 "content_sha256": "a" * 64,
             }],
-            rust_project_ir={},
+            rust_project_ir={
+                "modules": [{
+                    "unit_id": "unit", "candidate_sha256": "a" * 64,
+                    "rust_path": f"src/unit_{'a' * 64}.rs",
+                    "module_id": "module-unit",
+                }],
+            },
         )
         self.assertEqual("unit-path-not-unique", partition.admission_blocker)
         self.assertEqual({}, partition.unit_diagnostics)
         self.assertEqual([], partition.project_diagnostics)
+
+    def test_mixed_project_and_unclassified_error_admits_nothing(self) -> None:
+        partition = partition_cargo_diagnostics(
+            gate_kind="cargo-check",
+            diagnostics=[
+                _error("e0432", "src/lib.rs", "unresolved import `shared`"),
+                _error("rustc-diagnostic", "", "linking with `cc` failed"),
+            ],
+            candidate_members=[{
+                "unit_id": "unit", "artifact_id": "candidate",
+                "content_sha256": "a" * 64,
+            }],
+            rust_project_ir={
+                "modules": [{
+                    "unit_id": "unit", "candidate_sha256": "a" * 64,
+                    "rust_path": f"src/unit_{'a' * 64}.rs",
+                    "module_id": "module-unit",
+                }],
+                "public_api": [{"symbol": "shared", "module_id": "module-a"}],
+            },
+        )
+        self.assertEqual("diagnostic-unclassified", partition.admission_blocker)
+        self.assertEqual({}, partition.unit_diagnostics)
+        self.assertEqual([], partition.project_diagnostics)
+
+    def test_generic_cargo_failure_is_not_a_repair_diagnostic(self) -> None:
+        partition = partition_cargo_diagnostics(
+            gate_kind="cargo-check",
+            diagnostics=[{
+                "code": "cargo-command-failed", "stage": "cargo-check",
+                "message": "cargo check exited with code 1",
+            }],
+            candidate_members=[], rust_project_ir={},
+        )
+        self.assertEqual("diagnostic-not-structured", partition.admission_blocker)
+
+    def test_toolchain_rustc_error_is_not_a_repair_diagnostic(self) -> None:
+        partition = partition_cargo_diagnostics(
+            gate_kind="cargo-check",
+            diagnostics=[_error(
+                "e0514", "src/lib.rs",
+                "dependency was compiled by an incompatible rustc version",
+            )],
+            candidate_members=[], rust_project_ir={},
+        )
+        self.assertEqual(
+            "diagnostic-environment-failure", partition.admission_blocker,
+        )
+        self.assertEqual([], partition.project_diagnostics)
+
+    def test_cross_unit_symbol_error_uses_ir_ownership(self) -> None:
+        members = [
+            {"unit_id": "caller", "artifact_id": "candidate-a",
+             "content_sha256": "a" * 64},
+            {"unit_id": "provider", "artifact_id": "candidate-b",
+             "content_sha256": "b" * 64},
+        ]
+        ir = {
+            "modules": [
+                {"unit_id": "caller", "candidate_sha256": "a" * 64,
+                 "rust_path": f"src/unit_{'a' * 64}.rs", "module_id": "module-a"},
+                {"unit_id": "provider", "candidate_sha256": "b" * 64,
+                 "rust_path": f"src/unit_{'b' * 64}.rs", "module_id": "module-b"},
+            ],
+            "public_api": [{"symbol": "shared", "module_id": "module-b"}],
+        }
+        partition = partition_cargo_diagnostics(
+            gate_kind="cargo-check",
+            diagnostics=[_error(
+                "e0425", f"src/unit_{'a' * 64}.rs",
+                "cannot find value `shared` in this scope",
+            )],
+            candidate_members=members, rust_project_ir=ir,
+        )
+        self.assertIsNone(partition.admission_blocker)
+        self.assertEqual({}, partition.unit_diagnostics)
+        self.assertEqual(1, len(partition.project_diagnostics))
+        self.assertEqual(
+            ["module-a", "module-b"],
+            partition.project_diagnostics[0]["project_diagnostic"][
+                "affected_module_ids"
+            ],
+        )
+
+    def test_same_code_and_file_keep_distinct_event_identities(self) -> None:
+        first = _error("e0432", "src/lib.rs", "unresolved import `alpha`")
+        second = _error("e0432", "src/lib.rs", "unresolved import `beta`")
+        second["line"] = 2
+        partition = partition_cargo_diagnostics(
+            gate_kind="cargo-check", diagnostics=[first, second],
+            candidate_members=[], rust_project_ir={},
+        )
+        self.assertIsNone(partition.admission_blocker)
+        self.assertEqual(2, len(partition.project_diagnostics))
+        identities = {
+            item["project_diagnostic"]["diagnostic_sha256"]
+            for item in partition.project_diagnostics
+        }
+        self.assertEqual(2, len(identities))
 
 
 def _error(code: str, file: str, message: str = "mismatched types") -> dict:

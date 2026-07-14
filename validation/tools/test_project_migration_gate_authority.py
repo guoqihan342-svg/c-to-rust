@@ -159,6 +159,45 @@ class ProjectMigrationGateAuthorityTests(ProjectMigrationGateAuthorityCase):
                 evidence_sha256=str(reference["sha256"]), gate_family="compile",
             )
 
+    def test_stale_project_cohort_cannot_move_unit_to_retry(self) -> None:
+        self.promote_current_candidate()
+        first_id = self.candidate_id
+        first_set = self.ledger.bind_current_candidate_set(run_id="run")
+        payload = candidate_verdict_payload(
+            run_id="run", unit_id="unit",
+            candidate_artifact_id=first_id,
+            candidate_sha256=self.candidate_sha,
+            gate_family="compile", status="failed",
+            diagnostics=[{"code": "compile-failed", "stage": "compile"}],
+            candidate_set_sha256=first_set, source_evidence=[],
+        )
+        reference = write_content_addressed_json(
+            self.out_root, "candidate/compile", payload,
+        )
+        self.ledger.record_candidate_failure(
+            record_id="project-derived-failure", run_id="run", unit_id="unit",
+            candidate_artifact_id=first_id, gate_family="compile",
+            evidence_path=f"target/run/{reference['path']}",
+            evidence_sha256=str(reference["sha256"]),
+            metadata={"candidate_set_sha256": first_set},
+        )
+        self.candidate_id, self.candidate_sha = self.make_candidate(
+            "candidate-after-project-check",
+        )
+        self.promote_current_candidate()
+        with self.assertRaisesRegex(
+            LedgerError, "current verification candidate set",
+        ):
+            self.ledger.mark_verification_failed(
+                run_id="run", unit_id="unit",
+                candidate_artifact_id=first_id,
+                failed_record_id="project-derived-failure",
+                expected_candidate_set_sha256=first_set,
+            )
+        self.assertEqual("last_good", self.ledger.unit_states("run")[0][
+            "resumable_status"
+        ])
+
     def test_promotion_rehashes_content_addressed_evidence(self) -> None:
         records = {}
         ordered = ["compile", *sorted(CANDIDATE_REQUIRED_GATES - {"compile"})]

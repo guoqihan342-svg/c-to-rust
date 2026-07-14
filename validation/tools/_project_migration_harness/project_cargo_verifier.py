@@ -12,6 +12,7 @@ from .project_cargo_evidence import project_cargo_observation
 from .project_cargo_diagnostic_intake import (
     CargoDiagnosticPartition, partition_cargo_diagnostics,
 )
+from .project_cargo_diagnostic_cohort import decide_cargo_diagnostic_cohort
 from .project_generation_context import load_managed_project_context
 from .project_host_gates import record_host_project_observation
 from .project_verification import run_cargo_project_gates
@@ -49,11 +50,11 @@ def verify_project_cargo(
         str(context["project_input_sha256"])
         if context is not None else None
     )
-    records = []
     partitions: dict[str, CargoDiagnosticPartition] = {}
+    observations: dict[str, dict[str, Any]] = {}
+    gate_checks: dict[str, dict[str, Any]] = {}
     for gate_kind, command in (("cargo-check", "check"), ("cargo-test", "test")):
         check = checks.get(command)
-        diagnostics = _diagnostic_codes(execution, check, gate_kind)
         observation = project_cargo_observation(
             execution,
             check,
@@ -64,8 +65,24 @@ def verify_project_cargo(
             gate_kind=gate_kind, check=check, observation=observation,
             members=members, context=context,
         )
+        observations[gate_kind] = observation
         partitions[gate_kind] = partition
-        diagnostic_input = _project_diagnostic_input(context, partition)
+        if check is not None:
+            gate_checks[gate_kind] = check
+    admission = decide_cargo_diagnostic_cohort(
+        execution_status=execution.get("status"),
+        checks=gate_checks,
+        observations=observations,
+        partitions=partitions,
+        candidate_members=members,
+    )
+    records = []
+    for gate_kind, command in (("cargo-check", "check"), ("cargo-test", "test")):
+        check = checks.get(command)
+        diagnostic_input = (
+            _project_diagnostic_input(context, partitions[gate_kind])
+            if admission.admits_repairs else None
+        )
         records.append(record_host_project_observation(
             ledger=ledger,
             out_root=out_root,
@@ -73,19 +90,21 @@ def verify_project_cargo(
             run_id=run_id,
             gate_kind=gate_kind,
             candidate_set_sha256=candidate_set,
-            observation=observation,
-            diagnostic_codes=diagnostics,
+            observation=observations[gate_kind],
+            diagnostic_codes=_diagnostic_codes(execution, check, gate_kind),
             project_diagnostic_input=diagnostic_input,
         ))
     repairs = []
-    for gate_kind, project_record in zip(
-        ("cargo-check", "cargo-test"), records, strict=True,
-    ):
-        repairs.extend(_bridge_compile_failures(
-            ledger=ledger, run_id=run_id, out_root=out_root,
-            out_root_rel=out_root_rel, members=members,
-            partition=partitions[gate_kind], project_record=project_record,
-        ))
+    if admission.admits_repairs:
+        for gate_kind, project_record in zip(
+            ("cargo-check", "cargo-test"), records, strict=True,
+        ):
+            repairs.extend(_bridge_compile_failures(
+                ledger=ledger, run_id=run_id, out_root=out_root,
+                out_root_rel=out_root_rel, members=members,
+                candidate_set_sha256=candidate_set,
+                partition=partitions[gate_kind], project_record=project_record,
+            ))
     return {
         "schema_version": 1,
         "status": (
@@ -101,6 +120,7 @@ def verify_project_cargo(
             record["project_diagnostic_intake"] for record in records
             if "project_diagnostic_intake" in record
         ],
+        "diagnostic_admission": admission.payload(),
         "execution": execution,
         "semantic_gate": False,
     }
@@ -136,8 +156,8 @@ def _diagnostic_codes(
 
 def _bridge_compile_failures(
     *, ledger: ProjectLedger, run_id: str, out_root: Path, out_root_rel: str,
-    members: list[dict[str, str]], partition: CargoDiagnosticPartition,
-    project_record: dict[str, Any],
+    members: list[dict[str, str]], candidate_set_sha256: str,
+    partition: CargoDiagnosticPartition, project_record: dict[str, Any],
 ) -> list[dict[str, Any]]:
     if project_record.get("gate_status") != "failed" or partition.admission_blocker:
         return []
@@ -166,6 +186,8 @@ def _bridge_compile_failures(
             status="failed",
             verifier_id="host-derived",
             diagnostics=values[:32],
+            candidate_set_sha256=candidate_set_sha256,
+            project_record_id=project_record["record_id"],
         ))
     return results
 

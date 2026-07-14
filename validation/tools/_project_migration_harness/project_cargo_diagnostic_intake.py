@@ -5,11 +5,17 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from .artifacts import content_sha256
 from .project_diagnostic_shape import build_project_diagnostic
 
 
 _RUSTC_CODE = re.compile(r"e[0-9]{4}\Z")
 _UNIT_PATH = re.compile(r"src/unit_([0-9a-f]{64})\.rs\Z")
+_SYMBOL_RESOLUTION_CODES = frozenset({"e0412", "e0425", "e0432", "e0433"})
+_ENVIRONMENT_RUSTC_CODES = frozenset({
+    "e0460", "e0461", "e0462", "e0463", "e0464", "e0465",
+    "e0514", "e0554", "e0635", "e0658", "e0786",
+})
 _ENTITY_FIELDS = (
     ("public_api", "symbol"),
     ("shared_types", "name"),
@@ -36,26 +42,45 @@ def partition_cargo_diagnostics(
         raise ValueError("Cargo diagnostic gate kind is invalid")
     if not isinstance(diagnostics, list) or len(diagnostics) > 64:
         return CargoDiagnosticPartition({}, [], "diagnostic-set-invalid")
-    by_digest: dict[str, list[tuple[str, str]]] = {}
-    for member in candidate_members:
-        identity = (str(member.get("unit_id")), str(member.get("artifact_id")))
-        by_digest.setdefault(str(member.get("content_sha256")), []).append(identity)
+    path_owners, owner_blocker = _candidate_path_owners(
+        candidate_members, rust_project_ir,
+    )
+    if owner_blocker is not None:
+        return CargoDiagnosticPartition({}, [], owner_blocker)
     unit: dict[tuple[str, str], list[dict[str, Any]]] = {}
     project: list[dict[str, Any]] = []
     for diagnostic in diagnostics:
         if not _structured_error(diagnostic, gate_kind):
-            continue
+            return CargoDiagnosticPartition({}, [], "diagnostic-not-structured")
+        if diagnostic.get("code") in _ENVIRONMENT_RUSTC_CODES:
+            return CargoDiagnosticPartition(
+                {}, [], "diagnostic-environment-failure",
+            )
         location = str(diagnostic.get("file", ""))
-        matched = _UNIT_PATH.fullmatch(location)
-        if matched is not None:
-            owners = by_digest.get(matched.group(1), [])
-            if len(owners) != 1:
-                return CargoDiagnosticPartition({}, [], "unit-path-not-unique")
-            unit.setdefault(owners[0], []).append(_unit_projection(diagnostic))
+        owner = path_owners.get(location)
+        if owner is not None:
+            identity, owner_module = owner
+            matched_entities, matched_modules = _matching_ir_entities(
+                str(diagnostic.get("message", "")), rust_project_ir,
+            )
+            if (
+                diagnostic.get("code") in _SYMBOL_RESOLUTION_CODES
+                and any(module != owner_module for module in matched_modules)
+            ):
+                project.append(_project_diagnostic(
+                    diagnostic, gate_kind, rust_project_ir,
+                    matched=(matched_entities, matched_modules),
+                    extra_module_ids=[owner_module],
+                ))
+            else:
+                unit.setdefault(identity, []).append(_unit_projection(diagnostic))
             continue
+        if _UNIT_PATH.fullmatch(location) is not None:
+            return CargoDiagnosticPartition({}, [], "unit-path-not-unique")
         normalized = _project_diagnostic(diagnostic, gate_kind, rust_project_ir)
-        if normalized is not None:
-            project.append(normalized)
+        if normalized is None:
+            return CargoDiagnosticPartition({}, [], "diagnostic-unclassified")
+        project.append(normalized)
     project.sort(
         key=lambda item: item["project_diagnostic"]["diagnostic_sha256"],
     )
@@ -81,6 +106,8 @@ def _unit_projection(value: Mapping[str, Any]) -> dict[str, Any]:
 
 def _project_diagnostic(
     value: Mapping[str, Any], gate_kind: str, rust_project_ir: Mapping[str, Any],
+    *, matched: tuple[list[str], list[str]] | None = None,
+    extra_module_ids: Sequence[str] = (),
 ) -> dict[str, Any] | None:
     code = value.get("code")
     file_value = value.get("file")
@@ -91,23 +118,33 @@ def _project_diagnostic(
         or not isinstance(message, str) or not message
     ):
         return None
-    entity_ids, module_ids = _matching_ir_entities(message, rust_project_ir)
-    stable_entities = sorted({code, f"file:{file_value}", *entity_ids})
+    entity_ids, module_ids = (
+        _matching_ir_entities(message, rust_project_ir)
+        if matched is None else matched
+    )
+    location = {
+        "file": file_value,
+        "line": value.get("line"),
+        "column": value.get("column"),
+    }
+    event_sha = content_sha256({
+        "source_code": code, "stage": gate_kind,
+        "message": message[:512], "location": location,
+    })
+    stable_entities = sorted({
+        code, f"event:{event_sha}", f"file:{file_value}", *entity_ids,
+    })
     diagnostic = build_project_diagnostic(
         code=f"project-verifier-{code}",
         entity_ids=stable_entities,
-        affected_module_ids=module_ids,
+        affected_module_ids=sorted({*module_ids, *extra_module_ids}),
     )
     return {
         "family": "compile",
         "source_code": code,
         "stage": gate_kind,
         "message": message[:512],
-        "location": {
-            "file": file_value,
-            "line": value.get("line"),
-            "column": value.get("column"),
-        },
+        "location": location,
         "project_diagnostic": diagnostic,
     }
 
@@ -132,6 +169,43 @@ def _matching_ir_entities(
             if isinstance(owner_ids, list):
                 modules.update(str(item) for item in owner_ids if isinstance(item, str))
     return sorted(entities), sorted(modules)
+
+
+def _candidate_path_owners(
+    candidate_members: Sequence[Mapping[str, Any]],
+    rust_project_ir: Mapping[str, Any],
+) -> tuple[dict[str, tuple[tuple[str, str], str]], str | None]:
+    expected: dict[tuple[str, str], tuple[str, str]] = {}
+    for member in candidate_members:
+        key = (str(member.get("unit_id")), str(member.get("content_sha256")))
+        identity = (key[0], str(member.get("artifact_id")))
+        if key in expected:
+            return {}, "candidate-module-binding-not-unique"
+        expected[key] = identity
+    modules = rust_project_ir.get("modules")
+    if not isinstance(modules, list):
+        return ({}, None) if not expected else ({}, "candidate-module-coverage-invalid")
+    paths: dict[str, tuple[tuple[str, str], str]] = {}
+    covered: set[tuple[str, str]] = set()
+    for module in modules:
+        if not isinstance(module, Mapping):
+            return {}, "candidate-module-binding-invalid"
+        key = (str(module.get("unit_id")), str(module.get("candidate_sha256")))
+        identity = expected.get(key)
+        path = module.get("rust_path")
+        module_id = module.get("module_id")
+        if identity is None:
+            continue
+        if (
+            key in covered or not isinstance(path, str) or not path
+            or not isinstance(module_id, str) or not module_id or path in paths
+        ):
+            return {}, "candidate-module-binding-not-unique"
+        covered.add(key)
+        paths[path] = (identity, module_id)
+    if covered != set(expected):
+        return {}, "candidate-module-coverage-invalid"
+    return paths, None
 
 
 def _contains_token(message: str, token: str) -> bool:

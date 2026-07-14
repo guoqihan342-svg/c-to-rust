@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .gate_evidence import read_content_addressed_json
+from .gate_candidate_sets import assert_verification_candidate_set
 from .ledger_schema import atomic
 from .ledger_security import LedgerError
 from .ledger_transition_authority import TransitionAuthority, load_unit_projection
@@ -13,9 +14,14 @@ from .ledger_transition_policy import stable_transition_command_id
 class CandidateStateMixin:
     def mark_verification_failed(
         self, *, run_id: str, unit_id: str, candidate_artifact_id: str,
-        failed_record_id: str,
+        failed_record_id: str, expected_candidate_set_sha256: str | None = None,
     ) -> None:
         with self.connect() as connection, atomic(connection):
+            if expected_candidate_set_sha256 is not None:
+                assert_verification_candidate_set(
+                    connection, run_id, expected_candidate_set_sha256,
+                    database_path=self.path,
+                )
             failed = connection.execute(
                 """select v.status,v.gate_family,v.evidence_path,v.evidence_sha256,
                           a.attempt_id,a.content_sha256,t.status as attempt_status
@@ -33,9 +39,17 @@ class CandidateStateMixin:
             ).fetchone()
             if not failed or failed["status"] != "failed" or failed["attempt_status"] != "completed":
                 raise LedgerError("retry requires the latest failed host verification record")
-            read_content_addressed_json(
+            evidence = read_content_addressed_json(
                 self.path, str(failed["evidence_path"]), str(failed["evidence_sha256"])
             )
+            if (
+                expected_candidate_set_sha256 is not None
+                and evidence.get("candidate_set_sha256")
+                != expected_candidate_set_sha256
+            ):
+                raise LedgerError(
+                    "failed verification changed its candidate set binding"
+                )
             command_id = stable_transition_command_id(
                 "host-verification-failed", run_id, unit_id, failed_record_id,
             )
