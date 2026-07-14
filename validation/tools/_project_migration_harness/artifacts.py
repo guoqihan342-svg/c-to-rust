@@ -12,6 +12,82 @@ def canonical_json_bytes(value: Any) -> bytes:
     return (json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def canonical_json_metadata(value: Any) -> tuple[str, int]:
+    digest = hashlib.sha256()
+    size = 0
+    for chunk in _canonical_json_chunks(value, level=0):
+        encoded = chunk.encode("utf-8")
+        digest.update(encoded)
+        size += len(encoded)
+    digest.update(b"\n")
+    return digest.hexdigest(), size + 1
+
+
+def _canonical_json_chunks(value: Any, *, level: int):
+    if isinstance(value, str):
+        yield from _quoted_chunks(value)
+    elif value is None:
+        yield "null"
+    elif value is True:
+        yield "true"
+    elif value is False:
+        yield "false"
+    elif isinstance(value, int):
+        yield str(value)
+    elif isinstance(value, float):
+        yield json.dumps(value, ensure_ascii=True)
+    elif isinstance(value, (list, tuple)):
+        if not value:
+            yield "[]"
+            return
+        yield "[\n"
+        for index, item in enumerate(value):
+            if index:
+                yield ",\n"
+            yield " " * (2 * (level + 1))
+            yield from _canonical_json_chunks(item, level=level + 1)
+        yield "\n" + " " * (2 * level) + "]"
+    elif isinstance(value, dict):
+        if not value:
+            yield "{}"
+            return
+        yield "{\n"
+        for index, (key, item) in enumerate(sorted(value.items())):
+            if index:
+                yield ",\n"
+            yield " " * (2 * (level + 1))
+            yield from _quoted_chunks(_json_key(key))
+            yield ": "
+            yield from _canonical_json_chunks(item, level=level + 1)
+        yield "\n" + " " * (2 * level) + "}"
+    else:
+        raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _json_key(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return json.dumps(value, ensure_ascii=True)
+    raise TypeError(f"keys must be JSON scalar values, not {type(value).__name__}")
+
+
+def _quoted_chunks(value: str):
+    yield '"'
+    for offset in range(0, len(value), 64 * 1024):
+        encoded = json.encoder.encode_basestring_ascii(value[offset:offset + 64 * 1024])
+        yield encoded[1:-1]
+    yield '"'
+
+
 def content_sha256(value: Any) -> str:
     return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
 
@@ -69,7 +145,7 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 
 __all__ = [
-    "canonical_json_bytes",
+    "canonical_json_bytes", "canonical_json_metadata",
     "checked_relative_path",
     "content_sha256",
     "write_bytes_artifact",

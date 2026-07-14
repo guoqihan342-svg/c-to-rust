@@ -249,6 +249,29 @@ class ProjectMigrationBuildIRTests(unittest.TestCase):
             (harness / "target/run/state/project-migration.sqlite3").exists()
         )
 
+    def test_build_ir_contract_failure_records_sanitized_error_code(self) -> None:
+        root, database = self._project("contract-error")
+        harness = self.base / "contract-error-harness"
+        harness.mkdir()
+        with patch(
+            "validation.tools._project_migration_harness.orchestrator."
+            "materialize_selected_build_ir_stage",
+            side_effect=ValueError("build_ir_tool_ninja_reopen_blocked"),
+        ):
+            plan = plan_project(
+                root,
+                harness_root=harness,
+                out_root="target/run",
+                compile_database=database,
+            )
+
+        self.assertEqual(["build_ir_contract_invalid"], plan["blockers"])
+        reference = plan["artifacts"]["build_ir_contract_error"]
+        artifact = harness / "target/run" / reference["path"]
+        diagnostic = json.loads(artifact.read_text(encoding="utf-8"))
+        self.assertEqual("build_ir_tool_ninja_reopen_blocked", diagnostic["kind"])
+        self.assertFalse(diagnostic["claim_boundary"]["semantic_gate"])
+
 
 if __name__ == "__main__":
     unittest.main()

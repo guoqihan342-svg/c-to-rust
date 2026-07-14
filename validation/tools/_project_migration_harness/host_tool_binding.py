@@ -48,6 +48,10 @@ _ARCHIVER = re.compile(
 _RANLIB = re.compile(
     r"(?:(?:[a-z0-9_+.]+-)+)?(?:ranlib|gcc-ranlib|llvm-ranlib)(?:-[0-9.]+)?\Z"
 )
+_LLVM_MULTICALL = re.compile(
+    r"(?P<prefix>(?:(?:[a-z0-9_+.]+-)+)?)llvm-(?P<mode>ar|ranlib)"
+    r"(?:-[0-9.]+)?\Z"
+)
 
 Resolver = Callable[..., str | os.PathLike[str] | None]
 
@@ -102,7 +106,7 @@ def resolve_host_tool(
     resolver: Resolver | None = None,
 ) -> HostToolBinding:
     token = _token(token)
-    requested_family, _ = classify_tool_basename(_basename(token))
+    requested_family, requested_basename = classify_tool_basename(_basename(token))
     validate_role_family(roles, requested_family)
     mode = "absolute" if _is_absolute(token) else "path-search"
     if mode == "path-search" and ("/" in token or "\\" in token):
@@ -123,14 +127,26 @@ def resolve_host_tool(
     if not resolved.is_file() or resolved.suffix.lower() in {".cmd", ".bat", ".ps1"}:
         raise HostToolBindingError("resolved_tool_not_executable_file")
     try:
-        family, basename = classify_tool_basename(_basename(resolved.name))
+        resolved_family, resolved_basename = classify_tool_basename(
+            _basename(resolved.name)
+        )
     except ValueError as error:
         raise HostToolBindingError("resolved_tool_basename_unsupported") from error
-    if family != requested_family:
+    if not resolved_tool_family_compatible(
+        requested_family,
+        requested_basename,
+        resolved_family,
+        resolved_basename,
+    ):
         raise HostToolBindingError("resolved_tool_family_mismatch")
-    validate_role_family(roles, family)
+    validate_role_family(roles, requested_family)
     return HostToolBinding(
-        token, tuple(roles), family, basename, str(resolved), mode,
+        token,
+        tuple(roles),
+        requested_family,
+        requested_basename,
+        str(resolved),
+        mode,
         hash_stable_file(resolved, executable=True, limit=MAX_TOOL_BYTES),
     )
 
@@ -168,6 +184,27 @@ def classify_tool_basename(value: str) -> tuple[str, str]:
     if _RANLIB.fullmatch(basename):
         return "ranlib", basename
     raise ValueError("c_toolchain_basename_unsupported")
+
+
+def resolved_tool_family_compatible(
+    requested_family: str,
+    requested_basename: str,
+    resolved_family: str,
+    resolved_basename: str,
+) -> bool:
+    if requested_family == resolved_family:
+        return True
+    if requested_family != "ranlib" or resolved_family != "archiver":
+        return False
+    requested = _LLVM_MULTICALL.fullmatch(requested_basename)
+    resolved = _LLVM_MULTICALL.fullmatch(resolved_basename)
+    return bool(
+        requested
+        and resolved
+        and requested.group("mode") == "ranlib"
+        and resolved.group("mode") == "ar"
+        and requested.group("prefix") == resolved.group("prefix")
+    )
 
 
 def validate_role_family(roles: Sequence[str], family: str) -> None:
@@ -222,6 +259,6 @@ __all__ = [
     "HostToolBindingError", "MAX_PROFILE_BYTES", "MAX_TOOL_RECORDS",
     "MAX_TOOL_REQUESTS", "TOOL_ROLES", "classify_tool_basename",
     "competition_profile_binding", "hash_stable_file",
-    "reopen_profile_binding", "resolve_host_tool", "validate_profile_binding",
-    "validate_requests", "validate_role_family",
+    "reopen_profile_binding", "resolve_host_tool", "resolved_tool_family_compatible",
+    "validate_profile_binding", "validate_requests", "validate_role_family",
 ]

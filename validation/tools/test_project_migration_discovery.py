@@ -210,6 +210,25 @@ class RepositoryBuildDiscoveryContractTests(unittest.TestCase):
         self.assertEqual(0, result["rejected_entries"][0]["duplicate_of"])
         self.assertFalse(result["rejected_entries"][0]["blocking"])
 
+    def test_unmaterialized_source_reports_repository_relative_path(self) -> None:
+        database = self.write_database("build/compile_commands.json", [
+            self.arguments_entry(
+                "build/generated.c",
+                ["clang", "-c", "build/generated.c", "-o", "build/generated.o"],
+                output="build/generated.o",
+            ),
+        ])
+
+        result = discover_project(self.root, compile_database=database)
+
+        self.assertEqual("blocked", result["status"])
+        self.assertEqual(
+            ["no_c_translation_units", "source_not_regular"], result["blockers"],
+        )
+        rejected = result["rejected_entries"][0]
+        self.assertEqual("build/generated.c", rejected["source"])
+        self.assertTrue(rejected["blocking"])
+
     def test_same_output_with_distinct_commands_rejects_all_ambiguous_variants(self) -> None:
         self.write("ambiguous.c", "int ambiguous(void) { return 0; }\n")
         entries = [

@@ -73,9 +73,15 @@ def parse_compile_entry(
             if str(error) == "file_size_limit_exceeded"
             else "source_not_regular"
         )
-        return None, rejection(entry_index, entry_sha256, reason, True)
+        return None, rejection(
+            entry_index, entry_sha256, reason, True,
+            source=repository_path(repo_root, source_path),
+        )
     except OSError:
-        return None, rejection(entry_index, entry_sha256, "source_not_regular", True)
+        return None, rejection(
+            entry_index, entry_sha256, "source_not_regular", True,
+            source=repository_path(repo_root, source_path),
+        )
     try:
         argv = command_arguments(entry)
     except ValueError as error:

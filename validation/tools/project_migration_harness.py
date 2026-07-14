@@ -106,7 +106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         out_root = REPO_ROOT.joinpath(*out_rel.parts)
         result = dispatch_project_workers(
-            plan["portfolio"],
+            project_cli_runtime.load_bound_portfolio(plan, out_root),
             ledger=ProjectLedger(_ledger_path(ledger_path)),
             harness_root=REPO_ROOT,
             out_root=out_root,

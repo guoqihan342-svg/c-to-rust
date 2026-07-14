@@ -16,7 +16,12 @@ from .discovery import discover_project
 from .ledger import ProjectLedger, SCHEMA_VERSION as LEDGER_SCHEMA_VERSION
 from .migration_graph import build_migration_graph
 from .orchestrator_context import ContextPortfolioError, build_context_portfolio
-from .orchestrator_stages import blocked_plan as _blocked, run_stage as _stage
+from .orchestrator_stages import (
+    blocked_plan as _blocked,
+    contract_error,
+    run_stage as _stage,
+)
+from .project_cli_runtime import display_result
 from .scheduler import schedule_portfolio
 
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
@@ -73,7 +78,12 @@ def plan_project(
         build_stage = materialize_selected_build_ir_stage(
             source, output, discovery, artifacts, make_report, profile,
         )
-    except (OSError, TypeError, ValueError):
+    except (OSError, TypeError, ValueError) as error:
+        artifacts["build_ir_contract_error"] = write_json_artifact(
+            output,
+            "plan/build-ir-contract-error.json",
+            contract_error("build_ir", error),
+        )
         return _blocked(output, artifacts, "build_ir_contract_invalid")
     if build_stage["verification"].get("status") != "verified":
         return _blocked(output, artifacts, "build_ir_verification_blocked")
@@ -270,7 +280,8 @@ def plan_project(
         },
     }
     plan["plan_sha256"] = content_sha256(plan)
-    write_json_artifact(output, "project-migration-plan.json", plan)
+    stored_plan = display_result("plan", plan)
+    write_json_artifact(output, "project-migration-plan.json", stored_plan)
     return plan
 
 

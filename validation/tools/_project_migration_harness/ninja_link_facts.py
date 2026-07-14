@@ -219,9 +219,14 @@ def _commands(state: dict[str, Any]) -> list[dict[str, Any]]:
             if len(command.encode("utf-8")) > MAX_EXPANDED_COMMAND:
                 raise ValueError("ninja_command_size_limit_exceeded")
             argv, ranlib_argvs = parse_ninja_link_command(command)
-        except (UnicodeError, ValueError):
+        except (UnicodeError, ValueError) as error:
+            reason = str(error)
+            if re.fullmatch(r"[a-z][a-z0-9_]{0,95}", reason) is None:
+                reason = "ninja_command_syntax_invalid"
             state["blockers"].append({
-                "kind": "ninja_command_parse_invalid", "path": edge["fact_path"],
+                "kind": "ninja_command_parse_invalid",
+                "path": edge["fact_path"],
+                "reason": reason,
             })
             continue
         if argv is None:

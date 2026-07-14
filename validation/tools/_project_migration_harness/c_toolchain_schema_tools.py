@@ -13,7 +13,7 @@ from .c_toolchain_schema_identity import (
 )
 from .host_tool_binding import (
     MAX_TOOL_BYTES, MAX_TOOL_RECORDS, TOOL_ROLES, classify_tool_basename,
-    validate_role_family,
+    resolved_tool_family_compatible, validate_role_family,
 )
 
 
@@ -131,10 +131,15 @@ def _validate_resolved(
 ) -> None:
     if not is_absolute(value["resolved_path"], path_flavor):
         raise ValueError("c_toolchain_resolved_path_invalid")
-    resolved_family, _ = classify_tool_basename(
+    resolved_family, resolved_basename = classify_tool_basename(
         basename(value["resolved_path"]),
     )
-    if resolved_family != family:
+    if not resolved_tool_family_compatible(
+        family,
+        str(value["basename"]),
+        resolved_family,
+        resolved_basename,
+    ):
         raise ValueError("c_toolchain_resolved_path_invalid")
     binary = value.get("binary")
     if (

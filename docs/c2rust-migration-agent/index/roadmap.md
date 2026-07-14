@@ -12,6 +12,7 @@
 - [x] **A19b4c2a：把上下文检索未就绪建模为可恢复调度态，而不是 semantic ledger 终态。** portfolio 显式列出 `pending_retrieval_groups`，同时保留 hash-bound assignments；scheduler 对这些 worker 返回 `context_retrieval_pending` defer，因此它们不会获得租约，也不会触发模型调用。控制器用例验证 attempts/leases 均为 0；有限回归在 Windows 与 WSL 均为 527/527。该项只证明 pending 分类、绑定保留和零租约/零模型边界，不宣称 pending 已能恢复为 `ready`，也不构成 semantic gate 或增加 translator numerator。
 - [x] **A19b4c2b：实现 host-owned、content-bound 的 single-SCC refresh/override。** host 会重开 portfolio、base/new catalog、selection receipt、page/group、refresh input 与 overlay 的完整 CAS 依赖，之后才以私有 permit 把 SCC 从 `pending_retrieval` 恢复为 `ready`；dispatch、request 与 prelaunch 会再次重开 overlay，任一漂移都在 attempt/provider 前 fail closed。
 - [x] **A19b4c2c：在每波结束后重算下一检索前沿。** host 从绑定 portfolio 的 DAG、上一波 last-good 状态、显式失败证据与 expansion query 派生 wave input 和每 SCC selection directives；整波失效在一个 SQLite 事务中完成，逐 SCC refresh 可在中断后用相同 CAS 输入幂等续跑，且旧 schema refresh、跨 SCC fact 注入、旧/未来 query epoch 与调用方身份字段均被拒绝。该闭环可由 `prepare-next-context-frontier-wave` 调用，仍保持 `semantic_gate=false`、`translation_coverage_numerator=0`。
+- [x] **A19b4c2d：根计划只保存 hash-bound portfolio 摘要。** `project-migration-plan.json` 不再复制完整 assignments、ledger units 和 context；dispatch 在同一文件句柄上流式复验 path/size/SHA，要求 canonical UTF-8 JSON，并核对 run/status/DAG/portfolio-plan 身份后才进入不可变 ledger 复验。完整 CIndex、ContextPages 和 portfolio 仍需继续分片，因此父项保持未勾选。
 
 ## 评委 Demo / Milestone
 

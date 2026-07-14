@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 from validation.tools._project_migration_harness.orchestrator import plan_project
+from validation.tools._project_migration_harness.artifacts import content_sha256
 from validation.tools._project_migration_harness.ledger_schema import SCHEMA_VERSION
 
 
@@ -60,6 +61,9 @@ class ProjectMigrationOrchestratorTests(unittest.TestCase):
         self.assertEqual("bound", second["ledger"]["status"])
         self.assertEqual(first["run_id"], second["run_id"])
         self.assertEqual(first["plan_sha256"], second["plan_sha256"])
+        returned = dict(first)
+        returned_sha256 = returned.pop("plan_sha256")
+        self.assertEqual(returned_sha256, content_sha256(returned))
         self.assertEqual(6, len(first["portfolio"]["assignments"]))
         self.assertEqual(2, len(first["portfolio"]["waves"]))
         self.assertTrue(all(
@@ -76,6 +80,15 @@ class ProjectMigrationOrchestratorTests(unittest.TestCase):
         self.assertTrue((
             self.harness / "target/run-one/project-migration-plan.json"
         ).is_file())
+        stored = json.loads((
+            self.harness / "target/run-one/project-migration-plan.json"
+        ).read_text(encoding="utf-8"))
+        self.assertNotIn("assignments", stored["portfolio"])
+        self.assertEqual(
+            first["artifacts"]["portfolio"], stored["portfolio"]["full_payload"],
+        )
+        claimed = stored.pop("plan_sha256")
+        self.assertEqual(claimed, content_sha256(stored))
 
     def test_unknown_external_without_declaration_waits_without_model_launch(self) -> None:
         database = self.write_project(

@@ -2,19 +2,23 @@ from __future__ import annotations
 
 from contextlib import redirect_stderr, redirect_stdout
 import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
 
 import validation.tools.project_migration_harness as entrypoint
+from validation.tools._project_migration_harness.artifacts import (
+    write_bytes_artifact, write_json_artifact,
+)
 from validation.tools._project_migration_harness.project_migration_cli import (
     output_binding,
     parse_args,
 )
 from validation.tools._project_migration_harness.ledger_schema import SCHEMA_VERSION
 from validation.tools._project_migration_harness.project_cli_runtime import (
-    display_result,
+    display_result, load_bound_portfolio,
 )
 
 
@@ -37,7 +41,46 @@ class ProjectMigrationCliAuthorityTests(unittest.TestCase):
         self.assertEqual(1, displayed["portfolio"]["unit_count"])
         self.assertEqual(0, displayed["portfolio"]["pending_retrieval_group_count"])
         self.assertNotIn("assignments", displayed["portfolio"])
+        self.assertEqual(displayed, display_result("plan", displayed))
         self.assertEqual(full, display_result("dispatch", full))
+
+    def test_dispatch_reopens_hash_bound_portfolio_and_rejects_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="migration-cli-portfolio-") as temporary:
+            out_root = Path(temporary)
+            portfolio = {
+                "schema_version": 1,
+                "status": "planned",
+                "run_id": "run",
+                "dag_sha256": "a" * 64,
+                "plan_sha256": "b" * 64,
+            }
+            reference = write_json_artifact(
+                out_root, "plan/portfolio.json", portfolio,
+            )
+            plan = {
+                "status": "planned",
+                "run_id": "run",
+                "artifacts": {"portfolio": reference},
+                "portfolio": {
+                    "status": "planned", "run_id": "run",
+                    "dag_sha256": "a" * 64,
+                    "plan_sha256": "b" * 64,
+                },
+            }
+
+            self.assertEqual(portfolio, load_bound_portfolio(plan, out_root))
+            (out_root / "plan/portfolio.json").write_text("{}", encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "invalid"):
+                load_bound_portfolio(plan, out_root)
+
+            noncanonical = json.dumps(
+                portfolio, separators=(",", ":"), sort_keys=True,
+            ).encode("utf-8")
+            plan["artifacts"]["portfolio"] = write_bytes_artifact(
+                out_root, "plan/portfolio.json", noncanonical,
+            )
+            with self.assertRaisesRegex(SystemExit, "invalid"):
+                load_bound_portfolio(plan, out_root)
 
     def test_candidate_gate_cli_has_no_caller_authority_or_pass_switch(self) -> None:
         base = [

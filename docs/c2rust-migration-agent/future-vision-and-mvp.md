@@ -4,7 +4,7 @@
 
 本文是项目的中文 canonical backlog，也是当前状态、执行顺序和能力边界的唯一入口。详细实现过程由 Git 历史、coverage matrix 和机器可读 evidence 保存，不再把逐日流水账复制到本文。
 
-最后更新：2026-07-14。
+最后更新：2026-07-15。
 
 ## 1. 当前状态
 
@@ -489,7 +489,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   目标不是继续增加已知函数的 translator 分支，而是让比赛平台把一个此前未见的 C 仓库交给 OpenCode 后，harness 能自动形成可审计的项目级翻译计划、隔离并行候选、可编译 Rust 项目和验证驱动 repair。所有决策只允许读取源码/AST/编译数据库/构建文件/类型/调用图/ABI/诊断和 hash-bound evidence；项目名、函数名、目录名、slice id、fixture 常量和 golden case 身份不得选择翻译器、prompt、adapter、stub 或修复策略。
 
-  **当前边界（2026-07-14）**：A19 已完成一次真实 WSL DeepSeek 辅助 worker，并完成有界 Ninja/CMake 链接与静态归档闭包、实际 rustup toolchain 内容绑定、不可降级 SandboxBackend requirements/VerificationPlan、bubblewrap host capability probe、candidate/project Cargo 证据重开、不可变 coordinator receipt epoch、项目级 repair CAS/event/artifact ledger、最小相关 IR 上下文、隔离 Provider 合同模拟、宿主重建 IR 与重新协调、CompletionCoordinator 单步确定性调度，以及 schema v7 的 host Cargo project-diagnostic intake。已验证 compile intake 现在进入兼容 schema v7 数据库的 coordinator receipt v2 和共享 project repair queue；AI 候选只能进入 `pending-reverification`，同 gate 必须在新 managed generation 上产生更高 epoch 的 pass，才能由原子结算事务关闭历史义务。Cargo check/test 还会在任何 repair 落账前完成 whole-cohort gate/order/owner/error 分类，未知、混合、toolchain/environment 或 stale 结果整批零准入。Cargo stdout/stderr、分类回执和受限 unresolved-link intake 已可内容寻址重开；但 initialization/feature/cfg/ABI 专属入口、A19e7 独立 verifier capability/nonce 与 process-issued raw output、global planner、正向全项目 semantic gate 和真实 held-out 语义验收仍未闭合。父项保持未勾选，translator numerator 仍不增加；已有 Provider 合同模拟和本地 WSL smoke 都不是 `competition-exact`。
+  **当前边界（2026-07-15）**：A19 已完成一次真实 WSL DeepSeek 辅助 worker，并完成有界 Ninja/CMake 链接与静态归档闭包、实际 rustup toolchain 内容绑定、不可降级 SandboxBackend requirements/VerificationPlan、bubblewrap host capability probe、candidate/project Cargo 证据重开、不可变 coordinator receipt epoch、项目级 repair CAS/event/artifact ledger、最小相关 IR 上下文、隔离 Provider 合同模拟、宿主重建 IR 与重新协调、CompletionCoordinator 单步确定性调度，以及 schema v7 的 host Cargo project-diagnostic intake。已验证 compile intake 现在进入兼容 schema v7 数据库的 coordinator receipt v2 和共享 project repair queue；AI 候选只能进入 `pending-reverification`，同 gate 必须在新 managed generation 上产生更高 epoch 的 pass，才能由原子结算事务关闭历史义务。Cargo check/test 还会在任何 repair 落账前完成 whole-cohort gate/order/owner/error 分类，未知、混合、toolchain/environment 或 stale 结果整批零准入。Cargo stdout/stderr、分类回执和受限 unresolved-link intake 已可内容寻址重开；但 initialization/feature/cfg/ABI 专属入口、A19e7 独立 verifier capability/nonce 与 process-issued raw output、global planner、正向全项目 semantic gate 和真实 held-out 语义验收仍未闭合。父项保持未勾选，translator numerator 仍不增加；已有 Provider 合同模拟和本地 WSL smoke 都不是 `competition-exact`。
 
   **A19a 任意仓库入口与构建闭包发现**
 
@@ -501,8 +501,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   - [ ] **A19a6：Meson 与受限生成事实闭环**。
     - [x] A19a6a：只读解析仓库内已有 `meson-info/intro-targets.json`、`intro-buildoptions.json` 与编译器/依赖 metadata，绑定 target、source、generated source 和 introspection 文件 SHA；compiler/link/dependency metadata 目前只以有界摘要和非权威来源保存，schema、路径或闭包不完整时 fail closed。
     - [ ] A19a6b：仅在明确启用时由宿主在无网络、超时、资源和仓库边界约束下执行一次 configure/generate，输出到独立临时根后再只读提取事实；Meson/configure 缺失或失败属于环境/构建发现阻塞，禁止猜测参数或进入语义 repair。
+      - [ ] A19a6b1：从 canonical BuildIR 及已绑定的 Ninja/CMake/Meson producer graph 识别 compile database 引用但尚未物化的生成源码；仅在 A19e8 沙箱能力闭合、producer argv 固定且输出路径逐项受限时执行最小 producer target，随后重新发现并重开所有输入。禁止执行任意 shell、自动猜测 target，或把人工预生成文件冒充 harness 已闭环。
 
-    A19a6a 已由固定 `meson-info` 路径、严格 schema、路径/重解析点限制、内容绑定和漂移复验覆盖；A19a6 只因受限 configure/generate 尚未接入而保持未勾选。
+    A19a6a 已由固定 `meson-info` 路径、严格 schema、路径/重解析点限制、内容绑定和漂移复验覆盖；固定 curl 提交的真实 WSL 规划还发现 4 个已进入 compile database、但默认构建未生成的 unity C 源。显式执行 Ninja 已声明的 4 个 producer target 后规划可以继续；当前 harness 只会在阻塞证据中报告仓库相对源路径，尚不会自行执行 producer，因此 A19a6b/A19a6b1 保持未勾选。
   - [ ] **A19a7：canonical BuildIR 与构建 adapter 收敛**。
     - [x] A19a7a：定义带 schema version 和 canonical serialization 的 BuildIR，统一表达 target、翻译单元变体、source/generated input、compiler/toolchain、compile arguments、include/define、archive/link 顺序、外部依赖和 ABI facts；每个字段都绑定原始路径/SHA、提取器版本和 provenance。
     - [x] A19a7b：所有构建 adapter 只允许向下游暴露 BuildIR；adapter-specific raw facts 只能作为 BuildIR 引用的审计附件，planner、DAG、ContextPack、Rust 重建和 verifier 不得读取 adapter 私有 shape。无法无损归一化的事实必须显式 blocked/refused，禁止猜测或静默丢弃。
@@ -564,17 +565,22 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
       - [ ] A19b4c2：把 selection 计算本身也改为当前 frontier 的 `pending_retrieval -> ready` 状态转移，完成一波后从最新 DAG、失败证据和扩展查询重算下一波；移除计划期全项目 selection/CIndex JSON 单体和重复 portfolio context，保持分片 CAS 近线性增长。
         - [x] A19b4c2b：host-owned single-SCC refresh 已通过私有 permit、CAS 重开、runtime overlay 和 dispatch/request/prelaunch 复验闭合 `pending_retrieval -> ready`；漂移时零 attempt、零 provider。
         - [x] A19b4c2c：wave input、受限 selection directives、原子整波失效与可恢复逐 SCC refresh 已接入生产 CLI；失败证据、expansion query、query epoch、跨 SCC scope 和 caller authority 均 fail closed。父项仍因计划期单体 CIndex/重复 context 移除与近线性规模验收未完成而保持未勾选。
+        - [x] A19b4c2d：持久化的根 `project-migration-plan.json` 改为 compact、hash-bound portfolio 摘要，不再复制完整 assignments/ledger units/context；dispatch 在同一文件句柄上流式复验 path/size/SHA，要求 canonical UTF-8 JSON，并核对 run/status/DAG/portfolio-plan 身份后再进入 immutable-ledger 复验。完整 portfolio 仍是单体，故该项不关闭 A19b4c2 父项。
     - [ ] A19b4d：为 planner、translator、reviewer、repairer 定义不同的最小上下文合同；translator 必须获得完整 required facts，planner 只看项目级摘要和接口风险。若模型需要更多事实，只能提交结构化 retrieval query，由宿主选择、记账并返回新 receipt，模型不得直接读文件或自行声明事实。
     - [ ] A19b4e：对超过单次预算的超大函数实行层次化分解：先提取签名、控制流区域、局部类型/宏依赖和状态摘要，再按可验证 region 生成候选并在函数级重组；若跨 region 语义或 ABI 无法证明，必须整体 deferred/refused，禁止截断后假装完整翻译。
     - [ ] A19b4f：增加 exact macro/type 命中、确定性顺序、required-budget 阻塞、receipt 篡改、selected-only materialization、frontier lazy loading、角色隔离、显式 expansion 与超大函数拒绝测试；有限 held-out 项目必须证明 token/页面下降且 build/oracle 结论不退化。
 
-  当前已有 header 去重、blocker 摘要、可恢复函数 span、callee signature、未解析外部符号 required-fact 回执、确定性 selection receipt、retrieval segment/seed-page 分离、dispatch 前沿物理物化、模型启动前回执复验，以及 verifier-failure/include-adjacency/dependency-interface 的前沿选择和可恢复 wave refresh；尚未闭合 AST/type/layout/macro producer、计划期单体 CIndex/重复 context 移除、角色合同与超大函数分解，因此 A19b3/A19b4 及 A19b4c2 父项保持未勾选。
+  当前已有 header 去重、blocker 摘要、可恢复函数 span、callee signature、未解析外部符号 required-fact 回执、确定性 selection receipt、retrieval segment/seed-page 分离、dispatch 前沿物理物化、模型启动前回执复验，以及 verifier-failure/include-adjacency/dependency-interface 的前沿选择和可恢复 wave refresh；根计划对完整 portfolio 的重复嵌入已经移除，但计划期全项目 selection、单体 CIndex/ContextPages/portfolio、角色合同与超大函数分解仍未闭合，因此 A19b3/A19b4 及 A19b4c2 父项保持未勾选。
 
   A19b4a2a 有限阶段证据（2026-07-14）：Windows `test_project_migration_*.py` 525 项通过、5 项平台条件跳过；WSL 同组 525 项通过、3 项平台条件跳过。该阶段未调用 provider/model，也未执行项目 semantic gate；它只证明 required-symbol 查询、回执重算和 assignment fail-closed，translator numerator 仍为 0。
 
   A19b4c1 有限阶段证据（2026-07-13）：Windows `test_project_migration*.py` 254 项通过、2 项平台条件跳过，WSL 同组 254 项全部通过。固定 mbedTLS 提交 `9e9eb069d6aa3db84bef07b6d83a78bdee9b1da6` 的 WSL 本地模拟在 `required` build-closure 策略下完成 plan：2,410 个 ledger unit、9,252 个 assignment、97 个结构化 blocked group 和 4 个 ready worker；计划期只写 2,410 个分片 catalog，prompt page/group/assignment request/attempt/model invocation 均为 0。该运行耗时 8 分 47 秒、峰值 RSS 约 1.15 GB，且 CIndex、ContextPages、portfolio 仍分别约 50.6 MB、181 MB、96.1 MB，因此它不是比赛等价语义验收，也不能关闭 A19b4c2 或增加翻译成功计数。
 
   A19b4c2b/c 有限阶段证据（2026-07-14）：Windows `test_project_migration*.py` 619 项通过、5 项平台条件跳过；WSL 同组 619 项通过、3 项平台条件跳过。frontier/CLI/security 聚焦回归 114/114 通过，Rust translator 全特性测试通过；judge entrypoint dry-run 为 4/4 planned。WSL competition smoke 仍受本机镜像版本偏差、既有 FlashDB oracle call-plan 证据缺口和 OpenCode agent 长度门禁阻断，因此只记为 `wsl-local-simulation`，不宣称 `competition-exact`、semantic pass 或 translator numerator 增量。
+
+  A19a6b1/A19b4c2d held-out 阶段证据（2026-07-15）：固定 curl 提交 `6546ffeda4f1e81f68db6af721398148b5c74317` 在显式生成 4 个 Ninja producer 输出后完成 494 个 TU 的 WSL 规划，得到 4,476 个 ledger unit 和 17,700 个 assignment；根计划为 71,191 字节，完整 portfolio 为 194,295,931 字节。固定 mbedTLS 提交 `9e9eb069d6aa3db84bef07b6d83a78bdee9b1da6` 的 BuildIR 达到 580 个 target、383 个 TU、0 个 boundary 且 required build closure 完整；规划得到 11,637 个 ledger unit、44,808 个 assignment 和 4 个 initial-ready worker，耗时 47 分 24 秒、峰值 RSS 约 5.30 GiB。其根计划仅 5,087 字节，但 CIndex、ContextPages、portfolio 分别为 175,890,287、819,814,295、512,488,719 字节；最终 canonical 流式 dispatch 耗时 2 分 24 秒、峰值约 3.02 GiB，物化 26 个当前前沿页面并生成 4 个 launch descriptor，未调用 model/provider。该结果只证明本地 WSL 的 BuildIR/plan/dispatch 与 compact-root 重开，不是项目 Rust 重建、semantic gate 或 `competition-exact`，translator numerator 仍为 0；超大单体和内存峰值明确要求 A19b4c2 父项继续保持未勾选。
+
+  同阶段有限门禁：Windows `test_project_migration*.py` 631 项通过、5 项平台条件跳过；WSL 同组 631 项通过、3 项平台条件跳过；双语文档镜像 4/4 通过；WSL Rust translator `--all-features` 命令成功且 0 failure。16 MiB canonical artifact 微基准把 loader 峰值从 50,337,122 字节降至 33,688,912 字节，但真实 dispatch 总峰值仍由 portfolio 对象和前沿物化主导。该门禁不把 ignored Rust case 或未运行的 semantic project gate 计为成功翻译。
 
   **A19c OpenCode 多 worker 候选组合**
 
@@ -709,6 +715,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   - [ ] 删除 P0-A19 生产路径中经调用关系、静态扫描和有限回归证明不再使用的重复实现、过期兼容层与不可达入口；不得以“精简”为由删除 fail-closed 校验、证据绑定、拒绝路径或仍被 CLI/测试/发布入口引用的代码。
   - [x] P0-A19 `_project_migration_harness` 生产模块、`test_project_migration_*.py` 和共享 test-support 已按职责拆到每个文件不超过 300 行，并由 source-layout 门禁持续检查；后续触及该目录仍必须保持此约束。仓库其余 Python 大文件统一由 P0-C4 追踪，禁止通过压缩排版、重复薄包装或搬到未检查目录规避门禁。
+  - [x] A19h1：删除 dispatch 专用的整文件 bytes 收集路径，统一复用流式 artifact verifier 与 canonical JSON metadata；Ninja link command 回归从 generated-closure 大测试文件拆到独立 36 行模块。本阶段触及的生产与测试文件均保持不超过 300 行，未引入项目身份 adapter。
 
   完成判据：同一入口可对 held-out 仓库从零生成 translation inventory、迁移 DAG、hash-bound ContextPacks、候选/repair 证据和可复现 Cargo 输出；至少一个此前未参与开发的多文件 C 项目通过项目级 build 与声明边界内 semantic gates。任何按身份分派、手写项目 adapter、未绑定模型输出或只通过函数级 demo 的结果都不能关闭本项，也不能增加 translator numerator。
 
