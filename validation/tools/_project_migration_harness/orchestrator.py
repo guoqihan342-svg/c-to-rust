@@ -91,6 +91,7 @@ def plan_project(
     generated_closure = build_stage["closure"]
     closure_verification = build_stage["closure_verification"]
     closure_ready = bool(build_stage["closure_ready"])
+    del build_stage
     admission = verify_build_ir_artifact(source, output, artifacts["build_ir"])
     artifacts["build_ir_worker_admission"] = write_json_artifact(
         output, "plan/build-ir-worker-admission.json", admission,
@@ -108,6 +109,7 @@ def plan_project(
     effective_run_id = run_id or f"project-{project_key[:16]}"
     if RUN_ID_RE.fullmatch(effective_run_id) is None:
         raise ValueError("run_id must be a bounded portable identifier")
+    del discovery
 
     c_index = _stage("c_index", lambda: index_translation_units(
         source, translation_units_for_index(build_ir),
@@ -140,6 +142,7 @@ def plan_project(
     )
     if contexts.get("status") not in {"ready", "ready_with_boundaries"}:
         return _blocked(output, artifacts, "context_pages_blocked")
+    del c_index
 
     try:
         dag, portfolio, page_refs, materialization_ref = build_context_portfolio(
@@ -156,6 +159,7 @@ def plan_project(
         artifacts["context_materialization"] = materialization_ref
     except ContextPortfolioError as error:
         return _blocked(output, artifacts, error.stage)
+    del contexts, graph
     artifacts["portfolio_dag"] = write_json_artifact(output, "plan/portfolio-dag.json", dag)
     artifacts["portfolio"] = write_json_artifact(output, "plan/portfolio.json", portfolio)
 

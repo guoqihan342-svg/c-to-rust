@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 from collections import defaultdict
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from .artifacts import (
-    canonical_json_bytes, content_sha256,
-)
+from .artifacts import content_sha256
 from .artifact_write_once import (
     write_once_bytes_artifact, write_once_json_artifact,
 )
-from .context_catalog import persist_context_catalogs, prepare_context_catalog
+from .context_catalog import prepare_context_catalog
+from .context_page_binding import context_group_binding, prepare_context_page
 from .context_retrieval import validate_retrieval_bundle
 from .context_selection_materialization import (
     bind_selection_materialization as _bind_selection_materialization,
@@ -35,7 +32,7 @@ def prepare_context_indexes(
     page_payloads: dict[str, bytes] = {}
     page_ids: set[str] = set()
     for page in pages:
-        prepared = _prepare_page(page, facts, out_root_rel)
+        prepared = prepare_context_page(page, facts, out_root_rel)
         page_id = prepared["page_id"]
         if page_id in page_ids:
             raise ValueError("context page IDs must be unique")
@@ -58,7 +55,7 @@ def prepare_context_indexes(
         for scc_id, entries in sorted(by_scc.items())
     }
     contexts = {
-        scc_id: _context_binding(
+        scc_id: context_group_binding(
             scc_id, entries, out_root_rel, retrieval.get(scc_id),
             catalogs[scc_id]["reference"],
         )
@@ -75,15 +72,6 @@ def prepare_context_indexes(
         "catalogs": catalogs,
     }
     return contexts, page_payloads, prepared_store
-
-
-def materialize_prepared_context_catalogs(
-    prepared: Mapping[str, Any], *, out_root: Path,
-) -> list[dict[str, Any]]:
-    catalogs = prepared.get("catalogs")
-    if not isinstance(catalogs, Mapping):
-        raise ValueError("prepared context catalogs are invalid")
-    return persist_context_catalogs(catalogs, out_root=out_root)
 
 
 def materialize_selected_context_indexes(
@@ -210,72 +198,6 @@ def materialize_context_indexes(
     return contexts, page_refs
 
 
-def _prepare_page(
-    page: Any, facts: Mapping[str, Any], out_root_rel: str
-) -> dict[str, Any]:
-    if not isinstance(page, Mapping) or not isinstance(page.get("scc_id"), str):
-        raise ValueError("context page SCC binding is invalid")
-    fact_refs = page.get("fact_refs")
-    if not isinstance(fact_refs, list) or any(digest not in facts for digest in fact_refs):
-        raise ValueError("context page references an unknown shared fact")
-    fields = (
-        "wave_index", "scc_id", "classification", "dependency_count",
-        "dependency_set_sha256", "part_index",
-    )
-    materialized = {
-        **{key: page[key] for key in fields},
-        "facts": [{"sha256": digest, **facts[digest]} for digest in fact_refs],
-    }
-    compact = json.dumps(
-        materialized, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    if page.get("materialized_sha256") != hashlib.sha256(compact).hexdigest():
-        raise ValueError("context page materialized SHA drift")
-    payload = canonical_json_bytes(materialized)
-    page_id = str(page.get("page_id", ""))
-    relative = f"context/pages/{page_id}.json"
-    local = {
-        "path": relative,
-        "sha256": hashlib.sha256(payload).hexdigest(),
-        "size_bytes": len(payload),
-    }
-    metadata = {**dict(page), "estimated_tokens": len(payload)}
-    return {
-        "scc_id": str(page["scc_id"]), "page_id": page_id,
-        "fact_refs": list(fact_refs), "payload": payload,
-        "relative_path": relative, "local_reference": local,
-        "reference": {**local, "path": f"{out_root_rel}/{relative}"},
-        "page_metadata": metadata,
-    }
-
-
-def _context_binding(
-    scc_id: str, entries: list[dict[str, Any]], out_root_rel: str,
-    retrieval: Mapping[str, Any] | None,
-    catalog: Mapping[str, Any],
-) -> dict[str, Any]:
-    entries.sort(key=lambda item: int(item["page_metadata"]["part_index"]))
-    pages = [
-        {"page_id": entry["page_id"], **entry["reference"]}
-        for entry in entries
-    ]
-    result = {
-        "path": f"{out_root_rel}/context/groups/{scc_id}.json",
-        "byte_count": sum(int(item["size_bytes"]) for item in pages),
-        "token_count": sum(int(item["size_bytes"]) for item in pages),
-        "page_count": len(pages),
-        "pages": [
-            {**item, "estimated_tokens": item["size_bytes"]} for item in pages
-        ],
-        "catalog": dict(catalog),
-    }
-    if retrieval is not None:
-        result["retrieval"] = {
-            key: value for key, value in retrieval.items() if key != "fact_refs"
-        }
-    return result
-
-
 def _write_named_json(
     out_root: Path, name: str, payload: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -287,5 +209,5 @@ def _write_named_json(
 
 __all__ = [
     "materialize_context_indexes", "materialize_selected_context_indexes",
-    "materialize_prepared_context_catalogs", "prepare_context_indexes",
+    "prepare_context_indexes",
 ]

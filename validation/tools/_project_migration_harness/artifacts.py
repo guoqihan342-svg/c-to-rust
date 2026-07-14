@@ -15,12 +15,10 @@ def canonical_json_bytes(value: Any) -> bytes:
 def canonical_json_metadata(value: Any) -> tuple[str, int]:
     digest = hashlib.sha256()
     size = 0
-    for chunk in _canonical_json_chunks(value, level=0):
-        encoded = chunk.encode("utf-8")
+    for encoded in _canonical_json_byte_chunks(value):
         digest.update(encoded)
         size += len(encoded)
-    digest.update(b"\n")
-    return digest.hexdigest(), size + 1
+    return digest.hexdigest(), size
 
 
 def _canonical_json_chunks(value: Any, *, level: int):
@@ -88,8 +86,14 @@ def _quoted_chunks(value: str):
     yield '"'
 
 
+def _canonical_json_byte_chunks(value: Any):
+    for chunk in _canonical_json_chunks(value, level=0):
+        yield chunk.encode("utf-8")
+    yield b"\n"
+
+
 def content_sha256(value: Any) -> str:
-    return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
+    return canonical_json_metadata(value)[0]
 
 
 def checked_relative_path(value: str) -> str:
@@ -104,15 +108,31 @@ def checked_relative_path(value: str) -> str:
 
 
 def write_json_artifact(out_root: Path, relative: str, payload: Any) -> dict[str, Any]:
-    return write_bytes_artifact(out_root, relative, canonical_json_bytes(payload))
+    relative, target = _resolve_artifact_target(out_root, relative)
+    sha256, size_bytes = _atomic_write_json(target, payload)
+    return {
+        "path": relative,
+        "sha256": sha256,
+        "size_bytes": size_bytes,
+    }
 
 
 def write_bytes_artifact(
     out_root: Path, relative: str, data: bytes
 ) -> dict[str, Any]:
-    relative = checked_relative_path(relative)
     if not isinstance(data, bytes):
         raise TypeError("artifact data must be bytes")
+    relative, target = _resolve_artifact_target(out_root, relative)
+    _atomic_write(target, data)
+    return {
+        "path": relative,
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "size_bytes": len(data),
+    }
+
+
+def _resolve_artifact_target(out_root: Path, relative: str) -> tuple[str, Path]:
+    relative = checked_relative_path(relative)
     root = out_root.resolve()
     root.mkdir(parents=True, exist_ok=True)
     target = (root / Path(*PurePosixPath(relative).parts)).resolve()
@@ -120,12 +140,7 @@ def write_bytes_artifact(
         target.relative_to(root)
     except ValueError as error:
         raise ValueError("artifact target escapes out_root") from error
-    _atomic_write(target, data)
-    return {
-        "path": relative,
-        "sha256": hashlib.sha256(data).hexdigest(),
-        "size_bytes": len(data),
-    }
+    return relative, target
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
@@ -142,6 +157,33 @@ def _atomic_write(path: Path, data: bytes) -> None:
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _atomic_write_json(path: Path, payload: Any) -> tuple[str, int]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            sha256, size_bytes = _write_canonical_json_stream(handle, payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        return sha256, size_bytes
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _write_canonical_json_stream(handle: Any, payload: Any) -> tuple[str, int]:
+    digest = hashlib.sha256()
+    size = 0
+    for encoded in _canonical_json_byte_chunks(payload):
+        handle.write(encoded)
+        digest.update(encoded)
+        size += len(encoded)
+    return digest.hexdigest(), size
 
 
 __all__ = [

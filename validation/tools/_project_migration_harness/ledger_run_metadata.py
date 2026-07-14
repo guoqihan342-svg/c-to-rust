@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .artifacts import canonical_json_bytes
+from .artifacts import canonical_json_metadata
 from .artifact_verification import verify_artifact_reference
 from .ledger_run_contract import derive_migration_contract
 from .orchestration_facts import read_artifact_reference
@@ -78,11 +77,11 @@ def _bound_portfolio(
         if not isinstance(portfolio, Mapping):
             raise ValueError("portfolio artifact must be an object")
         return portfolio
-    encoded = canonical_json_bytes(portfolio_payload)
+    digest, size = canonical_json_metadata(portfolio_payload)
     if (
-        reference.get("sha256") != hashlib.sha256(encoded).hexdigest()
-        or reference.get("size_bytes") != len(encoded)
-        or len(encoded) > MAX_PORTFOLIO_ARTIFACT_BYTES
+        reference.get("sha256") != digest
+        or reference.get("size_bytes") != size
+        or size > MAX_PORTFOLIO_ARTIFACT_BYTES
     ):
         raise ValueError("in-memory portfolio does not match its artifact")
     verify_artifact_reference(

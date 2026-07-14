@@ -566,11 +566,12 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
         - [x] A19b4c2b：host-owned single-SCC refresh 已通过私有 permit、CAS 重开、runtime overlay 和 dispatch/request/prelaunch 复验闭合 `pending_retrieval -> ready`；漂移时零 attempt、零 provider。
         - [x] A19b4c2c：wave input、受限 selection directives、原子整波失效与可恢复逐 SCC refresh 已接入生产 CLI；失败证据、expansion query、query epoch、跨 SCC scope 和 caller authority 均 fail closed。父项仍因计划期单体 CIndex/重复 context 移除与近线性规模验收未完成而保持未勾选。
         - [x] A19b4c2d：持久化的根 `project-migration-plan.json` 改为 compact、hash-bound portfolio 摘要，不再复制完整 assignments/ledger units/context；dispatch 在同一文件句柄上流式复验 path/size/SHA，要求 canonical UTF-8 JSON，并核对 run/status/DAG/portfolio-plan 身份后再进入 immutable-ledger 复验。完整 portfolio 仍是单体，故该项不关闭 A19b4c2 父项。
+        - [x] A19b4c2e：计划期按 SCC 重建 ContextPages，完成页面绑定后立即释放 page/catalog payload，只向 portfolio 传递宿主签发的 group closure。闭包绑定 group、context、catalog、canonical profile、页面顺序、logical/artifact SHA 和大小；所有 catalog 先写同盘临时 staging，全部组验证成功后才 write-once 发布，后续组失败不会留下可见的半成品或污染重试。主 JSON 写入、content hash 和 ledger portfolio 绑定统一使用流式 canonical metadata，CIndex、ContextPages 和 graph 也在最后一次使用后显式释放。完整 CIndex/ContextPages/portfolio artifact 和全项目 selection 仍为单体，故父项保持未勾选。
     - [ ] A19b4d：为 planner、translator、reviewer、repairer 定义不同的最小上下文合同；translator 必须获得完整 required facts，planner 只看项目级摘要和接口风险。若模型需要更多事实，只能提交结构化 retrieval query，由宿主选择、记账并返回新 receipt，模型不得直接读文件或自行声明事实。
     - [ ] A19b4e：对超过单次预算的超大函数实行层次化分解：先提取签名、控制流区域、局部类型/宏依赖和状态摘要，再按可验证 region 生成候选并在函数级重组；若跨 region 语义或 ABI 无法证明，必须整体 deferred/refused，禁止截断后假装完整翻译。
     - [ ] A19b4f：增加 exact macro/type 命中、确定性顺序、required-budget 阻塞、receipt 篡改、selected-only materialization、frontier lazy loading、角色隔离、显式 expansion 与超大函数拒绝测试；有限 held-out 项目必须证明 token/页面下降且 build/oracle 结论不退化。
 
-  当前已有 header 去重、blocker 摘要、可恢复函数 span、callee signature、未解析外部符号 required-fact 回执、确定性 selection receipt、retrieval segment/seed-page 分离、dispatch 前沿物理物化、模型启动前回执复验，以及 verifier-failure/include-adjacency/dependency-interface 的前沿选择和可恢复 wave refresh；根计划对完整 portfolio 的重复嵌入已经移除，但计划期全项目 selection、单体 CIndex/ContextPages/portfolio、角色合同与超大函数分解仍未闭合，因此 A19b3/A19b4 及 A19b4c2 父项保持未勾选。
+  当前已有 header 去重、blocker 摘要、可恢复函数 span、callee signature、未解析外部符号 required-fact 回执、确定性 selection receipt、retrieval segment/seed-page 分离、dispatch 前沿物理物化、模型启动前回执复验，以及 verifier-failure/include-adjacency/dependency-interface 的前沿选择和可恢复 wave refresh；根计划对完整 portfolio 的重复嵌入、计划期 ContextPages payload 的全量常驻和 catalog 的双份常驻已经移除，但计划期仍一次性计算全项目 selection，CIndex/ContextPages/portfolio artifact 仍是单体，角色合同与超大函数分解也未闭合，因此 A19b3/A19b4 及 A19b4c2 父项保持未勾选。
 
   A19b4a2a 有限阶段证据（2026-07-14）：Windows `test_project_migration_*.py` 525 项通过、5 项平台条件跳过；WSL 同组 525 项通过、3 项平台条件跳过。该阶段未调用 provider/model，也未执行项目 semantic gate；它只证明 required-symbol 查询、回执重算和 assignment fail-closed，translator numerator 仍为 0。
 
@@ -581,6 +582,10 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   A19a6b1/A19b4c2d held-out 阶段证据（2026-07-15）：固定 curl 提交 `6546ffeda4f1e81f68db6af721398148b5c74317` 在显式生成 4 个 Ninja producer 输出后完成 494 个 TU 的 WSL 规划，得到 4,476 个 ledger unit 和 17,700 个 assignment；根计划为 71,191 字节，完整 portfolio 为 194,295,931 字节。固定 mbedTLS 提交 `9e9eb069d6aa3db84bef07b6d83a78bdee9b1da6` 的 BuildIR 达到 580 个 target、383 个 TU、0 个 boundary 且 required build closure 完整；规划得到 11,637 个 ledger unit、44,808 个 assignment 和 4 个 initial-ready worker，耗时 47 分 24 秒、峰值 RSS 约 5.30 GiB。其根计划仅 5,087 字节，但 CIndex、ContextPages、portfolio 分别为 175,890,287、819,814,295、512,488,719 字节；最终 canonical 流式 dispatch 耗时 2 分 24 秒、峰值约 3.02 GiB，物化 26 个当前前沿页面并生成 4 个 launch descriptor，未调用 model/provider。该结果只证明本地 WSL 的 BuildIR/plan/dispatch 与 compact-root 重开，不是项目 Rust 重建、semantic gate 或 `competition-exact`，translator numerator 仍为 0；超大单体和内存峰值明确要求 A19b4c2 父项继续保持未勾选。
 
   同阶段有限门禁：Windows `test_project_migration*.py` 631 项通过、5 项平台条件跳过；WSL 同组 631 项通过、3 项平台条件跳过；双语文档镜像 4/4 通过；WSL Rust translator `--all-features` 命令成功且 0 failure。16 MiB canonical artifact 微基准把 loader 峰值从 50,337,122 字节降至 33,688,912 字节，但真实 dispatch 总峰值仍由 portfolio 对象和前沿物化主导。该门禁不把 ignored Rust case 或未运行的 semantic project gate 计为成功翻译。
+
+  A19b4c2e 有限内存/等价性证据（2026-07-15）：32 组、每组 256 KiB 的合成计划把 `tracemalloc` 峰值从保留 payload 路径的 18,139,218 字节降至流式闭包路径的 2,087,339 字节，下降约 88.49%。固定 mbedTLS 提交的阶段重跑复用了既有 819,814,295 字节 ContextPages 和 33,160,149 字节 graph，重新生成 11,637 个 ledger unit 与 44,808 个 assignment，耗时 17 分 21 秒、峰值 RSS 4,584,668 KiB；旧的从仓库开始完整 plan 峰值为 5,555,644 KiB，差值 970,976 KiB（约 17.48%），但两次测量边界不同，不能把它当作严格的端到端对照。DAG 与旧基线逐字节一致；portfolio 的 44,814 个差异行全部由本次显式 `max_attempts=5` 相对旧基线的 `1` 及其派生 plan SHA 解释，规范化后 SHA/大小与 512,488,719 字节旧基线完全一致，其他差异为 0。该阶段没有调用 model/provider，没有执行 semantic gate，`translation_coverage_numerator=0`，并且不能关闭 A19b4c2 父项。
+
+  A19b4c2e 最终有限门禁（2026-07-15）：文档镜像与新增流式写入、catalog 安全、closure 防伪、staging 失败恢复、ledger 流式绑定聚焦回归 21/21；Windows `test_project_migration*.py` 648 项通过、5 项平台条件跳过，WSL 同组 648 项通过、3 项平台条件跳过；WSL Rust translator `--all-features` 完成且 0 failure。既有 ignored Rust case、阶段内存重跑和未执行的项目 semantic gate 均不计作成功翻译。
 
   **A19c OpenCode 多 worker 候选组合**
 
@@ -716,6 +721,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   - [ ] 删除 P0-A19 生产路径中经调用关系、静态扫描和有限回归证明不再使用的重复实现、过期兼容层与不可达入口；不得以“精简”为由删除 fail-closed 校验、证据绑定、拒绝路径或仍被 CLI/测试/发布入口引用的代码。
   - [x] P0-A19 `_project_migration_harness` 生产模块、`test_project_migration_*.py` 和共享 test-support 已按职责拆到每个文件不超过 300 行，并由 source-layout 门禁持续检查；后续触及该目录仍必须保持此约束。仓库其余 Python 大文件统一由 P0-C4 追踪，禁止通过压缩排版、重复薄包装或搬到未检查目录规避门禁。
   - [x] A19h1：删除 dispatch 专用的整文件 bytes 收集路径，统一复用流式 artifact verifier 与 canonical JSON metadata；Ninja link command 回归从 generated-closure 大测试文件拆到独立 36 行模块。本阶段触及的生产与测试文件均保持不超过 300 行，未引入项目身份 adapter。
+  - [x] A19h2：从旧 `context_index_store.py` 拆出页面绑定、计划期 closure proof 和 catalog staging/publish 三个独立职责模块，删除不再调用的 materialization helper；artifact 写入、content hash 与 ledger portfolio 绑定共用流式 canonical metadata。所有本阶段触及的生产/测试 Python 文件均不超过 300 行，生产路径未加入项目、函数、目录或 fixture 身份分派。
 
   完成判据：同一入口可对 held-out 仓库从零生成 translation inventory、迁移 DAG、hash-bound ContextPacks、候选/repair 证据和可复现 Cargo 输出；至少一个此前未参与开发的多文件 C 项目通过项目级 build 与声明边界内 semantic gates。任何按身份分派、手写项目 adapter、未绑定模型输出或只通过函数级 demo 的结果都不能关闭本项，也不能增加 translator numerator。
 

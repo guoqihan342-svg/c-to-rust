@@ -13,6 +13,7 @@
 - [x] **A19b4c2b：实现 host-owned、content-bound 的 single-SCC refresh/override。** host 会重开 portfolio、base/new catalog、selection receipt、page/group、refresh input 与 overlay 的完整 CAS 依赖，之后才以私有 permit 把 SCC 从 `pending_retrieval` 恢复为 `ready`；dispatch、request 与 prelaunch 会再次重开 overlay，任一漂移都在 attempt/provider 前 fail closed。
 - [x] **A19b4c2c：在每波结束后重算下一检索前沿。** host 从绑定 portfolio 的 DAG、上一波 last-good 状态、显式失败证据与 expansion query 派生 wave input 和每 SCC selection directives；整波失效在一个 SQLite 事务中完成，逐 SCC refresh 可在中断后用相同 CAS 输入幂等续跑，且旧 schema refresh、跨 SCC fact 注入、旧/未来 query epoch 与调用方身份字段均被拒绝。该闭环可由 `prepare-next-context-frontier-wave` 调用，仍保持 `semantic_gate=false`、`translation_coverage_numerator=0`。
 - [x] **A19b4c2d：根计划只保存 hash-bound portfolio 摘要。** `project-migration-plan.json` 不再复制完整 assignments、ledger units 和 context；dispatch 在同一文件句柄上流式复验 path/size/SHA，要求 canonical UTF-8 JSON，并核对 run/status/DAG/portfolio-plan 身份后才进入不可变 ledger 复验。完整 CIndex、ContextPages 和 portfolio 仍需继续分片，因此父项保持未勾选。
+- [x] **A19b4c2e：计划期按 SCC 流式绑定 ContextPages。** page/catalog payload 在签发 host-owned group closure 后立即释放；catalog 只有在所有组验证通过后才从同盘 staging 原子式逐项发布，失败重试看不到半成品。JSON 写入、content hash 与 ledger portfolio 绑定共用流式 canonical metadata；全项目 selection 与完整 CIndex/ContextPages/portfolio artifact 仍是单体，因此父项保持未勾选。
 
 ## 评委 Demo / Milestone
 

@@ -6,8 +6,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from .artifacts import canonical_json_bytes
+from .artifacts import canonical_json_bytes, checked_relative_path
 from .artifact_write_once import write_once_bytes_artifact
+from .context_contracts import canonical
+from .context_page_binding import valid_context_path_id
 
 
 CATALOG_SCHEMA_VERSION = 1
@@ -53,6 +55,7 @@ def prepare_context_catalog(
         "model_input_policy": model_input_policy,
         "claim_boundary": claim_boundary,
     }
+    payload = validate_context_catalog(payload)
     encoded = canonical_json_bytes(payload)
     relative = f"context/catalog/groups/{scc_id}.json"
     local = {
@@ -92,8 +95,7 @@ def validate_context_catalog(value: Any) -> dict[str, Any]:
     if (
         value.get("schema_version") != CATALOG_SCHEMA_VERSION
         or value.get("artifact_kind") != "host-context-group-catalog"
-        or not isinstance(value.get("scc_id"), str)
-        or not value["scc_id"]
+        or not valid_context_path_id(value.get("scc_id"))
         or not isinstance(value.get("pages"), list)
     ):
         raise ValueError("context catalog header is invalid")
@@ -108,19 +110,7 @@ def validate_context_catalog(value: Any) -> dict[str, Any]:
         if not isinstance(page_id, str) or not page_id or page_id in page_ids:
             raise ValueError("context catalog page identity is invalid")
         page_ids.add(page_id)
-        metadata = page.get("metadata")
-        reference = page.get("reference")
-        if not isinstance(metadata, Mapping) or metadata.get("page_id") != page_id:
-            raise ValueError("context catalog page metadata is invalid")
-        encoded = canonical_json_bytes(page.get("payload"))
-        if not _reference_matches(reference, encoded):
-            raise ValueError("context catalog page reference is invalid")
-        pages.append({
-            "page_id": page_id,
-            "metadata": dict(metadata),
-            "reference": dict(reference),
-            "payload": page["payload"],
-        })
+        pages.append(_validate_catalog_page(value["scc_id"], page))
     retrieval = value.get("retrieval")
     if retrieval is not None and not isinstance(retrieval, Mapping):
         raise ValueError("context catalog retrieval binding is invalid")
@@ -136,12 +126,76 @@ def _public_retrieval(value: Mapping[str, Any] | None) -> dict[str, Any] | None:
 
 
 def _reference_matches(value: Any, encoded: bytes) -> bool:
+    if not isinstance(value, Mapping) or set(value) != {
+        "path", "sha256", "size_bytes",
+    }:
+        return False
+    try:
+        path = checked_relative_path(value.get("path"))
+    except ValueError:
+        return False
     return (
-        isinstance(value, Mapping)
-        and set(value) == {"path", "sha256", "size_bytes"}
-        and isinstance(value.get("path"), str)
+        path == value.get("path")
         and value.get("sha256") == hashlib.sha256(encoded).hexdigest()
         and value.get("size_bytes") == len(encoded)
+    )
+
+
+def _validate_catalog_page(
+    scc_id: str, page: Mapping[str, Any],
+) -> dict[str, Any]:
+    page_id = page.get("page_id")
+    metadata = page.get("metadata")
+    reference = page.get("reference")
+    payload = page.get("payload")
+    payload_fields = {
+        "wave_index", "scc_id", "classification", "dependency_count",
+        "dependency_set_sha256", "part_index", "facts",
+    }
+    metadata_fields = payload_fields - {"facts"} | {
+        "page_id", "fact_refs", "materialized_bytes", "estimated_tokens",
+        "materialized_sha256",
+    }
+    if (
+        not valid_context_path_id(page_id)
+        or not isinstance(metadata, Mapping) or set(metadata) != metadata_fields
+        or not isinstance(payload, Mapping) or set(payload) != payload_fields
+        or metadata.get("page_id") != page_id
+        or payload.get("scc_id") != scc_id or metadata.get("scc_id") != scc_id
+    ):
+        raise ValueError("context catalog page metadata is invalid")
+    fixed = payload_fields - {"facts"}
+    if any(metadata.get(key) != payload.get(key) for key in fixed):
+        raise ValueError("context catalog page metadata drifted")
+    facts = payload.get("facts")
+    refs = metadata.get("fact_refs")
+    if (
+        not isinstance(facts, list) or not isinstance(refs, list) or not refs
+        or any(not isinstance(fact, Mapping) for fact in facts)
+        or refs != [fact.get("sha256") for fact in facts]
+        or len(refs) != len(set(refs)) or any(not _sha256(ref) for ref in refs)
+    ):
+        raise ValueError("context catalog page facts are invalid")
+    compact = canonical(payload)
+    encoded = canonical_json_bytes(payload)
+    if (
+        metadata.get("materialized_sha256")
+        != hashlib.sha256(compact).hexdigest()
+        or metadata.get("materialized_bytes") != len(compact)
+        or metadata.get("estimated_tokens") != len(encoded)
+    ):
+        raise ValueError("context catalog page materialized metadata drifted")
+    if not _reference_matches(reference, encoded):
+        raise ValueError("context catalog page reference is invalid")
+    return {
+        "page_id": page_id, "metadata": dict(metadata),
+        "reference": dict(reference), "payload": dict(payload),
+    }
+
+
+def _sha256(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(
+        character in "0123456789abcdef" for character in value
     )
 
 

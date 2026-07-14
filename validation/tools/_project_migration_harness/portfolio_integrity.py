@@ -7,6 +7,7 @@ from typing import Any
 
 from .artifacts import canonical_json_bytes
 from .build_facts import is_linklike
+from .context_page_proof import _verified_context_page_reference
 
 
 class PortfolioIntegrityError(ValueError):
@@ -113,7 +114,12 @@ def bind_context(
     page_payloads: Mapping[str, Any] | None,
     page_root: str | Path | None,
     max_page_bytes: int,
+    verified_group_proof: Any | None = None,
 ) -> dict[str, Any]:
+    if verified_group_proof is not None and (page_payloads is not None or page_root is not None):
+        raise PortfolioIntegrityError(
+            "verified context group cannot be combined with payloads or page_root"
+        )
     path = relative_path(context.get("path"), "context_pack.path")
     pages = context.get("pages", [])
     page_count = context.get("page_count", len(pages) if isinstance(pages, list) else None)
@@ -134,13 +140,23 @@ def bind_context(
         if page_path in seen:
             raise PortfolioIntegrityError(f"duplicate context page path: {page_path}")
         seen.add(page_path)
-        encoded = _page_bytes(
-            page_path, page_payloads, page_root, max_page_bytes=max_page_bytes
-        )
-        digest = hashlib.sha256(encoded).hexdigest()
+        if verified_group_proof is None:
+            encoded = _page_bytes(
+                page_path, page_payloads, page_root, max_page_bytes=max_page_bytes
+            )
+            digest, size = hashlib.sha256(encoded).hexdigest(), len(encoded)
+        else:
+            try:
+                reference = _verified_context_page_reference(
+                    verified_group_proof, str(page.get("page_id", "")), page_path,
+                    max_page_bytes=max_page_bytes,
+                )
+            except (TypeError, ValueError) as error:
+                raise PortfolioIntegrityError(str(error)) from error
+            digest, size = reference["sha256"], reference["size_bytes"]
         _match(page.get("sha256"), digest, f"context page {page_path} sha256")
-        _match_count(page, ("byte_count", "bytes", "size_bytes"), len(encoded), page_path)
-        _match_count(page, ("token_count", "tokens", "estimated_tokens"), len(encoded), page_path)
+        _match_count(page, ("byte_count", "bytes", "size_bytes"), size, page_path)
+        _match_count(page, ("token_count", "tokens", "estimated_tokens"), size, page_path)
         page_payload = {
             key: value
             for key, value in page.items()
@@ -154,8 +170,8 @@ def bind_context(
             **page_payload,
             "path": page_path,
             "sha256": digest,
-            "byte_count": len(encoded),
-            "token_count": len(encoded),
+            "byte_count": size,
+            "token_count": size,
             "token_estimator": "utf8_bytes_upper_bound",
         })
     if normalized_pages:

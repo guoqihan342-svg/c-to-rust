@@ -7,6 +7,11 @@ from typing import Any
 from .ledger_security import assert_no_secrets
 from .context_required_facts import context_retrieval_ready
 from .context_frontier_state import build_initial_context_frontier
+from .context_page_proof import (
+    _open_host_context_page_proof_set,
+    _require_context_page_proof_coverage,
+    _verified_context_group,
+)
 from .portfolio_integrity import (
     PortfolioIntegrityError,
     bind_context,
@@ -43,6 +48,7 @@ def plan_portfolio(
     context_page_limit: int = 32,
     context_page_payloads: Mapping[str, Any] | None = None,
     context_page_root: str | Path | None = None,
+    context_page_proof_set: Any | None = None,
 ) -> dict[str, Any]:
     """Build hash-bound assignments; this function never materializes or launches them."""
     assert_no_secrets(dag, "migration_dag")
@@ -52,6 +58,19 @@ def plan_portfolio(
     token_budget = positive(context_token_budget, "context_token_budget")
     page_limit = positive(context_page_limit, "context_page_limit")
     root = relative_path(out_root, "out_root")
+    if context_page_proof_set is not None and (
+        context_page_payloads is not None or context_page_root is not None
+    ):
+        raise PortfolioError(
+            "context page proof set cannot be combined with payloads or page_root"
+        )
+    try:
+        verified_page_proofs = (
+            _open_host_context_page_proof_set(context_page_proof_set)
+            if context_page_proof_set is not None else None
+        )
+    except (TypeError, ValueError) as error:
+        raise PortfolioError(str(error)) from error
     run_id = dag.get("run_id")
     project_key = dag.get("project_key", dag.get("project_id"))
     if not isinstance(run_id, str) or not run_id or not isinstance(project_key, str) or not project_key:
@@ -70,16 +89,36 @@ def plan_portfolio(
         elif not isinstance(raw_context, Mapping):
             raise PortfolioError(f"group {group_id} context_pack must be an object")
         else:
+            try:
+                verified_group_proof = (
+                    _verified_context_group(
+                        verified_page_proofs, group_id, raw_context,
+                    ) if verified_page_proofs is not None else None
+                )
+            except (TypeError, ValueError) as error:
+                raise PortfolioError(str(error)) from error
             context = bind_context(
                 raw_context,
                 page_payloads=context_page_payloads,
                 page_root=context_page_root,
                 max_page_bytes=byte_budget,
+                verified_group_proof=verified_group_proof,
             )
         contexts[group_id] = context
         payload, digest = canonical_group(group, dependencies[group_id], context)
         canonical_groups[group_id] = {**payload, "content_sha256": digest}
         group_hashes[group_id] = digest
+    if verified_page_proofs is not None:
+        used_group_ids = [
+            group_id for group_id, context in contexts.items()
+            if context is not None
+        ]
+        try:
+            _require_context_page_proof_coverage(
+                verified_page_proofs, used_group_ids,
+            )
+        except (TypeError, ValueError) as error:
+            raise PortfolioError(str(error)) from error
     dag_sha256 = canonical_dag(
         dag, [canonical_groups[str(group["group_id"])] for group in dag["groups"]],
     )
