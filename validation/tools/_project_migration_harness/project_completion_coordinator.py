@@ -20,8 +20,9 @@ from .ledger_candidate_state import latest_candidate_records
 from .ledger_run_contract import load_migration_contract
 from .project_cargo_verifier import verify_project_cargo
 from .project_completion_build_ir import (
-    build_ir_allows_completion, build_ir_blocker_kinds,
-    record_build_ir_checkpoint, verify_project_final_build_ir,
+    build_ir_allows_candidate_execution, build_ir_allows_completion,
+    build_ir_blocker_kinds, record_build_ir_checkpoint,
+    verify_project_final_build_ir,
 )
 from .project_completion_state import completion_paths, completion_result
 from .project_completion_repair_phase import execute_project_repair_completion_step
@@ -34,6 +35,7 @@ SEMANTIC_RUNNERS = (
     "oracle-replay-diff", "negative", "unsafe-alias", "abi-layout",
 )
 _write_build_ir_verification = record_build_ir_checkpoint
+_build_ir_allows_candidate_execution = build_ir_allows_candidate_execution
 _build_ir_allows_completion = build_ir_allows_completion
 _build_ir_blocker_kinds = build_ir_blocker_kinds
 _result = completion_result
@@ -65,7 +67,7 @@ def resume_project_completion(
     initial_build_ir_ref = _write_build_ir_verification(
         paths, "before-candidate-execution", initial_build_ir,
     )
-    if not _build_ir_allows_completion(initial_build_ir):
+    if not _build_ir_allows_candidate_execution(initial_build_ir):
         return _result(
             paths, run_id, "blocked", "project-final-build-ir-verification",
             _build_ir_blocker_kinds(initial_build_ir), candidate_set,

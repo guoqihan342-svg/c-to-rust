@@ -15,6 +15,7 @@ from .context_pages import build_context_pages
 from .discovery import discover_project
 from .ledger import ProjectLedger, SCHEMA_VERSION as LEDGER_SCHEMA_VERSION
 from .migration_graph import build_migration_graph
+from . import orchestrator_native_link as native_link_stage
 from .orchestrator_context import ContextPortfolioError, build_context_portfolio
 from .orchestrator_stages import (
     blocked_plan as _blocked,
@@ -99,6 +100,9 @@ def plan_project(
     if admission.get("status") != "verified":
         return _blocked(output, artifacts, "build_ir_worker_admission_blocked")
     build_ir_ready = True
+    native_link_context, artifacts["native_link_context"] = native_link_stage.prepare_native_link_plan(
+        build_ir, artifacts["build_ir"], profile=profile, output=output,
+    )
 
     project_key = content_sha256({
         "build_ir": artifacts["build_ir"],
@@ -258,6 +262,7 @@ def plan_project(
             "native_link_config_resolved": admission.get(
                 "native_link_config_resolved",
             ),
+            **native_link_stage.native_link_execution_summary(native_link_context),
             "build_ir_blockers": admission.get("blockers", []),
             "build_closure_ready": closure_ready,
             "build_closure_policy": (

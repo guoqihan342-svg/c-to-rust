@@ -12,6 +12,7 @@ from .build_ir import canonical_build_ir_bytes, is_sha256
 from .build_ir_validation import BuildIRValidationError, validate_build_ir
 from .rust_project_ir_validation import RustProjectIRError, validate_rust_project_ir
 from .rust_project_ir_cohort import PARENT_DAG_KEY, validate_cohort_dag
+from .rust_project_ir_native import validate_bound_native_link_requirements
 
 
 MAX_BOUND_ARTIFACT_BYTES = 64 * 1024 * 1024
@@ -160,6 +161,10 @@ def _validate_domain_coverage(
     if len(module_units) != len(set(module_units)) or set(module_units) != dag_units:
         _fail("RustProjectIR module units do not exactly cover the migration DAG")
     build_digests = set(build_payloads)
+    try:
+        validate_bound_native_link_requirements(value, list(build_payloads.values()))
+    except ValueError as error:
+        _fail(str(error))
     _validate_embedded_build_ir(dag, bindings["build_ir"])
     records = [value["crate"]]
     records.extend(record for section in _EVIDENCE_SECTIONS for record in value[section])

@@ -139,6 +139,25 @@ def build_ir_allows_completion(verification: Mapping[str, Any]) -> bool:
     return verification.get("status") == "verified"
 
 
+def build_ir_allows_candidate_execution(verification: Mapping[str, Any]) -> bool:
+    """Allow unresolved native obligations to reach AI/Cargo candidate work only."""
+    if build_ir_allows_completion(verification):
+        return True
+    blockers = verification.get("blockers")
+    count = verification.get("unresolved_native_dependency_count")
+    return (
+        verification.get("status") == "blocked"
+        and verification.get("native_link_config_resolved") is False
+        and isinstance(count, int) and not isinstance(count, bool) and count > 0
+        and isinstance(blockers, list) and bool(blockers)
+        and all(
+            isinstance(item, Mapping)
+            and item.get("kind") == "native_link_config_unresolved"
+            for item in blockers
+        )
+    )
+
+
 def build_ir_blocker_kinds(verification: Mapping[str, Any]) -> list[str]:
     blockers = verification.get("blockers")
     if not isinstance(blockers, list):
@@ -152,6 +171,7 @@ def build_ir_blocker_kinds(verification: Mapping[str, Any]) -> list[str]:
 
 
 __all__ = [
-    "build_ir_allows_completion", "build_ir_blocker_kinds",
+    "build_ir_allows_candidate_execution", "build_ir_allows_completion",
+    "build_ir_blocker_kinds",
     "record_build_ir_checkpoint", "verify_project_final_build_ir",
 ]

@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from . import cargo_project
-from .artifacts import content_sha256
+from .artifacts import canonical_json_bytes, content_sha256
 from .integration_validation import load_candidates, normalize_manifest
 from .rust_candidate_facts import derive_rust_metadata
 from .rust_ffi_facts import NoFfiBoundaryError, derive_ffi_boundary_facts
 from .rust_project_cargo import MAX_UNSAFE_OBLIGATIONS, VIRTUAL_CRATE_ROOT
 from .rust_project_ir import build_rust_project_ir
 from .rust_project_ir_validation import module_id_for_candidate
+from .native_link_context import native_link_requirements
+from .orchestration_facts import read_artifact_reference
 
 
 def derive_rust_project_ir_from_candidates(
@@ -32,6 +35,9 @@ def derive_rust_project_ir_from_candidates(
         _fail("rust_project_ir_candidate_coverage_invalid", "rust_project_ir")
     descriptors = _descriptor_map(candidate_descriptors)
     build_digests = _build_digests(build_ir_refs)
+    native_requirements = _native_requirements(
+        build_ir_refs, artifact_root,
+    )
     candidate_refs = []
     modules = []
     public_api = []
@@ -96,6 +102,7 @@ def derive_rust_project_ir_from_candidates(
         shared_types=[], global_ownership=[], initialization=[],
         ffi_boundaries=ffi_boundaries, cfgs=[], features=[],
         unsafe_obligations=unsafe_obligations,
+        native_link_requirements=native_requirements,
     )
 
 
@@ -125,6 +132,24 @@ def _build_digests(values: Sequence[Mapping[str, Any]]) -> list[str]:
     if not digests or len(digests) != len(set(digests)):
         _fail("rust_project_ir_build_binding_invalid", "rust_project_ir")
     return sorted(digests)
+
+
+def _native_requirements(
+    references: Sequence[Mapping[str, Any]], artifact_root: Path,
+) -> list[dict[str, Any]]:
+    payloads = []
+    for reference in references:
+        raw = read_artifact_reference(artifact_root, reference)
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise cargo_project.ProjectInputError(
+                "rust_project_ir_build_binding_invalid", "rust_project_ir",
+            ) from error
+        if not isinstance(payload, dict) or canonical_json_bytes(payload) != raw:
+            _fail("rust_project_ir_build_binding_invalid", "rust_project_ir")
+        payloads.append(payload)
+    return native_link_requirements(payloads)
 
 
 def _evidence(builds: list[str], unit_id: str, candidate_sha: str) -> dict[str, Any]:

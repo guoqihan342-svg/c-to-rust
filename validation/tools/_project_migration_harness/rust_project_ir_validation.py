@@ -6,29 +6,19 @@ from pathlib import Path
 from typing import Any
 
 from .artifacts import checked_relative_path, content_sha256
+from .rust_project_ir_native import (
+    HOST_INTERFACE_COMPLETENESS, native_link_interface_projection,
+    validate_native_link_sections,
+)
 
-RUST_PROJECT_IR_SCHEMA_VERSION = 1
+RUST_PROJECT_IR_SCHEMA_VERSION = 2
 VIRTUAL_CRATE_ROOT_MODULE_ID = "crate-root"
-HOST_INTERFACE_COMPLETENESS = {
-    "status": "partial",
-    "producer": "host-rust-source-facts-v1",
-    "verified_sections": [
-        "candidate-module-binding", "ffi-boundary-name",
-        "public-symbol-name", "unsafe-token-count",
-    ],
-    "unresolved_sections": [
-        "cfg-feature-extraction", "global-ownership",
-        "initialization-destruction", "native-link-config",
-        "nested-module-multi-target", "public-signature",
-        "shared-type-layout", "target-matrix",
-    ],
-    "semantic_gate": False,
-}
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _TOP_KEYS = {
     "schema_version", "kind", "bindings", "crate", "modules", "public_api",
     "shared_types", "global_ownership", "initialization", "ffi_boundaries",
     "cfgs", "features", "unsafe_obligations", "interface_sha256",
+    "native_link_requirements", "native_link_plans",
     "interface_completeness", "claim_boundary", "ir_sha256",
 }
 _FIELDS = {
@@ -88,8 +78,10 @@ def validate_rust_project_ir(value: Mapping[str, Any]) -> None:
     module_units = _sections(value, candidates, build_digests)
     _crate(value.get("crate"), candidates, build_digests)
     _cross_references(value, candidates, module_units)
-    if value.get("interface_completeness") != HOST_INTERFACE_COMPLETENESS:
-        _fail("RustProjectIR interface completeness boundary is invalid")
+    try:
+        validate_native_link_sections(value)
+    except ValueError as error:
+        _fail(str(error))
     boundary = value.get("claim_boundary")
     if boundary != {
         "artifact_role": "rust-project-ir-candidate", "semantic_gate": False,
@@ -117,9 +109,9 @@ def interface_projection(value: Mapping[str, Any]) -> dict[str, Any]:
     for module in sections["modules"]:
         module.pop("unit_id", None)
     return {
-        "schema_version": 1, "crate": crate,
+        "schema_version": RUST_PROJECT_IR_SCHEMA_VERSION, "crate": crate,
         "interface_completeness": value["interface_completeness"],
-        **sections,
+        **sections, **native_link_interface_projection(value),
     }
 def reopen_rust_project_ir_bindings(
     value: Mapping[str, Any], artifact_root: Path,
