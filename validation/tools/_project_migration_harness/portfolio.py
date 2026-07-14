@@ -6,6 +6,7 @@ from typing import Any
 
 from .ledger_security import assert_no_secrets
 from .context_required_facts import context_retrieval_ready
+from .context_frontier_state import build_initial_context_frontier
 from .portfolio_integrity import (
     PortfolioIntegrityError,
     bind_context,
@@ -160,6 +161,21 @@ def plan_portfolio(
         item["wave_index"], role_order[item["role"]], item["worker_id"],
     ))
     units = ready[:max_concurrency]
+    assigned_group_ids = {item["group_id"] for item in assignments}
+    context_frontiers = [
+        build_initial_context_frontier(
+            run_id=run_id, unit_id=group_id, dag_sha256=dag_sha256,
+            group_sha256=group_hashes[group_id], context=contexts[group_id] or {},
+            limits={
+                "context_byte_budget": byte_budget,
+                "context_token_budget": token_budget,
+                "context_page_limit": page_limit,
+            },
+        )
+        for group_id in groups
+        if group_id in assigned_group_ids
+        and isinstance((contexts[group_id] or {}).get("catalog"), Mapping)
+    ]
     ledger_units = [
         {
             "unit_id": group_id,
@@ -188,6 +204,7 @@ def plan_portfolio(
         "assignments": assignments,
         "units": units,
         "ledger_units": ledger_units,
+        "context_frontiers": context_frontiers,
         "initial_ready": {
             "selected_worker_ids": [item["worker_id"] for item in units],
             "deferred_worker_ids": [item["worker_id"] for item in ready[max_concurrency:]],

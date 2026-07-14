@@ -13,6 +13,10 @@ from .ledger_schema import (
     atomic, connect_database, migrate_schema,
 )
 from .ledger_lease import LeaseLifecycleMixin
+from .ledger_context_frontier import (
+    ContextFrontierLedgerMixin, insert_context_frontiers,
+    prepare_portfolio_frontiers, verify_initial_context_frontiers,
+)
 from .ledger_project_diagnostics import ProjectDiagnosticLedgerMixin
 from .ledger_project_gates import ProjectGateMixin
 from .ledger_project_repair import ProjectRepairLedgerMixin
@@ -38,6 +42,7 @@ class ProjectLedger(
     ProjectRepairLedgerMixin,
     ProjectRepairArtifactMixin,
     RuntimeBindingMixin,
+    ContextFrontierLedgerMixin,
     LeaseLifecycleMixin,
     LedgerRecoveryMixin,
     LedgerViewMixin,
@@ -87,6 +92,10 @@ class ProjectLedger(
         if max_concurrency < 1 or max_attempts < 1:
             raise ValueError("run concurrency and attempt limits must be positive")
         rows, assigned = list(units), list(assignments or ())
+        frontiers = prepare_portfolio_frontiers(
+            portfolio, run_id=run_id,
+            unit_ids=[str(item["unit_id"]) for item in rows],
+        )
         bound_metadata = prepare_run_metadata(
             self.path, metadata, run_id=run_id, dag_sha256=dag_sha256,
             assignments=assigned, units=rows, portfolio_payload=portfolio,
@@ -116,6 +125,9 @@ class ProjectLedger(
                 )
             for item in assigned:
                 self._insert_assignment(connection, run_id, item, now)
+            insert_context_frontiers(
+                connection, run_id=run_id, rows=frontiers, now=now,
+            )
 
     def register_assignments(self, *, run_id: str, assignments: Iterable[Mapping[str, Any]]) -> None:
         now = _now_text()
@@ -130,6 +142,14 @@ class ProjectLedger(
         units = list(kwargs["units"])
         assignments_supplied = "assignments" in kwargs
         assignments = list(kwargs.get("assignments") or ())
+        portfolio = kwargs.get("portfolio")
+        frontiers_supplied = (
+            isinstance(portfolio, Mapping) and "context_frontiers" in portfolio
+        )
+        expected_frontiers = prepare_portfolio_frontiers(
+            portfolio, run_id=str(kwargs["run_id"]),
+            unit_ids=[str(item["unit_id"]) for item in units],
+        )
         payload = {
             **kwargs, "units": units, "assignments": assignments,
         }
@@ -157,6 +177,10 @@ class ProjectLedger(
                     """select unit_id,worker_id,role,out_root,max_attempts from assignments
                        where run_id=? order by unit_id,worker_id""", (run_id,),
                 ).fetchall()
+                if frontiers_supplied:
+                    verify_initial_context_frontiers(
+                        connection, run_id=run_id, expected=expected_frontiers,
+                    )
             expected = sorted((str(x["unit_id"]), str(x["group_id"]), int(x["wave_index"]),
                                str(x["content_sha256"])) for x in units)
             expected_assignments = sorted((str(x.get("unit_id", x.get("group_id", ""))),
