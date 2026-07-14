@@ -505,15 +505,17 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     A19a6a 已由固定 `meson-info` 路径、严格 schema、路径/重解析点限制、内容绑定和漂移复验覆盖；A19a6 只因受限 configure/generate 尚未接入而保持未勾选。
   - [ ] **A19a7：canonical BuildIR 与构建 adapter 收敛**。
     - [x] A19a7a：定义带 schema version 和 canonical serialization 的 BuildIR，统一表达 target、翻译单元变体、source/generated input、compiler/toolchain、compile arguments、include/define、archive/link 顺序、外部依赖和 ABI facts；每个字段都绑定原始路径/SHA、提取器版本和 provenance。
-    - [ ] A19a7b：所有构建 adapter 只允许向下游暴露 BuildIR；adapter-specific raw facts 只能作为 BuildIR 引用的审计附件，planner、DAG、ContextPack、Rust 重建和 verifier 不得读取 adapter 私有 shape。无法无损归一化的事实必须显式 blocked/refused，禁止猜测或静默丢弃。
+    - [x] A19a7b：所有构建 adapter 只允许向下游暴露 BuildIR；adapter-specific raw facts 只能作为 BuildIR 引用的审计附件，planner、DAG、ContextPack、Rust 重建和 verifier 不得读取 adapter 私有 shape。无法无损归一化的事实必须显式 blocked/refused，禁止猜测或静默丢弃。
       - [x] A19a7b1：compile database、Ninja/CMake 与只读 Meson facts 已进入 canonical BuildIR/attachment 验证路径。
-      - [ ] A19a7b2：把 Make dry-run 报告接入同一 BuildIR adapter/validator，并以静态导入门禁证明没有下游读取 Make 私有 shape。
+      - [x] A19a7b2：把 Make dry-run 报告接入同一 BuildIR adapter/validator，并以静态导入门禁证明没有下游读取 Make 私有 shape。
         - [x] A19a7b2a：显式选择的 canonical Make 报告已进入共享 BuildIR/attachment reopener；计划和 worker admission 会重开原始报告并重新投影，同一语义在仓库根重命名后保持稳定，任一报告或仓库输入漂移均 fail closed。
-        - [ ] A19a7b2b：增加 Git-tracked 静态导入门禁，禁止 planner、DAG、ContextPack、RustProjectIR/Cargo 与 verifier 读取 Make 私有 report/command shape；再用跨 adapter 等价 fixture 关闭 A19a7b。
+        - [x] A19a7b2b：planner、discovery、CLI 与 verifier 已改走通用 `BuildInputSelection`、BuildIR stage 和 reopener facade；Git-tracked AST 门禁以精确 source→facade→symbol 和 facade→private-adapter import 图拒绝直接/别名/相对/star import、私有符号逃逸及动态 loader/`exec`/`compile`/`eval`/`__import__` 引用。门禁直接枚举仓库生产 `.py/.pyi`，不依赖 Windows worktree 的宿主 Git 路径；legacy `MakeReportSelection` 仅在 adapter facade 内转换。
     - [ ] A19a7c：由单一 BuildIR validator 重开并复算所有 provenance/hash、generated-input closure、target/TU 唯一性和有序 link/archive closure；源文件、构建 metadata、toolchain 或 canonical projection 漂移时，必须在 worker 启动和最终验证前 fail closed。
-      - [x] A19a7c1：重开 raw attachments 并复算 compile database、source/generated bindings、Meson facts、TU/target 唯一性、有序 target DAG 和 canonical projection；计划与 worker admission 前任一仓库事实漂移均 fail closed。
+      - [x] A19a7c1：重开 raw attachments 并复算 compile database、source/generated bindings、Meson facts、TU/target 唯一性、有序 target DAG 和 canonical projection；CMake/Ninja link input/search root 与 archive member 现在按 argv 原顺序保留，重复项不再被静默排序去重，并由 BuildIR ordinal/semantic hash 回归锁定。计划与 worker admission 前任一仓库事实漂移均 fail closed。
       - [ ] A19a7c2：在比赛 profile 下绑定并重开 C compiler/archiver/linker 的实际二进制、版本、target/sysroot 与环境指纹，并由 CompletionCoordinator 在 `project-final` 前再次执行同一 BuildIR verifier；compile-database driver token 不能单独关闭 toolchain drift。
     - [ ] A19a7d：用不含项目身份的等价构建 fixture 证明各 adapter 对同一构建语义产生相同 canonical projection，并用静态边界测试拒绝下游导入 adapter 私有字段；有限 held-out 项目必须先通过 BuildIR 验证才能进入迁移 DAG。
+      - [x] A19a7d1：Git-tracked 同源 fixture 已证明 compile-database+CMake 与 compile-database+Ninja 产生完全相同的 canonical BuildIR/`semantic_sha256`；Make 路径经同一 validator 重开，只在严格受限、test-only、非语义的公共合同上与二者相等。compile target id 已统一使用 canonical `kind=object`，define 漂移会改变公共合同；status、boundaries、raw refs、物化、toolchain、direct argv/link args 与 provenance 差异全部保留并显式断言不等。
+      - [ ] A19a7d2：把同源 fixture 扩展到 Meson、multi-TU、archive/ranlib、多输入和 external dependency/toolchain 语义，并让有限 held-out 项目通过 BuildIR validator 后再进入迁移 DAG。当前公共合同不证明 build 成功、程序语义、真实 toolchain 或完整 adapter 等价。
   - [ ] **A19a8：显式启用、强隔离的 Make dry-run 构建事实采集**。
     - [ ] A19a8a：仅在 compile database、可验证生成事实和只读 metadata 均无法闭合 BuildIR 时，才允许用户显式选择 `collect-make-facts`；禁止自动 fallback。采集前必须证明无网络、源码只读、独立输出根、子进程约束、环境白名单、超时、CPU/内存/文件/进程数与输出上限及退出清理均生效；能力不足时在执行 Make 前 fail closed。
       - [x] A19a8a1：当前入口只接受显式 path/SHA/size 绑定的预采集 Make 报告；不会从 compile database 或普通发现自动 fallback，双输入会在 discovery/CLI 前置校验中阻塞。
@@ -525,6 +527,8 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [ ] A19a8d：用不含项目身份的等价 fixture 验证 Make dry-run 与 compile database/Ninja/CMake adapter 产生相同 canonical projection，并覆盖 shell/configure/递归 Make 拒绝、timeout/output flood、路径/link escape、输入漂移和 sandbox receipt 漂移。
       - [x] A19a8d1：无项目身份的 Make fixture 已覆盖仓库根重命名等价、固定 argv、shell/configure/递归 Make 拒绝、timeout/output flood/cleanup、报告及每类绑定输入/preflight 漂移，并验证 worker admission 会再次重开证据。
       - [ ] A19a8d2：补齐 Make 与 compile database/Ninja/CMake 对同一构建语义的跨 adapter canonical projection 等价测试，以及生产沙箱中的 included-Makefile/`$(shell ...)` 对抗用例。
+        - [x] A19a8d2a：同源 CMake/Ninja lane 已达到完整 canonical BuildIR 等价；Make lane 已达到受限公共构建合同等价，并保留所有 adapter/evidence 差异和 define 漂移负例，固定 `semantic_gate=false`、numerator 0。
+        - [ ] A19a8d2b：在 A19e8 生产 sandbox 中补 included-Makefile rebuilding、`$(shell ...)`、真实 timeout/output flood/cleanup，以及 Meson、archive/ranlib、多输入 link、external dependency 和 toolchain 等价/差异矩阵；未完成前不得把 bounded common contract 写成完整 canonical 等价。
 
   **A19b 项目级依赖图与有界分解**
 
@@ -737,9 +741,12 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   - [x] AI exact 入口已拆为 236 行兼容 facade 和 6 个不超过 189 行的职责模块，并由专属 source-layout 测试锁定公开导入与拆分边界。
   - [x] AI candidate provider 已拆为 61 行兼容 facade 和 command/generation/cache/manifest 职责模块；原 1,282 行 candidate harness 测试拆为 225 行主文件及多个不超过 291 行的测试/支持模块，25 个原测试保持唯一，新增 source-layout 门禁拒绝动态装载和再次超限。
   - [x] AI candidate cache 测试已按纯缓存、provider 生命周期和并发执行拆为最大 239 行的模块；过期 fixture 改为真实源码绑定的 external-callee context，没有放宽生产 readiness。9 个原缓存测试保持唯一，连同 2 个布局门禁共 11 项通过，完整 `test_ai_candidate*.py` 为 72/72。
+  - [x] BuildIR adapter 边界新增 126/52 行通用 facade，AST import-graph 门禁拆为 279 行支持模块和 124 行测试；跨 adapter fixture 支持/测试为 282/298 行，顺序保留测试为 173 行，均保持在 300 行门禁内。拆分没有把私有 Make shape、动态 loader 或 test-only common contract 暴露给生产下游。
   - [ ] 对 `validation/tools` 其余活跃生产模块和测试建立 Git-tracked 行数清单并逐模块降到 300 行以内，优先 AI candidate/context/repair/provider 与有限套件调用链。拆分必须保持公开导入和测试发现兼容；hash-bound evidence、生成快照和 canonical 文档不因行数门禁改写。
 
   2026-07-14 本阶段有限门禁：AI candidate 72/72、host-verifier/provider 19/19、文档镜像 4/4；项目迁移套件在 Windows 为 450/450（2 项平台跳过），在 WSL 为 450/450（无跳过），`git diff --check` 通过，Git 跟踪文件的凭据片段扫描为 0 命中。这些结果只证明当前合同与回归在两个本地环境一致，不是比赛主机 exact 证明，也不关闭 A19f held-out 整项目 build/oracle 验收。
+
+  2026-07-14 A19a7b2b 有限门禁：合并后聚焦回归 44/44；项目迁移套件在 Windows 为 462/462（2 项平台跳过），最终宿主无关边界门禁在 Windows/WSL 各 6/6，WSL 全量为 462/462（无跳过）。第一次 WSL 运行准确暴露 Windows-created worktree `.git` 路径不可移植，改为仓库源码目录枚举后复跑通过；该修复没有跳过门禁。以上仍是本地合同证据，不是模型调用、held-out build/oracle 或比赛主机 exact 证明。
 
 ## 4. 后续 Backlog
 
