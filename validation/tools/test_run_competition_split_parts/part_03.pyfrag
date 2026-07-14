@@ -331,6 +331,49 @@
             )
             self.assertTrue((out_root / repair_history["patch_events_path"]).exists())
 
+    def test_runner_preserves_worker_repo_ai_evidence_bindings(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            out_root = Path(tmp) / "competition-out"
+            worker_out = out_root / "workers" / "worker-a"
+            worker_result = module.run_competition(
+                slice_specs=[REPO_ROOT / "validation/slice-specs/demo-while-countdown-positive.json"],
+                out_root=worker_out,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="run-worker-a",
+                reuse_accepted_evidence=True,
+                accepted_evidence_root=REPO_ROOT / "validation/evidence",
+            )
+            worker_summary = worker_out / "summary" / "competition-run-summary.json"
+            worker_metrics = worker_result.summary["ai_translation_metrics"]
+            self.assertEqual(worker_metrics["historical_evidence"], 1)
+            self.assertEqual(worker_metrics["abnormal"], 0)
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[],
+                worker_summaries=[worker_summary],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="run-parent",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            parent_summary = out_root / "summary" / "competition-run-summary.json"
+            self.assertEqual(validator.validate_summary(parent_summary, repo_root=REPO_ROOT)["status"], "passed")
+            parent_metrics = result.summary["ai_translation_metrics"]
+            self.assertEqual(parent_metrics["historical_evidence"], 1)
+            self.assertEqual(parent_metrics["abnormal"], 0)
+            self.assertEqual(
+                parent_metrics["units"][0]["artifacts"],
+                worker_metrics["units"][0]["artifacts"],
+            )
+
     def test_runner_rejects_worker_summary_outside_out_root_workers(self) -> None:
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:

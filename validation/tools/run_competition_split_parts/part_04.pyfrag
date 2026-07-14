@@ -102,12 +102,16 @@ def ai_metric_descriptor(
     repo_root: Path,
     out_root: Path,
     worker_summary: Path | None = None,
+    artifact_paths: dict[str, Path | None] | None = None,
 ) -> dict[str, Any]:
-    evidence_dir = evidence_root / target_id / "auto-translation" / slice_id
-    paths = {
-        key: evidence_dir / template.format(slice_id=slice_id)
-        for key, template in AI_METRIC_ARTIFACT_NAMES.items()
-    }
+    if artifact_paths is None:
+        evidence_dir = evidence_root / target_id / "auto-translation" / slice_id
+        paths = {
+            key: evidence_dir / template.format(slice_id=slice_id)
+            for key, template in AI_METRIC_ARTIFACT_NAMES.items()
+        }
+    else:
+        paths = {key: artifact_paths.get(key) for key in AI_METRIC_ARTIFACT_NAMES}
     return {
         "unit_id": f"{target_id}/{slice_id}",
         "target_id": target_id,
@@ -160,10 +164,10 @@ def ai_metric_descriptors_from_workers(
         summary_path = worker.get("_summary_path")
         if not isinstance(summary_path, Path):
             continue
-        evidence_root = summary_path.parent.parent / "evidence"
         for status in workflow_unit_statuses_from_worker(worker):
             identity = parse_ai_unit_id(status.get("unit_id"))
-            mode = worker_ai_execution_mode(worker.get("_summary"), status.get("unit_id"))
+            child_unit = worker_ai_metric_unit(worker.get("_summary"), status.get("unit_id"))
+            mode = worker_ai_execution_mode(child_unit)
             if identity is None:
                 descriptor = ai_unresolved_metric_descriptor(status, source="worker", execution_mode="worker_unbound")
                 descriptor["worker_summary"] = summary_path
@@ -175,27 +179,87 @@ def ai_metric_descriptors_from_workers(
                     slice_id=identity[1],
                     source="worker",
                     execution_mode=mode,
-                    evidence_root=evidence_root,
+                    evidence_root=summary_path.parent.parent / "evidence",
                     repo_root=repo_root,
                     out_root=out_root,
                     worker_summary=summary_path,
+                    artifact_paths=worker_ai_artifact_paths(
+                        child_unit,
+                        summary_path=summary_path,
+                        repo_root=repo_root,
+                        out_root=out_root,
+                    ),
                 )
             )
     return descriptors
 
 
-def worker_ai_execution_mode(summary: Any, unit_id: Any) -> str:
+def worker_ai_metric_unit(summary: Any, unit_id: Any) -> dict[str, Any] | None:
     if not isinstance(summary, dict) or not isinstance(unit_id, str):
-        return "worker_unbound"
+        return None
     metrics = summary.get("ai_translation_metrics")
     units = metrics.get("units") if isinstance(metrics, dict) else None
     if not isinstance(units, list):
-        return "worker_unbound"
+        return None
     matches = [unit for unit in units if isinstance(unit, dict) and unit.get("unit_id") == unit_id]
-    if len(matches) != 1:
+    return matches[0] if len(matches) == 1 else None
+
+
+def worker_ai_execution_mode(unit: dict[str, Any] | None) -> str:
+    if unit is None:
         return "worker_unbound"
-    mode = matches[0].get("execution_mode")
+    mode = unit.get("execution_mode")
     return mode if mode in {"fresh_ai_translation", "accepted_evidence_revalidation", "pre_translation_failure"} else "worker_unbound"
+
+
+def worker_ai_artifact_paths(
+    unit: dict[str, Any] | None,
+    *,
+    summary_path: Path,
+    repo_root: Path,
+    out_root: Path,
+) -> dict[str, Path | None]:
+    artifacts = unit.get("artifacts") if isinstance(unit, dict) else None
+    artifacts = artifacts if isinstance(artifacts, dict) else {}
+    return {
+        key: resolve_worker_ai_artifact_path(
+            artifacts.get(key),
+            summary_path=summary_path,
+            repo_root=repo_root,
+            out_root=out_root,
+        )
+        for key in AI_METRIC_ARTIFACT_NAMES
+    }
+
+
+def resolve_worker_ai_artifact_path(
+    binding: Any,
+    *,
+    summary_path: Path,
+    repo_root: Path,
+    out_root: Path,
+) -> Path | None:
+    if not isinstance(binding, dict) or binding.get("status") != "present":
+        return None
+    path_ref = binding.get("path")
+    if not isinstance(path_ref, str) or not is_safe_posix_relative(path_ref):
+        return None
+    allowed_roots = [repo_root.resolve(), out_root.resolve()]
+    for candidate in [repo_root / path_ref, summary_path.parent / path_ref, summary_path.parent.parent / path_ref]:
+        resolved = candidate.resolve()
+        if not any(_path_is_relative_to(resolved, root) for root in allowed_roots):
+            continue
+        if resolved.is_file():
+            return resolved
+    return None
+
+
+def _path_is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
 
 
 def parse_ai_unit_id(value: Any) -> tuple[str, str] | None:
