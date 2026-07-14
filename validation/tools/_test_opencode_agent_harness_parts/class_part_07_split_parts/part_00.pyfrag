@@ -256,7 +256,7 @@ class _OpenCodeAgentHarnessTestPart07:
             self.assertEqual(evidence["stderr_sha256"], harness.sha256_file(stderr_path))
             self.assertEqual([event["type"] for event in evidence["session_events"]], ["step_start", "text"])
 
-    def test_opencode_worker_prompt_is_canonical_and_reduces_exact_bytes(self) -> None:
+    def test_opencode_worker_prompt_keeps_command_last_and_bounded(self) -> None:
         worker_command = [
             "python3",
             "-B",
@@ -283,16 +283,16 @@ class _OpenCodeAgentHarnessTestPart07:
 
         prompt = argv[-1]
         canonical_instruction = (
-            "The first and only shell/bash/powershell/cmd tool call must execute exactly the Command line "
-            "string below from the repository root."
+            "The first and only shell/bash/powershell/cmd tool call must execute exactly the final Command "
+            "line string from the repository root; do not append metadata."
         )
         expected_prompt = " ".join(
             [
                 canonical_instruction,
-                f"Command line: {harness.shell_command_line(worker_command)}",
                 "Request: target/out/harness/assignments/worker-a-request.json",
                 "Expected summary: target/out/workers/worker-a/summary/competition-run-summary.json",
                 "Handoff contract: target/out/workers/worker-a/harness/opencode-handoff-contract.json",
+                f"Command line: {harness.shell_command_line(worker_command)}",
             ]
         )
         legacy_prompt_bytes = 1287
@@ -303,10 +303,11 @@ class _OpenCodeAgentHarnessTestPart07:
         self.assertEqual(prompt.count(canonical_instruction), 1)
         self.assertEqual(prompt.count("Command line:"), 1)
         self.assertNotIn("Command:", prompt)
-        self.assertEqual(prompt_bytes, 490)
-        self.assertEqual(legacy_prompt_bytes - prompt_bytes, 797)
+        self.assertTrue(prompt.endswith(f"Command line: {harness.shell_command_line(worker_command)}"))
+        self.assertLessEqual(prompt_bytes, 520)
+        self.assertGreaterEqual(legacy_prompt_bytes - prompt_bytes, 750)
 
-    def test_opencode_preflight_prompt_is_canonical_and_reduces_exact_bytes(self) -> None:
+    def test_opencode_preflight_prompt_keeps_command_last_and_bounded(self) -> None:
         marker_command = [
             "python3",
             "-B",
@@ -332,15 +333,15 @@ class _OpenCodeAgentHarnessTestPart07:
 
         prompt = argv[-1]
         canonical_instruction = (
-            "The first and only shell/bash/powershell/cmd tool call must execute exactly the Command line "
-            "string below from the repository root."
+            "The first and only shell/bash/powershell/cmd tool call must execute exactly the final Command "
+            "line string from the repository root; do not append metadata."
         )
         expected_prompt = " ".join(
             [
                 canonical_instruction,
-                f"Command line: {harness.shell_command_line(marker_command)}",
                 "Expected marker: target/out/harness/opencode-preflight-marker.json",
                 "Handoff contract: target/out/harness/opencode-preflight-contract.json",
+                f"Command line: {harness.shell_command_line(marker_command)}",
             ]
         )
         legacy_prompt_bytes = 1031
@@ -351,8 +352,9 @@ class _OpenCodeAgentHarnessTestPart07:
         self.assertEqual(prompt.count(canonical_instruction), 1)
         self.assertEqual(prompt.count("Command line:"), 1)
         self.assertNotIn("Command:", prompt)
-        self.assertEqual(prompt_bytes, 441)
-        self.assertEqual(legacy_prompt_bytes - prompt_bytes, 590)
+        self.assertTrue(prompt.endswith(f"Command line: {harness.shell_command_line(marker_command)}"))
+        self.assertLessEqual(prompt_bytes, 470)
+        self.assertGreaterEqual(legacy_prompt_bytes - prompt_bytes, 550)
 
     def test_opencode_contract_requires_first_shell_command_to_match_worker_command(self) -> None:
         worker_command = [

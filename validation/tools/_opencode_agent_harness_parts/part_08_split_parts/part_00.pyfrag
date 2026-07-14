@@ -341,13 +341,13 @@ def build_opencode_run_argv(
     )
     command_line = shell_command_line(worker_command)
     prompt_lines = [
-        "The first and only shell/bash/powershell/cmd tool call must execute exactly the Command line string below from the repository root.",
-        f"Command line: {command_line}",
+        "The first and only shell/bash/powershell/cmd tool call must execute exactly the final Command line string from the repository root; do not append metadata.",
         f"Request: {repo_relative(request_path, repo_root=repo_root)}",
         f"Expected summary: {repo_relative(summary_path, repo_root=repo_root)}",
     ]
     if handoff_contract_path is not None:
         prompt_lines.append(f"Handoff contract: {repo_relative(handoff_contract_path, repo_root=repo_root)}")
+    prompt_lines.append(f"Command line: {command_line}")
     prompt = build_opencode_prompt(prompt_lines)
     resolved_opencode_command = resolve_subprocess_command(launch_policy["opencode_command"])
     argv = [
@@ -397,10 +397,10 @@ def build_opencode_preflight_argv(
     command_line = shell_command_line(marker_command)
     prompt = build_opencode_prompt(
         [
-            "The first and only shell/bash/powershell/cmd tool call must execute exactly the Command line string below from the repository root.",
-            f"Command line: {command_line}",
+            "The first and only shell/bash/powershell/cmd tool call must execute exactly the final Command line string from the repository root; do not append metadata.",
             f"Expected marker: {repo_relative(marker_path, repo_root=repo_root)}",
             f"Handoff contract: {repo_relative(contract_path, repo_root=repo_root)}",
+            f"Command line: {command_line}",
         ]
     )
     resolved_opencode_command = resolve_subprocess_command(launch_policy["opencode_command"])
