@@ -23,14 +23,14 @@
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json",
         "semantic_claim_source": "verified_unsafe_baseline_gates",
         "semantic_pass": true,
-        "sha256": "249e90e838487876dcacd26950905ce059b43c99477b694bd8b53d833dd8f787",
+        "sha256": "dc5c3cbbbb3c95704c7e4b966d1c719d2dbffa52b0835f28923af7d01b9553a9",
         "status": "passed"
       }
     },
     "mode": "baseline_repair_gate",
     "translation_before_after": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-      "sha256": "1c2f37e07f4f010f7af4e180d4782d1028de17822ebc96cdecfc74b834742492"
+      "sha256": "3df2f9d21877a3e6b8820cf96113d79ec9bf897c31601183a97ab7e84ec90a98"
     }
   },
   "auto_retry": true,

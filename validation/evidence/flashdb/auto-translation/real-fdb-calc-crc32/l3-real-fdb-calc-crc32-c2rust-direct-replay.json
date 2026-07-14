@@ -2,7 +2,7 @@
   "bound_inputs": {
     "baseline_manifest": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-      "sha256": "52dcad1d09841470e49812c28c17d12c020a7e851d2baac919868920e356652b",
+      "sha256": "a250dc2b948f6e075a39a08b9765ec69ed837f75aadef03e68e0dac131f0030a",
       "status": "generated"
     },
     "c2rust_output": {

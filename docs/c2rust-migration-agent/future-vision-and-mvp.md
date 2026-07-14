@@ -562,15 +562,19 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [ ] A19b4c：调度器只计算当前可运行 frontier，先检索并 materialize 当前 assignments 的最小页面；状态为 `pending_retrieval`、required facts 不完整或 receipt 未验证的 group 不得租约或启动 worker。完成一波后按新 DAG/验证事实再计算下一波，禁止启动前一次性展开全项目 ContextPack。
       - [x] A19b4c1：为每个 SCC 生成内容绑定且有大小上限的宿主 catalog；plan 阶段不再写 prompt 页面或 worker request，dispatch 只对最新 `schedule.ready` 重开 catalog/receipt/page-set，在租约前增量物化页面，并把不可变 frontier receipt 绑定到 request 与 attempt。同一 frontier 首次执行与恢复会产生相同的内容寻址回执；模型启动前再次重开回执，逐项核对 worker/assignment/catalog/retrieval/page 绑定。已有页面、group index、catalog、receipt 或部分落盘漂移时 fail closed；主路径不复制 omitted fact store。
       - [ ] A19b4c2：把 selection 计算本身也改为当前 frontier 的 `pending_retrieval -> ready` 状态转移，完成一波后从最新 DAG、失败证据和扩展查询重算下一波；移除计划期全项目 selection/CIndex JSON 单体和重复 portfolio context，保持分片 CAS 近线性增长。
+        - [x] A19b4c2b：host-owned single-SCC refresh 已通过私有 permit、CAS 重开、runtime overlay 和 dispatch/request/prelaunch 复验闭合 `pending_retrieval -> ready`；漂移时零 attempt、零 provider。
+        - [x] A19b4c2c：wave input、受限 selection directives、原子整波失效与可恢复逐 SCC refresh 已接入生产 CLI；失败证据、expansion query、query epoch、跨 SCC scope 和 caller authority 均 fail closed。父项仍因计划期单体 CIndex/重复 context 移除与近线性规模验收未完成而保持未勾选。
     - [ ] A19b4d：为 planner、translator、reviewer、repairer 定义不同的最小上下文合同；translator 必须获得完整 required facts，planner 只看项目级摘要和接口风险。若模型需要更多事实，只能提交结构化 retrieval query，由宿主选择、记账并返回新 receipt，模型不得直接读文件或自行声明事实。
     - [ ] A19b4e：对超过单次预算的超大函数实行层次化分解：先提取签名、控制流区域、局部类型/宏依赖和状态摘要，再按可验证 region 生成候选并在函数级重组；若跨 region 语义或 ABI 无法证明，必须整体 deferred/refused，禁止截断后假装完整翻译。
     - [ ] A19b4f：增加 exact macro/type 命中、确定性顺序、required-budget 阻塞、receipt 篡改、selected-only materialization、frontier lazy loading、角色隔离、显式 expansion 与超大函数拒绝测试；有限 held-out 项目必须证明 token/页面下降且 build/oracle 结论不退化。
 
-  当前已有 header 去重、blocker 摘要、可恢复函数 span、callee signature、未解析外部符号 required-fact 回执、确定性 selection receipt、retrieval segment/seed-page 分离、dispatch 前沿物理物化和模型启动前回执复验；尚未闭合 AST/type/layout/macro 与 verifier-failure 精确选择、按前沿计算 selection、角色合同、显式 expansion 与超大函数分解，因此 A19b3/A19b4 均保持未勾选。
+  当前已有 header 去重、blocker 摘要、可恢复函数 span、callee signature、未解析外部符号 required-fact 回执、确定性 selection receipt、retrieval segment/seed-page 分离、dispatch 前沿物理物化、模型启动前回执复验，以及 verifier-failure/include-adjacency/dependency-interface 的前沿选择和可恢复 wave refresh；尚未闭合 AST/type/layout/macro producer、计划期单体 CIndex/重复 context 移除、角色合同与超大函数分解，因此 A19b3/A19b4 及 A19b4c2 父项保持未勾选。
 
   A19b4a2a 有限阶段证据（2026-07-14）：Windows `test_project_migration_*.py` 525 项通过、5 项平台条件跳过；WSL 同组 525 项通过、3 项平台条件跳过。该阶段未调用 provider/model，也未执行项目 semantic gate；它只证明 required-symbol 查询、回执重算和 assignment fail-closed，translator numerator 仍为 0。
 
   A19b4c1 有限阶段证据（2026-07-13）：Windows `test_project_migration*.py` 254 项通过、2 项平台条件跳过，WSL 同组 254 项全部通过。固定 mbedTLS 提交 `9e9eb069d6aa3db84bef07b6d83a78bdee9b1da6` 的 WSL 本地模拟在 `required` build-closure 策略下完成 plan：2,410 个 ledger unit、9,252 个 assignment、97 个结构化 blocked group 和 4 个 ready worker；计划期只写 2,410 个分片 catalog，prompt page/group/assignment request/attempt/model invocation 均为 0。该运行耗时 8 分 47 秒、峰值 RSS 约 1.15 GB，且 CIndex、ContextPages、portfolio 仍分别约 50.6 MB、181 MB、96.1 MB，因此它不是比赛等价语义验收，也不能关闭 A19b4c2 或增加翻译成功计数。
+
+  A19b4c2b/c 有限阶段证据（2026-07-14）：Windows `test_project_migration*.py` 619 项通过、5 项平台条件跳过；WSL 同组 619 项通过、3 项平台条件跳过。frontier/CLI/security 聚焦回归 114/114 通过，Rust translator 全特性测试通过；judge entrypoint dry-run 为 4/4 planned。WSL competition smoke 仍受本机镜像版本偏差、既有 FlashDB oracle call-plan 证据缺口和 OpenCode agent 长度门禁阻断，因此只记为 `wsl-local-simulation`，不宣称 `competition-exact`、semantic pass 或 translator numerator 增量。
 
   **A19c OpenCode 多 worker 候选组合**
 

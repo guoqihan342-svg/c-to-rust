@@ -34,7 +34,7 @@
     {
       "path": "crates/c2r-translator/Cargo.lock",
       "role": "rust-translator-dependency-lock",
-      "sha256": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117"
+      "sha256": "4dc5876cddcb2b539fdabdcf0078d64ed4e8c1ddae95a30bf8b80520381e9fdc"
     },
     {
       "path": "validation/l2_slices/Cargo.lock",
@@ -111,7 +111,7 @@
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
       "role": "planned-batch-profile",
-      "sha256": "5926a8b3ba93b05979ec2e8d0582b6976b2e2a0ecb4e566a826760d380a46ea2"
+      "sha256": "8b3020b41c0542782871a6eb326b61d712a1b1f3f3b0e6b0da1337935f836d5e"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
@@ -136,7 +136,7 @@
     {
       "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
       "role": "judge-entrypoint-index",
-      "sha256": "7211b10785c5a14198233529dee73ed2d68a510ace51d3e77c3ba23724260118"
+      "sha256": "2c7b530d5b24b9c615706c54c1e04f5d232af669ce59e0ca524a174c69f71368"
     },
     {
       "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",

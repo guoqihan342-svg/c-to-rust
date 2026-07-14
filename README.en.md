@@ -55,7 +55,7 @@ Slice candidate generation uses the tool-free `c2rust-candidate`; the existing `
 
 ## Whole-Project AI Orchestration
 
-The outer OpenCode process on the competition platform does not need one hand-written spec per function. It calls `project_migration_harness.py plan` with a repository root. The harness discovers compile databases, CMake/Ninja/Meson build facts, compile outputs, static archives, link edges, and translation units, then materializes SCC/DAG structure, paged ContextPacks, role portfolios, and SQLite state. The `plan` CLI defaults to `--profile competition` and `--build-closure-policy required`; `--profile development` is only an explicitly selected non-competition compatibility path. Incomplete closure defers every ready worker. `bounded-source` may produce only investigative `semantic_gate=false` candidates and cannot complete a project.
+The outer OpenCode process on the competition platform does not need one hand-written spec per function. It calls `project_migration_harness.py plan` with a repository root. The harness discovers compile databases, CMake/Ninja/Meson build facts, compile outputs, static archives, link edges, and translation units, then materializes SCC/DAG structure, content-addressed ContextPack catalogs/frontiers, role portfolios, and SQLite state. The `plan` CLI defaults to `--profile competition` and `--build-closure-policy required`; `--profile development` is only an explicitly selected non-competition compatibility path. Incomplete closure defers every ready worker. `bounded-source` may produce only investigative `semantic_gate=false` candidates and cannot complete a project.
 
 After discovery and before any worker or AI launch, the competition profile constructs `c-toolchain-evidence` from the discovered compiler drivers/wrappers, linker drivers/linkers, archivers, and ranlib tools. It binds the path/SHA/size/profile id of `config/competition-env/environment.json`, the environment allowlist and PATH-snapshot hashes, host/WSL fingerprints, absolute resolved paths, and binary SHA/size, then runs only fixed bounded version, target, sysroot, resource-dir, and derived-linker probes. Each probe's raw stdout/stderr is stored as bounded base64, SHA-256, and size inside a content-addressed attachment bound by BuildIR. A missing tool, failed or drifted probe, platform mismatch, or competition GCC-version mismatch fails closed before scheduling.
 
@@ -63,7 +63,7 @@ Competition canonical BuildIR uses each TU, ABI fact, and object/link/archive ta
 
 BuildIR adapter convergence is locked by a same-source Git-tracked fixture: CMake, Ninja, and Meson produce one canonical projection for two TUs, a static archive, a ranlib pass, a final multi-input link, and an external dependency. Meson-private target/source/compiler summaries remain provenance only and cannot enter the downstream DAG or ContextPack. The orchestrator reopens the same BuildIR reference again before CIndex or DAG work; failure during initial validation or admission creates no migration graph, portfolio, ledger, or model call. This evidence remains `semantic_gate=false` and does not claim build or program-semantic success.
 
-ContextPack retrieval no longer decides launch readiness from a lexical identifier seed alone. Every `unresolved_external` call/global produces a `host-required-symbol-facts-v1` query whose selection receipt binds the origin facts, query SHA, matched declaration set, and unresolved set. A request closes only when a structured matching declaration or bounded lexical declaration is present in the current required/selected pages. A missing declaration, budget omission, receipt drift, or absence of deferred facts still fails closed under the required-fact contract, and ordinary call text cannot impersonate a declaration. A19b4c2a additionally models a valid contract whose current context retrieval is not yet ready as a recoverable scheduling state, not a terminal semantic-ledger result: the portfolio explicitly lists `pending_retrieval_groups` while retaining hash-bound assignments, and the scheduler defers their workers with `context_retrieval_pending`; assignments absent from `schedule.ready` receive zero leases and zero model invocations. This stage closes only pending classification, assignment-binding retention, and the zero-launch boundary; it does not claim refresh recovery. A19b4c2b will add a host-owned, content-bound single-SCC refresh/override that reopens and validates its bindings before moving that SCC from `pending_retrieval` to `ready`. A19b4c2c will then recompute the next frontier after every wave from the latest DAG, failure evidence, and expansion queries. This remains a non-semantic symbol-fact and scheduling gate; AST type/layout/macro facts, verifier-failure dynamic queries, and those refresh/recomputation capabilities remain open and do not increase the translator numerator.
+ContextPack retrieval no longer decides launch readiness from a lexical identifier seed alone. A `pending_retrieval` assignment receives zero leases and zero model calls. Host-owned single-SCC refresh reopens the complete CAS chain for the portfolio, catalogs, receipts, pages/group, refresh input, and overlay before restoring `ready`. After each wave, `prepare-next-context-frontier-wave` derives bounded directives from the portfolio-bound DAG, prior-wave last-good state, explicit failure evidence, and expansion queries; it atomically invalidates the wave, then materializes per-SCC overlays. A retry with the same CAS inputs resumes only pending SCCs. Cross-SCC facts, stale/future query epochs, legacy refresh, reference drift, and caller-owned identity fail closed before provider launch. This remains a non-semantic scheduling gate and does not increase the translator numerator. AST type/layout/macro producers and removal of plan-time monolithic CIndex/repeated contexts remain open.
 
 AI is primary at runtime. Boundary groups first use a planner to select translation with context, preservation of a verifiable FFI boundary, or an explicit refusal. Translators emit Rust source, reviewers provide structural findings only, and repairers consume only allowlisted failure diagnostics. Typed IR and C2Rust are fact or candidate sources rather than a default routing priority. No model may write semantic pass, last-good, or project-complete state.
 
@@ -100,6 +100,13 @@ python3 -B validation/tools/project_migration_harness.py preflight \
   --resolved-model zai/glm-5.1
 python3 -B validation/tools/project_migration_harness.py dispatch \
   --plan target/project-migration/run-001/project-migration-plan.json
+python3 -B validation/tools/project_migration_harness.py prepare-next-context-frontier-wave \
+  --plan target/project-migration/run-001/project-migration-plan.json \
+  --latest-dag-path target/project-migration/run-001/project/portfolio-dag.json \
+  --latest-dag-sha256 SHA256 --latest-dag-size-bytes SIZE \
+  --completed-wave-index 0 \
+  --failure-evidence target/project-migration/run-001/failure-evidence.json \
+  --expansion-queries target/project-migration/run-001/expansion-queries.json
 python3 -B validation/tools/project_migration_harness.py complete \
   --db target/project-migration/run-001/state/project-migration.sqlite3 \
   --run-id run-001 \
@@ -128,8 +135,10 @@ flowchart TB
     BUILDIR --> ADMISSION["BuildIR admission reverify\nsame artifact before any DAG work"]
     ADMISSION --> INDEX["C index and include/global/top-level facts"]
     INDEX --> DAG["Call graph, SCCs, waves, boundary groups"]
-    DAG --> CONTEXT["Hash-bound paged ContextPacks"]
-    CONTEXT --> PORTFOLIO["Planner / translator / reviewer / repairer portfolio"]
+    DAG --> CONTEXT["Hash-bound ContextPack catalogs"]
+    CONTEXT --> FRONTIER["Wave input + bounded selection + resumable overlay refresh"]
+    FRONTIER --> PORTFOLIO["Planner / translator / reviewer / repairer portfolio"]
+    FRONTIER <--> LEDGER
     PORTFOLIO <--> LEDGER[("SQLite v7 ledger")]
     LEDGER --> PREFLIGHT["Fixed model/agent/environment preflight"]
     PREFLIGHT --> DISPATCH["Lease + attempt + fence-bound dispatch"]
@@ -179,8 +188,9 @@ flowchart LR
     C --> D
     D --> BIRADMIT["4b. BuildIR admission reverify"]
     BIRADMIT --> E["5. Include, symbol, SCC migration DAG"]
-    E --> F["6. Paged ContextPack"]
-    F --> G["7. Preflight-bound worker request"]
+    E --> F["6. ContextPack catalog + frontier CAS"]
+    F --> F2["6b. Atomic wave invalidation + resumable SCC overlays"]
+    F2 --> G["7. Preflight-bound worker request"]
     G --> H["8. AI candidate + provider evidence"]
     H --> I["9. Host candidate gates"]
     I -->|"repairable"| G

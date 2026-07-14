@@ -171,7 +171,7 @@ class ProjectMigrationContextFrontierCasTests(unittest.TestCase):
             )
             if completed.returncode != 0:
                 self.skipTest("directory links are unavailable")
-        self.addCleanup(linked_context.rmdir)
+        self.addCleanup(_remove_directory_link, linked_context)
 
         with self.assertRaisesRegex(ValueError, "link"):
             read_frontier_cas_json(self.harness, reference, KIND)
@@ -205,6 +205,13 @@ class ProjectMigrationContextFrontierCasTests(unittest.TestCase):
         return self.harness.joinpath(
             *PurePosixPath(reference["path"]).parts
         )
+
+
+def _remove_directory_link(path: Path) -> None:
+    if path.is_symlink():
+        path.unlink()
+    else:
+        path.rmdir()
 
 
 if __name__ == "__main__":

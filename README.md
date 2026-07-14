@@ -65,7 +65,7 @@ AI candidate manifest v9 的 `prompt_scope` 由实际 ContextPack 计算，并�
 
 ## 整项目 AI 编排
 
-比赛平台上的外层 OpenCode 不需要逐函数编写 spec。它只调用 `project_migration_harness.py plan` 并提供仓库根；后续由 harness 自己发现 compile database、CMake/Ninja/Meson 构建事实、编译输出、静态归档和链接边，生成 SCC/DAG、分页 ContextPack、角色组合和 SQLite 状态。`plan` CLI 默认使用 `--profile competition` 和 `--build-closure-policy required`；`--profile development` 只是必须显式选择的非比赛兼容路径。闭包不完整时所有 ready worker 都 deferred，`bounded-source` 只允许生成 `semantic_gate=false` 的调查候选，不能进入项目完成路径。
+比赛平台上的外层 OpenCode 不需要逐函数编写 spec。它只调用 `project_migration_harness.py plan` 并提供仓库根；后续由 harness 自己发现 compile database、CMake/Ninja/Meson 构建事实、编译输出、静态归档和链接边，生成 SCC/DAG、内容寻址 ContextPack catalog/frontier、角色组合和 SQLite 状态。`plan` CLI 默认使用 `--profile competition` 和 `--build-closure-policy required`；`--profile development` 只是必须显式选择的非比赛兼容路径。闭包不完整时所有 ready worker 都 deferred，`bounded-source` 只允许生成 `semantic_gate=false` 的调查候选，不能进入项目完成路径。
 
 competition profile 在发现完成后、任何 worker/AI 启动前，从发现到的 compiler driver/wrapper、linker driver/linker、archiver 和 ranlib 构造 `c-toolchain-evidence`。证据绑定 `config/competition-env/environment.json` 的 path/SHA/size/profile id、环境白名单与 PATH 快照哈希、host/WSL 指纹、绝对解析路径和 binary SHA/size，并只运行固定且有界的 version、target、sysroot、resource-dir 和 derived-linker 探针。每个探针的原始 stdout/stderr 以有界 base64、SHA-256 和 size 保存在 BuildIR 哈希绑定的内容寻址 attachment；工具缺失、探针失败或漂移、平台不符以及 competition GCC 版本不符都会在调度前 fail closed。
 
@@ -73,7 +73,7 @@ competition 的 canonical BuildIR 把 TU、ABI facts 以及 object/link/archive 
 
 BuildIR 适配器收敛由同源 Git-tracked fixture 锁定：CMake、Ninja、Meson 对两个 TU、静态归档、ranlib、最终多输入链接和外部依赖产生相同 canonical projection；Meson 私有 target/source/compiler 摘要只能留在 provenance，不能进入下游 DAG 或 ContextPack。编排器在 CIndex/DAG 前再次重开同一 BuildIR 引用；首次验证或 admission 重开失败时，不生成 migration graph、portfolio、ledger，也不启动模型。该证据固定为 `semantic_gate=false`，不代表 build 或程序语义已经通过。
 
-ContextPack 检索不再只靠 lexical identifier seed 判断可启动性。每个 `unresolved_external` call/global 都会生成 `host-required-symbol-facts-v1` 查询，selection receipt 绑定来源事实、查询 SHA、实际声明匹配集合和未解析集合；只有进入当前 required/selected 页面中的结构化同名声明或受限 lexical declaration 才能关闭请求。声明缺失、预算未选中、receipt 漂移或没有 deferred facts 仍由 required-fact 合同 fail closed，普通调用文本不能冒充声明。A19b4c2a 进一步把“合同有效、但当前上下文检索尚未就绪”建模为可恢复调度态，而不是 semantic ledger 终态：portfolio 显式列出 `pending_retrieval_groups` 并保留 hash-bound assignments，scheduler 以 `context_retrieval_pending` defer 对应 worker；未进入 `schedule.ready` 的 assignment 保持零租约、零模型调用。该阶段只关闭 pending 分类、assignment 绑定保留和零启动边界，不宣称已经实现刷新恢复。A19b4c2b 才会实现 host-owned、content-bound 的 single-SCC refresh/override，经重开复验后把该 SCC 从 `pending_retrieval` 恢复为 `ready`；A19b4c2c 再在每波结束后按最新 DAG、失败证据和 expansion query 重算下一 frontier。当前这仍是非语义的符号事实与调度门禁；AST type/layout/macro、verifier-failure 动态查询和上述刷新/重算能力仍未完成，也不增加 translator numerator。
+ContextPack 检索不再只靠 lexical identifier seed 判断可启动性。`pending_retrieval` assignment 保持零租约、零模型调用；host-owned single-SCC refresh 会重开 portfolio、catalog、receipt、page/group、refresh input 与 overlay 的完整 CAS 依赖后才恢复 `ready`。每波结束后，`prepare-next-context-frontier-wave` 从 portfolio-bound DAG、上一波 last-good、显式失败证据与 expansion query 派生受限 directives，原子失效整波，再逐 SCC 物化 overlay；中断后用同一 CAS 输入只续跑 pending SCC。跨 SCC fact、旧/未来 query epoch、legacy refresh、引用漂移和调用方自报身份都会在 provider 前 fail closed。该层仍是非语义调度门禁，不增加 translator numerator；AST type/layout/macro producer、计划期单体 CIndex 与重复 context 移除仍未完成。
 
 运行时以 AI 为主：boundary group 先由 planner 选择“带上下文翻译、保留可验证 FFI 边界或明确拒绝”，translator 输出 Rust source，reviewer 只给结构审查，repairer 只消费允许的失败诊断。typed IR/C2Rust 是事实或候选来源，不是默认路由优先级；任何模型都不能写 semantic pass、last-good 或项目完成状态。
 
@@ -112,6 +112,13 @@ python3 -B validation/tools/project_migration_harness.py preflight \
   --resolved-model zai/glm-5.1
 python3 -B validation/tools/project_migration_harness.py dispatch \
   --plan target/project-migration/run-001/project-migration-plan.json
+python3 -B validation/tools/project_migration_harness.py prepare-next-context-frontier-wave \
+  --plan target/project-migration/run-001/project-migration-plan.json \
+  --latest-dag-path target/project-migration/run-001/project/portfolio-dag.json \
+  --latest-dag-sha256 SHA256 --latest-dag-size-bytes SIZE \
+  --completed-wave-index 0 \
+  --failure-evidence target/project-migration/run-001/failure-evidence.json \
+  --expansion-queries target/project-migration/run-001/expansion-queries.json
 python3 -B validation/tools/project_migration_harness.py complete \
   --db target/project-migration/run-001/state/project-migration.sqlite3 \
   --run-id run-001 \
@@ -140,8 +147,10 @@ flowchart TB
     BUILDIR --> ADMISSION["BuildIR admission reverify\nsame artifact before any DAG work"]
     ADMISSION --> INDEX["C index and include/global/top-level facts"]
     INDEX --> DAG["Call graph, SCCs, waves, boundary groups"]
-    DAG --> CONTEXT["Hash-bound paged ContextPacks"]
-    CONTEXT --> PORTFOLIO["Planner / translator / reviewer / repairer portfolio"]
+    DAG --> CONTEXT["Hash-bound ContextPack catalogs"]
+    CONTEXT --> FRONTIER["Wave input + bounded selection + resumable overlay refresh"]
+    FRONTIER --> PORTFOLIO["Planner / translator / reviewer / repairer portfolio"]
+    FRONTIER <--> LEDGER
     PORTFOLIO <--> LEDGER[("SQLite v7 ledger")]
     LEDGER --> PREFLIGHT["Fixed model/agent/environment preflight"]
     PREFLIGHT --> DISPATCH["Lease + attempt + fence-bound dispatch"]
@@ -191,8 +200,9 @@ flowchart LR
     C --> D
     D --> BIRADMIT["4b. BuildIR admission reverify"]
     BIRADMIT --> E["5. Include, symbol, SCC migration DAG"]
-    E --> F["6. Paged ContextPack"]
-    F --> G["7. Preflight-bound worker request"]
+    E --> F["6. ContextPack catalog + frontier CAS"]
+    F --> F2["6b. Atomic wave invalidation + resumable SCC overlays"]
+    F2 --> G["7. Preflight-bound worker request"]
     G --> H["8. AI candidate + provider evidence"]
     H --> I["9. Host candidate gates"]
     I -->|"repairable"| G
