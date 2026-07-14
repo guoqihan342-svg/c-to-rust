@@ -12,7 +12,7 @@ from validation.tools._project_migration_harness.build_ir import (
     stable_build_id,
 )
 from validation.tools._project_migration_harness.build_ir_validation import (
-    validate_build_ir,
+    BuildIRValidationError, validate_build_ir,
     verify_build_ir_artifact,
 )
 from validation.tools.project_migration_build_ir_equivalence_test_support import (
@@ -284,14 +284,15 @@ class ProjectMigrationBuildIREquivalenceTests(unittest.TestCase):
         self.assertFalse(changed_contract["claim_boundary"]["semantic_gate"])
         self.assertEqual(0, changed_contract["claim_boundary"]["translation_coverage_numerator"])
 
-    def test_private_projection_rejects_promoted_semantic_claims(self) -> None:
+    def test_validator_rejects_promoted_semantic_claims(self) -> None:
         lane = materialize_cmake_lane(self.base, "claim-boundary")
         promoted = copy.deepcopy(lane.build_ir)
         promoted["claim_boundary"]["semantic_gate"] = True
         promoted = finalize_build_ir(promoted)
-        validate_build_ir(promoted)
-        with self.assertRaisesRegex(ValueError, "common_contract_semantic_gate"):
-            _common_contract(promoted)
+        with self.assertRaisesRegex(
+            BuildIRValidationError, "build_ir_claim_boundary_invalid",
+        ):
+            validate_build_ir(promoted)
 
 
 if __name__ == "__main__":

@@ -91,6 +91,9 @@ def _validated_dag(
 ) -> tuple[list[dict[str, Any]], list[str]]:
     if manifest.get("schema_version") != 1:
         raise ValueError("integration manifest schema is invalid")
+    profile = manifest.get("profile")
+    if profile is not None and profile not in {"competition", "development"}:
+        raise ValueError("integration manifest profile is invalid")
     dag = manifest.get("dag")
     order = manifest.get("dag_order")
     if not isinstance(dag, Mapping) or not isinstance(order, list):

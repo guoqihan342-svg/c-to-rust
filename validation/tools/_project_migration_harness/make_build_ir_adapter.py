@@ -8,6 +8,10 @@ from typing import Any, Mapping
 from .artifacts import write_bytes_artifact, write_json_artifact
 from .build_facts import detect_build_system_facts, file_binding
 from .build_ir import is_sha256
+from .build_ir_toolchain_stage import (
+    blocked_c_toolchain_stage, materialize_c_toolchain_stage,
+)
+from .build_ir_toolchains import make_tool_requests, merge_tool_requests
 from .make_build_ir_projection import (
     MAKE_RAW_ROLE, normalize_make_translation_units, project_make_build_ir,
 )
@@ -70,6 +74,7 @@ def discover_make_project(
 def materialize_make_build_ir_stage(
     repo_root: Path, output: Path, discovery: Mapping[str, Any],
     artifacts: dict[str, dict[str, Any]], selection: MakeReportSelection,
+    profile: str = "development",
 ) -> dict[str, Any]:
     from .build_ir_validation import verify_build_ir_artifact
 
@@ -82,8 +87,24 @@ def materialize_make_build_ir_stage(
         output, "plan/make-dry-run-report.json", report_data,
     )
     artifacts["make_dry_run_report"] = report_reference
+    toolchain_evidence = materialize_c_toolchain_stage(
+        output,
+        artifacts,
+        merge_tool_requests(make_tool_requests(report)),
+        profile=profile,
+    )
+    if toolchain_evidence is not None and toolchain_evidence.get("status") != "ready":
+        return blocked_c_toolchain_stage(output, artifacts, toolchain_evidence)
     build_ir = project_make_build_ir(
-        repo_root, report, report_reference, max_units=MAX_COMMANDS,
+        repo_root,
+        report,
+        report_reference,
+        max_units=MAX_COMMANDS,
+        toolchain_evidence=toolchain_evidence,
+        toolchain_reference=(
+            artifacts.get("c_toolchain_evidence")
+            if toolchain_evidence is not None else None
+        ),
     )
     closure = {
         "schema_version": 1,
@@ -140,25 +161,35 @@ def materialize_make_build_ir_stage(
 def materialize_selected_build_ir_stage(
     repo_root: Path, output: Path, discovery: Mapping[str, Any],
     artifacts: dict[str, dict[str, Any]], selection: MakeReportSelection | None,
+    profile: str = "development",
 ) -> dict[str, Any]:
     if discovery.get("input_kind") == MAKE_INPUT_KIND:
         if not isinstance(selection, MakeReportSelection):
             raise ValueError("make_report_selection_missing")
         return materialize_make_build_ir_stage(
-            repo_root, output, discovery, artifacts, selection,
+            repo_root, output, discovery, artifacts, selection, profile,
         )
     from .generated_closure import materialize_build_ir_stage
-    return materialize_build_ir_stage(repo_root, output, dict(discovery), artifacts)
+    return materialize_build_ir_stage(
+        repo_root, output, dict(discovery), artifacts, profile,
+    )
 
 
 def reproject_make_build_ir(
     repo_root: str | Path, report: Mapping[str, Any],
     report_reference: Mapping[str, Any],
+    toolchain_evidence: Mapping[str, Any] | None = None,
+    toolchain_reference: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     root = Path(repo_root).resolve(strict=True)
     checked = verify_make_dry_run_report_inputs(root, report)
     return project_make_build_ir(
-        root, checked, report_reference, max_units=MAX_COMMANDS,
+        root,
+        checked,
+        report_reference,
+        max_units=MAX_COMMANDS,
+        toolchain_evidence=toolchain_evidence,
+        toolchain_reference=toolchain_reference,
     )
 
 

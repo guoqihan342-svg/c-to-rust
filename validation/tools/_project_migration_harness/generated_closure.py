@@ -3,9 +3,7 @@ from __future__ import annotations
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from .artifacts import write_json_artifact
 from .build_facts import json_sha256, resolve_repository_path
-from .build_ir_projection import project_build_ir
 from .closure_paths import (
     bind_repository_artifact,
     path_error_blocker,
@@ -25,45 +23,12 @@ def materialize_build_ir_stage(
     output: Path,
     discovery: dict[str, Any],
     artifacts: dict[str, dict[str, Any]],
+    profile: str = "development",
 ) -> dict[str, Any]:
-    from .build_ir_validation import verify_build_ir_artifact
-
-    closure = discovery.get("generated_build_closure", {})
-    artifacts["generated_build_closure"] = write_json_artifact(
-        output, "plan/generated-build-closure.json", closure
+    from .generated_closure_materialize import materialize_generated_build_ir_stage
+    return materialize_generated_build_ir_stage(
+        repo_root, output, discovery, artifacts, profile,
     )
-    closure_verification = verify_generated_build_closure(repo_root, closure)
-    artifacts["generated_build_closure_verification"] = write_json_artifact(
-        output, "plan/generated-build-closure-verification.json",
-        closure_verification,
-    )
-    raw_refs = [
-        {"role": role, **artifacts[key]}
-        for role, key in (
-            ("discovery", "discovery"),
-            ("generated-build-closure", "generated_build_closure"),
-            ("generated-build-closure-verification",
-             "generated_build_closure_verification"),
-        )
-    ]
-    build_ir = project_build_ir(
-        discovery, closure, closure_verification, raw_refs
-    )
-    artifacts["build_ir"] = write_json_artifact(output, "plan/build-ir.json", build_ir)
-    verification = verify_build_ir_artifact(repo_root, output, artifacts["build_ir"])
-    artifacts["build_ir_verification"] = write_json_artifact(
-        output, "plan/build-ir-verification.json", verification
-    )
-    return {
-        "build_ir": build_ir,
-        "closure": closure,
-        "closure_verification": closure_verification,
-        "closure_ready": (
-            closure.get("status") == "ready"
-            and closure_verification.get("status") == "verified"
-        ),
-        "verification": verification,
-    }
 
 
 def discover_generated_build_closure(

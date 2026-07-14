@@ -94,6 +94,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             context_page_tokens=args.context_page_tokens,
             context_group_pages=args.context_group_pages,
             require_build_closure=args.build_closure_policy == "required",
+            profile=args.profile,
         )
     elif command == "dispatch":
         plan_path = _target_path(args.plan, "plan", must_exist=True)
@@ -245,6 +246,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             ledger=_ledger(args.db),
             run_id=args.run_id,
             harness_root=REPO_ROOT,
+            repo_root=args.repo_root,
             logical_model=args.logical_model,
             resolved_model=args.resolved_model,
             timeout_seconds=args.timeout_seconds,

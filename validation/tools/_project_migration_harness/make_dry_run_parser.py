@@ -7,7 +7,7 @@ import shlex
 from typing import Any
 
 from .artifacts import content_sha256
-from .compile_security import SUPPORTED_COMPILER
+from .make_dry_run_tools import classify_make_tool
 
 
 PARSER_NAME = "project-migration-make-dry-run-direct-argv"
@@ -15,18 +15,6 @@ PARSER_VERSION = 1
 MAX_STDOUT_BYTES = 4 * 1024 * 1024
 MAX_LINE_BYTES = 64 * 1024
 MAX_COMMANDS = 4_096
-_PREFIX = r"(?:(?:[a-z0-9_+.]+-){0,4})?"
-_ARCHIVER = re.compile(
-    rf"^{_PREFIX}(?:ar|gcc-ar|llvm-ar)(?:-[0-9.]+)?$", re.IGNORECASE
-)
-_RANLIB = re.compile(
-    rf"^{_PREFIX}(?:ranlib|gcc-ranlib|llvm-ranlib)(?:-[0-9.]+)?$",
-    re.IGNORECASE,
-)
-_LINKER = re.compile(
-    rf"^{_PREFIX}(?:ld(?:\.lld|\.gold)?|gold|lld|mold)(?:-[0-9.]+)?$",
-    re.IGNORECASE,
-)
 _SOURCE_SUFFIXES = (".c", ".cc", ".cpp", ".cxx", ".i", ".ii", ".s", ".asm")
 _LINK_SUFFIXES = (".o", ".obj", ".lo", ".a", ".lib", ".so", ".dylib")
 _DRIVER_PAIRS = {
@@ -51,14 +39,6 @@ _PATH_PREFIXES = (
     "-isysroot", "-rpath-link=", "-rpath=", "-MF", "-MJ", "-Map=",
     "-B", "-I", "-L", "-T",
 )
-_SPECIAL = {
-    "bash": "shell_command", "cd": "cd", "cmd": "shell_command",
-    "command": "shell_command", "configure": "configure", "dash": "shell_command",
-    "env": "shell_command", "exec": "shell_command", "libtool": "libtool",
-    "powershell": "shell_command", "pwsh": "shell_command", "sh": "shell_command",
-    "time": "shell_command", "zsh": "shell_command",
-}
-
 class MakeDryRunParseError(ValueError):
     def __init__(self, code: str, line_number: int | None = None) -> None:
         super().__init__(code)
@@ -144,30 +124,21 @@ def _record(argv: list[str], line: int, ordinal: int) -> dict[str, Any]:
     if not argv or not all(isinstance(item, str) and item for item in argv):
         _fail("argv_invalid", line)
     raw_tool = argv[0]
-    basename = raw_tool.replace("\\", "/").rsplit("/", 1)[-1]
-    tool = basename.removesuffix(".exe").lower()
-    if tool in _SPECIAL:
-        _fail(f"{_SPECIAL[tool]}_rejected", line)
-    if re.fullmatch(r"(?:g?make)(?:\[\d+\])?:?", tool):
-        _fail("recursive_make_rejected", line)
-    if tool in {"autoconf", "automake", "cmake", "meson"}:
-        _fail("configure_rejected", line)
-    if tool in {"glibtool", "glibtoolize", "libtoolize"}:
-        _fail("libtool_rejected", line)
-    if raw_tool != basename or "/" in raw_tool or "\\" in raw_tool:
-        _fail("tool_path_escape", line)
+    try:
+        tool_kind, selected_tool = classify_make_tool(raw_tool)
+    except ValueError as error:
+        _fail(str(error), line)
     _safe_arguments(argv[1:], line)
-    if SUPPORTED_COMPILER.fullmatch(tool) and tool not in {"cl", "clang-cl"}:
+    if tool_kind == "compiler":
         kind, inputs, outputs = _compiler(argv, line)
-    elif _ARCHIVER.fullmatch(tool):
+    elif tool_kind == "archive":
         kind, inputs, outputs = _archive(argv, line)
-    elif _RANLIB.fullmatch(tool):
+    elif tool_kind == "ranlib":
         kind, inputs, outputs = _ranlib(argv, line)
-    elif _LINKER.fullmatch(tool):
-        kind, inputs, outputs = _linker(argv, line)
     else:
-        _fail("unknown_command", line)
-    return {"ordinal": ordinal, "line_number": line, "kind": kind, "tool": tool,
+        kind, inputs, outputs = _linker(argv, line)
+    return {"ordinal": ordinal, "line_number": line, "kind": kind,
+            "tool": selected_tool,
             "argv": list(argv), "argv_sha256": content_sha256(argv),
             "inputs": inputs, "outputs": outputs}
 def _scan(

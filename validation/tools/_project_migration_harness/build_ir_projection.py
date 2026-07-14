@@ -10,6 +10,12 @@ from .build_ir import (
     finalize_build_ir, list_value, merge_meson_targets,
     normalize_binding, stable_build_id, string_list, target_record,
 )
+from .build_ir_host_toolchains import HostToolchainProjection
+from .build_ir_projection_inputs import generated_inputs, source_inputs
+from .build_ir_projection_legacy import (
+    ABI_PREFIXES, abi_facts, legacy_toolchains,
+)
+from .c_toolchain_schema import C_TOOLCHAIN_RAW_ROLE
 
 
 RAW_ROLES = {
@@ -17,7 +23,7 @@ RAW_ROLES = {
     "generated-build-closure",
     "generated-build-closure-verification",
 }
-ABI_PREFIXES = ("-m", "-target", "--target", "--sysroot", "-isysroot", "/arch:")
+HOST_BOUND_RAW_ROLES = {*RAW_ROLES, C_TOOLCHAIN_RAW_ROLE}
 
 
 def project_build_ir(
@@ -25,17 +31,22 @@ def project_build_ir(
     closure: Mapping[str, Any],
     closure_verification: Mapping[str, Any],
     raw_fact_refs: list[Mapping[str, Any]],
+    toolchain_evidence: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if discovery.get("status") != "ready":
         raise ValueError("build_ir_discovery_not_ready")
     if discovery.get("generated_build_closure") != closure:
         raise ValueError("build_ir_generated_closure_mismatch")
-    refs = _raw_refs(raw_fact_refs)
-    units = _translation_units(discovery.get("translation_units"))
+    refs = _raw_refs(raw_fact_refs, host_bound=toolchain_evidence is not None)
+    projector = (
+        HostToolchainProjection(toolchain_evidence)
+        if toolchain_evidence is not None else None
+    )
+    units = _translation_units(discovery.get("translation_units"), projector)
     metadata = normalize_binding(discovery.get("compile_database"), materialized=True)
-    targets, external, boundaries = _targets(units, closure)
-    sources = _source_inputs(units, targets)
-    generated = _generated_inputs(closure, targets)
+    targets, external, boundaries = _targets(units, closure, projector)
+    sources = source_inputs(units, targets)
+    generated = generated_inputs(closure, targets)
     boundaries.extend(_boundaries(closure, closure_verification))
     closure_complete = (
         closure.get("status") == "ready"
@@ -53,15 +64,17 @@ def project_build_ir(
         "generated_inputs": generated,
         "targets": targets,
         "target_closure": target_closure(targets),
-        "toolchains": _toolchains(units, closure),
+        "toolchains": projector.records() if projector else legacy_toolchains(units),
         "external_dependencies": external,
-        "abi_facts": _abi_facts(units),
+        "abi_facts": abi_facts(units),
         "boundaries": _unique(boundaries),
         "claim_boundary": {
             "role": "canonical_build_projection_only",
             "closure_complete": closure_complete,
             "parameters_guessed": False,
             "commands_executed": False,
+            "host_toolchain_bound": projector is not None,
+            "toolchain_profile": projector.profile if projector else None,
             "semantic_gate": False,
             "translation_coverage_numerator": 0,
         },
@@ -69,7 +82,9 @@ def project_build_ir(
     return finalize_build_ir(payload)
 
 
-def _translation_units(value: Any) -> list[dict[str, Any]]:
+def _translation_units(
+    value: Any, projector: HostToolchainProjection | None,
+) -> list[dict[str, Any]]:
     if not isinstance(value, list) or not value:
         raise ValueError("build_ir_translation_units_missing")
     result = []
@@ -80,6 +95,16 @@ def _translation_units(value: Any) -> list[dict[str, Any]]:
         if not isinstance(entry, Mapping):
             raise ValueError("build_ir_translation_unit_provenance_missing")
         output = {"path": raw.get("output"), "kind": "file", "materialized": False}
+        toolchain_id = (
+            projector.compile(
+                raw.get("compiler"), raw.get("compiler_wrappers"),
+                raw.get("language"),
+            )
+            if projector else stable_build_id("toolchain", {
+                "driver": raw.get("compiler"),
+                "wrappers": raw.get("compiler_wrappers"),
+            })
+        )
         item = {
             "unit_id": raw.get("unit_id"),
             "variant_index": raw.get("variant_index"),
@@ -89,10 +114,7 @@ def _translation_units(value: Any) -> list[dict[str, Any]]:
             "compiler": raw.get("compiler"),
             "compiler_wrappers": copy.deepcopy(raw.get("compiler_wrappers")),
             "language": raw.get("language"),
-            "toolchain_id": stable_build_id("toolchain", {
-                "driver": raw.get("compiler"),
-                "wrappers": raw.get("compiler_wrappers"),
-            }),
+            "toolchain_id": toolchain_id,
             "includes": copy.deepcopy(raw.get("includes")),
             "defines": copy.deepcopy(raw.get("defines")),
             "redacted_define_count": raw.get("redacted_define_count"),
@@ -118,7 +140,8 @@ def _translation_units(value: Any) -> list[dict[str, Any]]:
 
 
 def _targets(
-    units: list[dict[str, Any]], closure: Mapping[str, Any]
+    units: list[dict[str, Any]], closure: Mapping[str, Any],
+    projector: HostToolchainProjection | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     materialized = binding_map(closure.get("compile_outputs"))
     targets: list[dict[str, Any]] = []
@@ -130,13 +153,16 @@ def _targets(
         unit["output"] = copy.deepcopy(output)
         target_id = stable_build_id("target", {"kind": "object", "output": path})
         owners[path] = target_id
-        targets.append(target_record(
+        target = target_record(
             target_id, path, "object", [output],
             [{"ordinal": 0, "role": "source", "binding": unit["source"],
               "dependency_target_id": None}],
             [], [{"kind": "compile", "arguments": unit["compile_arguments"]["semantic_flags"]}],
             [], {"raw_fact_role": "discovery", "unit_id": unit["unit_id"]},
-        ))
+        )
+        if projector:
+            target["toolchain_id"] = unit["toolchain_id"]
+        targets.append(target)
     link = closure.get("target_link_closure")
     raw_targets = link.get("targets", []) if isinstance(link, Mapping) else []
     skeletons: list[tuple[Mapping[str, Any], str]] = []
@@ -175,89 +201,43 @@ def _targets(
                 "provenance": {"raw_fact_role": "generated-build-closure"},
             })
         fact = raw.get("fact_file") if isinstance(raw.get("fact_file"), Mapping) else {}
-        targets.append(target_record(
-            target_id, output["path"], "archive" if "archive_operation" in raw else "link",
+        kind = "archive" if "archive_operation" in raw else "link"
+        target = target_record(
+            target_id, output["path"], kind,
             [output], inputs, dependencies, [], arguments,
             {"raw_fact_role": "generated-build-closure", "fact_path": fact.get("path")},
-        ))
+        )
+        if projector:
+            target["toolchain_id"] = projector.command(
+                raw.get("driver"),
+                "archiver" if kind == "archive" else "linker-driver",
+            )
+            if kind == "archive":
+                target["auxiliary_toolchain_ids"] = sorted({
+                    projector.command(token, "ranlib")
+                    for token in raw.get("ranlib_drivers", [])
+                })
+        targets.append(target)
     merge_meson_targets(closure, targets, owners, external)
     targets.sort(key=lambda item: item["target_id"])
     external.sort(key=lambda item: item["dependency_id"])
     return targets, external, []
 
 
-def _source_inputs(units: list[dict[str, Any]], targets: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    values = [unit["source"] for unit in units]
-    values.extend(item["binding"] for target in targets for item in target["ordered_inputs"]
-                  if item["role"] == "source" and item["binding"]["materialized"])
-    return _unique_bindings(values)
-
-
-def _generated_inputs(closure: Mapping[str, Any], targets: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    records = []
-    for value in list_value(closure.get("generated_include_roots")):
-        records.append({"binding": normalize_binding(value, materialized=True), "role": "include-root",
-                        "producer_target_id": None, "consumer_target_ids": [],
-                        "provenance": {"raw_fact_role": "generated-build-closure"}})
-    for target in targets:
-        for value in target["outputs"]:
-            records.append({"binding": copy.deepcopy(value), "role": "target-output",
-                            "producer_target_id": target["target_id"], "consumer_target_ids": [],
-                            "provenance": {"raw_fact_role": target["provenance"]["raw_fact_role"]}})
-        for item in target["ordered_inputs"]:
-            if item["role"] == "generated-source":
-                records.append({"binding": copy.deepcopy(item["binding"]), "role": item["role"],
-                                "producer_target_id": item["dependency_target_id"],
-                                "consumer_target_ids": [target["target_id"]],
-                                "provenance": {"raw_fact_role": "generated-build-closure"}})
-    keyed = {item["binding"]["path"]: item for item in records}
-    return [keyed[path] for path in sorted(keyed)]
-
-
-def _toolchains(units: list[dict[str, Any]], closure: Mapping[str, Any]) -> list[dict[str, Any]]:
-    result = {unit["toolchain_id"]: {
-        "toolchain_id": unit["toolchain_id"], "driver": unit["compiler"],
-        "wrappers": unit["compiler_wrappers"], "language": unit["language"],
-        "identity": "compile-database-driver-token",
-        "provenance": {"raw_fact_role": "discovery"},
-    } for unit in units}
-    return [result[key] for key in sorted(result)]
-
-
-def _abi_facts(units: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    result = []
-    for unit in units:
-        flags = [item for item in unit["compile_arguments"]["semantic_flags"]
-                 if item.startswith(ABI_PREFIXES)]
-        result.append({"unit_id": unit["unit_id"], "language": unit["language"],
-                       "toolchain_id": unit["toolchain_id"],
-                       "target_flags": flags,
-                       "data_model": "explicit-flags" if flags else "compiler-default",
-                       "provenance": {"raw_fact_role": "discovery"}})
-    return result
-
-
-def _raw_refs(values: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _raw_refs(
+    values: list[Mapping[str, Any]], *, host_bound: bool,
+) -> list[dict[str, Any]]:
+    expected = HOST_BOUND_RAW_ROLES if host_bound else RAW_ROLES
     result = []
     for value in values:
         role = value.get("role")
-        if role not in RAW_ROLES:
+        if role not in expected:
             raise ValueError("build_ir_raw_fact_role_invalid")
         result.append({"role": role, "path": value.get("path"),
                        "sha256": value.get("sha256"), "size_bytes": value.get("size_bytes")})
-    if {item["role"] for item in result} != RAW_ROLES or len(result) != len(RAW_ROLES):
+    if {item["role"] for item in result} != expected or len(result) != len(expected):
         raise ValueError("build_ir_raw_fact_refs_incomplete")
     return sorted(result, key=lambda item: item["role"])
-
-
-def _unique_bindings(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    keyed: dict[str, dict[str, Any]] = {}
-    for value in values:
-        path = str(value["path"])
-        if path in keyed and keyed[path] != value:
-            raise ValueError("build_ir_source_binding_conflict")
-        keyed[path] = copy.deepcopy(value)
-    return [keyed[path] for path in sorted(keyed)]
 
 
 def _boundaries(closure: Mapping[str, Any], verification: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -296,4 +276,6 @@ def target_closure(targets: list[dict[str, Any]]) -> list[str]:
     return order
 
 
-__all__ = ["RAW_ROLES", "project_build_ir", "target_closure"]
+__all__ = [
+    "HOST_BOUND_RAW_ROLES", "RAW_ROLES", "project_build_ir", "target_closure",
+]

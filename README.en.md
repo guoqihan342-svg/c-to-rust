@@ -55,7 +55,11 @@ Slice candidate generation uses the tool-free `c2rust-candidate`; the existing `
 
 ## Whole-Project AI Orchestration
 
-The outer OpenCode process on the competition platform does not need one hand-written spec per function. It calls `project_migration_harness.py plan` with a repository root. The harness discovers compile databases, CMake/Ninja/Meson build facts, compile outputs, static archives, link edges, and translation units, then materializes SCC/DAG structure, paged ContextPacks, role portfolios, and SQLite state. The CLI defaults to `--build-closure-policy required`; incomplete closure defers every ready worker. `bounded-source` may produce only investigative `semantic_gate=false` candidates and cannot complete a project.
+The outer OpenCode process on the competition platform does not need one hand-written spec per function. It calls `project_migration_harness.py plan` with a repository root. The harness discovers compile databases, CMake/Ninja/Meson build facts, compile outputs, static archives, link edges, and translation units, then materializes SCC/DAG structure, paged ContextPacks, role portfolios, and SQLite state. The `plan` CLI defaults to `--profile competition` and `--build-closure-policy required`; `--profile development` is only an explicitly selected non-competition compatibility path. Incomplete closure defers every ready worker. `bounded-source` may produce only investigative `semantic_gate=false` candidates and cannot complete a project.
+
+After discovery and before any worker or AI launch, the competition profile constructs `c-toolchain-evidence` from the discovered compiler drivers/wrappers, linker drivers/linkers, archivers, and ranlib tools. It binds the path/SHA/size/profile id of `config/competition-env/environment.json`, the environment allowlist and PATH-snapshot hashes, host/WSL fingerprints, absolute resolved paths, and binary SHA/size, then runs only fixed bounded version, target, sysroot, resource-dir, and derived-linker probes. Each probe's raw stdout/stderr is stored as bounded base64, SHA-256, and size inside a content-addressed attachment bound by BuildIR. A missing tool, failed or drifted probe, platform mismatch, or competition GCC-version mismatch fails closed before scheduling.
+
+Competition canonical BuildIR uses each TU, ABI fact, and object/link/archive target's `toolchain_id` as a foreign key into host-probed toolchain records; missing or unknown foreign keys and token-only evidence cannot pass. On every reopen, the verifier reads the original `c-toolchain-evidence` attachment through BuildIR raw-fact references, rechecks base64/hash/size, reparses the profile, repository bindings, and absolute executables, reruns the fixed probes, rederives linker/role mappings, and reprojects BuildIR byte for byte. Any PATH, environment, binary, probe, or projection drift blocks.
 
 AI is primary at runtime. Boundary groups first use a planner to select translation with context, preservation of a verifiable FFI boundary, or an explicit refusal. Translators emit Rust source, reviewers provide structural findings only, and repairers consume only allowlisted failure diagnostics. Typed IR and C2Rust are fact or candidate sources rather than a default routing priority. No model may write semantic pass, last-good, or project-complete state.
 
@@ -63,21 +67,24 @@ Project preflight fixes the exact model, `c2rust-candidate`, `max`, and an immut
 
 Cargo generation is forced through canonical RustProjectIR. Wave-provisional generations contain the current candidates plus last-good dependencies and bind back to the immutable complete DAG; project-final generations must cover every migration unit. The host recomputes public, required, unsafe, and FFI facts from current Rust source, reopens BuildIR, DAG, and every candidate, and runs one interface coordinator over module topology and cross-unit API/type/global/FFI/feature/cfg/init conflicts. Only a `candidate-ready` receipt can generate Cargo. Production code has removed descriptor-only generation entrypoints and the direct `integrate` CLI; only ledger-bound `integrate-verified` can publish a full-project generation.
 
+`CompletionCoordinator` obtains the sole BuildIR reference from the immutable migration manifest. Competition `complete` must provide the original C repository through `--repo-root` as a reopen locator. It runs the same BuildIR verifier before any project-final candidate compile/semantic/final work, then runs it again after integration, Cargo, and downstream gates but before host project-final state and the completed receipt are published. Both content-addressed verification receipts are bound into the completion receipt, and either drift result stops later work.
+
 A19d3 is still open. RustProjectIR and generation manifests remain `interface_completeness.status=partial`, automatically derived signatures remain unresolved, and the authoritative generator currently supports flat library modules only. The schema v7 TransitionAuthority ledger and the dedicated AI repairer now persist and execute the project repair queue. Completion first observes the latest receipt without creating an attempt. After isolated zero-call preflight, a host-issued permit binds the exact receipt, queue, item state, model, agent, and runtime input, and one resume can launch at most one provider call. Complete provider results are hash-bound before ingest; after an ingest crash, the next resume reopens all evidence and performs ingest only. Incomplete or unknown results require manual reconciliation. Diagnostic-lineage budgets survive receipt epochs, with hard per-run caps of 64 provider calls and 65 receipt epochs.
 
 Schema v7 also adds an immutable project-diagnostic intake. The host reopens the current candidate set, managed generation, and canonical RustProjectIR, then admits only structured rustc `error` diagnostics from a proven sandboxed Cargo execution. Cargo check/test freezes the complete candidate cohort and validates gate order, execution status, unique candidate identity/content ownership, and classification of every error before recording any repair. Bounded stdout/stderr for each gate is first stored as a private content-addressed artifact, and observation v3 binds a classification receipt that is recomputable from those raw references. The receipt cross-binds the run, cohort, project input, RustProjectIR/interface, unit partition, and admitted diagnostics. Unit ownership comes from the cross-binding between RustProjectIR module paths and the candidate set. The shared linker parser accepts only bounded GNU/lld/MSVC unresolved-symbol forms, and a symbol must map uniquely to one module in the current RustProjectIR. Unknown, ambiguous, or mixed errors, duplicate owners, stale unit paths, toolchain-sensitive rustc failures, environment failures, and diagnostic overflow block the complete repair batch. Only after whole-batch admission do uniquely owned errors become unit repairs. An `E####` compile error with a repository-relative project location or a unique project link symbol binds the cohort, IR/interface, generation input, raw observation, and verifier receipt. Warnings, generic Cargo failures, and environment or sandbox blockers produce zero intake and zero AI calls; private raw text never enters model context.
 
 Validated intakes now enter a coordinator receipt v2 that remains compatible with the schema v7 database and shares the project-repair queue with static interface diagnostics; verifier-origin items dispatch first. Request materialization and provider launch reopen the content-addressed intake, current candidate set, original managed generation, RustProjectIR/interface, and verifier receipt. AI submits only bounded IR operations. After host reconstruction, the public state can be only `pending-reverification`; internal `candidate-ready` means that the ledger is awaiting host revalidation, and neither an ordinary static receipt nor a low-level resolve API can close the external diagnostic. CompletionCoordinator also rejects every historical project-repair obligation not in `resolved/cancelled`.
 
-Closure requires a higher-epoch pass from the same host gate on a new managed generation and a content-addressed revalidation receipt. One settlement transaction reopens the source intake, current cohort, old and new project inputs, ledger gate record, raw observation/evidence, classification receipt, candidate IR/interface, and current generation before it registers the successor receipt, resolves the target, and cancels queue siblings superseded by that successor. A failed recheck rolls back the old candidate, records the new diagnostics, and inherits the attempt budget. This loop now accepts strictly classified Cargo compile/link diagnostics. Dedicated initialization, feature/cfg, and ABI verifiers, the A19e7 process capability boundary, and complete project-final semantic acceptance remain open; AI candidates add nothing to the translator numerator.
+Closure requires a higher-epoch pass from the same host gate on a new managed generation and a content-addressed revalidation receipt. One settlement transaction reopens the source intake, current cohort, old and new project inputs, ledger gate record, raw observation/evidence, classification receipt, candidate IR/interface, and current generation before it registers the successor receipt, resolves the target, and cancels queue siblings superseded by that successor. A failed recheck rolls back the old candidate, records the new diagnostics, and inherits the attempt budget. This loop now accepts strictly classified Cargo compile/link diagnostics. Dedicated initialization, feature/cfg, and ABI verifiers, the A19e7 process capability boundary, the A19e8 non-degrading SandboxBackend, and complete project-final semantic acceptance remain open; AI candidates add nothing to the translator numerator.
 
-The positive completion path remains open. Host-owned integration/Cargo adapters and failure routing exist, but positive candidate compile/oracle/negative/unsafe-alias/ABI/final runners are not all connected. In-process raw-output references and a recomputable classification receipt now exist; the independent A19e7 verifier process, capability channel, and one-time nonce do not. The current host-issued receipt therefore proves canonical binding and drift rejection, not that the caller is unforgeable. Real held-out mode reopens SQLite read-only and revalidates AI provider evidence, every candidate gate, the immutable candidate set, the project final bundle, and original repository/build bindings. A self-reported JSON `semantic_gate=true` cannot contribute success.
+The positive completion path remains open. Host-owned integration/Cargo adapters and failure routing exist, but positive candidate compile/oracle/negative/unsafe-alias/ABI/final runners are not all connected. In-process raw-output references, a recomputable classification receipt, and competition-profile C-toolchain input closure now exist. The A19e7 independent verifier process/capability channel/one-time nonce and A19e8 complete sandbox capability/receipt/backend equivalence do not. The current host-issued receipt therefore proves canonical binding and drift rejection, not that the caller is unforgeable, and it is not `competition-exact`. Real held-out mode reopens SQLite read-only and revalidates AI provider evidence, every candidate gate, the immutable candidate set, the project final bundle, and original repository/build bindings. A self-reported JSON `semantic_gate=true` cannot contribute success.
 
 These commands establish planning, model preflight, and conditional dispatch only; they are not a completed translation claim:
 
 ```bash
 python3 -B validation/tools/project_migration_harness.py plan \
   --repo-root /path/to/c-project \
+  --profile competition \
   --compile-database /path/to/c-project/build/compile_commands.json \
   --out-root target/project-migration/run-001 \
   --run-id run-001 \
@@ -92,6 +99,7 @@ python3 -B validation/tools/project_migration_harness.py dispatch \
 python3 -B validation/tools/project_migration_harness.py complete \
   --db target/project-migration/run-001/state/project-migration.sqlite3 \
   --run-id run-001 \
+  --repo-root /path/to/c-project \
   --logical-model GLM-5.1 \
   --resolved-model zai/glm-5.1
 ```
@@ -108,7 +116,12 @@ flowchart TB
     REPO["Unseen C repository"] --> DISCOVERY["Compile DB and build-fact discovery"]
     PLAN --> DISCOVERY
     DISCOVERY --> CLOSURE["Hash-bound generated/archive/link closure"]
-    CLOSURE --> INDEX["C index and include/global/top-level facts"]
+    PROFILE["Competition profile"] --> TOOLCHAIN["C toolchain evidence\nresolved binaries + bounded raw probes"]
+    DISCOVERY --> TOOLCHAIN
+    CLOSURE --> TOOLCHAIN
+    CLOSURE --> BUILDIR["Canonical manifest-bound BuildIR"]
+    TOOLCHAIN --> BUILDIR
+    BUILDIR --> INDEX["C index and include/global/top-level facts"]
     INDEX --> DAG["Call graph, SCCs, waves, boundary groups"]
     DAG --> CONTEXT["Hash-bound paged ContextPacks"]
     CONTEXT --> PORTFOLIO["Planner / translator / reviewer / repairer portfolio"]
@@ -122,7 +135,9 @@ flowchart TB
     PROVIDER --> VERIFY["Fixed host candidate gates"]
     VERIFY -->|"failed, bounded diagnostic"| DISPATCH
     VERIFY -->|"latest gates passed"| LASTGOOD["Unit last-good"]
-    LASTGOOD --> RUSTIR["Canonical RustProjectIR + interface coordinator"]
+    LASTGOOD --> BIRPRE["Same manifest-bound BuildIR reverify #1 + receipt\nbefore project-final candidate work"]
+    BIRPRE --> FINALCAND["Project-final candidate compile / semantic / final gates"]
+    FINALCAND --> RUSTIR["Canonical RustProjectIR + interface coordinator"]
     RUSTIR -->|"repair-required"| RPRE["Zero-call repair preflight"]
     RPRE --> PERMIT["Receipt/state-bound host permit"]
     PERMIT --> RAI["At most one project-repair call per resume"]
@@ -143,7 +158,8 @@ flowchart TB
     SETTLE --> LEDGER
     SETTLE --> RUSTIR
     SANDBOX -->|"no pending repair"| PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
-    PROJECT -->|"same candidate set passed"| COMPLETE["Completed project evidence"]
+    PROJECT -->|"same candidate set passed"| BIRFINAL["Same manifest-bound BuildIR reverify #2 + receipt\nbefore project-final / completed publication"]
+    BIRFINAL --> COMPLETE["Completed receipt binds both verifications"]
     PROJECT -->|"unclosed verifier or failed gate"| BLOCKED
 ```
 
@@ -151,33 +167,39 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    A["1. Repo root"] --> B["2. Inventory"]
-    B --> C["3. Generated/archive/link closure"]
-    C --> D["4. Include, symbol, SCC migration DAG"]
-    D --> E["5. Paged ContextPack"]
-    E --> F["6. Preflight-bound worker request"]
-    F --> G["7. AI candidate + provider evidence"]
-    G --> H["8. Host candidate gates"]
-    H -->|"repairable"| F
-    H -->|"passed"| I["9. Unit last-good"]
-    I --> J["10. RustProjectIR + interface receipt"]
-    J -->|"repair-required"| R["11. Preflight + state-bound permit + one AI repair"]
-    R --> S["12. Host rebuild / re-coordinate or ingest-only resume"]
-    S -->|"static repair"| J
-    S -->|"verifier-origin"| T["13. pending-reverification"]
-    J -->|"candidate-ready"| K["14. Cargo generation"]
-    T --> K
-    K --> L["15. Sandboxed build/test"]
-    L --> O["16. Private raw refs + classification receipt"]
-    O -->|"uniquely classified compile/link error"| P["17. Bound intake + receipt v2 queue"]
-    P --> R
-    L -->|"fresh same-gate pass"| U["18. Atomic revalidation settlement"]
-    U --> J
-    L --> M["19. Project semantic and safety gates"]
-    M --> N["20. Candidate-set completion"]
+    A["1. Repo root"] --> B["2. Discovery + generated/archive/link closure"]
+    P["Competition profile"] --> C["3. C toolchain evidence + raw probe attachment"]
+    B --> C
+    B --> D["4. Canonical manifest-bound BuildIR"]
+    C --> D
+    D --> E["5. Include, symbol, SCC migration DAG"]
+    E --> F["6. Paged ContextPack"]
+    F --> G["7. Preflight-bound worker request"]
+    G --> H["8. AI candidate + provider evidence"]
+    H --> I["9. Host candidate gates"]
+    I -->|"repairable"| G
+    I -->|"passed"| J["10. Unit last-good"]
+    J --> V1["11. Same manifest-bound BuildIR reverify #1 before project-final candidate work"]
+    V1 --> Q["12. Project-final candidate compile / semantic / final gates"]
+    Q --> K["13. RustProjectIR + interface receipt"]
+    K -->|"repair-required"| R["14. Preflight + state-bound permit + one AI repair"]
+    R --> S["15. Host rebuild / re-coordinate or ingest-only resume"]
+    S -->|"static repair"| K
+    S -->|"verifier-origin"| T["16. pending-reverification"]
+    K -->|"candidate-ready"| L["17. Cargo generation"]
+    T --> L
+    L --> M["18. Sandboxed build/test"]
+    M --> O["19. Private raw refs + classification receipt"]
+    O -->|"uniquely classified compile/link error"| U["20. Bound intake + receipt v2 queue"]
+    U --> R
+    M -->|"fresh same-gate pass"| W["21. Atomic revalidation settlement"]
+    W --> K
+    M --> X["22. Project semantic and safety gates"]
+    X --> V2["23. Same manifest-bound BuildIR reverify #2 before publication"]
+    V2 --> N["24. Completed receipt binds both verifications"]
 ```
 
-Every edge carries schema-bound artifacts with repository-relative paths and SHA-256, not chat conclusions. This stage addresses the known runtime/gate-authority findings and adds Ninja/static-archive, toolchain, CLI, and read-only-held-out evidence constraints. Remaining work is Meson/configure build facts, positive candidate verifiers, a usable competition-equivalent sandbox, and real held-out build/oracle acceptance. The diagram is an implementation contract, not a whole-project success claim.
+Every edge carries schema-bound artifacts with repository-relative paths and SHA-256, not chat conclusions. This stage addresses the known runtime/gate-authority findings and adds Ninja/static-archive support, competition-profile C-toolchain input closure, canonical BuildIR reopen/reprojection, two CompletionCoordinator checkpoints, CLI constraints, and read-only held-out evidence. Remaining work includes Meson/configure build facts, positive candidate verifiers, the A19e7 independent process capability, the A19e8 non-degrading sandbox, a usable competition-equivalent environment, and real held-out build/oracle semantic acceptance. This profile-bound input evidence keeps `competition_exact=false`; the diagram is an implementation contract, not a whole-project success claim.
 
 ## Slice Verification and Publication Architecture
 
@@ -335,7 +357,7 @@ The default repair cap is five rounds. Process exit status, model text, and repa
 | `crates/c2r-translator/` | clang AST, typed IR, generic Rust emitter, fail-closed reasons | candidate and lowering report |
 | `auto_migrate.py` | Orchestrate generation, oracle/replay drafts, route/profile, and evidence | auto-translation evidence |
 | `validate_auto_translation_evidence.py` | Cross-check schema, hashes, identity, and semantic gates | strict validation result |
-| `project_migration_harness.py` | Arbitrary-repository inventory, SCC/DAG, ContextPacks, role scheduling, gates, and Cargo generations | project plan, SQLite v7, worker requests, last-good project |
+| `project_migration_harness.py` / `_project_migration_harness/build_ir_*.py` / `c_toolchain_*.py` | Arbitrary-repository inventory, competition-profile C-toolchain evidence, canonical BuildIR, SCC/DAG, ContextPacks, role scheduling, gates, and Cargo generations | `c-toolchain-evidence`, canonical BuildIR, project plan, SQLite v7, worker requests, last-good project |
 | `rust_project_ir*.py` / `project_interface_*.py` | Reopen BuildIR/DAG/candidates, coordinate cross-unit interfaces, and deterministically generate IR-bound Cargo generations | canonical RustProjectIR, coordinator receipt, project repair queue, generation manifest |
 | `opencode_agent_harness.py` | Run/plan/worker/retry/evaluate, SQLite state, isolation, recovery | worker reports, indexes, merge plan |
 | `run_competition.py` | Aggregate slices/workers and run environment, unsafe, and summary gates | competition summary and workflow metrics |

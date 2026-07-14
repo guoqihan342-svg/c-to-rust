@@ -65,13 +65,19 @@ AI candidate manifest v9 的 `prompt_scope` 由实际 ContextPack 计算，并�
 
 ## 整项目 AI 编排
 
-比赛平台上的外层 OpenCode 不需要逐函数编写 spec。它只调用 `project_migration_harness.py plan` 并提供仓库根；后续由 harness 自己发现 compile database、CMake/Ninja/Meson 构建事实、编译输出、静态归档和链接边，生成 SCC/DAG、分页 ContextPack、角色组合和 SQLite 状态。CLI 默认使用 `--build-closure-policy required`；闭包不完整时所有 ready worker 都 deferred。`bounded-source` 只允许生成 `semantic_gate=false` 的调查候选，不能进入项目完成路径。
+比赛平台上的外层 OpenCode 不需要逐函数编写 spec。它只调用 `project_migration_harness.py plan` 并提供仓库根；后续由 harness 自己发现 compile database、CMake/Ninja/Meson 构建事实、编译输出、静态归档和链接边，生成 SCC/DAG、分页 ContextPack、角色组合和 SQLite 状态。`plan` CLI 默认使用 `--profile competition` 和 `--build-closure-policy required`；`--profile development` 只是必须显式选择的非比赛兼容路径。闭包不完整时所有 ready worker 都 deferred，`bounded-source` 只允许生成 `semantic_gate=false` 的调查候选，不能进入项目完成路径。
+
+competition profile 在发现完成后、任何 worker/AI 启动前，从发现到的 compiler driver/wrapper、linker driver/linker、archiver 和 ranlib 构造 `c-toolchain-evidence`。证据绑定 `config/competition-env/environment.json` 的 path/SHA/size/profile id、环境白名单与 PATH 快照哈希、host/WSL 指纹、绝对解析路径和 binary SHA/size，并只运行固定且有界的 version、target、sysroot、resource-dir 和 derived-linker 探针。每个探针的原始 stdout/stderr 以有界 base64、SHA-256 和 size 保存在 BuildIR 哈希绑定的内容寻址 attachment；工具缺失、探针失败或漂移、平台不符以及 competition GCC 版本不符都会在调度前 fail closed。
+
+competition 的 canonical BuildIR 把 TU、ABI facts 以及 object/link/archive target 的 `toolchain_id` 作为到 host-probed toolchain records 的外键，缺失或未知外键以及 token-only evidence 不能通过。每次重开时，verifier 都从 BuildIR raw-fact refs 读取原始 `c-toolchain-evidence` attachment，复核 base64/hash/size，重新解析 profile、repository bindings 和绝对 executable，重跑固定探针，重新派生 linker/role mapping，并逐字节重投影 BuildIR；PATH、环境、binary、probe 或 projection 任一漂移都会阻断。
 
 运行时以 AI 为主：boundary group 先由 planner 选择“带上下文翻译、保留可验证 FFI 边界或明确拒绝”，translator 输出 Rust source，reviewer 只给结构审查，repairer 只消费允许的失败诊断。typed IR/C2Rust 是事实或候选来源，不是默认路由优先级；任何模型都不能写 semantic pass、last-good 或项目完成状态。
 
 项目级 preflight 固定精确模型、`c2rust-candidate`、`max` 和不可变 agent snapshot。每个 attempt 只继承显式环境白名单，并使用独立 config/data/state/cache/tmp/out；真实调用的 receipt、session export projection、prompt/response SHA 和 provider-execution report 进入同一 ledger attempt/fence。候选接受由固定 host authority 完成：候选 gate、项目 gate、证据 SHA、最新 epoch 和不可变 candidate set 全部进入 SQLite，并在晋升/完成前重新打开内容寻址证据。Cargo 项目使用不可变 generation 和原子 `CURRENT` 指针；候选 `cargo check/test` 只允许在通过 capability probe 的 Linux bubblewrap 无网络沙箱中运行。VerificationPlan 显式绑定固定命令、managed-generation 输入、timeout 与严格能力集；rustup 场景先用 `rustup which` 解析实际 `cargo/rustc/rustdoc`，对受限 toolchain 树做完整内容哈希、执行前复算并只读挂载。candidate compile 与 project Cargo 复用同一 reopener，重新核对 contract、probe、plan、command-start、input 和 cleanup；项目 final/completion 还要求 check/test 输入等于最新 integration manifest。缺沙箱、能力 probe、oracle 或 ABI 证据时返回 blocked，不在宿主机降级执行。
 
 Cargo generation 现在强制经过 canonical RustProjectIR。wave-provisional 会生成“当前候选 + last-good 依赖”的内容寻址子 DAG，并回指不可变完整 DAG；project-final 必须覆盖全部迁移单元。host 从当前 Rust source 复算 public/required/unsafe/FFI facts，重开 BuildIR、DAG 和每个 candidate source，再由唯一 interface coordinator 检查 module parent/cycle/orphan、跨单元 API/type/global/FFI/feature/cfg/init 冲突。只有 `candidate-ready` receipt 才能生成 Cargo；generation 内嵌 IR，并绑定 IR/interface/domain/coordinator SHA，integration verifier 会从原 artifact root 重建并逐字节比较。生产模块已删除 descriptor-only 写入口和直接写 generation 的 `integrate` CLI；只有绑定权威 ledger/run contract 的 `integrate-verified` 可以发布 full-project generation。
+
+`CompletionCoordinator` 只从不可变 migration manifest 取得唯一 BuildIR 引用；competition 的 `complete` 必须用 `--repo-root` 提供原始 C 仓库作为重开 locator。它先在任何 project-final candidate compile/semantic/final work 前运行同一 BuildIR verifier；integration、Cargo 和下游 gate 完成后，在写入 host project-final 和发布 completed receipt 前再运行一次。两次内容寻址 verification receipt 都绑定进 completion receipt，任一次漂移都会终止后续工作。
 
 这一层尚未完成全部 A19d3：RustProjectIR 和 generation manifest 会固定写入 `interface_completeness.status=partial`，自动派生 signature 仍明确标为 unresolved；候选 cohort 和 full-project candidate generation 可继续用于隔离检查，但 CompletionCoordinator 会阻止它进入 project-final gate 和 completed receipt。当前权威生成只支持 flat library modules；完整 shared-type layout、ownership、init/destruction、native link、多 crate/bin/target 和嵌套模块仍需 host extractor 或受验证 AI interface proposal。
 
@@ -81,15 +87,16 @@ schema v7 还增加了不可变 project diagnostic intake：host 会重开当前
 
 已验证 intake 现在进入兼容 schema v7 数据库的 coordinator receipt v2，并与静态接口诊断共用 project repair queue；verifier-origin 项优先调度。request 物化和 provider 启动前都会重开内容寻址 intake、当前 candidate set、原始 managed generation、RustProjectIR/interface 和 verifier receipt。AI 只提交有界 IR 操作，host 重建候选后对外状态只能是 `pending-reverification`；内部 `candidate-ready` 只是等待 host 复验的 ledger 状态，普通静态 receipt 和低层 resolve API 均不能关闭外部诊断。CompletionCoordinator 还会拒绝任何未 `resolved/cancelled` 的历史项目 repair 义务。
 
-只有在新 managed generation 上由同一 host gate 产生更高 epoch 的新 pass，才能写出内容寻址 revalidation receipt。结算事务会同时重开 source intake、当前 cohort、原始与新 project input、ledger gate record、raw observation/evidence、分类回执、候选 IR/interface 和当前 generation，然后注册 successor receipt、resolve 目标并取消已被 successor 取代的同队列项；复验失败则回滚旧候选、登记新诊断并继承 attempt 预算。该闭环已接入 Cargo compile/link 的严格分类路径；initialization、feature/cfg、ABI 专属 verifier、A19e7 独立进程 capability 和完整 project-final 语义验收仍未完成，AI 候选不会增加 translator numerator。
+只有在新 managed generation 上由同一 host gate 产生更高 epoch 的新 pass，才能写出内容寻址 revalidation receipt。结算事务会同时重开 source intake、当前 cohort、原始与新 project input、ledger gate record、raw observation/evidence、分类回执、候选 IR/interface 和当前 generation，然后注册 successor receipt、resolve 目标并取消已被 successor 取代的同队列项；复验失败则回滚旧候选、登记新诊断并继承 attempt 预算。该闭环已接入 Cargo compile/link 的严格分类路径；initialization、feature/cfg、ABI 专属 verifier、A19e7 独立进程 capability、A19e8 non-degrading SandboxBackend 和完整 project-final semantic acceptance 仍未完成，AI 候选不会增加 translator numerator。
 
-当前正向完成链仍未闭合：CLI 已有 host-owned integration/Cargo adapter 和失败诊断回投，但 candidate 的 oracle/negative/unsafe-alias/ABI/final 正向 runner 尚未全部接通。进程内 raw-output 引用与可复算 classification receipt 已落地；A19e7 独立 verifier 进程、capability channel 和一次性 nonce 尚未落地，因此当前 host-issued receipt 仍只能证明 canonical 绑定与漂移拒绝，不能声明调用方不可伪造。真实 held-out 模式只重开只读 SQLite，复验 AI provider evidence、每个 candidate gate、不可变 candidate set、项目 final bundle 和原始 repository/build 绑定；任何自报 `semantic_gate=true` 的 JSON 都不能计入成功。
+当前正向完成链仍未闭合：CLI 已有 host-owned integration/Cargo adapter 和失败诊断回投，但 candidate 的 oracle/negative/unsafe-alias/ABI/final 正向 runner 尚未全部接通。进程内 raw-output 引用、可复算 classification receipt 和 competition profile C toolchain input closure 已落地；A19e7 独立 verifier 进程/capability channel/一次性 nonce 与 A19e8 完整 sandbox capability/receipt/backend 等价性仍未落地。因此当前 host-issued receipt 只能证明 canonical 绑定与漂移拒绝，不能声明调用方不可伪造，也不能称为 `competition-exact`。真实 held-out 模式只重开只读 SQLite，复验 AI provider evidence、每个 candidate gate、不可变 candidate set、项目 final bundle 和原始 repository/build 绑定；任何自报 `semantic_gate=true` 的 JSON 都不能计入成功。
 
 阶段入口如下；它只完成规划、模型预检和条件调度，不代表翻译验收结束：
 
 ```bash
 python3 -B validation/tools/project_migration_harness.py plan \
   --repo-root /path/to/c-project \
+  --profile competition \
   --compile-database /path/to/c-project/build/compile_commands.json \
   --out-root target/project-migration/run-001 \
   --run-id run-001 \
@@ -104,6 +111,7 @@ python3 -B validation/tools/project_migration_harness.py dispatch \
 python3 -B validation/tools/project_migration_harness.py complete \
   --db target/project-migration/run-001/state/project-migration.sqlite3 \
   --run-id run-001 \
+  --repo-root /path/to/c-project \
   --logical-model GLM-5.1 \
   --resolved-model zai/glm-5.1
 ```
@@ -120,7 +128,12 @@ flowchart TB
     REPO["Unseen C repository"] --> DISCOVERY["Compile DB and build-fact discovery"]
     PLAN --> DISCOVERY
     DISCOVERY --> CLOSURE["Hash-bound generated/archive/link closure"]
-    CLOSURE --> INDEX["C index and include/global/top-level facts"]
+    PROFILE["Competition profile"] --> TOOLCHAIN["C toolchain evidence\nresolved binaries + bounded raw probes"]
+    DISCOVERY --> TOOLCHAIN
+    CLOSURE --> TOOLCHAIN
+    CLOSURE --> BUILDIR["Canonical manifest-bound BuildIR"]
+    TOOLCHAIN --> BUILDIR
+    BUILDIR --> INDEX["C index and include/global/top-level facts"]
     INDEX --> DAG["Call graph, SCCs, waves, boundary groups"]
     DAG --> CONTEXT["Hash-bound paged ContextPacks"]
     CONTEXT --> PORTFOLIO["Planner / translator / reviewer / repairer portfolio"]
@@ -134,7 +147,9 @@ flowchart TB
     PROVIDER --> VERIFY["Fixed host candidate gates"]
     VERIFY -->|"failed, bounded diagnostic"| DISPATCH
     VERIFY -->|"latest gates passed"| LASTGOOD["Unit last-good"]
-    LASTGOOD --> RUSTIR["Canonical RustProjectIR + interface coordinator"]
+    LASTGOOD --> BIRPRE["Same manifest-bound BuildIR reverify #1 + receipt\nbefore project-final candidate work"]
+    BIRPRE --> FINALCAND["Project-final candidate compile / semantic / final gates"]
+    FINALCAND --> RUSTIR["Canonical RustProjectIR + interface coordinator"]
     RUSTIR -->|"repair-required"| RPRE["Zero-call repair preflight"]
     RPRE --> PERMIT["Receipt/state-bound host permit"]
     PERMIT --> RAI["At most one project-repair call per resume"]
@@ -155,7 +170,8 @@ flowchart TB
     SETTLE --> LEDGER
     SETTLE --> RUSTIR
     SANDBOX -->|"no pending repair"| PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
-    PROJECT -->|"same candidate set passed"| COMPLETE["Completed project evidence"]
+    PROJECT -->|"same candidate set passed"| BIRFINAL["Same manifest-bound BuildIR reverify #2 + receipt\nbefore project-final / completed publication"]
+    BIRFINAL --> COMPLETE["Completed receipt binds both verifications"]
     PROJECT -->|"unclosed verifier or failed gate"| BLOCKED
 ```
 
@@ -163,33 +179,39 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    A["1. Repo root"] --> B["2. Inventory"]
-    B --> C["3. Generated/archive/link closure"]
-    C --> D["4. Include, symbol, SCC migration DAG"]
-    D --> E["5. Paged ContextPack"]
-    E --> F["6. Preflight-bound worker request"]
-    F --> G["7. AI candidate + provider evidence"]
-    G --> H["8. Host candidate gates"]
-    H -->|"repairable"| F
-    H -->|"passed"| I["9. Unit last-good"]
-    I --> J["10. RustProjectIR + interface receipt"]
-    J -->|"repair-required"| R["11. Preflight + state-bound permit + one AI repair"]
-    R --> S["12. Host rebuild / re-coordinate or ingest-only resume"]
-    S -->|"static repair"| J
-    S -->|"verifier-origin"| T["13. pending-reverification"]
-    J -->|"candidate-ready"| K["14. Cargo generation"]
-    T --> K
-    K --> L["15. Sandboxed build/test"]
-    L --> O["16. Private raw refs + classification receipt"]
-    O -->|"uniquely classified compile/link error"| P["17. Bound intake + receipt v2 queue"]
-    P --> R
-    L -->|"fresh same-gate pass"| U["18. Atomic revalidation settlement"]
-    U --> J
-    L --> M["19. Project semantic and safety gates"]
-    M --> N["20. Candidate-set completion"]
+    A["1. Repo root"] --> B["2. Discovery + generated/archive/link closure"]
+    P["Competition profile"] --> C["3. C toolchain evidence + raw probe attachment"]
+    B --> C
+    B --> D["4. Canonical manifest-bound BuildIR"]
+    C --> D
+    D --> E["5. Include, symbol, SCC migration DAG"]
+    E --> F["6. Paged ContextPack"]
+    F --> G["7. Preflight-bound worker request"]
+    G --> H["8. AI candidate + provider evidence"]
+    H --> I["9. Host candidate gates"]
+    I -->|"repairable"| G
+    I -->|"passed"| J["10. Unit last-good"]
+    J --> V1["11. Same manifest-bound BuildIR reverify #1 before project-final candidate work"]
+    V1 --> Q["12. Project-final candidate compile / semantic / final gates"]
+    Q --> K["13. RustProjectIR + interface receipt"]
+    K -->|"repair-required"| R["14. Preflight + state-bound permit + one AI repair"]
+    R --> S["15. Host rebuild / re-coordinate or ingest-only resume"]
+    S -->|"static repair"| K
+    S -->|"verifier-origin"| T["16. pending-reverification"]
+    K -->|"candidate-ready"| L["17. Cargo generation"]
+    T --> L
+    L --> M["18. Sandboxed build/test"]
+    M --> O["19. Private raw refs + classification receipt"]
+    O -->|"uniquely classified compile/link error"| U["20. Bound intake + receipt v2 queue"]
+    U --> R
+    M -->|"fresh same-gate pass"| W["21. Atomic revalidation settlement"]
+    W --> K
+    M --> X["22. Project semantic and safety gates"]
+    X --> V2["23. Same manifest-bound BuildIR reverify #2 before publication"]
+    V2 --> N["24. Completed receipt binds both verifications"]
 ```
 
-每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已处理已知 runtime/gate-authority 审查项，并补齐 Ninja/静态归档、toolchain、CLI 与只读 held-out 证据约束；当前开放项仍是 Meson/configure 构建事实、正向 candidate verifier、可用比赛等价沙箱和真实 held-out build/oracle。该流程图是实现合同，不是整项目成功声明。
+每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已处理已知 runtime/gate-authority 审查项，并补齐 Ninja/静态归档、competition profile C toolchain input closure、canonical BuildIR 重开重投影、CompletionCoordinator 双 checkpoint、CLI 与只读 held-out 证据约束。当前开放项仍包括 Meson/configure 构建事实、正向 candidate verifier、A19e7 独立进程 capability、A19e8 non-degrading sandbox、可用比赛等价环境和真实 held-out build/oracle semantic acceptance；这些 profile-bound 输入证据保持 `competition_exact=false`，该流程图是实现合同，不是整项目成功声明。
 
 ## 切片验证与发布架构
 
@@ -349,7 +371,7 @@ sequenceDiagram
 | `validate_auto_translation_evidence.py` | schema、hash、identity、semantic gate 交叉校验 | strict validation result |
 | `validate_ai_exact_evidence.py` | 重开 fresh oracle、candidate gate-index、router 和 canonical SHA | AI exact strict result |
 | `validate_ai_finite_cross_project_suite.py` | 校验最多 20 项、至少 3 个真实项目/10 类构造的固定套件输入完备性 | ready/blocked preflight，不产生成功率 |
-| `project_migration_harness.py` | 任意仓库 inventory、SCC/DAG、ContextPack、角色调度、门禁和 Cargo generation | project plan、SQLite v7、worker request、last-good project |
+| `project_migration_harness.py` / `_project_migration_harness/build_ir_*.py` / `c_toolchain_*.py` | 任意仓库 inventory、competition profile C toolchain evidence、canonical BuildIR、SCC/DAG、ContextPack、角色调度、门禁和 Cargo generation | `c-toolchain-evidence`、canonical BuildIR、project plan、SQLite v7、worker request、last-good project |
 | `rust_project_ir*.py` / `project_interface_*.py` | 重开 BuildIR/DAG/candidate，协调跨单元接口并阻断冲突，确定性生成 IR-bound Cargo generation | canonical RustProjectIR、coordinator receipt、project repair queue、generation manifest |
 | `opencode_agent_harness.py` | run/plan/worker/retry/evaluate、SQLite ledger、隔离和恢复 | worker reports、context pack、agent index、merge plan |
 | `run_competition.py` | 汇总 slice/worker，执行环境、unsafe、summary gates | competition summary、workflow metrics |

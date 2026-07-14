@@ -56,6 +56,7 @@ class MakeVerticalClosureTests(unittest.TestCase):
         selection = bundle["selection"]
         argv = [
             "plan", "--repo-root", str(bundle["root"]),
+            "--profile", "development",
             "--out-root", "target/run",
             "--make-report", str(selection.path),
             "--make-report-sha256", selection.sha256,

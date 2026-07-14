@@ -31,7 +31,8 @@ class ProjectMigrationArchiveClosureTests(unittest.TestCase):
         if kind == "link-txt":
             self.write(
                 "build/CMakeFiles/sample.dir/link.txt",
-                f"ar qc libsample.a unit.o\nranlib {ranlib_target}\n",
+                "C:/toolchains/ar qc libsample.a unit.o\n"
+                f"C:/toolchains/ranlib {ranlib_target}\n",
             )
         elif kind == "ninja":
             self.write(
@@ -67,6 +68,7 @@ class ProjectMigrationArchiveClosureTests(unittest.TestCase):
         self.assertEqual("build/libsample.a", target["output"]["path"])
         self.assertEqual(["build/unit.o"], [item["path"] for item in target["inputs"]])
         self.assertEqual("qc", target["archive_operation"])
+        self.assertEqual(["ranlib"], target["ranlib_drivers"])
 
     def test_ninja_archive_rule_is_lowered_without_execution(self) -> None:
         closure = discover_project(
@@ -76,6 +78,7 @@ class ProjectMigrationArchiveClosureTests(unittest.TestCase):
         self.assertEqual("ready", closure["status"], closure)
         target = closure["target_link_closure"]["targets"][0]
         self.assertEqual("ar", target["driver"])
+        self.assertEqual(["ranlib"], target["ranlib_drivers"])
         self.assertEqual("build/libsample.a", target["output"]["path"])
         self.assertFalse(closure["claim_boundary"]["commands_executed"])
 

@@ -18,7 +18,7 @@ MAX_BOUND_ARTIFACT_BYTES = 64 * 1024 * 1024
 _DAG_REQUIRED_KEYS = {"schema_version", "dag", "dag_order"}
 _DAG_ALLOWED_KEYS = _DAG_REQUIRED_KEYS | {
     "unsafe_policy", "generated_build_closure", "build_ir", "claim_boundary",
-    PARENT_DAG_KEY,
+    "profile", PARENT_DAG_KEY,
 }
 _EVIDENCE_SECTIONS = (
     "modules", "public_api", "shared_types", "global_ownership",
@@ -115,6 +115,9 @@ def _validate_migration_dag(payload: Mapping[str, Any]) -> set[str]:
 
 
 def _validate_dag_metadata(payload: Mapping[str, Any]) -> None:
+    profile = payload.get("profile")
+    if profile is not None and profile not in {"competition", "development"}:
+        _fail("bound migration DAG profile is invalid")
     boundary = payload.get("claim_boundary")
     if boundary is not None and boundary != {
         "semantic_gate": False, "translation_coverage_numerator": 0,

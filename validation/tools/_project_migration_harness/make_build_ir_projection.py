@@ -9,11 +9,16 @@ from .build_ir import (
     BUILD_IR_EXTRACTOR, BUILD_IR_KIND, BUILD_IR_SCHEMA_VERSION,
     finalize_build_ir, normalize_binding, stable_build_id, target_record,
 )
-from .build_ir_projection import ABI_PREFIXES, target_closure
+from .build_ir_host_toolchains import HostToolchainProjection
+from .build_ir_projection import target_closure
+from .build_ir_toolchains import make_command_tool_role
 from .compile_database import parse_compile_entry
 from .discovery_variants import finalize_variants
 from .make_build_ir_external import (
     MAKE_BUILD_BOUNDARIES, project_make_external_dependencies,
+)
+from .make_build_ir_toolchains import (
+    abi_facts, legacy_toolchain_id, legacy_toolchains,
 )
 
 
@@ -61,14 +66,22 @@ def normalize_make_translation_units(
 def project_make_build_ir(
     repo_root: Path, report: Mapping[str, Any],
     report_reference: Mapping[str, Any], *, max_units: int,
+    toolchain_evidence: Mapping[str, Any] | None = None,
+    toolchain_reference: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     units, _rejected, blockers = normalize_make_translation_units(
         repo_root, report, max_units,
     )
     if blockers:
         raise ValueError(blockers[0])
-    projected_units = _project_units(units, report)
-    targets = _project_targets(report, projected_units)
+    projector = (
+        HostToolchainProjection(toolchain_evidence)
+        if toolchain_evidence is not None else None
+    )
+    if (projector is None) != (toolchain_reference is None):
+        raise ValueError("make_build_ir_toolchain_binding_invalid")
+    projected_units = _project_units(units, report, projector)
+    targets = _project_targets(report, projected_units, projector)
     external = project_make_external_dependencies(report, targets)
     sources = _unique_bindings([unit["source"] for unit in projected_units])
     generated = [
@@ -82,21 +95,26 @@ def project_make_build_ir(
         for target in targets for output in target["outputs"]
     ]
     generated.sort(key=lambda item: item["binding"]["path"])
+    raw_refs = [{"role": MAKE_RAW_ROLE, **dict(report_reference)}]
+    if toolchain_reference is not None:
+        raw_refs.append({
+            "role": "c-toolchain-evidence", **dict(toolchain_reference),
+        })
     payload = {
         "schema_version": BUILD_IR_SCHEMA_VERSION,
         "artifact_kind": BUILD_IR_KIND,
         "status": "ready_with_boundaries",
         "extractor": dict(BUILD_IR_EXTRACTOR),
-        "raw_fact_refs": [{"role": MAKE_RAW_ROLE, **dict(report_reference)}],
+        "raw_fact_refs": sorted(raw_refs, key=lambda item: item["role"]),
         "build_metadata": [normalize_binding(report["makefile_ref"], materialized=True)],
         "translation_units": projected_units,
         "source_inputs": sources,
         "generated_inputs": generated,
         "targets": targets,
         "target_closure": target_closure(targets),
-        "toolchains": _toolchains(report),
+        "toolchains": projector.records() if projector else legacy_toolchains(report),
         "external_dependencies": external,
-        "abi_facts": _abi_facts(projected_units),
+        "abi_facts": abi_facts(projected_units),
         "boundaries": [
             {"kind": "make_dry_run_nonsemantic_fact_collection"},
             *copy.deepcopy(MAKE_BUILD_BOUNDARIES),
@@ -112,6 +130,8 @@ def project_make_build_ir(
             "parameters_guessed": False,
             "commands_executed": False,
             "fact_collection_executed": True,
+            "host_toolchain_bound": projector is not None,
+            "toolchain_profile": projector.profile if projector else None,
             "semantic_gate": False,
             "translation_coverage_numerator": 0,
         },
@@ -121,12 +141,16 @@ def project_make_build_ir(
 
 def _project_units(
     units: list[dict[str, Any]], report: Mapping[str, Any],
+    projector: HostToolchainProjection | None,
 ) -> list[dict[str, Any]]:
     commands = {command["ordinal"]: command for command in report["commands"]}
     result = []
     for raw in units:
         command = commands[raw["entry"]["index"]]
-        toolchain_id = _toolchain_id(command["tool"], report)
+        toolchain_id = (
+            projector.compile(command["tool"], [], raw["language"])
+            if projector else legacy_toolchain_id(command["tool"], report)
+        )
         result.append({
             "unit_id": raw["unit_id"],
             "variant_index": raw["variant_index"],
@@ -162,6 +186,7 @@ def _project_units(
 
 def _project_targets(
     report: Mapping[str, Any], units: list[dict[str, Any]],
+    projector: HostToolchainProjection | None,
 ) -> list[dict[str, Any]]:
     unit_by_ordinal = {unit["provenance"]["entry_index"]: unit for unit in units}
     leaves = {
@@ -173,7 +198,7 @@ def _project_targets(
     for command in report["commands"]:
         kind = command["kind"]
         if kind == "ranlib":
-            _merge_ranlib(command, owners)
+            _merge_ranlib(command, owners, projector)
             continue
         output_path = command["outputs"][0]
         if output_path in owners:
@@ -199,7 +224,14 @@ def _project_targets(
             [output], inputs, dependencies, argument_sets, link_arguments,
             {"raw_fact_role": MAKE_RAW_ROLE, "command_ordinal": command["ordinal"]},
         )
-        target["toolchain_id"] = _toolchain_id(command["tool"], report)
+        if projector and kind == "compile":
+            target["toolchain_id"] = unit["toolchain_id"]
+        elif projector:
+            target["toolchain_id"] = projector.command(
+                command["tool"], make_command_tool_role(command),
+            )
+        else:
+            target["toolchain_id"] = legacy_toolchain_id(command["tool"], report)
         owners[output_path] = target
         targets.append(target)
     return sorted(targets, key=lambda item: item["target_id"])
@@ -228,11 +260,16 @@ def _target_inputs(
 
 def _merge_ranlib(
     command: Mapping[str, Any], owners: Mapping[str, dict[str, Any]],
+    projector: HostToolchainProjection | None,
 ) -> None:
     target = owners.get(command["inputs"][0])
     if target is None or target["kind"] != "archive":
         raise ValueError("make_build_ir_ranlib_without_archive")
     target["compile_argument_sets"].append(_command_arguments(command))
+    if projector:
+        identifiers = target.setdefault("auxiliary_toolchain_ids", [])
+        identifiers.append(projector.command(command["tool"], "ranlib"))
+        target["auxiliary_toolchain_ids"] = sorted(set(identifiers))
 
 
 def _command_arguments(command: Mapping[str, Any]) -> dict[str, Any]:
@@ -241,42 +278,6 @@ def _command_arguments(command: Mapping[str, Any]) -> dict[str, Any]:
         "arguments": list(command["argv"][1:]),
         "argv_sha256": command["argv_sha256"],
     }
-
-
-def _toolchain_id(tool: str, report: Mapping[str, Any]) -> str:
-    return stable_build_id("toolchain", {
-        "tool": tool, "evidence_sha256": report["toolchain_ref"]["sha256"],
-    })
-
-
-def _toolchains(report: Mapping[str, Any]) -> list[dict[str, Any]]:
-    tools = sorted({command["tool"] for command in report["commands"]})
-    result = [{
-        "toolchain_id": _toolchain_id(tool, report),
-        "driver": tool,
-        "wrappers": [],
-        "language": "c" if "c" in tool else "build",
-        "identity": "hash-bound-make-toolchain-evidence",
-        "evidence_sha256": report["toolchain_ref"]["sha256"],
-        "provenance": {"raw_fact_role": MAKE_RAW_ROLE},
-    } for tool in tools]
-    return sorted(result, key=lambda item: item["toolchain_id"])
-
-
-def _abi_facts(units: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    result = []
-    for unit in units:
-        flags = [
-            item for item in unit["compile_arguments"]["semantic_flags"]
-            if item.startswith(ABI_PREFIXES)
-        ]
-        result.append({
-            "unit_id": unit["unit_id"], "language": unit["language"],
-            "toolchain_id": unit["toolchain_id"], "target_flags": flags,
-            "data_model": "explicit-flags" if flags else "compiler-default",
-            "provenance": {"raw_fact_role": MAKE_RAW_ROLE},
-        })
-    return result
 
 
 def _unique_bindings(values: list[dict[str, Any]]) -> list[dict[str, Any]]:

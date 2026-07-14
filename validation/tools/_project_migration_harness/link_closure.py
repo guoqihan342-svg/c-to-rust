@@ -9,7 +9,6 @@ from .archive_closure import (
     is_archiver_command,
     is_ranlib_command,
     parse_archive_command,
-    ranlib_output,
 )
 from .build_facts import compiler_name, json_sha256
 from .closure_paths import bind_repository_artifact, path_error_blocker
@@ -17,6 +16,7 @@ from .compile_security import SUPPORTED_COMPILER
 from .ninja_link_facts import discover_ninja_link_commands
 from .link_response import expand_link_response_files, take_link_output
 from .link_fact_paths import link_fact_working_directory
+from .link_ranlib import bind_ranlib_commands
 from .link_system_arguments import normalize_system_link_argument
 
 
@@ -70,6 +70,13 @@ def discover_link_closure(
             )
             blockers.extend(current)
             if target is not None:
+                blockers.extend(bind_ranlib_commands(
+                    repo_root,
+                    command["base"],
+                    target,
+                    command.get("ranlib_argvs", []),
+                    fact_path=str(fact.get("path", "")),
+                ))
                 targets.append(target)
     targets.sort(key=lambda item: item["fact_file"]["path"])
     outputs: dict[str, list[str]] = {}
@@ -136,17 +143,9 @@ def _parse_link_fact(
         root, base, current_fact, argv, response_files=response_files
     )
     if target is not None:
-        for auxiliary in auxiliaries:
-            value = ranlib_output(auxiliary)
-            try:
-                bound = bind_repository_artifact(root, value or "", base=base, kind="file")
-            except (OSError, ValueError) as error:
-                blockers.append(path_error_blocker(
-                    error, role="ranlib_target", path=value or "<missing>"
-                ))
-                continue
-            if bound != target.get("output"):
-                blockers.append({"kind": "ranlib_target_mismatch", "path": fact_path})
+        blockers.extend(bind_ranlib_commands(
+            root, base, target, auxiliaries, fact_path=fact_path,
+        ))
     return target, blockers
 
 

@@ -85,6 +85,7 @@ def materialize_selected_build_ir_stage(
     discovery: Mapping[str, Any],
     artifacts: dict[str, dict[str, Any]],
     selection: BuildInputSelectionLike | None,
+    profile: str = "development",
 ) -> dict[str, Any]:
     input_kind = discovery.get("input_kind")
     if input_kind == MAKE_REPORT_INPUT_KIND:
@@ -96,12 +97,15 @@ def materialize_selected_build_ir_stage(
             discovery,
             artifacts,
             _make_selection(selection),
+            profile,
         )
     if selection is not None:
         raise ValueError("build_input_selection_discovery_mismatch")
     from .generated_closure import materialize_build_ir_stage
 
-    return materialize_build_ir_stage(repo_root, output, dict(discovery), artifacts)
+    return materialize_build_ir_stage(
+        repo_root, output, dict(discovery), artifacts, profile,
+    )
 
 
 def _make_selection(selection: BuildInputSelectionLike) -> MakeReportSelection:

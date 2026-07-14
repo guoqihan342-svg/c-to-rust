@@ -24,6 +24,7 @@ MAKE_MODULE_NAMES = (
     "make_build_ir_external",
     "make_build_ir_projection",
     "make_build_ir_reopen",
+    "make_build_ir_toolchains",
     "make_dry_run_binding",
     "make_dry_run_contract",
     "make_dry_run_host_evidence",
@@ -31,6 +32,7 @@ MAKE_MODULE_NAMES = (
     "make_dry_run_report_io",
     "make_dry_run_result",
     "make_dry_run_runner",
+    "make_dry_run_tools",
 )
 MAKE_MODULES = {module_name(name) for name in MAKE_MODULE_NAMES}
 ADAPTER_ZONE = GENERIC_FACADES | MAKE_MODULES
@@ -66,6 +68,8 @@ PRIVATE_IMPORTS = _edges(
      "MAX_REPORT_BYTES reopen_make_dry_run_report verify_make_dry_run_report_inputs"),
     ("make_build_ir_projection", "make_build_ir_external",
      "MAKE_BUILD_BOUNDARIES project_make_external_dependencies"),
+    ("make_build_ir_projection", "make_build_ir_toolchains",
+     "abi_facts legacy_toolchain_id legacy_toolchains"),
     ("make_build_ir_reopen", "make_build_ir_adapter", "reproject_make_build_ir"),
     ("make_build_ir_reopen", "make_build_ir_projection", "MAKE_RAW_ROLE"),
     ("make_dry_run_contract", "make_dry_run_binding",
@@ -74,6 +78,7 @@ PRIVATE_IMPORTS = _edges(
      "MAX_STDOUT_BYTES PARSER_NAME PARSER_VERSION parse_make_dry_run_stdout validate_make_dry_run_commands"),
     ("make_dry_run_contract", "make_dry_run_result",
      "MakeDryRunOutcome validate_successful_make_outcome"),
+    ("make_dry_run_parser", "make_dry_run_tools", "classify_make_tool"),
     ("make_dry_run_report_io", "make_dry_run_binding", "make_input_sha256"),
     ("make_dry_run_report_io", "make_dry_run_contract",
      "MAX_STDERR_BYTES canonical_make_dry_run_report_bytes validate_make_dry_run_report"),

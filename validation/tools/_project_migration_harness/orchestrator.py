@@ -19,7 +19,7 @@ from .orchestrator_context import ContextPortfolioError, build_context_portfolio
 from .scheduler import schedule_portfolio
 
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
-
+PROJECT_PROFILES = {"competition", "development"}
 def plan_project(
     repo_root: str | Path,
     *,
@@ -36,6 +36,7 @@ def plan_project(
     context_page_tokens: int = 4_096,
     context_group_pages: int = 32,
     require_build_closure: bool = False,
+    profile: str = "development",
 ) -> dict[str, Any]:
     harness = Path(harness_root).resolve(strict=True)
     source_input = Path(repo_root)
@@ -54,6 +55,8 @@ def plan_project(
         raise ValueError("context_group_pages must be an integer from 1 to 64")
     if not isinstance(require_build_closure, bool):
         raise ValueError("require_build_closure must be boolean")
+    if profile not in PROJECT_PROFILES:
+        raise ValueError("profile must be competition or development")
     artifacts: dict[str, dict[str, Any]] = {}
     discovery = discover_project(
         source_input, compile_database=compile_database, max_units=max_units,
@@ -65,7 +68,7 @@ def plan_project(
     source = source_input.resolve(strict=True)
     try:
         build_stage = materialize_selected_build_ir_stage(
-            source, output, discovery, artifacts, make_report,
+            source, output, discovery, artifacts, make_report, profile,
         )
     except (OSError, TypeError, ValueError):
         return _blocked(output, artifacts, "build_ir_contract_invalid")
@@ -80,6 +83,7 @@ def plan_project(
         "build_ir": artifacts["build_ir"],
         "semantic_sha256": build_ir["semantic_sha256"],
         "build_closure_policy": "required" if require_build_closure else "bounded-source",
+        "profile": profile,
     })
     effective_run_id = run_id or f"project-{project_key[:16]}"
     if RUN_ID_RE.fullmatch(effective_run_id) is None:
@@ -141,6 +145,7 @@ def plan_project(
 
     integration_manifest = {
         "schema_version": 1,
+        "profile": profile,
         "dag": {
             group["group_id"]: list(group["dependencies"])
             for group in dag["groups"]
@@ -204,6 +209,7 @@ def plan_project(
     plan = {
         "schema_version": 1,
         "status": portfolio["status"],
+        "profile": profile,
         "run_id": effective_run_id,
         "project_key": project_key,
         "source_commit": source_commit,
@@ -223,6 +229,7 @@ def plan_project(
             "deferred_count": len(schedule["deferred"]),
         },
         "execution": {
+            "profile": profile,
             "model_launched": False,
             "cargo_executed": False,
             "make_executed": False,
@@ -248,6 +255,7 @@ def plan_project(
             "semantic_gate": False,
             "translation_coverage_numerator": 0,
             "proof_class": "project-plan-only",
+            "competition_profile": profile == "competition",
             "build_ir_verified": build_ir_ready,
             "generated_build_closure_complete": closure_ready,
             "build_closure_policy": (
@@ -258,8 +266,6 @@ def plan_project(
     plan["plan_sha256"] = content_sha256(plan)
     write_json_artifact(output, "project-migration-plan.json", plan)
     return plan
-
-
 def _stage(name: str, operation: Callable[[], dict[str, Any]]) -> dict[str, Any] | None:
     try:
         return operation()

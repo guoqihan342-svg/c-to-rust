@@ -21,6 +21,7 @@ class ProjectMigrationLinkArgumentTests(unittest.TestCase):
         return path
 
     def test_safe_driver_flags_and_repository_rpath_are_normalized(self) -> None:
+        compiler_token = "C:/toolchains/cc"
         source = self.write("src/main.c", "int main(void) { return 0; }\n")
         obj = self.write("build/CMakeFiles/app.dir/main.c.o", b"object")
         self.write("build/bin/app", b"executable")
@@ -28,14 +29,15 @@ class ProjectMigrationLinkArgumentTests(unittest.TestCase):
         rpath = (self.root / "build/lib").as_posix()
         self.write(
             "build/CMakeFiles/app.dir/link.txt",
-            "cc -Wall -O3 -fPIC -DNDEBUG "
+            f"{compiler_token} -Wall -O3 -fPIC -DNDEBUG "
             f"-Wl,-rpath,{rpath}: CMakeFiles/app.dir/main.c.o -o bin/app\n",
         )
         database = self.write("build/compile_commands.json", json.dumps([{
             "directory": str(self.root / "build"),
             "file": str(source),
             "arguments": [
-                "cc", "-c", str(source), "-o", "CMakeFiles/app.dir/main.c.o",
+                "C:/toolchains/ccache", compiler_token, "-c", str(source),
+                "-o", "CMakeFiles/app.dir/main.c.o",
             ],
             "output": "CMakeFiles/app.dir/main.c.o",
         }]))
@@ -45,7 +47,14 @@ class ProjectMigrationLinkArgumentTests(unittest.TestCase):
         )["generated_build_closure"]
 
         self.assertEqual("ready", closure["status"], closure)
+        discovery = discover_project(self.root, compile_database=database)
+        unit = discovery["translation_units"][0]
+        self.assertEqual("cc", unit["compiler"])
+        self.assertEqual(["ccache"], unit["compiler_wrappers"])
+        self.assertNotIn(compiler_token, json.dumps(discovery))
+        self.assertNotIn("C:/toolchains/ccache", json.dumps(discovery))
         target = closure["target_link_closure"]["targets"][0]
+        self.assertEqual("cc", target["driver"])
         self.assertEqual("build/bin/app", target["output"]["path"])
         self.assertEqual(["build/CMakeFiles/app.dir/main.c.o"], [
             item["path"] for item in target["inputs"]

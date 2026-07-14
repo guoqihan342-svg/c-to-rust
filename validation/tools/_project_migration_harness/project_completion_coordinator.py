@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .artifacts import content_sha256, write_json_artifact
+from .artifacts import write_json_artifact
 from .candidate_compile_verifier import verify_candidate_compile
 from .candidate_final_verifier import verify_candidate_final
 from .candidate_semantic_evidence import revalidate_candidate_semantic_verdict
@@ -19,7 +19,11 @@ from .ledger import LedgerError, ProjectLedger
 from .ledger_candidate_state import latest_candidate_records
 from .ledger_run_contract import load_migration_contract
 from .project_cargo_verifier import verify_project_cargo
-from .project_generation_context import managed_project_root
+from .project_completion_build_ir import (
+    build_ir_allows_completion, build_ir_blocker_kinds,
+    record_build_ir_checkpoint, verify_project_final_build_ir,
+)
+from .project_completion_state import completion_paths, completion_result
 from .project_completion_repair_phase import execute_project_repair_completion_step
 from .project_completion_verifier_phase import advance_project_verifier_phase
 from .project_host_gates import _record_host_project_final
@@ -29,13 +33,18 @@ from .project_integration_verifier import verify_integrated_project
 SEMANTIC_RUNNERS = (
     "oracle-replay-diff", "negative", "unsafe-alias", "abi-layout",
 )
+_write_build_ir_verification = record_build_ir_checkpoint
+_build_ir_allows_completion = build_ir_allows_completion
+_build_ir_blocker_kinds = build_ir_blocker_kinds
+_result = completion_result
 
 def resume_project_completion(
     *, ledger: ProjectLedger, run_id: str, harness_root: Path,
+    repo_root: Path | None = None,
     timeout_seconds: int = 300, preflight_timeout_seconds: int = 60,
     logical_model: str = "GLM-5.1", resolved_model: str = "zai/glm-5.1",
 ) -> dict[str, Any]:
-    paths = _completion_paths(ledger, harness_root)
+    paths = completion_paths(ledger, harness_root)
     try:
         candidate_set = ledger.bind_verification_candidate_set(
             run_id=run_id, scope="project-final",
@@ -48,6 +57,19 @@ def resume_project_completion(
         members = candidate_set_members(connection, run_id, candidate_set)
         _contract, migration_manifest = load_migration_contract(
             ledger.path, connection, run_id,
+        )
+    initial_build_ir = verify_project_final_build_ir(
+        migration_manifest=migration_manifest, repo_root=repo_root,
+        artifact_root=paths["out_root"],
+    )
+    initial_build_ir_ref = _write_build_ir_verification(
+        paths, "before-candidate-execution", initial_build_ir,
+    )
+    if not _build_ir_allows_completion(initial_build_ir):
+        return _result(
+            paths, run_id, "blocked", "project-final-build-ir-verification",
+            _build_ir_blocker_kinds(initial_build_ir), candidate_set,
+            build_ir_verification=initial_build_ir_ref,
         )
     for member in members:
         compile_result = verify_candidate_compile(
@@ -186,6 +208,19 @@ def resume_project_completion(
             paths, run_id, str(cargo.get("status", "blocked")),
             "project-final-cargo", [], candidate_set,
         )
+    final_build_ir = verify_project_final_build_ir(
+        migration_manifest=migration_manifest, repo_root=repo_root,
+        artifact_root=paths["out_root"],
+    )
+    final_build_ir_ref = _write_build_ir_verification(
+        paths, "before-project-final", final_build_ir,
+    )
+    if not _build_ir_allows_completion(final_build_ir):
+        return _result(
+            paths, run_id, "blocked", "project-final-build-ir-verification",
+            _build_ir_blocker_kinds(final_build_ir), candidate_set,
+            build_ir_verification=final_build_ir_ref,
+        )
     try:
         project_final = _record_host_project_final(
             ledger=ledger, out_root=paths["out_root"],
@@ -208,6 +243,10 @@ def resume_project_completion(
         "candidate_set_sha256": candidate_set,
         "project_final_record_id": project_final["record_id"],
         "project_final_evidence": project_final["evidence"],
+        "build_ir_verifications": {
+            "before_candidate_execution": initial_build_ir_ref,
+            "before_project_final": final_build_ir_ref,
+        },
         "semantic_gate": True,
     }
     reference = write_json_artifact(
@@ -254,47 +293,6 @@ def _semantic_runner(family: str) -> Any:
         "unsafe-alias": run_unsafe_alias_candidate,
         "abi-layout": run_abi_layout_candidate,
     }[family]
-
-
-def _completion_paths(ledger: ProjectLedger, harness_root: Path) -> dict[str, Any]:
-    root = harness_root.resolve(strict=True)
-    database = ledger.path.resolve()
-    try:
-        relative = database.relative_to(root)
-    except ValueError as error:
-        raise LedgerError("completion ledger is outside the harness repository") from error
-    if database.name != "project-migration.sqlite3" or database.parent.name != "state":
-        raise LedgerError("completion requires the fixed project migration ledger path")
-    out_root = database.parent.parent
-    out_rel = out_root.relative_to(root).as_posix()
-    return {
-        "out_root": out_root,
-        "out_root_rel": out_rel,
-        "quarantine_root": out_root / "completion" / "quarantine",
-        "runtime_root": out_root / "completion" / "runtime",
-        "project_root": managed_project_root(out_root),
-    }
-
-
-def _result(
-    paths: dict[str, Any], run_id: str, status: str, stage: str,
-    blockers: list[str], candidate_set: str | None = None, **details: Any,
-) -> dict[str, Any]:
-    payload = {
-        "schema_version": 1,
-        "status": status,
-        "run_id": run_id,
-        "stage": stage,
-        "candidate_set_sha256": candidate_set,
-        "blockers": blockers[:64],
-        "semantic_gate": False,
-        **details,
-    }
-    payload["checkpoint_sha256"] = content_sha256(payload)
-    write_json_artifact(
-        paths["out_root"], "completion/coordinator-state.json", payload,
-    )
-    return payload
 
 
 __all__ = ["SEMANTIC_RUNNERS", "resume_project_completion"]

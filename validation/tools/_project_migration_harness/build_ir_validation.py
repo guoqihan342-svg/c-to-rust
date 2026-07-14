@@ -1,26 +1,27 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-import hashlib
 import json
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
-from .artifacts import canonical_json_bytes
-from .build_facts import is_linklike
 from .build_ir import (
     BUILD_IR_EXTRACTOR, BUILD_IR_KIND, BUILD_IR_SCHEMA_VERSION,
     canonical_build_ir_bytes, is_sha256,
     validate_artifact_reference, validate_materialized_binding,
 )
+from .build_ir_validation_io import (
+    MAX_BUILD_IR_ARTIFACT_BYTES, attachments, read_bound,
+    repository_bindings, strict_object,
+)
 from .build_ir_reopen import (
     accepted_provenance_role, accepted_raw_roles, reproject_bound_build_ir,
 )
+from .build_ir_host_toolchains import validate_host_bound_toolchains
+from .build_ir_toolchain_validation import validate_toolchain_references
 from .build_ir_projection import target_closure
+from .c_toolchain_schema import C_TOOLCHAIN_RAW_ROLE
 from .closure_paths import verify_repository_artifact
-
-
-MAX_BUILD_IR_ARTIFACT_BYTES = 64 * 1024 * 1024
 TOP_LEVEL_KEYS = {
     "abi_facts", "artifact_kind", "boundaries", "build_metadata", "claim_boundary",
     "external_dependencies", "extractor", "generated_inputs", "raw_fact_refs",
@@ -31,7 +32,6 @@ TOP_LEVEL_KEYS = {
 
 class BuildIRValidationError(ValueError):
     pass
-
 def verify_build_ir_artifact(
     repo_root: str | Path,
     artifact_root: str | Path,
@@ -42,17 +42,17 @@ def verify_build_ir_artifact(
     verified_bindings = 0
     try:
         artifact_base = Path(artifact_root).resolve(strict=True)
-        data = _read_bound(artifact_base, reference, "build_ir")
-        payload = _strict_object(data, "build_ir")
+        data = read_bound(artifact_base, reference, "build_ir")
+        payload = strict_object(data, "build_ir")
         if canonical_build_ir_bytes(payload) != data:
             raise BuildIRValidationError("build_ir_not_canonical")
         validate_build_ir(payload)
-        attachments = _attachments(artifact_base, payload["raw_fact_refs"])
-        recomputed = reproject_bound_build_ir(repo_root, payload, attachments)
+        bound = attachments(artifact_base, payload["raw_fact_refs"])
+        recomputed = reproject_bound_build_ir(repo_root, payload, bound)
         if recomputed != payload:
             raise BuildIRValidationError("build_ir_projection_drift")
         seen: dict[tuple[str, str], dict[str, Any]] = {}
-        for binding in _repository_bindings(payload):
+        for binding in repository_bindings(payload):
             if not binding["materialized"]:
                 continue
             identity = (binding["path"], binding["kind"])
@@ -74,10 +74,12 @@ def verify_build_ir_artifact(
         "status": "verified" if not blockers else "blocked",
         "build_ir_sha256": reference.get("sha256"),
         "semantic_sha256": payload.get("semantic_sha256") if payload else None,
+        "toolchain_profile": payload.get("claim_boundary", {}).get(
+            "toolchain_profile",
+        ) if payload else None,
         "verified_binding_count": verified_bindings,
         "blockers": blockers,
     }
-
 def validate_build_ir(value: Mapping[str, Any]) -> None:
     if set(value) != TOP_LEVEL_KEYS:
         raise BuildIRValidationError("build_ir_top_level_schema_invalid")
@@ -89,7 +91,26 @@ def validate_build_ir(value: Mapping[str, Any]) -> None:
         raise BuildIRValidationError("build_ir_extractor_invalid")
     if value.get("status") not in {"ready", "ready_with_boundaries"}:
         raise BuildIRValidationError("build_ir_status_invalid")
-    _validate_raw_refs(value.get("raw_fact_refs"))
+    claim_boundary = _object(
+        value.get("claim_boundary"), "build_ir_claim_boundary_invalid",
+    )
+    numerator = claim_boundary.get("translation_coverage_numerator")
+    if (
+        claim_boundary.get("semantic_gate") is not False
+        or isinstance(numerator, bool)
+        or numerator != 0
+    ):
+        raise BuildIRValidationError("build_ir_claim_boundary_invalid")
+    raw_roles = _validate_raw_refs(value.get("raw_fact_refs"))
+    host_bound = C_TOOLCHAIN_RAW_ROLE in raw_roles
+    if claim_boundary.get("host_toolchain_bound", False) is not host_bound:
+        raise BuildIRValidationError("build_ir_claim_boundary_invalid")
+    toolchain_profile = claim_boundary.get("toolchain_profile")
+    if host_bound:
+        if toolchain_profile not in {"competition", "development"}:
+            raise BuildIRValidationError("build_ir_claim_boundary_invalid")
+    elif toolchain_profile is not None:
+        raise BuildIRValidationError("build_ir_claim_boundary_invalid")
     arrays = {
         key: _objects(value.get(key), f"build_ir_{key}_invalid")
         for key in (
@@ -121,19 +142,37 @@ def validate_build_ir(value: Mapping[str, Any]) -> None:
     _validate_targets(targets, set(target_ids))
     if value.get("target_closure") != target_closure(targets):
         raise BuildIRValidationError("build_ir_target_closure_invalid")
-    for key, identifier, code in (
-        ("toolchains", "toolchain_id", "build_ir_toolchain"),
-        ("external_dependencies", "dependency_id", "build_ir_external_dependency"),
-    ):
-        _ordered_ids(arrays[key], identifier, code)
+    toolchain_ids = _ordered_ids(
+        arrays["toolchains"], "toolchain_id", "build_ir_toolchain",
+    )
+    if host_bound:
+        try:
+            validate_host_bound_toolchains(arrays["toolchains"])
+        except ValueError as error:
+            raise BuildIRValidationError(str(error)) from error
+        if {item.get("profile") for item in arrays["toolchains"]} != {
+            toolchain_profile,
+        }:
+            raise BuildIRValidationError("build_ir_host_toolchain_profile_invalid")
+    _ordered_ids(
+        arrays["external_dependencies"], "dependency_id",
+        "build_ir_external_dependency",
+    )
     abi = arrays["abi_facts"]
     if [item.get("unit_id") for item in abi] != unit_ids:
         raise BuildIRValidationError("build_ir_abi_unit_order_invalid")
+    try:
+        validate_toolchain_references(
+            units, targets, abi, toolchain_ids, require_target_refs=host_bound,
+        )
+    except ValueError as error:
+        raise BuildIRValidationError(str(error)) from error
     for item in [*value["toolchains"], *value["external_dependencies"], *abi]:
         _require_provenance(item)
     if not isinstance(value.get("boundaries"), list):
         raise BuildIRValidationError("build_ir_boundaries_invalid")
     canonical_build_ir_bytes(value)
+
 
 def _validate_unit(unit: Mapping[str, Any]) -> None:
     for key in ("unit_id", "working_directory", "compiler", "language", "toolchain_id"):
@@ -189,68 +228,14 @@ def _validate_targets(targets: list[Mapping[str, Any]], identifiers: set[str]) -
         if not _strings(target.get("ordered_link_arguments")):
             raise BuildIRValidationError("build_ir_link_arguments_invalid")
 
-def _validate_raw_refs(value: Any) -> None:
+def _validate_raw_refs(value: Any) -> list[Any]:
     refs = _objects(value, "build_ir_raw_fact_refs_invalid")
     roles = [item.get("role") for item in refs]
     if not accepted_raw_roles(roles):
         raise BuildIRValidationError("build_ir_raw_fact_refs_invalid")
     for item in refs:
         validate_artifact_reference(item, "build_ir_raw_fact_ref_invalid")
-
-def _attachments(root: Path, refs: list[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
-    result = {}
-    for reference in refs:
-        role = str(reference["role"])
-        result[role] = _strict_object(_read_bound(root, reference, role), role)
-    return result
-
-def _repository_bindings(value: Mapping[str, Any]) -> list[dict[str, Any]]:
-    result = [*value["build_metadata"], *value["source_inputs"]]
-    for item in value["generated_inputs"]:
-        result.append(item["binding"])
-    for unit in value["translation_units"]:
-        result.extend([unit["source"], unit["output"]])
-        result.extend(unit["compile_arguments"]["response_files"])
-    for target in value["targets"]:
-        result.extend(target["outputs"])
-        result.extend(item["binding"] for item in target["ordered_inputs"])
-    return result
-
-def _read_bound(root: Path, reference: Mapping[str, Any], label: str) -> bytes:
-    validate_artifact_reference(reference, f"{label}_reference_invalid")
-    relative = str(reference["path"])
-    path = PurePosixPath(relative)
-    current = root
-    for part in path.parts:
-        current /= part
-        if current.exists() and is_linklike(current):
-            raise BuildIRValidationError(f"{label}_linked_path")
-    resolved = current.resolve(strict=True)
-    try:
-        resolved.relative_to(root)
-    except ValueError as error:
-        raise BuildIRValidationError(f"{label}_path_escape") from error
-    if resolved.stat().st_size != reference["size_bytes"]:
-        raise BuildIRValidationError(f"{label}_size_drift")
-    if resolved.stat().st_size > MAX_BUILD_IR_ARTIFACT_BYTES:
-        raise BuildIRValidationError(f"{label}_size_limit_exceeded")
-    data = resolved.read_bytes()
-    if hashlib.sha256(data).hexdigest() != reference["sha256"]:
-        raise BuildIRValidationError(f"{label}_sha256_drift")
-    return data
-
-def _strict_object(data: bytes, label: str) -> dict[str, Any]:
-    def pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
-        result = {}
-        for key, value in items:
-            if key in result:
-                raise BuildIRValidationError(f"{label}_duplicate_key")
-            result[key] = value
-        return result
-    value = json.loads(data.decode("utf-8"), object_pairs_hook=pairs)
-    if not isinstance(value, dict) or canonical_json_bytes(value) != data:
-        raise BuildIRValidationError(f"{label}_not_canonical")
-    return value
+    return roles
 
 def _validate_binding_order(values: list[Mapping[str, Any]], code: str) -> None:
     for value in values:

@@ -111,6 +111,15 @@ class MakeDryRunParserTests(unittest.TestCase):
             parsed["raw_stdout"]["sha256"],
         )
 
+    def test_preserves_absolute_tool_selection_without_executing_it(self) -> None:
+        tool = "C:/toolchains/clang"
+        parsed = parse_make_dry_run_stdout(
+            f"{tool} -c {self.source} -o {self.object}\n"
+        )
+
+        self.assertEqual(tool, parsed["commands"][0]["tool"])
+        self.assertEqual(tool, parsed["commands"][0]["argv"][0])
+
     def test_report_is_versioned_canonical_and_claims_no_semantics(self) -> None:
         report = self.report()
         encoded = canonical_make_dry_run_report_bytes(report)

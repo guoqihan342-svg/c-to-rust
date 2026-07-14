@@ -16,6 +16,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     commands = parser.add_subparsers(dest="command", required=True)
     plan = commands.add_parser("plan")
     plan.add_argument("--repo-root", type=Path, required=True)
+    plan.add_argument(
+        "--profile", choices=("development", "competition"),
+        default="competition",
+    )
     plan.add_argument("--compile-database", type=Path)
     plan.add_argument("--make-report", type=Path)
     plan.add_argument("--make-report-sha256")
@@ -135,6 +139,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     complete = commands.add_parser("complete")
     complete.add_argument("--db", type=Path, required=True)
     complete.add_argument("--run-id", required=True)
+    complete.add_argument("--repo-root", type=Path)
     complete.add_argument("--logical-model", default="GLM-5.1")
     complete.add_argument("--resolved-model", default="zai/glm-5.1")
     complete.add_argument("--timeout-seconds", type=int, default=300)

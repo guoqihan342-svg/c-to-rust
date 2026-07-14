@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import re
-import shlex
 from pathlib import Path
 from typing import Any
 
-from .build_facts import compiler_name, resolve_repository_path
-from .archive_closure import is_archiver_command
+from .build_facts import resolve_repository_path
 from .closure_paths import bind_repository_artifact, path_error_blocker
-from .compile_security import SUPPORTED_COMPILER
 from .ninja_syntax import (
     expand_ninja,
     logical_lines,
@@ -17,6 +14,7 @@ from .ninja_syntax import (
     unescaped_colon,
 )
 from .ninja_scope import NinjaScope
+from .ninja_link_command import parse_ninja_link_command
 
 
 MAX_NINJA_FILES = 64
@@ -220,7 +218,7 @@ def _commands(state: dict[str, Any]) -> list[dict[str, Any]]:
             command = expand_ninja(str(rule["command"]), values)
             if len(command.encode("utf-8")) > MAX_EXPANDED_COMMAND:
                 raise ValueError("ninja_command_size_limit_exceeded")
-            argv = _link_segment(shlex.split(command, posix=True))
+            argv, ranlib_argvs = parse_ninja_link_command(command)
         except (UnicodeError, ValueError):
             state["blockers"].append({
                 "kind": "ninja_command_parse_invalid", "path": edge["fact_path"],
@@ -233,39 +231,11 @@ def _commands(state: dict[str, Any]) -> list[dict[str, Any]]:
             break
         result.append({
             "argv": argv,
+            "ranlib_argvs": ranlib_argvs,
             "base": edge["base"],
             "fact_path": edge["fact_path"],
         })
     return result
-
-
-def _link_segment(argv: list[str]) -> list[str] | None:
-    segments: list[list[str]] = [[]]
-    for value in argv:
-        if value == "&&":
-            segments.append([])
-        elif value in {";", "|", "||", ">", "<"}:
-            raise ValueError("ninja_shell_operator_unsupported")
-        else:
-            segments[-1].append(value)
-    matches = [
-        part for part in segments
-        if part
-        and (
-            is_archiver_command(part)
-            or (
-                SUPPORTED_COMPILER.fullmatch(compiler_name(part[0])) is not None
-                and "-c" not in part
-                and any(
-                    item == "-o" or item.startswith(("-o", "/OUT:"))
-                    for item in part[1:]
-                )
-            )
-        )
-    ]
-    if len(matches) > 1:
-        raise ValueError("ninja_link_command_ambiguous")
-    return matches[0] if matches else None
 
 
 def _report(
