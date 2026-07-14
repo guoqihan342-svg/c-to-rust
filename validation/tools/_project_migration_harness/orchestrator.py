@@ -5,15 +5,15 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .artifacts import checked_relative_path, content_sha256, write_json_artifact
+from .build_adapter import (
+    BuildInputSelectionLike, materialize_selected_build_ir_stage,
+)
 from .build_ir import translation_units_for_index
 from .build_ir_validation import verify_build_ir_artifact
 from .c_index import index_translation_units
 from .context_pages import build_context_pages
 from .discovery import discover_project
 from .ledger import ProjectLedger, SCHEMA_VERSION as LEDGER_SCHEMA_VERSION
-from .make_build_ir_adapter import (
-    MakeReportSelection, materialize_selected_build_ir_stage,
-)
 from .migration_graph import build_migration_graph
 from .orchestrator_context import ContextPortfolioError, build_context_portfolio
 from .scheduler import schedule_portfolio
@@ -26,7 +26,7 @@ def plan_project(
     harness_root: str | Path,
     out_root: str,
     compile_database: str | Path | None = None,
-    make_report: MakeReportSelection | None = None,
+    make_report: BuildInputSelectionLike | None = None,
     run_id: str | None = None,
     source_commit: str = "unversioned",
     max_units: int = 10_000,

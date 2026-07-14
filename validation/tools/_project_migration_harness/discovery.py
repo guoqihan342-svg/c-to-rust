@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .build_adapter import BuildInputSelectionLike, discover_selected_project
 from .build_facts import (
     detect_build_system_facts,
     detect_generated_build_facts,
@@ -12,7 +13,6 @@ from .compile_database import parse_compile_entry
 from .discovery_database import load_compile_database, select_compile_database
 from .discovery_variants import finalize_variants
 from .generated_closure import discover_generated_build_closure
-from .make_build_ir_adapter import MakeReportSelection, discover_make_project
 
 
 CLAIM_BOUNDARY = {
@@ -32,7 +32,7 @@ def discover_project(
     repo_root: str | Path,
     compile_database: str | Path | None = None,
     max_units: int = 10_000,
-    make_report: MakeReportSelection | None = None,
+    make_report: BuildInputSelectionLike | None = None,
 ) -> dict[str, Any]:
     root = Path(repo_root)
     empty_facts = {
@@ -48,7 +48,16 @@ def discover_project(
                 empty_facts, {"status": "selection-conflict"}, [], [],
                 ["build_input_selection_conflict"],
             )
-        return discover_make_project(root, make_report, max_units)
+        try:
+            return discover_selected_project(root, make_report, max_units)
+        except (TypeError, ValueError):
+            return report(
+                empty_facts,
+                {"status": "unresolved"},
+                [],
+                [],
+                ["build_input_selection_invalid"],
+            )
     if isinstance(max_units, bool) or not isinstance(max_units, int) or max_units < 1:
         return report(empty_facts, {"status": "unresolved"}, [], [], ["max_units_invalid"])
     if not root.exists() or not root.is_dir():

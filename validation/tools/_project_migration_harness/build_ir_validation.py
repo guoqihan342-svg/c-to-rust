@@ -13,11 +13,11 @@ from .build_ir import (
     canonical_build_ir_bytes, is_sha256,
     validate_artifact_reference, validate_materialized_binding,
 )
-from .build_ir_projection import target_closure
-from .closure_paths import verify_repository_artifact
-from .make_build_ir_reopen import (
+from .build_ir_reopen import (
     accepted_provenance_role, accepted_raw_roles, reproject_bound_build_ir,
 )
+from .build_ir_projection import target_closure
+from .closure_paths import verify_repository_artifact
 
 
 MAX_BUILD_IR_ARTIFACT_BYTES = 64 * 1024 * 1024

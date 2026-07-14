@@ -5,8 +5,8 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any, Sequence
 
+from .build_adapter import BuildInputSelection, MAKE_REPORT_INPUT_KIND
 from .ledger_schema import SCHEMA_VERSION as LEDGER_SCHEMA_VERSION
-from .make_build_ir_adapter import MakeReportSelection
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -158,7 +158,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                     "--make-report-size-bytes are exclusive with --compile-database"
                 )
             try:
-                parsed.make_report = MakeReportSelection(*make_values)
+                parsed.make_report = BuildInputSelection(
+                    MAKE_REPORT_INPUT_KIND, *make_values,
+                )
             except ValueError as error:
                 parser.error(str(error))
     return parsed

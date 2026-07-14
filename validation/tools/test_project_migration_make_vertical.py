@@ -10,12 +10,15 @@ from unittest.mock import patch
 
 import validation.tools.project_migration_harness as project_migration_harness
 from validation.tools._project_migration_harness.artifacts import write_json_artifact
+from validation.tools._project_migration_harness.build_adapter import (
+    BuildInputSelection, MAKE_REPORT_INPUT_KIND,
+)
 from validation.tools._project_migration_harness.build_ir_validation import (
     verify_build_ir_artifact,
 )
 from validation.tools._project_migration_harness.discovery import discover_project
 from validation.tools._project_migration_harness.make_build_ir_adapter import (
-    MakeReportSelection, materialize_selected_build_ir_stage,
+    materialize_selected_build_ir_stage,
 )
 from validation.tools._project_migration_harness.orchestrator import plan_project
 from validation.tools._project_migration_harness.project_migration_cli import parse_args
@@ -226,7 +229,21 @@ class MakeVerticalClosureTests(unittest.TestCase):
             "--make-report-size-bytes", str(bundle["selection"].size_bytes),
         ])
         self.assertIsNone(parsed.compile_database)
-        self.assertIsInstance(parsed.make_report, MakeReportSelection)
+        self.assertIsInstance(parsed.make_report, BuildInputSelection)
+        self.assertEqual(MAKE_REPORT_INPUT_KIND, parsed.make_report.kind)
+        self.assertEqual(bundle["selection"].path, parsed.make_report.path)
+        self.assertEqual(bundle["selection"].sha256, parsed.make_report.sha256)
+        self.assertEqual(
+            bundle["selection"].size_bytes, parsed.make_report.size_bytes,
+        )
+        self.assertEqual(
+            {
+                "path": bundle["selection"].path,
+                "sha256": bundle["selection"].sha256,
+                "size_bytes": bundle["selection"].size_bytes,
+            },
+            parsed.make_report.binding,
+        )
         blocked = plan_project(
             bundle["root"], harness_root=bundle["harness"],
             out_root="target/conflict",
