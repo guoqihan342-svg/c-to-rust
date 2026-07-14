@@ -12,7 +12,7 @@
   "generated_draft": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
     "sha256": "70a15d513d2df753b483ef42961e97bd22b465e30c15e36d40b368f969760fea",
-    "status": "accepted_after_gates"
+    "status": "blocked"
   },
   "generated_draft_semantic_pass": false,
   "replay": {
@@ -21,7 +21,7 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-      "slice_spec_sha256=ed62c5026b7d6af134271d9aafa4e2b6e7a4056fb61c4ced149b5aff869a17a4",
+      "slice_spec_sha256=e55a5b57101a3e521648a4263782426a482c22180e7a57e705aade30be2d4ba3",
       "fixture_hash=real-fdb-calc-crc32-fixture",
       "build_profile_hash=4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
       "translator_version=0.1.0",
@@ -39,7 +39,7 @@
     "evidence_links": {
       "c_oracle": {
         "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
-        "sha256": "39cff16e69ca769ca956972c41224e55ce04b4031c1f1e1471a430ee59ff4c61",
+        "sha256": "73c907588dc8eb816bb74b8710ae8816aeab6f66d11a2e9f166af68f2d084962",
         "status": "passed"
       },
       "negative_diff": {
@@ -49,7 +49,7 @@
       },
       "rust_draft": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
-        "status": "accepted_after_gates"
+        "status": "blocked"
       },
       "rust_report": {
         "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json",
@@ -65,36 +65,37 @@
     "fixture": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
     "generated_draft_acceptance": {
       "accepted_evidence_binding": {
-        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "binding_boundary": "Accepted semantics bind independent oracle/replay/diff evidence and stable generated-draft unsafe gates; final accepted reports are downstream and cannot hash-bind themselves.",
         "fixture_path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
         "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
         "generated_draft_semantic_pass": false,
         "path_sha256": {
-          "c_oracle": "39cff16e69ca769ca956972c41224e55ce04b4031c1f1e1471a430ee59ff4c61",
+          "c_oracle": "73c907588dc8eb816bb74b8710ae8816aeab6f66d11a2e9f166af68f2d084962",
           "diff": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
           "negative_diff": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
           "rust_report": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
-          "unsafe_ledger": "f1f397564355a12b2b9d1fbc585ef98880ef3549fe8de09561be66757ca0b33b",
-          "unsafe_scan": "3fd4c1eb4a540b5cb2db1967774f0c62f3521d000a061b0d18d959f01a17733d"
+          "unsafe_ledger": "6e1985481a28a48e15882b9dcc944c4f9083856b69d295d827046395455ed3b1",
+          "unsafe_scan": "5851c24aef1eb3db1865350244d24b446b03a128bfdcaa0a28a5548f9663e32a"
         },
         "paths": {
           "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
           "diff": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json",
           "negative_diff": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json",
           "rust_report": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json",
-          "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
-          "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json"
+          "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-generated-draft-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-generated-draft-unsafe-scan.json"
         },
         "slice_id": "real-fdb-calc-crc32",
         "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
         "status": "accepted",
         "target_id": "flashdb",
-        "toolchain_status": "C_ORACLE_GENERATED"
+        "toolchain_status": "C_ORACLE_GENERATED",
+        "unsafe_gate_source": "generated_draft_unsafe_gates"
       },
       "accepted_evidence_refs": {
         "c_oracle": {
           "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
-          "sha256": "39cff16e69ca769ca956972c41224e55ce04b4031c1f1e1471a430ee59ff4c61",
+          "sha256": "73c907588dc8eb816bb74b8710ae8816aeab6f66d11a2e9f166af68f2d084962",
           "status": "passed"
         },
         "negative_diff": {
@@ -113,59 +114,70 @@
           "status": "passed"
         },
         "unsafe_ledger": {
-          "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-generated-draft-unsafe-ledger.json",
+          "sha256": "6e1985481a28a48e15882b9dcc944c4f9083856b69d295d827046395455ed3b1",
           "status": "passed"
         },
         "unsafe_scan": {
-          "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json",
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-generated-draft-unsafe-scan.json",
+          "sha256": "5851c24aef1eb3db1865350244d24b446b03a128bfdcaa0a28a5548f9663e32a",
           "status": "passed"
         }
       },
-      "blocked_reasons": [],
+      "blocked_reasons": [
+        "route_refused_candidate_generation"
+      ],
       "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
-      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "claim_source": "blocked_generated_draft_acceptance",
       "generated_draft_replay_pass": true,
-      "generated_draft_semantic_pass": true,
+      "generated_draft_semantic_pass": false,
       "replay_execution": {
-        "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-j77_qcut/generated_replay.rs -o /tmp/c2r-generated-replay-j77_qcut/generated_replay.exe",
+        "compile_command": "rustc --edition=2021 --test --error-format=json --json=diagnostic-short <generated-replay.rs> -o <generated-replay-executable>",
         "compile_returncode": 0,
         "phase": "run",
-        "run_command": "/tmp/c2r-generated-replay-j77_qcut/generated_replay.exe --nocapture",
+        "run_command": "<generated-replay-executable> --nocapture",
         "run_returncode": 0,
         "status": "passed",
         "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/generated-rust-replay.stderr.log",
         "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/generated-rust-replay.stdout.log"
       },
       "rust_check": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/rust-check.json",
         "status": "passed"
       },
       "rust_draft": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
         "sha256": "70a15d513d2df753b483ef42961e97bd22b465e30c15e36d40b368f969760fea",
-        "status": "accepted_after_gates"
+        "status": "blocked"
       },
       "schema_version": 1,
+      "selected_candidate_id": "primary:clang-lowered-typed-ir",
       "slice_id": "real-fdb-calc-crc32",
       "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-      "status": "passed",
-      "target_id": "flashdb"
+      "status": "blocked",
+      "target_id": "flashdb",
+      "unsafe_gate_source": "generated_draft_unsafe_gates"
     },
     "generated_draft_replay_pass": true,
-    "generated_draft_semantic_pass": true,
-    "known_gaps": [],
+    "generated_draft_semantic_pass": false,
+    "known_gaps": [
+      "Generated replay draft is not itself the accepted replay implementation.",
+      "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
+    ],
     "level": "L3",
     "replay_execution": {
-      "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-j77_qcut/generated_replay.rs -o /tmp/c2r-generated-replay-j77_qcut/generated_replay.exe",
+      "compile_command": "rustc --edition=2021 --test --error-format=json --json=diagnostic-short <generated-replay.rs> -o <generated-replay-executable>",
       "compile_returncode": 0,
       "phase": "run",
-      "run_command": "/tmp/c2r-generated-replay-j77_qcut/generated_replay.exe --nocapture",
+      "run_command": "<generated-replay-executable> --nocapture",
       "run_returncode": 0,
       "status": "passed",
       "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/generated-rust-replay.stderr.log",
       "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/generated-rust-replay.stdout.log"
     },
-    "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+    "repo_commit": "51a2fac608b33ec5438a42f3001b18936473e1a0",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml real_fdb_calc_crc32",
@@ -201,7 +213,7 @@
       "oracle_reports": [
         {
           "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
-          "sha256": "39cff16e69ca769ca956972c41224e55ce04b4031c1f1e1471a430ee59ff4c61",
+          "sha256": "73c907588dc8eb816bb74b8710ae8816aeab6f66d11a2e9f166af68f2d084962",
           "status": "passed"
         },
         {
@@ -210,7 +222,7 @@
           "status": "passed"
         }
       ],
-      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; this exact generated replay draft is accepted by generated_draft_acceptance."
+      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
     },
     "status": "recorded",
     "target_id": "flashdb",
@@ -224,7 +236,7 @@
         "evidence": [
           {
             "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
-            "sha256": "39cff16e69ca769ca956972c41224e55ce04b4031c1f1e1471a430ee59ff4c61",
+            "sha256": "73c907588dc8eb816bb74b8710ae8816aeab6f66d11a2e9f166af68f2d084962",
             "status": "passed"
           },
           {

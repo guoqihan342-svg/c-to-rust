@@ -18,7 +18,28 @@
         }
       ],
       "real_c_slice": "real-fdb-calc-crc32",
-      "semantic_pass": true
+      "semantic_pass": false
+    },
+    {
+      "blocked_callees": [],
+      "construct_id": "c_oracle_harness_matched_not_oracle",
+      "delta_id": "cap-real-fdb-calc-crc32-c_oracle_harness_matched_not_oracle",
+      "evidence_refs": [
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-status.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c"
+      ],
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_verification",
+      "negative_coverage": [
+        {
+          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_capability_ledger_records_c_oracle_matched_not_oracle_without_semantic_claim",
+          "kind": "c_oracle_diagnostic_regression"
+        }
+      ],
+      "real_c_slice": "real-fdb-calc-crc32",
+      "semantic_pass": false
     }
   ],
   "governance_delta": [
@@ -29,6 +50,18 @@
       "evidence_refs": [
         "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json"
+      ],
+      "kind": "evidence_contract"
+    },
+    {
+      "bound_to": "P0 capability delta; governance records that the C harness executed and matched fixture markers without semantic acceptance.",
+      "construct_id": "c_oracle_harness_matched_not_oracle",
+      "delta_id": "gov-real-fdb-calc-crc32-c_oracle_harness_matched_not_oracle-evidence",
+      "evidence_refs": [
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-status.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c"
       ],
       "kind": "evidence_contract"
     }
@@ -51,6 +84,7 @@
   "status": "recorded",
   "target_id": "flashdb",
   "verification_commands": [
-    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation"
+    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation",
+    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_capability_ledger_records_c_oracle_matched_not_oracle_without_semantic_claim"
   ]
 }

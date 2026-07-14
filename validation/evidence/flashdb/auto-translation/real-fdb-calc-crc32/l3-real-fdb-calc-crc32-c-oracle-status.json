@@ -1,7 +1,7 @@
 {
   "accepted_oracle": {
     "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
-    "sha256": "39cff16e69ca769ca956972c41224e55ce04b4031c1f1e1471a430ee59ff4c61",
+    "sha256": "73c907588dc8eb816bb74b8710ae8816aeab6f66d11a2e9f166af68f2d084962",
     "status": "passed"
   },
   "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
@@ -57,14 +57,84 @@
       "-o",
       "l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
     ],
-    "attempted": false,
-    "diagnostics": [
-      "C oracle compile execution skipped by --skip-c-oracle."
+    "attempted": true,
+    "compiler_candidates": [
+      "cc",
+      "gcc",
+      "clang"
     ],
+    "compiler_name": "cc",
+    "compiler_path": "/usr/bin/cc",
+    "diagnostics": [
+      "C oracle compile command succeeded, but execution/diff gates are still required."
+    ],
+    "execution_argv": [
+      "/usr/bin/cc",
+      "-std=c99",
+      "-I/tmp/c2r-competition-rehearsal-20260714-07b53e48/sources/FlashDB/inc",
+      "-I/tmp/c2r-competition-rehearsal-20260714-07b53e48/sources/FlashDB/tests",
+      "/tmp/c2r-competition-rehearsal-20260714-07b53e48/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
+      "/tmp/c2r-competition-rehearsal-20260714-07b53e48/sources/FlashDB/src/fdb_utils.c",
+      "/tmp/c2r-competition-rehearsal-20260714-07b53e48/sources/FlashDB/src/fdb_file.c",
+      "-o",
+      "/tmp/c2r-competition-rehearsal-20260714-07b53e48/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+    ],
+    "harness_execution": {
+      "argv": [
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+      ],
+      "attempted": true,
+      "diagnostics": [
+        "C oracle harness executed, but execution output has not passed oracle diff gates."
+      ],
+      "executable_path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe",
+      "output_gate": {
+        "boundary": "Strict records prove execution of regenerated draft assertions only; accepted C/Rust diff gates remain required for semantic pass.",
+        "compared_fields": [
+          "return_code"
+        ],
+        "diagnostics": [
+          "C oracle strict output records matched exactly; semantic diff gates remain required."
+        ],
+        "expected_stdout_fragments": [
+          "C2R_C_ORACLE_JSON {\"case_id\":\"empty-crc-zero\",\"case_ordinal\":0,\"kind\":\"case_result\",\"outputs\":{\"return_code\":{\"encoding\":\"u32\",\"value\":\"0\"}},\"plan_sha256\":\"38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe\",\"schema_version\":1}",
+          "C2R_C_ORACLE_JSON {\"case_id\":\"ascii-123456789-crc-zero\",\"case_ordinal\":1,\"kind\":\"case_result\",\"outputs\":{\"return_code\":{\"encoding\":\"u32\",\"value\":\"3421780262\"}},\"plan_sha256\":\"38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe\",\"schema_version\":1}"
+        ],
+        "fixture_expected_output_status": "declared_not_executed",
+        "gate": "c_oracle_harness_output",
+        "invalid_protocol_records": [],
+        "matched_stdout_fragments": [
+          "C2R_C_ORACLE_JSON {\"case_id\":\"empty-crc-zero\",\"case_ordinal\":0,\"kind\":\"case_result\",\"outputs\":{\"return_code\":{\"encoding\":\"u32\",\"value\":\"0\"}},\"plan_sha256\":\"38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe\",\"schema_version\":1}",
+          "C2R_C_ORACLE_JSON {\"case_id\":\"ascii-123456789-crc-zero\",\"case_ordinal\":1,\"kind\":\"case_result\",\"outputs\":{\"return_code\":{\"encoding\":\"u32\",\"value\":\"3421780262\"}},\"plan_sha256\":\"38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe\",\"schema_version\":1}"
+        ],
+        "missing_stdout_fragments": [],
+        "observed_protocol_records": [
+          "C2R_C_ORACLE_JSON {\"case_id\":\"empty-crc-zero\",\"case_ordinal\":0,\"kind\":\"case_result\",\"outputs\":{\"return_code\":{\"encoding\":\"u32\",\"value\":\"0\"}},\"plan_sha256\":\"38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe\",\"schema_version\":1}",
+          "C2R_C_ORACLE_JSON {\"case_id\":\"ascii-123456789-crc-zero\",\"case_ordinal\":1,\"kind\":\"case_result\",\"outputs\":{\"return_code\":{\"encoding\":\"u32\",\"value\":\"3421780262\"}},\"plan_sha256\":\"38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe\",\"schema_version\":1}"
+        ],
+        "plan_sha256": "38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe",
+        "protocol": "c2r_c_oracle_json_v1",
+        "schema_version": 2,
+        "semantic_pass": false,
+        "status": "matched_not_oracle",
+        "unexpected_protocol_records": []
+      },
+      "returncode": 0,
+      "semantic_pass": false,
+      "status": "exited_zero_not_oracle",
+      "stderr": "",
+      "stdout": "oracle harness draft for fdb_calc_crc32\nfixture input: validation/l2_slices/fixtures/real-fdb-calc-crc32.json\nC2R_C_ORACLE_JSON {\"case_id\":\"empty-crc-zero\",\"case_ordinal\":0,\"kind\":\"case_result\",\"outputs\":{\"return_code\":{\"encoding\":\"u32\",\"value\":\"0\"}},\"plan_sha256\":\"38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe\",\"schema_version\":1}\nC2R_C_ORACLE_JSON {\"case_id\":\"ascii-123456789-crc-zero\",\"case_ordinal\":1,\"kind\":\"case_result\",\"outputs\":{\"return_code\":{\"encoding\":\"u32\",\"value\":\"3421780262\"}},\"plan_sha256\":\"38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe\",\"schema_version\":1}\n",
+      "timeout_seconds": 30,
+      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32"
+    },
+    "requested_compiler": "cc",
+    "returncode": 0,
     "semantic_pass": false,
-    "status": "skipped_by_flag",
-    "toolchain_adapter": "not_executed",
-    "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
+    "status": "compile_succeeded_not_oracle",
+    "stderr": "",
+    "stdout": "",
+    "toolchain_adapter": "local",
+    "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
     "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32"
   },
   "fixture": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
@@ -129,6 +199,16 @@
     }
   ],
   "harness_contract": {
+    "c_oracle_call_plan": {
+      "case_count": 2,
+      "compared_fields": [
+        "return_code"
+      ],
+      "output_protocol": "c2r_c_oracle_json_v1",
+      "protocol_record_count": 2,
+      "replay_call_plan_sha256": "38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe",
+      "status": "generated"
+    },
     "fixture": {
       "behavior_fields": [
         "return_code"
@@ -169,6 +249,7 @@
       ],
       "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json"
     },
+    "fixture_external_stub": null,
     "function_prototype": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size);",
     "global_dependencies": [
       {
@@ -203,7 +284,7 @@
   "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
-    "sha256": "679817b06b6b91dbad29b121d3f57064ea9f8763b85c67a796e614a78ad66045",
+    "sha256": "aa8284c37f31262f45d7c129977f1b57c2a86c32af09b3b9519697c542ad9c21",
     "status": "draft"
   },
   "schema_version": 1,

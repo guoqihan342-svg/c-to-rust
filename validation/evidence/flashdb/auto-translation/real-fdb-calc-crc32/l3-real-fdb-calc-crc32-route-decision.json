@@ -1,5 +1,16 @@
 {
   "candidate_generation": {
+    "ai": {
+      "candidate_id": "opencode-ai:unavailable",
+      "kind": "opencode-ai",
+      "role": "ai_primary_rust_draft",
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-ai-candidate-manifest.json",
+        "status": "not_used"
+      },
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
@@ -22,6 +33,17 @@
     },
     "candidate_set": [
       {
+        "candidate_id": "opencode-ai:unavailable",
+        "kind": "opencode-ai",
+        "role": "ai_primary_rust_draft",
+        "semantic_pass": false,
+        "source_artifact": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-ai-candidate-manifest.json",
+          "status": "not_used"
+        },
+        "status": "not_used"
+      },
+      {
         "candidate_id": "primary:clang-lowered-typed-ir",
         "kind": "clang-lowered-typed-ir",
         "role": "primary_rust_draft",
@@ -33,6 +55,7 @@
         "kind": "typed-ir",
         "role": "typed_ir_candidate_signal",
         "rust_draft_generated": true,
+        "rust_draft_sha256": "70a15d513d2df753b483ef42961e97bd22b465e30c15e36d40b368f969760fea",
         "semantic_pass": false,
         "status": "generated"
       },
@@ -205,7 +228,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-        "sha256": "06dc0457c008f0bf4fe44a90da081806ab53f99d7805bda08f1ef7f1b2c82cf8",
+        "sha256": "d046fdf10d1561ac482b7e0c9aaf4ca3cdc1aeb2b2cc12f63ea395504e71ee8e",
         "status": "lowered"
       },
       "status": "generated",
@@ -279,6 +302,10 @@
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "source_artifacts": {
+    "ai_candidate_manifest": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-ai-candidate-manifest.json",
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
       "sha256": "a250dc2b948f6e075a39a08b9765ec69ed837f75aadef03e68e0dac131f0030a",
@@ -286,17 +313,17 @@
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-cfg.json",
-      "sha256": "72203180a0213afe82d7d9c8200ef889e659de35e0e92c07215df1dccd580964",
+      "sha256": "7a8f22cc23a8928b3c55a6773aae239b09ac2bb26274b2c8ee1e63c754d3ae07",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-      "sha256": "06dc0457c008f0bf4fe44a90da081806ab53f99d7805bda08f1ef7f1b2c82cf8",
+      "sha256": "d046fdf10d1561ac482b7e0c9aaf4ca3cdc1aeb2b2cc12f63ea395504e71ee8e",
       "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
-      "sha256": "ad6a4a1a0947fdab99cf32ad57588a59ff17d0aef1434c11bf51b483f8ce1ff4",
+      "sha256": "68495de734f6ed114fc9184c72efd733aa9c2ceddf1decce57269a8b7c78e61d",
       "status": "recorded"
     },
     "translation_plan": {
@@ -305,7 +332,7 @@
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-type-map.json",
-      "sha256": "ab263f4d99dc920dda45125874f990d4ff813bc7928ad9d4927a4d66edfebbaf",
+      "sha256": "7579f7b12fd1c6af59d3580a27e2e56b2f82fba0bbe5563ca3b826d0c164ce1c",
       "status": "recorded"
     }
   },

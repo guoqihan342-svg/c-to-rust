@@ -22,7 +22,7 @@
     },
     "c_oracle": {
       "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
-      "sha256": "39cff16e69ca769ca956972c41224e55ce04b4031c1f1e1471a430ee59ff4c61",
+      "sha256": "73c907588dc8eb816bb74b8710ae8816aeab6f66d11a2e9f166af68f2d084962",
       "status": "passed"
     },
     "c_replay_stderr": {
@@ -32,7 +32,7 @@
     },
     "c_replay_stdout": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-safety-c-replay-stdout.log",
-      "sha256": "b79e68ee566f181fb7f8eaca1b6c72ee147f141df908a2f9325169bc771332f1",
+      "sha256": "cd438fddebf572b745931820fa26b5ba11e2eeac644c0313266f81d78753cc56",
       "status": "passed"
     },
     "candidate": {
@@ -47,7 +47,7 @@
     },
     "repair_history": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-safety-repair-history.jsonl",
-      "sha256": "381842fba3fe0c28678b16806124220090da340aab9fe67a945c766d69e9bb0e",
+      "sha256": "2659357e320703714b46efb94317939d1e2aac9781bf924721995649a001ce0f",
       "status": "verified"
     },
     "replay_source": {
@@ -112,7 +112,7 @@
       },
       "c_replay_stdout": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-safety-c-replay-stdout.log",
-        "sha256": "b79e68ee566f181fb7f8eaca1b6c72ee147f141df908a2f9325169bc771332f1",
+        "sha256": "cd438fddebf572b745931820fa26b5ba11e2eeac644c0313266f81d78753cc56",
         "status": "passed"
       }
     },
@@ -121,7 +121,7 @@
       "fixture_markers_are_accepted_only_after_real_c_compile_and_execution": true
     },
     "compile": {
-      "actual_argv_sha256": "bea35d16f81a0409e23d22263fefdf2eb131ad16d6db757cc891949812251fc2",
+      "actual_argv_sha256": "3ce0f609bce96d7cf45382ac764511207efbc454d0870d701985a5b017d18be6",
       "attempted": true,
       "canonical_argv": [
         "cc",
@@ -134,15 +134,15 @@
         "-o",
         "c-oracle-harness.exe"
       ],
-      "executable_sha256": "9b374c7ba3f494131a178f9fbec647525383892fc3d22bf40c18d0372b4ea236",
+      "executable_sha256": "f0cd17e624d305b281a9851ce04ed9278eb72a76004fdda192a75f9fa1e9365b",
       "returncode": 0
     },
     "execution": {
-      "actual_argv_sha256": "557e9119931e8433f653c591651c5a5f96da36fd50da78ef5457151bd21c69a7",
+      "actual_argv_sha256": "f101903e36b8c54e40fa309398f473b22e5208c11674ce71ca6e85a7d735f5d0",
       "attempted": true,
       "matched_stdout_fragments": [
-        "fixture case empty-crc-zero return_code matched",
-        "fixture case ascii-123456789-crc-zero return_code matched"
+        "C2R_C_ORACLE_JSON {\"case_id\":\"empty-crc-zero\",\"case_ordinal\":0,\"kind\":\"case_result\",\"outputs\":{\"return_code\":{\"encoding\":\"u32\",\"value\":\"0\"}},\"plan_sha256\":\"38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe\",\"schema_version\":1}",
+        "C2R_C_ORACLE_JSON {\"case_id\":\"ascii-123456789-crc-zero\",\"case_ordinal\":1,\"kind\":\"case_result\",\"outputs\":{\"return_code\":{\"encoding\":\"u32\",\"value\":\"3421780262\"}},\"plan_sha256\":\"38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe\",\"schema_version\":1}"
       ],
       "missing_stdout_fragments": [],
       "returncode": 0
@@ -151,7 +151,7 @@
     "inputs": {
       "harness": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
-        "sha256": "679817b06b6b91dbad29b121d3f57064ea9f8763b85c67a796e614a78ad66045",
+        "sha256": "aa8284c37f31262f45d7c129977f1b57c2a86c32af09b3b9519697c542ad9c21",
         "status": "compiled"
       },
       "slice_spec": {
@@ -161,18 +161,20 @@
       },
       "source_files": [
         {
+          "crlf_sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc",
           "declared_hash_mode": "lf_stable",
           "declared_source_sha256": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0",
           "path": "sources/FlashDB/src/fdb_utils.c",
-          "raw_sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc",
+          "raw_sha256": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0",
           "sha256": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0",
           "status": "bound"
         },
         {
-          "declared_hash_mode": "raw_bytes_legacy",
+          "crlf_sha256": "c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d",
+          "declared_hash_mode": "crlf_raw_bytes_legacy",
           "declared_source_sha256": "c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d",
           "path": "sources/FlashDB/src/fdb_file.c",
-          "raw_sha256": "c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d",
+          "raw_sha256": "aa7b51d52f0c77d47b6396462e74dedc37f5fec1a569b37471d8cf08627d425f",
           "sha256": "aa7b51d52f0c77d47b6396462e74dedc37f5fec1a569b37471d8cf08627d425f",
           "status": "bound"
         }
@@ -181,7 +183,7 @@
     "semantic_pass": true,
     "status": "passed",
     "toolchain": {
-      "adapter": "wsl",
+      "adapter": "local",
       "compiler_name": "cc",
       "compiler_version": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
     }

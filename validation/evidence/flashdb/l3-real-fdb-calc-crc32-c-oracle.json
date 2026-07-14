@@ -23,9 +23,9 @@
   "provenance": {
     "compile_execution": {
       "semantic_pass": false,
-      "status": "skipped_by_flag",
-      "toolchain_adapter": "not_executed",
-      "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED"
+      "status": "compile_succeeded_not_oracle",
+      "toolchain_adapter": "local",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE"
     },
     "cycle_boundary": "This provenance intentionally omits the root c-oracle self hash; auto-translation evidence records the accepted c-oracle hash after regeneration.",
     "evidence_refs": {
@@ -56,7 +56,7 @@
     ],
     "harness_draft_ref": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
-      "sha256": "679817b06b6b91dbad29b121d3f57064ea9f8763b85c67a796e614a78ad66045",
+      "sha256": "aa8284c37f31262f45d7c129977f1b57c2a86c32af09b3b9519697c542ad9c21",
       "status": "draft"
     },
     "source_file_hashes": {

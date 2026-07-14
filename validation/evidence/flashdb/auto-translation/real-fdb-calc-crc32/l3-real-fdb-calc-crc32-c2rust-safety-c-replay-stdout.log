@@ -1,4 +1,4 @@
 oracle harness draft for fdb_calc_crc32
 fixture input: validation/l2_slices/fixtures/real-fdb-calc-crc32.json
-fixture case empty-crc-zero return_code matched
-fixture case ascii-123456789-crc-zero return_code matched
+C2R_C_ORACLE_JSON {"case_id":"empty-crc-zero","case_ordinal":0,"kind":"case_result","outputs":{"return_code":{"encoding":"u32","value":"0"}},"plan_sha256":"38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe","schema_version":1}
+C2R_C_ORACLE_JSON {"case_id":"ascii-123456789-crc-zero","case_ordinal":1,"kind":"case_result","outputs":{"return_code":{"encoding":"u32","value":"3421780262"}},"plan_sha256":"38096b4beab43f510e8a2cbdba15548b1fe72655ae9d261bf96783fb0cc859fe","schema_version":1}
