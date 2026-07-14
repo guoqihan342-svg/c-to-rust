@@ -13,7 +13,9 @@ from .controller_ingest import fail_running_worker_attempt, ingest_worker_result
 from .ledger import ProjectLedger
 from .opencode_project_worker import execute_opencode_project_worker
 from .opencode_environment import isolated_opencode_environment
-from .runtime_request_validation import bound_worker_request
+from .runtime_request_validation import (
+    bound_worker_request, cancel_invalid_bound_worker_request,
+)
 from .runtime_security import heartbeat_runner
 
 
@@ -23,9 +25,24 @@ def run_and_ingest_opencode_worker(
     logical_model: str = "GLM-5.1", resolved_model: str = "zai/glm-5.1",
     opencode_command: str = "opencode", timeout_seconds: int = 300,
 ) -> dict[str, Any]:
-    request, attempt = bound_worker_request(
-        request_reference, ledger=ledger, harness_root=harness_root
-    )
+    try:
+        request, attempt = bound_worker_request(
+            request_reference, ledger=ledger, harness_root=harness_root,
+        )
+    except Exception:
+        cancelled = cancel_invalid_bound_worker_request(
+            request_reference, ledger=ledger, harness_root=harness_root,
+        )
+        if cancelled is None:
+            raise
+        return {
+            "schema_version": 1,
+            "status": "prelaunch-blocked",
+            "run_id": str(cancelled["run_id"]),
+            "worker_id": str(cancelled["worker_id"]),
+            "attempt_consumed": False,
+            "semantic_gate": False,
+        }
     run_id = str(attempt["run_id"])
     worker_id = str(attempt["worker_id"])
     attempt_id = str(attempt["attempt_id"])

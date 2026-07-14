@@ -7,6 +7,9 @@ from typing import Any
 from .context_frontier_binding import validate_context_against_frontier
 from .context_frontier_cas import read_bound_frontier_cas_json
 from .context_frontier_overlay import resolve_effective_context
+from .context_frontier_refresh_reopen import (
+    reopen_context_frontier_overlay_dependencies,
+)
 
 
 def resolve_schedule_context_overlays(
@@ -33,6 +36,9 @@ def resolve_schedule_context_overlays(
             overlay = read_bound_frontier_cas_json(
                 harness_root, overlay_ref, "context-frontier-overlay",
             )
+            reopen_context_frontier_overlay_dependencies(
+                overlay, harness_root=harness_root,
+            )
             effective = resolve_effective_context(assignment, frontier, overlay)
         validate_context_against_frontier(frontier, effective)
         resolved.append({**dict(item), "effective_context": effective})
@@ -52,6 +58,9 @@ def resolve_request_effective_context(
     else:
         overlay = read_bound_frontier_cas_json(
             harness_root, overlay_ref, "context-frontier-overlay",
+        )
+        reopen_context_frontier_overlay_dependencies(
+            overlay, harness_root=harness_root,
         )
         effective = resolve_effective_context(assignment, frontier, overlay)
     validate_context_against_frontier(frontier, effective)

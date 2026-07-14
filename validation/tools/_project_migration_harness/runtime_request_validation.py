@@ -15,6 +15,55 @@ from .context_frontier_overlay_runtime import resolve_request_effective_context
 def bound_worker_request(
     reference: Mapping[str, Any], *, ledger: ProjectLedger, harness_root: Path,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    request, attempt = _bound_request_identity(
+        reference, ledger=ledger, harness_root=harness_root,
+    )
+    metadata = attempt["metadata"]
+    assignment_ref = {
+        "path": metadata.get("assignment_path"),
+        "sha256": metadata.get("assignment_sha256"),
+    }
+    try:
+        assignment = json.loads(
+            read_artifact_reference(harness_root, assignment_ref).decode("utf-8")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("worker assignment is unreadable") from error
+    if not isinstance(assignment, Mapping):
+        raise ValueError("worker assignment must be an object")
+    if content_sha256(assignment) != metadata.get("assignment_sha256"):
+        raise ValueError("worker assignment digest drifted")
+    _validate_request_fields(
+        request, assignment, attempt, harness_root=harness_root,
+    )
+    _validate_latest_coordinator_context(request, ledger)
+    return request, attempt
+
+
+def cancel_invalid_bound_worker_request(
+    reference: Mapping[str, Any], *, ledger: ProjectLedger, harness_root: Path,
+) -> dict[str, Any] | None:
+    try:
+        request, attempt = _bound_request_identity(
+            reference, ledger=ledger, harness_root=harness_root,
+        )
+        metadata = attempt.get("metadata")
+        if not isinstance(metadata, Mapping) or metadata.get("command_started") is True:
+            return None
+        execution = request["execution_binding"]
+        ledger.cancel_prelaunch_attempt(
+            attempt_id=str(execution["attempt_id"]),
+            owner=str(request["worker_id"]),
+            fencing_token=int(execution["fencing_token"]),
+        )
+    except (KeyError, OSError, TypeError, ValueError):
+        return None
+    return attempt
+
+
+def _bound_request_identity(
+    reference: Mapping[str, Any], *, ledger: ProjectLedger, harness_root: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     try:
         request = json.loads(read_artifact_reference(harness_root, reference).decode("utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -38,24 +87,6 @@ def bound_worker_request(
         or reference.get("sha256") != metadata.get("request_sha256")
     ):
         raise ValueError("worker request reference is not bound to the running attempt")
-    assignment_ref = {
-        "path": metadata.get("assignment_path"),
-        "sha256": metadata.get("assignment_sha256"),
-    }
-    try:
-        assignment = json.loads(
-            read_artifact_reference(harness_root, assignment_ref).decode("utf-8")
-        )
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError("worker assignment is unreadable") from error
-    if not isinstance(assignment, Mapping):
-        raise ValueError("worker assignment must be an object")
-    if content_sha256(assignment) != metadata.get("assignment_sha256"):
-        raise ValueError("worker assignment digest drifted")
-    _validate_request_fields(
-        request, assignment, attempt, harness_root=harness_root,
-    )
-    _validate_latest_coordinator_context(request, ledger)
     return request, attempt
 
 
@@ -149,4 +180,4 @@ def _validate_latest_coordinator_context(
         raise ValueError("worker coordinator context is stale")
 
 
-__all__ = ["bound_worker_request"]
+__all__ = ["bound_worker_request", "cancel_invalid_bound_worker_request"]

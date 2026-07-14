@@ -80,6 +80,47 @@ def reopen_host_context_refresh_permit(
     return {**binding, "portfolio_payload": portfolio, "overlay_payload": overlay}
 
 
+def reopen_context_frontier_overlay_dependencies(
+    overlay: Mapping[str, Any], *, harness_root: Path,
+) -> dict[str, Any]:
+    value = validate_context_frontier_overlay(overlay)
+    refresh_input = read_bound_frontier_cas_json(
+        harness_root, value["refresh_bundle"], _REFRESH_INPUT_KIND,
+    )
+    binding = {
+        "run_id": value["run_id"],
+        "unit_id": value["unit_id"],
+        "plan_sha256": value["plan_sha256"],
+        "portfolio": refresh_input.get("portfolio"),
+        "refresh_input": value["refresh_bundle"],
+    }
+    _validate_refresh_input(refresh_input, binding, value)
+    if refresh_input.get("base_catalog") != value["base_frontier"]["catalog"]:
+        raise ValueError("context refresh base catalog binding drifted")
+    portfolio = read_canonical_reference(
+        harness_root, refresh_input["portfolio"],
+    )
+    if (
+        portfolio.get("run_id") != value["run_id"]
+        or portfolio.get("plan_sha256") != value["plan_sha256"]
+    ):
+        raise ValueError("context refresh runtime portfolio binding drifted")
+    unit_assignments(portfolio, value["unit_id"])
+    context = value["effective_context"]
+    catalog = reopen_context_catalog(
+        harness_root, context["catalog"], unit_id=value["unit_id"],
+    )
+    _reopen_refresh_artifacts(
+        harness_root, refresh_input, value, context, catalog,
+    )
+    read_canonical_reference(harness_root, refresh_input["context_bundle"])
+    reopen_context_catalog(
+        harness_root, refresh_input["base_catalog"], unit_id=value["unit_id"],
+        require_materialized_pages=False,
+    )
+    return refresh_input
+
+
 def unit_assignments(
     portfolio: Mapping[str, Any], unit_id: str,
 ) -> list[dict[str, Any]]:
@@ -188,4 +229,4 @@ def _read_reference_bytes(root: Path, ref: Mapping[str, Any]) -> bytes:
     return data
 
 
-__all__: list[str] = []
+__all__ = ["reopen_context_frontier_overlay_dependencies"]
