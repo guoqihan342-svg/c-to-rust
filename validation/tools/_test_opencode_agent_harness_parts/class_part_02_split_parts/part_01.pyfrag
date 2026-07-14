@@ -300,6 +300,20 @@
                 )
                 return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
 
+            opencode_runtime = {
+                "runtime": "opencode",
+                "worker_count": 2,
+                "all_contracts_executed": True,
+                "chat_output_is_evidence": False,
+                "semantic_gate": False,
+            }
+            runtime_patch = patch.object(
+                harness,
+                "opencode_agent_runtime_evidence",
+                return_value=opencode_runtime,
+            )
+            runtime_patch.start()
+            self.addCleanup(runtime_patch.stop)
             result = harness.evaluate(
                 run_id="run-evaluate",
                 target_id="flashdb",
@@ -344,6 +358,17 @@
             self.assertFalse(headline["semantic_gate"])
             self.assertEqual(headline["context_pack"], result["context_pack"])
             self.assertEqual(headline["agent_index"], result["agent_index"])
+            self.assertEqual(result["opencode_agent_runtime"], opencode_runtime)
+            self.assertEqual(
+                headline["opencode_runtime"],
+                {
+                    "enabled": True,
+                    "worker_count": 2,
+                    "all_contracts_executed": True,
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                },
+            )
             self.assertEqual(judge_summary["core_translation_quality"]["final_gate_status"], "passed")
             self.assertEqual(judge_summary["core_translation_quality"]["semantic_pass_count"], 2)
             self.assertEqual(judge_summary["core_translation_quality"]["unsafe_reduction"]["reduced_by"], 3)

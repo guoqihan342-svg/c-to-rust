@@ -145,12 +145,16 @@ def evaluate(
         acceptance_boundary=None,
         repo_root=repo_root,
     )
+    opencode_runtime = opencode_agent_runtime_evidence(run_result, repo_root=repo_root)
+    if opencode_runtime is not None:
+        result["opencode_agent_runtime"] = opencode_runtime
     result["judge_headline"] = build_judge_headline(
         entrypoint="evaluate",
         status=str(result["status"]),
         proof_class=proof_class,
         mode=mode,
         judge_summary=result["judge_summary"],
+        opencode_runtime=opencode_runtime,
     )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(report_path, result)

@@ -32,8 +32,8 @@
             self.assertEqual(contract["worker_command"][: len(expected_worker_prefix)], expected_worker_prefix)
             self.assertEqual(contract["opencode_argv"], result["argv"])
             self.assertIn(
-                "The first and only shell/bash/powershell/cmd tool call must execute exactly the Command line "
-                "string below from the repository root.",
+                "The first and only shell/bash/powershell/cmd tool call must execute exactly the final "
+                "Command line string from the repository root; do not append metadata.",
                 contract["prompt"],
             )
             self.assertEqual(contract["prompt"].count("Command line:"), 1)
