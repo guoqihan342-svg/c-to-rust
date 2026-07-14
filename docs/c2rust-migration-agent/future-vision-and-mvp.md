@@ -508,17 +508,23 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [ ] A19a7b：所有构建 adapter 只允许向下游暴露 BuildIR；adapter-specific raw facts 只能作为 BuildIR 引用的审计附件，planner、DAG、ContextPack、Rust 重建和 verifier 不得读取 adapter 私有 shape。无法无损归一化的事实必须显式 blocked/refused，禁止猜测或静默丢弃。
       - [x] A19a7b1：compile database、Ninja/CMake 与只读 Meson facts 已进入 canonical BuildIR/attachment 验证路径。
       - [ ] A19a7b2：把 Make dry-run 报告接入同一 BuildIR adapter/validator，并以静态导入门禁证明没有下游读取 Make 私有 shape。
+        - [x] A19a7b2a：显式选择的 canonical Make 报告已进入共享 BuildIR/attachment reopener；计划和 worker admission 会重开原始报告并重新投影，同一语义在仓库根重命名后保持稳定，任一报告或仓库输入漂移均 fail closed。
+        - [ ] A19a7b2b：增加 Git-tracked 静态导入门禁，禁止 planner、DAG、ContextPack、RustProjectIR/Cargo 与 verifier 读取 Make 私有 report/command shape；再用跨 adapter 等价 fixture 关闭 A19a7b。
     - [ ] A19a7c：由单一 BuildIR validator 重开并复算所有 provenance/hash、generated-input closure、target/TU 唯一性和有序 link/archive closure；源文件、构建 metadata、toolchain 或 canonical projection 漂移时，必须在 worker 启动和最终验证前 fail closed。
       - [x] A19a7c1：重开 raw attachments 并复算 compile database、source/generated bindings、Meson facts、TU/target 唯一性、有序 target DAG 和 canonical projection；计划与 worker admission 前任一仓库事实漂移均 fail closed。
       - [ ] A19a7c2：在比赛 profile 下绑定并重开 C compiler/archiver/linker 的实际二进制、版本、target/sysroot 与环境指纹，并由 CompletionCoordinator 在 `project-final` 前再次执行同一 BuildIR verifier；compile-database driver token 不能单独关闭 toolchain drift。
     - [ ] A19a7d：用不含项目身份的等价构建 fixture 证明各 adapter 对同一构建语义产生相同 canonical projection，并用静态边界测试拒绝下游导入 adapter 私有字段；有限 held-out 项目必须先通过 BuildIR 验证才能进入迁移 DAG。
   - [ ] **A19a8：显式启用、强隔离的 Make dry-run 构建事实采集**。
     - [ ] A19a8a：仅在 compile database、可验证生成事实和只读 metadata 均无法闭合 BuildIR 时，才允许用户显式选择 `collect-make-facts`；禁止自动 fallback。采集前必须证明无网络、源码只读、独立输出根、子进程约束、环境白名单、超时、CPU/内存/文件/进程数与输出上限及退出清理均生效；能力不足时在执行 Make 前 fail closed。
+      - [x] A19a8a1：当前入口只接受显式 path/SHA/size 绑定的预采集 Make 报告；不会从 compile database 或普通发现自动 fallback，双输入会在 discovery/CLI 前置校验中阻塞。
+      - [ ] A19a8a2：实现 host-owned `collect-make-facts`，只在前序 adapter 无法闭合且 A19e8 能力探针全部通过时执行；当前预采集入口不能冒充生产采集器。
     - [ ] A19a8b：固定调用 `make -B -n -j1 --no-print-directory -f <makefile> -- <targets>`，不接受任意 command、flag、环境、shell、configure 或生成脚本。
-      - [x] A19a8b1：固定 argv/目标合同、受限 stdout parser 与非语义报告 schema 已实现；会拒绝 recursive Make、shell control、command chain、libtool/configure、歧义 compile+link 和路径逃逸，报告固定 `semantic_gate=false`、numerator 0。
+      - [x] A19a8b1：固定 argv/目标合同、受限 stdout parser 与非语义报告 schema 已实现；报告只能从成功且清理完成的 typed runner outcome 构造，并绑定 execution plan 与 raw stdout/stderr。它会拒绝 recursive Make、shell control、command chain、libtool/configure、歧义 compile+link 和路径逃逸，固定 `semantic_gate=false`、numerator 0。
       - [ ] A19a8b2：在 A19e8 已证明能力的沙箱中实际执行固定命令，持久化并重开 raw stdout/stderr、toolchain、sandbox 和输入引用；覆盖 `$(shell ...)`、included Makefile 重建、超时、输出洪泛与退出清理。当前 parser/report 合同不能冒充 runner 已接通。
-    - [ ] A19a8c：只把可无损解析的直接 compiler、archiver、ranlib、link invocation 归一化为 BuildIR；采集报告绑定 Makefile/source/toolchain/sandbox 与原始输出 SHA，BuildIR 可把未生成输出标成 `materialized=false`。该报告本身固定为非语义证据、numerator 0，并由同一 BuildIR validator 重开后才能进入迁移 DAG。
+    - [x] A19a8c：只把可无损解析的直接 compiler、archiver、ranlib、link invocation 归一化为 BuildIR；报告绑定 Makefile/source/leaf input/toolchain/preflight/plan/raw output，未生成输出固定为 `materialized=false`。BuildIR 明确写入 header、生成物物化和外部依赖解析边界，只声明直接 command graph 完整；`required` 完整闭包策略会让 worker deferred，显式 `bounded-source` 才允许进入迁移 DAG。报告与 BuildIR 均固定为非语义证据、numerator 0。
     - [ ] A19a8d：用不含项目身份的等价 fixture 验证 Make dry-run 与 compile database/Ninja/CMake adapter 产生相同 canonical projection，并覆盖 shell/configure/递归 Make 拒绝、timeout/output flood、路径/link escape、输入漂移和 sandbox receipt 漂移。
+      - [x] A19a8d1：无项目身份的 Make fixture 已覆盖仓库根重命名等价、固定 argv、shell/configure/递归 Make 拒绝、timeout/output flood/cleanup、报告及每类绑定输入/preflight 漂移，并验证 worker admission 会再次重开证据。
+      - [ ] A19a8d2：补齐 Make 与 compile database/Ninja/CMake 对同一构建语义的跨 adapter canonical projection 等价测试，以及生产沙箱中的 included-Makefile/`$(shell ...)` 对抗用例。
 
   **A19b 项目级依赖图与有界分解**
 
@@ -532,7 +538,11 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [ ] A19b3d：增加同 offset 不同 header provenance、证据引用悬空/篡改、共享 header 线性增长、source drift 与 canonical hash 重算测试；所有下游只消费经统一 validator 重开的 CIndex projection。
   - [ ] **A19b4：确定性分层检索、选择回执与按前沿懒加载的 ContextPack**。
     - [ ] A19b4a：建立版本化 retrieval catalog/query/selection receipt；回执绑定 policy、query seed、当前 unit/SCC、required/selected/omitted fact refs、materialized page refs、预算与 SHA。排序必须确定，任一必需事实缺失、引用漂移、预算不足或 unresolved symbol 均阻塞 assignment。
+      - [x] A19b4a1：宿主 catalog、确定性 symbol selection 和 selection/materialization receipt 已绑定 policy、query seed、SCC、required/selected/omitted 集合 SHA、字节预算与 materialized page-set SHA；引用、预算或 receipt 漂移 fail closed。
+      - [ ] A19b4a2：把 unresolved symbol、AST type/layout/macro 与 verifier failure facts 纳入统一 query/required-fact 合同；缺失时进入可恢复 retrieval 阻塞，而不是只依赖 lexical identifier seed。
     - [ ] A19b4b：required 层固定包含当前源码、compile context、直接 call/global、blocker summary；exact 层按符号和类型匹配声明、宏、布局及 direct-include segment；expansion 层只按 include adjacency、dependency SCC interface 和已验证失败事实扩展，禁止把完整仓库或无关 header 塞回 prompt。
+      - [x] A19b4b1：当前 source/direct-call/global/blocker facts 保持可见，deferred header/top-level chunk 按确定性精确 identifier、直接 include binding 与相邻 chunk 选取；未选择事实只以 host-withheld 摘要暴露给模型。
+      - [ ] A19b4b2：改用 A19b3c 的 AST/type/layout/macro facts，并只沿 include adjacency、dependency SCC interface 与已验证 failure facts 扩展；补全 unresolved symbol 的 fail-closed 规则。
     - [ ] A19b4c：调度器只计算当前可运行 frontier，先检索并 materialize 当前 assignments 的最小页面；状态为 `pending_retrieval`、required facts 不完整或 receipt 未验证的 group 不得租约或启动 worker。完成一波后按新 DAG/验证事实再计算下一波，禁止启动前一次性展开全项目 ContextPack。
       - [x] A19b4c1：为每个 SCC 生成内容绑定且有大小上限的宿主 catalog；plan 阶段不再写 prompt 页面或 worker request，dispatch 只对最新 `schedule.ready` 重开 catalog/receipt/page-set，在租约前增量物化页面，并把不可变 frontier receipt 绑定到 request 与 attempt。同一 frontier 首次执行与恢复会产生相同的内容寻址回执；模型启动前再次重开回执，逐项核对 worker/assignment/catalog/retrieval/page 绑定。已有页面、group index、catalog、receipt 或部分落盘漂移时 fail closed；主路径不复制 omitted fact store。
       - [ ] A19b4c2：把 selection 计算本身也改为当前 frontier 的 `pending_retrieval -> ready` 状态转移，完成一波后从最新 DAG、失败证据和扩展查询重算下一波；移除计划期全项目 selection/CIndex JSON 单体和重复 portfolio context，保持分片 CAS 近线性增长。
@@ -634,6 +644,8 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   - [ ] **A19e7：host verifier 进程级 capability 边界**。
     - [ ] A19e7a：把 semantic verifier 运行在独立、最小权限的宿主进程中，仅授予只读输入、专属沙箱执行和向 TransitionAuthority 提交 verifier receipt 的能力；AI worker、普通 CLI、测试 fixture 和编排进程均不持有产生 pass 或写 semantic projection 的能力。
     - [ ] A19e7b：pass 只能由 verifier 进程按固定 VerificationPlan 实际执行后派生，并绑定进程启动合同、输入快照、命令/toolchain、sandbox receipt、原始输出和退出状态；schema 合法、调用方 observation、model JSON、退出码零或可伪造 verifier id 单独均不能产生 pass。
+      - [x] A19e7b1：已为 initialization、feature/cfg 与 ABI 三类独立 gate 建立严格的非权威 envelope/raw-receipt 基础，绑定 run capability、issuer/nonce、run/cohort/generation、RustProjectIR/interface、VerificationPlan、toolchain、sandbox、固定 argv、原始 stdout/stderr 与退出状态；原始证据内容寻址、大小受限且可重开，当前合同只能记录 `failed/blocked`，固定 `semantic_gate=false`、numerator 0。
+      - [ ] A19e7b2：把该合同放入真正独立的 verifier 进程，由一次性 capability channel 签发执行结果并原子消费 nonce；只有真实执行才能派生 pass。当前 schema 绑定不构成身份认证，也不能提交 TransitionAuthority 或晋升任何 semantic 状态。
     - [ ] A19e7c：TransitionAuthority 只接受经当前 run capability channel 返回、可重算且未使用过的 verifier receipt，并重开其全部内容哈希和当前 cohort/context；缺失、重放、跨 run、进程异常、通道伪造、源码/计划漂移或未执行 observation 均记录 blocked/failure，不得提升 semantic 状态。
     - [ ] A19e7d：增加恶意调用方、伪造 schema/pass、替换 raw observation、receipt 重放、verifier kill/timeout 和并发竞争测试，证明只有真实 host runner 的当前执行结果能够通过状态转移权威。
   - [ ] **A19e8：不可降级的 SandboxBackend 能力接口**。
@@ -723,7 +735,11 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 - [ ] **P0-C4：第一方 Python 大文件按职责拆分**。
   - [x] P0-A19 新增的 `_project_migration_harness` 生产模块、`test_project_migration_*.py` 与共享测试支持文件均不超过 300 行；本轮已把 controller、gate-authority、sandbox 测试和 provider runtime/session/process/readiness 按职责拆开，并由源码布局测试持续约束。
   - [x] AI exact 入口已拆为 236 行兼容 facade 和 6 个不超过 189 行的职责模块，并由专属 source-layout 测试锁定公开导入与拆分边界。
+  - [x] AI candidate provider 已拆为 61 行兼容 facade 和 command/generation/cache/manifest 职责模块；原 1,282 行 candidate harness 测试拆为 225 行主文件及多个不超过 291 行的测试/支持模块，25 个原测试保持唯一，新增 source-layout 门禁拒绝动态装载和再次超限。
+  - [x] AI candidate cache 测试已按纯缓存、provider 生命周期和并发执行拆为最大 239 行的模块；过期 fixture 改为真实源码绑定的 external-callee context，没有放宽生产 readiness。9 个原缓存测试保持唯一，连同 2 个布局门禁共 11 项通过，完整 `test_ai_candidate*.py` 为 72/72。
   - [ ] 对 `validation/tools` 其余活跃生产模块和测试建立 Git-tracked 行数清单并逐模块降到 300 行以内，优先 AI candidate/context/repair/provider 与有限套件调用链。拆分必须保持公开导入和测试发现兼容；hash-bound evidence、生成快照和 canonical 文档不因行数门禁改写。
+
+  2026-07-14 本阶段有限门禁：AI candidate 72/72、host-verifier/provider 19/19、文档镜像 4/4；项目迁移套件在 Windows 为 450/450（2 项平台跳过），在 WSL 为 450/450（无跳过），`git diff --check` 通过，Git 跟踪文件的凭据片段扫描为 0 命中。这些结果只证明当前合同与回归在两个本地环境一致，不是比赛主机 exact 证明，也不关闭 A19f held-out 整项目 build/oracle 验收。
 
 ## 4. 后续 Backlog
 
