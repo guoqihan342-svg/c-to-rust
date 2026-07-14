@@ -626,6 +626,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [ ] A19d3d：Cargo generation 只能从已验证 RustProjectIR 确定性生成，并复验所有迁移单元、依赖边、公共接口和配置均被覆盖；IR 漂移、孤立模块、重复符号、临时手写 glue 或真实多文件 build 失败时禁止晋升。
       - [x] A19d3d1：生产 generation API、`integrate-verified` 与 candidate quarantine 已移除 manifest+descriptor 写入口，只消费重开且无协调冲突的 RustProjectIR；direct `integrate` CLI 已删除。generation 内嵌 canonical IR，并绑定 domain/coordinator/interface SHA；integration verifier 会从原 artifact root 重建同一 generation 逐字节比较，旧 descriptor-only 生成器仅留在测试 support。
       - [ ] A19d3d2：从当前 flat library module 投影扩展到经验证的嵌套 module tree、多 crate/bin/example、完整 target/feature/cfg、初始化/析构和 native link 配置，并在真实多文件 Cargo build/test 与 project-final 全门禁通过后才关闭 A19d3。
+        - [ ] **A19d3d2a：把目标 C 仓库 `tests/` 下的测试作为一等 test target 完整迁移，而不是仅因其出现在 `compile_commands.json` 就当作普通 library module 翻译。** host 必须从 BuildIR 及 CMake/CTest/Meson/Make 测试元数据中发现并内容绑定每个测试目标、C 测试源码、runner、fixture/data、工作目录、环境、参数、expected exit/signal 与 timeout；RustProjectIR 再确定性投影为 `#[test]`、`tests/*.rs` 或显式 Rust test binary，并保持目标依赖和执行语义。每个发现的 C test target 必须一一对应 Rust test target，或者产生带证据的 fail-closed refusal；验收必须同时运行原 C suite oracle 与 Rust suite，比较测试集合与逐项结果，并拒绝 `cargo test` 为 0 项、漏测、静默删除断言或只编译不执行。至少用两个 held-out C 项目证明不存在 `tests/` 路径、测试名称或项目身份硬编码。
 
   **A19e 项目级验证与精确 repair**
 
