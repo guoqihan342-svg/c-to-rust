@@ -79,6 +79,9 @@ def verify_project_final_build_ir(
             *blockers,
             {"kind": "competition_build_ir_toolchain_profile_invalid"},
         ]
+    native_link_resolved = verification.get("native_link_config_resolved")
+    if native_link_resolved is False:
+        blockers = [*blockers, {"kind": "native_link_config_unresolved"}]
     status = "verified" if verification.get("status") == "verified" and not blockers \
         else "blocked"
     return _result(
@@ -86,6 +89,10 @@ def verify_project_final_build_ir(
         build_ir_sha256=verification.get("build_ir_sha256"),
         semantic_sha256=verification.get("semantic_sha256"),
         toolchain_profile=verification.get("toolchain_profile"),
+        native_link_config_resolved=native_link_resolved,
+        unresolved_native_dependency_count=verification.get(
+            "unresolved_native_dependency_count",
+        ),
         verified_binding_count=verification.get("verified_binding_count", 0),
     )
 
@@ -129,7 +136,7 @@ def record_build_ir_checkpoint(
 
 
 def build_ir_allows_completion(verification: Mapping[str, Any]) -> bool:
-    return verification.get("status") in {"verified", "compatibility-skipped"}
+    return verification.get("status") == "verified"
 
 
 def build_ir_blocker_kinds(verification: Mapping[str, Any]) -> list[str]:

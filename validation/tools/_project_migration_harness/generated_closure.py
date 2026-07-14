@@ -96,9 +96,20 @@ def verify_generated_build_closure(
     root = Path(repo_root).resolve()
     bindings: list[dict[str, Any]] = []
     blockers: list[dict[str, Any]] = []
+    closure_status = closure.get("status")
+    closure_blockers = closure.get("blockers")
+    if (
+        closure_status not in {"ready", "blocked"}
+        or not isinstance(closure_blockers, list)
+        or closure_status == "ready" and closure_blockers
+        or closure_status == "blocked" and not closure_blockers
+    ):
+        blockers.append({"kind": "generated_closure_status_mismatch"})
     compile_database = closure.get("compile_database")
     if isinstance(compile_database, dict):
         bindings.append(compile_database)
+    else:
+        blockers.append({"kind": "compile_database_replay_binding_missing"})
     bindings.extend(_binding_list(closure.get("generated_include_roots")))
     bindings.extend(_binding_list(closure.get("compile_outputs")))
     generated = closure.get("generated_stage_facts")
@@ -116,8 +127,24 @@ def verify_generated_build_closure(
                 blockers.extend(verify_meson_introspection(
                     root, root / Path(*PurePosixPath(database_path).parts), meson
                 ))
+    else:
+        blockers.append({"kind": "generated_stage_facts_replay_missing"})
     link = closure.get("target_link_closure")
     if isinstance(link, dict):
+        if closure_status == "ready" and link.get("status") != "ready":
+            blockers.append({"kind": "generated_closure_status_mismatch"})
+        database_path = compile_database.get("path") if isinstance(
+            compile_database, dict
+        ) else None
+        if isinstance(database_path, str) and isinstance(generated, dict):
+            try:
+                current_link = discover_link_closure(
+                    root, resolve_repository_path(root, database_path), generated,
+                )
+                if current_link != link:
+                    blockers.append({"kind": "target_link_closure_drift"})
+            except (OSError, TypeError, ValueError):
+                blockers.append({"kind": "target_link_closure_reopen_failed"})
         for target in link.get("targets", []):
             if not isinstance(target, dict):
                 continue
@@ -128,6 +155,8 @@ def verify_generated_build_closure(
             for key in ("inputs", "search_roots", "response_files"):
                 bindings.extend(_binding_list(target.get(key)))
         bindings.extend(_binding_list(link.get("support_files")))
+    else:
+        blockers.append({"kind": "target_link_closure_replay_missing"})
     seen: set[tuple[str, str]] = set()
     for binding in bindings:
         identity = (str(binding.get("path")), str(binding.get("kind")))

@@ -11,6 +11,9 @@ from .host_tool_binding import ENVIRONMENT_ALLOWLIST
 
 
 MAX_ENVIRONMENT_VALUE_BYTES = 256 * 1024
+# WSL recreates this socket path per session; its presence, not its value,
+# identifies WSL.
+_VOLATILE_BINDING_VARIABLES = frozenset({"WSL_INTEROP"})
 
 
 def environment_values(value: Mapping[str, str] | None) -> dict[str, str]:
@@ -36,6 +39,7 @@ def environment_binding(value: Mapping[str, str]) -> dict[str, Any]:
     variables = [
         {"name": name, "value_sha256": _text_sha256(item)}
         for name, item in sorted(value.items())
+        if name not in _VOLATILE_BINDING_VARIABLES
     ]
     path = value.get("PATH", "")
     flavor = host_binding(value)["path_flavor"]

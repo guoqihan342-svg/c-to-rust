@@ -14,6 +14,19 @@ from validation.tools.project_migration_gate_authority_test_support import (
 class ProjectMigrationCompletionCoordinatorTests(
     ProjectMigrationGateAuthorityCase,
 ):
+    def _verified_build_ir(self):
+        return mock.patch(
+            "validation.tools._project_migration_harness."
+            "project_completion_coordinator.verify_project_final_build_ir",
+            return_value={
+                "schema_version": 1,
+                "status": "verified",
+                "blockers": [],
+                "native_link_config_resolved": True,
+                "unresolved_native_dependency_count": 0,
+            },
+        )
+
     def test_fixed_paths_and_project_final_scope_reach_first_semantic_runner(self) -> None:
         self.promote_current_candidate()
         with mock.patch(
@@ -28,9 +41,10 @@ class ProjectMigrationCompletionCoordinatorTests(
                 "reason_code": "semantic_adapter_unavailable",
             },
         ) as semantic_runner:
-            result = resume_project_completion(
-                ledger=self.ledger, run_id="run", harness_root=self.harness,
-            )
+            with self._verified_build_ir():
+                result = resume_project_completion(
+                    ledger=self.ledger, run_id="run", harness_root=self.harness,
+                )
         self.assertEqual("blocked", result["status"])
         self.assertEqual("project-final-oracle-replay-diff", result["stage"])
         self.assertEqual(
@@ -90,7 +104,7 @@ class ProjectMigrationCompletionCoordinatorTests(
             "validation.tools._project_migration_harness."
             "project_completion_coordinator._missing_candidate_semantic_gates",
             return_value=["stop-before-final"],
-        ):
+        ), self._verified_build_ir():
             result = resume_project_completion(
                 ledger=self.ledger, run_id="run", harness_root=self.harness,
             )
@@ -154,6 +168,7 @@ class ProjectMigrationCompletionCoordinatorTests(
                 "validation.tools._project_migration_harness."
                 "project_completion_coordinator.verify_integrated_project",
             ) as integration_gate,
+            self._verified_build_ir(),
         ):
             result = resume_project_completion(
                 ledger=self.ledger, run_id="run", harness_root=self.harness,

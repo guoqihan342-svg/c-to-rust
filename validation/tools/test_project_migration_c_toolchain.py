@@ -37,6 +37,7 @@ class ProjectMigrationCToolchainTests(unittest.TestCase):
         self.environment = {
             "PATH": str(self.root / "private-bin"),
             "CPATH": str(self.root / "private-include"),
+            "WSL_INTEROP": "/run/WSL/1_interop",
             "IGNORED_SECRET": "must-not-be-recorded",
         }
 
@@ -103,6 +104,17 @@ class ProjectMigrationCToolchainTests(unittest.TestCase):
             stored, environment=self.environment, resolver=self.fake.resolver,
             runner=self.fake.runner,
         ))
+        changed_interop = {
+            **self.environment, "WSL_INTEROP": "/run/WSL/2_interop",
+        }
+        self.assertEqual(stored, reopen_c_toolchain_evidence(
+            stored, environment=changed_interop, resolver=self.fake.resolver,
+            runner=self.fake.runner,
+        ))
+        self.assertNotIn(
+            "WSL_INTEROP",
+            {item["name"] for item in stored["environment"]["variables"]},
+        )
         original = self.fake.paths["gcc"].read_bytes()
         self.fake.paths["gcc"].write_bytes(b"changed-binary")
         with self.assertRaisesRegex(ValueError, "drift"):

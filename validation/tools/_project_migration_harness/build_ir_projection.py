@@ -12,6 +12,9 @@ from .build_ir import (
 )
 from .build_ir_meson import merge_meson_targets
 from .build_ir_host_toolchains import HostToolchainProjection
+from .build_ir_external_dependencies import (
+    NATIVE_DEPENDENCY_KIND, project_link_external_dependencies,
+)
 from .build_ir_projection_inputs import generated_inputs, source_inputs
 from .build_ir_projection_legacy import (
     ABI_PREFIXES, abi_facts, legacy_toolchains,
@@ -49,6 +52,9 @@ def project_build_ir(
     sources = source_inputs(units, targets)
     generated = generated_inputs(closure, targets)
     boundaries.extend(_boundaries(closure, closure_verification))
+    unresolved_native = sum(
+        item.get("kind") == NATIVE_DEPENDENCY_KIND for item in external
+    )
     closure_complete = (
         closure.get("status") == "ready"
         and closure_verification.get("status") == "verified"
@@ -56,7 +62,10 @@ def project_build_ir(
     payload = {
         "schema_version": BUILD_IR_SCHEMA_VERSION,
         "artifact_kind": BUILD_IR_KIND,
-        "status": "ready" if closure_complete else "ready_with_boundaries",
+        "status": (
+            "ready" if closure_complete and not boundaries
+            else "ready_with_boundaries"
+        ),
         "extractor": dict(BUILD_IR_EXTRACTOR),
         "raw_fact_refs": refs,
         "build_metadata": [metadata],
@@ -76,6 +85,8 @@ def project_build_ir(
             "commands_executed": False,
             "host_toolchain_bound": projector is not None,
             "toolchain_profile": projector.profile if projector else None,
+            "native_link_config_resolved": unresolved_native == 0,
+            "unresolved_native_dependency_count": unresolved_native,
             "semantic_gate": False,
             "translation_coverage_numerator": 0,
         },
@@ -178,6 +189,7 @@ def _targets(
         owners[output["path"]] = target_id
         skeletons.append((raw, target_id))
     external: list[dict[str, Any]] = []
+    boundaries: list[dict[str, Any]] = []
     for raw, target_id in skeletons:
         output = normalize_binding(raw["output"], materialized=True)
         inputs = []
@@ -189,18 +201,12 @@ def _targets(
                 dependencies.append(dependency)
             inputs.append({"ordinal": ordinal, "role": "link-input",
                            "binding": binding, "dependency_target_id": dependency})
+        current_external, current_boundaries = project_link_external_dependencies(
+            raw, target_id,
+        )
+        external.extend(current_external)
+        boundaries.extend(current_boundaries)
         arguments = string_list(raw.get("ordered_system_link_args"))
-        for ordinal, argument in enumerate(arguments):
-            external.append({
-                "dependency_id": stable_build_id("external", {
-                    "target": target_id, "ordinal": ordinal, "argument": argument,
-                }),
-                "kind": "ordered-link-argument",
-                "name": argument,
-                "consumer_target_ids": [target_id],
-                "ordinal": ordinal,
-                "provenance": {"raw_fact_role": "generated-build-closure"},
-            })
         fact = raw.get("fact_file") if isinstance(raw.get("fact_file"), Mapping) else {}
         kind = "archive" if "archive_operation" in raw else "link"
         target = target_record(
@@ -227,7 +233,7 @@ def _targets(
     merge_meson_targets(closure, targets, owners, external)
     targets.sort(key=lambda item: item["target_id"])
     external.sort(key=lambda item: item["dependency_id"])
-    return targets, external, []
+    return targets, external, boundaries
 
 
 def _raw_refs(

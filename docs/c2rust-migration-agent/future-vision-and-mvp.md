@@ -28,7 +28,7 @@ input.c + compile context
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 / libuv AI-first 0/1 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑。新 libuv DeepSeek 辅助实跑完成 1 次 initial + 3 次 repair，provider-ready 但 exact 未通过，明确不具备比赛资格 |
 | 当前翻译主线 | P0-A19 / P0-A10 / P0-A18c | h5a-h5d 已闭合 compiler/runtime/ABI repair facts 与 compiler-header declaration-only 分类；下一步进入陌生仓库整项目发现、拆解、并行候选、Cargo 集成与项目级 repair，不再围绕单个已知切片扩语法 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A19 BuildIR/frontier/verifier 收口 | 任意仓库 inventory、SCC/DAG、构建闭包、分页 ContextPack、隔离 OpenCode、SQLite ledger、RustProjectIR/Cargo generation、whole-cohort Cargo 诊断分类、可重开 raw output、受限 unresolved-link intake 和同门次 repair 复验已落地；实际 C toolchain 绑定、显式沙箱 Make 采集、frontier 懒加载、进程隔离 semantic verifier 和真实 held-out 语义验收仍未完成。易变测试总数只放在 commit-bound 阶段证据，不再写入本状态行 |
+| 最近开发阶段 | P0-A19 BuildIR/frontier/verifier 收口 | 任意仓库 inventory、SCC/DAG、构建闭包、实际 C toolchain 绑定、分页 ContextPack、隔离 OpenCode、SQLite ledger、RustProjectIR/Cargo generation、whole-cohort Cargo 诊断分类、可重开 raw output、受限 unresolved-link intake 和同门次 repair 复验已落地；外部 native-link 可验证解析、显式沙箱 Make 采集、frontier 懒加载、进程隔离 semantic verifier 和真实 held-out 语义验收仍未完成。易变测试总数只放在 commit-bound 阶段证据，不再写入本状态行 |
 | 最近一次严格证据快照 | `25/33` | 不可变历史 run `20260711T-finite-p0-t31`；`stress_loops=0`，该快照仍有 8 项 evidence 漂移。P0-C1 应以新替代运行关闭，不得改写历史 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -182,7 +182,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 顺序 | 待办 | 状态 | 本轮完成判据 |
 | ---: | --- | --- | --- |
 | 1 | P0-A18c7 跨项目 AI 输入与证据合同闭包 | 完成 | Windows/WSL 125 项回归通过；固定 12 项生成 12 个候选、0 contract failure、6 exact pass |
-| 2 | P0-A19 陌生 C 项目整项目 AI harness | 进行中：BuildIR、检索前沿与 verifier capability 收口 | 任意 repo root 的发现、分页 DAG、角色组合、SQLite ledger、Cargo generation、CMake/Ninja/Meson 只读事实、link/archive 闭包和 fail-closed 沙箱合同已落地；当前先补 BuildIR 实际 toolchain 绑定、显式受限 configure/Make 采集、frontier selection 状态转移和独立 verifier capability，再接 initialization/feature/cfg/ABI 与真实 held-out build/oracle。禁止项目/函数/路径/fixture 身份分派 |
+| 2 | P0-A19 陌生 C 项目整项目 AI harness | 进行中：BuildIR、检索前沿与 verifier capability 收口 | 任意 repo root 的发现、分页 DAG、角色组合、SQLite ledger、Cargo generation、实际 C toolchain 绑定、CMake/Ninja/Meson 只读事实、link/archive 闭包和 fail-closed 沙箱合同已落地；当前先补外部 native-link 可验证解析、显式受限 configure/Make 采集、frontier selection 状态转移和独立 verifier capability，再接 initialization/feature/cfg/ABI 与真实 held-out build/oracle。禁止项目/函数/路径/fixture 身份分派 |
 | 3 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | h5a-h5d 已完成且不扩大语义覆盖；保留父项未完成边界，后续只在 P0-A19 项目级 gate 暴露真实阻塞时回收，不再围绕单个已知切片顺序加规则 |
 | 4 | P0-A10 有限 held-out 跨项目验收 | 待开始 | 固定 12 项继续作为非回归基线，新增有限的未参与规则开发的整项目验收；只运行有限集合一次，不用重复轮次放大成功率 |
 | 5 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
@@ -519,12 +519,19 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
         - [x] A19a7c2c：把 canonical C toolchain evidence 作为 BuildIR raw attachment；同一个 BuildIR verifier 必须重开二进制和原始 probe CAS、重跑固定 probe、重新导出角色映射并逐字节重投影，PATH、symlink/reparse、binary、version、target、sysroot、environment 或 profile 漂移一律阻塞。
         - [x] A19a7c2d：`CompletionCoordinator` 从 immutable migration manifest 取得唯一 BuildIR reference；比赛 `complete` 的 repo root 仅作重开 locator，在任何候选/AI/Cargo 执行前和写入 host project-final 前各运行一次同一 verifier，并把两次内容寻址 receipt 绑定到 completion receipt。
         - [x] A19a7c2e：补齐身份无关的 Windows 合同测试、WSL/Linux 真实 GCC/Clang/binutils probe、跨 host/profile 拒绝和 project-final 零后续调用断言；A19e7/A19e8 未完成前保持 `semantic_gate=false`，不得把本机 probe 称为独立 verifier 或 `competition-exact`。
+        - [x] A19a7c2f：从可重开环境指纹中排除每次 WSL 会话都会变化的 `WSL_INTEROP` socket 值，但仍保留其 presence 参与 WSL 身份判断，并继续严格绑定 PATH、compiler binary/version/target/sysroot 与固定探针。两个独立 WSL login 进程复算相同证据 SHA；PATH、binary 或探针变化仍按原合同 fail closed。
     - [x] A19a7d：用不含项目身份的等价构建 fixture 证明各 adapter 对同一构建语义产生相同 canonical projection，并用静态边界测试拒绝下游导入 adapter 私有字段；有限 held-out 项目必须先通过 BuildIR 验证才能进入迁移 DAG。
       - [x] A19a7d1：Git-tracked 同源 fixture 已证明 compile-database+CMake 与 compile-database+Ninja 产生完全相同的 canonical BuildIR/`semantic_sha256`；Make 路径经同一 validator 重开，只在严格受限、test-only、非语义的公共合同上与二者相等。compile target id 已统一使用 canonical `kind=object`，define 漂移会改变公共合同；status、boundaries、raw refs、物化、toolchain、direct argv/link args 与 provenance 差异全部保留并显式断言不等。
       - [x] A19a7d2：把同源 fixture 扩展到 Meson、multi-TU、archive/ranlib、多输入和 external dependency/toolchain 语义，并让有限 held-out 项目通过 BuildIR validator 后再进入迁移 DAG。
         - [x] A19a7d2a：Git-tracked 扩展 fixture 以相同两个 TU、object、static archive、ranlib、最终多输入 link 和 `-pthread` 事实证明 CMake、Ninja、Meson 三条路径产生逐字段相同的 canonical projection/`semantic_sha256`；repository rename 不改变语义，compile/link 事实从 clang 切到 GCC 时三者共同改变 toolchain 语义。
         - [x] A19a7d2b：BuildIR schema/extractor 已升为 v2；Meson target type/source summary 只保存在被 semantic projection 排除的 provenance；canonical target kind、ordered input、archive operation/ranlib count、声明式 external dependency 和生成源使用 adapter-independent 字段。静态边界测试禁止所有下游生产模块读取 Meson 私有字段，Meson 自报 compiler metadata 漂移不能覆盖 compile/toolchain 权威事实。
         - [x] A19a7d2c：两个随机身份的有限 held-out 项目在 CIndex、migration graph、ContextPack、portfolio 和 ledger 之前连续重开同一 BuildIR 引用；首次验证失败或 worker-admission 时 source/hash 漂移均立即 blocked，后续 DAG、ledger、model 零调用。
+        - [x] A19a7d2d：闭合仓库外 native library 输入边界。把严格识别的宿主绝对库参数净化为有序位置、可移植 basename/format 和原参数 SHA，投影为 `unresolved-native-library` 与 `native_link_config_unresolved`；宿主目录漂移不改变 BuildIR `semantic_sha256`。仓库外 object、未知路径和路径夹带的 `-l`/`DEFAULTLIB` 参数继续 fail closed；GeneratedClosure 从完整绑定输入重解析，BuildIR 复算依赖类型、id、边界、计数和 resolved 声明。该边界可进入 AI 规划，但 CompletionCoordinator 在解析证据出现前阻止 project semantic pass。
+        - [ ] A19a7d2e：把 `unresolved-native-library` 交给身份中立的 AI/Cargo 重建流程，产出可复算的 Cargo dependency、`build.rs`/link directive 或 FFI 边界候选；宿主 verifier 必须按 target ABI、toolchain、portable library identity、实际解析结果和 Cargo raw evidence 独立判定，模型声明不能直接把 resolved 改为 true。至少两个具有不同 native dependency 形状的 held-out 项目完成真实 Cargo build/test 与 C oracle 对照后才能关闭，禁止按项目或库名称特判。
+
+        A19a7d2d 有限 held-out 证据（2026-07-15）：固定 libevent 提交 `e1f0335d2f3af1235421c939c62943bb99b3d652` 的 WSL competition-profile 本地模拟 run `hard-libevent-native-06` 得到 ready GeneratedClosure、`ready_with_boundaries` BuildIR、5,906 个 unit、23,600 个 assignment 和 4 个 initial-ready worker；168 个 `libcrypto.so`/`libssl.so`/`libz.so` 依赖被净化为 unresolved native boundary。独立 project-final 重开后唯一 blocker 为 `native_link_config_unresolved`，不再出现 C toolchain evidence drift；耗时 778.33 秒、峰值 RSS 1,549,408 KiB，ContextPages/portfolio/portfolio-DAG 分别为 185,683,579/245,224,312/37,335,598 字节。该运行没有调用 model、Cargo 或 oracle，`semantic_gate=false`、numerator 0；单体 artifact 与逐 catalog NTFS 发布成本继续由 A19b4c2 收敛，不得把 plan 成功写成翻译成功。
+
+        同阶段最终有限门禁：Windows `test_project_migration*.py` 660 项通过、5 项平台条件跳过；WSL 同组 660 项通过、3 项平台条件跳过；WSL Rust translator `--all-features` 为 267 + 688 + 4 项通过、133 项明确 ignored、0 failure；双语文档镜像与源码布局 5/5。ignored Rust case、held-out plan 和未执行的 model/Cargo/oracle 都不计入成功翻译。
 
         该完成项只证明受绑定构建事实的 canonical adapter convergence、漂移拒绝和 DAG 入场顺序；不证明命令已执行、build 成功、程序语义、独立 verifier 身份、真实 held-out 翻译成功或 `competition-exact`。真实 host toolchain 身份仍由 A19a7c2 证据链负责。
   - [ ] **A19a8：显式启用、强隔离的 Make dry-run 构建事实采集**。

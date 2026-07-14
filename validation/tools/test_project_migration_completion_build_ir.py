@@ -9,7 +9,7 @@ from validation.tools._project_migration_harness.ledger_run_contract import (
     load_migration_contract,
 )
 from validation.tools._project_migration_harness.project_completion_build_ir import (
-    verify_project_final_build_ir,
+    build_ir_allows_completion, verify_project_final_build_ir,
 )
 from validation.tools._project_migration_harness.project_completion_coordinator import (
     resume_project_completion,
@@ -31,7 +31,13 @@ COORDINATOR = (
     "project_completion_coordinator."
 )
 PASSED = {"schema_version": 1, "status": "passed"}
-VERIFIED = {"schema_version": 1, "status": "verified", "blockers": []}
+VERIFIED = {
+    "schema_version": 1,
+    "status": "verified",
+    "blockers": [],
+    "native_link_config_resolved": True,
+    "unresolved_native_dependency_count": 0,
+}
 INTEGRATED = {
     "schema_version": 1,
     "status": "integrated",
@@ -221,6 +227,7 @@ class ProjectMigrationCompletionBuildIRTests(
             result["claim_boundary"]["competition_profile_build_ir_verified"],
         )
         self.assertFalse(result["claim_boundary"]["semantic_gate"])
+        self.assertFalse(build_ir_allows_completion(result))
         verifier.assert_not_called()
 
     def test_initial_build_ir_drift_blocks_every_candidate_and_project_runner(self) -> None:

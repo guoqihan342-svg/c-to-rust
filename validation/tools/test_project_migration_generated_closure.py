@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -173,8 +174,8 @@ class GeneratedBuildClosureTests(unittest.TestCase):
             verification["blockers"],
         )
 
-    def test_external_include_and_link_input_are_blockers(self) -> None:
-        external = Path(self.temporary.name) / "external.lib"
+    def test_external_include_and_object_input_are_blockers(self) -> None:
+        external = Path(self.temporary.name) / "external.o"
         external.write_bytes(b"external")
         database = self.project(
             include=external.parent.as_posix(),
@@ -208,6 +209,26 @@ class GeneratedBuildClosureTests(unittest.TestCase):
             {"kind": "artifact_sha256_drift", "path": "build/unit.o"},
             verification["blockers"],
         )
+
+    def test_reopen_requires_complete_link_replay_inputs(self) -> None:
+        database = self.project()
+        closure = discover_project(
+            self.root, compile_database=database,
+        )["generated_build_closure"]
+        missing = {
+            "compile_database": "compile_database_replay_binding_missing",
+            "generated_stage_facts": "generated_stage_facts_replay_missing",
+            "target_link_closure": "target_link_closure_replay_missing",
+        }
+        for field, reason in missing.items():
+            with self.subTest(field=field):
+                altered = copy.deepcopy(closure)
+                del altered[field]
+                verification = verify_generated_build_closure(self.root, altered)
+                self.assertEqual("blocked", verification["status"])
+                self.assertIn(reason, {
+                    item["kind"] for item in verification["blockers"]
+                })
 
     def test_orchestrator_materializes_hash_bound_closure_artifact(self) -> None:
         database = self.project()

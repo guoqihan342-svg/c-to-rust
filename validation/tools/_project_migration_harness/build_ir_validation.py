@@ -18,9 +18,13 @@ from .build_ir_reopen import (
     accepted_provenance_role, accepted_raw_roles, reproject_bound_build_ir,
 )
 from .build_ir_host_toolchains import validate_host_bound_toolchains
+from .build_ir_external_dependencies import (
+    validate_external_dependency, validate_native_dependency_summary,
+)
 from .build_ir_toolchain_validation import validate_toolchain_references
 from .build_ir_target_extensions import validate_target_extensions
 from .build_ir_projection import target_closure
+from .build_ir_verification_result import build_ir_verification_result
 from .c_toolchain_schema import C_TOOLCHAIN_RAW_ROLE
 from .closure_paths import verify_repository_artifact
 TOP_LEVEL_KEYS = {
@@ -70,17 +74,11 @@ def verify_build_ir_artifact(
             TypeError, ValueError) as error:
         blockers.append({"kind": str(error) or "build_ir_validation_failed"})
     blockers = _unique_blockers(blockers)
-    return {
-        "schema_version": 1,
-        "status": "verified" if not blockers else "blocked",
-        "build_ir_sha256": reference.get("sha256"),
-        "semantic_sha256": payload.get("semantic_sha256") if payload else None,
-        "toolchain_profile": payload.get("claim_boundary", {}).get(
-            "toolchain_profile",
-        ) if payload else None,
-        "verified_binding_count": verified_bindings,
-        "blockers": blockers,
-    }
+    return build_ir_verification_result(
+        payload, reference, blockers, verified_bindings,
+    )
+
+
 def validate_build_ir(value: Mapping[str, Any]) -> None:
     if set(value) != TOP_LEVEL_KEYS:
         raise BuildIRValidationError("build_ir_top_level_schema_invalid")
@@ -159,6 +157,11 @@ def validate_build_ir(value: Mapping[str, Any]) -> None:
         arrays["external_dependencies"], "dependency_id",
         "build_ir_external_dependency",
     )
+    for dependency in arrays["external_dependencies"]:
+        try:
+            validate_external_dependency(dependency, set(target_ids))
+        except ValueError as error:
+            raise BuildIRValidationError(str(error)) from error
     abi = arrays["abi_facts"]
     if [item.get("unit_id") for item in abi] != unit_ids:
         raise BuildIRValidationError("build_ir_abi_unit_order_invalid")
@@ -170,8 +173,19 @@ def validate_build_ir(value: Mapping[str, Any]) -> None:
         raise BuildIRValidationError(str(error)) from error
     for item in [*value["toolchains"], *value["external_dependencies"], *abi]:
         _require_provenance(item)
-    if not isinstance(value.get("boundaries"), list):
+    boundaries = value.get("boundaries")
+    if (
+        not isinstance(boundaries, list)
+        or not all(isinstance(item, Mapping) for item in boundaries)
+    ):
         raise BuildIRValidationError("build_ir_boundaries_invalid")
+    try:
+        validate_native_dependency_summary(
+            arrays["external_dependencies"], boundaries, claim_boundary,
+            value.get("status"),
+        )
+    except ValueError as error:
+        raise BuildIRValidationError(str(error)) from error
     canonical_build_ir_bytes(value)
 
 

@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import re
 import shlex
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from .archive_closure import (
-    is_archiver_command,
-    is_ranlib_command,
-    parse_archive_command,
+    is_archiver_command, is_ranlib_command, parse_archive_command,
 )
 from .build_facts import compiler_name, json_sha256
 from .closure_paths import bind_repository_artifact, path_error_blocker
@@ -17,7 +14,10 @@ from .ninja_link_facts import discover_ninja_link_commands
 from .link_response import expand_link_response_files, take_link_output
 from .link_fact_paths import link_fact_working_directory
 from .link_ranlib import bind_ranlib_commands
-from .link_system_arguments import normalize_system_link_argument
+from .link_external_libraries import external_native_library
+from .link_system_arguments import (
+    contains_external_link_option_path, normalize_system_link_argument,
+)
 
 
 MAX_LINK_ARGUMENTS = 16_384
@@ -179,6 +179,7 @@ def _parse_link_argv(
     inputs: list[dict[str, Any]] = []
     search_roots: list[dict[str, Any]] = []
     system_args: list[str] = []
+    external_libraries: list[dict[str, Any]] = []
     index = 0
     while index < len(arguments):
         argument = arguments[index]
@@ -208,9 +209,21 @@ def _parse_link_argv(
             system_args.append(normalized_system_arg)
             index += 1
             continue
-        if argument.startswith("-") and _contains_external_path(argument):
+        external_library = external_native_library(
+            root, base, argument, argument_index=index,
+        )
+        if external_library is not None:
+            external_libraries.append(external_library)
+            index += 1
+            continue
+        if argument.startswith("-") or argument.upper().startswith("/DEFAULTLIB:"):
+            kind = (
+                "external_link_argument"
+                if contains_external_link_option_path(argument)
+                else "link_argument_unsupported"
+            )
             blockers.append({
-                "kind": "external_link_argument",
+                "kind": kind,
                 "fact": fact_path,
                 "argument_sha256": json_sha256(argument),
             })
@@ -237,6 +250,8 @@ def _parse_link_argv(
         "response_files": response_files or [],
         "ordered_system_link_args": system_args,
     }
+    if external_libraries:
+        target["external_native_libraries"] = external_libraries
     return target, blockers
 
 
@@ -266,14 +281,6 @@ def _looks_like_path(value: str) -> bool:
         or "\\" in value
         or value.startswith(".")
         or PureWindowsPath(value).is_absolute()
-    )
-
-
-def _contains_external_path(value: str) -> bool:
-    return any(
-        PurePosixPath(part).is_absolute() or PureWindowsPath(part).is_absolute()
-        for part in re.split(r"[,=]", value)
-        if part
     )
 
 

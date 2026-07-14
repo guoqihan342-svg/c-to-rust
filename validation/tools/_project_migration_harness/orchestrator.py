@@ -255,6 +255,9 @@ def plan_project(
             "make_executed": False,
             "build_ir_ready": build_ir_ready,
             "build_ir_semantic_sha256": build_ir["semantic_sha256"],
+            "native_link_config_resolved": admission.get(
+                "native_link_config_resolved",
+            ),
             "build_ir_blockers": admission.get("blockers", []),
             "build_closure_ready": closure_ready,
             "build_closure_policy": (
