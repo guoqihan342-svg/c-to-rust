@@ -179,7 +179,10 @@ def _project_targets(
         if output_path in owners:
             raise ValueError("make_build_ir_output_duplicate")
         output = {"path": output_path, "kind": "file", "materialized": False}
-        target_id = stable_build_id("target", {"kind": kind, "output": output_path})
+        canonical_kind = "object" if kind == "compile" else kind
+        target_id = stable_build_id(
+            "target", {"kind": canonical_kind, "output": output_path}
+        )
         inputs, dependencies = _target_inputs(command, owners, leaves)
         if kind == "compile":
             unit = unit_by_ordinal.get(command["ordinal"])

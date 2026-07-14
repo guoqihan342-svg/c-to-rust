@@ -1,0 +1,2 @@
+clang -std=c11 -DVALUE=7 -c src/unit.c -o build/unit.o
+clang build/unit.o -o build/program

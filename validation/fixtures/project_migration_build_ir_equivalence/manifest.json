@@ -1,0 +1,57 @@
+{
+  "artifact_kind": "project-migration-build-ir-equivalence-fixture",
+  "claim_boundary": {
+    "does_not_prove": [
+      "archive or multi-input link ordering",
+      "build success",
+      "program semantic equivalence",
+      "toolchain equivalence"
+    ],
+    "semantic_gate": false,
+    "translation_coverage_numerator": 0
+  },
+  "cmake_link_argv": [
+    "clang",
+    "unit.o",
+    "-o",
+    "program"
+  ],
+  "compile_argv": [
+    "clang",
+    "-std=c11",
+    "-DVALUE=7",
+    "-c",
+    "src/unit.c",
+    "-o",
+    "build/unit.o"
+  ],
+  "compile_database": "build/compile_commands.json",
+  "compile_output": "build/unit.o",
+  "define": {
+    "name": "VALUE",
+    "value": "7"
+  },
+  "link_argv": [
+    "clang",
+    "build/unit.o",
+    "-o",
+    "build/program"
+  ],
+  "linked_output": "build/program",
+  "make_stdout": "make.stdout",
+  "makefile": "Makefile",
+  "ninja_compile_database": "ninja/compile_commands.json",
+  "ninja_file": "ninja/build.ninja",
+  "ninja_link_argv": [
+    "clang",
+    "../build/unit.o",
+    "-o",
+    "../build/program"
+  ],
+  "schema_version": 1,
+  "source": "src/unit.c",
+  "targets": [
+    "all"
+  ],
+  "toolchain_evidence": "toolchain-evidence.json"
+}

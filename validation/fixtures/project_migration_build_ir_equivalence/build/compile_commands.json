@@ -1,0 +1,16 @@
+[
+  {
+    "arguments": [
+      "clang",
+      "-std=c11",
+      "-DVALUE=7",
+      "-c",
+      "src/unit.c",
+      "-o",
+      "build/unit.o"
+    ],
+    "directory": ".",
+    "file": "src/unit.c",
+    "output": "build/unit.o"
+  }
+]

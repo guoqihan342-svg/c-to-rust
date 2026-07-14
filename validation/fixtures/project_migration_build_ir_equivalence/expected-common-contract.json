@@ -1,0 +1,130 @@
+{
+  "abi_facts": [
+    {
+      "data_model": "compiler-default",
+      "language": "c",
+      "target_flags": []
+    }
+  ],
+  "artifact_kind": "project-migration-build-ir-common-contract-test-only",
+  "claim_boundary": {
+    "does_not_prove": [
+      "archive or multi-input link ordering",
+      "build success",
+      "program semantic equivalence",
+      "toolchain equivalence"
+    ],
+    "role": "test-only-nonsemantic-common-build-contract",
+    "semantic_gate": false,
+    "translation_coverage_numerator": 0
+  },
+  "excluded_fields": [
+    "boundaries",
+    "build_metadata",
+    "claim_boundary.adapter_fields",
+    "generated_inputs.materialization",
+    "provenance",
+    "raw_fact_refs",
+    "semantic_sha256",
+    "status",
+    "targets.compile_argument_sets",
+    "targets.ordered_link_arguments",
+    "targets.output_materialization",
+    "toolchains",
+    "translation_units.compile_arguments.direct_argv",
+    "translation_units.compile_arguments.direct_argv_sha256",
+    "translation_units.compile_arguments.expanded_argv_sha256",
+    "translation_units.output_materialization",
+    "translation_units.response_files",
+    "translation_units.toolchain_id",
+    "translation_units.unit_id"
+  ],
+  "schema_version": 1,
+  "source_inputs": [
+    {
+      "kind": "file",
+      "path": "src/unit.c",
+      "sha256": "515fd4865dd3799731ca550f2638096149dafb0a5054fecbcb8a31b3a027abf3",
+      "size_bytes": 88
+    }
+  ],
+  "target_closure": [
+    "object:build/unit.o",
+    "link:build/program"
+  ],
+  "targets": [
+    {
+      "dependency_keys": [],
+      "key": "object:build/unit.o",
+      "kind": "object",
+      "ordered_inputs": [
+        {
+          "binding": {
+            "kind": "file",
+            "path": "src/unit.c"
+          },
+          "dependency_key": null,
+          "ordinal": 0,
+          "role": "source"
+        }
+      ],
+      "output": {
+        "kind": "file",
+        "path": "build/unit.o"
+      }
+    },
+    {
+      "dependency_keys": [
+        "object:build/unit.o"
+      ],
+      "key": "link:build/program",
+      "kind": "link",
+      "ordered_inputs": [
+        {
+          "binding": {
+            "kind": "file",
+            "path": "build/unit.o"
+          },
+          "dependency_key": "object:build/unit.o",
+          "ordinal": 0,
+          "role": "link-input"
+        }
+      ],
+      "output": {
+        "kind": "file",
+        "path": "build/program"
+      }
+    }
+  ],
+  "translation_units": [
+    {
+      "compiler": "clang",
+      "compiler_wrappers": [],
+      "defines": [
+        {
+          "name": "VALUE",
+          "value": "7"
+        }
+      ],
+      "includes": [],
+      "language": "c",
+      "output": {
+        "kind": "file",
+        "path": "build/unit.o"
+      },
+      "redacted_define_count": 0,
+      "semantic_flags": [
+        "-std=c11"
+      ],
+      "source": {
+        "kind": "file",
+        "path": "src/unit.c",
+        "sha256": "515fd4865dd3799731ca550f2638096149dafb0a5054fecbcb8a31b3a027abf3",
+        "size_bytes": 88
+      },
+      "variant_count": 1,
+      "variant_index": 0,
+      "working_directory": "."
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "artifact_kind": "project-migration-build-ir-equivalence-toolchain-evidence",
+  "claim_boundary": {
+    "identity_verified": false,
+    "semantic_gate": false,
+    "translation_coverage_numerator": 0
+  },
+  "driver": "clang",
+  "schema_version": 1,
+  "status": "recorded"
+}

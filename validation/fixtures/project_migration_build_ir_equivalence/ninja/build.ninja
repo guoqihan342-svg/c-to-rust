@@ -1,0 +1,4 @@
+rule link
+  command = clang ../build/unit.o -o ../build/program
+
+build ../build/program: link ../build/unit.o
