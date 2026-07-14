@@ -453,8 +453,9 @@ class _JudgeEntrypointsValidatorTestsPart00:
             text = original_read_text(path, *args, **kwargs)
             if Path(path).as_posix().endswith(".opencode/agents/c2rust-migrator.md"):
                 return text.replace(
-                    "  --opencode-variant max\n```",
-                    "  --opencode-variant max\nsuperpowers required-preflight\n```",
+                    "## Superpowers Workflow Boundary",
+                    "superpowers required-preflight\n\n## Superpowers Workflow Boundary",
+                    1,
                 )
             return text
 
