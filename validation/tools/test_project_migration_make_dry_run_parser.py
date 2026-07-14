@@ -18,6 +18,12 @@ from validation.tools._project_migration_harness.make_dry_run_parser import (
     MakeDryRunParseError,
     parse_make_dry_run_stdout,
 )
+from validation.tools._project_migration_harness.make_dry_run_runner import (
+    canonical_make_dry_run_plan_bytes, create_make_dry_run_plan,
+)
+from validation.tools.test_project_migration_make_support import (
+    artifact_ref, controlled_success,
+)
 
 
 class MakeDryRunParserTests(unittest.TestCase):
@@ -47,13 +53,44 @@ class MakeDryRunParserTests(unittest.TestCase):
             "size_bytes": len(payload),
         }
 
+    @staticmethod
+    def raw_ref(path: str, payload: bytes) -> dict[str, object]:
+        return {
+            "path": path,
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "size_bytes": len(payload),
+        }
+
     def report(self) -> dict[str, object]:
+        makefile = self.ref(f"inputs/{self.token}/project.mk")
+        source = self.ref(self.source)
+        toolchain = self.ref(f"evidence/{self.token}/toolchain.json")
+        plan = create_make_dry_run_plan(
+            makefile_ref=makefile,
+            input_refs=[source],
+            toolchain_ref=toolchain,
+            targets=[f"target-{self.token}"],
+        )
+        stdout = self.stdout().encode("utf-8")
+        outcome, sandbox, _sandbox_bytes = controlled_success(
+            plan, toolchain, stdout, b"",
+            sandbox_path=f"evidence/{self.token}/sandbox.json",
+        )
         return create_make_dry_run_report(
-            stdout=self.stdout(),
-            makefile_ref=self.ref(f"inputs/{self.token}/project.mk"),
-            source_refs=[self.ref(self.source)],
-            toolchain_ref=self.ref(f"evidence/{self.token}/toolchain.json"),
-            sandbox_ref=self.ref(f"evidence/{self.token}/sandbox.json"),
+            outcome=outcome,
+            raw_stdout_ref=self.raw_ref(f"evidence/{self.token}/stdout.bin", stdout),
+            raw_stderr_ref=self.raw_ref(
+                f"evidence/{self.token}/stderr.bin", b"",
+            ),
+            makefile_ref=makefile,
+            source_refs=[source],
+            input_refs=[source],
+            toolchain_ref=toolchain,
+            sandbox_ref=sandbox,
+            execution_plan_ref=artifact_ref(
+                f"evidence/{self.token}/plan.json",
+                canonical_make_dry_run_plan_bytes(plan),
+            ),
             targets=[f"target-{self.token}"],
         )
 
@@ -78,7 +115,7 @@ class MakeDryRunParserTests(unittest.TestCase):
         report = self.report()
         encoded = canonical_make_dry_run_report_bytes(report)
 
-        self.assertEqual(1, report["schema_version"])
+        self.assertEqual(2, report["schema_version"])
         self.assertEqual("project-migration-make-dry-run-report", report["artifact_kind"])
         self.assertFalse(report["semantic_gate"])
         self.assertEqual(0, report["translation_coverage_numerator"])
@@ -120,16 +157,22 @@ class MakeDryRunParserTests(unittest.TestCase):
         with self.assertRaisesRegex(MakeDryRunContractError, "targets_invalid"):
             validate_make_dry_run_report(changed)
 
-        with self.assertRaisesRegex(
-            MakeDryRunContractError, "source_binding_mismatch"
-        ):
+        changed = copy.deepcopy(report)
+        changed["source_refs"] = [self.ref(f"sources/{self.token}/other.c")]
+        with self.assertRaisesRegex(MakeDryRunContractError, "source_binding_mismatch"):
+            validate_make_dry_run_report(changed)
+
+        with self.assertRaisesRegex(MakeDryRunContractError, "runner_outcome_type_invalid"):
             create_make_dry_run_report(
-                stdout=self.stdout(),
-                makefile_ref=self.ref(f"inputs/{self.token}/project.mk"),
-                source_refs=[self.ref(f"sources/{self.token}/other.c")],
-                toolchain_ref=self.ref(f"evidence/{self.token}/toolchain.json"),
-                sandbox_ref=self.ref(f"evidence/{self.token}/sandbox.json"),
-                targets=["all"],
+                outcome={"status": "ready"},
+                raw_stdout_ref=report["raw_stdout_ref"],
+                raw_stderr_ref=report["raw_stderr_ref"],
+                makefile_ref=report["makefile_ref"],
+                source_refs=report["source_refs"], input_refs=report["input_refs"],
+                toolchain_ref=report["toolchain_ref"],
+                sandbox_ref=report["sandbox_ref"],
+                execution_plan_ref=report["execution_plan_ref"],
+                targets=report["targets"],
             )
 
         extra = copy.deepcopy(report)

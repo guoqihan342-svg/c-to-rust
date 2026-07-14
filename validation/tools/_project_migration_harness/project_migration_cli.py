@@ -6,6 +6,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Sequence
 
 from .ledger_schema import SCHEMA_VERSION as LEDGER_SCHEMA_VERSION
+from .make_build_ir_adapter import MakeReportSelection
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -16,6 +17,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     plan = commands.add_parser("plan")
     plan.add_argument("--repo-root", type=Path, required=True)
     plan.add_argument("--compile-database", type=Path)
+    plan.add_argument("--make-report", type=Path)
+    plan.add_argument("--make-report-sha256")
+    plan.add_argument("--make-report-size-bytes", type=int)
     plan.add_argument("--out-root", default="target/project-migration")
     plan.add_argument("--run-id")
     plan.add_argument("--source-commit", default="unversioned")
@@ -139,7 +143,25 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     status = commands.add_parser("status")
     status.add_argument("--db", type=Path, required=True)
     status.add_argument("--run-id", required=True)
-    return parser.parse_args(argv)
+    parsed = parser.parse_args(argv)
+    if parsed.command == "plan":
+        make_values = (
+            parsed.make_report, parsed.make_report_sha256,
+            parsed.make_report_size_bytes,
+        )
+        if any(value is not None for value in make_values):
+            if parsed.compile_database is not None or any(
+                value is None for value in make_values
+            ):
+                parser.error(
+                    "--make-report, --make-report-sha256, and "
+                    "--make-report-size-bytes are exclusive with --compile-database"
+                )
+            try:
+                parsed.make_report = MakeReportSelection(*make_values)
+            except ValueError as error:
+                parser.error(str(error))
+    return parsed
 
 
 def load_object(path: Path) -> dict[str, Any]:

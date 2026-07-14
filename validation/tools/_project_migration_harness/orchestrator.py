@@ -10,8 +10,10 @@ from .build_ir_validation import verify_build_ir_artifact
 from .c_index import index_translation_units
 from .context_pages import build_context_pages
 from .discovery import discover_project
-from .generated_closure import materialize_build_ir_stage
 from .ledger import ProjectLedger, SCHEMA_VERSION as LEDGER_SCHEMA_VERSION
+from .make_build_ir_adapter import (
+    MakeReportSelection, materialize_selected_build_ir_stage,
+)
 from .migration_graph import build_migration_graph
 from .orchestrator_context import ContextPortfolioError, build_context_portfolio
 from .scheduler import schedule_portfolio
@@ -24,6 +26,7 @@ def plan_project(
     harness_root: str | Path,
     out_root: str,
     compile_database: str | Path | None = None,
+    make_report: MakeReportSelection | None = None,
     run_id: str | None = None,
     source_commit: str = "unversioned",
     max_units: int = 10_000,
@@ -53,14 +56,17 @@ def plan_project(
         raise ValueError("require_build_closure must be boolean")
     artifacts: dict[str, dict[str, Any]] = {}
     discovery = discover_project(
-        source_input, compile_database=compile_database, max_units=max_units
+        source_input, compile_database=compile_database, max_units=max_units,
+        make_report=make_report,
     )
     artifacts["discovery"] = write_json_artifact(output, "plan/discovery.json", discovery)
     if discovery.get("status") != "ready":
         return _blocked(output, artifacts, "discovery_blocked")
     source = source_input.resolve(strict=True)
     try:
-        build_stage = materialize_build_ir_stage(source, output, discovery, artifacts)
+        build_stage = materialize_selected_build_ir_stage(
+            source, output, discovery, artifacts, make_report,
+        )
     except (OSError, TypeError, ValueError):
         return _blocked(output, artifacts, "build_ir_contract_invalid")
     if build_stage["verification"].get("status") != "verified":
@@ -219,6 +225,7 @@ def plan_project(
         "execution": {
             "model_launched": False,
             "cargo_executed": False,
+            "make_executed": False,
             "build_ir_ready": build_ir_ready,
             "build_ir_semantic_sha256": build_ir["semantic_sha256"],
             "build_ir_blockers": admission.get("blockers", []),

@@ -12,6 +12,7 @@ from .compile_database import parse_compile_entry
 from .discovery_database import load_compile_database, select_compile_database
 from .discovery_variants import finalize_variants
 from .generated_closure import discover_generated_build_closure
+from .make_build_ir_adapter import MakeReportSelection, discover_make_project
 
 
 CLAIM_BOUNDARY = {
@@ -31,6 +32,7 @@ def discover_project(
     repo_root: str | Path,
     compile_database: str | Path | None = None,
     max_units: int = 10_000,
+    make_report: MakeReportSelection | None = None,
 ) -> dict[str, Any]:
     root = Path(repo_root)
     empty_facts = {
@@ -40,6 +42,13 @@ def discover_project(
         "blockers": [],
         "build_commands_executed": False,
     }
+    if make_report is not None:
+        if compile_database is not None:
+            return report(
+                empty_facts, {"status": "selection-conflict"}, [], [],
+                ["build_input_selection_conflict"],
+            )
+        return discover_make_project(root, make_report, max_units)
     if isinstance(max_units, bool) or not isinstance(max_units, int) or max_units < 1:
         return report(empty_facts, {"status": "unresolved"}, [], [], ["max_units_invalid"])
     if not root.exists() or not root.is_dir():

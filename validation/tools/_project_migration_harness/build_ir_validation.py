@@ -13,9 +13,11 @@ from .build_ir import (
     canonical_build_ir_bytes, is_sha256,
     validate_artifact_reference, validate_materialized_binding,
 )
-from .build_ir_projection import RAW_ROLES, project_build_ir, target_closure
+from .build_ir_projection import target_closure
 from .closure_paths import verify_repository_artifact
-from .generated_closure import verify_generated_build_closure
+from .make_build_ir_reopen import (
+    accepted_provenance_role, accepted_raw_roles, reproject_bound_build_ir,
+)
 
 
 MAX_BUILD_IR_ARTIFACT_BYTES = 64 * 1024 * 1024
@@ -46,15 +48,7 @@ def verify_build_ir_artifact(
             raise BuildIRValidationError("build_ir_not_canonical")
         validate_build_ir(payload)
         attachments = _attachments(artifact_base, payload["raw_fact_refs"])
-        discovery = attachments["discovery"]
-        closure = attachments["generated-build-closure"]
-        stored_verification = attachments["generated-build-closure-verification"]
-        current_verification = verify_generated_build_closure(repo_root, closure)
-        if current_verification != stored_verification:
-            raise BuildIRValidationError("build_ir_generated_closure_drift")
-        recomputed = project_build_ir(
-            discovery, closure, stored_verification, payload["raw_fact_refs"]
-        )
+        recomputed = reproject_bound_build_ir(repo_root, payload, attachments)
         if recomputed != payload:
             raise BuildIRValidationError("build_ir_projection_drift")
         seen: dict[tuple[str, str], dict[str, Any]] = {}
@@ -198,7 +192,7 @@ def _validate_targets(targets: list[Mapping[str, Any]], identifiers: set[str]) -
 def _validate_raw_refs(value: Any) -> None:
     refs = _objects(value, "build_ir_raw_fact_refs_invalid")
     roles = [item.get("role") for item in refs]
-    if roles != sorted(RAW_ROLES):
+    if not accepted_raw_roles(roles):
         raise BuildIRValidationError("build_ir_raw_fact_refs_invalid")
     for item in refs:
         validate_artifact_reference(item, "build_ir_raw_fact_ref_invalid")
@@ -286,7 +280,9 @@ def _objects(value: Any, code: str) -> list[Mapping[str, Any]]:
 
 def _require_provenance(value: Mapping[str, Any]) -> None:
     provenance = value.get("provenance")
-    if not isinstance(provenance, Mapping) or provenance.get("raw_fact_role") not in RAW_ROLES:
+    if not isinstance(provenance, Mapping) or not accepted_provenance_role(
+        provenance.get("raw_fact_role")
+    ):
         raise BuildIRValidationError("build_ir_provenance_invalid")
 
 def _strings(value: Any) -> bool:

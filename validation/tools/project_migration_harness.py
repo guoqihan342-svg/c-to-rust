@@ -84,6 +84,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             harness_root=REPO_ROOT,
             out_root=out_root_rel,
             compile_database=args.compile_database,
+            make_report=args.make_report,
             run_id=args.run_id,
             source_commit=args.source_commit,
             max_units=args.max_units,
