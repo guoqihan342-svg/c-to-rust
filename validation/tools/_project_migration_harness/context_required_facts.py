@@ -110,6 +110,24 @@ def required_fact_binding_ready(value: Mapping[str, Any]) -> bool:
     )
 
 
+def context_retrieval_ready(context: Mapping[str, Any]) -> bool:
+    if "retrieval" not in context:
+        return True
+    retrieval = context.get("retrieval")
+    if not isinstance(retrieval, Mapping):
+        return False
+    receipt = retrieval.get("selection_receipt_sha256")
+    blockers = retrieval.get("selection_blockers")
+    return (
+        retrieval.get("selection_status") == "ready"
+        and isinstance(receipt, str)
+        and _SHA256.fullmatch(receipt) is not None
+        and isinstance(blockers, list)
+        and not blockers
+        and required_fact_binding_ready(retrieval)
+    )
+
+
 def _record_request(
     requests: dict[tuple[str, str], set[str]],
     namespace: str,
@@ -233,5 +251,6 @@ def _source_declaration_match(
 
 __all__ = [
     "REQUIRED_FACT_QUERY_POLICY", "build_required_fact_query",
-    "required_fact_binding_ready", "required_fact_resolution",
+    "context_retrieval_ready", "required_fact_binding_ready",
+    "required_fact_resolution",
 ]

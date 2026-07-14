@@ -13,7 +13,14 @@ This mirror covers the categorized document index for the migration-agent docume
 The Chinese source currently contains these major headings:
 
 - `# 覆盖与路线`
+- `## A19b4c2 检索前沿`
 - `## 评委 Demo / Milestone`
+
+## A19b4c2 Retrieval Frontier
+
+- [x] **A19b4c2a: model context-retrieval-not-ready as a recoverable scheduling state, not a terminal semantic-ledger result.** The portfolio explicitly lists `pending_retrieval_groups` while retaining hash-bound assignments. The scheduler defers these workers with `context_retrieval_pending`, so they receive no leases and trigger no model invocations. A controller test verifies zero attempts and zero leases; the finite regression is 527/527 on both Windows and WSL. This item proves only pending classification, binding retention, and the zero-lease/zero-model boundary; it does not claim that pending can recover to `ready`, establish a semantic gate, or increase the translator numerator.
+- [ ] **A19b4c2b: implement a host-owned, content-bound single-SCC refresh/override.** The host must reopen and validate the current portfolio, catalog, selection receipt, and page bindings before moving that SCC from `pending_retrieval` to `ready`; A19b4c2a does not include this refresh/recovery capability.
+- [ ] **A19b4c2c: recompute the next retrieval frontier after every wave.** Recompute from the latest DAG, failure evidence, and expansion queries instead of reusing plan-time whole-project selection or presenting one single-SCC refresh as per-wave recomputation.
 
 ## Judge Demo / Milestone
 

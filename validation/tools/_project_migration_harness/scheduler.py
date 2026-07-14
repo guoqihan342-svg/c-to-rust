@@ -14,6 +14,7 @@ from .project_knowledge import validate_knowledge_reference
 from .schedule_graph import critical_path_weights
 from .candidate_strategy import validate_candidate_strategy
 from .project_interface_model_context import validate_model_coordinator_context
+from .context_required_facts import context_retrieval_ready
 
 
 
@@ -118,6 +119,11 @@ def _deferred_reasons(
     state = states.get(group_id)
     if state is None:
         return ["unit_state_missing"]
+    context = assignment.get("context")
+    if not isinstance(context, Mapping):
+        raise ValueError("assignment context must be an object")
+    if not context_retrieval_ready(context):
+        return ["context_retrieval_pending"]
     dependencies = assignment.get("dependencies", [])
     if not isinstance(dependencies, list) or not all(isinstance(item, str) for item in dependencies):
         raise ValueError("assignment dependencies must be strings")

@@ -77,7 +77,7 @@ class ProjectMigrationOrchestratorTests(unittest.TestCase):
             self.harness / "target/run-one/project-migration-plan.json"
         ).is_file())
 
-    def test_unknown_external_without_declaration_blocks_affected_group(self) -> None:
+    def test_unknown_external_without_declaration_waits_without_model_launch(self) -> None:
         database = self.write_project(
             "int closed(void) { return 1; }\n"
             "int boundary(void) { return external_api(); }\n"
@@ -96,13 +96,15 @@ class ProjectMigrationOrchestratorTests(unittest.TestCase):
             for item in result["portfolio"]["assignments"]
             if item["role"] == "planner"
         ]
-        self.assertEqual([], boundary)
-        self.assertEqual(3, len(result["portfolio"]["assignments"]))
-        self.assertEqual(1, len(result["portfolio"]["blocked_groups"]))
+        self.assertEqual(1, len(boundary))
+        self.assertEqual(7, len(result["portfolio"]["assignments"]))
+        self.assertEqual([], result["portfolio"]["blocked_groups"])
+        self.assertEqual(1, len(result["portfolio"]["pending_retrieval_groups"]))
         self.assertEqual(
             ["context_retrieval_not_ready"],
-            result["portfolio"]["blocked_groups"][0]["reasons"],
+            result["portfolio"]["pending_retrieval_groups"][0]["reasons"],
         )
+        self.assertNotIn(boundary[0]["worker_id"], result["scheduler"]["ready_worker_ids"])
         self.assertFalse(result["execution"]["model_launched"])
 
     def test_missing_compile_database_stops_before_model_and_ledger(self) -> None:

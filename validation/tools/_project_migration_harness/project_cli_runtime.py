@@ -83,6 +83,7 @@ def display_result(command: str, result: dict[str, Any]) -> dict[str, Any]:
     assignments = portfolio.get("assignments", [])
     units = portfolio.get("ledger_units", [])
     blocked = portfolio.get("blocked_groups", [])
+    pending_retrieval = portfolio.get("pending_retrieval_groups", [])
     artifacts = result.get("artifacts")
     full_payload = artifacts.get("portfolio") if isinstance(artifacts, dict) else None
     summary = {
@@ -94,6 +95,9 @@ def display_result(command: str, result: dict[str, Any]) -> dict[str, Any]:
         "assignment_count": len(assignments) if isinstance(assignments, list) else None,
         "unit_count": len(units) if isinstance(units, list) else None,
         "blocked_group_count": len(blocked) if isinstance(blocked, list) else None,
+        "pending_retrieval_group_count": (
+            len(pending_retrieval) if isinstance(pending_retrieval, list) else None
+        ),
         "full_payload": full_payload,
     }
     return {**result, "portfolio": summary}

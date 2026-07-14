@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .ledger_security import assert_no_secrets
-from .context_required_facts import required_fact_binding_ready
+from .context_required_facts import context_retrieval_ready
 from .portfolio_integrity import (
     PortfolioIntegrityError,
     bind_context,
@@ -23,7 +23,6 @@ from .portfolio_roles import boundary_required, roles_for_group, worker_descript
 
 SCHEMA_VERSION = 1
 PortfolioError = PortfolioIntegrityError
-_HEX_DIGITS = frozenset("0123456789abcdefABCDEF")
 
 
 def _explicitly_eligible(group: Mapping[str, Any]) -> bool:
@@ -35,25 +34,6 @@ def _explicitly_eligible(group: Mapping[str, Any]) -> bool:
     if group.get("structural_status") == "eligible":
         return True
     return group.get("classification") in {"independent", "context_group"}
-
-
-def _retrieval_ready(context: Mapping[str, Any]) -> bool:
-    if "retrieval" not in context:
-        return True
-    retrieval = context.get("retrieval")
-    if not isinstance(retrieval, Mapping):
-        return False
-    receipt = retrieval.get("selection_receipt_sha256")
-    blockers = retrieval.get("selection_blockers")
-    return (
-        retrieval.get("selection_status") == "ready"
-        and isinstance(receipt, str)
-        and len(receipt) == 64
-        and all(character in _HEX_DIGITS for character in receipt)
-        and isinstance(blockers, list)
-        and not blockers
-        and required_fact_binding_ready(retrieval)
-    )
 
 
 def plan_portfolio(
@@ -105,7 +85,9 @@ def plan_portfolio(
 
     assignments: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
+    pending_retrieval: list[dict[str, Any]] = []
     unavailable: set[str] = set()
+    retrieval_pending_ids: set[str] = set()
     planned_waves: list[dict[str, Any]] = []
     for wave_index, group_ids in enumerate(layout):
         wave_workers: list[str] = []
@@ -123,8 +105,6 @@ def plan_portfolio(
             context = contexts[group_id]
             if (_explicitly_eligible(group) or needs_planner) and context is None:
                 reasons.append("routable_group_context_pack_missing")
-            if context is not None and not _retrieval_ready(context):
-                reasons.append("context_retrieval_not_ready")
             if context and context["byte_count"] > byte_budget:
                 reasons.append("context_byte_budget_exceeded")
             if context and context["token_count"] > token_budget:
@@ -139,6 +119,13 @@ def plan_portfolio(
                     "reasons": sorted(set(reasons)),
                 })
                 continue
+            if context is not None and not context_retrieval_ready(context):
+                retrieval_pending_ids.add(group_id)
+                pending_retrieval.append({
+                    "group_id": group_id,
+                    "wave_index": wave_index,
+                    "reasons": ["context_retrieval_not_ready"],
+                })
             for role in roles_for_group(group):
                 descriptor = worker_descriptor(
                     run_id=run_id,
@@ -163,7 +150,11 @@ def plan_portfolio(
             "worker_ids": wave_workers,
         })
 
-    ready = [item for item in assignments if item["launch_policy"]["state"] == "ready"]
+    ready = [
+        item for item in assignments
+        if item["launch_policy"]["state"] == "ready"
+        and item["group_id"] not in retrieval_pending_ids
+    ]
     role_order = {"planner": 0, "translator": 1, "reviewer": 2, "repairer": 3}
     ready.sort(key=lambda item: (
         item["wave_index"], role_order[item["role"]], item["worker_id"],
@@ -200,8 +191,13 @@ def plan_portfolio(
         "initial_ready": {
             "selected_worker_ids": [item["worker_id"] for item in units],
             "deferred_worker_ids": [item["worker_id"] for item in ready[max_concurrency:]],
+            "pending_retrieval_worker_ids": sorted(
+                item["worker_id"] for item in assignments
+                if item["group_id"] in retrieval_pending_ids
+            ),
         },
         "blocked_groups": blocked,
+        "pending_retrieval_groups": pending_retrieval,
         "execution": {
             "launches_processes": False,
             "materialization_required": True,

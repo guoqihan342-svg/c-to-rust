@@ -7,6 +7,12 @@
 - [future-vision-and-mvp.md](../future-vision-and-mvp.md)
 - [future-vision-and-mvp.en.md](../future-vision-and-mvp.en.md)
 
+## A19b4c2 检索前沿
+
+- [x] **A19b4c2a：把上下文检索未就绪建模为可恢复调度态，而不是 semantic ledger 终态。** portfolio 显式列出 `pending_retrieval_groups`，同时保留 hash-bound assignments；scheduler 对这些 worker 返回 `context_retrieval_pending` defer，因此它们不会获得租约，也不会触发模型调用。控制器用例验证 attempts/leases 均为 0；有限回归在 Windows 与 WSL 均为 527/527。该项只证明 pending 分类、绑定保留和零租约/零模型边界，不宣称 pending 已能恢复为 `ready`，也不构成 semantic gate 或增加 translator numerator。
+- [ ] **A19b4c2b：实现 host-owned、content-bound 的 single-SCC refresh/override。** host 必须重开并复验当前 portfolio、catalog、selection receipt 与 page bindings，之后才能把该 SCC 从 `pending_retrieval` 恢复为 `ready`；A19b4c2a 不包含这项刷新恢复能力。
+- [ ] **A19b4c2c：在每波结束后重算下一检索前沿。** 重算必须消费最新 DAG、失败证据和 expansion query，而不是复用计划期全项目 selection 或把一次 single-SCC refresh 表述为每波重算。
+
 ## 评委 Demo / Milestone
 
 当前公开 before/after 入口是 `../judge-demo.md`。

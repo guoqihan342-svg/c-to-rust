@@ -35,6 +35,7 @@ class ProjectMigrationCliAuthorityTests(unittest.TestCase):
 
         self.assertEqual(1, displayed["portfolio"]["assignment_count"])
         self.assertEqual(1, displayed["portfolio"]["unit_count"])
+        self.assertEqual(0, displayed["portfolio"]["pending_retrieval_group_count"])
         self.assertNotIn("assignments", displayed["portfolio"])
         self.assertEqual(full, display_result("dispatch", full))
 

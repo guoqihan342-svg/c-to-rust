@@ -6,6 +6,7 @@ from typing import Any
 
 from validation.tools._project_migration_harness.artifacts import canonical_json_bytes
 from validation.tools._project_migration_harness.portfolio import plan_portfolio
+from validation.tools._project_migration_harness.scheduler import schedule_portfolio
 
 
 _ABSENT = object()
@@ -73,14 +74,16 @@ class RetrievalAdmissionTests(unittest.TestCase):
 
         self.assertTrue(result["assignments"])
         self.assertEqual(result["blocked_groups"], [])
+        self.assertEqual(result["pending_retrieval_groups"], [])
 
     def test_context_without_retrieval_contract_remains_assignable(self) -> None:
         result = _plan()
 
         self.assertTrue(result["assignments"])
         self.assertEqual(result["blocked_groups"], [])
+        self.assertEqual(result["pending_retrieval_groups"], [])
 
-    def test_non_ready_retrieval_contract_never_creates_assignments(self) -> None:
+    def test_non_ready_retrieval_contract_is_assignable_but_never_schedulable(self) -> None:
         valid_receipt = "b" * 64
         cases = {
             "blocked_status": _ready_retrieval(
@@ -114,15 +117,30 @@ class RetrievalAdmissionTests(unittest.TestCase):
         for label, retrieval in cases.items():
             with self.subTest(label=label):
                 result = _plan(retrieval)
-                self.assertEqual(result["assignments"], [])
+                self.assertEqual(len(result["assignments"]), 3)
                 self.assertEqual(result["units"], [])
-                self.assertEqual(result["waves"][0]["worker_ids"], [])
-                self.assertEqual(result["blocked_groups"], [{
+                self.assertEqual(len(result["waves"][0]["worker_ids"]), 3)
+                self.assertEqual(result["blocked_groups"], [])
+                self.assertEqual(result["pending_retrieval_groups"], [{
                     "group_id": "neutral-group",
                     "wave_index": 0,
                     "reasons": ["context_retrieval_not_ready"],
                 }])
-                self.assertEqual(result["ledger_units"][0]["status"], "blocked")
+                self.assertEqual(
+                    (result["ledger_units"][0]["status"],
+                     result["ledger_units"][0]["resumable_status"]),
+                    ("pending", "ready"),
+                )
+                self.assertEqual(
+                    len(result["initial_ready"]["pending_retrieval_worker_ids"]), 3,
+                )
+                schedule = schedule_portfolio(result, result["ledger_units"], {})
+                self.assertEqual(schedule["ready"], [])
+                self.assertEqual(len(schedule["deferred"]), 3)
+                self.assertTrue(all(
+                    item["reasons"] == ["context_retrieval_pending"]
+                    for item in schedule["deferred"]
+                ))
 
 
 if __name__ == "__main__":
