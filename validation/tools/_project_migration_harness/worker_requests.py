@@ -45,7 +45,7 @@ def materialize_worker_requests(
                 ),
             },
             "dependencies": assignment.get("dependencies", []),
-            "context": assignment.get("context"),
+            "context": item.get("effective_context", assignment.get("context")),
             "context_materialization": dict(context_materialization),
             "context_frontier": item.get("context_frontier"),
             "launch_claim": item.get("launch_claim"),

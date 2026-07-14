@@ -22,7 +22,7 @@ _KINDS = frozenset({"selection_ready", "selection_invalidated"})
 
 
 @dataclass(frozen=True, slots=True)
-class ContextFrontierCommand:
+class _ContextFrontierCommand:
     command_kind: str
     command_id: str
     run_id: str
@@ -66,7 +66,7 @@ class ContextFrontierAuthority:
         self.connection = connection
 
     def apply(
-        self, command: ContextFrontierCommand, *, created_at: str | None = None,
+        self, command: _ContextFrontierCommand, *, created_at: str | None = None,
     ) -> ContextFrontierResult:
         with atomic(self.connection):
             replay = self._find_replay(command)
@@ -131,7 +131,7 @@ class ContextFrontierAuthority:
             )
 
     def _find_replay(
-        self, command: ContextFrontierCommand,
+        self, command: _ContextFrontierCommand,
     ) -> ContextFrontierResult | None:
         rows = self.connection.execute(
             """select * from context_frontier_events
@@ -233,6 +233,7 @@ def _require_edge(kind: str, current: Mapping[str, Any], target: Mapping[str, An
             and target["mode"] == "host_retrieval"
             and target["query_epoch"] == current["query_epoch"]
             and target["selection_input_sha256"] == current["selection_input_sha256"]
+            and target.get("context_overlay") is not None
         )
     else:
         valid = (
@@ -278,6 +279,6 @@ def _sha(value: Any) -> bool:
 
 
 __all__ = [
-    "ContextFrontierAuthority", "ContextFrontierCommand", "ContextFrontierResult",
+    "ContextFrontierAuthority", "ContextFrontierResult",
     "assert_context_frontier_projection", "load_context_frontier_projection",
 ]

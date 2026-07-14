@@ -9,6 +9,7 @@ from .artifacts import content_sha256
 from .ledger import ProjectLedger
 from .orchestration_facts import read_artifact_reference
 from .project_interface_model_context import build_model_coordinator_context
+from .context_frontier_overlay_runtime import resolve_request_effective_context
 
 
 def bound_worker_request(
@@ -51,21 +52,32 @@ def bound_worker_request(
         raise ValueError("worker assignment must be an object")
     if content_sha256(assignment) != metadata.get("assignment_sha256"):
         raise ValueError("worker assignment digest drifted")
-    _validate_request_fields(request, assignment, attempt)
+    _validate_request_fields(
+        request, assignment, attempt, harness_root=harness_root,
+    )
     _validate_latest_coordinator_context(request, ledger)
     return request, attempt
 
 
 def _validate_request_fields(
     request: Mapping[str, Any], assignment: Mapping[str, Any], attempt: Mapping[str, Any],
+    *, harness_root: Path,
 ) -> None:
     fields = (
         "run_id", "worker_id", "role", "group_id", "unit_id", "wave_index",
-        "dependencies", "context", "launch_policy", "runtime_roots",
+        "dependencies", "launch_policy", "runtime_roots",
         "max_attempts", "authority",
     )
     if any(request.get(key) != assignment.get(key) for key in fields):
         raise ValueError("worker request fields drifted from its assignment")
+    frontier = request.get("context_frontier")
+    if (
+        not isinstance(frontier, Mapping)
+        or request.get("context") != resolve_request_effective_context(
+            assignment, frontier, harness_root=harness_root,
+        )
+    ):
+        raise ValueError("worker request effective context drifted")
     if request.get("group_id") != request.get("unit_id"):
         raise ValueError("worker request group/unit identity drifted")
     if (

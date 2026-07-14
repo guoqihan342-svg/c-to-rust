@@ -10,8 +10,10 @@ from validation.tools._project_migration_harness.ledger_context_frontier import 
     prepare_portfolio_frontiers,
 )
 from validation.tools._project_migration_harness.ledger_context_frontier_authority import (
-    ContextFrontierCommand, assert_context_frontier_projection,
+    ContextFrontierAuthority, _ContextFrontierCommand,
+    assert_context_frontier_projection,
 )
+from validation.tools._project_migration_harness.ledger_schema import atomic
 from validation.tools._project_migration_harness.ledger_security import LedgerError
 from validation.tools.project_migration_controller_test_support import (
     ProjectMigrationControllerCase,
@@ -64,7 +66,7 @@ class ProjectMigrationContextFrontierLedgerTests(ProjectMigrationControllerCase)
         ledger = self.ledger()
         pending = ledger.context_frontier_states(plan["run_id"])[0]
         ready_head = _ready_head(pending["head"])
-        ready = ContextFrontierCommand(
+        ready = _ContextFrontierCommand(
             command_kind="selection_ready",
             command_id="selection-ready:one",
             run_id=plan["run_id"],
@@ -76,17 +78,17 @@ class ProjectMigrationContextFrontierLedgerTests(ProjectMigrationControllerCase)
             evidence_sha256=digest("ready-evidence"),
         )
 
-        applied = ledger.apply_context_frontier(ready)
-        replay = ledger.apply_context_frontier(ready)
+        applied = _apply_authority(ledger, ready)
+        replay = _apply_authority(ledger, ready)
 
-        self.assertTrue(applied["applied"])
-        self.assertFalse(replay["applied"])
+        self.assertTrue(applied.applied)
+        self.assertFalse(replay.applied)
         self.assertEqual((0, 1), (
-            applied["previous"]["state_version"],
-            applied["current"]["state_version"],
+            applied.previous.version,
+            applied.current.version,
         ))
         invalidated_head = _invalidated_head(ready_head)
-        invalidated = ledger.apply_context_frontier(ContextFrontierCommand(
+        invalidated = _apply_authority(ledger, _ContextFrontierCommand(
             command_kind="selection_invalidated",
             command_id="selection-invalidated:one",
             run_id=plan["run_id"],
@@ -98,8 +100,8 @@ class ProjectMigrationContextFrontierLedgerTests(ProjectMigrationControllerCase)
             evidence_sha256=digest("failure-facts"),
         ))
         self.assertEqual(("pending_retrieval", 2), (
-            invalidated["current"]["status"],
-            invalidated["current"]["state_version"],
+            invalidated.current.status,
+            invalidated.current.version,
         ))
         with ledger.connect() as connection:
             with self.assertRaisesRegex(sqlite3.IntegrityError, "immutable"):
@@ -120,7 +122,7 @@ class ProjectMigrationContextFrontierLedgerTests(ProjectMigrationControllerCase)
         plan = self.plan("int unit(void) { return external_api(); }\n")
         ledger = self.ledger()
         pending = ledger.context_frontier_states(plan["run_id"])[0]
-        command = ContextFrontierCommand(
+        command = _ContextFrontierCommand(
             command_kind="selection_ready", command_id="selection-ready:first",
             run_id=plan["run_id"], unit_id=pending["unit_id"],
             expected_status="pending_retrieval", expected_version=0,
@@ -128,8 +130,8 @@ class ProjectMigrationContextFrontierLedgerTests(ProjectMigrationControllerCase)
             target_head=_ready_head(pending["head"]),
             evidence_sha256=digest("first"),
         )
-        ledger.apply_context_frontier(command)
-        stale = ContextFrontierCommand(
+        _apply_authority(ledger, command)
+        stale = _ContextFrontierCommand(
             command_kind="selection_ready", command_id="selection-ready:stale",
             run_id=command.run_id, unit_id=command.unit_id,
             expected_status=command.expected_status,
@@ -139,13 +141,19 @@ class ProjectMigrationContextFrontierLedgerTests(ProjectMigrationControllerCase)
         )
 
         with self.assertRaisesRegex(LedgerError, "stale"):
-            ledger.apply_context_frontier(stale)
+            _apply_authority(ledger, stale)
+
+
+def _apply_authority(ledger: object, command: _ContextFrontierCommand):
+    with ledger.connect() as connection, atomic(connection):
+        return ContextFrontierAuthority(connection).apply(command)
 
 
 def _ready_head(pending: dict) -> dict:
     return {
         **deepcopy(pending),
         "status": "ready",
+        "context_overlay": _overlay_reference("ready-overlay"),
         "selection_receipt_sha256": digest("receipt"),
         "materialized_page_set_sha256": digest("pages"),
         "selection_materialization_sha256": digest("materialization"),
@@ -161,9 +169,22 @@ def _invalidated_head(ready: dict) -> dict:
         "query_epoch": ready["query_epoch"] + 1,
         "input_binding": binding,
         "selection_input_sha256": content_sha256(binding),
+        "context_overlay": None,
         "selection_receipt_sha256": None,
         "materialized_page_set_sha256": None,
         "selection_materialization_sha256": None,
+    }
+
+
+def _overlay_reference(label: str) -> dict:
+    value = digest(label)
+    return {
+        "path": (
+            "target/run/context/frontier-cas/context-frontier-overlay/"
+            f"sha256/{value[:2]}/{value}.json"
+        ),
+        "sha256": value,
+        "size_bytes": 1,
     }
 
 

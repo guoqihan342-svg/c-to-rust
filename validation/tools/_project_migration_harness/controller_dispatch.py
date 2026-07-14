@@ -6,6 +6,7 @@ from typing import Any, Mapping
 
 from .artifacts import content_sha256, write_json_artifact
 from .context_frontier import materialize_scheduled_contexts
+from .context_frontier_overlay_runtime import resolve_schedule_context_overlays
 from .ledger import LeaseConflict, ProjectLedger
 from .orchestration_facts import build_gate_facts, read_artifact_reference
 from .scheduler import schedule_portfolio
@@ -28,6 +29,9 @@ def dispatch_project_workers(
     states = ledger.unit_states(run_id)
     facts = build_gate_facts(ledger, run_id=run_id, harness_root=harness_root)
     schedule = schedule_portfolio(portfolio, states, facts)
+    schedule = resolve_schedule_context_overlays(
+        schedule, harness_root=harness_root,
+    )
     context_pages, context_materialization = materialize_scheduled_contexts(
         schedule,
         harness_root=harness_root,

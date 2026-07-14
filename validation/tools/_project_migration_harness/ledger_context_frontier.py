@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 from .artifacts import content_sha256
 from .context_frontier_state import validate_context_frontier_head
 from .ledger_context_frontier_authority import (
-    ContextFrontierAuthority, ContextFrontierCommand,
+    ContextFrontierAuthority, _ContextFrontierCommand,
     assert_context_frontier_projection,
 )
 from .ledger_schema import _json, atomic
@@ -31,11 +33,46 @@ class ContextFrontierLedgerMixin:
             for unit_id, projection in zip(unit_ids, projections)
         ]
 
-    def apply_context_frontier(
-        self, command: ContextFrontierCommand,
+    def _commit_context_refresh(
+        self, permit: Any, *, harness_root: Path,
     ) -> dict[str, Any]:
+        from .context_frontier_refresh_reopen import (
+            reopen_host_context_refresh_permit,
+        )
+
         with self.connect() as connection, atomic(connection):
-            result = ContextFrontierAuthority(connection).apply(command)
+            binding = reopen_host_context_refresh_permit(
+                permit, harness_root=harness_root,
+            )
+            run = connection.execute(
+                "select status,metadata_json from project_runs where run_id=?",
+                (binding["run_id"],),
+            ).fetchone()
+            if run is None or run["status"] != "active":
+                raise LedgerError("context refresh requires an active run")
+            try:
+                metadata = json.loads(run["metadata_json"])
+            except (TypeError, json.JSONDecodeError) as error:
+                raise LedgerError("context refresh run metadata is invalid") from error
+            runtime = metadata.get("runtime_binding") if isinstance(metadata, Mapping) else None
+            if (
+                not isinstance(runtime, Mapping)
+                or runtime.get("plan_sha256") != binding["plan_sha256"]
+            ):
+                raise LedgerError("context refresh plan binding drifted")
+            result = ContextFrontierAuthority(connection).apply(
+                _ContextFrontierCommand(
+                    command_kind="selection_ready",
+                    command_id="selection-ready:" + str(binding["overlay"]["sha256"]),
+                    run_id=str(binding["run_id"]),
+                    unit_id=str(binding["unit_id"]),
+                    expected_status=str(binding["expected_status"]),
+                    expected_version=int(binding["expected_version"]),
+                    expected_head_sha256=str(binding["expected_head_sha256"]),
+                    target_head=binding["target_head"],
+                    evidence_sha256=str(binding["overlay"]["sha256"]),
+                )
+            )
         return {
             "applied": result.applied,
             "event_id": result.event_id,

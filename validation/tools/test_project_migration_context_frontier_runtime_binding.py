@@ -7,8 +7,9 @@ import unittest
 
 from validation.tools._project_migration_harness.artifacts import content_sha256
 from validation.tools._project_migration_harness.ledger_context_frontier_authority import (
-    ContextFrontierCommand,
+    ContextFrontierAuthority, _ContextFrontierCommand,
 )
+from validation.tools._project_migration_harness.ledger_schema import atomic
 from validation.tools._project_migration_harness.ledger_security import LedgerError
 from validation.tools.project_migration_controller_test_support import (
     ProjectMigrationControllerCase,
@@ -41,7 +42,7 @@ class ProjectMigrationContextFrontierRuntimeBindingTests(
         plan = self.plan("int unit(void) { return external_api(); }\n")
         ledger = self.ledger()
         pending = ledger.context_frontier_states(plan["run_id"])[0]
-        result = ledger.apply_context_frontier(ContextFrontierCommand(
+        result = _apply_authority(ledger, _ContextFrontierCommand(
             command_kind="selection_ready",
             command_id="selection-ready:runtime-binding",
             run_id=plan["run_id"],
@@ -52,7 +53,7 @@ class ProjectMigrationContextFrontierRuntimeBindingTests(
             target_head=_ready_head(pending["head"]),
             evidence_sha256=digest("runtime-binding-ready-evidence"),
         ))
-        self.assertTrue(result["applied"])
+        self.assertTrue(result.applied)
 
         with ledger.connect() as connection:
             event_count = connection.execute(
@@ -125,12 +126,30 @@ def _ready_head(pending: dict) -> dict:
     return {
         **deepcopy(pending),
         "status": "ready",
+        "context_overlay": _overlay_reference("runtime-binding-overlay"),
         "selection_receipt_sha256": digest("runtime-binding-receipt"),
         "materialized_page_set_sha256": digest("runtime-binding-pages"),
         "selection_materialization_sha256": content_sha256({
             "receipt": "runtime-binding-receipt",
             "pages": "runtime-binding-pages",
         }),
+    }
+
+
+def _apply_authority(ledger: object, command: _ContextFrontierCommand):
+    with ledger.connect() as connection, atomic(connection):
+        return ContextFrontierAuthority(connection).apply(command)
+
+
+def _overlay_reference(label: str) -> dict:
+    value = digest(label)
+    return {
+        "path": (
+            "target/run/context/frontier-cas/context-frontier-overlay/"
+            f"sha256/{value[:2]}/{value}.json"
+        ),
+        "sha256": value,
+        "size_bytes": 1,
     }
 
 

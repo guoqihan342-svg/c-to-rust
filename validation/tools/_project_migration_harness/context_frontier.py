@@ -34,7 +34,7 @@ def materialize_scheduled_contexts(
         if not isinstance(assignment, Mapping):
             raise ValueError("context frontier assignment is invalid")
         group_id = assignment.get("group_id")
-        context = assignment.get("context")
+        context = item.get("effective_context", assignment.get("context"))
         if not isinstance(group_id, str) or not isinstance(context, Mapping):
             raise ValueError("context frontier assignment binding is invalid")
         previous = contexts.setdefault(group_id, dict(context))
@@ -165,7 +165,7 @@ def _materialize_group(
     group_relative = _output_relative(
         str(context.get("path", "")), out_root_rel=out_root_rel,
     )
-    if group_relative != f"context/groups/{group_id}.json":
+    if not _valid_group_relative(group_relative, group_id):
         raise ValueError("context frontier group path drifted")
     group_target = out_root.joinpath(*PurePosixPath(group_relative).parts)
     group_payload = {
@@ -254,6 +254,21 @@ def _contains_link(root: Path, target: Path) -> bool:
     except ValueError:
         return True
     return False
+
+
+def _valid_group_relative(path: str, group_id: str) -> bool:
+    if path == f"context/groups/{group_id}.json":
+        return True
+    parts = PurePosixPath(path).parts
+    digest = parts[5][:-5] if len(parts) == 6 and parts[5].endswith(".json") else ""
+    return (
+        len(parts) == 6
+        and parts[:4] == ("context", "frontier-cas", "groups", "sha256")
+        and len(parts[4]) == 2
+        and len(digest) == 64
+        and parts[4] == digest[:2]
+        and all(character in "0123456789abcdef" for character in digest)
+    )
 
 
 __all__ = ["materialize_scheduled_contexts"]

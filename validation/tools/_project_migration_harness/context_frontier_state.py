@@ -13,12 +13,13 @@ FRONTIER_PENDING = "pending_retrieval"
 FRONTIER_READY = "ready"
 FRONTIER_STATUSES = frozenset({FRONTIER_PENDING, FRONTIER_READY})
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
-_HEAD_KEYS = {
+_HEAD_V1_KEYS = {
     "schema_version", "run_id", "unit_id", "status", "mode", "query_epoch",
     "input_binding", "selection_input_sha256", "catalog",
     "selection_receipt_sha256", "materialized_page_set_sha256",
     "selection_materialization_sha256",
 }
+_HEAD_KEYS = {*_HEAD_V1_KEYS, "context_overlay"}
 _INPUT_KEYS = {
     "dag_sha256", "group_sha256", "failure_fact_set_sha256",
     "selection_seed_sha256", "limits",
@@ -26,11 +27,12 @@ _INPUT_KEYS = {
 _LIMIT_KEYS = {
     "context_byte_budget", "context_token_budget", "context_page_limit",
 }
-_SCHEDULE_KEYS = {
+_SCHEDULE_V1_KEYS = {
     "status", "state_version", "head_sha256", "mode", "query_epoch",
     "selection_input_sha256", "catalog", "selection_receipt_sha256",
     "materialized_page_set_sha256", "selection_materialization_sha256",
 }
+_SCHEDULE_KEYS = {*_SCHEDULE_V1_KEYS, "context_overlay"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,7 +66,7 @@ def build_initial_context_frontier(
         "limits": {key: limits.get(key) for key in sorted(_LIMIT_KEYS)},
     }
     head = {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": run_id,
         "unit_id": unit_id,
         "status": status,
@@ -73,6 +75,7 @@ def build_initial_context_frontier(
         "input_binding": input_binding,
         "selection_input_sha256": content_sha256(input_binding),
         "catalog": catalog,
+        "context_overlay": None,
         "selection_receipt_sha256": (
             retrieval.get("selection_receipt_sha256") if ready else None
         ),
@@ -98,7 +101,13 @@ def build_initial_context_frontier(
 
 
 def validate_context_frontier_head(value: Any) -> dict[str, Any]:
-    if not isinstance(value, Mapping) or set(value) != _HEAD_KEYS:
+    if not isinstance(value, Mapping):
+        raise ValueError("context frontier head shape is invalid")
+    schema_version = value.get("schema_version")
+    if type(schema_version) is not int or schema_version not in {1, 2}:
+        raise ValueError("context frontier head header is invalid")
+    expected_keys = _HEAD_KEYS if schema_version == 2 else _HEAD_V1_KEYS
+    if set(value) != expected_keys:
         raise ValueError("context frontier head shape is invalid")
     run_id = _text(value, "run_id")
     unit_id = _text(value, "unit_id")
@@ -106,7 +115,7 @@ def validate_context_frontier_head(value: Any) -> dict[str, Any]:
     mode = value.get("mode")
     epoch = value.get("query_epoch")
     if (
-        value.get("schema_version") != 1 or status not in FRONTIER_STATUSES
+        status not in FRONTIER_STATUSES
         or mode not in {"static_context", "host_retrieval"}
         or isinstance(epoch, bool) or not isinstance(epoch, int) or epoch < 0
     ):
@@ -118,20 +127,30 @@ def validate_context_frontier_head(value: Any) -> dict[str, Any]:
     receipt = value.get("selection_receipt_sha256")
     pages = value.get("materialized_page_set_sha256")
     materialization = value.get("selection_materialization_sha256")
+    overlay = (
+        _optional_reference(value.get("context_overlay"), "context_overlay")
+        if schema_version == 2 else None
+    )
     if status == FRONTIER_PENDING:
         if mode != "host_retrieval" or any(
-            item is not None for item in (receipt, pages, materialization)
+            item is not None for item in (receipt, pages, materialization, overlay)
         ):
             raise ValueError("pending context frontier carries ready output")
     elif mode == "host_retrieval":
         if not all(_sha(item) for item in (receipt, pages, materialization)):
             raise ValueError("ready retrieval frontier output is incomplete")
-    elif receipt is not None or materialization is not None or not _sha(pages):
+    elif (
+        receipt is not None or materialization is not None or not _sha(pages)
+        or overlay is not None
+    ):
         raise ValueError("static context frontier output is invalid")
-    return {
+    normalized = {
         **dict(value), "run_id": run_id, "unit_id": unit_id,
         "input_binding": binding, "catalog": catalog,
     }
+    if schema_version == 2:
+        normalized["context_overlay"] = overlay
+    return normalized
 
 
 def context_frontier_head_sha256(value: Mapping[str, Any]) -> str:
@@ -152,6 +171,7 @@ def context_frontier_schedule_binding(
         "query_epoch": head["query_epoch"],
         "selection_input_sha256": head["selection_input_sha256"],
         "catalog": head["catalog"],
+        "context_overlay": head.get("context_overlay"),
         "selection_receipt_sha256": head["selection_receipt_sha256"],
         "materialized_page_set_sha256": head["materialized_page_set_sha256"],
         "selection_materialization_sha256": head["selection_materialization_sha256"],
@@ -159,7 +179,9 @@ def context_frontier_schedule_binding(
 
 
 def validate_context_frontier_schedule_binding(value: Any) -> dict[str, Any]:
-    if not isinstance(value, Mapping) or set(value) != _SCHEDULE_KEYS:
+    if not isinstance(value, Mapping) or (
+        set(value) != _SCHEDULE_KEYS and set(value) != _SCHEDULE_V1_KEYS
+    ):
         raise ValueError("context frontier schedule binding shape is invalid")
     status = value.get("status")
     version = value.get("state_version")
@@ -178,17 +200,21 @@ def validate_context_frontier_schedule_binding(value: Any) -> dict[str, Any]:
     receipt = value.get("selection_receipt_sha256")
     pages = value.get("materialized_page_set_sha256")
     materialization = value.get("selection_materialization_sha256")
+    overlay = _optional_reference(value.get("context_overlay"), "context_overlay")
     if status == FRONTIER_PENDING:
         if mode != "host_retrieval" or any(
-            item is not None for item in (receipt, pages, materialization)
+            item is not None for item in (receipt, pages, materialization, overlay)
         ):
             raise ValueError("pending frontier schedule binding carries ready output")
     elif mode == "host_retrieval":
         if not all(_sha(item) for item in (receipt, pages, materialization)):
             raise ValueError("ready frontier schedule binding is incomplete")
-    elif receipt is not None or materialization is not None or not _sha(pages):
+    elif (
+        receipt is not None or materialization is not None or not _sha(pages)
+        or overlay is not None
+    ):
         raise ValueError("static frontier schedule binding is invalid")
-    return {**dict(value), "catalog": catalog}
+    return {**dict(value), "catalog": catalog, "context_overlay": overlay}
 
 
 def _input_binding(value: Any) -> dict[str, Any]:
@@ -238,11 +264,18 @@ def static_context_page_set_sha256(context: Mapping[str, Any]) -> str:
 def _reference(value: Any, label: str) -> dict[str, Any]:
     if not isinstance(value, Mapping) or set(value) != {"path", "sha256", "size_bytes"}:
         raise ValueError(f"context frontier {label} reference shape is invalid")
-    path = checked_relative_path(str(value.get("path", "")))
+    path_value = value.get("path")
+    if not isinstance(path_value, str):
+        raise ValueError(f"context frontier {label} reference is invalid")
+    path = checked_relative_path(path_value)
     size = value.get("size_bytes")
     if not _sha(value.get("sha256")) or isinstance(size, bool) or not isinstance(size, int) or size < 0:
         raise ValueError(f"context frontier {label} reference is invalid")
     return {"path": path, "sha256": value["sha256"], "size_bytes": size}
+
+
+def _optional_reference(value: Any, label: str) -> dict[str, Any] | None:
+    return None if value is None else _reference(value, label)
 
 
 def _sha(value: Any) -> bool:

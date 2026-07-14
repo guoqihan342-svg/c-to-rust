@@ -7,8 +7,9 @@ import unittest
 
 from validation.tools._project_migration_harness.artifacts import content_sha256
 from validation.tools._project_migration_harness.ledger_context_frontier_authority import (
-    ContextFrontierCommand,
+    ContextFrontierAuthority, _ContextFrontierCommand,
 )
+from validation.tools._project_migration_harness.ledger_schema import atomic
 from validation.tools._project_migration_harness.ledger_security import (
     LedgerError, LeaseConflict,
 )
@@ -130,7 +131,7 @@ class ProjectMigrationContextFrontierLeaseTests(ProjectMigrationControllerCase):
         launch = self.dispatch(plan, ledger)["launches"][0]
         current = ledger.context_frontier_states(plan["run_id"])[0]
         target = _invalidated_head(current["head"])
-        command = ContextFrontierCommand(
+        command = _ContextFrontierCommand(
             command_kind="selection_invalidated",
             command_id="selection-invalidated:active",
             run_id=plan["run_id"], unit_id=current["unit_id"],
@@ -141,7 +142,7 @@ class ProjectMigrationContextFrontierLeaseTests(ProjectMigrationControllerCase):
         )
 
         with self.assertRaisesRegex(LedgerError, "active lease or attempt"):
-            ledger.apply_context_frontier(command)
+            _apply_authority(ledger, command)
         self.assertEqual("running", ledger.running_attempt_for_worker(
             run_id=plan["run_id"], worker_id=launch["worker_id"],
         )["status"])
@@ -166,9 +167,15 @@ def _invalidated_head(ready: dict) -> dict:
         **deepcopy(ready), "status": "pending_retrieval",
         "mode": "host_retrieval", "query_epoch": ready["query_epoch"] + 1,
         "input_binding": binding, "selection_input_sha256": content_sha256(binding),
+        "context_overlay": None,
         "selection_receipt_sha256": None, "materialized_page_set_sha256": None,
         "selection_materialization_sha256": None,
     }
+
+
+def _apply_authority(ledger: object, command: _ContextFrontierCommand):
+    with ledger.connect() as connection, atomic(connection):
+        return ContextFrontierAuthority(connection).apply(command)
 
 
 def _attempt_lease_counts(ledger: object, run_id: str) -> tuple[int, int]:
