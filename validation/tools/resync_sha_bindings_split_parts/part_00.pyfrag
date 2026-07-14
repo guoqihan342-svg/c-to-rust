@@ -63,6 +63,7 @@ def resync_judge_chain(
         max_passes=max_passes,
         dry_run=dry_run,
         ignored_ref_prefixes=JUDGE_CHAIN_IGNORED_REF_PREFIXES,
+        immutable_source_markers=("/auto-translation/",),
         skip_self_refs=True,
         skip_cycle_refs=True,
     )
@@ -79,6 +80,7 @@ def resync_json_files(
     max_passes: int = 8,
     dry_run: bool = False,
     ignored_ref_prefixes: tuple[str, ...] = (),
+    immutable_source_markers: tuple[str, ...] = (),
     skip_self_refs: bool = False,
     skip_cycle_refs: bool = False,
 ) -> dict[str, Any]:
@@ -104,6 +106,18 @@ def resync_json_files(
     )
     skipped_self_refs.update(immutable_self_refs)
     skipped_cycle_refs.update(immutable_cycle_refs)
+    immutable_marker_sources = {
+        json_file
+        for json_file in json_files
+        if any(
+            marker in judge_validator.repo_relative(json_file, repo_root)
+            for marker in immutable_source_markers
+        )
+    }
+    immutable_sources.update(immutable_marker_sources)
+    skipped_immutable_sources = {
+        judge_validator.repo_relative(path, repo_root) for path in immutable_marker_sources
+    }
 
     for pass_index in range(1, max_passes + 1):
         pass_updates = 0
@@ -148,6 +162,7 @@ def resync_json_files(
                 "skipped_refs": sorted(skipped_refs),
                 "skipped_self_refs": sorted(skipped_self_refs),
                 "skipped_cycle_refs": sorted(skipped_cycle_refs),
+                "skipped_immutable_sources": sorted(skipped_immutable_sources),
                 "dry_run": dry_run,
             }
 
@@ -162,6 +177,7 @@ def resync_json_files(
         "skipped_refs": sorted(skipped_refs),
         "skipped_self_refs": sorted(skipped_self_refs),
         "skipped_cycle_refs": sorted(skipped_cycle_refs),
+        "skipped_immutable_sources": sorted(skipped_immutable_sources),
         "dry_run": dry_run,
     }
 
@@ -251,9 +267,6 @@ def discover_judge_chain_json_files(
             payload = load_json(resolved)
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             continue
-        for sibling in judge_chain_slice_sibling_json_files(json_file=resolved, repo_root=repo_root):
-            if sibling not in seen and sibling not in queued:
-                queued.append(sibling)
         if is_judge_entrypoint_config(payload):
             for target in iter_judge_config_json_roots(
                 payload,
@@ -285,24 +298,6 @@ def judge_chain_terminal_json_files(*, repo_root: Path, seeds: list[Path]) -> se
         if rel_path == "config/competition-env/bundle-manifest.json":
             terminal.add(seed.resolve())
     return terminal
-
-
-def judge_chain_slice_sibling_json_files(*, json_file: Path, repo_root: Path) -> list[Path]:
-    """Include manifests read by convention from the same auto-translation slice."""
-    try:
-        parts = json_file.resolve().relative_to(repo_root.resolve()).parts
-    except ValueError:
-        return []
-    try:
-        marker = parts.index("auto-translation")
-    except ValueError:
-        return []
-    if marker + 1 >= len(parts):
-        return []
-    slice_dir = repo_root.joinpath(*parts[: marker + 2]).resolve()
-    if not slice_dir.is_dir():
-        return []
-    return sorted(path.resolve() for path in slice_dir.glob("*.json") if path.is_file())
 
 
 def is_judge_entrypoint_config(payload: Any) -> bool:

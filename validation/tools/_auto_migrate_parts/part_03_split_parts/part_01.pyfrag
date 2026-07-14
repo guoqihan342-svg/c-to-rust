@@ -73,6 +73,63 @@ def oracle_harness_identity(oracle: dict[str, Any] | None) -> dict[str, Any]:
     return {"path": oracle.get("harness_draft", "missing"), "status": "missing", "sha256": "missing"}
 
 
+def load_reusable_c2rust_baseline_manifest(
+    spec: dict[str, Any],
+    slice_spec: Path,
+    evidence_dir: Path,
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    path = evidence_dir / f"l3-{slice_id}-c2rust-baseline-manifest.json"
+    if not path.is_file():
+        raise ValueError(f"reusable C2Rust baseline is missing: {rel(path)}")
+    manifest = read_json(path)
+    if not isinstance(manifest, dict):
+        raise ValueError(f"reusable C2Rust baseline must be a JSON object: {rel(path)}")
+    expected_fields = {
+        "target_id": required_str(spec, "target_id"),
+        "slice_id": slice_id,
+        "source_commit": source_commit(spec),
+        "status": "generated",
+        "correctness_role": "candidate_context_only",
+    }
+    for key, expected in expected_fields.items():
+        if manifest.get(key) != expected:
+            raise ValueError(f"reusable C2Rust baseline {key} drift: {rel(path)}")
+    expected_slice_ref = {"path": rel(slice_spec), "sha256": sha256(slice_spec)}
+    if manifest.get("slice_spec") != expected_slice_ref:
+        raise ValueError(f"reusable C2Rust baseline slice_spec drift: {rel(path)}")
+    output = manifest.get("output")
+    compile_status = manifest.get("compile")
+    if not isinstance(output, dict) or output.get("status") != "generated":
+        raise ValueError(f"reusable C2Rust baseline output is not generated: {rel(path)}")
+    if (
+        not isinstance(compile_status, dict)
+        or compile_status.get("status") != "passed"
+        or compile_status.get("semantic_pass") is not False
+    ):
+        raise ValueError(f"reusable C2Rust baseline compile gate is not passed: {rel(path)}")
+    validate_reusable_c2rust_baseline_refs(manifest, label=rel(path))
+    return manifest
+
+
+def validate_reusable_c2rust_baseline_refs(value: Any, *, label: str) -> None:
+    if isinstance(value, dict):
+        path_text = value.get("path")
+        expected_sha = value.get("sha256")
+        if isinstance(path_text, str) and isinstance(expected_sha, str):
+            try:
+                target = judge_validator.repo_path(path_text, repo_root=REPO_ROOT)
+            except (AssertionError, ValueError) as exc:
+                raise ValueError(f"{label} contains an invalid file ref: {path_text}") from exc
+            if not target.is_file() or sha256(target) != expected_sha:
+                raise ValueError(f"{label} contains a missing or drifted file ref: {path_text}")
+        for child in value.values():
+            validate_reusable_c2rust_baseline_refs(child, label=label)
+    elif isinstance(value, list):
+        for child in value:
+            validate_reusable_c2rust_baseline_refs(child, label=label)
+
+
 def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, evidence_dir: Path) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
     prefix = f"l3-{slice_id}"

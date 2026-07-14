@@ -123,6 +123,11 @@ def main() -> int:
         help="Bind already accepted oracle/replay/diff/unsafe evidence from the slice spec instead of claiming the generated draft is accepted.",
     )
     parser.add_argument(
+        "--reuse-existing-c2rust-baseline",
+        action="store_true",
+        help="Reuse a generated, hash-valid C2Rust baseline already present under --out-root.",
+    )
+    parser.add_argument(
         "--ai-first-candidate",
         action="store_true",
         help="Generate a hash-bound OpenCode/GLM-5.1 candidate after deterministic discovery and route the exact applied draft through the common validation gates.",
@@ -151,6 +156,8 @@ def main() -> int:
             "--ai-first-candidate cannot reuse --accept-existing-evidence; "
             "fresh AI candidates require candidate-bound oracle, replay, diff, negative, unsafe, and final gates"
         )
+    if args.reuse_existing_c2rust_baseline and not args.accept_existing_evidence:
+        parser.error("--reuse-existing-c2rust-baseline requires --accept-existing-evidence")
     if args.competition_clang_lane:
         args.emit_clang_lowering_report = True
         require_competition_clang_lane()
@@ -213,7 +220,17 @@ def main() -> int:
             out_dir=evidence_dir,
             canonical_draft_path=canonical_draft_path,
         )
-    c2rust_baseline = emit_c2rust_baseline_manifest(spec, args.slice_spec, evidence_dir)
+    if args.reuse_existing_c2rust_baseline:
+        try:
+            c2rust_baseline = load_reusable_c2rust_baseline_manifest(
+                spec,
+                args.slice_spec,
+                evidence_dir,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+    else:
+        c2rust_baseline = emit_c2rust_baseline_manifest(spec, args.slice_spec, evidence_dir)
     def run_common_pipeline() -> dict[str, Any]:
         route_decision = emit_route_decision(spec, evidence_dir, translator_summary, c2rust_baseline)
         mark_route_refused_candidate_artifacts(spec, evidence_dir, route_decision)

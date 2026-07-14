@@ -377,20 +377,18 @@ class ResyncShaBindingsTest(unittest.TestCase):
             self.assertEqual(result["skipped_cycle_refs"], [])
             self.assertEqual(load_json(seed)["target"]["sha256"], judge_validator.sha256_file(target))
 
-    def test_judge_chain_includes_same_slice_root_manifests(self) -> None:
+    def test_judge_chain_does_not_rewrite_semantic_evidence_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             seed = root / "config" / "competition-env" / "judge-entrypoints" / "flashdb-harness.json"
-            slice_dir = root / "validation" / "evidence" / "sample" / "auto-translation" / "slice-a"
-            tracked = slice_dir / "tracked-run.json"
-            sibling = slice_dir / "slice-a-auto-translation-manifest.json"
-            leaf = slice_dir / "leaf.txt"
+            tracked = root / "validation" / "evidence" / "sample" / "auto-translation" / "slice-a" / "tracked.json"
+            leaf = tracked.parent / "leaf.txt"
 
             leaf.parent.mkdir(parents=True, exist_ok=True)
             leaf.write_text("stable\n", encoding="utf-8", newline="\n")
-            write_json(tracked, {"status": "tracked"})
-            write_json(sibling, {"leaf": {"path": rel(root, leaf), "sha256": "0" * 64}})
+            write_json(tracked, {"leaf": {"path": rel(root, leaf), "sha256": "0" * 64}})
             write_json(seed, {"tracked": {"path": rel(root, tracked), "sha256": judge_validator.sha256_file(tracked)}})
+            before = load_text(tracked)
 
             result = resync_sha_bindings.resync_judge_chain(
                 repo_root=root,
@@ -398,8 +396,9 @@ class ResyncShaBindingsTest(unittest.TestCase):
                 max_passes=4,
             )
 
-            self.assertIn(rel(root, sibling), result["scanned_json_files"])
-            self.assertEqual(load_json(sibling)["leaf"]["sha256"], judge_validator.sha256_file(leaf))
+            self.assertEqual(result["status"], "unchanged")
+            self.assertIn(rel(root, tracked), result["skipped_immutable_sources"])
+            self.assertEqual(load_text(tracked), before)
 
 
 def write_json(path: Path, payload: dict) -> None:
