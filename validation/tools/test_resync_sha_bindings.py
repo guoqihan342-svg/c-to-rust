@@ -328,6 +328,79 @@ class ResyncShaBindingsTest(unittest.TestCase):
             self.assertEqual(sorted(result["skipped_cycle_refs"]), [rel(root, cycle_a), rel(root, cycle_b)])
             self.assertEqual(resync_sha_bindings.exit_code_for_result(result, check=True), 0)
 
+    def test_judge_chain_keeps_entire_cycle_members_immutable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            seed = root / "config" / "competition-env" / "judge-entrypoints" / "flashdb-harness.json"
+            cycle_a = root / "validation" / "evidence" / "flashdb" / "cycle-a.json"
+            cycle_b = root / "validation" / "evidence" / "flashdb" / "cycle-b.json"
+            leaf = root / "validation" / "evidence" / "flashdb" / "leaf.json"
+
+            write_json(leaf, {"status": "stable"})
+            write_json(
+                cycle_a,
+                {
+                    "b": {"path": rel(root, cycle_b), "sha256": "0" * 64},
+                    "leaf": {"path": rel(root, leaf), "sha256": "1" * 64},
+                },
+            )
+            write_json(cycle_b, {"a": {"path": rel(root, cycle_a), "sha256": "0" * 64}})
+            write_json(seed, {"cycle": {"path": rel(root, cycle_a), "sha256": judge_validator.sha256_file(cycle_a)}})
+            before = {path: load_text(path) for path in (cycle_a, cycle_b)}
+
+            result = resync_sha_bindings.resync_judge_chain(
+                repo_root=root,
+                seeds=[seed],
+                max_passes=4,
+            )
+
+            self.assertEqual(result["status"], "unchanged")
+            self.assertEqual(sorted(result["skipped_cycle_refs"]), [rel(root, cycle_a), rel(root, cycle_b)])
+            self.assertEqual(before, {path: load_text(path) for path in (cycle_a, cycle_b)})
+
+    def test_plain_path_back_reference_is_not_a_hash_cycle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            seed = root / "config" / "competition-env" / "judge-entrypoints" / "flashdb-harness.json"
+            target = root / "validation" / "evidence" / "flashdb" / "target.json"
+
+            write_json(target, {"source": {"path": rel(root, seed)}})
+            write_json(seed, {"target": {"path": rel(root, target), "sha256": "0" * 64}})
+
+            result = resync_sha_bindings.resync_judge_chain(
+                repo_root=root,
+                seeds=[seed],
+                max_passes=4,
+            )
+
+            self.assertEqual(result["status"], "updated")
+            self.assertEqual(result["skipped_cycle_refs"], [])
+            self.assertEqual(load_json(seed)["target"]["sha256"], judge_validator.sha256_file(target))
+
+    def test_judge_chain_includes_same_slice_root_manifests(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            seed = root / "config" / "competition-env" / "judge-entrypoints" / "flashdb-harness.json"
+            slice_dir = root / "validation" / "evidence" / "sample" / "auto-translation" / "slice-a"
+            tracked = slice_dir / "tracked-run.json"
+            sibling = slice_dir / "slice-a-auto-translation-manifest.json"
+            leaf = slice_dir / "leaf.txt"
+
+            leaf.parent.mkdir(parents=True, exist_ok=True)
+            leaf.write_text("stable\n", encoding="utf-8", newline="\n")
+            write_json(tracked, {"status": "tracked"})
+            write_json(sibling, {"leaf": {"path": rel(root, leaf), "sha256": "0" * 64}})
+            write_json(seed, {"tracked": {"path": rel(root, tracked), "sha256": judge_validator.sha256_file(tracked)}})
+
+            result = resync_sha_bindings.resync_judge_chain(
+                repo_root=root,
+                seeds=[seed],
+                max_passes=4,
+            )
+
+            self.assertIn(rel(root, sibling), result["scanned_json_files"])
+            self.assertEqual(load_json(sibling)["leaf"]["sha256"], judge_validator.sha256_file(leaf))
+
 
 def write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -94,11 +94,23 @@ def resync_json_files(
     skipped_refs: set[str] = set()
     skipped_self_refs: set[str] = set()
     skipped_cycle_refs: set[str] = set()
+    immutable_sources, immutable_self_refs, immutable_cycle_refs = immutable_json_hash_sources(
+        repo_root=repo_root,
+        json_files=json_files,
+        payload_cache=payload_cache,
+        ignored_ref_prefixes=ignored_ref_prefixes,
+        skip_self_refs=skip_self_refs,
+        skip_cycle_refs=skip_cycle_refs,
+    )
+    skipped_self_refs.update(immutable_self_refs)
+    skipped_cycle_refs.update(immutable_cycle_refs)
 
     for pass_index in range(1, max_passes + 1):
         pass_updates = 0
         cycle_cache: dict[tuple[Path, Path], bool] = {}
         for json_file in json_files:
+            if json_file in immutable_sources:
+                continue
             payload = payload_cache[json_file] if payload_cache is not None else load_json(json_file)
             result = update_payload_refs(
                 payload,
@@ -154,6 +166,51 @@ def resync_json_files(
     }
 
 
+def immutable_json_hash_sources(
+    *,
+    repo_root: Path,
+    json_files: list[Path],
+    payload_cache: dict[Path, Any] | None,
+    ignored_ref_prefixes: tuple[str, ...],
+    skip_self_refs: bool,
+    skip_cycle_refs: bool,
+) -> tuple[set[Path], set[str], set[str]]:
+    """Keep complete hash-cycle members byte-stable during bounded resync."""
+    if not skip_self_refs and not skip_cycle_refs:
+        return set(), set(), set()
+
+    immutable_sources: set[Path] = set()
+    skipped_self_refs: set[str] = set()
+    skipped_cycle_refs: set[str] = set()
+    cycle_cache: dict[tuple[Path, Path], bool] = {}
+
+    for source_file in json_files:
+        payload = payload_cache[source_file] if payload_cache is not None else load_json(source_file)
+        for target in iter_hash_bound_json_refs(
+            payload,
+            repo_root=repo_root,
+            ignored_ref_prefixes=ignored_ref_prefixes,
+        ):
+            target = target.resolve()
+            path_text = judge_validator.repo_relative(target, repo_root)
+            if target == source_file:
+                if skip_self_refs:
+                    immutable_sources.add(source_file)
+                    skipped_self_refs.add(path_text)
+                continue
+            if skip_cycle_refs and creates_json_hash_cycle(
+                source_file=source_file,
+                target_file=target,
+                repo_root=repo_root,
+                cache=cycle_cache,
+                ignored_ref_prefixes=ignored_ref_prefixes,
+            ):
+                immutable_sources.add(source_file)
+                skipped_cycle_refs.add(path_text)
+
+    return immutable_sources, skipped_self_refs, skipped_cycle_refs
+
+
 def discover_json_files(*, repo_root: Path, scan_roots: list[Path]) -> list[Path]:
     files: set[Path] = set()
     for root in scan_roots:
@@ -194,6 +251,9 @@ def discover_judge_chain_json_files(
             payload = load_json(resolved)
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             continue
+        for sibling in judge_chain_slice_sibling_json_files(json_file=resolved, repo_root=repo_root):
+            if sibling not in seen and sibling not in queued:
+                queued.append(sibling)
         if is_judge_entrypoint_config(payload):
             for target in iter_judge_config_json_roots(
                 payload,
@@ -225,6 +285,24 @@ def judge_chain_terminal_json_files(*, repo_root: Path, seeds: list[Path]) -> se
         if rel_path == "config/competition-env/bundle-manifest.json":
             terminal.add(seed.resolve())
     return terminal
+
+
+def judge_chain_slice_sibling_json_files(*, json_file: Path, repo_root: Path) -> list[Path]:
+    """Include manifests read by convention from the same auto-translation slice."""
+    try:
+        parts = json_file.resolve().relative_to(repo_root.resolve()).parts
+    except ValueError:
+        return []
+    try:
+        marker = parts.index("auto-translation")
+    except ValueError:
+        return []
+    if marker + 1 >= len(parts):
+        return []
+    slice_dir = repo_root.joinpath(*parts[: marker + 2]).resolve()
+    if not slice_dir.is_dir():
+        return []
+    return sorted(path.resolve() for path in slice_dir.glob("*.json") if path.is_file())
 
 
 def is_judge_entrypoint_config(payload: Any) -> bool:
@@ -452,7 +530,8 @@ def json_file_reaches_path(
             return
         if isinstance(value, dict):
             path_text = value.get("path")
-            if isinstance(path_text, str):
+            sha256 = value.get("sha256")
+            if isinstance(path_text, str) and isinstance(sha256, str):
                 if ref_is_ignored(path_text, ignored_ref_prefixes):
                     return
                 try:
