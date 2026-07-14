@@ -6,7 +6,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Sequence
 
 from .build_adapter import BuildInputSelection, MAKE_REPORT_INPUT_KIND
+from .context_frontier_reference import context_frontier_reference
 from .ledger_schema import SCHEMA_VERSION as LEDGER_SCHEMA_VERSION
+from .project_cli_runtime import target_path
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -42,6 +44,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     dispatch = commands.add_parser("dispatch")
     dispatch.add_argument("--plan", type=Path, required=True)
     dispatch.add_argument("--lease-ttl-seconds", type=int, default=900)
+
+    frontier = commands.add_parser("prepare-next-context-frontier-wave")
+    frontier.add_argument("--plan", type=Path, required=True)
+    frontier.add_argument("--latest-dag-path", required=True)
+    frontier.add_argument("--latest-dag-sha256", required=True)
+    frontier.add_argument("--latest-dag-size-bytes", type=int, required=True)
+    frontier.add_argument("--completed-wave-index", type=int, required=True)
+    frontier.add_argument("--failure-evidence", type=Path, required=True)
+    frontier.add_argument("--expansion-queries", type=Path, required=True)
 
     preflight = commands.add_parser("preflight")
     preflight.add_argument("--out-root", default="target/project-migration")
@@ -185,6 +196,42 @@ def load_array(path: Path) -> list[Any]:
     return value
 
 
+def load_next_frontier_bindings(
+    args: argparse.Namespace, *, harness_root: Path,
+) -> tuple[Any, ...]:
+    root = harness_root.resolve(strict=True)
+    plan_path = target_path(args.plan, "plan", repo_root=root, must_exist=True)
+    plan = load_object(plan_path)
+    ledger_value, out_root_rel = output_binding(
+        plan, plan_path=plan_path, harness_root=root,
+    )
+    def artifact(name: str) -> dict[str, Any]:
+        artifacts = plan.get("artifacts")
+        value = artifacts.get(name) if isinstance(artifacts, dict) else None
+        if not isinstance(value, dict):
+            raise SystemExit(f"plan {name} artifact binding is missing")
+        try:
+            local = value.get("path")
+            if not isinstance(local, str):
+                raise ValueError("plan artifact path is not a string")
+            path = (out_root_rel / PurePosixPath(local)).as_posix()
+            return context_frontier_reference({**value, "path": path})
+        except ValueError as error:
+            raise SystemExit(f"plan {name} artifact binding is invalid") from error
+    references = {name: artifact(name) for name in ("portfolio", "context_pages")}
+    latest_path = target_path(
+        args.latest_dag_path, "latest-dag", repo_root=root, must_exist=True,
+    )
+    latest_reference = context_frontier_reference({
+        "path": latest_path.relative_to(root).as_posix(),
+        "sha256": args.latest_dag_sha256,
+        "size_bytes": args.latest_dag_size_bytes,
+    })
+    return (
+        plan, ledger_value, out_root_rel, references, latest_path, latest_reference,
+    )
+
+
 def output_binding(
     plan: dict[str, Any], *, plan_path: Path, harness_root: Path,
 ) -> tuple[str, PurePosixPath]:
@@ -244,4 +291,7 @@ def _reference_args(parser: argparse.ArgumentParser, name: str) -> None:
     parser.add_argument(f"--{name}-sha256", required=True)
 
 
-__all__ = ["load_array", "load_object", "output_binding", "parse_args"]
+__all__ = [
+    "load_array", "load_next_frontier_bindings", "load_object", "output_binding",
+    "parse_args",
+]

@@ -13,6 +13,7 @@ from validation.tools._project_migration_harness.controller import (
     dispatch_project_workers,
     ingest_worker_result,
     integrate_verified_project,
+    prepare_next_context_frontier_wave,
     promote_current_verified_candidate,
     record_candidate_gate,
     record_project_gate_summary,
@@ -33,6 +34,7 @@ from validation.tools._project_migration_harness.ledger import ProjectLedger
 from validation.tools._project_migration_harness.orchestrator import plan_project
 from validation.tools._project_migration_harness.project_migration_cli import (
     load_array,
+    load_next_frontier_bindings,
     load_object,
     output_binding,
     parse_args,
@@ -110,6 +112,33 @@ def main(argv: Sequence[str] | None = None) -> int:
             out_root=out_root,
             out_root_rel=out_rel.as_posix(),
             lease_ttl_seconds=args.lease_ttl_seconds,
+        )
+    elif command == "prepare-next-context-frontier-wave":
+        plan, ledger_path, out_rel, refs, latest_path, latest_ref = (
+            load_next_frontier_bindings(args, harness_root=REPO_ROOT)
+        )
+        result = prepare_next_context_frontier_wave(
+            load_object(_target_path(
+                refs["portfolio"]["path"], "portfolio", must_exist=True,
+            )),
+            portfolio_reference=refs["portfolio"],
+            latest_dag=load_object(latest_path),
+            latest_dag_reference=latest_ref,
+            context_bundle=load_object(_target_path(
+                refs["context_pages"]["path"], "context-pages", must_exist=True,
+            )),
+            context_bundle_reference=refs["context_pages"],
+            completed_wave_index=args.completed_wave_index,
+            failure_evidence=load_array(_target_path(
+                args.failure_evidence, "failure-evidence", must_exist=True,
+            )),
+            expansion_queries=load_array(_target_path(
+                args.expansion_queries, "expansion-queries", must_exist=True,
+            )),
+            ledger=ProjectLedger(_ledger_path(ledger_path)),
+            harness_root=REPO_ROOT,
+            out_root=REPO_ROOT.joinpath(*out_rel.parts),
+            out_root_rel=out_rel.as_posix(),
         )
     elif command == "preflight":
         out_root_rel = _target_relative(args.out_root, "out-root")
@@ -259,11 +288,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "run_id": args.run_id,
             "units": _ledger(args.db).unit_states(args.run_id),
         }
-    print(json.dumps(
-        project_cli_runtime.display_result(command, result),
-        indent=2,
-        sort_keys=True,
-    ))
+    displayed = project_cli_runtime.display_result(command, result)
+    print(json.dumps(displayed, indent=2, sort_keys=True))
     return _exit_code(result)
 
 

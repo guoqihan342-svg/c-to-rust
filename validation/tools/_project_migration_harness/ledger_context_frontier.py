@@ -8,6 +8,7 @@ from typing import Any
 
 from .artifacts import content_sha256
 from .context_frontier_state import validate_context_frontier_head
+from .context_frontier_wave_event import wave_invalidation_command_id
 from .ledger_context_frontier_authority import (
     ContextFrontierAuthority, _ContextFrontierCommand,
     assert_context_frontier_projection,
@@ -79,6 +80,83 @@ class ContextFrontierLedgerMixin:
             "previous": _public_projection(result.previous),
             "current": _public_projection(result.current),
         }
+
+    def _commit_context_wave_invalidations(
+        self, permits: Sequence[Any], *, harness_root: Path,
+    ) -> list[dict[str, Any]]:
+        from .context_frontier_wave_permit import (
+            _host_context_frontier_wave_binding,
+            _reopen_host_context_frontier_wave_permit,
+        )
+
+        if not permits:
+            raise ValueError("context frontier wave permits are empty")
+        with self.connect() as connection, atomic(connection):
+            bindings = []
+            for permit in permits:
+                claimed = _host_context_frontier_wave_binding(permit)
+                bindings.append(_reopen_host_context_frontier_wave_permit(
+                    permit,
+                    harness_root=harness_root,
+                    current_projection=assert_context_frontier_projection(
+                        connection, claimed["run_id"], claimed["unit_id"],
+                    ),
+                ))
+            identities = {
+                (item["run_id"], item["next_wave_index"], item["wave_input"]["sha256"])
+                for item in bindings
+            }
+            expected_units = set(bindings[0]["wave_input_payload"]["next_unit_ids"])
+            if (
+                len(identities) != 1
+                or {item["unit_id"] for item in bindings} != expected_units
+                or len(bindings) != len(expected_units)
+            ):
+                raise LedgerError("context frontier wave permit set drifted")
+            run_id = str(bindings[0]["run_id"])
+            run = connection.execute(
+                "select status,dag_sha256 from project_runs where run_id=?", (run_id,),
+            ).fetchone()
+            units = {
+                str(row["unit_id"]): row for row in connection.execute(
+                    """select unit_id,wave_index,content_sha256 from migration_units
+                       where run_id=?""", (run_id,),
+                ).fetchall()
+            }
+            if run is None or run["status"] != "active":
+                raise LedgerError("context frontier wave requires an active run")
+            results = []
+            for binding in sorted(bindings, key=lambda item: item["unit_id"]):
+                unit = units.get(str(binding["unit_id"]))
+                if (
+                    run["dag_sha256"] != binding["dag_sha256"]
+                    or unit is None
+                    or int(unit["wave_index"]) != binding["next_wave_index"]
+                    or unit["content_sha256"] != binding["group_sha256"]
+                ):
+                    raise LedgerError("context frontier wave ledger binding drifted")
+                command_id = wave_invalidation_command_id(
+                    str(binding["unit_id"]), str(binding["wave_input"]["sha256"]),
+                )
+                results.append(ContextFrontierAuthority(connection).apply(
+                    _ContextFrontierCommand(
+                        command_kind="selection_invalidated",
+                        command_id=command_id,
+                        run_id=run_id,
+                        unit_id=str(binding["unit_id"]),
+                        expected_status=str(binding["expected_status"]),
+                        expected_version=int(binding["expected_version"]),
+                        expected_head_sha256=str(binding["expected_head_sha256"]),
+                        target_head=binding["target_head"],
+                        evidence_sha256=str(binding["wave_input"]["sha256"]),
+                    )
+                ))
+        return [{
+            "applied": result.applied,
+            "event_id": result.event_id,
+            "previous": _public_projection(result.previous),
+            "current": _public_projection(result.current),
+        } for result in results]
 
 
 def prepare_portfolio_frontiers(

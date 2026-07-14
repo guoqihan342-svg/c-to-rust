@@ -5,17 +5,21 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .artifacts import canonical_json_bytes, checked_relative_path, content_sha256
+from .artifacts import canonical_json_bytes, content_sha256
 from .context_frontier_binding import validate_context_against_frontier
 from .context_frontier_cas import read_bound_frontier_cas_json
 from .context_frontier_overlay import (
     resolve_effective_context, validate_context_frontier_overlay,
 )
+from .context_frontier_reference import context_frontier_reference as reference
 from .context_frontier_refresh_artifacts import reopen_context_catalog
 from .context_frontier_refresh_permit import _host_context_refresh_binding
 from .context_frontier_state import (
     ContextFrontierProjection, context_frontier_schedule_binding,
     validate_context_frontier_head,
+)
+from .context_frontier_wave_materialization import (
+    validate_context_frontier_wave_materialization,
 )
 from .orchestration_facts import read_artifact_reference
 
@@ -71,6 +75,7 @@ def reopen_host_context_refresh_permit(
     _reopen_refresh_artifacts(
         harness_root, refresh_input, overlay, effective, catalog,
     )
+    _reopen_wave_artifacts(harness_root, refresh_input, overlay, effective)
     read_canonical_reference(harness_root, refresh_input["context_bundle"])
     reopen_context_catalog(
         harness_root, refresh_input["base_catalog"],
@@ -113,6 +118,7 @@ def reopen_context_frontier_overlay_dependencies(
     _reopen_refresh_artifacts(
         harness_root, refresh_input, value, context, catalog,
     )
+    _reopen_wave_artifacts(harness_root, refresh_input, value, context)
     read_canonical_reference(harness_root, refresh_input["context_bundle"])
     reopen_context_catalog(
         harness_root, refresh_input["base_catalog"], unit_id=value["unit_id"],
@@ -149,25 +155,16 @@ def read_canonical_reference(
     return payload
 
 
-def reference(value: Any) -> dict[str, Any]:
-    if not isinstance(value, Mapping) or set(value) != {"path", "sha256", "size_bytes"}:
-        raise ValueError("context refresh reference is invalid")
-    path = checked_relative_path(str(value.get("path", "")))
-    digest, size = value.get("sha256"), value.get("size_bytes")
-    if (not isinstance(digest, str) or len(digest) != 64
-            or any(character not in "0123456789abcdef" for character in digest)
-            or isinstance(size, bool) or not isinstance(size, int) or size < 0):
-        raise ValueError("context refresh reference binding is invalid")
-    return {"path": path, "sha256": digest, "size_bytes": size}
-
-
 def _validate_refresh_input(
     value: Mapping[str, Any], binding: Mapping[str, Any], overlay: Mapping[str, Any],
 ) -> None:
-    if set(value) != {
+    base_keys = {
         "schema_version", "artifact_kind", "run_id", "unit_id", "portfolio",
         "context_bundle", "base_catalog", "artifacts", "claim_boundary",
-    } or value.get("schema_version") != 1:
+    }
+    schema = value.get("schema_version")
+    expected = base_keys if schema == 1 else {*base_keys, "wave"}
+    if schema not in {1, 2} or set(value) != expected:
         raise ValueError("context refresh input contract is invalid")
     if (
         value.get("run_id") != binding.get("run_id")
@@ -180,6 +177,59 @@ def _validate_refresh_input(
         }
     ):
         raise ValueError("context refresh input identity drifted")
+
+
+def _reopen_wave_artifacts(
+    root: Path, refresh: Mapping[str, Any], overlay: Mapping[str, Any],
+    context: Mapping[str, Any],
+) -> None:
+    wave_binding = refresh.get("wave")
+    if refresh.get("schema_version") == 1:
+        if wave_binding is not None:
+            raise ValueError("legacy context refresh carries a wave binding")
+        return
+    if not isinstance(wave_binding, Mapping) or set(wave_binding) != {
+        "input", "selection", "materialization",
+    }:
+        raise ValueError("context refresh wave binding is invalid")
+    input_ref = reference(wave_binding["input"])
+    selection_ref = reference(wave_binding["selection"])
+    wave = read_bound_frontier_cas_json(
+        root, input_ref, "context-frontier-wave-input",
+    )
+    selection = read_bound_frontier_cas_json(
+        root, selection_ref, "context-frontier-wave-selection-directives",
+    )
+    materialization = validate_context_frontier_wave_materialization(
+        wave_binding["materialization"],
+    )
+    retrieval = context.get("retrieval")
+    units = wave.get("units")
+    matches = [
+        item for item in units if isinstance(item, Mapping)
+        and item.get("unit_id") == overlay["unit_id"]
+    ] if isinstance(units, list) else []
+    inputs = selection.get("input_bindings")
+    if (
+        wave.get("run_id") != overlay["run_id"]
+        or len(matches) != 1
+        or selection.get("run_id") != overlay["run_id"]
+        or selection.get("unit_id") != overlay["unit_id"]
+        or materialization["run_id"] != overlay["run_id"]
+        or materialization["unit_id"] != overlay["unit_id"]
+        or materialization["selection_directives"] != selection_ref
+        or materialization["selection_ready"] is not True
+        or not isinstance(inputs, Mapping)
+        or inputs.get("wave_selection_seed_sha256")
+        != matches[0].get("selection_seed_sha256")
+        or not isinstance(retrieval, Mapping)
+        or retrieval.get("frontier_wave_selection_artifact_sha256")
+        != selection_ref["sha256"]
+        or retrieval.get("frontier_wave_selection_sha256") != selection.get("sha256")
+        or retrieval.get("frontier_wave_selection_seed_sha256")
+        != inputs.get("wave_selection_seed_sha256")
+    ):
+        raise ValueError("context refresh wave materialization drifted")
 
 
 def _reopen_refresh_artifacts(

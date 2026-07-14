@@ -15,6 +15,9 @@ from .context_required_facts import context_retrieval_ready
 from .context_selection_materialization import (
     bind_selection_materialization, require_selection_materialization,
 )
+from .context_frontier_wave_materialization import (
+    materialize_context_frontier_wave_selection,
+)
 from .orchestration_facts import read_artifact_reference
 from .portfolio_integrity import bind_context
 
@@ -23,6 +26,8 @@ def prepare_single_scc_refresh_artifacts(
     context_bundle: Mapping[str, Any], *, run_id: str, unit_id: str,
     assignment_context: Mapping[str, Any], out_root: Path, out_root_rel: str,
     context_page_limit: int,
+    wave_selection: Mapping[str, Any] | None = None,
+    wave_selection_reference: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     _contexts, _payloads, prepared = prepare_context_indexes(
         context_bundle, out_root_rel=out_root_rel,
@@ -35,6 +40,19 @@ def prepare_single_scc_refresh_artifacts(
     retrieval = retrievals.get(unit_id)
     if not isinstance(entries, list) or not entries or not isinstance(retrieval, Mapping):
         raise ValueError("context refresh bundle has no host-retrieval SCC")
+    wave_materialization = None
+    if (wave_selection is None) != (wave_selection_reference is None):
+        raise ValueError("context refresh wave selection binding is incomplete")
+    if wave_selection is not None and wave_selection_reference is not None:
+        entries, retrieval, wave_materialization = (
+            materialize_context_frontier_wave_selection(
+                wave_selection,
+                directives_reference=wave_selection_reference,
+                context_bundle=context_bundle,
+                entries=entries,
+                retrieval=retrieval,
+            )
+        )
     receipt = _write_selection_receipt(out_root, retrieval)
 
     refreshed_entries = []
@@ -127,6 +145,7 @@ def prepare_single_scc_refresh_artifacts(
             "selection_materialization_sha256"
         ],
         "context_sha256": content_sha256(effective),
+        "wave_selection_materialization": wave_materialization,
     }
 
 

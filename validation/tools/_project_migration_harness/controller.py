@@ -17,6 +17,7 @@ from .project_integration_verifier import verify_integrated_project
 from .candidate_compile_verifier import verify_candidate_compile
 from .candidate_final_verifier import verify_candidate_final
 from .project_repair_runtime import run_and_ingest_opencode_project_repair
+from .context_frontier_wave_coordinator import prepare_next_context_frontier_wave
 
 __all__ = [
     "dispatch_project_workers",
@@ -26,6 +27,7 @@ __all__ = [
     "integrate_verified_project",
     "promote_verified_candidate",
     "promote_current_verified_candidate",
+    "prepare_next_context_frontier_wave",
     "record_candidate_gate",
     "record_project_gate_summary",
     "run_cargo_project_gates",
