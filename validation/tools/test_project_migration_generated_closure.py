@@ -251,7 +251,7 @@ class GeneratedBuildClosureTests(unittest.TestCase):
         verification = plan["artifacts"]["generated_build_closure_verification"]
         self.assertEqual(64, len(verification["sha256"]))
 
-    def test_orchestrator_keeps_incomplete_closure_execution_blocked(self) -> None:
+    def test_orchestrator_admits_only_candidate_frontier_without_closure(self) -> None:
         database = self.project(
             materialize_include=False,
             materialize_output=False,
@@ -270,8 +270,12 @@ class GeneratedBuildClosureTests(unittest.TestCase):
         self.assertFalse(plan["execution"]["build_closure_ready"])
         self.assertFalse(plan["execution"]["model_launched"])
         self.assertEqual(
-            "resolve_generated_build_closure_blockers",
+            "dispatch_candidate_only_workers",
             plan["execution"]["next_action"],
+        )
+        self.assertTrue(plan["scheduler"]["ready_worker_ids"])
+        self.assertEqual(
+            "candidate-only", plan["portfolio"]["execution"]["build_closure_admission"],
         )
         self.assertFalse(
             plan["claim_boundary"]["generated_build_closure_complete"]
@@ -286,7 +290,7 @@ class GeneratedBuildClosureTests(unittest.TestCase):
             out_root=self.harness / "target/blocked-closure",
             out_root_rel="target/blocked-closure",
         )
-        self.assertEqual([], dispatch["launches"])
+        self.assertTrue(dispatch["launches"])
 
 
 if __name__ == "__main__":

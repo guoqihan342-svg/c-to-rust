@@ -74,7 +74,7 @@ def candidate_row(
 ) -> Any:
     row = connection.execute(
         """select a.attempt_id,a.worker_id,a.fencing_token,a.status,a.content_sha256,
-                  a.repo_rel_path,
+                  a.repo_rel_path,a.metadata_json as artifact_metadata_json,
                   t.status as attempt_status,t.role,t.metadata_json as attempt_metadata_json,
                   r.status as run_status
            from artifacts a join attempts t on t.attempt_id=a.attempt_id

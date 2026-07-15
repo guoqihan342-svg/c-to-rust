@@ -178,9 +178,21 @@ def plan_project(
             context_page_bytes=context_page_bytes,
             context_page_tokens=context_page_tokens,
             context_group_pages=context_group_pages,
-            closure_admitted=build_ir_ready and (
-                closure_ready or not require_build_closure
-            ),
+            admission_evidence={
+                "build_ir": {
+                    "status": "bound",
+                    "artifact": artifacts["build_ir"],
+                    "verification": artifacts["build_ir_verification"],
+                    "worker_admission": artifacts["build_ir_worker_admission"],
+                },
+                "generated_build_closure": {
+                    "status": "bound" if closure_ready else "blocked",
+                    "closure": artifacts["generated_build_closure"],
+                    "verification": artifacts[
+                        "generated_build_closure_verification"
+                    ],
+                },
+            },
         )
         artifacts["context_materialization"] = materialization_ref
     except ContextPortfolioError as error:

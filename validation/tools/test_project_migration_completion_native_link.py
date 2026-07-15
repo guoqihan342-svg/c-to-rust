@@ -41,10 +41,15 @@ class ProjectMigrationCompletionNativeLinkTests(
             "status": "verified",
             "blockers": [],
             "toolchain_profile": "competition",
+            "closure_complete": True,
             "native_link_config_resolved": False,
             "unresolved_native_dependency_count": 1,
         }
-        with mock.patch(BUILD_VERIFIER, return_value=verification):
+        with mock.patch(
+            "validation.tools._project_migration_harness."
+            "project_completion_build_ir.verify_manifest_generated_closure",
+            return_value={"status": "verified", "blockers": []},
+        ), mock.patch(BUILD_VERIFIER, return_value=verification):
             result = verify_project_final_build_ir(
                 migration_manifest=manifest,
                 repo_root=self.harness,

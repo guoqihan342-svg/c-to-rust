@@ -120,6 +120,11 @@ def _plan(
     closure_verification: Mapping[str, Any],
 ) -> dict[str, Any]:
     policy = "required" if require_build_closure else "bounded-source"
+    portfolio_execution = portfolio.get("execution")
+    candidate_only = (
+        isinstance(portfolio_execution, Mapping)
+        and portfolio_execution.get("build_closure_admission") == "candidate-only"
+    )
     return {
         "schema_version": 1, "status": portfolio["status"], "profile": profile,
         "run_id": run_id, "project_key": project_key,
@@ -152,9 +157,16 @@ def _plan(
                 generated_closure.get("blockers", []),
                 closure_verification.get("blockers", []),
             ),
+            **({
+                "candidate_admission_scope": "candidate-only",
+                "candidate_generation_allowed": True,
+                "candidate_promotion_allowed": False,
+            } if candidate_only else {}),
             "next_action": (
                 "materialize_condition_eligible_worker_requests"
-                if build_ir_ready and (closure_ready or not require_build_closure)
+                if build_ir_ready and closure_ready
+                else "dispatch_candidate_only_workers"
+                if build_ir_ready and candidate_only and schedule["ready"]
                 else "resolve_generated_build_closure_blockers"
                 if build_ir_ready else "resolve_build_ir_blockers"
             ),
@@ -166,6 +178,7 @@ def _plan(
             "build_ir_verified": build_ir_ready,
             "generated_build_closure_complete": closure_ready,
             "build_closure_policy": policy,
+            **({"candidate_admission_scope": "candidate-only"} if candidate_only else {}),
         },
     }
 

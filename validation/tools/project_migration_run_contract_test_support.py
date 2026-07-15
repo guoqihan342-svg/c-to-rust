@@ -31,6 +31,14 @@ def migration_run_metadata(
         out_root, "plan/build-ir-worker-admission.json",
         {"schema_version": 1, "status": "admitted"},
     )
+    generated_closure = write_json_artifact(
+        out_root, "plan/generated-build-closure.json",
+        {"schema_version": 1, "status": "ready", "blockers": []},
+    )
+    closure_verification = write_json_artifact(
+        out_root, "plan/generated-build-closure-verification.json",
+        {"schema_version": 1, "status": "verified", "blockers": []},
+    )
     manifest = {
         "schema_version": 1,
         "dag": {unit_id: list(dependencies[unit_id]) for unit_id in sorted(dependencies)},
@@ -42,6 +50,10 @@ def migration_run_metadata(
             "status": "bound", "artifact": build,
             "verification": build_verification,
             "worker_admission": worker_admission,
+        },
+        "generated_build_closure": {
+            "status": "bound", "closure": generated_closure,
+            "verification": closure_verification,
         },
         "claim_boundary": {
             "semantic_gate": False, "translation_coverage_numerator": 0,

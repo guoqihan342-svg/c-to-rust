@@ -7,6 +7,9 @@ from pathlib import Path
 from validation.tools._project_migration_harness.candidate_compile_evidence import (
     FIXED_CARGO_CHECK,
 )
+from validation.tools._project_migration_harness.candidate_admission import (
+    candidate_admission_from_manifest,
+)
 from validation.tools._project_migration_harness.gate_authority import (
     CANDIDATE_REQUIRED_GATES,
     candidate_authority,
@@ -18,6 +21,9 @@ from validation.tools._project_migration_harness.gate_evidence import (
 )
 from validation.tools._project_migration_harness.ledger_transition_authority import (
     TransitionAuthority, load_unit_projection,
+)
+from validation.tools._project_migration_harness.ledger_run_contract import (
+    load_migration_contract,
 )
 from validation.tools._project_migration_harness.ledger_transition_commands import (
     attempt_finished_command, attempt_started_command,
@@ -50,10 +56,14 @@ class CandidateGateAuthoritySupportMixin:
         target = self.harness.joinpath(*Path(source_path).parts)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(label.encode("utf-8"))
-        metadata = json.dumps(
-            derive_rust_metadata(label), sort_keys=True, separators=(",", ":"),
-        )
         with self.ledger.connect() as connection:
+            _contract, manifest = load_migration_contract(
+                self.ledger.path, connection, "run",
+            )
+            metadata = json.dumps({
+                **derive_rust_metadata(label),
+                **candidate_admission_from_manifest(manifest),
+            }, sort_keys=True, separators=(",", ":"))
             ordinal = int(connection.execute(
                 "select count(*)+1 from attempts where run_id='run' and unit_id='unit'"
             ).fetchone()[0])

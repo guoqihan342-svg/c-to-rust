@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from .candidate_semantic_evidence import revalidate_candidate_semantic_verdict
+from .candidate_admission_ledger import require_semantic_candidate_admission
 from .execution_evidence import validate_provider_execution_evidence
 from .gate_authority import (
     CANDIDATE_GATE_FAMILIES,
@@ -34,6 +35,9 @@ def promote_last_good(
     with ledger.connect() as connection, atomic(connection):
         candidate = candidate_row(
             connection, run_id, unit_id, candidate_artifact_id, active=True,
+        )
+        require_semantic_candidate_admission(
+            ledger, connection, run_id, dict(candidate),
         )
         candidate_set = bind_verification_candidate_set(
             connection, run_id, database_path=ledger.path,

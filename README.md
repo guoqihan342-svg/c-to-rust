@@ -19,7 +19,7 @@
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
 | 当前翻译任务 | P0-A19 项目级编排优先；P0-A18c/P0-A10 保留为有限回归与 held-out 验收 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
-| P0-A19 有限门禁 | Windows 共 988 项：全部通过、11 项平台条件跳过；WSL 显式绑定 Cargo/Rustup 后 988 项全部通过、6 项平台条件跳过 |
+| P0-A19 有限门禁 | Windows 共 1001 项：全部通过、11 项平台条件跳过；WSL 同组 1001 项全部通过、6 项平台条件跳过 |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | canonical roadmap + code/tests + harness evidence gates |
 
@@ -65,7 +65,7 @@ AI candidate manifest v9 的 `prompt_scope` 由实际 ContextPack 计算，并�
 
 ## 整项目 AI 编排
 
-比赛平台上的外层 OpenCode 不需要逐函数编写 spec。它只调用 `project_migration_harness.py plan` 并提供仓库根；后续由 harness 自己发现 compile database、CMake/Ninja/Meson 构建事实、编译输出、静态归档和链接边，生成 SCC/DAG、内容寻址 ContextPack catalog/frontier、角色组合和 SQLite 状态。`plan` CLI 默认使用 `--profile competition` 和 `--build-closure-policy required`；`--profile development` 只是必须显式选择的非比赛兼容路径。闭包不完整时所有 ready worker 都 deferred，`bounded-source` 只允许生成 `semantic_gate=false` 的调查候选，不能进入项目完成路径。
+比赛平台上的外层 OpenCode 不需要逐函数编写 spec。它只调用 `project_migration_harness.py plan` 并提供仓库根；后续由 harness 自己发现 compile database、CMake/Ninja/Meson 构建事实、编译输出、静态归档和链接边，生成 SCC/DAG、内容寻址 ContextPack catalog/frontier、角色组合和 SQLite 状态。`plan` CLI 默认使用 `--profile competition` 和 `--build-closure-policy required`；`--profile development` 只是必须显式选择的非比赛兼容路径。BuildIR 已验证但 required 闭包仍不完整时，调度器只放行原本条件满足的当前前沿，并把 assignment、request 和 Rust artifact 全部绑定为 `candidate-only` 隔离候选；SQLite 最低层晋升权威会拒绝其成为 `last-good`，后续依赖、项目集成、semantic gate 和翻译计数仍保持阻塞。`bounded-source` 同样只能生成 `semantic_gate=false` 的调查候选，不能进入项目完成路径。
 
 competition profile 在发现完成后、任何 worker/AI 启动前，从发现到的 compiler driver/wrapper、linker driver/linker、archiver 和 ranlib 构造 `c-toolchain-evidence`。证据绑定 `config/competition-env/environment.json` 的 path/SHA/size/profile id、环境白名单与 PATH 快照哈希、host/WSL 指纹、绝对解析路径和 binary SHA/size，并只运行固定且有界的 version、target、sysroot、resource-dir 和 derived-linker 探针。每个探针的原始 stdout/stderr 以有界 base64、SHA-256 和 size 保存在 BuildIR 哈希绑定的内容寻址 attachment；工具缺失、探针失败或漂移、平台不符以及 competition GCC 版本不符都会在调度前 fail closed。
 

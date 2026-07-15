@@ -105,7 +105,9 @@ class MakeClosureFactTests(unittest.TestCase):
         )
         self.assertEqual("planned", plan["status"], plan)
         self.assertFalse(plan["execution"]["build_closure_ready"])
-        self.assertEqual([], plan["scheduler"]["ready_worker_ids"])
+        self.assertTrue(plan["scheduler"]["ready_worker_ids"])
+        self.assertEqual("candidate-only", plan["execution"]["candidate_admission_scope"])
+        self.assertFalse(plan["execution"]["candidate_promotion_allowed"])
         build_ir = self.read("target/run/plan/build-ir.json")
         claim = build_ir["claim_boundary"]
         self.assertTrue(claim["command_graph_complete"])

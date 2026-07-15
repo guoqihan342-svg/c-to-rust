@@ -20,6 +20,8 @@ from .held_out_run_verification import (
 )
 from .ledger import ProjectLedger
 from .ledger_project_gates import _require_latest_project_passes
+from .ledger_run_contract import load_migration_contract
+from .project_closure_gate import verify_manifest_generated_closure
 
 
 def verify_completed_project(
@@ -52,6 +54,18 @@ def verify_completed_project(
                 and binding.get("plan_sha256") == plan_sha256
                 and binding.get("run_id") == run_id,
                 "run is not bound to the held-out plan",
+            )
+            _contract, manifest = load_migration_contract(
+                ledger_file, connection, run_id,
+            )
+            closure_verification = verify_manifest_generated_closure(
+                manifest,
+                repo_root=repo_root,
+                artifact_root=ledger_file.parent.parent,
+            )
+            _require(
+                closure_verification.get("status") == "verified",
+                "held-out generated build closure is not verified",
             )
             discovery_sha = _verify_discovery(
                 ledger_file, metadata, repo_root, compile_database,
@@ -102,6 +116,7 @@ def verify_completed_project(
         "provider_candidate_count": provider_candidates,
         "project_gate_count": len(project_records),
         "discovery_sha256": discovery_sha,
+        "generated_build_closure_status": closure_verification["status"],
         "ledger_sha256": _file_identity(ledger_file)[-1],
         "translation_coverage_numerator": 1,
         "semantic_gate": True,

@@ -35,7 +35,7 @@ VERIFIED = {
     "schema_version": 1,
     "status": "verified",
     "blockers": [],
-    "native_link_config_resolved": True,
+    "native_link_config_resolved": True, "closure_complete": True,
     "unresolved_native_dependency_count": 0,
 }
 INTEGRATED = {
@@ -64,6 +64,10 @@ class ProjectMigrationCompletionBuildIRTests(
             },
         }
         with (
+            mock.patch(
+                BUILD_VERIFIER.rsplit(".", 1)[0] + ".verify_manifest_generated_closure",
+                return_value=VERIFIED,
+            ),
             mock.patch(
                 BUILD_VERIFIER, side_effect=build_ir_results,
             ) as build_ir_verifier,
@@ -161,10 +165,16 @@ class ProjectMigrationCompletionBuildIRTests(
             "blockers": [],
             "build_ir_sha256": "a" * 64,
             "semantic_sha256": "b" * 64,
-            "toolchain_profile": "competition",
+            "toolchain_profile": "competition", "closure_complete": True,
             "verified_binding_count": 3,
         }
-        with mock.patch(BUILD_VERIFIER, return_value=verified) as verifier:
+        with (
+            mock.patch(BUILD_VERIFIER, return_value=verified) as verifier,
+            mock.patch(
+                BUILD_VERIFIER.rsplit(".", 1)[0] + ".verify_manifest_generated_closure",
+                return_value=VERIFIED,
+            ),
+        ):
             result = verify_project_final_build_ir(
                 migration_manifest=manifest,
                 repo_root=self.harness,

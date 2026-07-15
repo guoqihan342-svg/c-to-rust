@@ -4,6 +4,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .build_facts import json_sha256, resolve_repository_path
+from .candidate_admission import apply_candidate_admission
 from .closure_paths import (
     bind_repository_artifact,
     path_error_blocker,
@@ -11,7 +12,6 @@ from .closure_paths import (
 )
 from .link_closure import discover_link_closure
 from .meson_introspection import verify_meson_introspection
-from .portfolio_integrity import canonical_sha256
 
 
 MAX_GENERATED_INCLUDE_ROOTS = 256
@@ -176,40 +176,9 @@ def verify_generated_build_closure(
 
 
 def apply_generated_closure_admission(
-    portfolio: dict[str, Any], *, closure_ready: bool,
+    portfolio: dict[str, Any], *, admission_evidence: dict[str, Any],
 ) -> dict[str, Any]:
-    if closure_ready:
-        return portfolio
-    requirement = "generated_build_closure_verified"
-    newly_deferred: list[str] = []
-    for assignment in portfolio.get("assignments", []):
-        if not isinstance(assignment, dict):
-            continue
-        policy = assignment.get("launch_policy")
-        if not isinstance(policy, dict) or policy.get("state") != "ready":
-            continue
-        policy["state"] = "deferred"
-        policy["condition"] = "hash_bound_generated_build_closure_required"
-        requires = policy.get("requires")
-        policy["requires"] = sorted({
-            *(requires if isinstance(requires, list) else []), requirement,
-        })
-        policy["gate_triggered"] = True
-        newly_deferred.append(str(assignment.get("worker_id")))
-    initial = portfolio.get("initial_ready")
-    if isinstance(initial, dict):
-        existing = initial.get("deferred_worker_ids")
-        initial["selected_worker_ids"] = []
-        initial["deferred_worker_ids"] = sorted({
-            *(existing if isinstance(existing, list) else []), *newly_deferred,
-        })
-    portfolio["units"] = []
-    execution = portfolio.get("execution")
-    if isinstance(execution, dict):
-        execution["build_closure_admission"] = "blocked"
-    payload = {key: value for key, value in portfolio.items() if key != "plan_sha256"}
-    portfolio["plan_sha256"] = canonical_sha256(payload)
-    return portfolio
+    return apply_candidate_admission(portfolio, admission_evidence)
 
 
 def _generated_include_roots(

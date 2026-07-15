@@ -7,6 +7,7 @@ from typing import Any
 from .artifacts import write_json_artifact
 from .build_ir import validate_artifact_reference
 from .build_ir_validation import verify_build_ir_artifact
+from .project_closure_gate import verify_manifest_generated_closure
 
 
 def verify_project_final_build_ir(
@@ -65,6 +66,18 @@ def verify_project_final_build_ir(
         )
         return _result(profile, bound_reference, "blocked", [{"kind": kind}])
 
+    closure_verification = verify_manifest_generated_closure(
+        migration_manifest,
+        repo_root=resolved_repo_root,
+        artifact_root=artifact_root,
+    )
+    if closure_verification["status"] != "verified":
+        return _result(
+            profile, bound_reference, "blocked",
+            closure_verification["blockers"],
+            generated_build_closure_verification=closure_verification,
+        )
+
     verification = verify_build_ir_artifact(
         resolved_repo_root, artifact_root, bound_reference,
     )
@@ -82,6 +95,9 @@ def verify_project_final_build_ir(
     native_link_resolved = verification.get("native_link_config_resolved")
     if native_link_resolved is False:
         blockers = [*blockers, {"kind": "native_link_config_unresolved"}]
+    closure_complete = verification.get("closure_complete")
+    if verification.get("status") == "verified" and closure_complete is not True:
+        blockers = [*blockers, {"kind": "build_ir_closure_incomplete"}]
     status = "verified" if verification.get("status") == "verified" and not blockers \
         else "blocked"
     return _result(
@@ -90,6 +106,8 @@ def verify_project_final_build_ir(
         semantic_sha256=verification.get("semantic_sha256"),
         toolchain_profile=verification.get("toolchain_profile"),
         native_link_config_resolved=native_link_resolved,
+        closure_complete=closure_complete,
+        generated_build_closure_verification=closure_verification,
         unresolved_native_dependency_count=verification.get(
             "unresolved_native_dependency_count",
         ),

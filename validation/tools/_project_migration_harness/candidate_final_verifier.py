@@ -5,6 +5,7 @@ from typing import Any
 
 from .artifacts import canonical_json_bytes, content_sha256
 from .candidate_semantic_evidence import revalidate_candidate_semantic_verdict
+from .candidate_admission_ledger import require_semantic_candidate_admission
 from .gate_authority import (
     CANDIDATE_REQUIRED_GATES,
     candidate_authority,
@@ -27,6 +28,9 @@ def verify_candidate_final(
     with ledger.connect() as connection:
         candidate = candidate_row(
             connection, run_id, unit_id, candidate_artifact_id, active=True,
+        )
+        require_semantic_candidate_admission(
+            ledger, connection, run_id, dict(candidate),
         )
         records = latest_candidate_records(
             connection, run_id, unit_id, candidate_artifact_id,

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .artifacts import content_sha256, write_json_artifact
+from .candidate_admission import candidate_admission_metadata
 
 
 def materialize_worker_requests(
@@ -28,6 +29,7 @@ def materialize_worker_requests(
         assignment = dict(item["assignment"])
         worker_id = _portable_id(assignment.get("worker_id"), "worker_id")
         role = _portable_id(assignment.get("role"), "role")
+        launch_policy = assignment.get("launch_policy")
         request = {
             "schema_version": 1,
             "request_kind": "project_migration_worker",
@@ -50,7 +52,7 @@ def materialize_worker_requests(
             "context_frontier": item.get("context_frontier"),
             "launch_claim": item.get("launch_claim"),
             "schedule_sha256": schedule.get("schedule_sha256"),
-            "launch_policy": assignment.get("launch_policy"),
+            "launch_policy": launch_policy,
             "repair_mode": item.get("repair_mode"),
             "input_facts": item.get("input_facts", {}),
             "runtime_roots": assignment.get("runtime_roots"),
@@ -61,7 +63,7 @@ def materialize_worker_requests(
                 "expected_actual": "withheld",
                 "context_loading": "hash_bound_pages_only",
             },
-            "output_contract": _output_contract(role),
+            "output_contract": _output_contract(role, launch_policy),
         }
         request["effective_input_sha256"] = content_sha256(request)
         base = f"harness/assignments/{worker_id}"
@@ -77,9 +79,9 @@ def materialize_worker_requests(
     return results
 
 
-def _output_contract(role: str) -> dict[str, Any]:
+def _output_contract(role: str, launch_policy: Any) -> dict[str, Any]:
     if role == "planner":
-        return {
+        contract = {
             "kind": "hash_bound_boundary_route_decision",
             "required": ["decision"],
             "allowed_decisions": [
@@ -90,7 +92,7 @@ def _output_contract(role: str) -> dict[str, Any]:
             "semantic_acceptance": False,
         }
     if role == "translator":
-        return {
+        contract = {
             "kind": "complete_group_candidate",
             "required": ["candidate_source"],
             "host_derived": [
@@ -100,13 +102,13 @@ def _output_contract(role: str) -> dict[str, Any]:
             "semantic_acceptance": False,
         }
     if role == "reviewer":
-        return {
+        contract = {
             "kind": "bounded_structural_review",
             "required": ["candidate_artifact_sha256", "findings"],
             "semantic_acceptance": False,
         }
     if role == "repairer":
-        return {
+        contract = {
             "kind": "complete_group_candidate_replacement",
             "required": ["failed_gate_result_sha256", "candidate_source"],
             "host_derived": [
@@ -115,7 +117,10 @@ def _output_contract(role: str) -> dict[str, Any]:
             ],
             "semantic_acceptance": False,
         }
-    raise ValueError("unsupported worker role")
+    if role not in {"planner", "translator", "reviewer", "repairer"}:
+        raise ValueError("unsupported worker role")
+    contract.update(candidate_admission_metadata(launch_policy))
+    return contract
 
 
 def _portable_id(value: Any, field: str) -> str:

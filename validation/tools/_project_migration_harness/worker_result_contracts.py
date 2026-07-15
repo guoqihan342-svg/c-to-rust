@@ -10,6 +10,7 @@ from validation.tools._ai_candidate_harness_parts.context_security import (
 )
 
 from .artifacts import content_sha256
+from .candidate_admission import candidate_admission_metadata
 from .candidate_strategy import validate_candidate_strategy
 from .ledger_security import assert_no_semantic_claims
 from .portfolio_roles import PLANNER_DECISIONS
@@ -132,7 +133,10 @@ def _candidate(
         if decision == "preserve_ffi_boundary"
         else None
     )
-    candidate_metadata = {**common, **derived}
+    candidate_metadata = {
+        **common, **derived,
+        **candidate_admission_metadata(request.get("launch_policy")),
+    }
     strategy = request.get("input_facts", {}).get("candidate_strategy")
     if strategy is not None:
         bound_strategy = validate_candidate_strategy(strategy)

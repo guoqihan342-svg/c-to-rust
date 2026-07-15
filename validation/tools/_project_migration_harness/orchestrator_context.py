@@ -23,7 +23,7 @@ def build_context_portfolio(
     output: Path, out_rel: str, run_id: str, project_key: str,
     max_concurrency: int, max_attempts: int, context_page_bytes: int,
     context_page_tokens: int, context_group_pages: int,
-    closure_admitted: bool,
+    admission_evidence: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
     try:
         bindings, page_proofs, index_summary = prepare_plan_context_indexes(
@@ -42,7 +42,7 @@ def build_context_portfolio(
             context_page_proof_set=page_proofs,
         )
         portfolio = apply_generated_closure_admission(
-            portfolio, closure_ready=closure_admitted
+            portfolio, admission_evidence=dict(admission_evidence),
         )
     except (OSError, ValueError) as error:
         raise ContextPortfolioError("portfolio_contract_invalid") from error

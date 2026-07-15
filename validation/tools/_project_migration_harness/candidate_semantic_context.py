@@ -6,6 +6,7 @@ from typing import Any
 
 from .artifacts import canonical_json_bytes
 from .candidate_compile_evidence import derive_compile_status, verify_compile_bindings
+from .candidate_admission_ledger import require_semantic_candidate_admission
 from .gate_authority import candidate_authority, validate_candidate_verdict
 from .gate_candidate_sets import candidate_set_manifest
 from .gate_evidence import (
@@ -39,6 +40,9 @@ def current_semantic_context_bound(
     candidate = dict(candidate_row(
         connection, run_id, unit_id, artifact_id, active=True,
     ))
+    require_semantic_candidate_admission(
+        ledger, connection, run_id, candidate,
+    )
     unit = connection.execute(
         "select group_id from migration_units where run_id=? and unit_id=?",
         (run_id, unit_id),

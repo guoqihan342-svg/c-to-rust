@@ -54,6 +54,11 @@ class ProjectMigrationControllerCase(unittest.TestCase):
     def plan(self, source: str) -> dict:
         source_path = self.source / "unit.c"
         source_path.write_text(source, encoding="utf-8")
+        (self.source / "unit.o").write_bytes(b"object-fixture")
+        (self.source / "unit.bin").write_bytes(b"target-fixture")
+        link = self.source / "CMakeFiles/unit.dir/link.txt"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.write_text("clang unit.o -o unit.bin\n", encoding="utf-8")
         database = self.source / "compile_commands.json"
         database.write_text(json.dumps([{
             "directory": ".",

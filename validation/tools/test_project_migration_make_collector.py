@@ -132,7 +132,11 @@ class MakeCollectorTests(unittest.TestCase):
         self.assertFalse(plan["claim_boundary"][
             "generated_build_closure_complete"
         ])
-        self.assertEqual([], plan["scheduler"]["ready_worker_ids"])
+        self.assertTrue(plan["scheduler"]["ready_worker_ids"])
+        self.assertEqual(
+            "candidate-only", plan["execution"]["candidate_admission_scope"],
+        )
+        self.assertFalse(plan["execution"]["candidate_promotion_allowed"])
         build_ir = read_json(self.harness / "target/run/plan/build-ir.json")
         self.assertEqual("build", build_ir["translation_units"][0]["working_directory"])
         self.assertEqual("src/unit.c", build_ir["translation_units"][0]["source"]["path"])

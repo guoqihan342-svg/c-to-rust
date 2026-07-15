@@ -75,6 +75,10 @@ class MakeVerticalClosureTests(unittest.TestCase):
         self.assertTrue(plan["execution"]["build_ir_ready"])
         self.assertFalse(plan["execution"]["make_executed"])
         self.assertFalse(plan["execution"]["build_closure_ready"])
+        self.assertEqual(
+            "candidate-only", plan["execution"]["candidate_admission_scope"],
+        )
+        self.assertFalse(plan["execution"]["candidate_promotion_allowed"])
         self.assertTrue(plan["scheduler"]["ready_worker_ids"])
         build_ir = self.read(output / "plan/build-ir.json")
         admission = self.read(output / "plan/build-ir-worker-admission.json")
@@ -114,7 +118,7 @@ class MakeVerticalClosureTests(unittest.TestCase):
         self.assertFalse(boundary["semantic_gate"])
         self.assertEqual(0, boundary["translation_coverage_numerator"])
 
-    def test_required_complete_closure_keeps_workers_deferred(self) -> None:
+    def test_required_incomplete_closure_admits_candidate_only_frontier(self) -> None:
         bundle = self.bundle("required-closure")
         plan = plan_project(
             bundle["root"], harness_root=bundle["harness"],
@@ -123,11 +127,12 @@ class MakeVerticalClosureTests(unittest.TestCase):
         )
         self.assertEqual("planned", plan["status"], plan)
         self.assertFalse(plan["execution"]["build_closure_ready"])
-        self.assertEqual([], plan["scheduler"]["ready_worker_ids"])
+        self.assertTrue(plan["scheduler"]["ready_worker_ids"])
         self.assertEqual(
-            "blocked", plan["portfolio"]["execution"]["build_closure_admission"],
+            "candidate-only", plan["portfolio"]["execution"]["build_closure_admission"],
         )
-        self.assertEqual([], plan["portfolio"]["initial_ready"]["selected_worker_ids"])
+        self.assertTrue(plan["portfolio"]["initial_ready"]["selected_worker_ids"])
+        self.assertFalse(plan["portfolio"]["execution"]["promotion_allowed"])
 
     def test_report_and_every_bound_input_drift_block_reopen(self) -> None:
         mutations = {

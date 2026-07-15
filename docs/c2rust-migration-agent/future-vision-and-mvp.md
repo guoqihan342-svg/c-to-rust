@@ -495,7 +495,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   - [x] 自动选择显式或唯一 compile database，识别 Make/CMake/Meson 构建事实，展开有界 response files，保留 C 编译变体并安全跳过 C++ 翻译单元。
   - [x] 对仓库根、源码、数据库、输出、include/response 路径执行 repo confinement、link/junction、大小、数量和 SHA-256 漂移检查；外部路径和敏感 defines 不进入模型事实。
-  - [x] 对 CMake `link.txt`、generated include、compile output、target、response file、搜索目录和有序系统链接参数建立 repo-confined 内容绑定；`required` 策略在闭包缺失时把所有 ready worker 转成不可启动的 deferred，`bounded-source` 只能生成非语义候选。
+  - [x] 对 CMake `link.txt`、generated include、compile output、target、response file、搜索目录和有序系统链接参数建立 repo-confined 内容绑定；`required` 策略在闭包缺失时只允许当前条件满足的前沿生成绑定的 `candidate-only` 隔离候选，最低层晋升与后续依赖继续阻塞；`bounded-source` 也只能生成非语义候选。
   - [x] 以不执行命令的有界解析器读取仓库内 `build.ninja`、递归 `include/subninja`、变量、rule/build edge、compiler link edge 和 response file；所有支持文件与输入输出都做内容绑定并在执行前复查漂移。
   - [x] 从 CMake 多行 `link.txt` 与 Ninja archive rule 解析 `ar`/`ranlib` 静态归档闭包，绑定操作、归档目标、成员顺序和同目标 `ranlib`，不执行构建命令。
   - [ ] **A19a6：Meson 与受限生成事实闭环**。
@@ -591,7 +591,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
     - [ ] A19a8b：固定调用 `make -B -n -j1 --no-print-directory -f <makefile> -- <targets>`，不接受任意 command、flag、环境、shell、configure 或生成脚本。
       - [x] A19a8b1：固定 argv/目标合同、受限 stdout parser 与非语义报告 schema 已实现；报告只能从成功且清理完成的 typed runner outcome 构造，并绑定 execution plan 与 raw stdout/stderr。它会拒绝 recursive Make、shell control、command chain、libtool/configure、歧义 compile+link 和路径逃逸，固定 `semantic_gate=false`、numerator 0。
       - [ ] A19a8b2：在 A19e8 已证明能力的沙箱中实际执行固定命令，持久化并重开 raw stdout/stderr、toolchain、sandbox 和输入引用；覆盖 `$(shell ...)`、included Makefile 重建、超时、输出洪泛与退出清理。当前 parser/report 合同不能冒充 runner 已接通。
-    - [x] A19a8c：只把可无损解析的直接 compiler、archiver、ranlib、link invocation 归一化为 BuildIR；报告绑定 Makefile/source/leaf input/toolchain/preflight/plan/raw output，未生成输出固定为 `materialized=false`。BuildIR 明确写入 header、生成物物化和外部依赖解析边界，只声明直接 command graph 完整；`required` 完整闭包策略会让 worker deferred，显式 `bounded-source` 才允许进入迁移 DAG。报告与 BuildIR 均固定为非语义证据、numerator 0。
+    - [x] A19a8c：只把可无损解析的直接 compiler、archiver、ranlib、link invocation 归一化为 BuildIR；报告绑定 Makefile/source/leaf input/toolchain/preflight/plan/raw output，未生成输出固定为 `materialized=false`。BuildIR 明确写入 header、生成物物化和外部依赖解析边界，只声明直接 command graph 完整；`required` 完整闭包缺失时只允许当前前沿进入不可晋升的 `candidate-only` 隔离路径，显式 `bounded-source` 仍只是非语义调查路径。报告与 BuildIR 均固定为非语义证据、numerator 0。
     - [ ] A19a8d：用不含项目身份的等价 fixture 验证 Make dry-run 与 compile database/Ninja/CMake adapter 产生相同 canonical projection，并覆盖 shell/configure/递归 Make 拒绝、timeout/output flood、路径/link escape、输入漂移和 sandbox receipt 漂移。
       - [x] A19a8d1：无项目身份的 Make fixture 已覆盖仓库根重命名等价、固定 argv、shell/configure/递归 Make 拒绝、timeout/output flood/cleanup、报告及每类绑定输入/preflight 漂移，并验证 worker admission 会再次重开证据。
       - [ ] A19a8d2：补齐 Make 与 compile database/Ninja/CMake 对同一构建语义的跨 adapter canonical projection 等价测试，以及生产沙箱中的 included-Makefile/`$(shell ...)` 对抗用例。
@@ -652,6 +652,11 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   - [x] 生成 planner/translator/reviewer/repairer 角色组合、独立 config/data/state/cache/tmp/out-root、DAG 依赖和 SQLite assignments/leases/attempts/artifacts。
   - [x] 关闭 plan/preflight/request/attempt 漂移、租约重入、heartbeat、非原子 ingest、工具事件、secret 输入、父环境泄漏、agent 权限覆盖、spawn 前误记 command-started 和 provider evidence 未落 ledger；当前有限回归为 Windows 351 项（349 通过、2 项条件跳过），WSL 351/351。
   - [x] 在 WSL 通过固定项目 preflight 真实调用一次 `opencode/deepseek-v4-flash-free`：1 次 provider invocation，preflight report SHA `f0bc76b6b2489597e782cd1f0e532b7483f03658680b4352401ee12c814913c0`，session export `verified`，execution report SHA `9e04b437135aa9f1e2171a180f2e77272374fc8bba3c1257d314e8a963c10b5d`，candidate SHA `359cb2ef234f85d9aa1cbdf2d77e07a296f55cb8bd7d4ad9dd37afe4d9ea72ef`；状态仅为 `candidate-ready` / `auxiliary-local-validation`。GLM-5.1 仍只有真实比赛主机精确合同才能关闭 P0-H9。
+  - [ ] **A19c3：构建闭包缺失时的渐进 AI 准入与不可变升级**。
+    - [x] A19c3a：BuildIR 已验证但 generated closure 不完整时，无论策略是 `required` 还是 `bounded-source`，都只保留调度器原本条件满足的当前前沿；assignment、worker request、output contract 和 translator/repairer artifact 均绑定精确 `candidate-only`/quarantine/promotion requirement。AI 可在隔离单元内生成、审查和修复候选，但 SQLite 最低层 promotion authority 会拒绝其成为 `last-good`，因此不能解锁跨单元依赖、集成、semantic gate 或 numerator。合同缺字段、自相矛盾或工件 metadata 漂移均 fail closed。
+    - [ ] A19c3b：闭包补齐后增加不可变 upgrade/replan 事务，重新打开 BuildIR、generated closure、旧候选源码和验证证据，在新 assignment/run 身份下决定重新生成或重新验证；不得原地修改旧 request/artifact 的 hash-bound `candidate-only` 身份，也不得用旧隔离候选直接解锁后续波次。
+
+    A19c3a 有限阶段证据（2026-07-15）：所有候选现在必须携带由 integration manifest 的 BuildIR/generated-closure 引用重算得到的 `admission_binding_sha256`；闭包完整时为 `semantic-eligible`，闭包不完整时无论 `required` 还是 `bounded-source` 都是 `candidate-only`，缺字段不再默认放行。worker result 只能由宿主把该身份写入候选 metadata；semantic context、candidate final、最低层 `last-good` promotion、CompletionCoordinator 的 project-final BuildIR checkpoint 和只读 held-out acceptance 都独立重开或重算 admission/closure，隔离候选只能进行 candidate compile/quarantine 工作。Windows `test_project_migration*.py` 1001 项全部通过、11 项平台条件跳过；WSL 同组 1001 项全部通过、6 项平台条件跳过。该阶段没有调用 provider/model，没有完成 A19c3b、项目 semantic gate 或真实 held-out 翻译，`semantic_gate=false`、numerator 0。
   - [ ] **A19c4：最大化 AI 项目推理、候选多样性与信息增益**。
     - [ ] A19c4a：增加跨完整 BuildIR、Migration DAG、RustProjectIR 和历史失败事实工作的 global AI planner；它按依赖、接口风险、验证可用性和项目阻塞生成可重算迁移策略，并在新证据到达后局部重规划，禁止按项目名或固定测试身份选择路线。
     - [ ] A19c4b：同一高风险 unit 可在共享总预算内生成有明确策略标签的多样候选/接口提案，经 source SHA 去重后由相同 host gates 比较；reviewer/critic 只能提出结构化风险和修复假设，模型投票、自评分或多数意见不得产生 pass。

@@ -26,6 +26,7 @@ def build_ir_verification_result(
         "build_ir_sha256": reference.get("sha256"),
         "semantic_sha256": payload.get("semantic_sha256") if payload else None,
         "toolchain_profile": claim.get("toolchain_profile"),
+        "closure_complete": claim.get("closure_complete"),
         "native_link_config_resolved": not unresolved_native if payload else None,
         "unresolved_native_dependency_count": unresolved_native if payload else None,
         "verified_binding_count": verified_bindings,
