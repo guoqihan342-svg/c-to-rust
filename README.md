@@ -129,7 +129,7 @@ python3 -B validation/tools/project_migration_harness.py complete \
 
 ### 可执行的整项目 C2Rust 基线
 
-`c2rust-baseline` 接受仓库内 `compile_commands.json`，实际调用 C2Rust，执行通用的生成代码修复，发现所有已翻译 public `main` 并生成 Rust wrapper，然后对每个 Cargo package 运行 `check --offline --all-targets`，最后逐个执行所有 wrapper。wrapper 保留对应编译单元的原始工作目录，因此依赖相对路径 fixture 或构建产物的测试仍在原语境执行。输入路径逃逸、C2Rust 路径归一化碰撞、同一源文件工作目录冲突、转换失败、无可执行入口、任一 Cargo 检查或任一 wrapper 失败都会阻断；报告和原始输出使用内容寻址引用，宿主绝对路径只保留在 `private-local` 工件中。
+`c2rust-baseline` 接受仓库内 `compile_commands.json`，实际调用 C2Rust，执行通用的生成代码修复，发现所有已翻译 public `main` 并生成 Rust wrapper，然后对每个 Cargo package 运行 `check --offline --all-targets`，最后逐个执行所有 wrapper。wrapper 保留对应编译单元的原始工作目录，因此依赖相对路径 fixture 或构建产物的测试仍在原语境执行。Bear 记录的 Clang `-cc1` 内部子任务只有在同一源码存在普通 driver 编译项时才会被忽略，孤立子任务仍阻断。输入路径逃逸、C2Rust 路径归一化碰撞、同一源文件工作目录冲突或多个语义编译配置、转换失败、C2Rust 零退出码但 hash 绑定 stderr 含 `error:`、无可执行入口、任一 Cargo 检查或任一 wrapper 失败都会阻断；报告和原始输出使用内容寻址引用，宿主绝对路径只保留在 `private-local` 工件中。
 
 ```bash
 python3 -B validation/tools/project_migration_harness.py c2rust-baseline \
@@ -155,6 +155,8 @@ python3 -B validation/tools/project_migration_harness.py c2rust-baseline \
 四项验收使用同一身份中立的生产路径，生产代码不读取项目名、测试名或固定 fixture。cJSON、libyaml 和 Lua 在测试期间推动了工作目录绑定、C2Rust 文件名规范化、重复导出私有化、定向 rustc lint 兼容以及 Rust 1.95 `VaList` API 迁移，因此都是跨项目开发回归，不计 held-out。Lua 的默认 GCC computed-goto 配置被 C2Rust 明确拒绝；测试改用上游已有且原生全套通过的 `LUA_USE_JUMPTABLE=0` 可移植构建变体。转换版官方全套还按原 Make 链接事实补了 `-Wl,--export-dynamic`，并使用 WSL 默认栈而非上游脚本的 1.1 MiB 限制。后两项尚未由正式报告从 BuildIR 自动绑定，所以该命令仍是通用 raw C2Rust unsafe 执行基线，固定 `semantic_gate=false`、numerator 0；它不冒充 AI-primary、unsafe 消除、比赛真实主机或任意未知项目的最终语义通过。
 
 同日追加了 Expat `R_2_8_2`（`c61098da494eea1cbd091118118dcee417faacea`）初始 held-out 探针。上游默认 Linux 非 fuzzer 闭包包含共享库、`xmlwf`、3 个 examples、benchmark 和完整测试，共 36 条编译命令、29 个唯一 C TU；原生 CTest 1/1 和内部 4824/4824 checks 通过。该探针暴露并推动了 C2Rust 按共同源码祖先裁剪仓库内嵌源码根时的通用工作目录映射修复，因此修复后重跑只算开发回归，不再算 held-out 证明。重跑中 29 个 TU 全部生成 Rust，Cargo all-targets 通过，转换后的 4824/4824 checks 通过；`xmlwf` 的文件/标准输入、3 个 examples 和 benchmark 也分别使用同一有效 XML/参数与原生 C 差分通过。6 个 Rust 二进制只依赖系统运行库，没有链接 `libexpat` 或遗留 `XML_*` 未解析符号。正式 baseline 报告 `db902e6124d9afe46d8ba05757b84115d9b89eb88f466f4e879653b6b2df9e8b` 仍为 `blocked`：当前低层入口会无参数执行所有 wrapper，因而把需要 XML、文件或 benchmark 参数的 5 个非测试程序判为失败。该结果证明实际转换和有效输入行为，但不进入上表的正式通过项；只有 BuildIR 自动绑定原 C 测试目标、argv、stdin/fixture 和等价 Rust 场景后，才能关闭该编排缺口。
+
+随后用 TinyCC 当前完整 `mob` 源码提交 `d9d02c56401e43be43760b63f7d82f771a7ed1f6` 做更高复杂度压力测试。仓库含 544 个 tracked files、232 个 C 文件和 346 个 `tests/` 文件；`./configure --cc=clang --debug --enable-cross`、全量 `make -j8` 及官方 `make test -j8` 均通过，并构建了多种交叉编译目标。Bear 产生 25 条记录、12 个唯一 C TU，其中 `tcc.c` 具有 13 个目标宏配置。加固后的 C2Rust baseline 报告 `2d4a94431f18d245532be61c9103874fdcfc641439daee06280eb51e1512fe15` 明确为 `blocked`：同一源码多语义配置尚不能投影为互不冲突的 Rust 变体，且 C2Rust 在 `tccgen.c` 的 `long double` 到 `uint64` 转换上输出 fatal diagnostic；门禁在 Cargo 前停止，没有 wrapper 成功证据。AI-first 计划虽生成并验证 BuildIR、411 个迁移单元和 1440 个 assignment，但因链接事实和生成头文件闭包未完成而全部 deferred，未启动模型或 Cargo。Make 采集还暴露递归子 Make 工作目录和构建期 `c2str` 生成器无法无损表达。TinyCC 因此只作为开发回归和缺口证据，不计 held-out，也不计转换通过。
 
 `complete` 可重复执行；每次恢复最多启动一个 project-repair provider call。只有最新队列已解决且后续全项目门禁通过时才会发布 completion receipt。
 

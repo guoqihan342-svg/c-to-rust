@@ -10,10 +10,12 @@ from validation.tools._project_migration_harness.c2rust_project_baseline_process
 class FakeRunner:
     def __init__(
         self, sources: dict[str, str] | None = None, *,
-        transpile_returncode: int = 0, failing_bin: str | None = None,
+        transpile_returncode: int = 0, transpile_stderr: bytes = b"",
+        failing_bin: str | None = None,
     ) -> None:
         self.sources = sources or {}
         self.transpile_returncode = transpile_returncode
+        self.transpile_stderr = transpile_stderr
         self.failing_bin = failing_bin
         self.calls: list[list[str]] = []
         self.working_directories: list[Path] = []
@@ -35,7 +37,7 @@ class FakeRunner:
                     self.transpile_returncode, b"transpile-out", b"transpile-error",
                 )
             self._emit(Path(command[command.index("--output-dir") + 1]))
-            return ProcessOutcome(0, b"generated", b"")
+            return ProcessOutcome(0, b"generated", self.transpile_stderr)
         if "run" in command and "--bin" in command:
             name = command[command.index("--bin") + 1]
             return ProcessOutcome(

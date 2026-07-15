@@ -7,6 +7,9 @@ from typing import Any, Mapping
 from .artifacts import canonical_json_bytes, content_sha256
 from .c2rust_project_baseline_cargo import prepare_generated_cargo
 from .c2rust_project_baseline_compile_db import normalize_compilation_database
+from .c2rust_project_baseline_diagnostics import (
+    has_multi_configuration_source, has_transpiler_error_diagnostics,
+)
 from .c2rust_project_baseline_evidence import (
     reopen_c2rust_project_baseline, snapshot_generated_tree, write_cas_artifact,
 )
@@ -118,6 +121,29 @@ def run_c2rust_project_baseline(
             normalized_ref, normalized.sources, tools, policy,
             executions, generated, artifacts,
             ["c2rust_transpile_execution_failed"],
+        )
+    pre_cargo_blockers: list[str] = []
+    if has_multi_configuration_source(normalized.entries):
+        pre_cargo_blockers.append(
+            "c2rust_multi_configuration_source_unsupported",
+        )
+    try:
+        diagnostics_failed = has_transpiler_error_diagnostics(
+            output, transpile["stderr_ref"],
+        )
+    except ValueError:
+        pre_cargo_blockers.append("c2rust_transpile_diagnostics_unavailable")
+    else:
+        if diagnostics_failed:
+            pre_cargo_blockers.append("c2rust_transpile_diagnostics_failed")
+    if pre_cargo_blockers:
+        generated = _snapshot_if_available(
+            output, workspace, generated_root, generated, artifacts,
+        )
+        return _finish(
+            output, run_id, repository, original_path, original_ref,
+            normalized_ref, normalized.sources, tools, policy,
+            executions, generated, artifacts, pre_cargo_blockers,
         )
     try:
         preparation = prepare_generated_cargo(

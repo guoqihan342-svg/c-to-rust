@@ -8,10 +8,14 @@ from pathlib import Path
 import shlex
 from typing import Any
 
+from .compile_command_kinds import is_clang_frontend_job
+
 
 MAX_COMPILE_DATABASE_BYTES = 32 * 1024 * 1024
 MAX_COMPILE_DATABASE_ENTRIES = 100_000
 MAX_BOUND_SOURCE_BYTES = 512 * 1024 * 1024
+_OPAQUE_VALUE_NEXT = {"-D", "-U"}
+_OPAQUE_VALUE_PREFIX = ("-D", "-U")
 _PATH_NEXT = {
     "-I", "-L", "-T", "-include", "-imacros", "-iquote", "-isystem",
     "-o", "-MF", "--sysroot", "--include-directory",
@@ -50,32 +54,33 @@ def normalize_compilation_database(
         raise ValueError("c2rust_compile_database_entries_invalid")
     entries: list[dict[str, Any]] = []
     sources: dict[str, dict[str, Any]] = {}
+    internal_sources: set[str] = set()
     for value in raw:
-        entry, binding = _normalize_entry(root, value)
+        if not isinstance(value, dict):
+            raise ValueError("c2rust_compile_database_entry_invalid")
+        argv = _entry_argv(value)
+        if is_clang_frontend_job(argv):
+            _, source = _entry_paths(root, value)
+            internal_sources.add(source.relative_to(root).as_posix())
+            continue
+        entry, binding = _normalize_entry(root, value, argv=argv)
         entries.append(entry)
         sources.setdefault(binding["path"], binding)
+    if internal_sources - sources.keys():
+        raise ValueError("c2rust_compile_database_internal_job_unpaired")
+    if not entries:
+        raise ValueError("c2rust_compile_database_entries_invalid")
     return NormalizedCompilationDatabase(
         tuple(entries), tuple(sources[key] for key in sorted(sources)),
     )
 
 
 def _normalize_entry(
-    root: Path, value: Any,
+    root: Path, value: Any, *, argv: list[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    if not isinstance(value, dict):
-        raise ValueError("c2rust_compile_database_entry_invalid")
-    directory_value = value.get("directory")
-    file_value = value.get("file")
-    if not isinstance(directory_value, str) or not isinstance(file_value, str):
-        raise ValueError("c2rust_compile_database_path_invalid")
-    directory = _safe_path(directory_value, root, root, must_exist=True)
-    if not directory.is_dir():
-        raise ValueError("c2rust_compile_database_directory_invalid")
-    source = _safe_path(file_value, directory, root, must_exist=True)
-    if not source.is_file():
-        raise ValueError("c2rust_compile_database_source_invalid")
-    argv = _entry_argv(value)
-    normalized_argv = _normalize_argv(argv, directory, root, source)
+    directory, source = _entry_paths(root, value)
+    selected_argv = argv if argv is not None else _entry_argv(value)
+    normalized_argv = _normalize_argv(selected_argv, directory, root, source)
     result: dict[str, Any] = {
         "directory": directory.as_posix(),
         "file": source.as_posix(),
@@ -89,6 +94,22 @@ def _normalize_entry(
             output, directory, root, must_exist=False,
         ).as_posix()
     return result, _source_binding(root, source)
+
+
+def _entry_paths(root: Path, value: Any) -> tuple[Path, Path]:
+    if not isinstance(value, dict):
+        raise ValueError("c2rust_compile_database_entry_invalid")
+    directory_value = value.get("directory")
+    file_value = value.get("file")
+    if not isinstance(directory_value, str) or not isinstance(file_value, str):
+        raise ValueError("c2rust_compile_database_path_invalid")
+    directory = _safe_path(directory_value, root, root, must_exist=True)
+    if not directory.is_dir():
+        raise ValueError("c2rust_compile_database_directory_invalid")
+    source = _safe_path(file_value, directory, root, must_exist=True)
+    if not source.is_file():
+        raise ValueError("c2rust_compile_database_source_invalid")
+    return directory, source
 
 
 def _entry_argv(value: dict[str, Any]) -> list[str]:
@@ -122,6 +143,19 @@ def _normalize_argv(
     index = 1
     while index < len(argv):
         token = argv[index]
+        if token in _OPAQUE_VALUE_NEXT:
+            if index + 1 >= len(argv):
+                raise ValueError("c2rust_compile_database_argv_value_missing")
+            result.extend((token, argv[index + 1]))
+            index += 2
+            continue
+        if any(
+            token.startswith(prefix) and len(token) > len(prefix)
+            for prefix in _OPAQUE_VALUE_PREFIX
+        ):
+            result.append(token)
+            index += 1
+            continue
         if token in _PATH_NEXT:
             if index + 1 >= len(argv):
                 raise ValueError("c2rust_compile_database_argv_path_missing")

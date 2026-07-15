@@ -8,8 +8,11 @@ from .build_facts import (
     detect_build_system_facts,
     detect_generated_build_facts,
     is_linklike,
+    repository_path,
+    resolve_repository_path,
 )
-from .compile_database import parse_compile_entry
+from .compile_command_kinds import is_clang_frontend_job
+from .compile_database import command_arguments, parse_compile_entry
 from .discovery_database import load_compile_database, select_compile_database
 from .discovery_variants import finalize_variants
 from .generated_closure import discover_generated_build_closure
@@ -115,8 +118,12 @@ def discover_project(
             parsed.append(unit)
         if rejected_entry is not None:
             rejected.append(rejected_entry)
-            if rejected_entry["blocking"]:
-                blockers.append(rejected_entry["reason"])
+    rejected = _classify_paired_clang_frontend_jobs(
+        payload, root, parsed, rejected,
+    )
+    blockers.extend(
+        item["reason"] for item in rejected if item["blocking"]
+    )
     units, variant_rejections, variant_blockers = finalize_variants(parsed, max_units)
     rejected.extend(variant_rejections)
     blockers.extend(variant_blockers)
@@ -136,6 +143,53 @@ def discover_project(
         blockers,
         generated_closure,
     )
+
+
+def _classify_paired_clang_frontend_jobs(
+    payload: list[Any], root: Path, parsed: list[dict[str, Any]],
+    rejected: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    paired_sources = {item["source"]["path"] for item in parsed}
+    result: list[dict[str, Any]] = []
+    for rejection_item in rejected:
+        item = dict(rejection_item)
+        index = item.get("entry_index")
+        if (
+            item.get("reason") != "compile_only_flag_missing"
+            or type(index) is not int
+            or not 0 <= index < len(payload)
+        ):
+            result.append(item)
+            continue
+        entry = payload[index]
+        try:
+            argv = command_arguments(entry)
+            if not is_clang_frontend_job(argv):
+                result.append(item)
+                continue
+            directory = entry.get("directory", ".")
+            source_value = entry.get("file")
+            if not isinstance(directory, str) or not isinstance(source_value, str):
+                result.append(item)
+                continue
+            working_directory = resolve_repository_path(root, directory)
+            source = resolve_repository_path(
+                root, source_value, base=working_directory,
+            )
+            source_path = repository_path(root, source)
+        except (AttributeError, OSError, TypeError, ValueError):
+            result.append(item)
+            continue
+        if source_path not in paired_sources:
+            result.append(item)
+            continue
+        item.update({
+            "blocking": False,
+            "reason": "paired_clang_frontend_job_ignored",
+            "source": source_path,
+        })
+        result.append(item)
+    return result
 
 
 def report(build_facts: dict[str, Any], database: dict[str, Any],
