@@ -55,6 +55,7 @@ def collect_project_interface_diagnostics(
 ) -> list[dict[str, Any]]:
     modules = {str(item["module_id"]): item for item in ir["modules"]}
     result = _module_diagnostics(ir, modules)
+    result.extend(_native_link_diagnostics(ir))
     for section, group_key, shape_keys, duplicate_code, conflict_code in _CONFLICT_SPECS:
         result.extend(_group_conflicts(
             ir[section], group_key, shape_keys, duplicate_code, conflict_code,
@@ -63,6 +64,21 @@ def collect_project_interface_diagnostics(
     result.extend(_feature_dependency_diagnostics(ir["features"]))
     result.extend(_initialization_dependency_diagnostics(ir["initialization"]))
     return result
+
+
+def _native_link_diagnostics(
+    ir: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    requirements = ir["native_link_requirements"]
+    if not requirements or ir["native_link_plans"]:
+        return []
+    requirement_ids = [str(item["requirement_id"]) for item in requirements]
+    plan_set_id = "native-link-plan-set-" + content_sha256(
+        requirement_ids,
+    )[:24]
+    return [_diagnostic(
+        "rust_project_ir_native_link_plan_missing", [plan_set_id], [],
+    )]
 
 
 def _module_diagnostics(

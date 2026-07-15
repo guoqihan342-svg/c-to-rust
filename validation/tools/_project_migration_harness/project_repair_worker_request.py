@@ -16,6 +16,7 @@ from .project_repair_generation_authority import (
     require_project_repair_source_generation,
 )
 from .project_repair_paths import require_bound_project_repair_out_root
+from .project_repair_native_link import prepare_native_link_repair_context
 from .project_verifier_receipt import (
     receipt_project_diagnostic_references, verifier_diagnostic_detail,
 )
@@ -76,9 +77,19 @@ def materialize_project_repair_request(
         ledger=ledger, run_id=run_id, queue_sha256=queue_sha256,
         rust_project_ir=ir, out_root=out_root,
     )
+    native_link_context = None
+    native_link_reference = None
+    if selected["diagnostic_code"] == "rust_project_ir_native_link_plan_missing":
+        native_link_context, native_link_reference = (
+            prepare_native_link_repair_context(
+                ledger=ledger, run_id=run_id, rust_project_ir=ir,
+                out_root=out_root, out_root_rel=out_root_rel,
+            )
+        )
     context = build_project_repair_context(
         ir, receipt, receipt_epoch=receipt_epoch, repair_id=repair_id,
         project_diagnostic_intakes=intakes,
+        native_link_context=native_link_context,
     )
     context_ref = write_json_artifact(
         out_root,
@@ -129,12 +140,14 @@ def materialize_project_repair_request(
             "context_loading": "single-hash-bound-project-repair-context",
         },
         "output_contract": {
-            "kind": "bounded-rust-project-ir-operations",
-            "max_operations": 32,
+            "kind": context["allowed_output"]["kind"],
+            "max_operations": context["allowed_output"]["max_operations"],
             "host_rebuilds_complete_ir": True,
             "semantic_acceptance": False,
         },
     }
+    if native_link_reference is not None:
+        request["native_link_context"] = native_link_reference
     request["effective_input_sha256"] = content_sha256(request)
     start_command = f"project-repair-start-{request['effective_input_sha256'][:24]}"
     started = ledger.start_project_repair_attempt(
@@ -184,6 +197,21 @@ def materialize_project_repair_request(
             content_sha256=str(request_ref["sha256"]), status="written",
             metadata={"effective_input_sha256": request["effective_input_sha256"]},
         )
+        if native_link_reference is not None:
+            ledger.record_project_repair_artifact(
+                attempt_id=str(started.attempt_id),
+                artifact_id=(
+                    "native-link-context-"
+                    + str(native_link_reference["sha256"])[:24]
+                ),
+                kind="native-link-context",
+                repo_rel_path=str(native_link_reference["path"]),
+                content_sha256=str(native_link_reference["sha256"]),
+                status="diagnostic",
+                metadata={
+                    "context_sha256": native_link_reference["context_sha256"],
+                },
+            )
     except BaseException:
         ledger.recover_project_repair_attempt(
             attempt_id=str(started.attempt_id),

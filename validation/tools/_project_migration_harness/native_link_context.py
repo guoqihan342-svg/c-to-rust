@@ -37,6 +37,12 @@ _MODEL_POLICY = {
     "absolute_paths_allowed": False,
     "model_may_claim_resolved": False,
 }
+_MODEL_CONTEXT_KEYS = {
+    "schema_version", "artifact_kind", "profile", "context_sha256",
+    "toolchain_abi_sha256", "requirements", "model_policy",
+}
+
+
 def build_native_link_context(
     build_ir: Mapping[str, Any], build_ir_reference: Mapping[str, Any], *,
     profile: str,
@@ -146,7 +152,7 @@ def reopen_native_link_context(
 def model_native_link_context(value: Mapping[str, Any]) -> dict[str, Any]:
     """Return only the grouped facts that a model needs for strategy selection."""
     validate_native_link_context(value)
-    return {
+    return validate_model_native_link_context({
         "schema_version": value["schema_version"],
         "artifact_kind": value["artifact_kind"],
         "profile": value["profile"],
@@ -156,6 +162,27 @@ def model_native_link_context(value: Mapping[str, Any]) -> dict[str, Any]:
         ],
         "requirements": [dict(item) for item in value["requirements"]],
         "model_policy": dict(value["model_policy"]),
+    })
+
+
+def validate_model_native_link_context(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping) or set(value) != _MODEL_CONTEXT_KEYS:
+        raise ValueError("native_link_model_context_schema_invalid")
+    result = dict(value)
+    requirements = validate_native_link_requirements(result.get("requirements"))
+    if (
+        result.get("schema_version") != NATIVE_LINK_CONTEXT_SCHEMA_VERSION
+        or result.get("artifact_kind") != NATIVE_LINK_CONTEXT_KIND
+        or result.get("profile") not in _PROFILE_VALUES
+        or not is_sha256(result.get("context_sha256"))
+        or not is_sha256(result.get("toolchain_abi_sha256"))
+        or result.get("model_policy") != _MODEL_POLICY
+    ):
+        raise ValueError("native_link_model_context_invalid")
+    return {
+        **result,
+        "requirements": requirements,
+        "model_policy": dict(_MODEL_POLICY),
     }
 
 
@@ -258,5 +285,6 @@ __all__ = [
     "NATIVE_LINK_CONTEXT_KIND", "NATIVE_LINK_CONTEXT_SCHEMA_VERSION",
     "build_native_link_context", "model_native_link_context",
     "native_link_requirements", "reopen_native_link_context",
-    "validate_native_link_context", "validate_native_link_requirements",
+    "validate_model_native_link_context", "validate_native_link_context",
+    "validate_native_link_requirements",
 ]

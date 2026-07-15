@@ -8,6 +8,11 @@ from .ledger_security import assert_no_semantic_claims
 from .project_repair_context import (
     validate_project_repair_context, visible_record_ids,
 )
+from .project_repair_native_patch import (
+    NATIVE_LINK_PLAN_SECTION,
+    apply_native_link_operation,
+    normalize_native_link_operation,
+)
 from .runtime_security import assert_model_payload_safe
 from .rust_project_ir import build_rust_project_ir
 from .rust_project_ir_validation import validate_rust_project_ir
@@ -79,6 +84,7 @@ def normalize_project_repair_response(
 def apply_project_repair_operations(
     base_ir: Mapping[str, Any], context: Mapping[str, Any],
     normalized_response: Mapping[str, Any],
+    *, native_link_context: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     validate_rust_project_ir(base_ir)
     safe_context = validate_project_repair_context(context)
@@ -88,6 +94,15 @@ def apply_project_repair_operations(
         or normalized_response.get("context_sha256") != safe_context["context_sha256"]
     ):
         raise ValueError("project repair patch changed its base IR/context binding")
+    operations = normalized_response["operations"]
+    if safe_context["schema_version"] == 3 or any(
+        item["section"] == NATIVE_LINK_PLAN_SECTION for item in operations
+    ):
+        return apply_native_link_operation(
+            base_ir, safe_context, operations, native_link_context,
+        )
+    if native_link_context is not None:
+        raise ValueError("native link context is unexpected for record repair")
     visible = visible_record_ids(safe_context)
     affected_modules = set(safe_context["diagnostic"]["affected_module_ids"])
     diagnostic_entities = set(safe_context["diagnostic"]["entity_ids"])
@@ -95,7 +110,7 @@ def apply_project_repair_operations(
         name: json.loads(json.dumps(base_ir[name], ensure_ascii=True))
         for name in _IDENTITIES
     }
-    for operation in normalized_response["operations"]:
+    for operation in operations:
         section = operation["section"]
         record_id = operation["record_id"]
         if record_id not in visible[section]:
@@ -132,7 +147,11 @@ def apply_project_repair_operations(
 
 
 def _normalize_operation(value: Any) -> dict[str, Any]:
-    if not isinstance(value, Mapping) or set(value) != {
+    if not isinstance(value, Mapping):
+        raise ValueError("project repair operation fields are invalid")
+    if value.get("section") == NATIVE_LINK_PLAN_SECTION:
+        return normalize_native_link_operation(value)
+    if set(value) != {
         "section", "action", "record_id", "changes",
     }:
         raise ValueError("project repair operation fields are invalid")

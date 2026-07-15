@@ -5,8 +5,18 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from .artifacts import canonical_json_bytes, checked_relative_path, content_sha256
-from .project_diagnostic_contract import PROJECT_DIAGNOSTIC_GATE_FAMILIES
+from .artifacts import canonical_json_bytes, content_sha256
+from .project_repair_context_native import (
+    NATIVE_LINK_FIELD,
+    context_allowed_output,
+    native_link_planning,
+    validate_native_link_planning,
+)
+from .project_repair_context_verifier import (
+    diagnostic_keys,
+    validate_verifier_diagnostic,
+    verifier_model_detail,
+)
 from .project_interface_contract import validate_coordinator_receipt
 from .project_interface_coordinator import (
     COORDINATOR_RECEIPT_SHA256_FIELD, PROJECT_REPAIR_QUEUE_SHA256_FIELD,
@@ -32,7 +42,7 @@ _IDENTITIES = {
     "unsafe_obligations": "obligation_id",
 }
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
-_CONTEXT_KEYS = {
+_CONTEXT_BASE_KEYS = {
     "schema_version", "authority", "receipt_epoch",
     "coordinator_receipt_sha256", "project_repair_queue_sha256", "repair_id",
     "base_rust_project_ir_sha256", "base_interface_sha256", "diagnostic",
@@ -62,6 +72,7 @@ def build_project_repair_context(
     rust_project_ir: Mapping[str, Any], receipt: Mapping[str, Any], *,
     receipt_epoch: int, repair_id: str,
     project_diagnostic_intakes: Sequence[Mapping[str, Any]] = (),
+    native_link_context: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     validate_rust_project_ir(rust_project_ir)
     value = validate_coordinator_receipt(receipt)
@@ -88,6 +99,11 @@ def build_project_repair_context(
     verifier_detail = verifier_diagnostic_detail(
         project_diagnostic_intakes, item["diagnostic_sha256"],
     )
+    native_planning = native_link_planning(
+        rust_project_ir, diagnostic, native_link_context,
+    )
+    if verifier_detail is not None and native_planning is not None:
+        raise ValueError("native link planning cannot use verifier diagnostics")
     affected = set(item["affected_module_ids"])
     visible: dict[str, list[dict[str, Any]]] = {}
     withheld: dict[str, int] = {}
@@ -102,8 +118,13 @@ def build_project_repair_context(
         withheld[section] = len(rust_project_ir[section]) - len(records)
     if record_count > MAX_PROJECT_REPAIR_RECORDS:
         raise ValueError("project repair context record bound is exceeded")
+    schema_version = (
+        3 if native_planning is not None
+        else 2 if verifier_detail is not None else 1
+    )
+    allowed_output = context_allowed_output(native_planning is not None)
     payload = {
-        "schema_version": 2 if verifier_detail is not None else 1,
+        "schema_version": schema_version,
         "authority": "host-project-repair-context-builder",
         "receipt_epoch": receipt_epoch,
         "coordinator_receipt_sha256": value[COORDINATOR_RECEIPT_SHA256_FIELD],
@@ -116,26 +137,21 @@ def build_project_repair_context(
             "diagnostic_sha256": diagnostic["diagnostic_sha256"],
             "entity_ids": list(diagnostic["entity_ids"]),
             "affected_module_ids": list(diagnostic["affected_module_ids"]),
-            **(_verifier_model_detail(verifier_detail) if verifier_detail else {}),
+            **(verifier_model_detail(verifier_detail) if verifier_detail else {}),
         },
         "repair_item": dict(item),
         "crate": _model_record(rust_project_ir["crate"]),
         "interface_completeness": dict(rust_project_ir["interface_completeness"]),
         "visible_records": visible,
         "withheld_record_counts": withheld,
-        "allowed_output": {
-            "kind": "bounded-rust-project-ir-operations",
-            "sections": list(_SECTIONS),
-            "max_operations": 32,
-            "may_change_evidence": False,
-            "may_change_candidate_sources": False,
-            "may_generate_glue": False,
-        },
+        "allowed_output": allowed_output,
         "claim_boundary": {
             "semantic_acceptance": False,
             "translation_coverage_numerator": 0,
         },
     }
+    if native_planning is not None:
+        payload[NATIVE_LINK_FIELD] = native_planning
     result = {**payload, "context_sha256": content_sha256(payload)}
     encoded = canonical_json_bytes(result)
     if len(encoded) > MAX_PROJECT_REPAIR_CONTEXT_BYTES:
@@ -145,31 +161,34 @@ def build_project_repair_context(
 
 
 def validate_project_repair_context(value: Any) -> dict[str, Any]:
-    if not isinstance(value, Mapping) or set(value) != _CONTEXT_KEYS:
+    if not isinstance(value, Mapping):
         raise ValueError("project repair context must be an object")
     result = json.loads(canonical_json_bytes(value).decode("utf-8"))
+    schema_version = result.get("schema_version")
+    expected_keys = _CONTEXT_BASE_KEYS | (
+        {NATIVE_LINK_FIELD} if schema_version == 3 else set()
+    )
+    if set(result) != expected_keys:
+        raise ValueError("project repair context fields are invalid")
     claimed = result.get("context_sha256")
     projection = {key: item for key, item in result.items() if key != "context_sha256"}
     if not isinstance(claimed, str) or content_sha256(projection) != claimed:
         raise ValueError("project repair context SHA drifted")
+    expected_output = context_allowed_output(schema_version == 3)
     if (
-        result.get("schema_version") not in {1, 2}
+        schema_version not in {1, 2, 3}
         or result.get("authority") != "host-project-repair-context-builder"
         or set(result.get("visible_records", {})) != set(_SECTIONS)
         or set(result.get("withheld_record_counts", {})) != set(_SECTIONS)
-        or result.get("allowed_output") != {
-            "kind": "bounded-rust-project-ir-operations",
-            "sections": list(_SECTIONS), "max_operations": 32,
-            "may_change_evidence": False,
-            "may_change_candidate_sources": False,
-            "may_generate_glue": False,
-        }
+        or result.get("allowed_output") != expected_output
         or result.get("claim_boundary") != {
             "semantic_acceptance": False,
             "translation_coverage_numerator": 0,
         }
     ):
         raise ValueError("project repair context contract is invalid")
+    if schema_version == 3:
+        validate_native_link_planning(result)
     records = result["visible_records"]
     if not all(isinstance(records[name], list) for name in _SECTIONS):
         raise ValueError("project repair context records are invalid")
@@ -199,7 +218,7 @@ def validate_project_repair_context(value: Any) -> dict[str, Any]:
         or not isinstance(result.get("repair_id"), str)
         or not result["repair_id"].startswith("project-repair-")
         or not isinstance(result.get("diagnostic"), dict)
-        or set(result["diagnostic"]) != _diagnostic_keys(result["schema_version"])
+        or set(result["diagnostic"]) != diagnostic_keys(result["schema_version"])
         or not isinstance(result.get("repair_item"), dict)
         or result["repair_item"].get("repair_id") != result["repair_id"]
         or result["repair_item"].get("assigned_unit_id") is not None
@@ -210,7 +229,7 @@ def validate_project_repair_context(value: Any) -> dict[str, Any]:
         }
     ):
         raise ValueError("project repair context identity binding is invalid")
-    _validate_verifier_diagnostic(result["diagnostic"], result["schema_version"])
+    validate_verifier_diagnostic(result["diagnostic"], result["schema_version"])
     if sum(len(records[name]) for name in _SECTIONS) > MAX_PROJECT_REPAIR_RECORDS:
         raise ValueError("project repair context record bound is exceeded")
     if len(canonical_json_bytes(result)) > MAX_PROJECT_REPAIR_CONTEXT_BYTES:
@@ -240,54 +259,6 @@ def _model_record(value: Mapping[str, Any]) -> dict[str, Any]:
         key: json.loads(json.dumps(item, ensure_ascii=True))
         for key, item in value.items() if key != "evidence"
     }
-
-
-def _verifier_model_detail(value: Mapping[str, Any]) -> dict[str, Any]:
-    return {
-        "origin": "host-project-verifier",
-        "family": value["family"], "stage": value["stage"],
-        "message": value["message"], "location": dict(value["location"]),
-    }
-
-
-def _diagnostic_keys(schema_version: int) -> set[str]:
-    base = {"code", "diagnostic_sha256", "entity_ids", "affected_module_ids"}
-    if schema_version == 2:
-        return base | {"origin", "family", "stage", "message", "location"}
-    return base
-
-
-def _validate_verifier_diagnostic(value: Mapping[str, Any], schema_version: int) -> None:
-    if schema_version == 1:
-        return
-    stage = value.get("stage")
-    location = value.get("location")
-    message = value.get("message")
-    if (
-        value.get("origin") != "host-project-verifier"
-        or not isinstance(stage, str)
-        or value.get("family") not in PROJECT_DIAGNOSTIC_GATE_FAMILIES.get(
-            stage, frozenset()
-        )
-        or not isinstance(message, str) or not message or len(message) > 512
-        or not isinstance(location, dict)
-        or set(location) != {"file", "line", "column"}
-    ):
-        raise ValueError("project verifier diagnostic context is invalid")
-    file_value = location["file"]
-    if file_value is not None and (
-        not isinstance(file_value, str)
-        or checked_relative_path(file_value) != file_value
-    ):
-        raise ValueError("project verifier diagnostic location is invalid")
-    numbers = (location["line"], location["column"])
-    if any(
-        value is not None and (
-            isinstance(value, bool) or not isinstance(value, int) or value < 1
-        )
-        for value in numbers
-    ) or (file_value is None and any(value is not None for value in numbers)):
-        raise ValueError("project verifier diagnostic location is invalid")
 
 
 __all__ = [

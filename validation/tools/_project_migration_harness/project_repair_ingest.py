@@ -14,6 +14,7 @@ from .project_repair_authoritative_ir import persist_authoritative_project_ir
 from .project_repair_patch import (
     apply_project_repair_operations, normalize_project_repair_response,
 )
+from .project_repair_native_link import read_native_link_repair_context
 from .project_repair_paths import require_bound_project_repair_out_root
 from .project_repair_prompt import render_project_repair_prompt
 from .project_repair_worker_request import read_bound_rust_project_ir
@@ -59,7 +60,18 @@ def ingest_project_repair_response(
     )
     context = _read_context(harness_root, request["project_repair_context"])
     try:
-        candidate = apply_project_repair_operations(base_ir, context, normalized)
+        native_link_context = (
+            read_native_link_repair_context(
+                harness_root=harness_root, artifact_root=out_root,
+                reference=request["native_link_context"],
+                model_context=context["native_link_planning"]["context"],
+            )
+            if context["schema_version"] == 3 else None
+        )
+        candidate = apply_project_repair_operations(
+            base_ir, context, normalized,
+            native_link_context=native_link_context,
+        )
         _reopen_candidate_bindings(candidate, out_root, harness_root)
     except (OSError, TypeError, ValueError):
         return _record_failure(
