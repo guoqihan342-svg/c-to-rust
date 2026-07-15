@@ -38,6 +38,9 @@ from validation.tools._project_migration_harness.sandbox_requirements import (
 from validation.tools.project_migration_sandbox_test_support import (
     passing_probe_receipt,
 )
+from validation.tools.project_migration_candidate_receipt_test_support import (
+    materialize_test_quarantine,
+)
 
 
 class ProjectCandidateVerificationReceiptTests(unittest.TestCase):
@@ -48,6 +51,9 @@ class ProjectCandidateVerificationReceiptTests(unittest.TestCase):
         self.out_root = self.repo / "target/run"
         self.out_root.mkdir(parents=True)
         self.ledger_path = self.out_root / "state/project-migration.sqlite3"
+        self.quarantine_root = self.repo / "quarantine"
+        self.materialization = materialize_test_quarantine(self.quarantine_root)
+        self.candidate_set_sha256 = self.materialization["candidate_set_sha256"]
         self.payload = self._payload()
 
     def test_valid_receipt_reopens_raw_cargo_evidence(self) -> None:
@@ -55,8 +61,9 @@ class ProjectCandidateVerificationReceiptTests(unittest.TestCase):
         reopened = reopen_candidate_project_verification(
             self.ledger_path,
             reference,
+            quarantine_root=self.quarantine_root,
             run_id="receipt-run",
-            candidate_set_sha256="c" * 64,
+            candidate_set_sha256=self.candidate_set_sha256,
             rust_project_ir_sha256="a" * 64,
             rust_project_interface_sha256="b" * 64,
         )
@@ -111,8 +118,23 @@ class ProjectCandidateVerificationReceiptTests(unittest.TestCase):
             reopen_candidate_project_verification(
                 self.ledger_path,
                 reference,
+                quarantine_root=self.quarantine_root,
                 run_id="receipt-run",
-                candidate_set_sha256="c" * 64,
+                candidate_set_sha256=self.candidate_set_sha256,
+                rust_project_ir_sha256="a" * 64,
+                rust_project_interface_sha256="b" * 64,
+            )
+
+    def test_quarantine_generation_drift_blocks_deep_reopen(self) -> None:
+        reference = self._write(self.payload)
+        (self.quarantine_root / "generations/current/Cargo.toml").write_text(
+            "changed", encoding="utf-8",
+        )
+        with self.assertRaisesRegex(LedgerError, "generation"):
+            reopen_candidate_project_verification(
+                self.ledger_path, reference,
+                quarantine_root=self.quarantine_root,
+                run_id="receipt-run", candidate_set_sha256=self.candidate_set_sha256,
                 rust_project_ir_sha256="a" * 64,
                 rust_project_interface_sha256="b" * 64,
             )
@@ -123,8 +145,9 @@ class ProjectCandidateVerificationReceiptTests(unittest.TestCase):
             reopen_candidate_project_verification(
                 self.ledger_path,
                 reference,
+                quarantine_root=self.quarantine_root,
                 run_id="other-run",
-                candidate_set_sha256="c" * 64,
+                candidate_set_sha256=self.candidate_set_sha256,
                 rust_project_ir_sha256="a" * 64,
                 rust_project_interface_sha256="b" * 64,
             )
@@ -141,7 +164,7 @@ class ProjectCandidateVerificationReceiptTests(unittest.TestCase):
                 "sha256": "3" * 64,
                 "size_bytes": 1,
             },
-            "candidate_set_sha256": "c" * 64,
+            "candidate_set_sha256": self.candidate_set_sha256,
             "candidate_set_manifest_sha256": "4" * 64,
             "rust_project_ir_sha256": "a" * 64,
             "rust_project_interface_sha256": "b" * 64,
@@ -152,22 +175,27 @@ class ProjectCandidateVerificationReceiptTests(unittest.TestCase):
         )
         build_ir = {"schema_version": 1, "status": "verified", "blockers": []}
         materialization = {
+            "schema_version": 1,
             "status": "materialized",
-            "candidate_set": {"sha256": "c" * 64, "member_count": 2},
+            "candidate_set": {
+                "sha256": self.candidate_set_sha256, "member_count": 2,
+            },
+            "candidate_count": 2,
             "rust_project_ir_sha256": "a" * 64,
             "rust_project_interface_sha256": "b" * 64,
             "rust_project_ir_scope": "full-project",
+            "generator": self.materialization["generator"],
             "generation": {
-                "path": "generations/current", "sha256": "6" * 64,
-                "immutable": True,
+                **self.materialization["generation"],
             },
-            "generation_manifest_ref": {
-                "path": "generations/current/last-good-manifest.json",
-                "sha256": "6" * 64, "size_bytes": 1,
-            },
+            "manifest_ref": self.materialization["manifest_ref"],
+            "generation_manifest_ref": self.materialization[
+                "generation_manifest_ref"
+            ],
             "immutable": True,
             "last_good_updated": False,
             "cargo_executed": False,
+            "diagnostics": [],
         }
         execution = {
             "status": "passed", "cargo_executed": True,
@@ -267,7 +295,5 @@ class ProjectCandidateVerificationReceiptTests(unittest.TestCase):
             self.out_root, "candidate-project-verification", payload,
         )
         return {**reference, "path": f"target/run/{reference['path']}"}
-
-
 if __name__ == "__main__":
     unittest.main()

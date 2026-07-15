@@ -296,6 +296,5 @@ class ProjectMigrationControllerTests(ProjectMigrationControllerCase):
         self.assertEqual(
             "retry-ready", ledger.unit_states(plan["run_id"])[0]["status"]
         )
-
 if __name__ == "__main__":
     unittest.main()

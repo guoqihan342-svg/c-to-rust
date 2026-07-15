@@ -6,6 +6,11 @@ from typing import Any
 
 from .artifacts import canonical_json_bytes
 from .build_ir import is_sha256
+from .candidate_generation_reopen import (
+    generation_reference_path,
+    generation_relative,
+    reopen_candidate_generation,
+)
 from .gate_evidence import (
     read_content_addressed_json,
     require_content_addressed_reference,
@@ -48,6 +53,13 @@ _STATE_EFFECTS = {
     "final_current_updated": False,
     "project_gate_records_written": 0,
     "candidate_only": True,
+}
+_MATERIALIZATION_KEYS = {
+    "schema_version", "status", "candidate_set", "candidate_count",
+    "rust_project_ir_sha256", "rust_project_interface_sha256",
+    "rust_project_ir_scope", "generator", "generation", "manifest_ref",
+    "generation_manifest_ref", "immutable", "last_good_updated",
+    "cargo_executed", "diagnostics",
 }
 
 
@@ -103,7 +115,8 @@ def validate_candidate_project_verification(value: Any) -> dict[str, Any]:
 
 
 def reopen_candidate_project_verification(
-    ledger_path: Path, reference: Mapping[str, Any], *, run_id: str,
+    ledger_path: Path, reference: Mapping[str, Any], *, quarantine_root: Path,
+    run_id: str,
     candidate_set_sha256: str, rust_project_ir_sha256: str,
     rust_project_interface_sha256: str,
 ) -> dict[str, Any]:
@@ -129,6 +142,7 @@ def reopen_candidate_project_verification(
         verify_project_cargo_raw_outputs(
             Path(ledger_path), observation, gate_kind=gate,
         )
+    reopen_candidate_generation(quarantine_root, receipt["materialization"])
     return receipt
 
 
@@ -136,23 +150,42 @@ def _materialization(receipt: Mapping[str, Any]) -> dict[str, Any]:
     value = _mapping(receipt, "materialization")
     generation = value.get("generation")
     candidate_set = value.get("candidate_set")
+    quarantine_manifest = value.get("manifest_ref")
     generation_manifest = value.get("generation_manifest_ref")
     valid = (
-        value.get("status") == "materialized"
+        set(value) == _MATERIALIZATION_KEYS
+        and value.get("schema_version") == 1
+        and value.get("status") == "materialized"
         and value.get("last_good_updated") is False
         and value.get("cargo_executed") is False
         and value.get("immutable") is True
+        and isinstance(value.get("generator"), str)
+        and bool(value["generator"])
+        and value.get("diagnostics") == []
         and value.get("rust_project_ir_scope") == "full-project"
         and value.get("rust_project_ir_sha256") == receipt["rust_project_ir_sha256"]
         and value.get("rust_project_interface_sha256")
         == receipt["rust_project_interface_sha256"]
         and isinstance(candidate_set, Mapping)
+        and set(candidate_set) == {"sha256", "member_count"}
         and candidate_set.get("sha256") == receipt["candidate_set_sha256"]
+        and type(candidate_set.get("member_count")) is int
+        and candidate_set["member_count"] > 0
+        and value.get("candidate_count") == candidate_set["member_count"]
         and isinstance(generation, Mapping)
+        and set(generation) == {"path", "sha256", "immutable"}
         and generation.get("immutable") is True
         and is_sha256(generation.get("sha256"))
+        and generation_relative(generation.get("path")) is not None
+        and _artifact_reference(quarantine_manifest)
         and _artifact_reference(generation_manifest)
         and generation_manifest.get("sha256") == generation.get("sha256")
+        and generation_reference_path(
+            generation, quarantine_manifest, "migration-quarantine.json",
+        )
+        and generation_reference_path(
+            generation, generation_manifest, "migration-last-good.json",
+        )
     )
     if not valid:
         raise ValueError("candidate_project_materialization_invalid")
