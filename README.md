@@ -19,11 +19,11 @@
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
 | 当前翻译任务 | P0-A19 项目级编排优先；P0-A18c/P0-A10 保留为有限回归与 held-out 验收 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
-| P0-A19 有限门禁 | Windows 共 867 项：861 项通过、6 项平台条件跳过；WSL 显式开启 live gate 后 867/867 全通过 |
+| P0-A19 有限门禁 | Windows 共 988 项：全部通过、11 项平台条件跳过；WSL 显式绑定 Cargo/Rustup 后 988 项全部通过、6 项平台条件跳过 |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | canonical roadmap + code/tests + harness evidence gates |
 
-能力计数只代表已绑定 named-slice 边界。它不表示完整 C 语言覆盖、完整 `fdb_kv_iterate`、FlashDB 全项目自动迁移或生产级安全性。
+能力计数只代表已绑定 named-slice 边界。它不表示完整 C 语言覆盖、AI-primary 可最终迁移任意未知项目、完整 `fdb_kv_iterate` 或生产级安全性；三项目 raw C2Rust 执行基线在下文单独列出。
 
 全局待办、阶段状态和实施顺序的唯一入口是 [future-vision-and-mvp.md](docs/c2rust-migration-agent/future-vision-and-mvp.md)；架构合同维护在 `docs/c2rust-migration-agent/`，是否通过只由代码、测试和 `validation/**` 证据决定。
 
@@ -126,6 +126,33 @@ python3 -B validation/tools/project_migration_harness.py complete \
   --logical-model GLM-5.1 \
   --resolved-model zai/glm-5.1
 ```
+
+### 可执行的整项目 C2Rust 基线
+
+`c2rust-baseline` 接受仓库内 `compile_commands.json`，实际调用 C2Rust，执行通用的生成代码修复，发现所有已翻译 public `main` 并生成 Rust wrapper，然后对每个 Cargo package 运行 `check --offline --all-targets`，最后逐个执行所有 wrapper。wrapper 保留对应编译单元的原始工作目录，因此依赖相对路径 fixture 或构建产物的测试仍在原语境执行。输入路径逃逸、C2Rust 路径归一化碰撞、同一源文件工作目录冲突、转换失败、无可执行入口、任一 Cargo 检查或任一 wrapper 失败都会阻断；报告和原始输出使用内容寻址引用，宿主绝对路径只保留在 `private-local` 工件中。
+
+```bash
+python3 -B validation/tools/project_migration_harness.py c2rust-baseline \
+  --repo-root /path/to/c-project \
+  --compile-database /path/to/c-project/compile_commands.json \
+  --c2rust-transpile /path/to/c2rust-transpile \
+  --cargo /path/to/cargo \
+  --rustc /path/to/rustc \
+  --out-root target/c2rust-project-baseline/run-001 \
+  --cargo-toolchain stable \
+  --rustc-bootstrap
+```
+
+2026-07-15 在 WSL 本地模拟环境完成了四项固定提交的整项目验收：
+
+| 项目 | 固定提交 | 原生 C 验收 | 转换后验收 | 正式报告 SHA-256 |
+|---|---|---:|---:|---|
+| FlashDB | `f9d0421315c564fb890a1b14eee77b290e0d7bbe` | KVDB 13 + TSDB 11 项通过 | 7 个 TU，Cargo 全目标及 2/2 wrapper 通过 | `48c94540ef05b88763ffeb2477dd2c17623de68a7b1d5e211da3157fc78aa8f2` |
+| cJSON | `fb16e5cf358798aabb049655975cde8427101056` | CTest 22/22 | 27 个 TU，Cargo 全目标及 23/23 wrapper 通过 | `f5ca5c8920104c3f1061f6a6e453450c8184e538a1dfc3004a994c5b15e65885` |
+| libyaml | `893682bb98d5ed663a3e314c46dceaf9b1c8802f` | CTest 3/3 | 22 个 TU，Cargo 全目标及 14/14 wrapper 通过 | `35c265abc83b1a6d6931945b7db2951628a42e5ff67b32c584808eb0cf8f3b0e` |
+| Lua | `40b76de2d77e66b70a9d4bf989c3f5340919973f` | 官方 `testes/all.lua` 最终 `final OK` | 34 个 TU，Cargo 全目标及 1/1 wrapper 通过；转换版官方全套最终 `final OK` | `d5874a59c505c6015a9e797c88ca04e0ce8d8a254c8e503c05a587e30274a446` |
+
+四项验收使用同一身份中立的生产路径，生产代码不读取项目名、测试名或固定 fixture。cJSON、libyaml 和 Lua 在测试期间推动了工作目录绑定、C2Rust 文件名规范化、重复导出私有化、定向 rustc lint 兼容以及 Rust 1.95 `VaList` API 迁移，因此都是跨项目开发回归，不计 held-out。Lua 的默认 GCC computed-goto 配置被 C2Rust 明确拒绝；测试改用上游已有且原生全套通过的 `LUA_USE_JUMPTABLE=0` 可移植构建变体。转换版官方全套还按原 Make 链接事实补了 `-Wl,--export-dynamic`，并使用 WSL 默认栈而非上游脚本的 1.1 MiB 限制。后两项尚未由正式报告从 BuildIR 自动绑定，所以该命令仍是通用 raw C2Rust unsafe 执行基线，固定 `semantic_gate=false`、numerator 0；它不冒充 AI-primary、unsafe 消除、比赛真实主机或任意未知项目的最终语义通过。
 
 `complete` 可重复执行；每次恢复最多启动一个 project-repair provider call。只有最新队列已解决且后续全项目门禁通过时才会发布 completion receipt。
 

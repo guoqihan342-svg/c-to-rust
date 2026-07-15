@@ -14,12 +14,12 @@ from .build_ir_projection import target_closure
 from .build_ir_toolchains import make_command_tool_role
 from .compile_database import parse_compile_entry
 from .discovery_variants import finalize_variants
-from .make_build_ir_external import (
-    MAKE_BUILD_BOUNDARIES, project_make_external_dependencies,
-)
+from .make_build_ir_closure import project_make_closure
+from .make_build_ir_external import project_make_external_dependencies
 from .make_build_ir_toolchains import (
     abi_facts, legacy_toolchain_id, legacy_toolchains,
 )
+from .make_dry_run_binding import repository_path_argument
 
 
 MAKE_RAW_ROLE = "make-dry-run-report"
@@ -31,14 +31,15 @@ def normalize_make_translation_units(
     parsed: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
     blockers: list[str] = []
+    working_directory = report.get("working_directory", ".")
     for command in report.get("commands", []):
         if not isinstance(command, Mapping) or command.get("kind") != "compile":
             continue
         entry = {
-            "directory": ".",
-            "file": command["inputs"][0],
+            "directory": working_directory,
+            "file": repository_path_argument(command["inputs"][0], working_directory),
             "arguments": list(command["argv"]),
-            "output": command["outputs"][0],
+            "output": repository_path_argument(command["outputs"][0], working_directory),
         }
         unit, rejection = parse_compile_entry(
             entry, int(command["ordinal"]), repo_root, repo_root,
@@ -68,6 +69,7 @@ def project_make_build_ir(
     report_reference: Mapping[str, Any], *, max_units: int,
     toolchain_evidence: Mapping[str, Any] | None = None,
     toolchain_reference: Mapping[str, Any] | None = None,
+    report_inputs_verified: bool = False,
 ) -> dict[str, Any]:
     units, _rejected, blockers = normalize_make_translation_units(
         repo_root, report, max_units,
@@ -82,19 +84,17 @@ def project_make_build_ir(
         raise ValueError("make_build_ir_toolchain_binding_invalid")
     projected_units = _project_units(units, report, projector)
     targets = _project_targets(report, projected_units, projector)
-    external = project_make_external_dependencies(report, targets)
+    external, classification_errors = project_make_external_dependencies(
+        report, targets,
+    )
+    toolchains = projector.records() if projector else legacy_toolchains(report)
+    closure = project_make_closure(
+        report, targets, external,
+        link_classification_error_count=classification_errors,
+        report_inputs_verified=report_inputs_verified,
+        toolchains=toolchains,
+    )
     sources = _unique_bindings([unit["source"] for unit in projected_units])
-    generated = [
-        {
-            "binding": copy.deepcopy(output),
-            "role": "target-output",
-            "producer_target_id": target["target_id"],
-            "consumer_target_ids": [],
-            "provenance": {"raw_fact_role": MAKE_RAW_ROLE},
-        }
-        for target in targets for output in target["outputs"]
-    ]
-    generated.sort(key=lambda item: item["binding"]["path"])
     raw_refs = [{"role": MAKE_RAW_ROLE, **dict(report_reference)}]
     if toolchain_reference is not None:
         raw_refs.append({
@@ -109,27 +109,15 @@ def project_make_build_ir(
         "build_metadata": [normalize_binding(report["makefile_ref"], materialized=True)],
         "translation_units": projected_units,
         "source_inputs": sources,
-        "generated_inputs": generated,
+        "generated_inputs": closure["generated_inputs"],
         "targets": targets,
         "target_closure": target_closure(targets),
-        "toolchains": projector.records() if projector else legacy_toolchains(report),
+        "toolchains": toolchains,
         "external_dependencies": external,
         "abi_facts": abi_facts(projected_units),
-        "boundaries": [
-            {"kind": "make_dry_run_nonsemantic_fact_collection"},
-            *copy.deepcopy(MAKE_BUILD_BOUNDARIES),
-        ],
+        "boundaries": closure["boundaries"],
         "claim_boundary": {
-            "role": "canonical_build_projection_only",
-            "closure_complete": False,
-            "command_graph_complete": True,
-            "selected_translation_units_complete": True,
-            "repository_input_closure_complete": False,
-            "generated_outputs_materialized": False,
-            "external_dependencies_complete": False,
-            "parameters_guessed": False,
-            "commands_executed": False,
-            "fact_collection_executed": True,
+            **closure["claim_boundary"],
             "host_toolchain_bound": projector is not None,
             "toolchain_profile": projector.profile if projector else None,
             "semantic_gate": False,

@@ -24,6 +24,7 @@ from validation.tools._project_migration_harness.controller import (
     verify_candidate_compile,
     verify_candidate_final,
 )
+from validation.tools._project_migration_harness.c2rust_project_baseline_cli import run_c2rust_baseline_command
 from validation.tools._project_migration_harness import project_cli_runtime
 from validation.tools._project_migration_harness.gate_authority import (
     candidate_authority,
@@ -31,6 +32,7 @@ from validation.tools._project_migration_harness.gate_authority import (
     project_authority,
 )
 from validation.tools._project_migration_harness.ledger import ProjectLedger
+from validation.tools._project_migration_harness.make_dry_run_cli import run_collect_make_command
 from validation.tools._project_migration_harness.orchestrator import plan_project
 from validation.tools._project_migration_harness.project_migration_cli import (
     load_array,
@@ -48,17 +50,14 @@ from validation.tools._project_migration_harness.project_completion_coordinator 
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-_exit_code = project_cli_runtime.exit_code
 _ref = project_cli_runtime.reference
 
 
 def _repo_relative(value: str) -> Path:
     return project_cli_runtime.repo_relative(value, repo_root=REPO_ROOT)
 
-
 def _ledger(value: str | Path) -> ProjectLedger:
     return project_cli_runtime.ledger(value, repo_root=REPO_ROOT)
-
 
 def _ledger_path(value: str | Path) -> Path:
     return project_cli_runtime.ledger_path(value, repo_root=REPO_ROOT)
@@ -79,7 +78,11 @@ def _target_relative(value: str | Path, label: str) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     command = args.command
-    if command == "plan":
+    if command == "collect-make-facts":
+        result = run_collect_make_command(args)
+    elif command == "c2rust-baseline":
+        result = run_c2rust_baseline_command(args, harness_root=REPO_ROOT)
+    elif command == "plan":
         out_root_rel = _target_relative(args.out_root, "out-root")
         result = plan_project(
             args.repo_root,
@@ -290,7 +293,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         }
     displayed = project_cli_runtime.display_result(command, result)
     print(json.dumps(displayed, indent=2, sort_keys=True))
-    return _exit_code(result)
+    return project_cli_runtime.exit_code(result)
 
 
 if __name__ == "__main__":

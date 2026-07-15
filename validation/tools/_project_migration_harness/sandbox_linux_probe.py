@@ -17,6 +17,7 @@ from .sandbox_requirements import ENVIRONMENT_ALLOWLIST, REQUIRED_CAPABILITIES
 
 _MAX_PROBE_BYTES = 64 * 1024
 _NAMESPACES = ("mnt", "net", "pid", "user")
+_TOOL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}\Z")
 _PROBE_SCRIPT = r"""
 set -eu
 umask 077
@@ -68,7 +69,10 @@ def run_bubblewrap_probe(
     argv_builder: Callable[[Path, Sequence[str]], list[str]],
     executor: Callable[..., subprocess.CompletedProcess[str]],
     preexec_fn: Callable[[], None],
+    required_tool: str = "cargo",
 ) -> object:
+    if _TOOL_NAME.fullmatch(required_tool) is None:
+        raise ValueError("sandbox probe required tool is invalid")
     project = project_root.resolve(strict=True)
     if not project.is_dir():
         raise ValueError("sandbox probe project input is invalid")
@@ -82,7 +86,11 @@ def run_bubblewrap_probe(
     results: dict[str, bool] | None = None
     failure: Exception | None = None
     try:
-        command = ("/bin/sh", "-c", _PROBE_SCRIPT, "sandbox-probe")
+        script = _PROBE_SCRIPT.replace(
+            "cargo_path=$(command -v cargo)",
+            f"cargo_path=$(command -v {required_tool})",
+        )
+        command = ("/bin/sh", "-c", script, "sandbox-probe")
         argv = argv_builder(runtime, command)
         with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
             completed = executor(

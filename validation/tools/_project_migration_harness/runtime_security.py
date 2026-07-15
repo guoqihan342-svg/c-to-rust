@@ -38,6 +38,16 @@ FACT_PAYLOAD_KEYS = {
         "compiler", "language", "redacted_define_count", "unit_id",
         "working_directory",
     },
+    "compiler_fact_binding": {
+        "unit_id", "status", "reason_code", "source_sha256",
+        "expanded_argv_sha256", "toolchain_id", "toolchain_binding_sha256",
+        "compile_context_sha256", "plan_sha256", "receipt_sha256",
+        "command_started", "syntax_passed", "diagnostics_sha256",
+        "diagnostic_bytes", "evidence_scope", "semantic_gate",
+        "compiler_basename", "compiler_binary_sha256",
+        "compiler_binary_size_bytes",
+        "translation_coverage_numerator",
+    },
     "context_retrieval_summary": {
         "omitted_fact_count", "scc_id", "selected_fact_count",
         "selection_receipt_sha256", "selection_status",
@@ -64,6 +74,11 @@ FACT_PAYLOAD_KEYS = {
     "resolved_call": {"callee_node_id", "caller_node_id", "symbol"},
     "scc_dependency": {"dependency_scc_id", "scc_id"},
     "source_binding": {"node_id", "source"},
+    "source_macro_definition": {
+        "node_id", "unit_id", "name", "parameters", "replacement",
+        "source_path", "source_sha256", "directive_sha256", "byte_offset",
+        "conditional_depth", "activation_status",
+    },
     "top_level_source": {"chunk_count", "chunk_index", "content", "owner_id"},
     "top_level_source_binding": {"owner_id", "source"},
     "translation_unit_coverage": {

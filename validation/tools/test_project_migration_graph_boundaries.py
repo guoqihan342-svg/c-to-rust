@@ -95,6 +95,36 @@ class ProjectMigrationGraphBoundaryTests(unittest.TestCase):
         self.assertIn("table", {item["symbol"] for item in index["globals"]})
         self.assertNotIn("COUNT", {item["symbol"] for item in index["globals"]})
 
+    def test_unconditional_global_and_referenced_macro_survive_unrelated_boundaries(self) -> None:
+        unit = self.unit(
+            "macro-global.c",
+            "#define FIELD(object) ((object)->value)\n"
+            "static const int table[] = { 3, 5 };\n"
+            "#if FEATURE\nstatic int conditional_state = 9;\n#endif\n"
+            "struct record { int value; };\n"
+            "int read_record(struct record *item) {\n"
+            "  return FIELD(item) + table[0];\n"
+            "}\n",
+            "macro-global-variant",
+        )
+
+        index = index_translation_units(self.root, [unit])
+
+        globals_by_name = {item["symbol"]: item for item in index["globals"]}
+        self.assertIn("table", globals_by_name)
+        self.assertNotIn("conditional_state", globals_by_name)
+        node = next(item for item in index["nodes"] if item["symbol"] == "read_record")
+        self.assertEqual(["FIELD"], [
+            item["name"] for item in node["macro_definitions"]
+        ])
+        pages = build_context_pages(index, build_migration_graph(index))
+        definitions = [
+            fact["payload"] for fact in pages["shared_facts"].values()
+            if fact["kind"] == "source_macro_definition"
+        ]
+        self.assertEqual("((object)->value)", definitions[0]["replacement"])
+        self.assertEqual("unconditional", definitions[0]["activation_status"])
+
     def test_local_include_and_global_initializer_are_model_context(self) -> None:
         self.unit("src/config.h", "#define INITIAL_VALUE 7\n", "header-only")
         unit = self.unit(

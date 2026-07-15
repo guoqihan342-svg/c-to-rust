@@ -5,8 +5,16 @@ import hashlib
 from typing import Any
 
 from .artifacts import canonical_json_bytes, content_sha256
-from .build_ir import is_sha256, safe_posix_path
-from .make_dry_run_binding import fixed_make_argv, validated_targets
+from .build_ir import is_sha256
+from .make_dry_run_binding import (
+    validated_working_directory,
+)
+from .make_dry_run_contract_refs import (
+    MakeDryRunContractError, artifact_ref as _artifact_ref,
+    artifact_refs as _artifact_refs, fail as _fail,
+    fixed_argv as _fixed_make_argv, require_raw_cas_ref as _cas_raw_ref,
+    require_snapshot_cas_ref as _cas_snapshot_ref, targets as _targets,
+)
 from .make_dry_run_parser import (
     MAX_STDOUT_BYTES,
     PARSER_NAME,
@@ -19,7 +27,7 @@ from .make_dry_run_result import (
 )
 
 
-MAKE_DRY_RUN_REPORT_SCHEMA_VERSION = 2
+MAKE_DRY_RUN_REPORT_SCHEMA_VERSION = 3
 MAKE_DRY_RUN_REPORT_KIND = "project-migration-make-dry-run-report"
 COLLECTION_MODE = "explicit-make-dry-run"
 MAX_STDERR_BYTES = 1024 * 1024
@@ -27,17 +35,14 @@ _REPORT_FIELDS = {
     "schema_version", "artifact_kind", "status", "collection_mode",
     "explicitly_enabled", "make_argv", "targets", "working_directory",
     "parser", "raw_stdout", "raw_stdout_ref", "raw_stderr_ref",
-    "makefile_ref", "source_refs", "input_refs", "toolchain_ref",
+    "makefile_ref", "source_refs", "input_refs", "repository_snapshot_ref",
+    "toolchain_ref",
     "sandbox_ref", "execution_plan_ref", "commands", "command_count",
     "execution_plan_sha256",
     "configure_executed", "make_started", "returncode", "timed_out",
     "output_flooded", "semantic_gate", "translation_coverage_numerator",
     "report_sha256",
 }
-
-
-class MakeDryRunContractError(ValueError):
-    pass
 
 
 def create_make_dry_run_report(
@@ -52,13 +57,21 @@ def create_make_dry_run_report(
     sandbox_ref: Mapping[str, Any],
     execution_plan_ref: Mapping[str, Any],
     targets: Sequence[str],
+    working_directory: str = ".",
+    repository_snapshot_ref: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     try:
         execution = validate_successful_make_outcome(outcome)
     except ValueError as error:
         raise MakeDryRunContractError(str(error)) from error
     assert execution.stdout is not None and execution.stderr is not None
-    parsed = parse_make_dry_run_stdout(execution.stdout)
+    try:
+        workdir = validated_working_directory(working_directory)
+    except ValueError as error:
+        raise MakeDryRunContractError(str(error)) from error
+    parsed = parse_make_dry_run_stdout(
+        execution.stdout, working_directory=workdir,
+    )
     makefile = _artifact_ref(makefile_ref, "makefile")
     sources = sorted(
         (_artifact_ref(value, "source") for value in source_refs),
@@ -68,6 +81,12 @@ def create_make_dry_run_report(
         (_artifact_ref(value, "input") for value in input_refs),
         key=lambda value: value["path"],
     )
+    snapshot = (
+        _artifact_ref(repository_snapshot_ref, "repository_snapshot")
+        if repository_snapshot_ref is not None else None
+    )
+    if snapshot is not None:
+        _cas_snapshot_ref(snapshot)
     toolchain = _artifact_ref(toolchain_ref, "toolchain")
     sandbox = _artifact_ref(sandbox_ref, "sandbox")
     plan = _artifact_ref(execution_plan_ref, "execution_plan")
@@ -84,7 +103,9 @@ def create_make_dry_run_report(
     if not isinstance(targets, Sequence) or isinstance(targets, (str, bytes)):
         _fail("make_dry_run_targets_invalid")
     normalized_targets = _targets(targets)
-    make_argv = _fixed_make_argv(makefile["path"], normalized_targets)
+    make_argv = _fixed_make_argv(
+        makefile["path"], normalized_targets, workdir,
+    )
     core = {
         "schema_version": MAKE_DRY_RUN_REPORT_SCHEMA_VERSION,
         "artifact_kind": MAKE_DRY_RUN_REPORT_KIND,
@@ -93,7 +114,7 @@ def create_make_dry_run_report(
         "explicitly_enabled": True,
         "make_argv": make_argv,
         "targets": normalized_targets,
-        "working_directory": ".",
+        "working_directory": workdir,
         "parser": dict(parsed["parser"]),
         "raw_stdout": dict(parsed["raw_stdout"]),
         "raw_stdout_ref": stdout_ref,
@@ -101,6 +122,7 @@ def create_make_dry_run_report(
         "makefile_ref": makefile,
         "source_refs": sources,
         "input_refs": inputs,
+        "repository_snapshot_ref": snapshot,
         "toolchain_ref": toolchain,
         "sandbox_ref": sandbox,
         "execution_plan_ref": plan,
@@ -129,7 +151,6 @@ def validate_make_dry_run_report(value: Any) -> dict[str, Any]:
         or value.get("status") != "ready"
         or value.get("collection_mode") != COLLECTION_MODE
         or value.get("explicitly_enabled") is not True
-        or value.get("working_directory") != "."
         or value.get("configure_executed") is not False
         or value.get("make_started") is not True
         or type(value.get("returncode")) is not int
@@ -141,6 +162,12 @@ def validate_make_dry_run_report(value: Any) -> dict[str, Any]:
         or value.get("translation_coverage_numerator") != 0
     ):
         _fail("make_dry_run_report_policy_invalid")
+    try:
+        workdir = validated_working_directory(value.get("working_directory"))
+    except ValueError as error:
+        raise MakeDryRunContractError(
+            "make_dry_run_report_working_directory_invalid"
+        ) from error
     parser = value.get("parser")
     if (
         not isinstance(parser, Mapping)
@@ -170,20 +197,31 @@ def validate_make_dry_run_report(value: Any) -> dict[str, Any]:
         _fail("make_dry_run_report_execution_plan_sha256_invalid")
     stdout_ref = _artifact_ref(value.get("raw_stdout_ref"), "stdout")
     stderr_ref = _artifact_ref(value.get("raw_stderr_ref"), "stderr")
+    _cas_raw_ref(stdout_ref, "raw-stdout")
+    _cas_raw_ref(stderr_ref, "raw-stderr")
     if stdout_ref["sha256"] != raw["sha256"] or stdout_ref["size_bytes"] != size:
         _fail("make_dry_run_report_stdout_binding_mismatch")
     if stderr_ref["size_bytes"] > MAX_STDERR_BYTES:
         _fail("make_dry_run_report_stderr_invalid")
     sources = _artifact_refs(value.get("source_refs"), "source")
     inputs = _artifact_refs(value.get("input_refs"), "input")
+    snapshot_value = value.get("repository_snapshot_ref")
+    snapshot = (
+        _artifact_ref(snapshot_value, "repository_snapshot")
+        if snapshot_value is not None else None
+    )
+    if snapshot is not None:
+        _cas_snapshot_ref(snapshot)
     source_paths = [item["path"] for item in sources]
     input_paths = [item["path"] for item in inputs]
     targets = _targets(value.get("targets"))
-    expected_make_argv = _fixed_make_argv(makefile["path"], targets)
+    expected_make_argv = _fixed_make_argv(makefile["path"], targets, workdir)
     if value.get("make_argv") != expected_make_argv:
         _fail("make_dry_run_report_make_argv_invalid")
     try:
-        commands = validate_make_dry_run_commands(value.get("commands"))
+        commands = validate_make_dry_run_commands(
+            value.get("commands"), working_directory=workdir,
+        )
     except ValueError as error:
         raise MakeDryRunContractError(
             "make_dry_run_report_command_binding_invalid"
@@ -211,6 +249,7 @@ def validate_make_dry_run_report(value: Any) -> dict[str, Any]:
         "makefile_ref": makefile,
         "source_refs": sources,
         "input_refs": inputs,
+        "repository_snapshot_ref": snapshot,
         "toolchain_ref": toolchain,
         "sandbox_ref": sandbox,
         "execution_plan_ref": plan,
@@ -222,51 +261,6 @@ def validate_make_dry_run_report(value: Any) -> dict[str, Any]:
 
 def canonical_make_dry_run_report_bytes(value: Any) -> bytes:
     return canonical_json_bytes(validate_make_dry_run_report(value))
-
-
-def _artifact_refs(value: Any, role: str) -> list[dict[str, Any]]:
-    if not isinstance(value, list) or not value:
-        _fail(f"make_dry_run_report_{role}_refs_invalid")
-    result = [_artifact_ref(item, role) for item in value]
-    paths = [item["path"] for item in result]
-    if paths != sorted(set(paths)):
-        _fail(f"make_dry_run_report_{role}_refs_not_canonical")
-    return result
-
-
-def _artifact_ref(value: Any, role: str) -> dict[str, Any]:
-    if not isinstance(value, Mapping) or set(value) != {"path", "sha256", "size_bytes"}:
-        _fail(f"make_dry_run_{role}_ref_invalid")
-    size = value.get("size_bytes")
-    if (
-        not safe_posix_path(value.get("path"))
-        or not is_sha256(value.get("sha256"))
-        or isinstance(size, bool)
-        or not isinstance(size, int)
-        or size < 0
-    ):
-        _fail(f"make_dry_run_{role}_ref_invalid")
-    return {"path": value["path"], "sha256": value["sha256"], "size_bytes": size}
-
-
-def _targets(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        _fail("make_dry_run_targets_invalid")
-    try:
-        return validated_targets(value)
-    except ValueError as error:
-        _fail(str(error))
-
-
-def _fixed_make_argv(makefile: str, targets: Sequence[str]) -> list[str]:
-    try:
-        return fixed_make_argv(makefile, targets)
-    except ValueError as error:
-        _fail(str(error))
-
-
-def _fail(code: str) -> None:
-    raise MakeDryRunContractError(code)
 
 
 build_make_dry_run_report = create_make_dry_run_report

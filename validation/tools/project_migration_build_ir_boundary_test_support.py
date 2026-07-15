@@ -3,6 +3,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from validation.tools.project_migration_make_boundary_edges import (
+    ENTRYPOINT_PRIVATE_IMPORTS, PRIVATE_IMPORT_SPECS,
+)
+
 
 PACKAGE = "validation.tools._project_migration_harness"
 
@@ -21,17 +25,31 @@ def _edges(*specs: tuple[str, str, str]) -> dict[tuple[str, str], frozenset[str]
 GENERIC_FACADES = {module_name("build_adapter"), module_name("build_ir_reopen")}
 MAKE_MODULE_NAMES = (
     "make_build_ir_adapter",
+    "make_build_ir_closure",
+    "make_build_ir_closure_artifacts",
+    "make_build_ir_closure_resolution",
     "make_build_ir_external",
     "make_build_ir_projection",
     "make_build_ir_reopen",
     "make_build_ir_toolchains",
     "make_dry_run_binding",
+    "make_dry_run_cas",
+    "make_dry_run_cli",
+    "make_dry_run_collect",
+    "make_dry_run_collect_io",
     "make_dry_run_contract",
+    "make_dry_run_contract_refs",
     "make_dry_run_host_evidence",
+    "make_dry_run_linux",
     "make_dry_run_parser",
+    "make_dry_run_process",
     "make_dry_run_report_io",
     "make_dry_run_result",
     "make_dry_run_runner",
+    "make_dry_run_sandbox",
+    "make_dry_run_snapshot",
+    "make_dry_run_snapshot_io",
+    "make_dry_run_toolchain",
     "make_dry_run_tools",
 )
 MAKE_MODULES = {module_name(name) for name in MAKE_MODULE_NAMES}
@@ -56,47 +74,11 @@ FACADE_IMPORTS = _edges(
     ("build_ir_validation", "build_ir_reopen",
      "accepted_provenance_role accepted_raw_roles reproject_bound_build_ir"),
 )
-PRIVATE_IMPORTS = _edges(
-    ("build_adapter", "make_build_ir_adapter",
-     "MAKE_INPUT_KIND MakeReportSelection discover_make_project materialize_make_build_ir_stage"),
-    ("build_ir_reopen", "make_build_ir_reopen",
-     "accepted_make_provenance_role accepted_make_raw_roles reproject_bound_make_build_ir"),
-    ("make_build_ir_adapter", "make_build_ir_projection",
-     "MAKE_RAW_ROLE normalize_make_translation_units project_make_build_ir"),
-    ("make_build_ir_adapter", "make_dry_run_parser", "MAX_COMMANDS"),
-    ("make_build_ir_adapter", "make_dry_run_report_io",
-     "MAX_REPORT_BYTES reopen_make_dry_run_report verify_make_dry_run_report_inputs"),
-    ("make_build_ir_projection", "make_build_ir_external",
-     "MAKE_BUILD_BOUNDARIES project_make_external_dependencies"),
-    ("make_build_ir_projection", "make_build_ir_toolchains",
-     "abi_facts legacy_toolchain_id legacy_toolchains"),
-    ("make_build_ir_reopen", "make_build_ir_adapter", "reproject_make_build_ir"),
-    ("make_build_ir_reopen", "make_build_ir_projection", "MAKE_RAW_ROLE"),
-    ("make_dry_run_contract", "make_dry_run_binding",
-     "fixed_make_argv validated_targets"),
-    ("make_dry_run_contract", "make_dry_run_parser",
-     "MAX_STDOUT_BYTES PARSER_NAME PARSER_VERSION parse_make_dry_run_stdout validate_make_dry_run_commands"),
-    ("make_dry_run_contract", "make_dry_run_result",
-     "MakeDryRunOutcome validate_successful_make_outcome"),
-    ("make_dry_run_parser", "make_dry_run_tools", "classify_make_tool"),
-    ("make_dry_run_report_io", "make_dry_run_binding", "make_input_sha256"),
-    ("make_dry_run_report_io", "make_dry_run_contract",
-     "MAX_STDERR_BYTES canonical_make_dry_run_report_bytes validate_make_dry_run_report"),
-    ("make_dry_run_report_io", "make_dry_run_host_evidence",
-     "canonical_make_host_preflight_bytes validate_make_host_preflight"),
-    ("make_dry_run_report_io", "make_dry_run_parser",
-     "MAX_STDOUT_BYTES parse_make_dry_run_stdout"),
-    ("make_dry_run_report_io", "make_dry_run_runner",
-     "canonical_make_dry_run_plan_bytes validate_make_dry_run_plan"),
-    ("make_dry_run_runner", "make_dry_run_host_evidence",
-     "MAKE_REQUIRED_CAPABILITIES create_make_host_preflight validate_make_host_preflight"),
-    ("make_dry_run_runner", "make_dry_run_binding",
-     "fixed_make_argv make_input_sha256"),
-    ("make_dry_run_runner", "make_dry_run_contract", "MAX_STDERR_BYTES"),
-    ("make_dry_run_runner", "make_dry_run_parser", "MAX_STDOUT_BYTES"),
-    ("make_dry_run_runner", "make_dry_run_result",
-     "MakeDryRunExecution MakeDryRunOutcome"),
-)
+PRIVATE_IMPORTS = _edges(*PRIVATE_IMPORT_SPECS)
+PRIVATE_IMPORTS.update({
+    (source, module_name(target)): symbols
+    for (source, target), symbols in ENTRYPOINT_PRIVATE_IMPORTS.items()
+})
 DYNAMIC_MODULES = {"builtins", "importlib", "marshal", "runpy", "zipimport"}
 BUILTIN_SINKS = {"__import__", "compile", "eval", "exec"}
 LOADER_SINKS = {

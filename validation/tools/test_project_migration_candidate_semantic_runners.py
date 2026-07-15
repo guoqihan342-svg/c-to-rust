@@ -188,6 +188,18 @@ class CandidateSemanticRunnerTests(ProjectMigrationGateAuthorityCase):
                 gate_family="negative", context=context,
                 execution=execution, observation=observation("negative"),
             )
+        context["candidate_source"]["path"] = (
+            f"target/run/workers/translator/out/{self.candidate_id}.rs"
+        )
+        context["worker_request"] = {
+            "path": "../escape.json", "sha256": digest("request"),
+            "size_bytes": 1,
+        }
+        with self.assertRaisesRegex(LedgerError, "worker request path"):
+            semantic_raw_payload(
+                gate_family="negative", context=context,
+                execution=execution, observation=observation("negative"),
+            )
 
     def test_source_change_during_adapter_run_is_stale(self) -> None:
         candidate_path = self.harness.joinpath(

@@ -78,9 +78,15 @@ class MakeDryRunParserTests(unittest.TestCase):
         )
         return create_make_dry_run_report(
             outcome=outcome,
-            raw_stdout_ref=self.raw_ref(f"evidence/{self.token}/stdout.bin", stdout),
+            raw_stdout_ref=self.raw_ref(
+                f"evidence/{self.token}/cas/raw-stdout/"
+                f"{hashlib.sha256(stdout).hexdigest()}.bin",
+                stdout,
+            ),
             raw_stderr_ref=self.raw_ref(
-                f"evidence/{self.token}/stderr.bin", b"",
+                f"evidence/{self.token}/cas/raw-stderr/"
+                f"{hashlib.sha256(b'').hexdigest()}.bin",
+                b"",
             ),
             makefile_ref=makefile,
             source_refs=[source],
@@ -120,11 +126,34 @@ class MakeDryRunParserTests(unittest.TestCase):
         self.assertEqual(tool, parsed["commands"][0]["tool"])
         self.assertEqual(tool, parsed["commands"][0]["argv"][0])
 
+    def test_subdirectory_parent_paths_normalize_inside_repository(self) -> None:
+        parsed = parse_make_dry_run_stdout(
+            "cc -I../include -c ../src/unit.c -o obj/unit.o\n"
+            "cc obj/unit.o ../../vendor/prebuilt.a -o app\n",
+            working_directory="components/build",
+        )
+
+        self.assertEqual(
+            ["components/src/unit.c"], parsed["commands"][0]["inputs"],
+        )
+        self.assertEqual(
+            ["components/build/obj/unit.o"], parsed["commands"][0]["outputs"],
+        )
+        self.assertEqual(
+            ["components/build/obj/unit.o", "vendor/prebuilt.a"],
+            parsed["commands"][1]["inputs"],
+        )
+        with self.assertRaisesRegex(MakeDryRunParseError, "path_escape"):
+            parse_make_dry_run_stdout(
+                "cc -c ../../../outside.c -o obj/unit.o\n",
+                working_directory="components/build",
+            )
+
     def test_report_is_versioned_canonical_and_claims_no_semantics(self) -> None:
         report = self.report()
         encoded = canonical_make_dry_run_report_bytes(report)
 
-        self.assertEqual(2, report["schema_version"])
+        self.assertEqual(3, report["schema_version"])
         self.assertEqual("project-migration-make-dry-run-report", report["artifact_kind"])
         self.assertFalse(report["semantic_gate"])
         self.assertEqual(0, report["translation_coverage_numerator"])

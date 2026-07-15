@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -210,8 +211,12 @@ def _create_make_report(
     plan_path = _write(root, "evidence/make-plan.json", canonical_make_dry_run_plan_bytes(plan))
     preflight = MakeDryRunPreflight(
         backend="equivalence-fixture-backend",
+        backend_version="test-1",
         plan_sha256=plan["plan_sha256"],
         toolchain_sha256=toolchain["sha256"],
+        launcher_sha256="1" * 64,
+        make_sha256="2" * 64,
+        probe_observation_sha256="3" * 64,
         capability_results=tuple((name, True) for name in MAKE_REQUIRED_CAPABILITIES),
         cleanup_ready=True,
     )
@@ -220,7 +225,6 @@ def _create_make_report(
         canonical_make_host_preflight_bytes(preflight.payload()),
     )
     stdout = (root / manifest["make_stdout"]).read_bytes()
-    stderr_path = _write(root, "evidence/make.stderr", b"")
     execution = MakeDryRunExecution(
         stdout=stdout, stderr=b"", returncode=0, timed_out=False,
         command_started=True, cleanup_verified=True,
@@ -233,10 +237,20 @@ def _create_make_report(
         make_binary=Path("make"), toolchain_ref=toolchain,
         sandbox_ref=sandbox, backend=_ControlledMakeBackend(preflight, execution),
     )
+    stdout_cas = _write(
+        root,
+        f"evidence/cas/raw-stdout/{hashlib.sha256(stdout).hexdigest()}.bin",
+        stdout,
+    )
+    stderr_cas = _write(
+        root,
+        f"evidence/cas/raw-stderr/{hashlib.sha256(b'').hexdigest()}.bin",
+        b"",
+    )
     report = create_make_dry_run_report(
         outcome=outcome,
-        raw_stdout_ref=file_binding(root, root / manifest["make_stdout"]),
-        raw_stderr_ref=file_binding(root, stderr_path),
+        raw_stdout_ref=file_binding(root, stdout_cas),
+        raw_stderr_ref=file_binding(root, stderr_cas),
         makefile_ref=makefile, source_refs=[source], input_refs=[source],
         toolchain_ref=toolchain, sandbox_ref=sandbox,
         execution_plan_ref=file_binding(root, plan_path), targets=manifest["targets"],

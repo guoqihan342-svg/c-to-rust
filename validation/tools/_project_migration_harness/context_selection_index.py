@@ -9,6 +9,7 @@ from typing import Any
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _SOURCE_KINDS = frozenset({"header_source", "top_level_source"})
 _MAX_DEFINITION_REFS = 4
+_MAX_RECORD_EXTENT_CHUNKS = 8
 
 
 class ContextSelectionIndex:
@@ -107,10 +108,65 @@ class ContextSelectionIndex:
             selected.add(previous)
         if len(content) - position - len(token) < 128 and following is not None:
             selected.add(following)
+        selected.update(self._record_extent_refs(ref, candidates))
+        selected.update(self._aliased_record_refs(token, ref, candidates))
         return {
             neighbor for neighbor in selected
-            if neighbor in candidates
+            if neighbor in candidates and neighbor != ref
         }
+
+    def _aliased_record_refs(
+        self, token: str, ref: str, candidates: set[str]
+    ) -> set[str]:
+        content = self._content[ref]
+        match = re.search(
+            rf"\btypedef\s+(?:const\s+)?(?:struct|union|enum)\s+"
+            rf"([A-Za-z_][A-Za-z0-9_]*)[^;]*\b{re.escape(token)}\b\s*;",
+            content,
+        )
+        if match is None:
+            return set()
+        tag = match.group(1)
+        definition = re.compile(
+            rf"\b(?:struct|union|enum)\s+{re.escape(tag)}\s*\{{"
+        )
+        result: set[str] = set()
+        for candidate in sorted(self._by_token.get(tag, ())):
+            if candidate not in candidates or not definition.search(
+                self._content[candidate]
+            ):
+                continue
+            result.add(candidate)
+            result.update(self._record_extent_refs(candidate, candidates))
+            if len(result) >= _MAX_RECORD_EXTENT_CHUNKS:
+                break
+        return result
+
+    def _record_extent_refs(
+        self, ref: str, candidates: set[str]
+    ) -> set[str]:
+        selected = {ref}
+        balance = _brace_balance(self._content[ref])
+        previous, following = self._neighbors.get(ref, (None, None))
+        while (
+            balance < 0 and previous is not None
+            and len(selected) < _MAX_RECORD_EXTENT_CHUNKS
+        ):
+            if previous not in candidates:
+                break
+            selected.add(previous)
+            balance += _brace_balance(self._content[previous])
+            previous = self._neighbors.get(previous, (None, None))[0]
+        while (
+            balance > 0 and following is not None
+            and len(selected) < _MAX_RECORD_EXTENT_CHUNKS
+        ):
+            if following not in candidates:
+                break
+            selected.add(following)
+            balance += _brace_balance(self._content[following])
+            following = self._neighbors.get(following, (None, None))[1]
+        return selected
 
     def _allowed(
         self, ref: str, own_units: set[str], header_owners: set[str]
@@ -124,6 +180,11 @@ class ContextSelectionIndex:
         ) or (
             kind == "top_level_source" and owner in own_units
         )
+
+
+def _brace_balance(value: str) -> int:
+    masked = re.sub(r"/\*[\s\S]*?\*/|//[^\r\n]*|\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'", "", value)
+    return masked.count("{") - masked.count("}")
 
 
 __all__ = ["ContextSelectionIndex"]

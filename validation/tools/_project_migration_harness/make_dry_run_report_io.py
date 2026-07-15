@@ -21,6 +21,9 @@ from .make_dry_run_parser import MAX_STDOUT_BYTES, parse_make_dry_run_stdout
 from .make_dry_run_runner import (
     canonical_make_dry_run_plan_bytes, validate_make_dry_run_plan,
 )
+from .make_dry_run_snapshot import (
+    canonical_repository_snapshot_bytes, verify_repository_snapshot,
+)
 
 
 MAX_REPORT_BYTES = 8 * 1024 * 1024
@@ -52,7 +55,10 @@ def verify_make_dry_run_report_inputs(
     try:
         report = validate_make_dry_run_report(value)
         opened = _reopen_refs(root, report)
-        parsed = parse_make_dry_run_stdout(opened["raw_stdout_ref"])
+        parsed = parse_make_dry_run_stdout(
+            opened["raw_stdout_ref"],
+            working_directory=report["working_directory"],
+        )
         if (
             parsed["parser"] != report["parser"]
             or parsed["raw_stdout"] != report["raw_stdout"]
@@ -68,9 +74,16 @@ def verify_make_dry_run_report_inputs(
             expected_input_sha256=make_input_sha256(
                 report["makefile_ref"], report["input_refs"],
                 report["toolchain_ref"],
+                working_directory=report["working_directory"],
+                repository_snapshot_ref=report["repository_snapshot_ref"],
             ),
         )
-        if checked_plan["plan_sha256"] != report["execution_plan_sha256"]:
+        if (
+            checked_plan["plan_sha256"] != report["execution_plan_sha256"]
+            or checked_plan["working_directory"] != report["working_directory"]
+            or checked_plan["repository_snapshot_ref"]
+            != report["repository_snapshot_ref"]
+        ):
             raise MakeDryRunReopenError("make_report_execution_plan_drift")
         sandbox = _strict_object(opened["sandbox_ref"], "sandbox")
         if canonical_make_host_preflight_bytes(sandbox) != opened["sandbox_ref"]:
@@ -80,6 +93,29 @@ def verify_make_dry_run_report_inputs(
             expected_plan_sha256=checked_plan["plan_sha256"],
             expected_toolchain_sha256=report["toolchain_ref"]["sha256"],
         )
+        if report["repository_snapshot_ref"] is not None:
+            snapshot = _strict_object(
+                opened["repository_snapshot_ref"], "repository_snapshot",
+            )
+            if (
+                canonical_repository_snapshot_bytes(snapshot)
+                != opened["repository_snapshot_ref"]
+            ):
+                raise MakeDryRunReopenError(
+                    "make_report_repository_snapshot_not_canonical"
+                )
+            checked_snapshot = verify_repository_snapshot(root, snapshot)
+            by_path = {
+                item["path"]: item for item in checked_snapshot["files"]
+            }
+            bound_inputs = [
+                report["makefile_ref"], *report["source_refs"],
+                *report["input_refs"],
+            ]
+            if any(by_path.get(item["path"]) != item for item in bound_inputs):
+                raise MakeDryRunReopenError(
+                    "make_report_repository_snapshot_binding_drift"
+                )
     except MakeDryRunReopenError:
         raise
     except (OSError, TypeError, UnicodeError, ValueError) as error:
@@ -96,6 +132,11 @@ def _reopen_refs(root: Path, report: Mapping[str, Any]) -> dict[str, bytes]:
         ("raw_stdout_ref", report["raw_stdout_ref"], MAX_STDOUT_BYTES),
         ("raw_stderr_ref", report["raw_stderr_ref"], MAX_STDERR_BYTES),
     ]
+    if report["repository_snapshot_ref"] is not None:
+        roles.append((
+            "repository_snapshot_ref", report["repository_snapshot_ref"],
+            MAX_EVIDENCE_BYTES,
+        ))
     roles.extend(
         (f"source_ref:{index}", reference, MAX_EVIDENCE_BYTES)
         for index, reference in enumerate(report["source_refs"])

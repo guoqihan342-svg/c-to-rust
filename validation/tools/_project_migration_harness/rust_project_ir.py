@@ -10,7 +10,10 @@ from .rust_project_ir_validation import (
     interface_projection,
     validate_rust_project_ir,
 )
-from .rust_project_ir_native import host_interface_completeness, plans_from_candidate
+from .rust_project_ir_native import (
+    host_interface_completeness, plans_from_candidate,
+    refresh_native_link_completeness,
+)
 from .native_link_context import validate_native_link_context
 from .native_link_model import validate_native_link_candidate
 
@@ -51,6 +54,8 @@ def build_rust_project_ir(
     unsafe_obligations: Sequence[Mapping[str, Any]] = (),
     native_link_requirements: Sequence[Mapping[str, Any]] = (),
     native_link_plans: Sequence[Mapping[str, Any]] = (),
+    interface_completeness: Mapping[str, Any] | None = None,
+    c_compilation_facts_ref: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic candidate IR; this never grants semantic acceptance."""
     raw_sections = {
@@ -78,6 +83,11 @@ def build_rust_project_ir(
                 (_clone(value) for value in build_ir_refs),
                 key=lambda value: (str(value.get("path")), str(value.get("sha256"))),
             ),
+            "c_compilation_facts": (
+                None
+                if c_compilation_facts_ref is None
+                else _clone(c_compilation_facts_ref)
+            ),
             "candidates": sorted(
                 (_normalized_candidate(value) for value in candidate_refs),
                 key=lambda value: (
@@ -96,8 +106,10 @@ def build_rust_project_ir(
         ),
         **normalized,
     }
-    payload["interface_completeness"] = host_interface_completeness(
-        payload["native_link_requirements"],
+    payload["interface_completeness"] = _clone(
+        interface_completeness
+        if interface_completeness is not None
+        else host_interface_completeness(payload["native_link_requirements"])
     )
     payload["interface_sha256"] = content_sha256(interface_projection(payload))
     payload["claim_boundary"] = dict(CLAIM_BOUNDARY)
@@ -133,8 +145,8 @@ def bind_native_link_candidate(
         raise ValueError("native_link_context_requirement_mismatch")
     result = _clone(value)
     result["native_link_plans"] = plans_from_candidate(candidate)
-    result["interface_completeness"] = host_interface_completeness(
-        result["native_link_requirements"],
+    result["interface_completeness"] = refresh_native_link_completeness(
+        result["interface_completeness"], result["native_link_requirements"],
     )
     result["interface_sha256"] = content_sha256(interface_projection(result))
     result["ir_sha256"] = content_sha256({

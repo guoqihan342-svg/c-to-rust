@@ -31,6 +31,12 @@ def unit_context_refs(
             "working_directory": str(compile_context.get("working_directory", ".")),
             "redacted_define_count": int(compile_context.get("redacted_define_count", 0)),
         })]
+        compiler_fact = context.get("compiler_fact")
+        if compiler_fact is not None:
+            refs.append(add_fact(
+                "compiler_fact_binding",
+                mapping(compiler_fact, f"unit {unit_id} compiler_fact"),
+            ))
         for include in objects(compile_context.get("includes", []), "compile includes"):
             refs.append(add_fact("compile_include", {"unit_id": unit_id, **dict(include)}))
         for define in objects(compile_context.get("defines", []), "compile defines"):

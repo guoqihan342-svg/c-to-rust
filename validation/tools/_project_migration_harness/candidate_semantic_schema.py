@@ -3,30 +3,24 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
-from pathlib import Path
-import sys
 from typing import Any
 
 from .artifacts import canonical_json_bytes, checked_relative_path
+from .candidate_semantic_plan import (
+    FIXED_RESOURCE_LIMITS,
+    FIXED_TIMEOUT_SECONDS,
+    MAX_ADAPTER_OUTPUT_BYTES,
+    MAX_OBSERVATION_COUNT,
+    SEMANTIC_FAMILIES,
+    fixed_adapter_plan,
+    require_semantic_family,
+)
 from .gate_authority import candidate_authority
 from .gate_evidence import require_content_addressed_reference
 from .ledger_security import LedgerError
 from .sandbox_contract import canonical_sha256
 
 
-SEMANTIC_FAMILIES = frozenset({
-    "oracle-replay-diff", "negative", "unsafe-alias", "abi-layout",
-})
-FIXED_TIMEOUT_SECONDS = 300
-MAX_ADAPTER_OUTPUT_BYTES = 1024 * 1024
-MAX_OBSERVATION_COUNT = 1_000_000
-FIXED_RESOURCE_LIMITS = {
-    "cpu_seconds": 300,
-    "address_space_bytes": 2 * 1024 * 1024 * 1024,
-    "file_size_bytes": MAX_ADAPTER_OUTPUT_BYTES,
-    "process_count": 64,
-    "open_files": 128,
-}
 OBSERVATION_FIELDS = {
     "oracle-replay-diff": {
         "case_count", "mismatch_count", "crash_count", "c_oracle_sha256",
@@ -48,7 +42,7 @@ CONTEXT_KEYS = {
     "run_id", "group_id", "unit_id", "candidate_artifact_id",
     "candidate_sha256", "candidate_set_sha256", "candidate_source",
     "run_context_sha256", "compile_verdict", "compile_observation",
-    "generation_sha256", "toolchain_sha256",
+    "generation_sha256", "toolchain_sha256", "worker_request",
 }
 PLAN_KEYS = {
     "schema_version", "adapter_id", "protocol", "gate_family", "command",
@@ -66,37 +60,6 @@ PAYLOAD_KEYS = {
     "gate_family", *CONTEXT_KEYS, "verification_plan",
     "verification_context_sha256", "execution", "observation",
 }
-
-
-def fixed_adapter_plan(gate_family: str) -> dict[str, Any]:
-    _family(gate_family)
-    launcher = Path(sys.executable).resolve(strict=True)
-    adapter = Path(__file__).with_name("candidate_semantic_runners.py").resolve(strict=True)
-    command = [
-        launcher.name, "-E", "-s", "-B", "-m",
-        "validation.tools._project_migration_harness.candidate_semantic_runners",
-        "--adapter-worker", gate_family,
-    ]
-    launcher_argv = [
-        str(launcher), *command[1:],
-    ]
-    plan = {
-        "schema_version": 1,
-        "adapter_id": f"host.candidate.semantic.{gate_family}.v1",
-        "protocol": "candidate-semantic-raw-json-v1",
-        "gate_family": gate_family,
-        "command": command,
-        "command_sha256": canonical_sha256(command),
-        "launcher_argv_sha256": canonical_sha256(launcher_argv),
-        "adapter_source_sha256": _file_sha256(adapter),
-        "launcher_sha256": _file_sha256(launcher),
-        "timeout_seconds": FIXED_TIMEOUT_SECONDS,
-        "resource_limits": dict(FIXED_RESOURCE_LIMITS),
-        "max_stdout_bytes": MAX_ADAPTER_OUTPUT_BYTES,
-        "max_stderr_bytes": MAX_ADAPTER_OUTPUT_BYTES,
-        "shell": False,
-    }
-    return plan
 
 
 def semantic_verification_context(
@@ -141,7 +104,7 @@ def derive_strict_semantic_status(
     candidate_artifact_id: str, candidate_sha256: str,
     candidate_set_sha256: str, gate_family: str,
 ) -> str:
-    _family(gate_family)
+    require_semantic_family(gate_family)
     if not isinstance(payload, Mapping) or set(payload) != PAYLOAD_KEYS:
         raise LedgerError("candidate semantic raw observation schema is invalid")
     expected = {
@@ -179,7 +142,7 @@ def derive_strict_semantic_status(
 
 
 def parse_adapter_observation(data: bytes, gate_family: str) -> dict[str, Any]:
-    _family(gate_family)
+    require_semantic_family(gate_family)
     if not isinstance(data, bytes) or not 0 < len(data) <= MAX_ADAPTER_OUTPUT_BYTES:
         raise LedgerError("candidate semantic adapter output size is invalid")
     try:
@@ -226,6 +189,23 @@ def _validate_context(value: Mapping[str, Any]) -> None:
         if not isinstance(reference, Mapping):
             raise LedgerError("candidate semantic compile reference is invalid")
         require_content_addressed_reference(reference)
+    request = value.get("worker_request")
+    if request is not None:
+        if not isinstance(request, Mapping) or set(request) != {
+            "path", "sha256", "size_bytes",
+        }:
+            raise LedgerError("candidate semantic worker request is invalid")
+        try:
+            checked_relative_path(str(request.get("path")))
+        except ValueError as error:
+            raise LedgerError(
+                "candidate semantic worker request path is invalid"
+            ) from error
+        _sha(request.get("sha256"), "worker request sha256")
+        _bounded_int(
+            request.get("size_bytes"), "worker request size",
+            64 * 1024 * 1024, 1,
+        )
 
 
 def _validate_execution(value: Any, plan: Mapping[str, Any]) -> None:
@@ -270,11 +250,6 @@ def _observation_passed(gate_family: str, value: Mapping[str, Any]) -> bool:
     return value["check_count"] > 0 and value["mismatch_count"] == 0
 
 
-def _family(value: str) -> None:
-    if value not in SEMANTIC_FAMILIES:
-        raise LedgerError("candidate semantic gate family is invalid")
-
-
 def _sha(value: Any, label: str) -> None:
     if not isinstance(value, str) or len(value) != 64 or any(
         char not in "0123456789abcdef" for char in value
@@ -285,13 +260,3 @@ def _sha(value: Any, label: str) -> None:
 def _bounded_int(value: Any, label: str, maximum: int, minimum: int = 0) -> None:
     if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
         raise LedgerError(f"{label} is invalid")
-
-
-def _file_sha256(path: Path) -> str:
-    if not path.is_file() or path.stat().st_size > 64 * 1024 * 1024:
-        raise LedgerError("candidate semantic adapter executable is invalid")
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()

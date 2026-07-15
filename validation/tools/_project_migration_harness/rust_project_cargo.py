@@ -15,6 +15,10 @@ from .rust_ffi_facts import NoFfiBoundaryError, derive_ffi_boundary_facts
 from .rust_project_cargo_render import (
     GENERATOR, RUST_PROJECT_IR_FILE, render_cargo_project,
 )
+from .rust_project_ir_native import DERIVED_INTERFACE_PRODUCER
+from .rust_project_ir_source_facts import (
+    derive_bound_candidate_source_facts, project_bound_public_items,
+)
 from .rust_project_ir_validation import (
     VIRTUAL_CRATE_ROOT_MODULE_ID, reopen_rust_project_ir_bindings,
 )
@@ -54,7 +58,7 @@ def reconstruct_cargo_project_from_ir(
     accepted = {item.group_id: item for item in candidates}
     cargo_project._validate_accepted(accepted, dependencies, order)
     unsafe_policy = cargo_project._unsafe_policy(dag.get("unsafe_policy"), candidates)
-    _validate_ir_configuration(rust_project_ir, candidates)
+    _validate_ir_configuration(rust_project_ir, candidates, binding)
     return render_cargo_project(
         rust_project_ir, binding, coordination, dependencies, order,
         candidates, unsafe_policy,
@@ -73,7 +77,7 @@ def _candidate_sources(
     ir: Mapping[str, Any], root: Path, limit: int,
 ) -> list[cargo_project.CandidateSource]:
     modules = {item["unit_id"]: item for item in ir["modules"]}
-    public = _public_symbols(ir)
+    public = _public_interfaces(ir)
     obligations = _unsafe_counts(ir)
     ffi = _ffi_facts(ir)
     result = []
@@ -92,7 +96,16 @@ def _candidate_sources(
         if len(source) > limit or total > 8_000_000:
             _fail("candidate_sources_too_large", "candidate", unit_id)
         metadata = derive_rust_metadata(text)
-        if tuple(metadata["public_symbols"]) != public.get(str(module["module_id"]), ()):
+        source_facts = derive_bound_candidate_source_facts(
+            text, metadata["public_symbols"],
+        )
+        expected_public = tuple(sorted(
+            (str(item["symbol"]), str(item["kind"]), str(item["signature"]))
+            for item in project_bound_public_items(
+                metadata["public_symbols"], source_facts,
+            )
+        ))
+        if expected_public != public.get(str(module["module_id"]), ()):
             _fail("rust_project_ir_public_api_drift", "rust_project_ir", unit_id)
         if int(metadata["unsafe_count"]) != obligations.get(str(module["module_id"]), 0):
             _fail("rust_project_ir_unsafe_obligation_drift", "rust_project_ir", unit_id)
@@ -111,11 +124,15 @@ def _candidate_sources(
     return result
 
 
-def _public_symbols(ir: Mapping[str, Any]) -> dict[str, tuple[str, ...]]:
-    values: dict[str, list[str]] = {}
+def _public_interfaces(
+    ir: Mapping[str, Any],
+) -> dict[str, tuple[tuple[str, str, str], ...]]:
+    values: dict[str, list[tuple[str, str, str]]] = {}
     for item in ir["public_api"]:
         if item["visibility"] == "public":
-            values.setdefault(str(item["module_id"]), []).append(str(item["symbol"]))
+            values.setdefault(str(item["module_id"]), []).append((
+                str(item["symbol"]), str(item["kind"]), str(item["signature"]),
+            ))
     return {key: tuple(sorted(items)) for key, items in values.items()}
 
 
@@ -151,16 +168,28 @@ def _derived_ffi(source: str, digest: str) -> tuple[tuple[str, str, str, str], .
 
 def _validate_ir_configuration(
     ir: Mapping[str, Any], candidates: list[cargo_project.CandidateSource],
+    binding: Mapping[str, Any],
 ) -> None:
     crate = ir["crate"]
     if not _PACKAGE.fullmatch(str(crate["crate_id"])):
         _fail("rust_project_ir_crate_name_invalid", "rust_project_ir")
-    if crate["edition"] not in _EDITIONS or crate["targets"] != ["library"]:
+    if crate["edition"] not in _EDITIONS:
         _fail("rust_project_ir_target_unsupported", "rust_project_ir")
     if not set(crate["crate_types"]) <= _CRATE_TYPES:
         _fail("rust_project_ir_crate_type_unsupported", "rust_project_ir")
     if crate["root_module_id"] != VIRTUAL_CRATE_ROOT:
         _fail("rust_project_ir_authoritative_root_invalid", "rust_project_ir")
+    producer = ir["interface_completeness"]["producer"]
+    if producer == DERIVED_INTERFACE_PRODUCER:
+        topology = binding.get("target_topology")
+        if (
+            not isinstance(topology, list) or not topology
+            or crate["targets"] != sorted({str(item.get("kind")) for item in topology})
+            or binding.get("target_topology_sha256") is None
+        ):
+            _fail("rust_project_ir_target_topology_invalid", "rust_project_ir")
+    elif crate["targets"] != ["library"]:
+        _fail("rust_project_ir_target_unsupported", "rust_project_ir")
     by_unit = {item.group_id: item for item in candidates}
     for module in ir["modules"]:
         candidate = by_unit[str(module["unit_id"])]

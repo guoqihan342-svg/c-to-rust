@@ -11,19 +11,18 @@ from .build_adapter import (
 from .build_ir import translation_units_for_index
 from .build_ir_validation import verify_build_ir_artifact
 from .c_index import index_translation_units
+from .c_compilation_fact_bundle import collect_c_compilation_fact_bundle
 from .context_pages import build_context_pages
 from .discovery import discover_project
-from .ledger import ProjectLedger, SCHEMA_VERSION as LEDGER_SCHEMA_VERSION
 from .migration_graph import build_migration_graph
 from . import orchestrator_native_link as native_link_stage
 from .orchestrator_context import ContextPortfolioError, build_context_portfolio
+from .orchestrator_finalize import finalize_project_plan
 from .orchestrator_stages import (
     blocked_plan as _blocked,
     contract_error,
     run_stage as _stage,
 )
-from .project_cli_runtime import display_result
-from .scheduler import schedule_portfolio
 
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
 PROJECT_PROFILES = {"competition", "development"}
@@ -104,9 +103,41 @@ def plan_project(
         build_ir, artifacts["build_ir"], profile=profile, output=output,
     )
 
+    compilation_facts = _stage("c_compilation_facts", lambda: (
+        collect_c_compilation_fact_bundle(
+            repo_root=source,
+            out_root=output,
+            build_ir=build_ir,
+            profile=profile,
+        )
+    ))
+    if compilation_facts is None:
+        return _blocked(output, artifacts, "c_compilation_fact_contract_invalid")
+    artifacts["c_compilation_facts"] = write_json_artifact(
+        output, "plan/c-compilation-facts.json", compilation_facts,
+    )
+
+    c_index = _stage("c_index", lambda: index_translation_units(
+        source,
+        translation_units_for_index(build_ir),
+        compilation_fact_bundle=compilation_facts,
+        build_ir_semantic_sha256=build_ir["semantic_sha256"],
+    ))
+    if c_index is None:
+        return _blocked(output, artifacts, "c_index_contract_invalid")
+    artifacts["c_index"] = write_json_artifact(output, "plan/c-index.json", c_index)
+    if c_index.get("status") not in {"ready", "ready_with_boundaries"}:
+        return _blocked(output, artifacts, "c_index_blocked")
+
     project_key = content_sha256({
         "build_ir": artifacts["build_ir"],
         "semantic_sha256": build_ir["semantic_sha256"],
+        "generated_build_closure": artifacts["generated_build_closure"],
+        "generated_build_closure_verification": artifacts[
+            "generated_build_closure_verification"
+        ],
+        "c_compilation_fact_bundle_sha256": compilation_facts["bundle_sha256"],
+        "c_index": artifacts["c_index"],
         "build_closure_policy": "required" if require_build_closure else "bounded-source",
         "profile": profile,
     })
@@ -114,15 +145,6 @@ def plan_project(
     if RUN_ID_RE.fullmatch(effective_run_id) is None:
         raise ValueError("run_id must be a bounded portable identifier")
     del discovery
-
-    c_index = _stage("c_index", lambda: index_translation_units(
-        source, translation_units_for_index(build_ir),
-    ))
-    if c_index is None:
-        return _blocked(output, artifacts, "c_index_contract_invalid")
-    artifacts["c_index"] = write_json_artifact(output, "plan/c-index.json", c_index)
-    if c_index.get("status") not in {"ready", "ready_with_boundaries"}:
-        return _blocked(output, artifacts, "c_index_blocked")
 
     graph = _stage("migration_graph", lambda: build_migration_graph(c_index))
     if graph is None:
@@ -167,134 +189,19 @@ def plan_project(
     artifacts["portfolio_dag"] = write_json_artifact(output, "plan/portfolio-dag.json", dag)
     artifacts["portfolio"] = write_json_artifact(output, "plan/portfolio.json", portfolio)
 
-    integration_manifest = {
-        "schema_version": 1,
-        "profile": profile,
-        "dag": {
-            group["group_id"]: list(group["dependencies"])
-            for group in dag["groups"]
-        },
-        "dag_order": [
-            group_id for wave in dag["waves"] for group_id in wave["group_ids"]
-        ],
-        "unsafe_policy": {
-            "allow_unsafe": True,
-            "max_total": None,
-            "max_per_group": None,
-        },
-        "generated_build_closure": {
-            "status": "bound" if closure_ready else "blocked",
-            "closure": artifacts["generated_build_closure"],
-            "verification": artifacts["generated_build_closure_verification"],
-        },
-        "build_ir": {
-            "status": "bound" if build_ir_ready else "blocked",
-            "artifact": artifacts["build_ir"],
-            "verification": artifacts["build_ir_verification"],
-            "worker_admission": artifacts["build_ir_worker_admission"],
-        },
-        "claim_boundary": {
-            "semantic_gate": False,
-            "translation_coverage_numerator": 0,
-        },
-    }
-    artifacts["integration_manifest"] = write_json_artifact(
-        output, "plan/integration-manifest.json", integration_manifest,
+    return finalize_project_plan(
+        output=output, out_rel=out_rel, artifacts=artifacts, profile=profile,
+        dag=dag, portfolio=portfolio, page_count=len(page_refs),
+        run_id=effective_run_id, project_key=project_key,
+        source_commit=source_commit, max_concurrency=max_concurrency,
+        max_attempts=max_attempts, closure_ready=closure_ready,
+        require_build_closure=require_build_closure,
+        build_ir_ready=build_ir_ready, build_ir=build_ir,
+        admission=admission, native_link_context=native_link_context,
+        compilation_facts=compilation_facts,
+        generated_closure=generated_closure,
+        closure_verification=closure_verification,
     )
-
-    ledger = ProjectLedger(output / "state/project-migration.sqlite3")
-    ledger_assignments = [
-        {
-            "unit_id": item["unit_id"],
-            "worker_id": item["worker_id"],
-            "role": item["role"],
-            "out_root": item["isolated_out_root"],
-            "max_attempts": item["max_attempts"],
-        }
-        for item in portfolio["assignments"]
-    ]
-    ledger.create_or_resume_run(
-        run_id=effective_run_id,
-        project_key=project_key,
-        source_commit=source_commit,
-        dag_sha256=portfolio["dag_sha256"],
-        units=portfolio["ledger_units"],
-        assignments=ledger_assignments,
-        portfolio=portfolio,
-        max_concurrency=max_concurrency,
-        max_attempts=max_attempts,
-        metadata={"artifacts": artifacts, "page_count": len(page_refs)},
-    )
-    unit_states = ledger.unit_states(effective_run_id)
-    schedule = schedule_portfolio(portfolio, unit_states, {})
-    artifacts["initial_schedule"] = write_json_artifact(
-        output, "plan/initial-schedule.json", schedule,
-    )
-    plan = {
-        "schema_version": 1,
-        "status": portfolio["status"],
-        "profile": profile,
-        "run_id": effective_run_id,
-        "project_key": project_key,
-        "source_commit": source_commit,
-        "artifacts": artifacts,
-        "ledger": {
-            "path": f"{out_rel}/state/project-migration.sqlite3",
-            "status": "bound",
-            "schema_version": LEDGER_SCHEMA_VERSION,
-            "resume_policy": "create_or_verify_immutable_inputs",
-        },
-        "portfolio": portfolio,
-        "scheduler": {
-            "status": schedule["status"],
-            "ready_worker_ids": [
-                item["worker_id"] for item in schedule["ready"]
-            ],
-            "deferred_count": len(schedule["deferred"]),
-        },
-        "execution": {
-            "profile": profile,
-            "model_launched": False,
-            "cargo_executed": False,
-            "make_executed": False,
-            "build_ir_ready": build_ir_ready,
-            "build_ir_semantic_sha256": build_ir["semantic_sha256"],
-            "native_link_config_resolved": admission.get(
-                "native_link_config_resolved",
-            ),
-            **native_link_stage.native_link_execution_summary(native_link_context),
-            "build_ir_blockers": admission.get("blockers", []),
-            "build_closure_ready": closure_ready,
-            "build_closure_policy": (
-                "required" if require_build_closure else "bounded-source"
-            ),
-            "build_closure_blockers": [
-                *generated_closure.get("blockers", []),
-                *closure_verification.get("blockers", []),
-            ],
-            "next_action": (
-                "materialize_condition_eligible_worker_requests"
-                if build_ir_ready and (closure_ready or not require_build_closure)
-                else ("resolve_generated_build_closure_blockers" if build_ir_ready
-                      else "resolve_build_ir_blockers")
-            ),
-        },
-        "claim_boundary": {
-            "semantic_gate": False,
-            "translation_coverage_numerator": 0,
-            "proof_class": "project-plan-only",
-            "competition_profile": profile == "competition",
-            "build_ir_verified": build_ir_ready,
-            "generated_build_closure_complete": closure_ready,
-            "build_closure_policy": (
-                "required" if require_build_closure else "bounded-source"
-            ),
-        },
-    }
-    plan["plan_sha256"] = content_sha256(plan)
-    stored_plan = display_result("plan", plan)
-    write_json_artifact(output, "project-migration-plan.json", stored_plan)
-    return plan
 
 
 __all__ = ["plan_project"]

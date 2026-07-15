@@ -10,6 +10,7 @@ import uuid
 from validation.tools._project_migration_harness import (
     build_ir_validation,
     orchestrator,
+    orchestrator_finalize,
 )
 
 
@@ -45,13 +46,17 @@ class HeldOutBuildIRAdmissionTestSupport:
                 orchestrator, "verify_build_ir_artifact", validator,
             ))
             for attribute, label in DOWNSTREAM_STAGES:
-                operation = getattr(orchestrator, attribute)
+                owner = (
+                    orchestrator_finalize
+                    if attribute == "ProjectLedger" else orchestrator
+                )
+                operation = getattr(owner, attribute)
                 stage = mock.Mock(
                     name=label,
                     side_effect=self.recording_call(events, label, operation),
                 )
                 stages[label] = stage
-                stack.enter_context(mock.patch.object(orchestrator, attribute, stage))
+                stack.enter_context(mock.patch.object(owner, attribute, stage))
             plan = orchestrator.plan_project(
                 source,
                 harness_root=self.harness,

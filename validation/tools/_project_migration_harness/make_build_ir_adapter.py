@@ -12,6 +12,7 @@ from .build_ir_toolchain_stage import (
     blocked_c_toolchain_stage, materialize_c_toolchain_stage,
 )
 from .build_ir_toolchains import make_tool_requests, merge_tool_requests
+from .make_build_ir_closure_artifacts import project_make_closure_artifacts
 from .make_build_ir_projection import (
     MAKE_RAW_ROLE, normalize_make_translation_units, project_make_build_ir,
 )
@@ -105,42 +106,7 @@ def materialize_make_build_ir_stage(
             artifacts.get("c_toolchain_evidence")
             if toolchain_evidence is not None else None
         ),
-    )
-    closure = {
-        "schema_version": 1,
-        "artifact_kind": "project-migration-make-target-closure",
-        "status": "ready_with_boundaries",
-        "report": report_reference,
-        "target_closure": list(build_ir["target_closure"]),
-        "blockers": [],
-        "command_graph_complete": True,
-        "repository_input_closure_complete": False,
-        "boundaries": [
-            {"kind": "make_repository_input_closure_incomplete"},
-            {"kind": "make_generated_outputs_not_materialized"},
-            {"kind": "make_external_dependencies_unresolved"},
-        ],
-        "claim_boundary": {
-            "semantic_gate": False, "translation_coverage_numerator": 0,
-        },
-    }
-    artifacts["generated_build_closure"] = write_json_artifact(
-        output, "plan/make-target-closure.json", closure,
-    )
-    closure_verification = {
-        "schema_version": 1,
-        "artifact_kind": "project-migration-make-target-closure-verification",
-        "status": "verified_with_boundaries",
-        "report_sha256": report_reference["sha256"],
-        "blockers": [],
-        "command_graph_verified": True,
-        "repository_input_closure_complete": False,
-        "semantic_gate": False,
-        "translation_coverage_numerator": 0,
-    }
-    artifacts["generated_build_closure_verification"] = write_json_artifact(
-        output, "plan/make-target-closure-verification.json",
-        closure_verification,
+        report_inputs_verified=True,
     )
     artifacts["build_ir"] = write_json_artifact(
         output, "plan/build-ir.json", build_ir,
@@ -149,11 +115,23 @@ def materialize_make_build_ir_stage(
     artifacts["build_ir_verification"] = write_json_artifact(
         output, "plan/build-ir-verification.json", verification,
     )
+    closure, closure_verification, closure_ready = (
+        project_make_closure_artifacts(
+            build_ir, artifacts["build_ir"], report_reference, verification,
+        )
+    )
+    artifacts["generated_build_closure"] = write_json_artifact(
+        output, "plan/make-target-closure.json", closure,
+    )
+    artifacts["generated_build_closure_verification"] = write_json_artifact(
+        output, "plan/make-target-closure-verification.json",
+        closure_verification,
+    )
     return {
         "build_ir": build_ir,
         "closure": closure,
         "closure_verification": closure_verification,
-        "closure_ready": False,
+        "closure_ready": closure_ready,
         "verification": verification,
     }
 
@@ -190,6 +168,7 @@ def reproject_make_build_ir(
         max_units=MAX_COMMANDS,
         toolchain_evidence=toolchain_evidence,
         toolchain_reference=toolchain_reference,
+        report_inputs_verified=True,
     )
 
 

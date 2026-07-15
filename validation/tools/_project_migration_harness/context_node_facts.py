@@ -48,6 +48,28 @@ def node_context_refs(
             add_fact("parser_boundary", blocker)
             for blocker in blockers_by_unit.get(unit_id, [])
         )
+        for macro in objects(
+            node.get("macro_definitions", []),
+            f"node {node_id} macro_definitions",
+        ):
+            replacement = macro.get("replacement")
+            if not isinstance(replacement, str):
+                raise ValueError("source macro replacement must be a string")
+            base.append(add_fact("source_macro_definition", {
+                "node_id": node_id,
+                "unit_id": unit_id,
+                "name": required_string(macro, "name"),
+                "parameters": macro.get("parameters"),
+                "replacement": replacement,
+                "source_path": required_string(macro, "source_path"),
+                "source_sha256": required_string(macro, "source_sha256"),
+                "directive_sha256": required_string(macro, "directive_sha256"),
+                "byte_offset": macro.get("byte_offset"),
+                "conditional_depth": macro.get("conditional_depth"),
+                "activation_status": required_string(
+                    macro, "activation_status"
+                ),
+            }))
         full[node_id] = base + _source_chunks(
             "function_source", node_id, content, chunk_limit, add_fact
         )

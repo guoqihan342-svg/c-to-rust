@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import json
 from typing import Any
 
 from .artifacts import canonical_json_bytes
@@ -99,6 +100,9 @@ def current_semantic_context_bound(
         raise LedgerError("candidate semantic compile context is invalid")
     source = candidate_source_reference(ledger.path, candidate)
     _data, repository_root = read_ledger_artifact(ledger.path, source)
+    worker_request = _worker_request_reference(
+        ledger.path, candidate, repository_root,
+    )
     contract_payload = compile_raw.get("sandbox", {}).get("contract", {})
     quarantine = compile_raw.get("quarantine", {})
     context = {
@@ -115,8 +119,32 @@ def current_semantic_context_bound(
         "compile_observation": dict(compile_raw_ref),
         "generation_sha256": str(quarantine.get("generation_sha256")),
         "toolchain_sha256": str(contract_payload.get("toolchain_sha256")),
+        "worker_request": worker_request,
     }
     return context, repository_root
+
+
+def _worker_request_reference(
+    ledger_path: Any, candidate: Mapping[str, Any], repository_root: Any,
+) -> dict[str, Any] | None:
+    try:
+        metadata = json.loads(str(candidate.get("attempt_metadata_json", "{}")))
+    except json.JSONDecodeError as error:
+        raise LedgerError("candidate worker request metadata is invalid") from error
+    if not isinstance(metadata, dict):
+        raise LedgerError("candidate worker request metadata is invalid")
+    path = metadata.get("request_path")
+    digest = metadata.get("request_sha256")
+    if path is None and digest is None:
+        return None
+    if not isinstance(path, str) or not isinstance(digest, str):
+        raise LedgerError("candidate worker request binding is incomplete")
+    data, root = read_ledger_artifact(
+        ledger_path, {"path": path, "sha256": digest},
+    )
+    if root != repository_root or not data:
+        raise LedgerError("candidate worker request repository binding drifted")
+    return {"path": path, "sha256": digest, "size_bytes": len(data)}
 
 
 __all__ = ["current_semantic_context", "current_semantic_context_bound"]

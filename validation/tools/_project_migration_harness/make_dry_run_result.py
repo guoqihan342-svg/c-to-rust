@@ -19,6 +19,7 @@ class MakeDryRunExecution:
     cleanup_verified: bool
     plan_sha256: str
     command_sha256: str
+    output_limit_exceeded: bool = False
 
 
 @dataclass(frozen=True, slots=True)

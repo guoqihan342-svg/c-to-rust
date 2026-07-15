@@ -56,6 +56,15 @@ def integrate_rust_project_ir(
             "rust_project_ir_completeness": dict(
                 rust_project_ir["interface_completeness"]
             ),
+            "cargo_targets": [
+                dict(item) for item in plan.last_good_manifest["cargo_targets"]
+            ],
+            "cargo_target_topology_sha256": plan.last_good_manifest[
+                "cargo_target_topology_sha256"
+            ],
+            "c_compilation_facts": plan.last_good_manifest[
+                "c_compilation_facts"
+            ],
             "last_good_manifest": {
                 "path": cargo_project.LAST_GOOD_MANIFEST,
                 "sha256": validation.digest(manifest_bytes),
@@ -65,6 +74,7 @@ def integrate_rust_project_ir(
             "generation": {"id": generation.name, "current_pointer": generations.CURRENT,
                            "immutable": True},
             "cargo_executed": False, "diagnostics": [],
+            "semantic_gate": False,
         }
     except cargo_project.ProjectInputError as error:
         status = "blocked" if error.code == "rust_project_ir_not_promoted" else "failed"

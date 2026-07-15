@@ -25,32 +25,23 @@ def render_cargo_project(
     by_unit = {item.group_id: item for item in candidates}
     module_by_unit = {str(item["unit_id"]): item for item in ir["modules"]}
     conditions = _module_conditions(ir)
+    topology = binding.get("target_topology")
+    if not isinstance(topology, list) or not topology:
+        topology = [_legacy_library_target(order)]
     build_script = native_link_build_script(ir)
     files: dict[str, bytes] = {
-        "Cargo.toml": _cargo_toml(ir, has_build_script=build_script is not None),
+        "Cargo.toml": _cargo_toml(
+            ir, topology, has_build_script=build_script is not None,
+        ),
         "Cargo.lock": _cargo_lock(str(ir["crate"]["crate_id"])),
         RUST_PROJECT_IR_FILE: canonical_rust_project_ir_bytes(ir),
     }
     if build_script is not None:
         files["build.rs"] = build_script
-    lines = ["// Generated only from a validated RustProjectIR.", ""]
     groups = []
     for unit_id in order:
         candidate = by_unit[unit_id]
         module = module_by_unit[unit_id]
-        module_id = str(module["module_id"])
-        condition = conditions.get(module_id)
-        if condition:
-            lines.append(f"#[cfg({condition})]")
-        lines.append(f"mod {candidate.module_name};")
-        if candidate.public_symbols:
-            if condition:
-                lines.append(f"#[cfg({condition})]")
-            lines.append(
-                f"pub use self::{candidate.module_name}::"
-                f"{{{', '.join(candidate.public_symbols)}}};"
-            )
-        lines.append("")
         files[str(module["rust_path"])] = candidate.source
         groups.append({
             "group_id": unit_id, "module_name": candidate.module_name,
@@ -63,7 +54,11 @@ def render_cargo_project(
             "required_symbols": list(candidate.required_symbols),
             "unsafe_count": candidate.unsafe_count,
         })
-    files["src/lib.rs"] = ("\n".join(lines).rstrip() + "\n").encode("ascii")
+    for target in topology:
+        path = str(target["root_path"])
+        files[path] = _target_root(
+            target, by_unit, module_by_unit, conditions,
+        )
     refs = [_ref(path, data) for path, data in sorted(files.items())]
     dag_payload = {
         "dependencies": {
@@ -83,6 +78,9 @@ def render_cargo_project(
             cargo_project.canonical_json_bytes(dag_payload)
         ).hexdigest(),
         "native_link": native_link_generation_binding(ir, build_script),
+        "c_compilation_facts": binding.get("c_compilation_facts"),
+        "cargo_targets": [dict(item) for item in topology],
+        "cargo_target_topology_sha256": content_sha256(topology),
         "accepted_groups": groups, "unsafe_policy": dict(unsafe_policy),
         "cargo_executed": False, "files": refs,
     }
@@ -116,21 +114,108 @@ def _module_conditions(ir: Mapping[str, Any]) -> dict[str, str]:
     return result
 
 
+def _legacy_library_target(order: list[str]) -> dict[str, Any]:
+    return {
+        "target_id": "cargo-target-legacy-library",
+        "kind": "library", "name": "legacy_library",
+        "root_path": "src/lib.rs", "root_unit_id": None,
+        "module_unit_ids": list(order), "build_ir_target_ids": [],
+    }
+
+
+def _target_root(
+    target: Mapping[str, Any],
+    by_unit: Mapping[str, cargo_project.CandidateSource],
+    module_by_unit: Mapping[str, Mapping[str, Any]],
+    conditions: Mapping[str, str],
+) -> bytes:
+    kind = str(target["kind"])
+    root_unit = target.get("root_unit_id")
+    units = target["module_unit_ids"]
+    lines = ["// Generated only from a validated RustProjectIR.", ""]
+    for unit_id in units:
+        if unit_id == root_unit:
+            continue
+        candidate = by_unit[str(unit_id)]
+        module = module_by_unit[str(unit_id)]
+        condition = conditions.get(str(module["module_id"]))
+        if condition:
+            lines.append(f"#[cfg({condition})]")
+        relative = _module_relative_path(kind, str(module["rust_path"]))
+        if relative is not None:
+            lines.append(f'#[path = "{relative}"]')
+        lines.append(f"mod {candidate.module_name};")
+        if candidate.public_symbols:
+            if condition:
+                lines.append(f"#[cfg({condition})]")
+            lines.append(
+                f"pub use self::{candidate.module_name}::"
+                f"{{{', '.join(candidate.public_symbols)}}};"
+            )
+        lines.append("")
+    if root_unit is not None:
+        module = module_by_unit[str(root_unit)]
+        if str(module["module_id"]) in conditions:
+            raise ValueError("rust_project_ir_target_root_condition_unsupported")
+        include = _root_include_path(kind, str(module["rust_path"]))
+        lines.append(f'include!("{include}");')
+    return ("\n".join(lines).rstrip() + "\n").encode("ascii")
+
+
+def _module_relative_path(kind: str, rust_path: str) -> str | None:
+    relative = rust_path.removeprefix("src/")
+    if kind == "library":
+        return None
+    if kind == "bin":
+        return f"../{relative}"
+    if kind == "test":
+        return f"../src/{relative}"
+    raise ValueError("rust_project_ir_target_kind_unsupported")
+
+
+def _root_include_path(kind: str, rust_path: str) -> str:
+    relative = rust_path.removeprefix("src/")
+    if kind == "bin":
+        return f"../{relative}"
+    if kind == "test":
+        return f"../src/{relative}"
+    raise ValueError("rust_project_ir_target_root_invalid")
+
+
 def _cargo_toml(
-    ir: Mapping[str, Any], *, has_build_script: bool,
+    ir: Mapping[str, Any], topology: list[Mapping[str, Any]], *,
+    has_build_script: bool,
 ) -> bytes:
     crate = ir["crate"]
     lines = [
         "[package]", f'name = "{crate["crate_id"]}"', 'version = "0.0.0"',
-        f'edition = "{crate["edition"]}"', "publish = false", "", "[lib]",
-        'path = "src/lib.rs"',
-        "crate-type = ["
-        + ", ".join(f'"{item}"' for item in crate["crate_types"])
-        + "]",
-        "", "[features]",
+        f'edition = "{crate["edition"]}"', "publish = false",
     ]
     if has_build_script:
-        lines[5:5] = ['build = "build.rs"']
+        lines.append('build = "build.rs"')
+    for target in topology:
+        kind = str(target["kind"])
+        lines.append("")
+        if kind == "library":
+            lines.extend([
+                "[lib]", f'path = "{target["root_path"]}"',
+                "crate-type = ["
+                + ", ".join(f'"{item}"' for item in crate["crate_types"])
+                + "]",
+            ])
+        elif kind == "bin":
+            lines.extend([
+                "[[bin]]", f'name = "{target["name"]}"',
+                f'path = "{target["root_path"]}"',
+            ])
+        elif kind == "test":
+            lines.extend([
+                "[[test]]", f'name = "{target["name"]}"',
+                f'path = "{target["root_path"]}"', "harness = true",
+            ])
+        else:
+            raise ValueError("rust_project_ir_target_kind_unsupported")
+    lines.extend(["", "[features]"])
     features = {item["feature_id"]: item for item in ir["features"]}
     defaults = sorted(
         str(item["name"]) for item in features.values() if item["default"]

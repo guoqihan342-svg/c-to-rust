@@ -10,16 +10,18 @@ from .artifacts import canonical_json_bytes, checked_relative_path, content_sha2
 from .build_facts import is_linklike
 from .build_ir import canonical_build_ir_bytes, is_sha256
 from .build_ir_validation import BuildIRValidationError, validate_build_ir
+from .rust_project_ir_native import DERIVED_INTERFACE_PRODUCER, validate_bound_native_link_requirements
+from .rust_project_ir_compilation_facts import (
+    reopen_manifest_compilation_facts, validate_dag_metadata,
+)
+from .rust_project_ir_reopen_facts import recompute_bound_interface_plan
 from .rust_project_ir_validation import RustProjectIRError, validate_rust_project_ir
 from .rust_project_ir_cohort import PARENT_DAG_KEY, validate_cohort_dag
-from .rust_project_ir_native import validate_bound_native_link_requirements
-
-
 MAX_BOUND_ARTIFACT_BYTES = 64 * 1024 * 1024
 _DAG_REQUIRED_KEYS = {"schema_version", "dag", "dag_order"}
 _DAG_ALLOWED_KEYS = _DAG_REQUIRED_KEYS | {
     "unsafe_policy", "generated_build_closure", "build_ir", "claim_boundary",
-    "profile", PARENT_DAG_KEY,
+    "c_compilation_facts", "profile", PARENT_DAG_KEY,
 }
 _EVIDENCE_SECTIONS = (
     "modules", "public_api", "shared_types", "global_ownership",
@@ -53,21 +55,54 @@ def reopen_rust_project_ir_bindings(
         build_unit_count += len(payload["translation_units"])
     if build_unit_count == 0:
         _fail("RustProjectIR BuildIR closure has no translation units")
-    for candidate in bindings["candidates"]:
-        _read_reference(artifact_root, candidate["source"])
+    try:
+        compilation_facts = reopen_manifest_compilation_facts(
+            artifact_root, dag, bindings["c_compilation_facts"],
+            list(build_payloads.values()),
+        )
+    except (OSError, TypeError, ValueError) as error:
+        raise RustProjectIRError(
+            f"bound C compilation facts validation failed: {error}"
+        ) from error
+    candidate_sources = {
+        str(candidate["unit_id"]): _read_reference(
+            artifact_root, candidate["source"],
+        )
+        for candidate in bindings["candidates"]
+    }
     _validate_domain_coverage(value, dag, dag_units, build_payloads)
-    return {
+    result = {
         "schema_version": 1,
         "status": "domain-bound",
-        "reference_count": 1 + len(build_payloads) + len(bindings["candidates"]),
+        "reference_count": (
+            1 + len(build_payloads) + len(bindings["candidates"])
+            + int(compilation_facts is not None)
+        ),
         "bindings_sha256": content_sha256(bindings),
         "dag_unit_count": len(dag_units),
         "build_ir_count": len(build_payloads),
         "build_ir_translation_unit_count": build_unit_count,
         "candidate_count": len(bindings["candidates"]),
+        "c_compilation_facts": compilation_facts,
         "semantic_gate": False,
         "semantic_pass": False,
     }
+    if value["interface_completeness"]["producer"] == DERIVED_INTERFACE_PRODUCER:
+        plan = recompute_bound_interface_plan(
+            value, dag, list(build_payloads.values()), candidate_sources,
+            compilation_facts_complete=bool(
+                bindings["c_compilation_facts"] is not None
+                and compilation_facts is not None
+                and compilation_facts["coverage_complete"]
+            ),
+        )
+        result.update({
+            "target_topology": plan["target_topology"],
+            "target_topology_sha256": plan["target_topology_sha256"],
+            "topology_verified": plan["topology_verified"],
+            "topology_blockers": plan["topology_blockers"],
+        })
+    return result
 
 
 def _validate_build_ir(payload: Mapping[str, Any], data: bytes) -> None:
@@ -111,39 +146,11 @@ def _validate_migration_dag(payload: Mapping[str, Any]) -> set[str]:
             or any(positions[item] >= positions[unit] for item in dependencies)
         ):
             _fail("bound migration DAG dependency closure is invalid")
-    _validate_dag_metadata(payload)
+    try:
+        validate_dag_metadata(payload, _artifact_identity)
+    except ValueError as error:
+        raise RustProjectIRError(str(error)) from error
     return units
-
-
-def _validate_dag_metadata(payload: Mapping[str, Any]) -> None:
-    profile = payload.get("profile")
-    if profile is not None and profile not in {"competition", "development"}:
-        _fail("bound migration DAG profile is invalid")
-    boundary = payload.get("claim_boundary")
-    if boundary is not None and boundary != {
-        "semantic_gate": False, "translation_coverage_numerator": 0,
-    }:
-        _fail("bound migration DAG claim boundary is invalid")
-    policy = payload.get("unsafe_policy")
-    if policy is not None:
-        if not isinstance(policy, Mapping) or set(policy) != {
-            "allow_unsafe", "max_total", "max_per_group",
-        } or not isinstance(policy.get("allow_unsafe"), bool):
-            _fail("bound migration DAG unsafe policy is invalid")
-        for key in ("max_total", "max_per_group"):
-            limit = policy.get(key)
-            if limit is not None and (
-                isinstance(limit, bool) or not isinstance(limit, int) or limit < 0
-            ):
-                _fail("bound migration DAG unsafe policy is invalid")
-    generated = payload.get("generated_build_closure")
-    if generated is not None:
-        if not isinstance(generated, Mapping) or set(generated) != {
-            "status", "closure", "verification",
-        } or generated.get("status") not in {"bound", "blocked"}:
-            _fail("bound migration DAG generated closure binding is invalid")
-        _artifact_identity(generated.get("closure"))
-        _artifact_identity(generated.get("verification"))
 
 
 def _validate_domain_coverage(

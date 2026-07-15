@@ -155,7 +155,7 @@ def _invoke_fixed_adapter(
     try:
         with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
             process = subprocess.Popen(
-                argv, cwd=repository_root, env={"PYTHONHASHSEED": "0", "PYTHONUTF8": "1"},
+                argv, cwd=repository_root, env=_adapter_environment(),
                 stdin=subprocess.PIPE, stdout=stdout, stderr=stderr, shell=False,
                 preexec_fn=_apply_resource_limits,
             )
@@ -188,6 +188,16 @@ def _apply_resource_limits() -> None:
     for name, resource_id in keys.items():
         value = FIXED_RESOURCE_LIMITS[name]
         resource.setrlimit(resource_id, (value, value))
+
+
+def _adapter_environment() -> dict[str, str]:
+    result = {"PYTHONHASHSEED": "0", "PYTHONUTF8": "1"}
+    for key in ("PATH", "HOME", "CARGO_HOME", "RUSTUP_HOME"):
+        value = os.environ.get(key)
+        if isinstance(value, str) and value and "\x00" not in value:
+            result[key] = value
+    result.setdefault("PATH", os.defpath)
+    return result
 
 
 def _execution_blocker(value: _AdapterExecution) -> str | None:
@@ -261,8 +271,19 @@ def _adapter_worker_main(gate_family: str) -> int:
         return 65
     if not isinstance(request, dict) or canonical_json_bytes(request) != data:
         return 65
-    sys.stderr.write("dedicated semantic adapter backend is not configured\n")
-    return 78
+    try:
+        from .candidate_semantic_backend import run_semantic_backend
+        from .candidate_semantic_backend_inputs import SemanticBackendError
+
+        observation = run_semantic_backend(gate_family, request, Path.cwd())
+    except SemanticBackendError as error:
+        sys.stderr.write(f"{error.code}\n")
+        return 78
+    except Exception:
+        sys.stderr.write("semantic_backend_internal_error\n")
+        return 70
+    sys.stdout.buffer.write(canonical_json_bytes(observation))
+    return 0
 
 
 if __name__ == "__main__":

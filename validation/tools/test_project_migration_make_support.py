@@ -42,6 +42,46 @@ class ControlledMakeBackend:
         return self.execution_value
 
 
+class ControlledCollectorBackend:
+    def __init__(self, toolchain_sha256: str, stdout: bytes) -> None:
+        self.toolchain_sha256 = toolchain_sha256
+        self.stdout = stdout
+        self.preflight_calls = 0
+        self.execute_calls = 0
+
+    def preflight(self, plan, *, project_root, runtime_root):
+        self.preflight_calls += 1
+        return MakeDryRunPreflight(
+            backend="controlled-collector-backend",
+            backend_version="test-1",
+            plan_sha256=plan["plan_sha256"],
+            toolchain_sha256=self.toolchain_sha256,
+            launcher_sha256="1" * 64,
+            make_sha256="2" * 64,
+            probe_observation_sha256="3" * 64,
+            capability_results=tuple(
+                (name, True) for name in MAKE_REQUIRED_CAPABILITIES
+            ),
+            cleanup_ready=True,
+        )
+
+    def execute(
+        self, make_binary, make_args, *, project_root, runtime_root,
+        plan, preflight,
+    ):
+        self.execute_calls += 1
+        return MakeDryRunExecution(
+            stdout=self.stdout,
+            stderr=b"",
+            returncode=0,
+            timed_out=False,
+            command_started=True,
+            cleanup_verified=True,
+            plan_sha256=plan["plan_sha256"],
+            command_sha256=content_sha256(plan["command"]),
+        )
+
+
 def artifact_ref(path: str, data: bytes) -> dict[str, Any]:
     return {
         "path": path,
@@ -56,8 +96,12 @@ def controlled_success(
 ) -> tuple[Any, dict[str, Any], bytes]:
     preflight = MakeDryRunPreflight(
         backend="controlled-test-backend",
+        backend_version="test-1",
         plan_sha256=plan["plan_sha256"],
         toolchain_sha256=toolchain_ref["sha256"],
+        launcher_sha256="1" * 64,
+        make_sha256="2" * 64,
+        probe_observation_sha256="3" * 64,
         capability_results=tuple(
             (name, True) for name in MAKE_REQUIRED_CAPABILITIES
         ),
@@ -120,8 +164,16 @@ class MakeBundleFactory:
         )
         stdout = self.stdout()
         stderr = b""
-        self.write_bytes(root, "evidence/raw/stdout.bin", stdout)
-        self.write_bytes(root, "evidence/raw/stderr.bin", stderr)
+        stdout_relative = (
+            "evidence/cas/raw-stdout/"
+            f"{hashlib.sha256(stdout).hexdigest()}.bin"
+        )
+        stderr_relative = (
+            "evidence/cas/raw-stderr/"
+            f"{hashlib.sha256(stderr).hexdigest()}.bin"
+        )
+        self.write_bytes(root, stdout_relative, stdout)
+        self.write_bytes(root, stderr_relative, stderr)
         makefile = file_binding(root, root / "Makefile")
         source = file_binding(root, root / "src/unit.c")
         prebuilt = file_binding(root, root / "vendor/prebuilt.a")
@@ -145,8 +197,8 @@ class MakeBundleFactory:
             raise AssertionError("controlled sandbox binding drift")
         report = create_make_dry_run_report(
             outcome=outcome,
-            raw_stdout_ref=file_binding(root, root / "evidence/raw/stdout.bin"),
-            raw_stderr_ref=file_binding(root, root / "evidence/raw/stderr.bin"),
+            raw_stdout_ref=file_binding(root, root / stdout_relative),
+            raw_stderr_ref=file_binding(root, root / stderr_relative),
             makefile_ref=makefile, source_refs=[source],
             input_refs=[source, prebuilt],
             toolchain_ref=toolchain, sandbox_ref=sandbox,
@@ -168,6 +220,8 @@ class MakeBundleFactory:
             }]) + "\n")
         return {
             "root": root, "harness": harness,
+            "stdout_relative": stdout_relative,
+            "stderr_relative": stderr_relative,
             "selection": MakeReportSelection(
                 report_path, report_ref["sha256"], report_ref["size_bytes"],
             ),
@@ -209,5 +263,6 @@ class MakeBundleFactory:
 
 
 __all__ = [
-    "MakeBundleFactory", "artifact_ref", "controlled_success",
+    "ControlledCollectorBackend", "MakeBundleFactory", "artifact_ref",
+    "controlled_success",
 ]

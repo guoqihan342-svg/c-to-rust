@@ -88,7 +88,7 @@ class MakeVerticalClosureTests(unittest.TestCase):
         self.assertTrue(boundary["command_graph_complete"])
         self.assertTrue(boundary["selected_translation_units_complete"])
         self.assertFalse(boundary["repository_input_closure_complete"])
-        self.assertFalse(boundary["external_dependencies_complete"])
+        self.assertTrue(boundary["external_dependencies_complete"])
         self.assertEqual(
             [["-Lbuild"], ["-lunit"]],
             sorted(item["arguments"] for item in build_ir["external_dependencies"]),
@@ -132,8 +132,8 @@ class MakeVerticalClosureTests(unittest.TestCase):
     def test_report_and_every_bound_input_drift_block_reopen(self) -> None:
         mutations = {
             "report": ("output", "plan/make-dry-run-report.json"),
-            "stdout": ("root", "evidence/raw/stdout.bin"),
-            "stderr": ("root", "evidence/raw/stderr.bin"),
+            "stdout": ("root", "<stdout>"),
+            "stderr": ("root", "<stderr>"),
             "plan": ("root", "evidence/make-plan.json"),
             "toolchain": ("root", "evidence/toolchain.json"),
             "preflight": ("root", "evidence/sandbox.json"),
@@ -145,6 +145,10 @@ class MakeVerticalClosureTests(unittest.TestCase):
             with self.subTest(name=name):
                 bundle, output, artifacts = self.materialize(f"drift-{name}")
                 base = output if location == "output" else bundle["root"]
+                if relative == "<stdout>":
+                    relative = bundle["stdout_relative"]
+                elif relative == "<stderr>":
+                    relative = bundle["stderr_relative"]
                 path = base / relative
                 path.write_bytes(path.read_bytes() + b"drift")
                 verification = verify_build_ir_artifact(
@@ -167,7 +171,7 @@ class MakeVerticalClosureTests(unittest.TestCase):
         real_verify = verify_build_ir_artifact
 
         def drift_before_admission(repo_root, artifact_root, reference):
-            raw = bundle["root"] / "evidence/raw/stdout.bin"
+            raw = bundle["root"] / bundle["stdout_relative"]
             raw.write_bytes(raw.read_bytes() + b"drift")
             return real_verify(repo_root, artifact_root, reference)
 

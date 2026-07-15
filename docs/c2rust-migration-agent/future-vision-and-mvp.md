@@ -28,7 +28,7 @@ input.c + compile context
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 / libuv AI-first 0/1 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑。新 libuv DeepSeek 辅助实跑完成 1 次 initial + 3 次 repair，provider-ready 但 exact 未通过，明确不具备比赛资格 |
 | 当前翻译主线 | P0-A19 / P0-A10 / P0-A18c | h5a-h5d 已闭合 compiler/runtime/ABI repair facts 与 compiler-header declaration-only 分类；下一步进入陌生仓库整项目发现、拆解、并行候选、Cargo 集成与项目级 repair，不再围绕单个已知切片扩语法 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |
-| 最近开发阶段 | P0-A19 BuildIR/frontier/verifier 收口 | 任意仓库 inventory、SCC/DAG、构建闭包、实际 C toolchain 绑定、分页 ContextPack、隔离 OpenCode、SQLite ledger、RustProjectIR/Cargo generation、whole-cohort Cargo 诊断分类、原始字节 CAS、固定 Cargo linker trace、实际 ELF/ar 重开、ABI/顺序/符号门和项目级 native settlement 已落地；合法的接口完整度状态转换、运行时 AI 符号候选、独立 verifier 进程、最终 CompletionCoordinator 接线、显式沙箱 Make 采集、frontier 懒加载和真实 held-out 语义验收仍未完成。易变测试总数只放在 commit-bound 阶段证据，不再写入本状态行 |
+| 最近开发阶段 | P0-A19 BuildIR/frontier/verifier 收口 | 任意仓库 inventory、SCC/DAG、显式沙箱 Make 采集、实际 C toolchain 语法见证、分页 ContextPack、隔离 OpenCode、SQLite ledger、RustProjectIR/Cargo generation、whole-cohort Cargo 诊断分类、原始字节 CAS、固定 Cargo linker trace、实际 ELF/ar 重开、ABI/顺序/符号门和项目级 native settlement 已落地；toolchain-provided 外部链接参数解析 producer、合法接口完整度状态转换、运行时 AI 符号候选、独立 verifier 进程、最终 CompletionCoordinator、完整 frontier 懒加载和真实 held-out 语义验收仍未完成。易变测试总数只放在 commit-bound 阶段证据，不再写入本状态行 |
 | 最近一次严格证据快照 | `25/33` | 不可变历史 run `20260711T-finite-p0-t31`；`stress_loops=0`，该快照仍有 8 项 evidence 漂移。P0-C1 应以新替代运行关闭，不得改写历史 |
 | 当前证明等级 | `wsl-local-simulation` | 可用于开发和近似验收，不能冒充 `competition-exact` |
 
@@ -695,6 +695,8 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
       - [x] A19d3d1：生产 generation API、`integrate-verified` 与 candidate quarantine 已移除 manifest+descriptor 写入口，只消费重开且无协调冲突的 RustProjectIR；direct `integrate` CLI 已删除。generation 内嵌 canonical IR，并绑定 domain/coordinator/interface SHA；integration verifier 会从原 artifact root 重建同一 generation 逐字节比较，旧 descriptor-only 生成器仅留在测试 support。
       - [ ] A19d3d2：从当前 flat library module 投影扩展到经验证的嵌套 module tree、多 crate/bin/example、完整 target/feature/cfg、初始化/析构和 native link 配置，并在真实多文件 Cargo build/test 与 project-final 全门禁通过后才关闭 A19d3。
         - [ ] **A19d3d2a：把目标 C 仓库 `tests/` 下的测试作为一等 test target 完整迁移，而不是仅因其出现在 `compile_commands.json` 就当作普通 library module 翻译。** host 必须从 BuildIR 及 CMake/CTest/Meson/Make 测试元数据中发现并内容绑定每个测试目标、C 测试源码、runner、fixture/data、工作目录、环境、参数、expected exit/signal 与 timeout；RustProjectIR 再确定性投影为 `#[test]`、`tests/*.rs` 或显式 Rust test binary，并保持目标依赖和执行语义。每个发现的 C test target 必须一一对应 Rust test target，或者产生带证据的 fail-closed refusal；验收必须同时运行原 C suite oracle 与 Rust suite，比较测试集合与逐项结果，并拒绝 `cargo test` 为 0 项、漏测、静默删除断言或只编译不执行。至少用两个 held-out C 项目证明不存在 `tests/` 路径、测试名称或项目身份硬编码。
+          - [x] A19d3d2a1：新增身份中立的 `c2rust-baseline` 整项目执行入口：严格绑定仓库内 compile database，实际运行 C2Rust，通用修复生成代码，发现每个 translated public `main`，确定性生成 Rust wrapper，保留原编译工作目录，并执行所有 package 的 Cargo all-targets check 及每个 wrapper。同一生产路径已在 WSL 本地模拟中通过四个固定项目：FlashDB 7 TU/2 wrapper/24 项原测试，报告 SHA-256 `48c94540ef05b88763ffeb2477dd2c17623de68a7b1d5e211da3157fc78aa8f2`；cJSON 27 TU/23 wrapper/CTest 22/22，报告 SHA-256 `f5ca5c8920104c3f1061f6a6e453450c8184e538a1dfc3004a994c5b15e65885`；libyaml 22 TU/14 wrapper/CTest 3/3，报告 SHA-256 `35c265abc83b1a6d6931945b7db2951628a42e5ff67b32c584808eb0cf8f3b0e`；Lua 34 TU/1 wrapper，报告 SHA-256 `d5874a59c505c6015a9e797c88ca04e0ce8d8a254c8e503c05a587e30274a446`。Lua 推动了身份中立的 Rust 1.95 `VaList` API 结构化修复；cJSON、libyaml、Lua 都参与通用规则开发，不计 held-out。该入口固定 `semantic_gate=false`、numerator 0；尚未从通用测试元数据证明 C/Rust test target 一一对应，也未拒绝所有 zero-test/断言删除情形，因此 A19d3d2a 与 A19d3d2 保持未勾选。
+          - [ ] A19d3d2a2：把 BuildIR 中经内容绑定的编译变体、链接命令、动态导出/native library、测试 runner 和资源限制投影进 C2Rust/Cargo 验收。未知项目遇到 computed goto 等工具不支持特性时，只能从项目自身元数据发现并先通过原生 oracle 的可移植构建变体；Rust 侧必须继承等价链接语义和显式资源配置，并把原 C/转换后测试命令、逐项结果和差异写入正式报告。Lua 压测已证明手工选择 `LUA_USE_JUMPTABLE=0`、补 `--export-dynamic`、恢复默认栈后官方全套可通过，但这些手工步骤不计本项完成证据，生产代码也禁止读取 Lua 或任何项目身份。
 
   **A19e 项目级验证与精确 repair**
 
@@ -712,8 +714,9 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
       - [x] A19e4c2：compile evidence 同时绑定并在 final/promotion 重开 candidate source、integration manifest、quarantine manifest/generation state、verification candidate-set、固定 Cargo command、toolchain 和 sandbox contract；任一漂移拒绝晋升。
     - [x] A19e4d：把可定位 Rust 模块的编译诊断回投给对应 repairer；沙箱/工具链/超时/资源等环境阻塞保持 blocked/deferred，不能写成候选语义失败。无法定位到单元的项目错误进入项目级 repair，不得随机归因。
     - [ ] A19e4e：为 C oracle/Rust replay/diff、negative、unsafe/alias、ABI 与 candidate final gate 接入专属 host-owned runner 和专属 raw observation schema；底层通用 ledger API 不允许写入调用方构造的 pass。promotion 前重新派生同一 verification context，任一 gate、源码、generation 或 cohort 过期均拒绝 last-good。
-      - [x] A19e4e1：四类 candidate semantic runner 已具备固定计划、严格 raw schema、调用方 authority 拒绝和 stale-context 重开；未配置真实后端时 fail closed，不产生 pass。
+      - [x] A19e4e1：四类 candidate semantic runner 已具备固定计划、严格 raw schema、调用方 authority 拒绝和 stale-context 重开；不支持的签名、缺失原编译器事实或不可用后端均 fail closed，不产生 pass。
       - [ ] A19e4e2：接入可实际执行的 oracle/replay/diff、negative、unsafe/alias 与 ABI 后端，并由 A19e7/A19e8 receipt 支撑 promotion 和 `project-final` 复验。
+        - [x] A19e4e2a：依赖闭合的标量函数 lane 已在 Linux bubblewrap 内实际执行 C oracle、Rust replay、diff、`forbid(unsafe_code)` 和 ABI；行为样本在候选固定后由宿主 nonce 生成 32 个 held-out case，negative 门实际编译运行首项 `wrapping_add(1)` mutant，旧 6 样本查表候选会被拒绝。C oracle driver 还必须与 CIndex 中原 BuildIR 编译器 basename、binary SHA 和大小一致。WSL 4 项实跑在 298.420 秒内通过；该子项不覆盖依赖函数、指针/记录、项目测试或 A19e7 独立进程 receipt，因此不关闭 A19e4e2。
     - [ ] A19e4f：CLI 完成命令只编排固定 adapter，并在所有单元 last-good 后运行 integration、Cargo、项目 oracle/negative/unsafe-ABI 和 project final；任何 model JSON、测试构造 ledger 或仅 compile 通过都不能完成项目。
   - [ ] **A19e5：单一状态转移权威、声明式 FSM 与 invariant audit**。
     - [ ] A19e5a：用声明式 FSM 列出 unit/run 的状态、合法命令、前置条件、事件和后置状态；只有 `TransitionAuthority` 持有更新 `migration_units` 及其他 semantic projection 的数据库能力，lease、worker、verifier、repair、promotion、project gate 和 CLI 模块只能提交 typed command，禁止直接 `UPDATE` 或绕过转移表。
@@ -757,13 +760,14 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 
   - [x] 生产编排包与相关 agent 配置通过已知项目/函数/路径身份静态扫描，覆盖 raw text、常量拼接、bytes、SHA 前缀/全值、hex/base64 编码；图结构与 Cargo 输出已有重命名等价测试，并新增无项目身份的双翻译单元规划用例。
   - [x] 建立固定有限 held-out 合同工具：5–20 个不重复项目、至少 12 个 construct family、至少 2 个未参与规则开发项目，显式绑定 repo/commit/tree/compile DB，并拒绝身份分派和近重复项目。真实模式禁止 case 自报 translation evidence，只能按 plan 推导 ledger 路径后只读重开 SQLite，复验原仓库树、compile DB、source/generated closure、AI provider evidence、每个 candidate gate、不可变 candidate set 和 project final bundle；资源数量/大小有界，离线合同通过不能冒充翻译成功。
+  - [x] 建立通用 raw C2Rust 整项目执行非回归基线，并在同一生产路径上实际跑通固定提交的 FlashDB、cJSON 和 libyaml：合计 56 个 TU、39 个 translated executable，三个项目的原生测试与迁移后 wrapper 均通过。生产实现不读取项目/测试/函数身份，工作目录与路径规范化均来自 compile database/C2Rust 规则，报告与原始流内容寻址且公开摘要清除宿主绝对路径。三个项目均参与了本阶段规则开发，因此结果不是 held-out、AI-primary 或 final semantic acceptance，不能关闭下一项或 P0-A19 父项。
   - [ ] 在不超过 20 个有限 case 中覆盖至少 5 个真实项目、整项目构建和 12 个不同 construct family；至少 2 个项目不得参与对应规则开发。禁止 1,000/10,000 轮和重复近似切片放大成功率。
 
   P0-A10 的现有 12 项是函数/fragment 输入与 exact 路径非回归基线；A19f 是未知仓库的整项目 BuildIR、迁移 DAG、Cargo 重建和项目级语义验收。两者共享反特判规则，但任何一方通过都不能替另一方关闭。
 
   **下一执行顺序（按完成条件推进，不按测试用例身份推进）**：
 
-  1. A19a7c-A19a8：先闭合 canonical BuildIR validator、真实 toolchain 绑定与显式沙箱 Make 采集；A19a6/A19a7d 可按 adapter 分线程推进，但任何下游不得消费 adapter 私有 shape，也不得把 dry-run 采集冒充语义证据。
+  1. A19a7c-A19a8：canonical BuildIR validator、真实 toolchain 绑定、显式沙箱 Make 采集和 7/7 原编译器语法见证已落地；下一步由通用 toolchain 参数探针生成并重开外部链接解析记录。当前 FlashDB 的两个 `-lpthread` 依赖因没有该记录而正确保持 `closure_complete=false`，禁止按库名白名单放行或把 dry-run 采集冒充语义证据。
   2. A19b3-A19b4：闭合可重开的 CIndex blocker/source CAS、声明/type/macro facts、确定性选择回执和 frontier 懒加载；required facts、预算或 receipt 未闭合的 assignment 不得启动 AI worker。
   3. A19e5a-A19e5d：建立 TransitionAuthority、声明式 FSM、事件投影和 invariant audit；并行定义 A19e7 verifier IPC/receipt 与 A19e8 SandboxBackend capability contract，但在单一状态写入权威闭合前不接入 pass。
   4. A19c4c 与 A19e8：以已闭合的 A19e4a-A19e4d candidate-set/quarantine/宿主 compile/repair 链为基线，在不可降级沙箱上用 verifier-owned failure、critical-path、cost 和 convergence facts 驱动信息增益调度；模型自评分不得进入优先级。SandboxBackend 可按 bubblewrap/等价实现分线程开发，所有实现共享同一 conformance suite。

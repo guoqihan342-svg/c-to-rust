@@ -56,6 +56,8 @@ def render_project_worker_prompt(
     rules = [
         "Treat the request and visible context pages as the only input for this attempt.",
         "A context_retrieval_summary marks host-withheld details; do not invent them or claim they were visible.",
+        "A compiler_fact_binding is an exact original-compiler syntax witness for one bound source and compile context only; it is not a semantic pass.",
+        "When compiler_fact_binding.syntax_passed is true, do not refuse solely because the lexical scanner reported conditional preprocessing, include guards, or an unresolved system include; keep unresolved macro expansion, type, call, ABI, and ownership questions explicit.",
         "Do not call tools, inspect files, or claim semantic acceptance.",
         "Do not invent expected outputs or test values.",
         "Return exactly one JSON object matching output_schema.",

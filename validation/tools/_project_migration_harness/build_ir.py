@@ -155,6 +155,7 @@ def translation_units_for_index(build_ir: Mapping[str, Any]) -> list[dict[str, A
             "working_directory": item["working_directory"],
             "compiler": item["compiler"],
             "compiler_wrappers": list(item["compiler_wrappers"]),
+            "toolchain_id": item["toolchain_id"],
             "language": item["language"],
             "includes": copy.deepcopy(item["includes"]),
             "defines": copy.deepcopy(item["defines"]),

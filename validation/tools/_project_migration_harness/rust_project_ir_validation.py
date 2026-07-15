@@ -120,10 +120,13 @@ def reopen_rust_project_ir_bindings(
     return reopen(value, artifact_root)
 def _bindings(value: Any) -> tuple[dict[str, dict[str, Any]], set[str]]:
     if not isinstance(value, Mapping) or set(value) != {
-        "migration_dag", "build_ir", "candidates",
+        "migration_dag", "build_ir", "c_compilation_facts", "candidates",
     }:
         _fail("RustProjectIR bindings are invalid")
     _artifact_ref(value["migration_dag"])
+    compilation_facts = value["c_compilation_facts"]
+    if compilation_facts is not None:
+        _artifact_ref(compilation_facts)
     build_refs = value["build_ir"]
     candidate_refs = value["candidates"]
     if not isinstance(build_refs, list) or not build_refs:

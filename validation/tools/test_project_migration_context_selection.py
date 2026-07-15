@@ -7,6 +7,9 @@ from validation.tools._project_migration_harness.context_contracts import canoni
 from validation.tools._project_migration_harness.context_selection import (
     select_deferred_context,
 )
+from validation.tools._project_migration_harness.context_selection_index import (
+    ContextSelectionIndex,
+)
 
 
 class ProjectMigrationContextSelectionTests(unittest.TestCase):
@@ -39,6 +42,23 @@ class ProjectMigrationContextSelectionTests(unittest.TestCase):
             result["binding"]["selection_blockers"],
         )
         self.assertEqual(set(deferred), set(result["omitted_fact_refs"]))
+
+    def test_split_record_alias_selects_the_complete_record_extent(self) -> None:
+        facts, required, deferred = self.split_record_fixture()
+
+        result = select_deferred_context(
+            "group", required, deferred, facts, max_selected_bytes=16_384,
+            selection_index=ContextSelectionIndex(facts),
+        )
+
+        self.assertEqual("ready", result["binding"]["selection_status"])
+        self.assertEqual(set(deferred), set(result["selected_fact_refs"]))
+        selected_text = "".join(
+            facts[ref]["payload"].get("content", "")
+            for ref in result["selected_fact_refs"]
+        )
+        self.assertIn("struct item", selected_text)
+        self.assertIn("item_t", selected_text)
 
     @staticmethod
     def fixture() -> tuple[dict[str, dict], list[str], list[str]]:
@@ -86,6 +106,68 @@ class ProjectMigrationContextSelectionTests(unittest.TestCase):
             add("header_source", {
                 "owner_id": "header-owner", "chunk_index": 0, "chunk_count": 1,
                 "content": "#define API_VALUE 9\n",
+            }),
+        ]
+        return facts, required, deferred
+
+    @staticmethod
+    def split_record_fixture() -> tuple[dict[str, dict], list[str], list[str]]:
+        facts: dict[str, dict] = {}
+
+        def add(kind: str, payload: dict) -> str:
+            fact = {"kind": kind, "payload": payload}
+            digest = hashlib.sha256(canonical(fact)).hexdigest()
+            facts[digest] = fact
+            return digest
+
+        required = [
+            add("function", {
+                "node_id": "node", "unit_id": "unit", "node_kind": "function",
+                "symbol": "read_item", "linkage": "external",
+            }),
+            add("source_binding", {
+                "node_id": "node", "source": {
+                    "path": "src/main.c", "sha256": "1" * 64,
+                    "encoding": "utf-8", "span": {
+                        "byte_start": 0, "byte_end": 1, "sha256": "2" * 64,
+                    },
+                },
+            }),
+            add("function_signature", {
+                "node_id": "node", "chunk_index": 0, "chunk_count": 1,
+                "content": "int read_item(item_t value)",
+            }),
+            add("function_source", {
+                "node_id": "node", "chunk_index": 0, "chunk_count": 1,
+                "content": "int read_item(item_t value) { return value->code; }",
+            }),
+        ]
+        deferred = [
+            add("include_binding", {
+                "unit_id": "unit", "kind": "include", "body": '"item.h"',
+                "sha256": "3" * 64, "byte_offset": 0,
+                "from_path": "src/main.c", "target": "item.h",
+                "style": "quote", "status": "bound", "path": "src/item.h",
+            }),
+            add("header_source_binding", {
+                "owner_id": "header-owner", "source": {
+                    "path": "src/item.h", "sha256": "4" * 64,
+                    "encoding": "utf-8", "span": {
+                        "byte_start": 0, "byte_end": 90, "sha256": "4" * 64,
+                    },
+                },
+            }),
+            add("header_source", {
+                "owner_id": "header-owner", "chunk_index": 0, "chunk_count": 3,
+                "content": "struct item {\n    int value;\n",
+            }),
+            add("header_source", {
+                "owner_id": "header-owner", "chunk_index": 1, "chunk_count": 3,
+                "content": "    struct { int code; } nested;\n",
+            }),
+            add("header_source", {
+                "owner_id": "header-owner", "chunk_index": 2, "chunk_count": 3,
+                "content": "};\ntypedef struct item *item_t;\n",
             }),
         ]
         return facts, required, deferred

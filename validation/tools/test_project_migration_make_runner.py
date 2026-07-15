@@ -66,8 +66,12 @@ class MakeDryRunRunnerTests(unittest.TestCase):
     def preflight(self, *, missing: str | None = None) -> MakeDryRunPreflight:
         return MakeDryRunPreflight(
             backend="controlled-test-backend",
+            backend_version="test-1",
             plan_sha256=self.plan["plan_sha256"],
             toolchain_sha256=self.toolchain["sha256"],
+            launcher_sha256="1" * 64,
+            make_sha256="2" * 64,
+            probe_observation_sha256="3" * 64,
             capability_results=tuple(
                 (name, name != missing) for name in MAKE_REQUIRED_CAPABILITIES
             ),

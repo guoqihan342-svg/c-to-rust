@@ -15,11 +15,11 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | Latest development stage | P0-A19: unfamiliar-repository build closure, verification authority, and real held-out contract closure |
 | Active translator task | P0-A19 project orchestration first; P0-A18c/P0-A10 remain finite regression and held-out acceptance tracks |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
-| P0-A19 finite gate | Windows: 867 total, 861 passed and six platform-conditional skips; WSL with live gates enabled: 867/867 passed |
+| P0-A19 finite gate | Windows: 988 passed with 11 platform-conditional skips; WSL with explicit Cargo/Rustup bindings: 988 passed with six platform-conditional skips |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | canonical roadmap, code/tests, and harness evidence gates |
 
-These counts cover declared named-slice boundaries only. They do not prove complete C support, complete `fdb_kv_iterate`, whole-project FlashDB migration, or production safety.
+These counts cover declared named-slice boundaries only. They do not prove complete C support, AI-primary final migration of every unfamiliar project, complete `fdb_kv_iterate`, or production safety. The three-project raw-C2Rust execution baseline is reported separately below.
 
 The single source for backlog, stage status, and implementation order is [future-vision-and-mvp.md](docs/c2rust-migration-agent/future-vision-and-mvp.md). Architecture contracts live under `docs/c2rust-migration-agent/`; only code, tests, and `validation/**` evidence decide acceptance.
 
@@ -114,6 +114,33 @@ python3 -B validation/tools/project_migration_harness.py complete \
   --logical-model GLM-5.1 \
   --resolved-model zai/glm-5.1
 ```
+
+### Executable whole-project C2Rust baseline
+
+`c2rust-baseline` consumes a repository-owned `compile_commands.json`, invokes C2Rust, applies generic generated-code repairs, discovers every translated public `main`, creates Rust wrappers, runs `check --offline --all-targets` for every Cargo package, and executes every wrapper. Each wrapper retains its compilation unit's original working directory, so tests that use relative fixtures or build outputs still execute in their original context. Repository path escape, a C2Rust-normalized path collision, conflicting source working directories, transpilation failure, no runnable entry point, any Cargo-check failure, or any wrapper failure blocks the run. Reports and raw streams are content-addressed; host absolute paths remain only in `private-local` artifacts.
+
+```bash
+python3 -B validation/tools/project_migration_harness.py c2rust-baseline \
+  --repo-root /path/to/c-project \
+  --compile-database /path/to/c-project/compile_commands.json \
+  --c2rust-transpile /path/to/c2rust-transpile \
+  --cargo /path/to/cargo \
+  --rustc /path/to/rustc \
+  --out-root target/c2rust-project-baseline/run-001 \
+  --cargo-toolchain stable \
+  --rustc-bootstrap
+```
+
+The 2026-07-15 WSL local simulation completed four pinned whole-project runs:
+
+| Project | Pinned commit | Native C acceptance | Translated acceptance | Formal report SHA-256 |
+|---|---|---:|---:|---|
+| FlashDB | `f9d0421315c564fb890a1b14eee77b290e0d7bbe` | KVDB 13 + TSDB 11 passed | 7 TUs, all-target Cargo and 2/2 wrappers passed | `48c94540ef05b88763ffeb2477dd2c17623de68a7b1d5e211da3157fc78aa8f2` |
+| cJSON | `fb16e5cf358798aabb049655975cde8427101056` | CTest 22/22 | 27 TUs, all-target Cargo and 23/23 wrappers passed | `f5ca5c8920104c3f1061f6a6e453450c8184e538a1dfc3004a994c5b15e65885` |
+| libyaml | `893682bb98d5ed663a3e314c46dceaf9b1c8802f` | CTest 3/3 | 22 TUs, all-target Cargo and 14/14 wrappers passed | `35c265abc83b1a6d6931945b7db2951628a42e5ff67b32c584808eb0cf8f3b0e` |
+| Lua | `40b76de2d77e66b70a9d4bf989c3f5340919973f` | Official `testes/all.lua` ended with `final OK` | 34 TUs, all-target Cargo and 1/1 wrapper passed; the translated official suite ended with `final OK` | `d5874a59c505c6015a9e797c88ca04e0ce8d8a254c8e503c05a587e30274a446` |
+
+All four use the same identity-neutral production path, which does not inspect project names, test names, or fixed fixtures. cJSON, libyaml, and Lua drove working-directory binding, C2Rust filename normalization, duplicate-export privatization, targeted rustc lint compatibility, and the Rust 1.95 `VaList` API migration, so they are cross-project development regressions rather than held-out samples. C2Rust rejected Lua's default GCC computed-goto profile; the run used the upstream portable `LUA_USE_JUMPTABLE=0` profile only after that profile passed the native suite. The translated official suite also carried the native Make link fact as `-Wl,--export-dynamic` and used the WSL default stack instead of the upstream script's 1.1 MiB limit. Those last two facts are not yet derived and bound from BuildIR by the formal report. This command therefore remains a generic raw-C2Rust unsafe execution baseline with fixed `semantic_gate=false` and numerator zero. It does not claim AI-primary translation, unsafe elimination, a competition-exact host, or final semantic success for arbitrary unknown projects.
 
 `complete` is resumable and launches at most one project-repair provider call per invocation. It publishes a completion receipt only after the latest queue is resolved and the downstream whole-project gates pass.
 

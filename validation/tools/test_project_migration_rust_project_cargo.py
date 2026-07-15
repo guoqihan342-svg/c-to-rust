@@ -78,6 +78,10 @@ class RustProjectCargoTests(unittest.TestCase):
             one.last_good_manifest["rust_project_ir_completeness"]["status"],
         )
         self.assertIn(
+            "target-matrix",
+            one.last_good_manifest["rust_project_ir_completeness"]["unresolved_sections"],
+        )
+        self.assertNotIn(
             "public-signature",
             one.last_good_manifest["rust_project_ir_completeness"]["unresolved_sections"],
         )
@@ -208,7 +212,7 @@ class RustProjectCargoTests(unittest.TestCase):
         ir, _manifest = bound_ir(self.root, [item], {"unit": []})
         self.assertEqual("partial", ir["interface_completeness"]["status"])
         self.assertIn(
-            "public-signature", ir["interface_completeness"]["unresolved_sections"],
+            "target-matrix", ir["interface_completeness"]["unresolved_sections"],
         )
         ir["interface_completeness"]["status"] = "complete"
         with self.assertRaisesRegex(
