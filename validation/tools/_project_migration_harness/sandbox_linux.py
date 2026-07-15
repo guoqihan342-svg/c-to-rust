@@ -4,6 +4,11 @@ from pathlib import Path
 import subprocess
 from typing import Any, Callable, Sequence
 
+from .sandbox_bubblewrap_argv import (
+    build_bubblewrap_argv,
+    redacted_bubblewrap_argv as _redacted_argv,
+    resource_limiter as _resource_limiter,
+)
 from .sandbox_contract import (
     SandboxContract,
     SandboxDiscovery,
@@ -12,7 +17,6 @@ from .sandbox_contract import (
     validate_contract,
 )
 from .sandbox_environment import (
-    bubblewrap_environment_args,
     canonical_environment_items,
     cargo_guest_environment,
 )
@@ -156,47 +160,38 @@ class BubblewrapBackend:
         marker_name: str, command_sha256: str,
         environment: tuple[tuple[str, str], ...],
     ) -> list[str]:
-        argv = [
-            str(self._launcher), "--die-with-parent", "--new-session",
-            "--unshare-all", "--cap-drop", "ALL", "--clearenv",
-            "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
-            "--dir", "/workspace", "--dir", "/runtime",
-            "--dir", "/toolchain", "--dir", "/toolchain/bin",
-            "--dir", "/home", "--dir", "/home/sandbox", "--dir", "/etc",
-        ]
-        for system_path in ("/usr", "/bin", "/lib", "/lib64"):
-            if Path(system_path).exists():
-                argv.extend(("--ro-bind", system_path, system_path))
-        for host_path, guest_path in _system_files():
-            argv.extend(("--ro-bind", host_path, guest_path))
-        argv.extend((
-            "--ro-bind", str(project), "/workspace",
-            "--bind", str(runtime), "/runtime",
-        ))
+        tool_bindings: tuple[tuple[Path, str], ...]
         if self._toolchain_root is None:
-            for name, path in sorted(self._tools.items()):
-                argv.extend(("--ro-bind", str(path), f"/toolchain/bin/{name}"))
+            tool_bindings = tuple(
+                (path, f"/toolchain/bin/{name}")
+                for name, path in sorted(self._tools.items())
+            )
         else:
-            argv.extend(("--ro-bind", str(self._toolchain_root), "/toolchain"))
-        argv.extend(bubblewrap_environment_args(environment))
-        argv.extend((
-            "--chdir", "/workspace", "--", "/bin/sh", "-c",
+            tool_bindings = ((self._toolchain_root, "/toolchain"),)
+        guest_command = (
+            "/bin/sh", "-c",
             "umask 077; printf '%s\\n%s\\n' \"$1\" \"$2\" > \"$3\" || exit 125; "
             "shift 3; exec \"$@\"",
             "sandbox-launch", self._contract.sha256, command_sha256,
             f"/runtime/{marker_name}", "/toolchain/bin/cargo", *cargo_args,
-        ))
-        return argv
+        )
+        return build_bubblewrap_argv(
+            launcher=self._launcher, workspace=project, runtime=runtime,
+            tool_bindings=tool_bindings, environment=environment,
+            guest_command=guest_command,
+        )
 
     def _probe_argv(
         self, project: Path, runtime: Path, command: Sequence[str],
     ) -> list[str]:
-        argv = self._argv(
-            project, runtime, ("check",), "probe-unused", "0" * 64,
-            canonical_environment_items(cargo_guest_environment()),
+        environment = canonical_environment_items(cargo_guest_environment())
+        cargo_argv = self._argv(
+            project, runtime, ("check",), "probe-unused", "0" * 64, environment,
         )
-        boundary = argv.index("--chdir")
-        return [*argv[:boundary], "--chdir", "/workspace", "--", *command]
+        boundary = cargo_argv.index("--chdir")
+        return [
+            *cargo_argv[:boundary], "--chdir", "/workspace", "--", *command,
+        ]
 
 
 def discover_sandbox_backend(
@@ -205,16 +200,6 @@ def discover_sandbox_backend(
     from .sandbox_linux_discovery import discover_sandbox_backend as discover
 
     return discover(cargo_binary, project_root)
-
-
-def _system_files() -> list[tuple[str, str]]:
-    result = []
-    for value in ("/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/passwd", "/etc/group"):
-        if Path(value).is_file():
-            result.append((value, value))
-    if Path("/etc/ld.so.conf.d").is_dir():
-        result.append(("/etc/ld.so.conf.d", "/etc/ld.so.conf.d"))
-    return result
 
 
 def _marker_matches(path: Path, contract_sha256: str, command_sha256: str) -> bool:
@@ -227,37 +212,6 @@ def _marker_matches(path: Path, contract_sha256: str, command_sha256: str) -> bo
 def _read_capture(path: Path) -> bytes:
     with path.open("rb") as handle:
         return handle.read(MAX_CAPTURE_BYTES)
-
-
-def _redacted_argv(argv: Sequence[str]) -> list[str]:
-    redacted = []
-    for value in argv:
-        if value.startswith("/") and value not in {
-            "/proc", "/dev", "/tmp", "/workspace", "/runtime",
-            "/toolchain", "/toolchain/bin",
-            "/home", "/home/sandbox", "/usr", "/bin", "/lib", "/lib64",
-        }:
-            redacted.append("<host-or-guest-path>")
-        else:
-            redacted.append(value)
-    return redacted
-
-
-def _resource_limiter(contract: SandboxContract) -> Callable[[], None]:
-    def apply() -> None:
-        import resource
-
-        limits = (
-            (resource.RLIMIT_CPU, contract.cpu_seconds),
-            (resource.RLIMIT_AS, contract.address_space_bytes),
-            (resource.RLIMIT_FSIZE, contract.file_size_bytes),
-            (resource.RLIMIT_NPROC, contract.process_count),
-            (resource.RLIMIT_NOFILE, contract.open_files),
-        )
-        for kind, value in limits:
-            resource.setrlimit(kind, (value, value))
-
-    return apply
 
 
 __all__ = ["BubblewrapBackend", "discover_sandbox_backend"]

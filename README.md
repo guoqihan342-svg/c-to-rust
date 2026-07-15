@@ -129,7 +129,7 @@ python3 -B validation/tools/project_migration_harness.py complete \
 
 `complete` 可重复执行；每次恢复最多启动一个 project-repair provider call。只有最新队列已解决且后续全项目门禁通过时才会发布 completion receipt。
 
-真实 WSL 辅助 smoke `a19-deepseek-smoke-20260713` 使用 `opencode/deepseek-v4-flash-free` + `c2rust-candidate` + `max`：preflight report SHA 为 `f0bc76b6b2489597e782cd1f0e532b7483f03658680b4352401ee12c814913c0`，provider-execution SHA 为 `9e04b437135aa9f1e2171a180f2e77272374fc8bba3c1257d314e8a963c10b5d`，candidate SHA 为 `359cb2ef234f85d9aa1cbdf2d77e07a296f55cb8bd7d4ad9dd37afe4d9ea72ef`。该结果仅为 `candidate-ready` / `auxiliary-local-validation` / `semantic_gate=false`；WSL 缺 `bwrap`，未执行候选代码。
+真实 WSL 辅助 smoke `a19-deepseek-smoke-20260713` 使用 `opencode/deepseek-v4-flash-free` + `c2rust-candidate` + `max`：preflight report SHA 为 `f0bc76b6b2489597e782cd1f0e532b7483f03658680b4352401ee12c814913c0`，provider-execution SHA 为 `9e04b437135aa9f1e2171a180f2e77272374fc8bba3c1257d314e8a963c10b5d`，candidate SHA 为 `359cb2ef234f85d9aa1cbdf2d77e07a296f55cb8bd7d4ad9dd37afe4d9ea72ef`。该结果仅为 `candidate-ready` / `auxiliary-local-validation` / `semantic_gate=false`；该次运行当时因 WSL 缺 `bwrap` 而未执行候选代码。后续安装的 `bwrap` 已用于 Clang fact live lane，但这不等于该 Cargo 候选 smoke 已重跑或通过。
 
 当前没有运行时依赖 LangGraph 或 LangChain。这里需要的是可审计的固定状态机、事务、外键、租约、围栏和证据重放；这些由仓库内 Python 编排器与 SQLite 实现。以后只有在框架能减少代码且不削弱上述合同校验时才考虑引入。
 
