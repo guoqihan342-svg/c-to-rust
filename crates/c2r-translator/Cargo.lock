@@ -15,9 +15,11 @@ dependencies = [
 name = "c2r-translator"
 version = "0.1.0"
 dependencies = [
+ "quote",
  "serde",
  "serde_json",
  "sha2",
+ "syn",
 ]
 
 [[package]]

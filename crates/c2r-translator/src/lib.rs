@@ -6,6 +6,7 @@ pub mod clang_frontend;
 mod clang_lowered_translation;
 mod legacy_translation;
 mod model;
+pub mod rust_source_witness;
 #[cfg(feature = "typed-ir")]
 pub mod translation_route;
 #[cfg(feature = "typed-ir")]
