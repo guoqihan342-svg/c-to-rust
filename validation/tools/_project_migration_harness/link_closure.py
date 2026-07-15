@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import shlex
-from pathlib import Path, PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .archive_closure import (
@@ -15,15 +15,13 @@ from .link_response import expand_link_response_files, take_link_output
 from .link_fact_paths import link_fact_working_directory
 from .link_ranlib import bind_ranlib_commands
 from .link_external_libraries import external_native_library
+from .link_input_paths import bind_positional_link_input
 from .link_system_arguments import (
     contains_external_link_option_path, normalize_system_link_argument,
 )
 
 
 MAX_LINK_ARGUMENTS = 16_384
-LINK_INPUT_SUFFIXES = {
-    ".a", ".dll", ".dylib", ".lib", ".lo", ".o", ".obj", ".so",
-}
 def discover_link_closure(
     repo_root: Path,
     compile_database_path: Path,
@@ -229,8 +227,10 @@ def _parse_link_argv(
             })
             index += 1
             continue
-        if _looks_like_path(argument):
-            bound = _bind(root, base, argument, "link_input", blockers)
+        handled, bound = bind_positional_link_input(
+            root, base, argument, blockers,
+        )
+        if handled:
             if bound is not None:
                 inputs.append(bound)
         else:
@@ -271,17 +271,6 @@ def _bind(
     except (OSError, ValueError) as error:
         blockers.append(path_error_blocker(error, role=role, path=value))
         return None
-
-
-def _looks_like_path(value: str) -> bool:
-    suffix = PurePosixPath(value.replace("\\", "/")).suffix.lower()
-    return (
-        suffix in LINK_INPUT_SUFFIXES
-        or "/" in value
-        or "\\" in value
-        or value.startswith(".")
-        or PureWindowsPath(value).is_absolute()
-    )
 
 
 def _canonical_binding_set(items: list[dict[str, Any]]) -> list[dict[str, Any]]:

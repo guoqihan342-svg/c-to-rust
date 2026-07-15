@@ -15,6 +15,7 @@ from .c_index_blockers import build_blocker_catalog
 from .c_index_blocker_validation import validate_blocker_catalog
 from .c_index_span_policy import function_spans_reliable
 from .c_index_dependency_snapshot import DependencySnapshot
+from .c_index_build_targets import normalized_build_target_context
 from .c_compilation_fact_bundle import compiler_facts_for_index
 from .c_index_macros import (
     conditional_ranges,
@@ -153,13 +154,21 @@ def _validated_unit(
     actual = hashlib.sha256(raw).hexdigest()
     if actual != expected:
         raise ValueError(f"translation unit {unit_id} source.sha256 does not match")
+    compile_context = _normalize_compile_context(root, item, snapshot)
+    build_targets = normalized_build_target_context(
+        item.get("build_target_context"), unit_id=unit_id,
+    )
+    if build_targets is not None:
+        compile_context["build_target_context"] = build_targets
     return {
         "unit_id": unit_id,
         "path": path,
         "sha256": actual,
         "raw": raw,
-        "compile_context": _normalize_compile_context(root, item, snapshot),
+        "compile_context": compile_context,
     }
+
+
 def _safe_relative(value: str) -> bool:
     posix = PurePosixPath(value)
     windows = PureWindowsPath(value)

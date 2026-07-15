@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from .artifacts import canonical_json_bytes, content_sha256
+from .build_ir_index_targets import index_target_contexts
 
 
 BUILD_IR_SCHEMA_VERSION = 2
@@ -139,6 +140,7 @@ def canonical_build_ir_bytes(value: Mapping[str, Any]) -> bytes:
 
 def translation_units_for_index(build_ir: Mapping[str, Any]) -> list[dict[str, Any]]:
     result = []
+    target_contexts = index_target_contexts(build_ir)
     for item in build_ir.get("translation_units", []):
         if not isinstance(item, Mapping):
             raise ValueError("build_ir_translation_unit_invalid")
@@ -169,6 +171,7 @@ def translation_units_for_index(build_ir: Mapping[str, Any]) -> list[dict[str, A
                 "sha256": provenance["entry_sha256"],
             },
             "entry_sha256": provenance["entry_sha256"],
+            "build_target_context": target_contexts[item["unit_id"]],
         })
     return result
 

@@ -31,6 +31,13 @@ PAGE_KEYS = {
     "part_index", "scc_id", "wave_index",
 }
 FACT_PAYLOAD_KEYS = {
+    "build_target": {
+        "dependency_target_ids", "kind", "name", "ordered_input_target_ids",
+        "ordered_link_arguments", "output_paths", "target_id",
+    },
+    "build_target_membership": {
+        "consumer_target_ids", "object_target_id", "unit_id", "variant",
+    },
     "compile_define": {"name", "unit_id", "value"},
     "compile_include": {"kind", "path", "scope", "unit_id"},
     "compile_semantic_flag": {"index", "unit_id", "value"},

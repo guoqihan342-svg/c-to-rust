@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -109,6 +110,70 @@ class ProjectMigrationLinkArgumentTests(unittest.TestCase):
                 self.assertTrue({
                     "external_link_argument", "link_argument_unsupported",
                 } & {item["kind"] for item in closure["blockers"]})
+
+    def test_existing_nontraditional_inputs_are_content_bound_in_order(self) -> None:
+        versioned = b"versioned-shared-library"
+        numeric_suffix = b"numeric-suffix-link-input"
+        self.write("build/libneutral.so.7", versioned)
+        self.write("build/linker-script.9", numeric_suffix)
+
+        closure = self.link_closure(
+            "libneutral.so.7 linker-script.9 libneutral.so.7"
+        )
+
+        self.assertEqual("ready", closure["status"], closure)
+        target = closure["target_link_closure"]["targets"][0]
+        self.assertEqual([
+            "build/main.o",
+            "build/libneutral.so.7",
+            "build/linker-script.9",
+            "build/libneutral.so.7",
+        ], [item["path"] for item in target["inputs"]])
+        self.assertEqual([
+            hashlib.sha256(b"object").hexdigest(),
+            hashlib.sha256(versioned).hexdigest(),
+            hashlib.sha256(numeric_suffix).hexdigest(),
+            hashlib.sha256(versioned).hexdigest(),
+        ], [item["sha256"] for item in target["inputs"]])
+
+    def test_missing_versioned_input_and_escape_stay_fail_closed(self) -> None:
+        cases = {
+            "libneutral.so.11": "link_input_missing",
+            "../../outside.so.11": "link_input_path_outside_repository",
+        }
+        for argument, expected in cases.items():
+            with self.subTest(argument=argument):
+                closure = self.link_closure(argument)
+                self.assertEqual("blocked", closure["status"], closure)
+                self.assertIn(expected, {
+                    item["kind"] for item in closure["blockers"]
+                })
+
+    def test_missing_bare_token_is_not_guessed_as_a_path(self) -> None:
+        argument = "opaque-linker-token"
+
+        closure = self.link_closure(argument)
+
+        self.assertEqual("blocked", closure["status"], closure)
+        kinds = {item["kind"] for item in closure["blockers"]}
+        self.assertIn("link_argument_unsupported", kinds)
+        self.assertNotIn("link_input_missing", kinds)
+        self.assertNotIn(argument, json.dumps(closure))
+
+    def test_versioned_input_symlink_stays_fail_closed(self) -> None:
+        target = self.write("build/actual-library", b"library")
+        link = self.root / "build/libneutral.so.7"
+        try:
+            link.symlink_to(target.name)
+        except OSError as error:
+            self.skipTest(f"symlink creation unavailable: {error}")
+
+        closure = self.link_closure("libneutral.so.7")
+
+        self.assertEqual("blocked", closure["status"], closure)
+        self.assertIn("link_input_linked_path_component", {
+            item["kind"] for item in closure["blockers"]
+        })
 
 
 if __name__ == "__main__":

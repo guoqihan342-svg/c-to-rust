@@ -31,6 +31,28 @@ def unit_context_refs(
             "working_directory": str(compile_context.get("working_directory", ".")),
             "redacted_define_count": int(compile_context.get("redacted_define_count", 0)),
         })]
+        target_context = compile_context.get("build_target_context")
+        if target_context is not None:
+            target_context = mapping(
+                target_context, f"unit {unit_id} build_target_context",
+            )
+            variant = mapping(target_context.get("variant"), "variant context")
+            object_target = mapping(
+                target_context.get("object_target"), "object target context",
+            )
+            consumers = objects(
+                target_context.get("consumer_targets", []), "consumer targets",
+            )
+            refs.append(add_fact("build_target_membership", {
+                "unit_id": unit_id,
+                "variant": dict(variant),
+                "object_target_id": required_string(object_target, "target_id"),
+                "consumer_target_ids": [
+                    required_string(item, "target_id") for item in consumers
+                ],
+            }))
+            refs.append(add_fact("build_target", dict(object_target)))
+            refs.extend(add_fact("build_target", dict(item)) for item in consumers)
         compiler_fact = context.get("compiler_fact")
         if compiler_fact is not None:
             refs.append(add_fact(
