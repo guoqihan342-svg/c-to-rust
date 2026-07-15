@@ -10,7 +10,10 @@ from .artifacts import canonical_json_bytes
 from .bounded_artifact_io import (
     BoundedArtifactIOError, read_bounded_artifact, write_immutable_artifact,
 )
-from .c2rust_project_baseline_schema import validate_c2rust_baseline_report
+from .c2rust_project_baseline_report_validation import (
+    generated_snapshot_references, required_report_references,
+    validate_baseline_report,
+)
 from .c2rust_project_baseline_contract_reopen import (
     validate_execution_contract_reopen,
 )
@@ -141,18 +144,30 @@ def reopen_c2rust_project_baseline(
     required = _required_report_refs(report)
     if not required.issubset(identities):
         raise C2RustBaselineEvidenceError("c2rust_report_artifact_binding_missing")
-    snapshot_ref = report.get("generated", {}).get("snapshot_ref")
-    if snapshot_ref is not None:
+    for snapshot_ref in generated_snapshot_references(report):
         snapshot_data = _read_reference(
             root, snapshot_ref, MAX_CAS_ARTIFACT_BYTES,
             role="generated-snapshot",
         )
         snapshot = _strict_object(snapshot_data, "generated_snapshot")
         _validate_snapshot(root, snapshot, identities)
+    if report.get("schema_version") == 3:
+        from .c2rust_project_baseline_target_export_evidence import validate_target_export_reopen
+        validate_target_export_reopen(root, report)
     _validate_execution_contract_binding(root, report)
     return report
 
 
+def read_cas_artifact(
+    out_root: Path, reference: Mapping[str, Any], *, role: str,
+    limit: int = MAX_CAS_ARTIFACT_BYTES,
+) -> bytes:
+    root = Path(out_root).resolve(strict=True)
+    return _read_reference(root, reference, limit, role=role)
+def read_cas_object(
+    out_root: Path, reference: Mapping[str, Any], *, role: str, label: str,
+) -> dict[str, Any]:
+    return _strict_object(read_cas_artifact(out_root, reference, role=role), label)
 def _validate_execution_contract_binding(
     root: Path, report: Mapping[str, Any],
 ) -> None:
@@ -171,23 +186,7 @@ def _validate_execution_contract_binding(
 
 
 def _required_report_refs(report: Mapping[str, Any]) -> set[tuple[str, str, int]]:
-    result = {
-        _identity(report["inputs"]["original_compile_database_ref"]),
-        _identity(report["inputs"]["normalized_compile_database_ref"]),
-    }
-    for execution in report.get("executions", []):
-        result.add(_identity(execution["stdout_ref"]))
-        result.add(_identity(execution["stderr_ref"]))
-        result.add(_identity(execution["stdin_ref"]))
-    contract = report.get("inputs", {}).get("execution_contract")
-    if isinstance(contract, Mapping):
-        result.add(_identity(contract["source_ref"]))
-        if contract.get("normalized_ref") is not None:
-            result.add(_identity(contract["normalized_ref"]))
-    snapshot = report.get("generated", {}).get("snapshot_ref")
-    if snapshot is not None:
-        result.add(_identity(snapshot))
-    return result
+    return {_identity(item) for item in required_report_references(report)}
 
 
 def _validate_snapshot(
@@ -228,7 +227,7 @@ def _validate_snapshot(
 
 def _validate_report_shape(value: Mapping[str, Any]) -> None:
     try:
-        validate_c2rust_baseline_report(value)
+        validate_baseline_report(value)
     except ValueError as error:
         raise C2RustBaselineEvidenceError(str(error)) from error
 
@@ -293,6 +292,7 @@ def _safe_relative(value: Any) -> str:
 
 
 __all__ = [
-    "C2RustBaselineEvidenceError", "reopen_c2rust_project_baseline",
+    "C2RustBaselineEvidenceError", "read_cas_artifact", "read_cas_object",
+    "reopen_c2rust_project_baseline",
     "snapshot_generated_tree", "write_baseline_report", "write_cas_artifact",
 ]
