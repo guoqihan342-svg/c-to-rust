@@ -7,8 +7,9 @@ from typing import Any
 def translated_source_working_directories(
     repository: Path, entries: tuple[dict[str, Any], ...],
 ) -> dict[str, str]:
-    result: dict[str, str] = {}
+    records: list[tuple[Path, str, str]] = []
     source_paths: dict[str, str] = {}
+    exact_working_directories: dict[str, str] = {}
     for entry in entries:
         source = Path(entry["file"]).resolve(strict=True)
         working_directory = Path(entry["directory"]).resolve(strict=True)
@@ -19,11 +20,27 @@ def translated_source_working_directories(
         previous_source = source_paths.setdefault(translated, source_identity)
         if previous_source != source_identity:
             raise ValueError("c2rust_translated_source_path_ambiguous")
-        previous_working_directory = result.setdefault(
+        previous_working_directory = exact_working_directories.setdefault(
             translated, working_relative,
         )
         if previous_working_directory != working_relative:
             raise ValueError("c2rust_source_working_directory_ambiguous")
+        records.append((source_relative, source_identity, working_relative))
+
+    result: dict[str, str] = {}
+    candidate_sources: dict[str, str] = {}
+    ambiguous: set[str] = set()
+    for source_relative, source_identity, working_relative in records:
+        for translated in _c2rust_translated_candidates(source_relative):
+            previous_source = candidate_sources.setdefault(
+                translated, source_identity,
+            )
+            if previous_source != source_identity:
+                ambiguous.add(translated)
+                continue
+            result.setdefault(translated, working_relative)
+    for translated in ambiguous:
+        result.pop(translated, None)
     return result
 
 
@@ -61,6 +78,13 @@ def _c2rust_translated_path(source_relative: Path) -> str:
     ]
     stem = _c2rust_module_component(source_relative.stem)
     return Path("src", *directories, f"{stem}.rs").as_posix()
+
+
+def _c2rust_translated_candidates(source_relative: Path) -> tuple[str, ...]:
+    return tuple(
+        _c2rust_translated_path(Path(*source_relative.parts[index:]))
+        for index in range(len(source_relative.parts))
+    )
 
 
 def _c2rust_module_component(value: str) -> str:
