@@ -32,6 +32,9 @@ from validation.tools.project_migration_semantic_test_support import (
 from validation.tools.project_migration_compile_test_support import (
     compile_observation_for_ledger,
 )
+from validation.tools.project_migration_candidate_generation_test_support import (
+    materialize_candidate_generation,
+)
 
 
 class ProjectMigrationControllerCase(unittest.TestCase):
@@ -85,6 +88,15 @@ class ProjectMigrationControllerCase(unittest.TestCase):
     def load(self, relative: str) -> dict:
         path = self.harness / Path(*relative.split("/"))
         return json.loads(path.read_text(encoding="utf-8"))
+
+    def load_out_artifact(self, relative: str) -> dict:
+        path = self.out_root.joinpath(*relative.split("/"))
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def materialize_candidate_project(self, rust_project_ir: dict, target: Path) -> Path:
+        return materialize_candidate_generation(
+            rust_project_ir, self.out_root, target,
+        )
 
     def host_pass(
         self,

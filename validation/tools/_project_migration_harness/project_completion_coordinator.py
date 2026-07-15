@@ -163,9 +163,15 @@ def resume_project_completion(
                     blockers, candidate_set, project_repair=repair_step,
                 )
         else:
+            diagnostics = integration.get("diagnostics")
+            blockers = [
+                str(item["code"])
+                for item in diagnostics if isinstance(item, dict) and item.get("code")
+            ] if isinstance(diagnostics, list) else []
             return _result(
-                paths, run_id, "failed", "project-final-integration", [],
-                candidate_set,
+                paths, run_id, str(integration.get("status", "failed")),
+                str(integration.get("stage", "project-final-integration")),
+                blockers, candidate_set,
             )
     completeness = integration.get("rust_project_ir_completeness")
     if not isinstance(completeness, dict) or completeness.get("status") != "complete":

@@ -138,12 +138,19 @@ class ProjectMigrationControllerTests(ProjectMigrationControllerCase):
             candidate_root_rel="target/run",
             project_root=project,
         )
-        self.assertEqual("integrated", integrated["status"])
+        self.assertEqual("blocked", integrated["status"])
+        self.assertEqual(
+            "rust_project_ir_not_promoted", integrated["diagnostics"][0]["code"],
+        )
+        self.assertFalse(project.exists())
         self.assertEqual(
             ledger.bind_current_candidate_set(run_id=plan["run_id"]),
             integrated["candidate_set_sha256"],
         )
         self.assertIn("candidate_descriptor_sha256", integrated)
+        self.materialize_candidate_project(
+            self.load_out_artifact(integrated["rust_project_ir"]["path"]), project,
+        )
         self.assertTrue((project / "Cargo.toml").is_file())
         self.assertTrue((project / "Cargo.lock").is_file())
         self.assertFalse(integrated["semantic_gate"])

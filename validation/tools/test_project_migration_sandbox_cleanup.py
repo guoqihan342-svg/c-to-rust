@@ -9,7 +9,11 @@ from unittest import mock
 from collections.abc import Iterator
 
 from validation.tools._project_migration_harness.project_verification import (
+    run_cargo_generation_gates,
     run_cargo_project_gates,
+)
+from validation.tools._project_migration_harness.integration_generation import (
+    recover_current_generation,
 )
 from validation.tools._project_migration_harness.sandbox_contract import (
     SandboxDiscovery,
@@ -85,6 +89,38 @@ class ProjectMigrationSandboxCleanupTests(unittest.TestCase):
         self.assertIn(
             "cargo_timeout", {item["code"] for item in result["diagnostics"]},
         )
+
+    def test_native_trace_without_linker_blocks_before_any_cargo(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sandbox-native-preflight-") as temporary:
+            root = Path(temporary)
+            project, cargo = managed_project(root)
+            generation = recover_current_generation(project)
+            self.assertIsNotNone(generation)
+            runtime = root / "runtime"
+            backend = BoundBackend()
+
+            with self._sandbox(backend, cargo):
+                result = run_cargo_generation_gates(
+                    generation,
+                    runtime_root=runtime,
+                    timeout_seconds=60,
+                    capture_raw_output=True,
+                    capture_native_link_trace=True,
+                )
+
+            self.assertEqual("blocked", result["status"])
+            self.assertFalse(result["cargo_executed"])
+            self.assertEqual([], result["checks"])
+            self.assertEqual([], backend.calls)
+            self.assertEqual([], list(runtime.glob("cargo-sandbox-*")))
+            self.assertEqual(
+                "sandbox_native_linker_unavailable",
+                result["sandbox"]["reason_code"],
+            )
+            self.assertEqual(
+                ["sandbox_native_linker_unavailable"],
+                [item["code"] for item in result["diagnostics"]],
+            )
 
     @staticmethod
     @contextmanager

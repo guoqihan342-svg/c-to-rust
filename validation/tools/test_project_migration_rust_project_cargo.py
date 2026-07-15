@@ -179,24 +179,17 @@ class RustProjectCargoTests(unittest.TestCase):
         self.assertIn("extra = []", cargo)
         self.assertIn('#[cfg(all(unix, feature = "extra"))]', lib)
 
-    def test_failed_ir_increment_preserves_managed_last_good(self) -> None:
+    def test_partial_ir_cannot_publish_final_generation(self) -> None:
         item = descriptor(self.root, "unit", "pub fn stable_value() -> i32 { 8 }\n")
         ir, _manifest = bound_ir(self.root, [item], {"unit": []})
         project = self.workspace / "managed"
-        first = integration.integrate_rust_project_ir(ir, self.root, project)
-        self.assertEqual("integrated", first["status"])
-        generation = project / "generations" / first["generation"]["id"]
-        before = {path.relative_to(generation): path.read_bytes()
-                  for path in generation.rglob("*") if path.is_file()}
-        broken = rebuild(ir, public_api=[])
+        result = integration.integrate_rust_project_ir(ir, self.root, project)
 
-        failed = integration.integrate_rust_project_ir(broken, self.root, project)
-
-        self.assertEqual("failed", failed["status"])
-        self.assertTrue(failed["last_good_preserved"])
-        after = {path.relative_to(generation): path.read_bytes()
-                 for path in generation.rglob("*") if path.is_file()}
-        self.assertEqual(before, after)
+        self.assertEqual("blocked", result["status"])
+        self.assertEqual(
+            "rust_project_ir_not_promoted", result["diagnostics"][0]["code"],
+        )
+        self.assertFalse(project.exists())
 
     def test_ir_hash_drift_is_rejected_before_filesystem_write(self) -> None:
         item = descriptor(self.root, "unit", "pub fn value() {}\n")

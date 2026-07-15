@@ -106,6 +106,8 @@ def _integrate_verified_project(
         "semantic_gate": False,
         "proof_boundary": "validated RustProjectIR Cargo reconstruction only; project gates not yet run",
     }
+    if result.get("status") == "blocked":
+        report["stage"] = "project-interface-promotion"
     if action["status"] == "pending-reverification":
         report["project_repair_verification"] = action
     write_json_artifact(candidate_root, "integration/latest-integration.json", report)

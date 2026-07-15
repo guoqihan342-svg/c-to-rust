@@ -3,9 +3,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from validation.tools._project_migration_harness.integration import (
-    integrate_rust_project_ir,
-)
 from validation.tools._project_migration_harness.gate_candidate_sets import (
     current_candidate_members,
 )
@@ -47,6 +44,9 @@ from validation.tools.project_migration_gate_authority_test_support import diges
 from validation.tools.project_migration_cargo_receipt_test_support import (
     classified_cargo_observation, register_verifier_project_ir,
 )
+from validation.tools.project_migration_candidate_generation_test_support import (
+    materialize_candidate_generation,
+)
 from validation.tools.project_migration_project_repair_test_support import (
     project_repair_test_dispatch_permit,
 )
@@ -70,9 +70,10 @@ class ProjectVerifierRepairFlowSupportMixin:
         )
 
     def _prepare_source_generation(self) -> None:
-        integrate_rust_project_ir(
+        materialize_candidate_generation(
             self.rust_project_ir, self.out_root,
             managed_project_root(self.out_root),
+            publish_current=True,
         )
         with self.ledger.connect() as connection:
             members = current_candidate_members(connection, "run")
@@ -158,11 +159,10 @@ class ProjectVerifierRepairFlowSupportMixin:
         if input_label == "source-generation":
             project_input = self.source_project_input
         else:
-            integrated = integrate_rust_project_ir(
+            materialize_candidate_generation(
                 candidate, self.out_root, managed_project_root(self.out_root),
+                publish_current=True,
             )
-            if integrated["status"] != "integrated":
-                raise AssertionError("test candidate generation was not published")
             with self.ledger.connect() as connection:
                 members = current_candidate_members(connection, "run")
             project_input = load_managed_project_context(

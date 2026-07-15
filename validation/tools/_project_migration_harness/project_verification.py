@@ -58,13 +58,16 @@ def run_cargo_project_gates(
 def run_cargo_generation_gates(
     generation_root: Path, *, runtime_root: Path, cargo_command: str = "cargo",
     timeout_seconds: int = 300, capture_raw_output: bool = False,
+    capture_native_link_trace: bool = False,
 ) -> dict[str, Any]:
     if timeout_seconds < 30 or timeout_seconds > 3_600:
         raise ValueError("timeout_seconds must be between 30 and 3600")
+    if capture_native_link_trace and not capture_raw_output:
+        raise ValueError("native linker trace requires raw Cargo output capture")
     source = _project_target(generation_root).resolve(strict=True)
     return _run_managed_cargo(
         source, source, runtime_root, cargo_command, timeout_seconds,
-        capture_raw_output, False,
+        capture_raw_output, capture_native_link_trace,
     )
 
 
@@ -122,6 +125,12 @@ def _run_managed_cargo(
     except ValueError:
         return _blocked(
             "sandbox_capability_probe_invalid",
+            project_state=before,
+            project_input_sha256=before,
+        )
+    if capture_native_link_trace and backend.contract.native_linker is None:
+        return _blocked(
+            "sandbox_native_linker_unavailable",
             project_state=before,
             project_input_sha256=before,
         )

@@ -31,6 +31,15 @@ def integrate_rust_project_ir(
             raise cargo_project.ProjectInputError(
                 "rust_project_ir_scope_not_full_project", "rust_project_ir",
             )
+        completeness = rust_project_ir.get("interface_completeness")
+        if (
+            not isinstance(completeness, Mapping)
+            or completeness.get("status") != "complete"
+            or completeness.get("unresolved_sections") != []
+        ):
+            raise cargo_project.ProjectInputError(
+                "rust_project_ir_not_promoted", "rust_project_ir",
+            )
         stage = generations.create_generation_stage(target)
         _write_stage(stage, plan.files)
         staged_state, staged_managed = validation.existing_state(stage)
@@ -58,8 +67,9 @@ def integrate_rust_project_ir(
             "cargo_executed": False, "diagnostics": [],
         }
     except cargo_project.ProjectInputError as error:
+        status = "blocked" if error.code == "rust_project_ir_not_promoted" else "failed"
         return _failure(error.code, error.stage, error.group_id,
-                        previous_managed, previous_preserved)
+                        previous_managed, previous_preserved, status=status)
     except generations.GenerationCommitError as error:
         previous_preserved = error.preserved
         return _failure(error.code, "generation_publish", None,
@@ -99,13 +109,15 @@ def _atomic_write(path: Path, data: bytes) -> None:
 def _failure(
     code: str, stage: str, group_id: str | None,
     previous_managed: bool, previous_preserved: bool,
+    *, status: str = "failed",
 ) -> dict[str, Any]:
     diagnostic = {"code": code[:96], "stage": stage[:48]}
     if isinstance(group_id, str) and group_id:
         diagnostic["group_id"] = group_id[:128]
     return {
         "schema_version": 1,
-        "status": "failed",
+        "status": status,
+        "stage": stage,
         "integrated_group_ids": [],
         "last_good_preserved": previous_managed and previous_preserved,
         "cargo_executed": False,
