@@ -34,9 +34,12 @@ SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 def run_cargo_project_gates(
     project_root: Path, *, runtime_root: Path, cargo_command: str = "cargo",
     timeout_seconds: int = 300, capture_raw_output: bool = False,
+    capture_native_link_trace: bool = False,
 ) -> dict[str, Any]:
     if timeout_seconds < 30 or timeout_seconds > 3_600:
         raise ValueError("timeout_seconds must be between 30 and 3600")
+    if capture_native_link_trace and not capture_raw_output:
+        raise ValueError("native linker trace requires raw Cargo output capture")
     project = _project_target(project_root)
     try:
         source = _current_managed_source(project)
@@ -48,7 +51,7 @@ def run_cargo_project_gates(
         )
     return _run_managed_cargo(
         source, project, runtime_root, cargo_command, timeout_seconds,
-        capture_raw_output,
+        capture_raw_output, capture_native_link_trace,
     )
 
 
@@ -61,7 +64,7 @@ def run_cargo_generation_gates(
     source = _project_target(generation_root).resolve(strict=True)
     return _run_managed_cargo(
         source, source, runtime_root, cargo_command, timeout_seconds,
-        capture_raw_output,
+        capture_raw_output, False,
     )
 
 
@@ -79,6 +82,7 @@ def managed_project_input_sha256(project_root: Path) -> str:
 def _run_managed_cargo(
     source: Path, project: Path, runtime_root: Path,
     cargo_command: str, timeout_seconds: int, capture_raw_output: bool,
+    capture_native_link_trace: bool,
 ) -> dict[str, Any]:
     before, managed = existing_state(source)
     if not managed:
@@ -127,16 +131,19 @@ def _run_managed_cargo(
         for name in ("cargo-home", "target"):
             (execution_root / name).mkdir(mode=0o700)
         commands = [
-            ["check", "--all-targets", "--all-features", "--offline", "--locked",
-             "--message-format=json"],
-            ["test", "--all-targets", "--all-features", "--offline", "--locked",
-             "--message-format=json"],
+            (["check", "--all-targets", "--all-features", "--offline", "--locked",
+              "--message-format=json"], False),
+            (["test", "--all-targets", "--all-features", "--offline", "--locked",
+              "--message-format=json", *(
+                  ["--jobs", "1"] if capture_native_link_trace else []
+              )], capture_native_link_trace),
         ]
-        for cargo_args in commands:
+        for cargo_args, native_link_trace in commands:
             checks.append(_run(
                 cargo, cargo_args, source, execution_root,
                 timeout_seconds, backend, before, probe_receipt,
                 capture_raw_output=capture_raw_output,
+                native_link_trace=native_link_trace,
             ))
             if checks[-1]["status"] != "passed":
                 break

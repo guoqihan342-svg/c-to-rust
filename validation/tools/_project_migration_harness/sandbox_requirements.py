@@ -8,6 +8,12 @@ import unicodedata
 from collections.abc import Mapping
 from typing import Any
 
+from .sandbox_environment import (
+    ENVIRONMENT_ALLOWLIST,
+    canonical_environment_items,
+    cargo_guest_environment,
+)
+
 
 REQUIRED_CAPABILITIES = (
     "cpu-limit",
@@ -28,20 +34,6 @@ REQUIRED_CAPABILITIES = (
     "user-isolation",
     "wall-timeout",
 )
-ENVIRONMENT_ALLOWLIST = (
-    "CARGO_HOME",
-    "CARGO_NET_OFFLINE",
-    "CARGO_TARGET_DIR",
-    "CARGO_TERM_COLOR",
-    "HOME",
-    "LANG",
-    "LC_ALL",
-    "PATH",
-    "RUSTC",
-    "RUSTDOC",
-    "TMPDIR",
-)
-
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 _PURPOSE = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z", re.ASCII)
 _SHELL_SYNTAX = re.compile(r"(?:&&|\|\||[;|<>`]|\$\(|\r|\n|\x00)")
@@ -108,6 +100,8 @@ class SandboxVerificationPlan:
     timeout_seconds: int
     requirements_sha256: str
     requirements: SandboxRequirements
+    native_link_trace: bool = False
+    environment: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         if type(self.purpose) is not str or _PURPOSE.fullmatch(self.purpose) is None:
@@ -122,15 +116,24 @@ class SandboxVerificationPlan:
             raise ValueError("sandbox requirements type is invalid")
         if self.requirements_sha256 != self.requirements.sha256:
             raise ValueError("sandbox requirements hash is inconsistent")
+        if type(self.native_link_trace) is not bool:
+            raise ValueError("native_link_trace must be a boolean")
+        expected_environment = canonical_environment_items(
+            cargo_guest_environment(native_link_trace=self.native_link_trace)
+        )
+        if self.environment != expected_environment:
+            raise ValueError("sandbox environment does not match the fixed plan")
 
     def payload(self) -> dict[str, object]:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "purpose": self.purpose,
             "command": list(self.command),
             "input_sha256": self.input_sha256,
             "timeout_seconds": self.timeout_seconds,
             "requirements_sha256": self.requirements_sha256,
+            "native_link_trace": self.native_link_trace,
+            "environment": dict(self.environment),
         }
 
     @property
@@ -189,6 +192,7 @@ def cargo_verification_plan(
     timeout_seconds: int = 300,
     requirements: SandboxRequirements | None = None,
     requirements_sha256: str | None = None,
+    *, native_link_trace: bool = False,
 ) -> SandboxVerificationPlan:
     if (
         type(command) is not tuple
@@ -208,6 +212,10 @@ def cargo_verification_plan(
         timeout_seconds=timeout_seconds,
         requirements_sha256=claimed,
         requirements=selected,
+        native_link_trace=native_link_trace,
+        environment=canonical_environment_items(
+            cargo_guest_environment(native_link_trace=native_link_trace)
+        ),
     )
 
 
@@ -216,11 +224,13 @@ def verification_plan_from_payload(
 ) -> SandboxVerificationPlan:
     if not isinstance(value, Mapping) or set(value) != {
         "schema_version", "purpose", "command", "input_sha256",
-        "timeout_seconds", "requirements_sha256",
-    } or value.get("schema_version") != 1:
+        "timeout_seconds", "requirements_sha256", "native_link_trace",
+        "environment",
+    } or value.get("schema_version") != 2:
         raise ValueError("sandbox verification plan schema is invalid")
     command = value.get("command")
-    if not isinstance(command, list):
+    environment = value.get("environment")
+    if not isinstance(command, list) or not isinstance(environment, Mapping):
         raise ValueError("sandbox verification command is invalid")
     plan = cargo_verification_plan(
         value.get("purpose"),
@@ -229,6 +239,7 @@ def verification_plan_from_payload(
         timeout_seconds=value.get("timeout_seconds"),
         requirements=requirements,
         requirements_sha256=value.get("requirements_sha256"),
+        native_link_trace=value.get("native_link_trace"),
     )
     if plan.payload() != dict(value):
         raise ValueError("sandbox verification plan is not canonical")

@@ -212,20 +212,20 @@ class ProjectMigrationSandboxToolchainTests(unittest.TestCase):
             launcher = executable(root / "bwrap", b"bubblewrap")
             with (
                 mock.patch(
-                    "validation.tools._project_migration_harness.sandbox_linux.platform.system",
+                    "validation.tools._project_migration_harness.sandbox_linux_discovery.platform.system",
                     return_value="Linux",
                 ),
                 mock.patch(
-                    "validation.tools._project_migration_harness.sandbox_linux.shutil.which",
+                    "validation.tools._project_migration_harness.sandbox_linux_discovery.shutil.which",
                     return_value=str(launcher),
                 ),
                 mock.patch(
                     "validation.tools._project_migration_harness."
-                    "sandbox_linux._validate_launcher",
+                    "sandbox_linux_discovery._validate_launcher",
                 ),
                 mock.patch(
                     "validation.tools._project_migration_harness."
-                    "sandbox_linux.resolve_toolchain",
+                    "sandbox_linux_discovery.resolve_toolchain",
                     side_effect=ValueError("ambiguous rustup toolchain"),
                 ),
             ):
@@ -252,23 +252,23 @@ class ProjectMigrationSandboxToolchainTests(unittest.TestCase):
                 with ExitStack() as stack:
                     stack.enter_context(mock.patch(
                         "validation.tools._project_migration_harness."
-                        "sandbox_linux.platform.system", return_value="Linux",
+                        "sandbox_linux_discovery.platform.system", return_value="Linux",
                     ))
                     stack.enter_context(mock.patch(
                         "validation.tools._project_migration_harness."
-                        "sandbox_linux.shutil.which", return_value=str(launcher),
+                        "sandbox_linux_discovery.shutil.which", return_value=str(launcher),
                     ))
                     stack.enter_context(mock.patch(
                         "validation.tools._project_migration_harness."
-                        "sandbox_linux._validate_launcher",
+                        "sandbox_linux_discovery._validate_launcher",
                     ))
                     stack.enter_context(mock.patch(
                         "validation.tools._project_migration_harness."
-                        "sandbox_linux.resolve_toolchain", return_value=selected,
+                        "sandbox_linux_discovery.resolve_toolchain", return_value=selected,
                     ))
                     stack.enter_context(mock.patch(
                         "validation.tools._project_migration_harness."
-                        "sandbox_linux.bubblewrap_version", return_value="0.11.0",
+                        "sandbox_linux_discovery.bubblewrap_version", return_value="0.11.0",
                     ))
                     probe = stack.enter_context(mock.patch.object(
                         BubblewrapBackend, "probe", autospec=True,

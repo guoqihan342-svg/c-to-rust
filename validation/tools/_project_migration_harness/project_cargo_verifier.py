@@ -3,13 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .artifacts import content_sha256
 from .cargo_raw_output_evidence import persist_captured_cargo_outputs
-from .controller_gates import record_candidate_gate
 from .gate_candidate_sets import current_candidate_members
 from .integration_generation import GenerationCommitError
 from .ledger import ProjectLedger
 from .ledger_security import LedgerError
+from .ledger_run_contract import load_migration_contract
+from .native_link_trace_evidence import persist_captured_native_link_trace
 from .project_cargo_classification_receipt import (
     write_cargo_classification_receipt,
 )
@@ -18,12 +18,22 @@ from .project_cargo_evidence import (
     project_cargo_observation,
 )
 from .project_cargo_diagnostic_intake import (
-    CargoDiagnosticPartition, partition_cargo_diagnostics,
+    CargoDiagnosticPartition,
 )
 from .project_cargo_diagnostic_cohort import (
     CargoDiagnosticCohortDecision, decide_cargo_diagnostic_cohort,
 )
+from .project_cargo_native_link import settle_cargo_native_links
 from .project_generation_context import load_managed_project_context
+from .project_cargo_verifier_support import (
+    bridge_compile_failures as _bridge_compile_failures,
+    classification_required as _classification_required,
+    command_stage as _command_stage,
+    diagnostic_codes as _diagnostic_codes,
+    native_link_trace_required as _native_link_trace_required,
+    partition_diagnostics as _partition_diagnostics,
+    project_diagnostic_input as _project_diagnostic_input,
+)
 from .project_host_gates import record_host_project_observation
 from .project_verification import run_cargo_project_gates
 
@@ -36,17 +46,29 @@ def verify_project_cargo(
     candidate_set = ledger.bind_current_candidate_set(run_id=run_id)
     with ledger.connect() as connection:
         members = current_candidate_members(connection, run_id)
+        try:
+            _contract, migration_manifest = load_migration_contract(
+                ledger.path, connection, run_id,
+            )
+        except LedgerError:
+            migration_manifest = None
     try:
         context = load_managed_project_context(project_root, members)
     except (GenerationCommitError, OSError, UnicodeError, ValueError):
         context = None
+    native_link_trace_required = _native_link_trace_required(context)
+    captured_execution = run_cargo_project_gates(
+        project_root,
+        runtime_root=runtime_root,
+        cargo_command="cargo",
+        timeout_seconds=timeout_seconds,
+        capture_raw_output=True,
+        capture_native_link_trace=native_link_trace_required,
+    )
     execution = persist_captured_cargo_outputs(
-        run_cargo_project_gates(
-            project_root,
-            runtime_root=runtime_root,
-            cargo_command="cargo",
-            timeout_seconds=timeout_seconds,
-            capture_raw_output=True,
+        persist_captured_native_link_trace(
+            captured_execution, out_root=out_root,
+            required=native_link_trace_required,
         ),
         out_root=out_root, out_root_rel=out_root_rel,
     )
@@ -123,6 +145,11 @@ def verify_project_cargo(
             }
         else:
             observations = bound
+    native_link_settlement = settle_cargo_native_links(
+        ledger_path=ledger.path, out_root=out_root, context=context,
+        migration_manifest=migration_manifest, execution=execution,
+        checks=checks, observations=observations,
+    )
     records = []
     for gate_kind, command in (("cargo-check", "check"), ("cargo-test", "test")):
         check = checks.get(command)
@@ -152,13 +179,19 @@ def verify_project_cargo(
                 candidate_set_sha256=candidate_set,
                 partition=partitions[gate_kind], project_record=project_record,
             ))
+    status = (
+        "passed" if all(item["gate_status"] == "passed" for item in records)
+        else "blocked" if execution.get("status") == "blocked"
+        else "failed"
+    )
+    if (
+        status == "passed" and native_link_trace_required
+        and native_link_settlement["status"] != "resolved"
+    ):
+        status = "blocked"
     return {
         "schema_version": 1,
-        "status": (
-            "passed" if all(item["gate_status"] == "passed" for item in records)
-            else "blocked" if execution.get("status") == "blocked"
-            else "failed"
-        ),
+        "status": status,
         "run_id": run_id,
         "candidate_set_sha256": candidate_set,
         "records": records,
@@ -169,126 +202,12 @@ def verify_project_cargo(
         ],
         "diagnostic_admission": admission.payload(),
         "execution": execution,
+        "native_link_settlement": native_link_settlement,
         "semantic_gate": False,
         **(
             {"classification_receipt": classification_receipt}
             if classification_receipt is not None else {}
         ),
-    }
-
-
-def _classification_required(
-    context: dict[str, Any] | None,
-    checks: dict[str, dict[str, Any]],
-    observations: dict[str, dict[str, Any]],
-) -> bool:
-    check_observation = observations.get("cargo-check", {})
-    return (
-        context is not None
-        and "cargo-check" in checks
-        and check_observation.get("schema_version") == 2
-        and check_observation.get("outcome") == "executed"
-        and all(
-            item.get("status") in {"passed", "failed"}
-            and observations.get(gate, {}).get("outcome") == "executed"
-            for gate, item in checks.items()
-        )
-    )
-
-
-def _command_stage(check: dict[str, Any]) -> str | None:
-    command = check.get("command")
-    if (
-        not isinstance(command, list)
-        or len(command) < 2
-        or command[0] != "cargo"
-        or command[1] not in {"check", "test"}
-    ):
-        return None
-    return str(command[1])
-
-
-def _diagnostic_codes(
-    execution: dict[str, Any], check: Any, gate_kind: str,
-) -> list[str]:
-    diagnostics = check.get("diagnostics") if isinstance(check, dict) else None
-    if not isinstance(diagnostics, list):
-        diagnostics = execution.get("diagnostics")
-    codes = {
-        str(item.get("code"))
-        for item in diagnostics or []
-        if isinstance(item, dict) and isinstance(item.get("code"), str)
-    }
-    if not codes:
-        codes.add(f"{gate_kind}-not-executed")
-    return sorted(codes)[:64]
-
-
-def _bridge_compile_failures(
-    *, ledger: ProjectLedger, run_id: str, out_root: Path, out_root_rel: str,
-    members: list[dict[str, str]], candidate_set_sha256: str,
-    partition: CargoDiagnosticPartition, project_record: dict[str, Any],
-) -> list[dict[str, Any]]:
-    if project_record.get("gate_status") != "failed" or partition.admission_blocker:
-        return []
-    by_identity = {
-        (item["unit_id"], item["artifact_id"]): item for item in members
-    }
-    results = []
-    for identity, values in sorted(partition.unit_diagnostics.items()):
-        member = by_identity[identity]
-        record_id = "host-compile-" + content_sha256({
-            "run_id": run_id,
-            "unit_id": member["unit_id"],
-            "candidate_artifact_id": member["artifact_id"],
-            "project_record_id": project_record["record_id"],
-        })[:24]
-        results.append(record_candidate_gate(
-            ledger=ledger,
-            out_root=out_root,
-            out_root_rel=out_root_rel,
-            run_id=run_id,
-            unit_id=member["unit_id"],
-            candidate_artifact_id=member["artifact_id"],
-            record_id=record_id,
-            kind="verifier",
-            gate_family="compile",
-            status="failed",
-            verifier_id="host-derived",
-            diagnostics=values[:32],
-            candidate_set_sha256=candidate_set_sha256,
-            project_record_id=project_record["record_id"],
-        ))
-    return results
-
-
-def _partition_diagnostics(
-    *, gate_kind: str, check: Any, observation: dict[str, Any],
-    members: list[dict[str, str]], context: dict[str, Any] | None,
-) -> CargoDiagnosticPartition:
-    if (
-        context is None or not isinstance(check, dict)
-        or check.get("status") != "failed"
-        or observation.get("outcome") != "executed"
-    ):
-        return CargoDiagnosticPartition({}, [], None)
-    return partition_cargo_diagnostics(
-        gate_kind=gate_kind, diagnostics=check.get("diagnostics"),
-        candidate_members=members, rust_project_ir=context["rust_project_ir"],
-    )
-
-
-def _project_diagnostic_input(
-    context: dict[str, Any] | None, partition: CargoDiagnosticPartition,
-) -> dict[str, Any] | None:
-    if context is None or partition.admission_blocker or not partition.project_diagnostics:
-        return None
-    ir = context["rust_project_ir"]
-    return {
-        "rust_project_ir_sha256": ir["ir_sha256"],
-        "rust_project_interface_sha256": ir["interface_sha256"],
-        "project_input_sha256": context["project_input_sha256"],
-        "diagnostics": partition.project_diagnostics,
     }
 
 

@@ -35,12 +35,12 @@ class ProjectMigrationCompletionCoordinatorTests(
             return_value={"schema_version": 1, "status": "passed"},
         ) as compile_runner, mock.patch(
             "validation.tools._project_migration_harness."
-            "project_completion_coordinator.run_oracle_replay_diff_candidate",
-            return_value={
+            "project_completion_coordinator._semantic_runner",
+            return_value=mock.Mock(return_value={
                 "schema_version": 1, "status": "blocked",
                 "reason_code": "semantic_adapter_unavailable",
-            },
-        ) as semantic_runner:
+            }),
+        ) as runner_selector:
             with self._verified_build_ir():
                 result = resume_project_completion(
                     ledger=self.ledger, run_id="run", harness_root=self.harness,
@@ -62,6 +62,7 @@ class ProjectMigrationCompletionCoordinatorTests(
             (self.out_root / "completion" / "runtime").resolve(),
             kwargs["runtime_root"].resolve(),
         )
+        semantic_runner = runner_selector.return_value
         semantic_kwargs = semantic_runner.call_args.kwargs
         self.assertEqual("project-final", semantic_kwargs["verification_scope"])
         self.assertEqual(self.out_root.resolve(), semantic_kwargs["out_root"].resolve())
@@ -81,22 +82,11 @@ class ProjectMigrationCompletionCoordinatorTests(
                 return {"schema_version": 1, "status": "passed"}
             return run
 
-        patches = [
-            mock.patch(
-                "validation.tools._project_migration_harness."
-                f"project_completion_coordinator.{name}", side_effect=passed(family),
-            )
-            for name, family in (
-                ("run_oracle_replay_diff_candidate", "oracle-replay-diff"),
-                ("run_negative_candidate", "negative"),
-                ("run_unsafe_alias_candidate", "unsafe-alias"),
-                ("run_abi_layout_candidate", "abi-layout"),
-            )
-        ]
-        for patcher in patches:
-            patcher.start()
-            self.addCleanup(patcher.stop)
         with mock.patch(
+            "validation.tools._project_migration_harness."
+            "project_completion_coordinator._semantic_runner",
+            side_effect=lambda family: passed(family),
+        ), mock.patch(
             "validation.tools._project_migration_harness."
             "project_completion_coordinator.verify_candidate_compile",
             return_value={"schema_version": 1, "status": "passed"},

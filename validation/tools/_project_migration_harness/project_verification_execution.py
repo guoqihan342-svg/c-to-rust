@@ -22,7 +22,7 @@ def run_cargo_check(
     cargo: Path, cargo_args: list[str], project: Path, runtime: Path,
     timeout_seconds: int, backend: SandboxBackend, input_sha256: str,
     probe_receipt: SandboxProbeReceipt,
-    *, capture_raw_output: bool = False,
+    *, capture_raw_output: bool = False, native_link_trace: bool = False,
 ) -> dict[str, Any]:
     command = ["cargo", *cargo_args]
     stage = f"cargo-{cargo_args[0]}"
@@ -30,6 +30,7 @@ def run_cargo_check(
         stage, tuple(command), input_sha256,
         timeout_seconds=timeout_seconds,
         requirements=backend.contract.requirements,
+        native_link_trace=native_link_trace,
     )
     try:
         result = backend.execute(
@@ -49,15 +50,21 @@ def run_cargo_check(
             else "sandbox_contract_mismatch"
         )
         return _execution_failure(command, stage, code)
-    stdout = _text(result.completed.stdout)
-    stderr = _text(result.completed.stderr)
-    stdout_bytes = stdout.encode("utf-8")
-    stderr_bytes = stderr.encode("utf-8")
+    stdout_bytes = _raw_bytes(result.completed.stdout)
+    stderr_bytes = _raw_bytes(result.completed.stderr)
     oversized = (
         len(stdout_bytes) > MAX_OUTPUT_BYTES
         or len(stderr_bytes) > MAX_OUTPUT_BYTES
     )
     returncode = int(result.completed.returncode)
+    try:
+        stdout = stdout_bytes.decode("utf-8", errors="strict")
+        stderr_bytes.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        invalid_utf8 = True
+        stdout = ""
+    else:
+        invalid_utf8 = False
     diagnostics = cargo_check_diagnostics(stdout, cargo_args[0], returncode)
     if oversized:
         diagnostics = [{
@@ -65,10 +72,17 @@ def run_cargo_check(
             "stage": stage,
             "message": "Cargo output exceeded the bounded capture size",
         }]
+    elif invalid_utf8:
+        diagnostics = [{
+            "code": "cargo_output_invalid_utf8",
+            "stage": stage,
+            "message": "Cargo output was not valid UTF-8",
+        }]
     output = {
         "command": command,
         "status": (
-            "blocked" if oversized else "passed" if returncode == 0 else "failed"
+            "blocked" if oversized or invalid_utf8
+            else "passed" if returncode == 0 else "failed"
         ),
         "returncode": returncode,
         "timed_out": False,
@@ -88,8 +102,8 @@ def run_cargo_check(
         "diagnostics": diagnostics[:64],
     }
     if capture_raw_output and not oversized:
-        output["_captured_stdout"] = stdout
-        output["_captured_stderr"] = stderr
+        output["_captured_stdout"] = stdout_bytes
+        output["_captured_stderr"] = stderr_bytes
     return output
 
 
@@ -175,10 +189,10 @@ def _environment_policy() -> dict[str, Any]:
     }
 
 
-def _text(value: Any) -> str:
+def _raw_bytes(value: Any) -> bytes:
     if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return value if isinstance(value, str) else ""
+        return value
+    return value.encode("utf-8") if isinstance(value, str) else b""
 
 
 __all__ = [

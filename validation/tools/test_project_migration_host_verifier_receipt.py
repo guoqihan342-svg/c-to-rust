@@ -24,6 +24,9 @@ from validation.tools._project_migration_harness.host_verifier_receipt import (
 from validation.tools._project_migration_harness.sandbox_requirements import (
     SandboxVerificationPlan, strict_sandbox_requirements,
 )
+from validation.tools._project_migration_harness.sandbox_environment import (
+    canonical_environment_items, cargo_guest_environment,
+)
 
 
 class ProjectMigrationHostVerifierReceiptTests(unittest.TestCase):
@@ -196,6 +199,7 @@ class ProjectMigrationHostVerifierReceiptTests(unittest.TestCase):
             timeout_seconds=300,
             requirements_sha256=requirements.sha256,
             requirements=requirements,
+            environment=canonical_environment_items(cargo_guest_environment()),
         )
         out_root = self.root.joinpath(*Path(self.evidence_root).parts)
         local = write_content_addressed_json(

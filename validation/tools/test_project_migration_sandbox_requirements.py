@@ -14,6 +14,10 @@ from validation.tools._project_migration_harness.sandbox_requirements import (
     requirements_from_payload,
     strict_sandbox_requirements,
 )
+from validation.tools._project_migration_harness.sandbox_environment import (
+    canonical_environment_items,
+    cargo_guest_environment,
+)
 
 
 INPUT_SHA256 = "1" * 64
@@ -101,6 +105,7 @@ class ProjectMigrationSandboxRequirementsTests(unittest.TestCase):
         self.assertEqual(COMMAND, first.command)
         self.assertEqual(list(COMMAND), first.payload()["command"])
         self.assertEqual(requirements.sha256, first.requirements_sha256)
+        self.assertEqual(cargo_guest_environment(), first.payload()["environment"])
         self.assertEqual(first, second)
         self.assertEqual(first.sha256, second.sha256)
         self.assertEqual(canonical_sha256(first.payload()), first.sha256)
@@ -120,6 +125,31 @@ class ProjectMigrationSandboxRequirementsTests(unittest.TestCase):
         self.assertEqual(3, len({plan.sha256 for plan in changed}))
         for plan in changed:
             self.assertNotEqual(baseline.sha256, plan.sha256)
+
+    def test_native_link_trace_is_fixed_and_hash_bound(self) -> None:
+        baseline = cargo_verification_plan("cargo-test", COMMAND, INPUT_SHA256)
+        traced = cargo_verification_plan(
+            "cargo-test", COMMAND, INPUT_SHA256, native_link_trace=True,
+        )
+        self.assertNotEqual(baseline.sha256, traced.sha256)
+        self.assertEqual(
+            cargo_guest_environment(native_link_trace=True),
+            traced.payload()["environment"],
+        )
+        self.assertEqual(
+            [
+                "--force-warn=linker-messages", "-C", "linker=/usr/bin/cc",
+                "-C", "link-arg=-Wl,-t,-t",
+            ],
+            traced.payload()["environment"]["CARGO_ENCODED_RUSTFLAGS"].split("\x1f"),
+        )
+        drifted = dict(cargo_guest_environment(native_link_trace=True))
+        drifted["CARGO_NET_OFFLINE"] = "false"
+        with self.assertRaisesRegex(ValueError, "fixed plan"):
+            replace(
+                traced,
+                environment=canonical_environment_items(drifted),
+            )
 
     def test_invalid_commands_fail_closed(self) -> None:
         bad_commands = (

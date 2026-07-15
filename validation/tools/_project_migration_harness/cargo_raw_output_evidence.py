@@ -144,14 +144,13 @@ def persist_captured_cargo_outputs(
                         expected_sha256=digest,
                     )
                     continue
-                if not isinstance(captured, str) or gate_kind is None:
+                if not isinstance(captured, bytes) or gate_kind is None:
                     raise ValueError("captured Cargo output is unavailable")
-                data = captured.encode("utf-8")
-                if hashlib.sha256(data).hexdigest() != digest:
+                if hashlib.sha256(captured).hexdigest() != digest:
                     raise ValueError("captured Cargo output hash drifted")
                 check[f"{stream}_ref"] = write_cargo_raw_output(
                     out_root, out_root_rel, gate_kind=gate_kind,
-                    stream=stream, data=data,
+                    stream=stream, data=captured,
                 )
             except (OSError, TypeError, ValueError, LedgerError):
                 check[f"{stream}_ref"] = None

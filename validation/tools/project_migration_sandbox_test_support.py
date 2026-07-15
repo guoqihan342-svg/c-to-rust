@@ -140,7 +140,7 @@ def bind_execution_plan(
         for stream in ("stdout", "stderr"):
             check[f"{stream}_sha256"] = hashlib.sha256(b"").hexdigest()
             check[f"{stream}_ref"] = None
-            check[f"_captured_{stream}"] = ""
+            check[f"_captured_{stream}"] = b""
     return bound
 
 
@@ -158,7 +158,7 @@ def bind_cargo_output(
     for stream, text in (("stdout", stdout), ("stderr", stderr)):
         check[f"{stream}_sha256"] = hashlib.sha256(text.encode("utf-8")).hexdigest()
         check[f"{stream}_ref"] = None
-        check[f"_captured_{stream}"] = text
+        check[f"_captured_{stream}"] = text.encode("utf-8")
     check["diagnostics"] = cargo_check_diagnostics(
         stdout, str(command[1]), returncode,
     )

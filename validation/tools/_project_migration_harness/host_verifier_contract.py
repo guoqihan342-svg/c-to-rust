@@ -17,6 +17,10 @@ import unicodedata
 from .artifacts import checked_relative_path
 from .gate_evidence import require_content_addressed_reference
 from .ledger_security import LedgerError
+from .sandbox_environment import (
+    canonical_environment_items,
+    cargo_guest_environment,
+)
 from .sandbox_requirements import SandboxVerificationPlan
 
 
@@ -36,7 +40,8 @@ HOST_VERIFIER_TERMINATIONS = (
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 _PLAN_KEYS = {
     "schema_version", "purpose", "command", "input_sha256",
-    "timeout_seconds", "requirements_sha256",
+    "timeout_seconds", "requirements_sha256", "native_link_trace",
+    "environment",
 }
 _SHELL_SYNTAX = re.compile(r"(?:&&|\|\||[;|<>`]|\$\(|\r|\n|\x00)")
 
@@ -139,7 +144,7 @@ def content_addressed_json_reference(value: Any) -> dict[str, Any]:
 def verification_plan_payload(value: Any) -> dict[str, Any]:
     if (
         not isinstance(value, Mapping) or set(value) != _PLAN_KEYS
-        or value.get("schema_version") != 1
+        or value.get("schema_version") != 2
         or value.get("purpose") not in HOST_VERIFIER_GATE_KINDS
     ):
         raise ValueError("host verifier VerificationPlan schema is invalid")
@@ -150,15 +155,25 @@ def verification_plan_payload(value: Any) -> dict[str, Any]:
         "VerificationPlan requirements_sha256",
     )
     timeout = value.get("timeout_seconds")
+    environment = value.get("environment")
     if type(timeout) is not int or not 30 <= timeout <= 3_600:
         raise ValueError("host verifier VerificationPlan timeout is invalid")
+    if (
+        value.get("native_link_trace") is not False
+        or not isinstance(environment, Mapping)
+        or canonical_environment_items(environment)
+        != canonical_environment_items(cargo_guest_environment())
+    ):
+        raise ValueError("host verifier VerificationPlan environment is invalid")
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "purpose": value["purpose"],
         "command": command,
         "input_sha256": value["input_sha256"],
         "timeout_seconds": timeout,
         "requirements_sha256": value["requirements_sha256"],
+        "native_link_trace": False,
+        "environment": dict(canonical_environment_items(environment)),
     }
 
 

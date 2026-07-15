@@ -101,7 +101,10 @@ class ProjectMigrationCargoDiagnosticCohortTests(unittest.TestCase):
                 },
             ),
             mock.patch(f"{module}.record_host_project_observation", recorded),
-            mock.patch(f"{module}.record_candidate_gate") as candidate_gate,
+            mock.patch(
+                "validation.tools._project_migration_harness."
+                "project_cargo_verifier_support.record_candidate_gate",
+            ) as candidate_gate,
         ):
             result = verify_project_cargo(
                 ledger=ledger, run_id="run", project_root=Path("project"),

@@ -99,14 +99,14 @@ class ProjectMigrationCargoRawOutputEvidenceTests(unittest.TestCase):
             )
 
     def test_captured_outputs_are_removed_after_persistence(self) -> None:
-        stdout, stderr = "compiler-json\n", "linker-note\n"
+        stdout, stderr = b"compiler-json\n", b"linker-note\n"
         execution = {
             "status": "failed", "diagnostics": [],
             "checks": [{
                 "command": ["cargo", "check"], "status": "failed",
                 "cargo_executed": True,
-                "stdout_sha256": hashlib.sha256(stdout.encode()).hexdigest(),
-                "stderr_sha256": hashlib.sha256(stderr.encode()).hexdigest(),
+                "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
+                "stderr_sha256": hashlib.sha256(stderr).hexdigest(),
                 "stdout_ref": None, "stderr_ref": None,
                 "_captured_stdout": stdout, "_captured_stderr": stderr,
             }],
@@ -120,13 +120,27 @@ class ProjectMigrationCargoRawOutputEvidenceTests(unittest.TestCase):
         self.assertEqual("failed", persisted["status"])
         for stream, expected in (("stdout", stdout), ("stderr", stderr)):
             self.assertEqual(
-                expected.encode(),
+                expected,
                 read_cargo_raw_output(
                     self.database, check[f"{stream}_ref"],
                     gate_kind="cargo-check", stream=stream,
                     expected_sha256=check[f"{stream}_sha256"],
                 ),
             )
+
+    def test_raw_bytes_round_trip_without_text_normalization(self) -> None:
+        data = b"\xff\x00\r\n"
+        reference = write_cargo_raw_output(
+            self.out_root, "target/run", gate_kind="cargo-test",
+            stream="stdout", data=data,
+        )
+        self.assertEqual(
+            data,
+            read_cargo_raw_output(
+                self.database, reference, gate_kind="cargo-test",
+                stream="stdout", expected_sha256=hashlib.sha256(data).hexdigest(),
+            ),
+        )
 
     def test_missing_capture_turns_execution_into_environment_blocker(self) -> None:
         execution = {

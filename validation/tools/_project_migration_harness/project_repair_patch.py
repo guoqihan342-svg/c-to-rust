@@ -122,6 +122,8 @@ def apply_project_repair_operations(
         build_ir_refs=base_ir["bindings"]["build_ir"],
         candidate_refs=base_ir["bindings"]["candidates"],
         crate=base_ir["crate"],
+        native_link_requirements=base_ir["native_link_requirements"],
+        native_link_plans=base_ir["native_link_plans"],
         **sections,
     )
     if candidate["ir_sha256"] == base_ir["ir_sha256"]:

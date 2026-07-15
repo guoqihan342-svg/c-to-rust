@@ -45,7 +45,7 @@ def project_cargo_observation(
     gate_kind: str,
     expected_input_sha256: str | None,
 ) -> dict[str, Any]:
-    command = _command(gate_kind)
+    command = _command(gate_kind, check)
     unchanged = (
         isinstance(execution, Mapping)
         and execution.get("project_state_unchanged") is True
@@ -148,7 +148,7 @@ def derive_project_cargo_status(
         verified = validate_sandbox_execution_evidence(
             observation.get("sandbox"),
             observation.get("check"),
-            expected_command=_command(gate_kind),
+            expected_command=_command(gate_kind, observation.get("check")),
             expected_input_sha256=expected_input,
             expected_purpose=gate_kind,
             require_raw_output=v2 or v3,
@@ -200,11 +200,16 @@ def _blocker_code(execution: Any) -> str:
     return "cargo_gate_not_executed"
 
 
-def _command(gate_kind: str) -> list[str]:
+def _command(gate_kind: str, check: Any = None) -> list[str]:
     command = CARGO_COMMANDS.get(gate_kind)
     if command is None:
         raise LedgerError("project Cargo gate kind is invalid")
-    return list(command)
+    result = list(command)
+    if gate_kind == "cargo-test" and isinstance(check, Mapping):
+        plan = check.get("sandbox_verification_plan")
+        if isinstance(plan, Mapping) and plan.get("native_link_trace") is True:
+            result.extend(("--jobs", "1"))
+    return result
 
 
 def is_project_cargo_observation_fields(value: Mapping[str, Any]) -> bool:

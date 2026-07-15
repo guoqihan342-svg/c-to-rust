@@ -6,23 +6,19 @@ from typing import Any
 from .artifacts import write_json_artifact
 from .candidate_compile_verifier import verify_candidate_compile
 from .candidate_final_verifier import verify_candidate_final
-from .candidate_semantic_evidence import revalidate_candidate_semantic_verdict
-from .candidate_semantic_runners import (
-    run_abi_layout_candidate, run_negative_candidate,
-    run_oracle_replay_diff_candidate, run_unsafe_alias_candidate,
-)
 from .controller_project_gates import complete_verified_project
-from .gate_authority import CANDIDATE_REQUIRED_GATES
 from .gate_candidate_sets import candidate_set_members
-from .gate_evidence import read_content_addressed_json
 from .ledger import LedgerError, ProjectLedger
-from .ledger_candidate_state import latest_candidate_records
 from .ledger_run_contract import load_migration_contract
 from .project_cargo_verifier import verify_project_cargo
 from .project_completion_build_ir import (
     build_ir_allows_candidate_execution, build_ir_allows_completion,
     build_ir_blocker_kinds, record_build_ir_checkpoint,
     verify_project_final_build_ir,
+)
+from .project_completion_semantics import (
+    SEMANTIC_RUNNERS, missing_candidate_semantic_gates as _missing_candidate_semantic_gates,
+    semantic_runner as _semantic_runner,
 )
 from .project_completion_state import completion_paths, completion_result
 from .project_completion_repair_phase import execute_project_repair_completion_step
@@ -31,9 +27,6 @@ from .project_host_gates import _record_host_project_final
 from .project_integration import integrate_verified_project
 from .project_integration_verifier import verify_integrated_project
 
-SEMANTIC_RUNNERS = (
-    "oracle-replay-diff", "negative", "unsafe-alias", "abi-layout",
-)
 _write_build_ir_verification = record_build_ir_checkpoint
 _build_ir_allows_candidate_execution = build_ir_allows_candidate_execution
 _build_ir_allows_completion = build_ir_allows_completion
@@ -255,46 +248,6 @@ def resume_project_completion(
         paths["out_root"], "completion/completion-receipt.json", receipt,
     )
     return {**completed, "completion_receipt": reference}
-
-
-def _missing_candidate_semantic_gates(
-    ledger: ProjectLedger, run_id: str, candidate_set: str,
-    members: list[dict[str, str]],
-) -> list[str]:
-    missing = []
-    with ledger.connect() as connection:
-        for member in members:
-            rows = latest_candidate_records(
-                connection, run_id, member["unit_id"], member["artifact_id"],
-            )
-            by_family = {str(row["gate_family"]): row for row in rows}
-            for family in sorted(CANDIDATE_REQUIRED_GATES - {"compile"}):
-                row = by_family.get(family)
-                if row is None or row["status"] != "passed":
-                    missing.append(f"{member['unit_id']}:{family}:missing-pass")
-                    continue
-                payload = read_content_addressed_json(
-                    ledger.path, str(row["evidence_path"]), str(row["evidence_sha256"]),
-                )
-                if payload.get("candidate_set_sha256") != candidate_set:
-                    missing.append(f"{member['unit_id']}:{family}:cohort-drift")
-                    continue
-                try:
-                    strict = revalidate_candidate_semantic_verdict(ledger, payload)
-                except LedgerError:
-                    strict = False
-                if not strict:
-                    missing.append(f"{member['unit_id']}:{family}:untrusted-evidence")
-    return missing
-
-
-def _semantic_runner(family: str) -> Any:
-    return {
-        "oracle-replay-diff": run_oracle_replay_diff_candidate,
-        "negative": run_negative_candidate,
-        "unsafe-alias": run_unsafe_alias_candidate,
-        "abi-layout": run_abi_layout_candidate,
-    }[family]
 
 
 __all__ = ["SEMANTIC_RUNNERS", "resume_project_completion"]

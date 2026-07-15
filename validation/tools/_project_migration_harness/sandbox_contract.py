@@ -13,6 +13,9 @@ from .sandbox_requirements import (
     SandboxRequirements, SandboxVerificationPlan, requirements_from_payload,
     strict_sandbox_requirements,
 )
+from .sandbox_native_linker_contract import (
+    NativeLinkerContract, native_linker_contract_from_payload,
+)
 
 
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -23,6 +26,7 @@ class SandboxContract:
     backend: str
     launcher_sha256: str
     toolchain_sha256: str
+    native_linker: NativeLinkerContract | None = None
     requirements: SandboxRequirements = field(
         default_factory=strict_sandbox_requirements,
     )
@@ -30,14 +34,21 @@ class SandboxContract:
     def __post_init__(self) -> None:
         if type(self.requirements) is not SandboxRequirements:
             raise ValueError("sandbox contract requirements type is invalid")
+        if self.native_linker is not None and not isinstance(
+            self.native_linker, NativeLinkerContract,
+        ):
+            raise ValueError("sandbox native linker contract type is invalid")
 
     def payload(self) -> dict[str, object]:
         return {
-            "schema_version": 2,
+            "schema_version": 3,
             "backend": self.backend,
             "os_family": "linux",
             "launcher_sha256": self.launcher_sha256,
             "toolchain_sha256": self.toolchain_sha256,
+            "native_linker": (
+                self.native_linker.payload() if self.native_linker is not None else None
+            ),
             "network": "unshared",
             "project_input": "read-only",
             "runtime_output": "isolated-read-write",
@@ -78,7 +89,7 @@ class SandboxContract:
 
 @dataclass(frozen=True)
 class SandboxRunResult:
-    completed: subprocess.CompletedProcess[str]
+    completed: subprocess.CompletedProcess[bytes]
     contract_sha256: str
     command_sha256: str
     command_started: bool
@@ -121,6 +132,10 @@ def validate_contract(contract: SandboxContract) -> None:
         or SHA256.fullmatch(contract.launcher_sha256) is None
         or not isinstance(contract.toolchain_sha256, str)
         or SHA256.fullmatch(contract.toolchain_sha256) is None
+        or payload.get("native_linker") != (
+            contract.native_linker.payload()
+            if contract.native_linker is not None else None
+        )
         or payload["network"] != "unshared"
         or payload["project_input"] != "read-only"
         or payload["home"] != "isolated-empty"
@@ -150,10 +165,16 @@ def contract_from_payload(value: Any) -> SandboxContract:
     if not isinstance(value, Mapping):
         raise ValueError("sandbox contract payload is invalid")
     requirements = requirements_from_payload(value.get("requirements"))
+    native_linker_value = value.get("native_linker")
+    native_linker = (
+        native_linker_contract_from_payload(native_linker_value)
+        if native_linker_value is not None else None
+    )
     contract = SandboxContract(
         backend=value.get("backend"),
         launcher_sha256=value.get("launcher_sha256"),
         toolchain_sha256=value.get("toolchain_sha256"),
+        native_linker=native_linker,
         requirements=requirements,
     )
     validate_contract(contract)

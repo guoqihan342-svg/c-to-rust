@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-import platform
-import shutil
-import stat
 import subprocess
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 from .sandbox_contract import (
     SandboxContract,
@@ -14,18 +11,26 @@ from .sandbox_contract import (
     canonical_sha256,
     validate_contract,
 )
+from .sandbox_environment import (
+    bubblewrap_environment_args,
+    canonical_environment_items,
+    cargo_guest_environment,
+)
 from .sandbox_requirements import SandboxVerificationPlan
-from .sandbox_linux_probe import bubblewrap_version, run_bubblewrap_probe
+from .sandbox_linux_probe import run_bubblewrap_probe
+from .sandbox_native_linker import (
+    NativeLinkerToolchain, validate_native_linker_toolchain,
+)
+from .sandbox_native_linker_contract import native_linker_contract
 from .sandbox_probe import SandboxProbeReceipt, validate_probe_receipt
 from .sandbox_toolchain import (
     file_sha256,
-    resolve_toolchain,
     toolchain_sha256,
 )
 
 
 MAX_CAPTURE_BYTES = 1024 * 1024 + 1
-Executor = Callable[..., subprocess.CompletedProcess[str]]
+Executor = Callable[..., subprocess.CompletedProcess[Any]]
 
 
 class BubblewrapBackend:
@@ -33,6 +38,7 @@ class BubblewrapBackend:
         self, launcher: Path, tools: dict[str, Path], contract: SandboxContract,
         *, executor: Executor | None = None, requested_cargo: Path | None = None,
         toolchain_root: Path | None = None, backend_version: str = "test-only",
+        native_linker_toolchain: NativeLinkerToolchain | None = None,
     ) -> None:
         validate_contract(contract)
         self._launcher = launcher
@@ -46,6 +52,13 @@ class BubblewrapBackend:
             toolchain_root.resolve(strict=True) if toolchain_root is not None else None
         )
         self._backend_version = backend_version
+        self._native_linker_toolchain = native_linker_toolchain
+        expected_native_linker = (
+            native_linker_contract(native_linker_toolchain)
+            if native_linker_toolchain is not None else None
+        )
+        if expected_native_linker != contract.native_linker:
+            raise ValueError("Sandbox native linker does not match its contract")
         if self._toolchain_root is not None and any(
             path.parent != self._toolchain_root / "bin" for path in self._tools.values()
         ):
@@ -71,6 +84,8 @@ class BubblewrapBackend:
             or verification_plan.requirements != self._contract.requirements
         ):
             raise ValueError("Sandbox verification plan does not match execution")
+        if verification_plan.native_link_trace and self._native_linker_toolchain is None:
+            raise ValueError("Sandbox native linker trace toolchain is unavailable")
         if not isinstance(probe_receipt, SandboxProbeReceipt):
             raise ValueError("Sandbox execution requires a capability probe receipt")
         if probe_receipt.backend_version != self._backend_version:
@@ -83,7 +98,7 @@ class BubblewrapBackend:
         marker.unlink(missing_ok=True)
         argv = self._argv(
             project_root, runtime_root, cargo_args, marker.name,
-            command_sha256,
+            command_sha256, verification_plan.environment,
         )
         stdout_path = runtime_root / f"sandbox-{command_sha256}.stdout"
         stderr_path = runtime_root / f"sandbox-{command_sha256}.stderr"
@@ -134,15 +149,19 @@ class BubblewrapBackend:
             raise ValueError("Sandbox launcher content drifted after discovery")
         if toolchain_sha256(self._tools, self._toolchain_root) != self._contract.toolchain_sha256:
             raise ValueError("Sandbox toolchain content drifted after discovery")
+        if self._native_linker_toolchain is not None:
+            validate_native_linker_toolchain(self._native_linker_toolchain)
     def _argv(
         self, project: Path, runtime: Path, cargo_args: Sequence[str],
         marker_name: str, command_sha256: str,
+        environment: tuple[tuple[str, str], ...],
     ) -> list[str]:
         argv = [
             str(self._launcher), "--die-with-parent", "--new-session",
             "--unshare-all", "--cap-drop", "ALL", "--clearenv",
             "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
-            "--dir", "/workspace", "--dir", "/runtime", "--dir", "/tools",
+            "--dir", "/workspace", "--dir", "/runtime",
+            "--dir", "/toolchain", "--dir", "/toolchain/bin",
             "--dir", "/home", "--dir", "/home/sandbox", "--dir", "/etc",
         ]
         for system_path in ("/usr", "/bin", "/lib", "/lib64"):
@@ -154,23 +173,18 @@ class BubblewrapBackend:
             "--ro-bind", str(project), "/workspace",
             "--bind", str(runtime), "/runtime",
         ))
-        tool_directory = "/tools"
         if self._toolchain_root is None:
             for name, path in sorted(self._tools.items()):
-                argv.extend(("--ro-bind", str(path), f"/tools/{name}"))
+                argv.extend(("--ro-bind", str(path), f"/toolchain/bin/{name}"))
         else:
-            tool_directory = "/toolchain/bin"
-            argv.extend((
-                "--dir", "/toolchain",
-                "--ro-bind", str(self._toolchain_root), "/toolchain",
-            ))
-        argv.extend(_guest_environment(tool_directory))
+            argv.extend(("--ro-bind", str(self._toolchain_root), "/toolchain"))
+        argv.extend(bubblewrap_environment_args(environment))
         argv.extend((
             "--chdir", "/workspace", "--", "/bin/sh", "-c",
             "umask 077; printf '%s\\n%s\\n' \"$1\" \"$2\" > \"$3\" || exit 125; "
             "shift 3; exec \"$@\"",
             "sandbox-launch", self._contract.sha256, command_sha256,
-            f"/runtime/{marker_name}", f"{tool_directory}/cargo", *cargo_args,
+            f"/runtime/{marker_name}", "/toolchain/bin/cargo", *cargo_args,
         ))
         return argv
 
@@ -179,6 +193,7 @@ class BubblewrapBackend:
     ) -> list[str]:
         argv = self._argv(
             project, runtime, ("check",), "probe-unused", "0" * 64,
+            canonical_environment_items(cargo_guest_environment()),
         )
         boundary = argv.index("--chdir")
         return [*argv[:boundary], "--chdir", "/workspace", "--", *command]
@@ -187,45 +202,9 @@ class BubblewrapBackend:
 def discover_sandbox_backend(
     cargo_binary: Path, project_root: Path | None = None,
 ) -> SandboxDiscovery:
-    if platform.system() != "Linux":
-        return SandboxDiscovery(None, "sandbox_os_unsupported")
-    launcher_value = shutil.which("bwrap")
-    if not launcher_value:
-        return SandboxDiscovery(None, "bubblewrap_unavailable")
-    try:
-        launcher = Path(launcher_value).resolve(strict=True)
-        _validate_launcher(launcher)
-        toolchain = resolve_toolchain(cargo_binary, project_root)
-        launcher_sha256 = file_sha256(launcher)
-        contract = SandboxContract(
-            backend="bubblewrap-v1",
-            launcher_sha256=launcher_sha256,
-            toolchain_sha256=toolchain.sha256,
-        )
-        backend_version = bubblewrap_version(launcher)
-        backend = BubblewrapBackend(
-            launcher, toolchain.paths(), contract,
-            requested_cargo=cargo_binary, toolchain_root=toolchain.root,
-            backend_version=backend_version,
-        )
-    except (OSError, ValueError):
-        return SandboxDiscovery(None, "sandbox_toolchain_untrusted")
-    try:
-        probe_root = Path(project_root or Path.cwd()).resolve(strict=True)
-        receipt = backend.probe(probe_root)
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return SandboxDiscovery(None, "sandbox_capability_probe_failed")
-    return SandboxDiscovery(backend, None, receipt)
+    from .sandbox_linux_discovery import discover_sandbox_backend as discover
 
-
-def _validate_launcher(path: Path) -> None:
-    metadata = path.stat()
-    if (
-        not path.is_file()
-        or metadata.st_uid != 0
-        or metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
-    ):
-        raise ValueError("bubblewrap launcher is untrusted")
+    return discover(cargo_binary, project_root)
 
 
 def _system_files() -> list[tuple[str, str]]:
@@ -238,23 +217,6 @@ def _system_files() -> list[tuple[str, str]]:
     return result
 
 
-def _guest_environment(tool_directory: str) -> list[str]:
-    values = {
-        "CARGO_HOME": "/runtime/cargo-home",
-        "CARGO_NET_OFFLINE": "true",
-        "CARGO_TARGET_DIR": "/runtime/target",
-        "CARGO_TERM_COLOR": "never",
-        "HOME": "/home/sandbox",
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-        "PATH": f"{tool_directory}:/usr/bin:/bin",
-        "RUSTC": f"{tool_directory}/rustc",
-        "RUSTDOC": f"{tool_directory}/rustdoc",
-        "TMPDIR": "/tmp",
-    }
-    return [item for key, value in sorted(values.items()) for item in ("--setenv", key, value)]
-
-
 def _marker_matches(path: Path, contract_sha256: str, command_sha256: str) -> bool:
     try:
         return path.read_text(encoding="ascii") == f"{contract_sha256}\n{command_sha256}\n"
@@ -262,16 +224,17 @@ def _marker_matches(path: Path, contract_sha256: str, command_sha256: str) -> bo
         return False
 
 
-def _read_capture(path: Path) -> str:
+def _read_capture(path: Path) -> bytes:
     with path.open("rb") as handle:
-        return handle.read(MAX_CAPTURE_BYTES).decode("utf-8", errors="replace")
+        return handle.read(MAX_CAPTURE_BYTES)
 
 
 def _redacted_argv(argv: Sequence[str]) -> list[str]:
     redacted = []
     for value in argv:
         if value.startswith("/") and value not in {
-            "/proc", "/dev", "/tmp", "/workspace", "/runtime", "/tools",
+            "/proc", "/dev", "/tmp", "/workspace", "/runtime",
+            "/toolchain", "/toolchain/bin",
             "/home", "/home/sandbox", "/usr", "/bin", "/lib", "/lib64",
         }:
             redacted.append("<host-or-guest-path>")

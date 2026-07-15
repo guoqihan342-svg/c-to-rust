@@ -10,6 +10,9 @@ from unittest import mock
 from validation.tools._project_migration_harness.sandbox_contract import (
     SandboxContract,
 )
+from validation.tools._project_migration_harness.sandbox_environment import (
+    cargo_guest_environment,
+)
 from validation.tools._project_migration_harness.sandbox_linux_probe import (
     bubblewrap_version,
     run_bubblewrap_probe,
@@ -43,8 +46,11 @@ def _failed_cleanup(root: Path) -> bool:
 
 
 class ProbeExecutor:
-    def __init__(self, *, extra_route: bool = False) -> None:
+    def __init__(
+        self, *, extra_route: bool = False, environment_drift: bool = False,
+    ) -> None:
         self.extra_route = extra_route
+        self.environment_drift = environment_drift
         self.calls = 0
 
     def __call__(self, argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -54,8 +60,11 @@ class ProbeExecutor:
             f"{name}={value}-guest\n"
             for name, value in sorted(HOST_NAMESPACES.items())
         )
+        environment_values = cargo_guest_environment()
+        if self.environment_drift:
+            environment_values["CARGO_NET_OFFLINE"] = "false"
         environment = "".join(
-            f"{name}=bounded\n" for name in ENVIRONMENT_ALLOWLIST
+            f"{name}={environment_values[name]}\n" for name in ENVIRONMENT_ALLOWLIST
         ) + "PWD=/workspace\n"
         status = "".join(
             f"{name}:\t0000000000000000\n"
@@ -120,6 +129,25 @@ class ProjectMigrationSandboxLinuxProbeTests(unittest.TestCase):
                     project_root=Path(temporary),
                     argv_builder=lambda _runtime, command: ["bwrap", *command],
                     executor=ProbeExecutor(extra_route=True),
+                    preexec_fn=lambda: None,
+                )
+
+    def test_probe_rejects_environment_value_drift(self) -> None:
+        selected = contract()
+        with tempfile.TemporaryDirectory(prefix="linux-probe-env-") as temporary:
+            with (
+                mock.patch(
+                    "validation.tools._project_migration_harness."
+                    "sandbox_linux_probe._host_namespaces",
+                    return_value=HOST_NAMESPACES,
+                ),
+                self.assertRaisesRegex(ValueError, "execution failed"),
+            ):
+                run_bubblewrap_probe(
+                    contract=selected, backend_version="0.11.0",
+                    project_root=Path(temporary),
+                    argv_builder=lambda _runtime, command: ["bwrap", *command],
+                    executor=ProbeExecutor(environment_drift=True),
                     preexec_fn=lambda: None,
                 )
 

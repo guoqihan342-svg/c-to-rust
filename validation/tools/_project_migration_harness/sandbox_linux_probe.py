@@ -10,6 +10,7 @@ import tempfile
 from typing import Any
 
 from .sandbox_contract import SandboxContract, canonical_sha256
+from .sandbox_environment import cargo_guest_environment
 from .sandbox_probe import make_probe_receipt, validate_probe_receipt
 from .sandbox_requirements import ENVIRONMENT_ALLOWLIST, REQUIRED_CAPABILITIES
 
@@ -161,9 +162,12 @@ def _validate_capabilities(status: str) -> None:
 
 def _validate_environment(environment: str) -> None:
     values = _key_values(environment)
-    required = set(ENVIRONMENT_ALLOWLIST)
-    allowed = required | {"OLDPWD", "PWD", "SHLVL", "_"}
-    if not required.issubset(values) or not set(values).issubset(allowed):
+    required = cargo_guest_environment()
+    allowed = set(ENVIRONMENT_ALLOWLIST) | {"OLDPWD", "PWD", "SHLVL", "_"}
+    if (
+        any(values.get(key) != value for key, value in required.items())
+        or not set(values).issubset(allowed)
+    ):
         raise ValueError("sandbox environment allowlist probe failed")
 
 
