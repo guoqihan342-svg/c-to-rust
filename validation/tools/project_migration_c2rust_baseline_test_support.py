@@ -12,23 +12,27 @@ class FakeRunner:
         self, sources: dict[str, str] | None = None, *,
         transpile_returncode: int = 0, transpile_stderr: bytes = b"",
         failing_bin: str | None = None,
+        returncode_by_token: dict[str, int] | None = None,
     ) -> None:
         self.sources = sources or {}
         self.transpile_returncode = transpile_returncode
         self.transpile_stderr = transpile_stderr
         self.failing_bin = failing_bin
+        self.returncode_by_token = dict(returncode_by_token or {})
         self.calls: list[list[str]] = []
         self.working_directories: list[Path] = []
         self.environments: list[dict[str, str]] = []
+        self.stdins: list[bytes] = []
 
     def __call__(
         self, argv: list[str], cwd: Path, environment: dict[str, str],
-        timeout_seconds: int,
+        timeout_seconds: int, stdin: bytes,
     ) -> ProcessOutcome:
         command = list(argv)
         self.calls.append(command)
         self.working_directories.append(cwd)
         self.environments.append(dict(environment))
+        self.stdins.append(stdin)
         self._assert_contract(cwd, environment, timeout_seconds)
         if "--emit-build-files" in command:
             assert Path(command[1]).name == "compile_commands.json"
@@ -40,8 +44,14 @@ class FakeRunner:
             return ProcessOutcome(0, b"generated", self.transpile_stderr)
         if "run" in command and "--bin" in command:
             name = command[command.index("--bin") + 1]
+            selected = next((
+                code for token, code in self.returncode_by_token.items()
+                if token in command
+            ), None)
             return ProcessOutcome(
-                9 if name == self.failing_bin else 0, b"run", b"",
+                selected if selected is not None
+                else 9 if name == self.failing_bin else 0,
+                b"run", b"",
             )
         return ProcessOutcome(0, b"check", b"")
 

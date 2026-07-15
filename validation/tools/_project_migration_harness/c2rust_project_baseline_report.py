@@ -19,6 +19,7 @@ class C2RustProjectBaselineRun:
 def finish_baseline_run(
     out_root: Path, run_id: str, repo_root: Path, compile_commands: Path,
     original_ref: Mapping[str, Any], normalized_ref: Mapping[str, Any],
+    execution_contract: Mapping[str, Any] | None,
     sources: tuple[dict[str, Any], ...], tools: list[dict[str, Any]],
     policy: dict[str, Any], executions: list[dict[str, Any]],
     generated: dict[str, Any],
@@ -29,7 +30,7 @@ def finish_baseline_run(
     status = "blocked" if unique_blockers else "passed"
     compile_path = compile_commands.relative_to(repo_root).as_posix()
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_kind": "c2rust-project-baseline-report",
         "status": status,
         "blockers": unique_blockers,
@@ -42,6 +43,10 @@ def finish_baseline_run(
             "compile_commands_path": compile_path,
             "original_compile_database_ref": dict(original_ref),
             "normalized_compile_database_ref": dict(normalized_ref),
+            "execution_contract": (
+                dict(execution_contract)
+                if execution_contract is not None else None
+            ),
             "source_bindings": list(sources),
         },
         "tools": tools,
@@ -58,7 +63,9 @@ def finish_baseline_run(
             "publication_scope": "portable-summary-only",
             "referenced_artifact_visibility": "private-local",
             "host_absolute_paths_in_report": False,
-            "real_process_exit_zero": status == "passed",
+            "real_process_exit_zero": all(
+                item.get("returncode") == 0 for item in executions
+            ),
             "ai_translation": False,
             "final_semantic_gate": False,
         },

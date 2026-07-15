@@ -15,6 +15,7 @@ def add_c2rust_baseline_parser(commands: Any) -> None:
     )
     parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--compile-database", type=Path, required=True)
+    parser.add_argument("--execution-contract", type=Path)
     parser.add_argument("--c2rust-transpile", type=Path, required=True)
     parser.add_argument("--cargo", type=Path, required=True)
     parser.add_argument("--rustc", type=Path, required=True)
@@ -47,6 +48,7 @@ def run_c2rust_baseline_command(
         timeout_seconds=args.timeout_seconds,
         cargo_toolchain=args.cargo_toolchain,
         environment_overrides=overrides,
+        execution_contract=args.execution_contract,
     )
     return {
         "schema_version": 1,
@@ -55,6 +57,9 @@ def run_c2rust_baseline_command(
         "blockers": run.report["blockers"],
         "source_count": len(run.report["inputs"]["source_bindings"]),
         "wrapper_count": len(run.report["generated"]["wrappers"]),
+        "scenario_count": (
+            run.report["generated"].get("execution_plan") or {}
+        ).get("scenario_count", 0),
         "report": {
             **run.report_ref,
             "path": f"{Path(args.out_root).as_posix()}/{run.report_ref['path']}",

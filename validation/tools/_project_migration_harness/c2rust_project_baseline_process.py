@@ -10,12 +10,16 @@ from typing import Any, Callable, Mapping, Sequence
 
 from .artifacts import content_sha256
 from .c2rust_project_baseline_evidence import write_cas_artifact
+from .c2rust_project_baseline_process_contract import (
+    RUNTIME_OVERRIDE_KEYS, validated_command, validated_environment,
+    validated_expected_returncodes, validated_portable_command,
+    validated_portable_path, validated_stdin,
+)
 
 
 MAX_PROCESS_OUTPUT_BYTES = 4 * 1024 * 1024
 MIN_TIMEOUT_SECONDS = 1
 MAX_TIMEOUT_SECONDS = 3_600
-_OVERRIDE_KEYS = {"CARGO_HOME", "RUSTUP_HOME", "RUSTC_BOOTSTRAP"}
 _TOOLCHAIN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z", re.ASCII)
 
 
@@ -29,7 +33,7 @@ class ProcessOutcome:
 
 
 Runner = Callable[
-    [Sequence[str], Path, Mapping[str, str], int], ProcessOutcome,
+    [Sequence[str], Path, Mapping[str, str], int, bytes], ProcessOutcome,
 ]
 
 
@@ -95,7 +99,7 @@ def normalized_environment_overrides(
     overrides: Mapping[str, str] | None,
 ) -> dict[str, str]:
     selected = dict(overrides or {})
-    if set(selected) - _OVERRIDE_KEYS:
+    if set(selected) - RUNTIME_OVERRIDE_KEYS:
         raise ValueError("c2rust_process_environment_override_invalid")
     for key in ("CARGO_HOME", "RUSTUP_HOME"):
         if key not in selected:
@@ -125,11 +129,16 @@ def run_recorded_process(
     argv: Sequence[str], *, cwd: Path, environment: Mapping[str, str],
     timeout_seconds: int, out_root: Path, purpose: str,
     portable_argv: Sequence[str], portable_working_directory: str,
+    stdin: bytes = b"", expected_returncodes: Sequence[int] = (0,),
+    allowed_environment_keys: Sequence[str] = (),
     runner: Runner | None = None,
-) -> tuple[dict[str, Any], tuple[dict[str, Any], dict[str, Any]]]:
-    command = _validated_command(argv)
-    published_command = _validated_portable_command(portable_argv)
-    published_workdir = _validated_portable_path(portable_working_directory)
+) -> tuple[
+    dict[str, Any],
+    tuple[dict[str, Any], dict[str, Any], dict[str, Any]],
+]:
+    command = validated_command(argv)
+    published_command = validated_portable_command(portable_argv)
+    published_workdir = validated_portable_path(portable_working_directory)
     workdir = Path(cwd).resolve(strict=True)
     if not workdir.is_dir():
         raise ValueError("c2rust_process_working_directory_invalid")
@@ -138,10 +147,12 @@ def run_recorded_process(
         or not MIN_TIMEOUT_SECONDS <= timeout_seconds <= MAX_TIMEOUT_SECONDS
     ):
         raise ValueError("c2rust_process_timeout_invalid")
-    env = _validated_environment(environment)
+    input_bytes = validated_stdin(stdin, limit=MAX_PROCESS_OUTPUT_BYTES)
+    expected = validated_expected_returncodes(expected_returncodes)
+    env = validated_environment(environment, allowed_environment_keys)
     selected = runner or default_process_runner
     try:
-        outcome = selected(command, workdir, env, timeout_seconds)
+        outcome = selected(command, workdir, env, timeout_seconds, input_bytes)
     except (OSError, subprocess.SubprocessError) as error:
         outcome = ProcessOutcome(
             None, b"", str(error).encode("utf-8", errors="replace"),
@@ -159,13 +170,17 @@ def run_recorded_process(
         out_root, "process-stderr", stderr, suffix="bin",
         limit=MAX_PROCESS_OUTPUT_BYTES,
     )
+    stdin_ref = write_cas_artifact(
+        out_root, "process-stdin", input_bytes, suffix="bin",
+        limit=MAX_PROCESS_OUTPUT_BYTES,
+    )
     output_limited = stdout_limited or stderr_limited
     passed = (
         outcome.command_started is True and outcome.timed_out is False
-        and outcome.returncode == 0 and not output_limited
+        and outcome.returncode in expected and not output_limited
     )
     evidence = {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_kind": "c2rust-project-process-execution",
         "purpose": purpose,
         "status": "passed" if passed else "failed",
@@ -173,11 +188,17 @@ def run_recorded_process(
         "argv_sha256": content_sha256(published_command),
         "local_execution_binding_sha256": content_sha256({
             "argv": command, "working_directory": workdir.as_posix(),
+            "stdin_sha256": stdin_ref["sha256"],
+            "expected_returncodes": expected,
+            "environment": dict(sorted(env.items())),
         }),
         "working_directory": published_workdir,
         "environment_keys": sorted(env),
         "environment_sha256": content_sha256(dict(sorted(env.items()))),
         "timeout_seconds": timeout_seconds,
+        "expected_returncodes": expected,
+        "stdin_sha256": stdin_ref["sha256"],
+        "stdin_ref": stdin_ref,
         "command_started": outcome.command_started,
         "timed_out": outcome.timed_out,
         "returncode": outcome.returncode,
@@ -189,16 +210,16 @@ def run_recorded_process(
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
     }
-    return evidence, (stdout_ref, stderr_ref)
+    return evidence, (stdout_ref, stderr_ref, stdin_ref)
 
 
 def default_process_runner(
     argv: Sequence[str], cwd: Path, environment: Mapping[str, str],
-    timeout_seconds: int,
+    timeout_seconds: int, stdin: bytes,
 ) -> ProcessOutcome:
     try:
         completed = subprocess.run(
-            list(argv), cwd=cwd, env=dict(environment), stdin=subprocess.DEVNULL,
+            list(argv), cwd=cwd, env=dict(environment), input=stdin,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
             timeout=timeout_seconds,
         )
@@ -210,52 +231,6 @@ def default_process_runner(
             None, _timeout_bytes(error.stdout), _timeout_bytes(error.stderr),
             timed_out=True,
         )
-
-
-def _validated_command(value: Sequence[str]) -> list[str]:
-    if (
-        isinstance(value, (str, bytes)) or not value
-        or any(not isinstance(item, str) or not item or "\0" in item for item in value)
-    ):
-        raise ValueError("c2rust_process_argv_invalid")
-    return list(value)
-
-
-def _validated_portable_command(value: Sequence[str]) -> list[str]:
-    command = _validated_command(value)
-    for token in command:
-        if (
-            Path(token).is_absolute() or re.match(r"^[A-Za-z]:[/\\]", token)
-            or token.startswith(("/", "\\\\"))
-        ):
-            raise ValueError("c2rust_process_portable_argv_invalid")
-    return command
-
-
-def _validated_portable_path(value: str) -> str:
-    if (
-        not isinstance(value, str) or not value or "\\" in value
-        or Path(value).is_absolute() or ".." in Path(value).parts
-    ):
-        raise ValueError("c2rust_process_portable_working_directory_invalid")
-    return Path(value).as_posix()
-
-
-def _validated_environment(value: Mapping[str, str]) -> dict[str, str]:
-    required = {
-        "CARGO_HOME", "CARGO_NET_OFFLINE", "CARGO_TARGET_DIR",
-        "CARGO_TERM_COLOR", "HOME", "LANG", "LC_ALL", "PATH", "RUSTC",
-        "TMPDIR",
-    }
-    if (
-        not isinstance(value, Mapping) or not required <= set(value)
-        or set(value) - required - _OVERRIDE_KEYS
-        or any(type(key) is not str or type(item) is not str for key, item in value.items())
-        or value.get("CARGO_NET_OFFLINE") != "true"
-        or value.get("CARGO_TERM_COLOR") != "never"
-    ):
-        raise ValueError("c2rust_process_environment_invalid")
-    return dict(value)
 
 
 def _bounded(value: bytes) -> tuple[bytes, bool]:

@@ -4,7 +4,7 @@
 
 本文是项目的中文 canonical backlog，也是当前状态、执行顺序和能力边界的唯一入口。详细实现过程由 Git 历史、coverage matrix 和机器可读 evidence 保存，不再把逐日流水账复制到本文。
 
-最后更新：2026-07-15。
+最后更新：2026-07-16。
 
 ## 1. 当前状态
 
@@ -707,6 +707,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
           - [ ] A19d3d2a2：把 BuildIR 中经内容绑定的编译变体、链接命令、动态导出/native library、测试 runner 和资源限制投影进 C2Rust/Cargo 验收。未知项目遇到 computed goto 等工具不支持特性时，只能从项目自身元数据发现并先通过原生 oracle 的可移植构建变体；Rust 侧必须继承等价链接语义和显式资源配置，并把原 C/转换后测试命令、逐项结果和差异写入正式报告。必须区分“所有 translated main 均完成 Cargo 编译”和“只有原构建系统声明的测试/验证场景才是运行门禁”，从 BuildIR 绑定每个测试目标的 argv、stdin、fixture、工作目录、资源限制与期望退出/输出合同；需要参数的普通 CLI 不能被无参数假失败，也不能未经有效场景执行就冒充语义通过。Lua 压测已证明手工选择 `LUA_USE_JUMPTABLE=0`、补 `--export-dynamic`、恢复默认栈后官方全套可通过，Expat 诊断已证明手工补有效 XML/benchmark 参数可通过，但这些手工步骤都不计本项完成证据，生产代码也禁止读取 Lua、Expat 或任何项目身份。
             - [ ] A19d3d2a2a：同一 C 源码存在多个语义编译配置时，按内容绑定的 variant key 生成独立 Rust module/target/symbol namespace，并将每个链接目标只连接到对应变体；不能证明配置等价或消除符号碰撞时显式 refusal，禁止让 C2Rust 静默丢弃重复命令。
             - [x] A19d3d2a2b：C2Rust baseline 已在 Cargo 前检查同源多语义配置，并重新打开 hash/size/path 绑定的 transpiler stderr；即使进程退出码为 0，只要去除 ANSI 后出现行首 `error:` 诊断也会以 `c2rust_transpile_diagnostics_failed` 阻断。stderr 缺失、漂移或路径逃逸以 `c2rust_transpile_diagnostics_unavailable` 阻断；该门禁不把错误转嫁给后续 Cargo，也不把部分生成树记为成功。
+            - [x] A19d3d2a2c：`c2rust-baseline` 新增身份中立、内容绑定的声明式执行场景合同。合同必须精确覆盖全部生成 wrapper；每个 wrapper 只能显式标记 `compile_only`，或声明一个或多个具有唯一 ID 的场景，并严格绑定 argv、UTF-8 stdin、受限环境变量、仓库内工作目录、expected exit 和 timeout。原始合同与规范化合同都进入不可变 CAS，参与 run identity；报告 schema v2 绑定场景输入、stdin artifact、执行计划、实际退出码和逐项状态，重开时会逐项交叉验证规范化合同并对合同、输入、计划或 CAS 漂移 fail closed。未提供合同时保留旧兼容路径，但显式合同模式只执行声明场景，普通 CLI 不再因无参数启动而假失败，也不能以 `compile_only` 冒充语义通过。聚焦门禁在 Windows 与 WSL 均为 39/39；完整 `project_migration` 回归在 Windows 为 1019 项通过、11 项平台条件跳过，在 WSL 为 1019 项通过、6 项平台条件跳过，均零失败。生产代码不读取项目名称、测试名称或 fixture 身份。Expat 原始 29 TU compile database 仍因 7 组同源多配置在 Cargo 前正确阻断，报告 SHA-256 `09f21f2b6d16ce60367cc8dcb1ec65785eab2f8be2659fb70e3b0b5de1abc588`；仅为隔离验证本子能力而构造的测试专用单变体投影完成 29 TU、6 wrapper、6 个声明场景且实际退出码全为 0，报告 SHA-256 `dd7f2194702ee1a45dc4601beb2e51753adff2907635a0bbf8cfebea63bbb2f4`。后者不是生产变体选择规则、不是 held-out 或 Expat 全项目通过；两份报告都固定 `semantic_gate=false`、numerator 0，且尚未证明构建系统测试清单一一对应，因此不关闭 A19d3d2a2a、A19d3d2a2、A19d3d2a 或其父项。
 
   **A19e 项目级验证与精确 repair**
 
@@ -771,19 +772,44 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   - [x] 生产编排包与相关 agent 配置通过已知项目/函数/路径身份静态扫描，覆盖 raw text、常量拼接、bytes、SHA 前缀/全值、hex/base64 编码；图结构与 Cargo 输出已有重命名等价测试，并新增无项目身份的双翻译单元规划用例。
   - [x] 建立固定有限 held-out 合同工具：5–20 个不重复项目、至少 12 个 construct family、至少 2 个未参与规则开发项目，显式绑定 repo/commit/tree/compile DB，并拒绝身份分派和近重复项目。真实模式禁止 case 自报 translation evidence，只能按 plan 推导 ledger 路径后只读重开 SQLite，复验原仓库树、compile DB、source/generated closure、AI provider evidence、每个 candidate gate、不可变 candidate set 和 project final bundle；资源数量/大小有界，离线合同通过不能冒充翻译成功。
   - [x] 建立通用 raw C2Rust 整项目执行非回归基线，并在同一生产路径上实际跑通固定提交的 FlashDB、cJSON 和 libyaml：合计 56 个 TU、39 个 translated executable，三个项目的原生测试与迁移后 wrapper 均通过。生产实现不读取项目/测试/函数身份，工作目录与路径规范化均来自 compile database/C2Rust 规则，报告与原始流内容寻址且公开摘要清除宿主绝对路径。三个项目均参与了本阶段规则开发，因此结果不是 held-out、AI-primary 或 final semantic acceptance，不能关闭下一项或 P0-A19 父项。
-  - [ ] 在不超过 20 个有限 case 中覆盖至少 5 个真实项目、整项目构建和 12 个不同 construct family；至少 2 个项目不得参与对应规则开发。禁止 1,000/10,000 轮和重复近似切片放大成功率。
+  - [ ] **A19f1：competition whole-project qualification matrix（机器验收合同）**。固定矩阵总数不超过 20 个 `case_id`，首批逐项覆盖 TinyCC、FlashDB、cJSON、libyaml、Lua 5.5、Expat、PostgreSQL 和 Linux kernel。一个 case 由项目、上游 pin、声明的全项目构建范围和正式 variant 集合共同定址；每个 pinned case 只能执行一次正式 qualification，失败后若据此修改规则，原 case 永久转为 development regression，后续必须使用新的 pin/`case_id` 且仍计入 20 个上限。禁止 1,000/10,000 次重复运行、近重复项目或多次挑选最好结果。
+
+    每行在启动前必须生成 hash-bound `qualification-case.json`，并由独立 verifier 重算下列 Q1-Q11；任一字段缺失、漂移、未知或未通过都只能得到 `blocked`/`not-run`，不能得到项目 pass、`semantic_gate=true` 或 translator numerator。每行都必须声明 `required_gates=[Q1,...,Q11]`，不能按项目删减门禁。
+
+    | Gate | 必填字段与机器判定 |
+    | --- | --- |
+    | Q1 `source_pin` | 固定 `upstream_repository`、40-hex `source_commit`、`source_tag_or_ref`、Git tree id 和重算的 `repository_tree_sha256`；实际 checkout 必须 HEAD 相等、tracked-clean、内容树相等。任一 pin 尚未写入正式 case manifest 时禁止启动。 |
+    | Q2 `competition_proof` | 绑定比赛环境、toolchain、sandbox 和 `proof_class=competition-exact`，并重开真实 OpenCode model probe、session、worker 与 raw stream。P0-A19 正式 AI 证据必须是 `opencode + GLM-5.1 + c2rust-candidate + max`；DeepSeek 只允许标成 `auxiliary`/`local-validation`，不能替代 GLM-5.1、competition-exact 或最终模型证明。 |
+    | Q3 `native_c_baseline` | 绑定原 C 的 configure/build argv、环境、退出状态、raw output，以及上游官方或仓库声明 test suite 的版本、命令、非零发现数和逐项结果；原生构建或声明测试未通过时不得继续声称转换成功。 |
+    | Q4 `build_test_inventory` | 从项目元数据完整列出并 hash 绑定所有 TU、同源 compile variant、generated source/header、compile/link command、library/export、target、feature/config、test runner、scenario、argv/stdin、fixture/data、工作目录与 timeout/resource；未知、漏项或无法投影均 fail closed。 |
+    | Q5 `candidate_repair_provenance` | 绑定全部 typed-IR/C2Rust/AI 候选及 accepted/rejected 状态、provider/model、prompt/context、输入输出、patch、repair/rollback、选择理由和 artifact SHA；`candidate_set_complete` 必须由宿主重算，不能只发布获胜候选。 |
+    | Q6 `rust_reconstruction` | RustProjectIR/Cargo 必须重建 Q4 声明的完整 crate/module、bin/lib/example、variant、link/export、test target 和 scenario，执行所有 target 的 build/check/test；只编译部分 TU、单个 binary、wrapper 或 slice 不算整项目重建。 |
+    | Q7 `execution_completeness` | 原 C/Rust target 与 test inventory 一一对应，`silent_skip_count=0`、`zero_test_target_count=0`、`required_test_omission_count=0`；任何 skip 都必须有来源、理由和 receipt，必需测试被显式 skip 仍阻断 pass。 |
+    | Q8 `per_test_oracle_diff` | 每个稳定 test/scenario id 都绑定 C 与 Rust 的 argv、stdin、fixture、环境、工作目录、资源、exit/signal、stdout/stderr 和 schema-aware oracle diff；只有全部必需逐项 diff 通过才可进入 final。 |
+    | Q9 `no_original_c_residual` | 从实际 linker trace、ELF/archive/import 重开结果证明项目自有原 C source/object/static/shared library 链接计数为 0。若必须保留声明清楚的 native/FFI 边界，只能发布 `conversion_scope=partial`，不得命名或标记为 `full conversion`，也不能关闭本矩阵的全项目通过。 |
+    | Q10 `resource_recovery` | 固定 CPU、内存、wall time、进程树、磁盘、网络、provider call/token 上限，绑定超限分类、checkpoint、crash/timeout 恢复、去重调用和最终资源实测；超比赛资源只能 `blocked`，不能缩小范围后改写为 pass。 |
+    | Q11 `project_final` | 唯一 CompletionCoordinator 签发并由独立 verifier 重开的 `project-final` receipt 必须绑定 Q1-Q10、完整 cohort/generation、所有 project gates、空 blockers、`semantic_gate=true` 和最终 invariant audit；plan/index/compile/Cargo 单门通过均不具备完成权限。 |
+
+    | case_id | 项目与固定 upstream | held-out 资格 | 全项目 qualification 边界与当前状态 |
+    | --- | --- | --- | --- |
+    | `wpq-tinycc` | TinyCC；`https://repo.or.cz/tinycc.git`；已知开发 pin `mob@d9d02c56401e43be43760b63f7d82f771a7ed1f6`，正式 tag/ref/tree receipt 仍须在 Q1 固化 | `development-regression`；已用于 multi-variant/closure 加固，永不计 held-out | `blocked`：现有报告在 Cargo/AI 前被同源多配置与 C2Rust fatal diagnostic 阻断；必须按 Q1-Q11 重新 qualification，不能把原生测试通过或 planner inventory 当转换成功。 |
+    | `wpq-flashdb` | FlashDB；`https://gitcode.com/xwxf/FlashDB.git`；已知比赛 pin `competition@f9d0421315c564fb890a1b14eee77b290e0d7bbe`，正式 tree receipt 仍须在 Q1 固化 | `development-regression`；已参与规则开发，永不计 held-out | `blocked`：已有 WSL/local raw baseline 与函数级证据不是 competition-exact whole-project `project-final`，必须补齐全量 target/test、真实 GLM-5.1 provider、逐项 oracle 和 Q1-Q11。 |
+    | `wpq-cjson` | cJSON；`https://github.com/DaveGamble/cJSON.git`；正式 commit/tag/tree 尚未写入 case manifest | `development-regression`；已参与规则开发，永不计 held-out | `not-run`：现有 WSL C2Rust regression 只作本地非回归，不能替代正式 AI、完整测试投影、无 C 残留和 `project-final`。未固化 Q1 前不得启动。 |
+    | `wpq-libyaml` | libyaml；`https://github.com/yaml/libyaml.git`；正式 commit/tag/tree 尚未写入 case manifest | `development-regression`；已参与规则开发，永不计 held-out | `not-run`：现有 WSL C2Rust regression 不是 whole-project qualification；Q1-Q11 全部待正式证据。 |
+    | `wpq-lua-5-5` | Lua 5.5；`https://github.com/lua/lua.git`；正式 5.5 commit/tag/tree 尚未写入 case manifest | `development-regression`；已推动 `VaList`/variant/link 修复，永不计 held-out | `blocked`：手工选择 `LUA_USE_JUMPTABLE=0`、补 link flag 或恢复栈不能成为生产证明；必须由项目元数据投影并通过 Q1-Q11。 |
+    | `wpq-expat` | Expat；`https://github.com/libexpat/libexpat.git`；开发 ref `R_2_8_2` 已知，正式 commit/tree 尚未写入 case manifest | `development-regression`；初始 probe 已推动工作目录修复，永不计 held-out | `blocked`：身份中立的声明式场景合同子能力已闭合，但原始 29 TU 数据库仍因 7 组同源多配置在 Cargo 前阻断，Q1-Q11 也未完成；测试专用单变体回归不得复写为 held-out、正式变体规则或全项目 pass。 |
+    | `wpq-postgresql` | PostgreSQL；`https://git.postgresql.org/git/postgresql.git`；正式 commit/tag/tree 尚未写入 case manifest | `reserved-held-out`；只有 provenance ledger 证明 `rule_development_used=false` 后才计入至少两个真实 held-out 之一 | `not-run`：只能按固定 pin 的仓库级全量范围验收。规划、索引、迁移少量目录/TU 或只编译部分 target 一律不算全量翻译成功；若完整范围超比赛 Q10 资源，结果必须是 `blocked`，不得缩成 slice/partial 后改口为 pass。 |
+    | `wpq-linux-kernel` | Linux kernel；`https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git`；正式 commit/tag/tree 与 build config 尚未写入 case manifest | `reserved-held-out`；只有 provenance ledger 证明 `rule_development_used=false` 后才计入至少两个真实 held-out 之一 | `not-run`：只能按固定 pin/config 的仓库级全量范围验收。仅 Kconfig/BuildIR 规划、索引、翻译子系统/TU、构建单一 image/tool 或运行部分 selftest 均不算全量翻译成功；若完整范围超比赛 Q10 资源，必须 `blocked`，不得降格范围后标 pass。 |
+
+    正式矩阵开始前必须至少有两个 `held_out=true`、`rule_development_used=false` 且 development provenance 可重开的项目；当前预留 PostgreSQL 与 Linux kernel，但预留标签本身不是 held-out 证明。TinyCC、FlashDB、cJSON、libyaml、Lua 5.5、Expat 的任何后续结果都只能进入 development-regression 栏。若 PostgreSQL 或 Linux kernel 的首次正式 case 反向用于修改规则，该项目从下一次运行起也失去 held-out 资格，必须在总数不超过 20 的矩阵中换入此前完全未参与规则开发的新项目。
 
   P0-A10 的现有 12 项是函数/fragment 输入与 exact 路径非回归基线；A19f 是未知仓库的整项目 BuildIR、迁移 DAG、Cargo 重建和项目级语义验收。两者共享反特判规则，但任何一方通过都不能替另一方关闭。
 
   **下一执行顺序（按完成条件推进，不按测试用例身份推进）**：
 
-  1. A19a7c-A19a8：canonical BuildIR validator、真实 toolchain 绑定、显式沙箱 Make 采集和 7/7 原编译器语法见证已落地；下一步由通用 toolchain 参数探针生成并重开外部链接解析记录。当前 FlashDB 的两个 `-lpthread` 依赖因没有该记录而正确保持 `closure_complete=false`，禁止按库名白名单放行或把 dry-run 采集冒充语义证据。
-  2. A19b3-A19b4：闭合可重开的 CIndex blocker/source CAS、声明/type/macro facts、确定性选择回执和 frontier 懒加载；required facts、预算或 receipt 未闭合的 assignment 不得启动 AI worker。
-  3. A19e5a-A19e5d：建立 TransitionAuthority、声明式 FSM、事件投影和 invariant audit；并行定义 A19e7 verifier IPC/receipt 与 A19e8 SandboxBackend capability contract，但在单一状态写入权威闭合前不接入 pass。
-  4. A19c4c 与 A19e8：以已闭合的 A19e4a-A19e4d candidate-set/quarantine/宿主 compile/repair 链为基线，在不可降级沙箱上用 verifier-owned failure、critical-path、cost 和 convergence facts 驱动信息增益调度；模型自评分不得进入优先级。SandboxBackend 可按 bubblewrap/等价实现分线程开发，所有实现共享同一 conformance suite。
-  5. A19d3c2b3c3、A19e7、A19e8b2 与 A19d3d2：Cargo raw stdout/stderr、可重算 classification receipt 和受限 unresolved-link intake 已闭合；下一步接入 initialization、feature/cfg、ABI 的独立 process-issued verifier receipt，并扩展 RustProjectIR/Cargo 到真实多 target/feature/native-link 项目。不得从 Cargo 文本猜测这些语义 family，也不得绕过 RustProjectIR。
-  6. A19d3c2b4、A19c4a-A19c4e、A19e4e、A19e6 与 A19e7：在 BuildIR/RustProjectIR 上接通 global AI planner、多策略候选、角色化最小检索、可审计 expansion、知识记忆和 project-level repair，同时接通进程隔离的 semantic verifier 与唯一 CompletionCoordinator，强制生成全量 `project-final` cohort/generation 并重跑全部 candidate/project gates；关闭所有可改变 semantic 状态的低层 debug CLI。
-  7. 完成上述合同后再用固定有限清单执行 A19f 真实 held-out 整项目 build/oracle 验收，并按 A19g 做有限 Windows/WSL 门禁、提交、push 与远端 SHA 核对；开发阶段不在每个小改动后启动模型，也不运行 1,000/10,000 轮。
+  1. 先闭合 A19d3d2a-A19d3d2a2a 的 scenario/test metadata 与 variant/target projection：只从项目自有 CMake/CTest/Meson/Make/Kconfig 等元数据生成 Q3-Q4 inventory，把同源 variant、link/export、target、runner、argv/stdin、fixture、工作目录和资源合同确定性投影到 RustProjectIR/Cargo；原 C baseline、目标一一对应、零静默跳过和零 zero-test 未证明前，不启动正式 qualification。
+  2. 再按依赖顺序完成 closure upgrade、global AI planner、project verifier 与 CompletionCoordinator：A19a7c-A19b4 先闭合 toolchain/generated/native-link/CIndex/frontier 并可重开全部事实；A19d3c2b4、A19c4a-A19c4e 再接通真实 OpenCode/GLM-5.1 全局规划、多候选和 project repair；A19e4e、A19e7、A19e8 随后用独立进程与不可降级沙箱执行 project verifier；最后由 A19e5-A19e6 的单一权威和唯一 CompletionCoordinator 生成全量 `project-final` cohort/generation、重跑全部门禁并签发可恢复 final receipt。任何低层 CLI、model JSON 或局部门禁都不能提前完成项目。
+  3. 最后冻结 A19f1 不超过 20 个 case 的正式矩阵，在 competition-exact 主机上按表逐项、每个 pinned case 一次执行 Q1-Q11；至少两个真实未参与规则开发的 held-out 项目必须保留该资格。逐行记录 `passed`/`blocked` 而不挑选性重跑，再按 A19g 执行有限 Windows/WSL 门禁与交付核对；禁止 1,000/10,000 轮。
 
   **A19g 阶段交付规则（每个独立阶段重复执行）**：完成一个可复核阶段后，先运行一次有限 Windows/WSL 门禁与 `git diff --check`，确认没有凭据、宿主缓存、`target/` 运行产物或测试身份特判进入提交；随后创建范围单一的 commit、push 当前分支，并核对本地 `HEAD` 与远端分支 SHA 完全一致。未测试、未提交、未 push 或远端未核对的阶段不得在待办中标成完成。
 

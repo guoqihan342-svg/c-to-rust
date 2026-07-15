@@ -11,6 +11,9 @@ from .bounded_artifact_io import (
     BoundedArtifactIOError, read_bounded_artifact, write_immutable_artifact,
 )
 from .c2rust_project_baseline_schema import validate_c2rust_baseline_report
+from .c2rust_project_baseline_contract_reopen import (
+    validate_execution_contract_reopen,
+)
 
 
 MAX_CAS_ARTIFACT_BYTES = 64 * 1024 * 1024
@@ -100,6 +103,7 @@ def write_baseline_report(
     out_root: Path, report: Mapping[str, Any],
 ) -> dict[str, Any]:
     _validate_report_shape(report)
+    _validate_execution_contract_binding(Path(out_root).resolve(), report)
     return write_cas_artifact(
         out_root, "report", canonical_json_bytes(dict(report)),
         suffix="json", limit=MAX_REPORT_BYTES,
@@ -145,7 +149,25 @@ def reopen_c2rust_project_baseline(
         )
         snapshot = _strict_object(snapshot_data, "generated_snapshot")
         _validate_snapshot(root, snapshot, identities)
+    _validate_execution_contract_binding(root, report)
     return report
+
+
+def _validate_execution_contract_binding(
+    root: Path, report: Mapping[str, Any],
+) -> None:
+    contract = report.get("inputs", {}).get("execution_contract")
+    if not isinstance(contract, Mapping) or contract.get("status") != "validated":
+        return
+    normalized_data = _read_reference(
+        root, contract["normalized_ref"], MAX_CAS_ARTIFACT_BYTES,
+        role="scenario-contract",
+    )
+    normalized = _strict_object(normalized_data, "scenario_contract")
+    try:
+        validate_execution_contract_reopen(report, normalized)
+    except ValueError as error:
+        raise C2RustBaselineEvidenceError(str(error)) from error
 
 
 def _required_report_refs(report: Mapping[str, Any]) -> set[tuple[str, str, int]]:
@@ -156,6 +178,12 @@ def _required_report_refs(report: Mapping[str, Any]) -> set[tuple[str, str, int]
     for execution in report.get("executions", []):
         result.add(_identity(execution["stdout_ref"]))
         result.add(_identity(execution["stderr_ref"]))
+        result.add(_identity(execution["stdin_ref"]))
+    contract = report.get("inputs", {}).get("execution_contract")
+    if isinstance(contract, Mapping):
+        result.add(_identity(contract["source_ref"]))
+        if contract.get("normalized_ref") is not None:
+            result.add(_identity(contract["normalized_ref"]))
     snapshot = report.get("generated", {}).get("snapshot_ref")
     if snapshot is not None:
         result.add(_identity(snapshot))

@@ -7,12 +7,16 @@ from typing import Any, Mapping
 from .artifacts import canonical_json_bytes, content_sha256
 from .c2rust_project_baseline_cargo import prepare_generated_cargo
 from .c2rust_project_baseline_compile_db import normalize_compilation_database
+from .c2rust_project_baseline_contract_evidence import (
+    bind_execution_contract, materialize_contract_source,
+)
 from .c2rust_project_baseline_diagnostics import (
     has_multi_configuration_source, has_transpiler_error_diagnostics,
 )
 from .c2rust_project_baseline_evidence import (
     reopen_c2rust_project_baseline, snapshot_generated_tree, write_cas_artifact,
 )
+from .c2rust_project_baseline_execution import execute_generated_cargo
 from .c2rust_project_baseline_process import (
     Runner, cargo_toolchain_prefix, executable_binding,
     minimal_process_environment, normalized_environment_overrides,
@@ -21,10 +25,8 @@ from .c2rust_project_baseline_process import (
 from .c2rust_project_baseline_report import (
     C2RustProjectBaselineRun, finish_baseline_run as _finish,
 )
-from .c2rust_project_baseline_workdirs import (
-    portable_package_workdir, portable_repository_workdir,
-    repository_working_directory, translated_source_working_directories,
-)
+from .c2rust_project_baseline_scenarios import project_baseline_scenarios
+from .c2rust_project_baseline_workdirs import translated_source_working_directories
 
 
 def run_c2rust_project_baseline(
@@ -32,6 +34,7 @@ def run_c2rust_project_baseline(
     out_root: Path, cargo: Path, rustc: Path, timeout_seconds: int = 300,
     cargo_toolchain: str | None = None,
     environment_overrides: Mapping[str, str] | None = None,
+    execution_contract: Path | None = None,
     runner: Runner | None = None,
 ) -> C2RustProjectBaselineRun:
     repository = Path(repo_root).resolve(strict=True)
@@ -46,6 +49,7 @@ def run_c2rust_project_baseline(
     tools = [_portable_tool(item) for item in runtime_tools]
     cargo_prefix = cargo_toolchain_prefix(cargo_toolchain)
     selected_overrides = normalized_environment_overrides(environment_overrides)
+    bound_contract = bind_execution_contract(repository, execution_contract)
     policy = {
         "timeout_seconds": timeout_seconds,
         "minimal_environment": True,
@@ -56,6 +60,9 @@ def run_c2rust_project_baseline(
         "environment_override_keys": sorted(selected_overrides),
         "environment_overrides_sha256": content_sha256(selected_overrides),
         "rustc_bootstrap": selected_overrides.get("RUSTC_BOOTSTRAP") == "1",
+        "wrapper_execution_policy": (
+            "declared-scenarios" if bound_contract else "legacy-all-wrappers"
+        ),
     }
     original_path = Path(compile_commands).resolve(strict=True)
     original_ref = write_cas_artifact(
@@ -65,11 +72,15 @@ def run_c2rust_project_baseline(
     normalized_ref = write_cas_artifact(
         output, "normalized-compile-database", normalized_bytes, suffix="json",
     )
+    contract_input, contract_source_ref = materialize_contract_source(
+        output, bound_contract,
+    )
     run_id = content_sha256({
         "normalized_compile_database_sha256": normalized_ref["sha256"],
         "sources": list(normalized.sources),
         "tools": tools,
         "policy": policy,
+        "execution_contract": contract_input,
     })
     workspaces = output / "workspaces"
     workspaces.mkdir(exist_ok=True)
@@ -91,6 +102,8 @@ def run_c2rust_project_baseline(
     artifacts: dict[tuple[str, str, int], dict[str, Any]] = {}
     _register(artifacts, "compile-database", original_ref)
     _register(artifacts, "normalized-compile-database", normalized_ref)
+    if contract_source_ref is not None:
+        _register(artifacts, "scenario-contract-source", contract_source_ref)
     transpile_argv = [
         runtime_tools[0]["executable_path"],
         runtime_database.as_posix(),
@@ -118,7 +131,7 @@ def run_c2rust_project_baseline(
     if transpile["status"] != "passed":
         return _finish(
             output, run_id, repository, original_path, original_ref,
-            normalized_ref, normalized.sources, tools, policy,
+            normalized_ref, contract_input, normalized.sources, tools, policy,
             executions, generated, artifacts,
             ["c2rust_transpile_execution_failed"],
         )
@@ -142,7 +155,7 @@ def run_c2rust_project_baseline(
         )
         return _finish(
             output, run_id, repository, original_path, original_ref,
-            normalized_ref, normalized.sources, tools, policy,
+            normalized_ref, contract_input, normalized.sources, tools, policy,
             executions, generated, artifacts, pre_cargo_blockers,
         )
     try:
@@ -157,9 +170,38 @@ def run_c2rust_project_baseline(
         )
         return _finish(
             output, run_id, repository, original_path, original_ref,
-            normalized_ref, normalized.sources, tools, policy,
+            normalized_ref, contract_input, normalized.sources, tools, policy,
             executions, generated, artifacts, [blocker],
         )
+    scenarios = None
+    if bound_contract is not None:
+        try:
+            scenarios = project_baseline_scenarios(
+                repository, bound_contract, preparation.wrappers,
+            )
+        except (OSError, UnicodeError, ValueError) as error:
+            blocker = str(error) or "c2rust_scenario_contract_invalid"
+            generated = _snapshot_if_available(
+                output, workspace, generated_root, generated, artifacts,
+            )
+            return _finish(
+                output, run_id, repository, original_path, original_ref,
+                normalized_ref, contract_input, normalized.sources, tools,
+                policy, executions, generated, artifacts, [blocker],
+            )
+        normalized_contract_ref = write_cas_artifact(
+            output, "scenario-contract", scenarios.canonical_payload,
+            suffix="json",
+        )
+        _register(artifacts, "scenario-contract", normalized_contract_ref)
+        contract_input = {
+            **contract_input,
+            "status": "validated",
+            "normalized_ref": normalized_contract_ref,
+            "semantic_sha256": scenarios.content_sha256,
+            "wrapper_count": len(scenarios.wrappers),
+            "scenario_count": scenarios.scenario_count,
+        }
     snapshot, snapshot_ref = snapshot_generated_tree(generated_root, output)
     _register(artifacts, "generated-snapshot", snapshot_ref)
     for entry in snapshot["files"]:
@@ -173,63 +215,24 @@ def run_c2rust_project_baseline(
         ],
         "wrappers": list(preparation.wrappers),
         "repairs": list(preparation.repairs),
+        "execution_plan": None,
     }
-    blockers: list[str] = []
-    cargo_path = runtime_tools[1]["executable_path"]
-    for index, manifest in enumerate(preparation.manifests):
-        execution, refs = run_recorded_process(
-            [
-                cargo_path, *cargo_prefix, "check", "--offline", "--all-targets",
-                "--manifest-path", manifest.as_posix(),
-            ],
-            cwd=manifest.parent, environment=environment,
-            timeout_seconds=timeout_seconds, out_root=output,
-            purpose=f"cargo-check-all-targets-{index}", runner=runner,
-            portable_argv=[
-                "cargo", *cargo_prefix, "check", "--offline", "--all-targets",
-                "--manifest-path", manifest.relative_to(generated_root).as_posix(),
-            ],
-            portable_working_directory=portable_package_workdir(
-                generated_root, manifest.parent,
-            ),
-        )
+    batch = execute_generated_cargo(
+        repository=repository, generated_root=generated_root,
+        preparation=preparation,
+        cargo_path=runtime_tools[1]["executable_path"],
+        cargo_prefix=cargo_prefix, environment=environment,
+        timeout_seconds=timeout_seconds, out_root=output,
+        scenarios=scenarios, runner=runner,
+    )
+    generated["execution_plan"] = batch.execution_plan
+    for execution, refs in batch.records:
         executions.append(execution)
         _register_process_refs(artifacts, refs)
-        if execution["status"] != "passed":
-            blockers.append("c2rust_cargo_check_failed")
-    if not blockers:
-        for wrapper in preparation.wrappers:
-            manifest = generated_root.joinpath(
-                *Path(wrapper["manifest_path"]).parts
-            )
-            source_working_directory = repository_working_directory(
-                repository, wrapper["source_working_directory"],
-            )
-            execution, refs = run_recorded_process(
-                [
-                    cargo_path, *cargo_prefix, "run", "--offline", "--manifest-path",
-                    manifest.as_posix(), "--bin", wrapper["name"],
-                ],
-                cwd=source_working_directory, environment=environment,
-                timeout_seconds=timeout_seconds, out_root=output,
-                purpose=f"cargo-run-wrapper-{wrapper['name']}", runner=runner,
-                portable_argv=[
-                    "cargo", *cargo_prefix, "run", "--offline",
-                    "--manifest-path", wrapper["manifest_path"],
-                    "--bin", wrapper["name"],
-                ],
-                portable_working_directory=portable_repository_workdir(
-                    repository, source_working_directory,
-                ),
-            )
-            executions.append(execution)
-            _register_process_refs(artifacts, refs)
-            if execution["status"] != "passed":
-                blockers.append("c2rust_wrapper_execution_failed")
     return _finish(
         output, run_id, repository, original_path, original_ref,
-        normalized_ref, normalized.sources, tools, policy,
-        executions, generated, artifacts, blockers,
+        normalized_ref, contract_input, normalized.sources, tools, policy,
+        executions, generated, artifacts, list(batch.blockers),
     )
 
 
@@ -237,6 +240,7 @@ def _empty_generated(out_root: Path, workspace: Path) -> dict[str, Any]:
     return {
         "workspace": workspace.relative_to(out_root).as_posix(),
         "snapshot_ref": None, "manifests": [], "wrappers": [], "repairs": [],
+        "execution_plan": None,
     }
 
 
@@ -255,16 +259,17 @@ def _snapshot_if_available(
     return {
         "workspace": workspace.relative_to(out_root).as_posix(),
         "snapshot_ref": reference, "manifests": [], "wrappers": [],
-        "repairs": [],
+        "repairs": [], "execution_plan": None,
     }
 
 
 def _register_process_refs(
     artifacts: dict[tuple[str, str, int], dict[str, Any]],
-    refs: tuple[dict[str, Any], dict[str, Any]],
+    refs: tuple[dict[str, Any], dict[str, Any], dict[str, Any]],
 ) -> None:
     _register(artifacts, "process-stdout", refs[0])
     _register(artifacts, "process-stderr", refs[1])
+    _register(artifacts, "process-stdin", refs[2])
 
 
 def _register(
@@ -288,7 +293,6 @@ def _portable_tool(value: Mapping[str, Any]) -> dict[str, Any]:
         "size_bytes": value["size_bytes"],
     }
     return {**core, "portable_identity_sha256": content_sha256(core)}
-
 
 __all__ = [
     "C2RustProjectBaselineRun", "reopen_c2rust_project_baseline",

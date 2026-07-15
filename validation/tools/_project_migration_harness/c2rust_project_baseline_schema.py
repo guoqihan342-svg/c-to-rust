@@ -6,6 +6,10 @@ import re
 from typing import Any
 
 from .artifacts import content_sha256
+from .c2rust_project_baseline_schema_execution import (
+    validate_execution_contract, validate_execution_mode_binding,
+    validate_execution_plan,
+)
 
 
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
@@ -19,6 +23,7 @@ _EXECUTION_FIELDS = {
     "schema_version", "artifact_kind", "purpose", "status", "argv",
     "argv_sha256", "local_execution_binding_sha256", "working_directory",
     "environment_keys", "environment_sha256", "timeout_seconds",
+    "expected_returncodes", "stdin_sha256", "stdin_ref",
     "command_started", "timed_out", "returncode", "output_limit_exceeded",
     "stdout_sha256", "stderr_sha256", "stdout_ref", "stderr_ref",
     "semantic_gate", "translation_coverage_numerator",
@@ -32,7 +37,7 @@ def validate_c2rust_baseline_report(value: Any) -> dict[str, Any]:
     status = report.get("status")
     blockers = report.get("blockers")
     if (
-        report.get("schema_version") != 1
+        report.get("schema_version") != 2
         or report.get("artifact_kind") != "c2rust-project-baseline-report"
         or status not in {"passed", "blocked"}
         or not isinstance(blockers, list)
@@ -47,10 +52,13 @@ def validate_c2rust_baseline_report(value: Any) -> dict[str, Any]:
     _validate_tools(report.get("tools"))
     _validate_policy(report.get("policy"))
     executions = _validate_executions(report.get("executions"))
-    wrappers, manifests = _validate_generated(report.get("generated"))
+    wrappers, manifests, execution_plan = _validate_generated(report.get("generated"))
     _validate_artifact_refs(report.get("artifact_refs"))
-    _validate_claims(report.get("claims"), status)
-    _validate_completion(status, executions, wrappers, manifests)
+    _validate_claims(report.get("claims"), executions)
+    validate_execution_mode_binding(
+        report["inputs"]["execution_contract"], report["policy"], execution_plan,
+    )
+    _validate_completion(status, executions, wrappers, manifests, execution_plan)
     _reject_absolute_paths(report)
     return report
 
@@ -59,7 +67,7 @@ def _validate_inputs(value: Any) -> None:
     fields = {
         "repository_identity_sha256", "compile_commands_path",
         "original_compile_database_ref", "normalized_compile_database_ref",
-        "source_bindings",
+        "execution_contract", "source_bindings",
     }
     if not isinstance(value, Mapping) or set(value) != fields:
         raise ValueError("c2rust_baseline_inputs_invalid")
@@ -82,6 +90,7 @@ def _validate_inputs(value: Any) -> None:
     })
     if value.get("repository_identity_sha256") != expected:
         raise ValueError("c2rust_baseline_repository_identity_invalid")
+    validate_execution_contract(value.get("execution_contract"))
 
 
 def _validate_tools(value: Any) -> None:
@@ -116,6 +125,7 @@ def _validate_policy(value: Any) -> None:
         "cargo_check_all_targets", "all_discovered_wrappers_required",
         "cargo_toolchain", "environment_override_keys",
         "environment_overrides_sha256", "rustc_bootstrap",
+        "wrapper_execution_policy",
     }
     if not isinstance(value, Mapping) or set(value) != fields:
         raise ValueError("c2rust_baseline_policy_invalid")
@@ -134,6 +144,9 @@ def _validate_policy(value: Any) -> None:
         or _SHA256.fullmatch(str(value.get("environment_overrides_sha256"))) is None
         or type(value.get("rustc_bootstrap")) is not bool
         or value["rustc_bootstrap"] != ("RUSTC_BOOTSTRAP" in keys)
+        or value.get("wrapper_execution_policy") not in {
+            "legacy-all-wrappers", "declared-scenarios",
+        }
     ):
         raise ValueError("c2rust_baseline_policy_contract_invalid")
 
@@ -145,14 +158,29 @@ def _validate_executions(value: Any) -> list[dict[str, Any]]:
     for execution in value:
         if not isinstance(execution, Mapping) or set(execution) != _EXECUTION_FIELDS:
             raise ValueError("c2rust_baseline_execution_invalid")
+        expected = execution.get("expected_returncodes")
+        if (
+            not isinstance(expected, list) or not expected
+            or expected != sorted(set(expected))
+            or any(type(item) is not int or not -255 <= item <= 255 for item in expected)
+        ):
+            raise ValueError("c2rust_baseline_expected_returncodes_invalid")
+        stdin_ref = execution.get("stdin_ref")
+        if (
+            not isinstance(stdin_ref, Mapping)
+            or set(stdin_ref) != {"path", "sha256", "size_bytes"}
+            or execution.get("stdin_sha256") != stdin_ref.get("sha256")
+            or _SHA256.fullmatch(str(execution.get("stdin_sha256"))) is None
+        ):
+            raise ValueError("c2rust_baseline_stdin_ref_invalid")
         passed = (
             execution.get("command_started") is True
             and execution.get("timed_out") is False
-            and execution.get("returncode") == 0
+            and execution.get("returncode") in expected
             and execution.get("output_limit_exceeded") is False
         )
         if (
-            execution.get("schema_version") != 1
+            execution.get("schema_version") != 2
             or execution.get("artifact_kind") != "c2rust-project-process-execution"
             or execution.get("status") != ("passed" if passed else "failed")
             or not isinstance(execution.get("argv"), list)
@@ -166,8 +194,13 @@ def _validate_executions(value: Any) -> list[dict[str, Any]]:
     return result
 
 
-def _validate_generated(value: Any) -> tuple[list[dict[str, Any]], list[str]]:
-    fields = {"workspace", "snapshot_ref", "manifests", "wrappers", "repairs"}
+def _validate_generated(
+    value: Any,
+) -> tuple[list[dict[str, Any]], list[str], dict[str, Any] | None]:
+    fields = {
+        "workspace", "snapshot_ref", "manifests", "wrappers", "repairs",
+        "execution_plan",
+    }
     if not isinstance(value, Mapping) or set(value) != fields:
         raise ValueError("c2rust_baseline_generated_invalid")
     _relative(value.get("workspace"))
@@ -180,7 +213,8 @@ def _validate_generated(value: Any) -> tuple[list[dict[str, Any]], list[str]]:
         or not isinstance(value.get("repairs"), list)
     ):
         raise ValueError("c2rust_baseline_generated_contract_invalid")
-    return wrappers, manifests
+    plan = validate_execution_plan(value.get("execution_plan"), wrappers)
+    return wrappers, manifests, plan
 
 
 def _validate_artifact_refs(value: Any) -> None:
@@ -195,13 +229,15 @@ def _validate_artifact_refs(value: Any) -> None:
         raise ValueError("c2rust_baseline_artifact_ref_invalid")
 
 
-def _validate_claims(value: Any, status: str) -> None:
+def _validate_claims(value: Any, executions: list[dict[str, Any]]) -> None:
     expected = {
         "classification": "execution-evidence-only",
         "publication_scope": "portable-summary-only",
         "referenced_artifact_visibility": "private-local",
         "host_absolute_paths_in_report": False,
-        "real_process_exit_zero": status == "passed",
+        "real_process_exit_zero": all(
+            item.get("returncode") == 0 for item in executions
+        ),
         "ai_translation": False,
         "final_semantic_gate": False,
     }
@@ -212,24 +248,31 @@ def _validate_claims(value: Any, status: str) -> None:
 def _validate_completion(
     status: str, executions: list[dict[str, Any]],
     wrappers: list[dict[str, Any]], manifests: list[str],
+    execution_plan: dict[str, Any] | None,
 ) -> None:
     purposes = [item.get("purpose") for item in executions]
     if purposes.count("c2rust-transpile-project") != 1:
         raise ValueError("c2rust_baseline_transpiler_evidence_invalid")
     if status != "passed":
         return
-    wrapper_names = {item.get("name") for item in wrappers}
-    run_purposes = {
-        str(item)[len("cargo-run-wrapper-"):]
-        for item in purposes if str(item).startswith("cargo-run-wrapper-")
-    }
+    if execution_plan is None:
+        raise ValueError("c2rust_baseline_execution_plan_missing")
+    run_purposes = [
+        str(item) for item in purposes if str(item).startswith("cargo-run-")
+    ]
     check_count = sum(str(item).startswith("cargo-check-all-targets-") for item in purposes)
     if (
         not wrappers or not manifests or any(item["status"] != "passed" for item in executions)
-        or run_purposes != wrapper_names or len(run_purposes) != len(wrappers)
+        or run_purposes != execution_plan["expected_run_purposes"]
         or check_count != len(manifests)
     ):
         raise ValueError("c2rust_baseline_completion_evidence_invalid")
+    if execution_plan["mode"] == "legacy-all-wrappers":
+        wrapper_purposes = {
+            f"cargo-run-wrapper-{item.get('name')}" for item in wrappers
+        }
+        if set(run_purposes) != wrapper_purposes:
+            raise ValueError("c2rust_baseline_completion_evidence_invalid")
 
 
 def _reject_absolute_paths(value: Any) -> None:
