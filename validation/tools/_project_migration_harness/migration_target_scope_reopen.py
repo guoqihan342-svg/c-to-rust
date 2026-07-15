@@ -16,6 +16,14 @@ def reopen_bound_target_scope_bindings(
     manifest: Mapping[str, Any], build_irs: Sequence[Mapping[str, Any]],
     artifact_root: Path,
 ) -> dict[str, Any] | None:
+    scopes = reopen_bound_target_scope_map(manifest, build_irs, artifact_root)
+    return None if scopes is None else _scope_facts(scopes)
+
+
+def reopen_bound_target_scope_map(
+    manifest: Mapping[str, Any], build_irs: Sequence[Mapping[str, Any]],
+    artifact_root: Path,
+) -> dict[str, dict[str, Any]] | None:
     reference = manifest.get("migration_graph")
     if manifest.get("target_scopes") is None and reference is None:
         return None
@@ -33,13 +41,21 @@ def reopen_bound_target_scope_bindings(
         or canonical_json_bytes(graph) != data
     ):
         raise ValueError("migration_target_scope_graph_content_invalid")
-    return reopen_target_scope_bindings(manifest, build_irs, graph)
+    return reopen_target_scope_map(manifest, build_irs, graph)
 
 
 def reopen_target_scope_bindings(
     manifest: Mapping[str, Any], build_irs: Sequence[Mapping[str, Any]],
     migration_graph: Mapping[str, Any],
 ) -> dict[str, Any] | None:
+    scopes = reopen_target_scope_map(manifest, build_irs, migration_graph)
+    return None if scopes is None else _scope_facts(scopes)
+
+
+def reopen_target_scope_map(
+    manifest: Mapping[str, Any], build_irs: Sequence[Mapping[str, Any]],
+    migration_graph: Mapping[str, Any],
+) -> dict[str, dict[str, Any]] | None:
     bindings = manifest.get("target_scopes")
     graph_ref = manifest.get("migration_graph")
     if bindings is None and graph_ref is None:
@@ -71,15 +87,19 @@ def reopen_target_scope_bindings(
     recomputed = derive_build_ir_target_scopes(build_irs, source_units)
     if recomputed != manifest_scopes:
         raise ValueError("migration_target_scope_build_ir_drifted")
+    return recomputed
+
+
+def _scope_facts(scopes: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "status": "target-scopes-bound",
-        "group_count": len(group_ids),
+        "group_count": len(scopes),
         "source_unit_count": len({
-            unit_id for scope in recomputed.values()
+            unit_id for scope in scopes.values()
             for unit_id in scope["source_unit_ids"]
         }),
-        "scope_set_sha256": content_sha256(recomputed),
+        "scope_set_sha256": content_sha256(scopes),
     }
 
 
@@ -139,5 +159,6 @@ def _graph_order(waves: list[Any], groups: set[str]) -> list[str]:
 
 
 __all__ = [
-    "reopen_bound_target_scope_bindings", "reopen_target_scope_bindings",
+    "reopen_bound_target_scope_bindings", "reopen_bound_target_scope_map",
+    "reopen_target_scope_bindings", "reopen_target_scope_map",
 ]

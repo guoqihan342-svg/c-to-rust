@@ -68,6 +68,10 @@ def module_id_for_candidate(candidate_sha256: str) -> str:
     _sha(candidate_sha256, "candidate_sha256")
     return f"module-{candidate_sha256[:24]}"
 def validate_rust_project_ir(value: Mapping[str, Any]) -> None:
+    if isinstance(value, Mapping) and value.get("schema_version") == 3:
+        from .rust_project_ir_v3_validation import validate_rust_project_ir_v3
+        validate_rust_project_ir_v3(value)
+        return
     if not isinstance(value, Mapping) or set(value) != _TOP_KEYS:
         _fail("RustProjectIR top-level schema is invalid")
     if value.get("schema_version") != RUST_PROJECT_IR_SCHEMA_VERSION:
@@ -96,6 +100,9 @@ def validate_rust_project_ir(value: Mapping[str, Any]) -> None:
     if content_sha256(payload) != stored:
         _fail("RustProjectIR content hash drifted")
 def interface_projection(value: Mapping[str, Any]) -> dict[str, Any]:
+    if value.get("schema_version") == 3:
+        from .rust_project_ir_v3_validation import interface_projection_v3
+        return interface_projection_v3(value)
     crate = {
         key: item for key, item in value["crate"].items()
         if key not in {"crate_id", "evidence"}
