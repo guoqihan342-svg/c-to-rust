@@ -2,11 +2,11 @@
 
 # C2Rust Migration Agent
 
-`docs/c2rust-migration-agent/` 是 C2Rust migration agent 的专题文档文件夹，收纳 `design-c2rust-migration-agent` 的可执行设计文档集合，供 OpenCode、Codex 或其他智能体按 Superpowers 分阶段执行 C 到 Rust 迁移。英文镜像见 `README.en.md`。
+`docs/c2rust-migration-agent/` 是 C2Rust migration agent 的专题文档文件夹，收纳架构合同、运行手册、能力边界和唯一全局待办，供 OpenCode、Codex 或其他智能体分阶段执行 C 到 Rust 迁移。英文镜像见 `README.en.md`。
 
 ## 当前状态
 
-- Superpowers 设计与计划：`docs/superpowers/specs/`、`docs/superpowers/plans/`
+- 唯一全局待办：`future-vision-and-mvp.md`
 - 第一目标：FlashDB
 - 源码克隆：`sources/FlashDB`
 - 源码 commit：`f9d0421315c564fb890a1b14eee77b290e0d7bbe`
@@ -45,7 +45,7 @@
 
 - 面向用户或 Agent 的新增文档，默认使用中文主文档 `.md` 和英文镜像 `.en.md`。
 - 修改已有文档时，如果改动超过小修小补，应同步维护对应英文镜像。
-- Superpowers 文档使用普通 Markdown；设计放入 `docs/superpowers/specs/`，可执行计划放入 `docs/superpowers/plans/`。
+- 架构决策维护在本目录的中英文文档中；实施状态、顺序和剩余工作只写入 `future-vision-and-mvp.md` 及其英文镜像。
 - 本目录仍有早期文档采用“中文说明 + English summary”混合格式；后续触及时按上述约定拆成完整双语版本。
 - 全局待办唯一来源是 `future-vision-and-mvp.md`；`future-vision-and-mvp.en.md` 只是同步镜像，不另立待办来源。
 
@@ -56,7 +56,7 @@
 - 运行与验证：见 `index/operations.md`。覆盖 `quickstart.md` / `quickstart.en.md`、`opencode-agent-harness-design.md` / `opencode-agent-harness-design.en.md`、`build-and-c2rust-baseline.md`、`bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`、`evidence-governance.md` / `evidence-governance.en.md`、`testing-unsafe-cache-and-milestone.md`、`full-regression-runner.md`、`../../config/competition-env/`。
 - 覆盖与路线：见 `index/roadmap.md`。覆盖 `COVERAGE.md` / `COVERAGE.en.md`、`future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`。
 - FlashDB 用例边界：见 `index/flashdb.md`。覆盖 `baseline-record.json`、`build-and-c2rust-baseline.md`、`flashdb-rust-skeleton-and-milestone.md`、`full-regression-runner.md`。
-- 归档/分析：见 `index/archive.md`。覆盖 `archive/context-history-2026-06-28.md`、`analysis/translator-strengthening-analysis.md` / `analysis/translator-strengthening-analysis.en.md`。
+- 分析：见 `index/archive.md`。覆盖 `analysis/translator-strengthening-analysis.md` / `analysis/translator-strengthening-analysis.en.md`。
 
 
 ## 快速使用
@@ -74,7 +74,7 @@ c2rust-migrator --phase index --input request.json
 
 ## 运行原则
 
-- 实现前先走 Superpowers。
+- 实现前先核对唯一全局待办和机器可执行验证合同。
 - context local-first，并限制 token。
 - 只在只读任务或不相交写入任务上并行多个 subagent。
 - 先用确定性规则，再使用 AI。

@@ -26,7 +26,6 @@ EXCLUDED_PARTS = {
 }
 
 EXCLUDED_RELATIVE_PREFIXES = (
-    Path("docs/superpowers"),
     Path("validation/evidence"),
 )
 
@@ -98,7 +97,10 @@ def _iter_chinese_docs():
         if not item or not item.endswith(".md"):
             continue
         candidate = REPO_ROOT / item
-        if candidate.name.endswith(".en.md") or _is_excluded(candidate):
+        if (
+            not candidate.is_file() or candidate.name.endswith(".en.md")
+            or _is_excluded(candidate)
+        ):
             continue
         docs.append(candidate)
     return sorted(set(docs))
@@ -117,7 +119,7 @@ def _iter_maintained_docs():
         if not item or not item.endswith(".md"):
             continue
         candidate = REPO_ROOT / item
-        if _is_excluded(candidate):
+        if not candidate.is_file() or _is_excluded(candidate):
             continue
         docs.append(candidate)
     return sorted(set(docs))

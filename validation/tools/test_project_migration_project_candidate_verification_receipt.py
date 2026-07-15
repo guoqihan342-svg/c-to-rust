@@ -1,45 +1,21 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 from pathlib import Path
 import tempfile
 import unittest
 
-from validation.tools._project_migration_harness.cargo_raw_output_evidence import (
-    write_cargo_raw_output,
-)
-from validation.tools._project_migration_harness.gate_evidence import (
-    write_content_addressed_json,
-)
+from validation.tools._project_migration_harness.artifacts import content_sha256
 from validation.tools._project_migration_harness.ledger_security import LedgerError
 from validation.tools._project_migration_harness.project_candidate_domain import (
-    candidate_domain_context_sha256,
     candidate_verification_context,
 )
 from validation.tools._project_migration_harness.project_candidate_verification_receipt import (
     reopen_candidate_project_verification,
     validate_candidate_project_verification,
 )
-from validation.tools._project_migration_harness.project_cargo_evidence import (
-    CARGO_COMMANDS,
-    project_cargo_observation,
-)
-from validation.tools._project_migration_harness.project_native_link_settlement_binding import (
-    project_native_link_settlement_status,
-)
-from validation.tools._project_migration_harness.sandbox_contract import (
-    SandboxContract,
-    canonical_sha256,
-)
-from validation.tools._project_migration_harness.sandbox_requirements import (
-    cargo_verification_plan,
-)
-from validation.tools.project_migration_sandbox_test_support import (
-    passing_probe_receipt,
-)
-from validation.tools.project_migration_candidate_receipt_test_support import (
-    materialize_test_quarantine,
+from validation.tools.project_migration_candidate_receipt_payload_test_support import (
+    CandidateReceiptFixture,
 )
 
 
@@ -47,26 +23,15 @@ class ProjectCandidateVerificationReceiptTests(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory(prefix="candidate-receipt-")
         self.addCleanup(temporary.cleanup)
-        self.repo = Path(temporary.name)
-        self.out_root = self.repo / "target/run"
-        self.out_root.mkdir(parents=True)
-        self.ledger_path = self.out_root / "state/project-migration.sqlite3"
-        self.quarantine_root = self.repo / "quarantine"
-        self.materialization = materialize_test_quarantine(self.quarantine_root)
-        self.candidate_set_sha256 = self.materialization["candidate_set_sha256"]
-        self.payload = self._payload()
+        self.fixture = CandidateReceiptFixture(Path(temporary.name))
+        self.repo = self.fixture.repo
+        self.ledger_path = self.fixture.ledger_path
+        self.quarantine_root = self.fixture.quarantine_root
+        self.candidate_set_sha256 = self.fixture.candidate_set_sha256
+        self.payload = self.fixture.payload()
 
     def test_valid_receipt_reopens_raw_cargo_evidence(self) -> None:
-        reference = self._write(self.payload)
-        reopened = reopen_candidate_project_verification(
-            self.ledger_path,
-            reference,
-            quarantine_root=self.quarantine_root,
-            run_id="receipt-run",
-            candidate_set_sha256=self.candidate_set_sha256,
-            rust_project_ir_sha256="a" * 64,
-            rust_project_interface_sha256="b" * 64,
-        )
+        reopened = self._reopen(self.fixture.write(self.payload))
         self.assertEqual("candidate-verified", reopened["status"])
         self.assertTrue(reopened["claim_boundary"]["candidate_project_gate"])
         self.assertFalse(reopened["claim_boundary"]["final_project_gate"])
@@ -95,205 +60,113 @@ class ProjectCandidateVerificationReceiptTests(unittest.TestCase):
             with self.subTest(label=label), self.assertRaises(ValueError):
                 validate_candidate_project_verification(changed)
 
-    def test_native_binding_and_cargo_observation_tamper_fail_closed(self) -> None:
+    def test_legacy_v1_receipt_cannot_regain_candidate_authority(self) -> None:
+        legacy = copy.deepcopy(self.payload)
+        legacy["schema_version"] = 1
+        with self.assertRaisesRegex(ValueError, "identity_invalid"):
+            validate_candidate_project_verification(legacy)
+
+    def test_execution_envelope_is_recomputed_and_fail_closed(self) -> None:
+        for field, value in (
+            ("status", "unknown"),
+            ("cargo_executed", False),
+            ("semantic_gate", True),
+        ):
+            changed = copy.deepcopy(self.payload)
+            changed["execution"][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(
+                ValueError, "execution_invalid",
+            ):
+                validate_candidate_project_verification(changed)
+
+    def test_native_cargo_and_fact_binding_tamper_fail_closed(self) -> None:
+        variants = []
         native = copy.deepcopy(self.payload)
         native["native_link_settlement"]["binding_sha256"] = "0" * 64
-        with self.assertRaises(ValueError):
-            validate_candidate_project_verification(native)
-
+        variants.append(native)
         cargo = copy.deepcopy(self.payload)
         cargo["cargo_observations"]["cargo-check"]["check"]["returncode"] = 9
-        with self.assertRaises((ValueError, LedgerError)):
-            validate_candidate_project_verification(cargo)
+        variants.append(cargo)
+        facts = copy.deepcopy(self.payload)
+        facts["cargo_fact_evidence"]["cargo_metadata"]["facts_sha256"] = "0" * 64
+        variants.append(facts)
+        for changed in variants:
+            with self.assertRaises((ValueError, LedgerError)):
+                validate_candidate_project_verification(changed)
 
     def test_raw_output_content_drift_blocks_deep_reopen(self) -> None:
-        reference = self._write(self.payload)
+        reference = self.fixture.write(self.payload)
         raw = self.payload["cargo_observations"]["cargo-test"]["check"][
             "stdout_ref"
         ]
-        target = self.repo.joinpath(*Path(raw["path"]).parts)
-        target.chmod(0o600)
-        target.write_bytes(b"changed")
+        self._overwrite(raw, b"changed")
         with self.assertRaises(LedgerError):
-            reopen_candidate_project_verification(
-                self.ledger_path,
-                reference,
-                quarantine_root=self.quarantine_root,
-                run_id="receipt-run",
-                candidate_set_sha256=self.candidate_set_sha256,
-                rust_project_ir_sha256="a" * 64,
-                rust_project_interface_sha256="b" * 64,
-            )
+            self._reopen(reference)
+
+    def test_metadata_raw_fact_drift_blocks_deep_reopen(self) -> None:
+        reference = self.fixture.write(self.payload)
+        raw = self.payload["cargo_fact_evidence"]["cargo_metadata"]["source"]
+        self._overwrite(raw, b"changed")
+        with self.assertRaisesRegex(LedgerError, "Cargo fact evidence"):
+            self._reopen(reference)
+
+    def test_metadata_stderr_drift_blocks_deep_reopen(self) -> None:
+        reference = self.fixture.write(self.payload)
+        raw = self.payload["execution"]["fact_probes"]["cargo-metadata"][
+            "stderr_ref"
+        ]
+        self._overwrite(raw, b"changed")
+        with self.assertRaisesRegex(LedgerError, "Cargo fact evidence"):
+            self._reopen(reference)
+
+    def test_derived_fact_reference_size_is_rechecked_from_cas(self) -> None:
+        changed = copy.deepcopy(self.payload)
+        facts = changed["cargo_fact_evidence"]
+        facts["cargo_metadata"]["evidence"]["size_bytes"] += 1
+        core = {key: value for key, value in facts.items() if key != "binding_sha256"}
+        facts["binding_sha256"] = content_sha256(core)
+        changed["verification_context_sha256"] = candidate_verification_context(
+            changed,
+            changed["build_ir_verification"],
+            changed["materialization"],
+            changed["execution"],
+            changed["cargo_observations"],
+            changed["native_link_settlement"],
+            facts,
+        )
+        validate_candidate_project_verification(changed)
+        with self.assertRaisesRegex(LedgerError, "Cargo fact evidence"):
+            self._reopen(self.fixture.write(changed))
 
     def test_quarantine_generation_drift_blocks_deep_reopen(self) -> None:
-        reference = self._write(self.payload)
+        reference = self.fixture.write(self.payload)
         (self.quarantine_root / "generations/current/Cargo.toml").write_text(
             "changed", encoding="utf-8",
         )
         with self.assertRaisesRegex(LedgerError, "generation"):
-            reopen_candidate_project_verification(
-                self.ledger_path, reference,
-                quarantine_root=self.quarantine_root,
-                run_id="receipt-run", candidate_set_sha256=self.candidate_set_sha256,
-                rust_project_ir_sha256="a" * 64,
-                rust_project_interface_sha256="b" * 64,
-            )
+            self._reopen(reference)
 
     def test_expected_identity_mismatch_blocks_reopen(self) -> None:
-        reference = self._write(self.payload)
+        reference = self.fixture.write(self.payload)
         with self.assertRaisesRegex(LedgerError, "binding drifted"):
-            reopen_candidate_project_verification(
-                self.ledger_path,
-                reference,
-                quarantine_root=self.quarantine_root,
-                run_id="other-run",
-                candidate_set_sha256=self.candidate_set_sha256,
-                rust_project_ir_sha256="a" * 64,
-                rust_project_interface_sha256="b" * 64,
-            )
+            self._reopen(reference, run_id="other-run")
 
-    def _payload(self) -> dict:
-        observations = self._observations()
-        native = project_native_link_settlement_status("not-required")
-        domain = {
-            "run_id": "receipt-run",
-            "run_context_sha256": "1" * 64,
-            "dag_sha256": "2" * 64,
-            "integration_manifest": {
-                "path": "plan/integration-manifest.json",
-                "sha256": "3" * 64,
-                "size_bytes": 1,
-            },
-            "candidate_set_sha256": self.candidate_set_sha256,
-            "candidate_set_manifest_sha256": "4" * 64,
-            "rust_project_ir_sha256": "a" * 64,
-            "rust_project_interface_sha256": "b" * 64,
-            "rust_project_binding_sha256": "5" * 64,
-        }
-        domain["candidate_domain_context_sha256"] = (
-            candidate_domain_context_sha256(domain)
+    def _reopen(self, reference: dict, *, run_id: str = "receipt-run") -> dict:
+        return reopen_candidate_project_verification(
+            self.ledger_path,
+            reference,
+            quarantine_root=self.quarantine_root,
+            run_id=run_id,
+            candidate_set_sha256=self.candidate_set_sha256,
+            rust_project_ir_sha256="a" * 64,
+            rust_project_interface_sha256="b" * 64,
         )
-        build_ir = {"schema_version": 1, "status": "verified", "blockers": []}
-        materialization = {
-            "schema_version": 1,
-            "status": "materialized",
-            "candidate_set": {
-                "sha256": self.candidate_set_sha256, "member_count": 2,
-            },
-            "candidate_count": 2,
-            "rust_project_ir_sha256": "a" * 64,
-            "rust_project_interface_sha256": "b" * 64,
-            "rust_project_ir_scope": "full-project",
-            "generator": self.materialization["generator"],
-            "generation": {
-                **self.materialization["generation"],
-            },
-            "manifest_ref": self.materialization["manifest_ref"],
-            "generation_manifest_ref": self.materialization[
-                "generation_manifest_ref"
-            ],
-            "immutable": True,
-            "last_good_updated": False,
-            "cargo_executed": False,
-            "diagnostics": [],
-        }
-        execution = {
-            "status": "passed", "cargo_executed": True,
-            "project_input_sha256": "7" * 64,
-        }
-        payload = {
-            "schema_version": 1,
-            "artifact_kind": "candidate-project-verification",
-            "status": "candidate-verified",
-            **domain,
-            "build_ir_verification": build_ir,
-            "materialization": materialization,
-            "execution": execution,
-            "cargo_observations": observations,
-            "cargo_statuses": {"cargo-check": "passed", "cargo-test": "passed"},
-            "native_link_settlement": native,
-            "state_effects": {
-                "final_current_updated": False,
-                "project_gate_records_written": 0,
-                "candidate_only": True,
-            },
-            "claim_boundary": {
-                "candidate_project_gate": True,
-                "final_project_gate": False,
-                "updates_final_current": False,
-                "writes_project_gate_records": False,
-                "semantic_gate": False,
-                "semantic_pass": False,
-                "translation_coverage_numerator": 0,
-            },
-        }
-        payload["verification_context_sha256"] = candidate_verification_context(
-            domain, build_ir, materialization, execution, observations, native,
-        )
-        return payload
 
-    def _observations(self) -> dict[str, dict]:
-        contract = SandboxContract(
-            backend="bubblewrap-v1",
-            launcher_sha256="8" * 64,
-            toolchain_sha256="9" * 64,
-        )
-        probe = passing_probe_receipt(contract)
-        sandbox = {
-            "contract": contract.payload(),
-            "contract_sha256": contract.sha256,
-            "probe_receipt": probe.payload(),
-            "probe_receipt_sha256": probe.sha256,
-            "cleanup_verified": True,
-        }
-        result = {}
-        for index, gate in enumerate(("cargo-check", "cargo-test"), start=1):
-            command = CARGO_COMMANDS[gate]
-            plan = cargo_verification_plan(
-                gate, tuple(command), "7" * 64,
-                requirements=contract.requirements,
-            )
-            stdout = bytes([index])
-            stderr = bytes([index + 2])
-            check = {
-                "command": command, "status": "passed", "cargo_executed": True,
-                "returncode": 0, "timed_out": False,
-                "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
-                "stderr_sha256": hashlib.sha256(stderr).hexdigest(),
-                "stdout_ref": write_cargo_raw_output(
-                    self.out_root, "target/run", gate_kind=gate,
-                    stream="stdout", data=stdout,
-                ),
-                "stderr_ref": write_cargo_raw_output(
-                    self.out_root, "target/run", gate_kind=gate,
-                    stream="stderr", data=stderr,
-                ),
-                "sandbox_contract_sha256": contract.sha256,
-                "sandbox_command_sha256": canonical_sha256(command),
-                "sandbox_command_started": True,
-                "sandbox_launcher_argv_sha256": "a" * 64,
-                "sandbox_requirements_sha256": contract.requirements.sha256,
-                "sandbox_verification_plan": plan.payload(),
-                "sandbox_verification_plan_sha256": plan.sha256,
-                "sandbox_probe_receipt_sha256": probe.sha256,
-            }
-            execution = {
-                "project_input_sha256": "7" * 64,
-                "project_state_before": "7" * 64,
-                "project_state_after": "7" * 64,
-                "project_state_unchanged": True,
-                "sandbox": sandbox,
-            }
-            result[gate] = project_cargo_observation(
-                execution, check, gate_kind=gate,
-                expected_input_sha256="7" * 64,
-            )
-        return result
+    def _overwrite(self, reference: dict, data: bytes) -> None:
+        target = self.repo.joinpath(*Path(reference["path"]).parts)
+        target.chmod(0o600)
+        target.write_bytes(data)
 
-    def _write(self, payload: dict) -> dict:
-        reference = write_content_addressed_json(
-            self.out_root, "candidate-project-verification", payload,
-        )
-        return {**reference, "path": f"target/run/{reference['path']}"}
+
 if __name__ == "__main__":
     unittest.main()

@@ -16,7 +16,7 @@ from .ledger_security import LedgerError
 
 MAX_CARGO_RAW_OUTPUT_BYTES = 1024 * 1024
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
-_GATES = {"cargo-check", "cargo-test"}
+_GATES = {"cargo-metadata", "cargo-check", "cargo-test"}
 _STREAMS = {"stdout", "stderr"}
 
 
@@ -120,13 +120,26 @@ def persist_captured_cargo_outputs(
     result = deepcopy(dict(execution))
     checks = result.get("checks")
     complete = isinstance(checks, list)
-    for check in checks if isinstance(checks, list) else []:
+    captured = list(checks) if isinstance(checks, list) else []
+    fact_probes = result.get("fact_probes")
+    if fact_probes is not None:
+        if (
+            not isinstance(fact_probes, Mapping)
+            or set(fact_probes) != {"cargo-metadata"}
+            or not isinstance(fact_probes.get("cargo-metadata"), dict)
+        ):
+            complete = False
+        else:
+            captured.append(fact_probes["cargo-metadata"])
+    for check in captured:
         if not isinstance(check, dict):
             complete = False
             continue
         command = check.get("command")
         stage = command[1] if isinstance(command, list) and len(command) > 1 else None
-        gate_kind = f"cargo-{stage}" if stage in {"check", "test"} else None
+        gate_kind = (
+            f"cargo-{stage}" if stage in {"metadata", "check", "test"} else None
+        )
         executed = check.get("cargo_executed") is True and check.get("status") in {
             "passed", "failed",
         }

@@ -20,27 +20,23 @@ from validation.tools._project_migration_harness.project_candidate_domain import
     candidate_verification_context,
 )
 from validation.tools._project_migration_harness import cargo_project
+from validation.tools._project_migration_harness.sandbox_contract import (
+    contract_from_payload,
+)
+from validation.tools._project_migration_harness.sandbox_requirements import (
+    cargo_verification_plan,
+)
+from validation.tools.project_migration_candidate_receipt_payload_test_support import (
+    CandidateReceiptFixture,
+)
 
 
 class ProjectCandidateVerificationReceiptPathTests(unittest.TestCase):
     def _fixture(self) -> tuple[object, dict]:
-        from validation.tools.test_project_migration_project_candidate_verification_receipt import (
-            ProjectCandidateVerificationReceiptTests,
-        )
-        case = ProjectCandidateVerificationReceiptTests(methodName="runTest")
         temporary = tempfile.TemporaryDirectory(prefix="candidate-path-")
         self.addCleanup(temporary.cleanup)
-        case.repo = Path(temporary.name)
-        case.out_root = case.repo / "target/run"
-        case.out_root.mkdir(parents=True)
-        case.ledger_path = case.out_root / "state/project-migration.sqlite3"
-        case.quarantine_root = case.repo / "quarantine"
-        from validation.tools.project_migration_candidate_receipt_test_support import (
-            materialize_test_quarantine,
-        )
-        case.materialization = materialize_test_quarantine(case.quarantine_root)
-        case.candidate_set_sha256 = case.materialization["candidate_set_sha256"]
-        return case, case._payload()
+        fixture = CandidateReceiptFixture(Path(temporary.name))
+        return fixture, fixture.payload()
 
     def _payload(self) -> dict:
         return self._fixture()[1]
@@ -100,6 +96,7 @@ class ProjectCandidateVerificationReceiptPathTests(unittest.TestCase):
         materialization["generation_manifest_ref"].update({
             "sha256": digest(manifest_raw), "size_bytes": len(manifest_raw),
         })
+        _rebind_project_input(payload, digest(manifest_raw))
         payload["candidate_set_sha256"] = forged_candidate_set
         payload["candidate_domain_context_sha256"] = (
             candidate_domain_context_sha256(payload)
@@ -108,9 +105,10 @@ class ProjectCandidateVerificationReceiptPathTests(unittest.TestCase):
             payload, payload["build_ir_verification"], materialization,
             payload["execution"], payload["cargo_observations"],
             payload["native_link_settlement"],
+            payload["cargo_fact_evidence"],
         )
         validate_candidate_project_verification(payload)
-        reference = case._write(payload)
+        reference = case.write(payload)
         with self.assertRaisesRegex(LedgerError, "binding drifted"):
             reopen_candidate_project_verification(
                 case.ledger_path, reference,
@@ -146,6 +144,37 @@ class ProjectCandidateVerificationReceiptPathTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(LedgerError, "cannot be reopened"):
             reopen_candidate_generation(linked, receipt_materialization)
+
+
+def _rebind_project_input(payload: dict, project_input: str) -> None:
+    execution = payload["execution"]
+    for key in (
+        "project_input_sha256", "project_state_before", "project_state_after",
+    ):
+        execution[key] = project_input
+    for observation in payload["cargo_observations"].values():
+        observation["project_input_sha256"] = project_input
+    contract = contract_from_payload(execution["sandbox"]["contract"])
+    checks = [
+        execution["fact_probes"]["cargo-metadata"],
+        *execution["checks"],
+        *(item["check"] for item in payload["cargo_observations"].values()),
+    ]
+    seen: set[int] = set()
+    for check in checks:
+        if id(check) in seen:
+            continue
+        seen.add(id(check))
+        command = check["command"]
+        prior = check["sandbox_verification_plan"]
+        plan = cargo_verification_plan(
+            f"cargo-{command[1]}", tuple(command), project_input,
+            timeout_seconds=prior["timeout_seconds"],
+            requirements=contract.requirements,
+            native_link_trace=prior["native_link_trace"],
+        )
+        check["sandbox_verification_plan"] = plan.payload()
+        check["sandbox_verification_plan_sha256"] = plan.sha256
 
 
 if __name__ == "__main__":

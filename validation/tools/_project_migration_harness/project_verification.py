@@ -6,6 +6,7 @@ import shutil
 import tempfile
 from typing import Any
 
+from .cargo_fact_commands import CARGO_METADATA_ARGS
 from .integration_generation import (
     GenerationCommitError,
     generation_store_root,
@@ -35,11 +36,14 @@ def run_cargo_project_gates(
     project_root: Path, *, runtime_root: Path, cargo_command: str = "cargo",
     timeout_seconds: int = 300, capture_raw_output: bool = False,
     capture_native_link_trace: bool = False,
+    capture_cargo_facts: bool = False,
 ) -> dict[str, Any]:
     if timeout_seconds < 30 or timeout_seconds > 3_600:
         raise ValueError("timeout_seconds must be between 30 and 3600")
     if capture_native_link_trace and not capture_raw_output:
         raise ValueError("native linker trace requires raw Cargo output capture")
+    if capture_cargo_facts and not capture_raw_output:
+        raise ValueError("Cargo facts require raw Cargo output capture")
     project = _project_target(project_root)
     try:
         source = _current_managed_source(project)
@@ -51,7 +55,7 @@ def run_cargo_project_gates(
         )
     return _run_managed_cargo(
         source, project, runtime_root, cargo_command, timeout_seconds,
-        capture_raw_output, capture_native_link_trace,
+        capture_raw_output, capture_native_link_trace, capture_cargo_facts,
     )
 
 
@@ -59,15 +63,18 @@ def run_cargo_generation_gates(
     generation_root: Path, *, runtime_root: Path, cargo_command: str = "cargo",
     timeout_seconds: int = 300, capture_raw_output: bool = False,
     capture_native_link_trace: bool = False,
+    capture_cargo_facts: bool = False,
 ) -> dict[str, Any]:
     if timeout_seconds < 30 or timeout_seconds > 3_600:
         raise ValueError("timeout_seconds must be between 30 and 3600")
     if capture_native_link_trace and not capture_raw_output:
         raise ValueError("native linker trace requires raw Cargo output capture")
+    if capture_cargo_facts and not capture_raw_output:
+        raise ValueError("Cargo facts require raw Cargo output capture")
     source = _project_target(generation_root).resolve(strict=True)
     return _run_managed_cargo(
         source, source, runtime_root, cargo_command, timeout_seconds,
-        capture_raw_output, capture_native_link_trace,
+        capture_raw_output, capture_native_link_trace, capture_cargo_facts,
     )
 
 
@@ -85,7 +92,7 @@ def managed_project_input_sha256(project_root: Path) -> str:
 def _run_managed_cargo(
     source: Path, project: Path, runtime_root: Path,
     cargo_command: str, timeout_seconds: int, capture_raw_output: bool,
-    capture_native_link_trace: bool,
+    capture_native_link_trace: bool, capture_cargo_facts: bool,
 ) -> dict[str, Any]:
     before, managed = existing_state(source)
     if not managed:
@@ -136,9 +143,17 @@ def _run_managed_cargo(
         )
     execution_root = Path(tempfile.mkdtemp(prefix="cargo-sandbox-", dir=runtime))
     checks = []
+    fact_probes: dict[str, dict[str, Any]] = {}
     try:
         for name in ("cargo-home", "target"):
             (execution_root / name).mkdir(mode=0o700)
+        if capture_cargo_facts:
+            fact_probes["cargo-metadata"] = _run(
+                cargo, list(CARGO_METADATA_ARGS), source, execution_root,
+                timeout_seconds, backend, before, probe_receipt,
+                capture_raw_output=True,
+                native_link_trace=False,
+            )
         commands = [
             (["check", "--all-targets", "--all-features", "--offline", "--locked",
               "--message-format=json"], False),
@@ -147,15 +162,16 @@ def _run_managed_cargo(
                   ["--jobs", "1"] if capture_native_link_trace else []
               )], capture_native_link_trace),
         ]
-        for cargo_args, native_link_trace in commands:
-            checks.append(_run(
-                cargo, cargo_args, source, execution_root,
-                timeout_seconds, backend, before, probe_receipt,
-                capture_raw_output=capture_raw_output,
-                native_link_trace=native_link_trace,
-            ))
-            if checks[-1]["status"] != "passed":
-                break
+        if not capture_cargo_facts or fact_probes["cargo-metadata"]["status"] == "passed":
+            for cargo_args, native_link_trace in commands:
+                checks.append(_run(
+                    cargo, cargo_args, source, execution_root,
+                    timeout_seconds, backend, before, probe_receipt,
+                    capture_raw_output=capture_raw_output,
+                    native_link_trace=native_link_trace,
+                ))
+                if checks[-1]["status"] != "passed":
+                    break
         try:
             after, still_managed = existing_state(source)
         except ValueError:
@@ -163,16 +179,22 @@ def _run_managed_cargo(
     finally:
         cleanup_verified = _cleanup_execution_root(execution_root)
     unchanged = still_managed and after == before
-    passed = cleanup_verified and unchanged and len(checks) == 2 and all(
-        item["status"] == "passed" for item in checks
+    all_results = [*fact_probes.values(), *checks]
+    facts_passed = not capture_cargo_facts or (
+        set(fact_probes) == {"cargo-metadata"}
+        and fact_probes["cargo-metadata"]["status"] == "passed"
+    )
+    passed = (
+        cleanup_verified and unchanged and facts_passed and len(checks) == 2
+        and all(item["status"] == "passed" for item in checks)
     )
     blocked = (
         not cleanup_verified or not unchanged
-        or any(item["status"] == "blocked" for item in checks)
+        or any(item["status"] == "blocked" for item in all_results)
     )
     diagnostics = [
         diagnostic
-        for check in checks if check["status"] == "blocked"
+        for check in all_results if check["status"] == "blocked"
         for diagnostic in check.get("diagnostics", [])
     ]
     if not unchanged:
@@ -187,10 +209,10 @@ def _run_managed_cargo(
             "stage": "cargo-sandbox",
             "message": "Sandbox execution root could not be proven removed",
         })
-    return {
+    result = {
         "schema_version": 1,
         "status": "passed" if passed else "blocked" if blocked else "failed",
-        "cargo_executed": any(item["cargo_executed"] for item in checks),
+        "cargo_executed": any(item["cargo_executed"] for item in all_results),
         "project_input_sha256": before,
         "project_state_before": before,
         "project_state_after": after,
@@ -203,8 +225,11 @@ def _run_managed_cargo(
         "environment_policy": _environment_policy(),
         "diagnostics": diagnostics,
         "semantic_gate": False,
-        "proof_boundary": "Sandboxed Cargo compile/test only; oracle and final verification remain separate",
+        "proof_boundary": "Sandboxed Cargo topology/compile/test facts only; oracle and final verification remain separate" if capture_cargo_facts else "Sandboxed Cargo compile/test facts only; oracle and final verification remain separate",
     }
+    if capture_cargo_facts:
+        result["fact_probes"] = fact_probes
+    return result
 
 
 def _cleanup_execution_root(root: Path) -> bool:

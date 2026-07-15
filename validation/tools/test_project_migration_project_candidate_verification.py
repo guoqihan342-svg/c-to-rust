@@ -14,16 +14,9 @@ from validation.tools._project_migration_harness.project_verification import (
 from validation.tools.project_migration_controller_test_support import (
     ProjectMigrationControllerCase,
 )
-
-
-MODULE = (
-    "validation.tools._project_migration_harness."
-    "project_candidate_verification"
-)
+MODULE = "validation.tools._project_migration_harness.project_candidate_verification"
 EVIDENCE = f"{MODULE}_evidence"
-PROJECT_VERIFICATION = (
-    "validation.tools._project_migration_harness.project_verification"
-)
+PROJECT_VERIFICATION = "validation.tools._project_migration_harness.project_verification"
 VERIFIED_BUILD_IR = {"schema_version": 1, "status": "verified", "blockers": []}
 NATIVE_BUILD_IR = {
     "schema_version": 1,
@@ -32,8 +25,6 @@ NATIVE_BUILD_IR = {
     "native_link_config_resolved": False,
     "unresolved_native_dependency_count": 1,
 }
-
-
 class ProjectCandidateVerificationTests(ProjectMigrationControllerCase):
     def setUp(self) -> None:
         super().setUp()
@@ -78,7 +69,7 @@ class ProjectCandidateVerificationTests(ProjectMigrationControllerCase):
         execution = self.execution()
         bound = (execution, {}, self.observations(), {
             "cargo-check": "passed", "cargo-test": "passed",
-        })
+        }, self.facts())
         with self.pipeline(execution=execution, bound=bound) as calls:
             result = self.verify()
         self.assertEqual("candidate-verified", result["status"])
@@ -92,7 +83,7 @@ class ProjectCandidateVerificationTests(ProjectMigrationControllerCase):
         execution = self.execution()
         bound = (execution, {}, self.observations(), {
             "cargo-check": "passed", "cargo-test": "passed",
-        })
+        }, self.facts())
         unresolved = {"schema_version": 1, "status": "blocked"}
         with self.pipeline(
             build_ir=NATIVE_BUILD_IR, execution=execution, bound=bound,
@@ -104,6 +95,7 @@ class ProjectCandidateVerificationTests(ProjectMigrationControllerCase):
         cargo_kwargs = calls["cargo"].call_args.kwargs
         self.assertIs(True, cargo_kwargs["capture_raw_output"])
         self.assertIs(True, cargo_kwargs["capture_native_link_trace"])
+        self.assertIs(True, cargo_kwargs["capture_cargo_facts"])
         self.assert_candidate_only(result)
 
     def test_post_cargo_evidence_failure_preserves_executed_state(self) -> None:
@@ -180,7 +172,7 @@ class ProjectCandidateVerificationTests(ProjectMigrationControllerCase):
         execution = execution or self.execution()
         bound = bound or (execution, {}, self.observations(), {
             "cargo-check": "passed", "cargo-test": "passed",
-        })
+        }, self.facts())
         generation = self.quarantine_root / "generations/candidate-generation"
         generation.mkdir(parents=True, exist_ok=True)
         materialized = {
@@ -269,6 +261,14 @@ class ProjectCandidateVerificationTests(ProjectMigrationControllerCase):
         return {
             "cargo-check": {"outcome": "executed"},
             "cargo-test": {"outcome": "executed"},
+        }
+
+    @staticmethod
+    def facts() -> dict[str, object]:
+        return {
+            "schema_version": 1,
+            "status": "ready",
+            "binding_sha256": "6" * 64,
         }
 
     def assert_candidate_only(

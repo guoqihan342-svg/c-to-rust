@@ -134,11 +134,18 @@ class ProjectCandidateDomainTests(unittest.TestCase):
         )
         first = candidate_verification_context(
             *args, {"binding_sha256": "2" * 64},
+            {"binding_sha256": "4" * 64},
         )
         second = candidate_verification_context(
             *args, {"binding_sha256": "3" * 64},
+            {"binding_sha256": "4" * 64},
         )
         self.assertNotEqual(first, second)
+        third = candidate_verification_context(
+            *args, {"binding_sha256": "2" * 64},
+            {"binding_sha256": "5" * 64},
+        )
+        self.assertNotEqual(first, third)
 
 
 def _compact_sha(value: dict) -> str:

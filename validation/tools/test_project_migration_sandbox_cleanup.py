@@ -12,6 +12,9 @@ from validation.tools._project_migration_harness.project_verification import (
     run_cargo_generation_gates,
     run_cargo_project_gates,
 )
+from validation.tools._project_migration_harness.cargo_fact_commands import (
+    CARGO_METADATA_ARGS,
+)
 from validation.tools._project_migration_harness.integration_generation import (
     recover_current_generation,
 )
@@ -42,6 +45,7 @@ class ProjectMigrationSandboxCleanupTests(unittest.TestCase):
             self.assertTrue(result["sandbox"]["cleanup_verified"])
             self.assertEqual(2, len(backend.calls))
             self.assertEqual([], list(runtime.glob("cargo-sandbox-*")))
+            self.assertNotIn("topology", result["proof_boundary"])
 
     def test_cleanup_failure_blocks_an_otherwise_passing_run(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sandbox-cleanup-fail-") as temporary:
@@ -67,6 +71,46 @@ class ProjectMigrationSandboxCleanupTests(unittest.TestCase):
             self.assertIn(
                 "sandbox_cleanup_failed",
                 {item["code"] for item in result["diagnostics"]},
+            )
+
+    def test_fact_capture_runs_fixed_metadata_before_compile_and_test(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sandbox-cargo-facts-") as temporary:
+            root = Path(temporary)
+            project, cargo = managed_project(root)
+            generation = recover_current_generation(project)
+            self.assertIsNotNone(generation)
+            backend = BoundBackend()
+            with self._sandbox(backend, cargo):
+                result = run_cargo_generation_gates(
+                    generation,
+                    runtime_root=root / "runtime",
+                    timeout_seconds=60,
+                    capture_raw_output=True,
+                    capture_cargo_facts=True,
+                )
+        self.assertEqual("passed", result["status"])
+        self.assertEqual(
+            [
+                list(CARGO_METADATA_ARGS),
+                ["check", "--all-targets", "--all-features", "--offline",
+                 "--locked", "--message-format=json"],
+                ["test", "--all-targets", "--all-features", "--offline",
+                 "--locked", "--message-format=json"],
+            ],
+            [item["cargo_args"] for item in backend.calls],
+        )
+        self.assertEqual(
+            ["cargo", *CARGO_METADATA_ARGS],
+            result["fact_probes"]["cargo-metadata"]["command"],
+        )
+        self.assertIn("topology", result["proof_boundary"])
+
+    def test_fact_capture_without_raw_output_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "facts require raw"):
+            run_cargo_generation_gates(
+                Path("does-not-need-to-exist"),
+                runtime_root=Path("does-not-need-to-exist"),
+                capture_cargo_facts=True,
             )
 
     def test_timeout_is_an_environment_block_not_a_compile_failure(self) -> None:

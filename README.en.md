@@ -15,13 +15,13 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | Latest development stage | P0-A19: unfamiliar-repository build closure, verification authority, and real held-out contract closure |
 | Active translator task | P0-A19 project orchestration first; P0-A18c/P0-A10 remain finite regression and held-out acceptance tracks |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
-| P0-A19 finite gate | 527/527 on Windows with five platform-conditional skips; 527/527 on WSL with three platform-conditional skips |
+| P0-A19 finite gate | Windows: 867 total, 861 passed and six platform-conditional skips; WSL with live gates enabled: 867/867 passed |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
-| Development workflow | Superpowers specs/plans, canonical roadmap, and harness evidence gates |
+| Development workflow | canonical roadmap, code/tests, and harness evidence gates |
 
 These counts cover declared named-slice boundaries only. They do not prove complete C support, complete `fdb_kv_iterate`, whole-project FlashDB migration, or production safety.
 
-The canonical backlog is [future-vision-and-mvp.md](docs/c2rust-migration-agent/future-vision-and-mvp.md). Designs and implementation plans live under `docs/superpowers/specs/` and `docs/superpowers/plans/`.
+The single source for backlog, stage status, and implementation order is [future-vision-and-mvp.md](docs/c2rust-migration-agent/future-vision-and-mvp.md). Architecture contracts live under `docs/c2rust-migration-agent/`; only code, tests, and `validation/**` evidence decide acceptance.
 
 ## What the Harness Does
 
@@ -226,7 +226,6 @@ flowchart TB
         SPEC["Slice spec / extract spec"]
         PROFILE["Batch profile"]
         JCFG["Judge entrypoints"]
-        SP["Superpowers specs and plans"]
     end
 
     subgraph Control["Control plane"]
@@ -265,7 +264,6 @@ flowchart TB
         PACKET["public-release-packet"]
     end
 
-    SP -. "development constraints" .-> PLAN
     SRC --> EXTRACT
     SPEC --> EXTRACT
     PROFILE --> HARNESS
@@ -495,16 +493,15 @@ python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --opencode-variant max
 ```
 
-## Superpowers Workflow
+## Development and Acceptance Entrypoints
 
-The project uses these development entrypoints:
+The project maintains these authoritative entrypoints:
 
-1. `docs/superpowers/specs/` for behavioral and architectural designs.
-2. `docs/superpowers/plans/` for executable implementation, test, and rollback plans.
-3. `docs/c2rust-migration-agent/future-vision-and-mvp.md` as the only global backlog.
-4. `validation/**` as executable contracts and evidence; documentation checkboxes cannot replace them.
+1. `docs/c2rust-migration-agent/future-vision-and-mvp.md` as the only global backlog, implementation order, and status source.
+2. `docs/c2rust-migration-agent/` for architecture, runbooks, capability boundaries, and competition-environment notes.
+3. `validation/**` as executable contracts and evidence; documentation checkboxes cannot replace them.
 
-Superpowers documents guide development. They are not competition preflight inputs or semantic gates.
+Documentation is not a competition preflight input or a semantic gate.
 
 ## Core Directories
 
@@ -517,7 +514,6 @@ Superpowers documents guide development. They are not competition preflight inpu
 | `validation/l2_slices/` | Rust replay and C oracle fixtures |
 | `flashDB_rust/` | FlashDB Rust skeleton/reference runtime |
 | `config/competition-env/` | environment, batch profiles, judge entrypoints, OpenCode runbook |
-| `docs/superpowers/` | current designs and implementation plans |
 | `docs/c2rust-migration-agent/` | architecture, runbooks, roadmap, and boundaries |
 | `scripts/` | full regression and helper scripts |
 

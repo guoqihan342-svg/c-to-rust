@@ -81,6 +81,7 @@ def candidate_verification_context(
     domain: Mapping[str, Any], build_ir: Mapping[str, Any],
     materialization: Mapping[str, Any], execution: Mapping[str, Any],
     observations: Mapping[str, Any], native_settlement: Mapping[str, Any],
+    cargo_fact_evidence: Mapping[str, Any],
 ) -> str:
     generation = materialization.get("generation")
     return content_sha256({
@@ -93,6 +94,7 @@ def candidate_verification_context(
         ),
         "project_input_sha256": execution.get("project_input_sha256"),
         "cargo_observations": dict(observations),
+        "cargo_fact_binding_sha256": cargo_fact_evidence.get("binding_sha256"),
         "native_link_settlement_binding_sha256": native_settlement.get(
             "binding_sha256"
         ),

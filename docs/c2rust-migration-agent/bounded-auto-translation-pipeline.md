@@ -2,7 +2,7 @@
 
 # 受限自动翻译管线 Agent 使用文档
 
-本文面向 OpenCode、Codex 和其他可执行 Agent，说明受限自动 C-to-Rust 翻译流程。设计与执行计划由 `docs/superpowers/` 管理；该流程生成的是 evidence-bound Rust draft candidate，不是默认接受的实现，最终是否通过仍由 L1-L3 evidence gates 判定。
+本文面向 OpenCode、Codex 和其他可执行 Agent，说明受限自动 C-to-Rust 翻译流程。全局实施顺序与状态由 `future-vision-and-mvp.md` 管理；该流程生成的是 evidence-bound Rust draft candidate，不是默认接受的实现，最终是否通过仍由 L1-L3 evidence gates 判定。
 
 ## 入口原则
 

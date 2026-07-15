@@ -22,7 +22,7 @@ c2rust-migrator --phase <phase> --input request.json
 
 Phases:
 
-- `propose`: create or update Superpowers proposal artifacts.
+- `propose`: create or update architecture decisions and canonical-backlog artifacts.
 - `plan`: produce concrete task slices, owners, gates, and rollback points.
 - `index`: build SQLite/JSONL context from C, Rust, build, test, and error facts.
 - `skeleton`: create a compilable `flashDB_rust` crate before function-body migration.
@@ -149,8 +149,8 @@ First milestone rule:
 
 - Prefer synchronous, deterministic storage operations.
 - Add async wrappers later only as adapters over proven synchronous semantics.
-- Add multithreaded tests later for API safety, but do not change storage ordering without a separately reviewed Superpowers design and execution plan.
+- Add multithreaded tests later for API safety, but do not change storage ordering without a separately reviewed architecture decision and executable roadmap item.
 
 ## Bilingual Documentation Rule
 
-User-facing docs should include Chinese as the primary explanation and English labels where useful. Superpowers designs use ordinary Markdown under `docs/superpowers/specs/`; executable plans use checkbox tasks under `docs/superpowers/plans/`.
+User-facing docs should include Chinese as the primary explanation and English labels where useful. Architecture decisions stay under `docs/c2rust-migration-agent/`; executable status and checkbox tasks stay in the canonical roadmap.

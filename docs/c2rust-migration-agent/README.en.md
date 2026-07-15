@@ -1,10 +1,10 @@
 # C2Rust Migration Agent
 
-`docs/c2rust-migration-agent/` is the topic documentation folder for the C2Rust migration agent. It contains the executable design contract for the Superpowers-governed C-to-Rust migration Agent. The Chinese mirror is `README.md`.
+`docs/c2rust-migration-agent/` is the topic documentation folder for the C2Rust migration agent. It contains architecture contracts, runbooks, capability boundaries, and the single global backlog for staged C-to-Rust migration. The Chinese mirror is `README.md`.
 
 ## Current Status
 
-- Superpowers design and plans: `docs/superpowers/specs/`, `docs/superpowers/plans/`
+- Single global backlog: `future-vision-and-mvp.md`
 - First target: FlashDB
 - Source clone: `sources/FlashDB`
 - Source commit: `f9d0421315c564fb890a1b14eee77b290e0d7bbe`
@@ -42,7 +42,7 @@
 
 - New user-facing or Agent-facing docs use a Chinese primary `.md` file and an English mirror `.en.md` by default.
 - When an existing document receives more than a small edit, keep the matching English mirror synchronized.
-- Superpowers documents use ordinary Markdown: designs live in `docs/superpowers/specs/` and executable plans live in `docs/superpowers/plans/`.
+- Architecture decisions stay in the bilingual documents in this directory; implementation status, order, and remaining work live only in `future-vision-and-mvp.md` and its English mirror.
 - Some older files in this directory still use a mixed "Chinese note + English summary" format. When touched, they should be split into full bilingual versions under this convention.
 - The only global backlog source is `future-vision-and-mvp.md`; `future-vision-and-mvp.en.md` is only a synchronized mirror and does not define a separate backlog source.
 
@@ -53,7 +53,7 @@
 - Operations and validation: see `index/operations.md`. Covers `quickstart.md` / `quickstart.en.md`, `opencode-agent-harness-design.md` / `opencode-agent-harness-design.en.md`, `build-and-c2rust-baseline.md`, `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`, `evidence-governance.md` / `evidence-governance.en.md`, `testing-unsafe-cache-and-milestone.md`, `full-regression-runner.md`, and `../../config/competition-env/`.
 - Coverage and roadmap: see `index/roadmap.md`. Covers `COVERAGE.md` / `COVERAGE.en.md` and `future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`.
 - FlashDB case boundary: see `index/flashdb.md`. Covers `baseline-record.json`, `build-and-c2rust-baseline.md`, `flashdb-rust-skeleton-and-milestone.md`, and `full-regression-runner.md`.
-- Archive/analysis: see `index/archive.md`. Covers `archive/context-history-2026-06-28.md` and `analysis/translator-strengthening-analysis.md` / `analysis/translator-strengthening-analysis.en.md`.
+- Analysis: see `index/archive.md`. Covers `analysis/translator-strengthening-analysis.md` / `analysis/translator-strengthening-analysis.en.md`.
 
 ## Quick Use
 
@@ -70,7 +70,7 @@ The current judge-facing demo path is `judge-demo.md`; the preferred route uses 
 
 ## Operating Principles
 
-- Use Superpowers before implementation.
+- Check the single global backlog and executable validation contracts before implementation.
 - Keep context local-first and token-bounded.
 - Spawn multiple subagents for read-only or disjoint work.
 - Use deterministic rules before AI.

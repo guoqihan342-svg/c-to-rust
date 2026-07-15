@@ -6,6 +6,10 @@ from typing import Any
 
 from .artifacts import canonical_json_bytes
 from .build_ir import is_sha256
+from .candidate_cargo_fact_binding import (
+    reopen_candidate_cargo_fact_binding,
+    validate_candidate_cargo_fact_binding,
+)
 from .candidate_generation_reopen import (
     generation_reference_path,
     generation_relative,
@@ -16,6 +20,7 @@ from .gate_evidence import (
     require_content_addressed_reference,
 )
 from .ledger_security import LedgerError
+from .native_link_trace_evidence import validate_native_link_trace_binding
 from .project_candidate_domain import (
     candidate_domain_context_sha256,
     candidate_verification_context,
@@ -31,6 +36,7 @@ from .project_cargo_evidence import (
 from .project_native_link_settlement_binding import (
     validate_project_native_link_settlement_binding,
 )
+from .project_verification_execution import environment_policy
 
 
 _KEYS = {
@@ -40,7 +46,8 @@ _KEYS = {
     "rust_project_ir_sha256", "rust_project_interface_sha256",
     "rust_project_binding_sha256", "candidate_domain_context_sha256",
     "build_ir_verification", "materialization", "execution",
-    "cargo_observations", "cargo_statuses", "native_link_settlement",
+    "cargo_observations", "cargo_statuses", "cargo_fact_evidence",
+    "native_link_settlement",
     "state_effects", "claim_boundary", "verification_context_sha256",
 }
 _HASH_FIELDS = (
@@ -61,6 +68,12 @@ _MATERIALIZATION_KEYS = {
     "generation_manifest_ref", "immutable", "last_good_updated",
     "cargo_executed", "diagnostics",
 }
+_EXECUTION_KEYS = {
+    "schema_version", "status", "cargo_executed", "project_input_sha256",
+    "project_state_before", "project_state_after", "project_state_unchanged",
+    "checks", "fact_probes", "sandbox", "environment_policy", "diagnostics", "semantic_gate", "proof_boundary", "native_link_trace",
+}
+_FACT_PROOF_BOUNDARY = "Sandboxed Cargo topology/compile/test facts only; oracle and final verification remain separate"
 
 
 def validate_candidate_project_verification(value: Any) -> dict[str, Any]:
@@ -68,7 +81,7 @@ def validate_candidate_project_verification(value: Any) -> dict[str, Any]:
         raise ValueError("candidate_project_verification_schema_invalid")
     receipt = dict(value)
     if (
-        receipt.get("schema_version") != 1
+        receipt.get("schema_version") != 2
         or receipt.get("artifact_kind") != "candidate-project-verification"
         or receipt.get("status") not in {"candidate-verified", "failed", "blocked"}
         or not isinstance(receipt.get("run_id"), str)
@@ -84,8 +97,26 @@ def validate_candidate_project_verification(value: Any) -> dict[str, Any]:
         raise ValueError("candidate_project_domain_context_drifted")
     build_ir = _mapping(receipt, "build_ir_verification")
     materialization = _materialization(receipt)
-    execution = _mapping(receipt, "execution")
+    execution = _execution(receipt)
     observations = _observations(receipt)
+    generation = materialization["generation"]
+    project_input = execution.get("project_input_sha256")
+    if (
+        project_input != generation["sha256"]
+        or execution.get("project_state_before") != project_input
+        or execution.get("project_state_after") != project_input
+        or execution.get("project_state_unchanged") is not True
+        or any(
+            observation.get("project_input_sha256") != project_input
+            for observation in observations.values()
+        )
+    ):
+        raise ValueError("candidate_project_generation_input_drifted")
+    cargo_facts = validate_candidate_cargo_fact_binding(
+        receipt.get("cargo_fact_evidence"),
+        execution=execution,
+        observations=observations,
+    )
     statuses = {
         gate: derive_project_cargo_status(gate, observation)
         for gate, observation in observations.items()
@@ -96,8 +127,10 @@ def validate_candidate_project_verification(value: Any) -> dict[str, Any]:
         receipt.get("native_link_settlement")
     )
     native_required = native["requirement_count"] > 0
+    validate_native_link_trace_binding(execution["native_link_trace"], required=native_required)
     expected_status = candidate_verification_status(
         execution, observations, statuses, native, native_required,
+        cargo_facts,
     )
     if receipt["status"] != expected_status:
         raise ValueError("candidate_project_verification_status_drifted")
@@ -108,6 +141,7 @@ def validate_candidate_project_verification(value: Any) -> dict[str, Any]:
         raise ValueError("candidate_project_verification_claim_invalid")
     expected_context = candidate_verification_context(
         receipt, build_ir, materialization, execution, observations, native,
+        cargo_facts,
     )
     if receipt["verification_context_sha256"] != expected_context:
         raise ValueError("candidate_project_verification_context_drifted")
@@ -142,6 +176,11 @@ def reopen_candidate_project_verification(
         verify_project_cargo_raw_outputs(
             Path(ledger_path), observation, gate_kind=gate,
         )
+    reopen_candidate_cargo_fact_binding(
+        Path(ledger_path), receipt["cargo_fact_evidence"],
+        execution=receipt["execution"],
+        observations=receipt["cargo_observations"],
+    )
     reopen_candidate_generation(quarantine_root, receipt["materialization"])
     return receipt
 
@@ -199,6 +238,43 @@ def _observations(receipt: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     return {
         gate: dict(_mapping(value, gate)) for gate in ("cargo-check", "cargo-test")
     }
+
+
+def _execution(receipt: Mapping[str, Any]) -> dict[str, Any]:
+    value = _mapping(receipt, "execution")
+    checks = value.get("checks")
+    probes = value.get("fact_probes")
+    metadata = probes.get("cargo-metadata") if isinstance(probes, Mapping) else None
+    sandbox = value.get("sandbox")
+    results = [metadata, *(checks if isinstance(checks, list) else [])]
+    result_mappings = [item for item in results if isinstance(item, Mapping)]
+    cleanup = isinstance(sandbox, Mapping) and sandbox.get("cleanup_verified") is True
+    unchanged = value.get("project_state_unchanged") is True
+    passed = (
+        cleanup and unchanged and len(result_mappings) == 3
+        and all(item.get("status") == "passed" for item in result_mappings)
+    )
+    blocked = (
+        not cleanup or not unchanged
+        or any(item.get("status") == "blocked" for item in result_mappings)
+    )
+    expected_status = "passed" if passed else "blocked" if blocked else "failed"
+    expected_executed = any(
+        item.get("cargo_executed") is True for item in result_mappings
+    )
+    if (
+        set(value) != _EXECUTION_KEYS
+        or value.get("schema_version") != 1
+        or value.get("status") != expected_status
+        or value.get("cargo_executed") is not expected_executed
+        or value.get("semantic_gate") is not False
+        or value.get("environment_policy") != environment_policy()
+        or value.get("proof_boundary") != _FACT_PROOF_BOUNDARY
+        or not isinstance(value.get("diagnostics"), list)
+        or not isinstance(value.get("native_link_trace"), Mapping)
+    ):
+        raise ValueError("candidate_project_execution_invalid")
+    return value
 
 
 def _mapping(value: Mapping[str, Any], key: str) -> dict[str, Any]:

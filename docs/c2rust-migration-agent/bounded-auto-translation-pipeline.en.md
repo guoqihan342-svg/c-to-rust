@@ -1,6 +1,6 @@
 # Bounded Automatic Translation Pipeline Agent Guide
 
-This guide is for OpenCode, Codex, and other executable agents working on the bounded automatic C-to-Rust translation pipeline. Design and execution plans are managed under `docs/superpowers/`. The pipeline produces evidence-bound Rust draft candidates; acceptance still comes from the L1-L3 evidence gates.
+This guide is for OpenCode, Codex, and other executable agents working on the bounded automatic C-to-Rust translation pipeline. Global implementation order and status are managed in `future-vision-and-mvp.md`. The pipeline produces evidence-bound Rust draft candidates; acceptance still comes from the L1-L3 evidence gates.
 
 ## Entry Rules
 

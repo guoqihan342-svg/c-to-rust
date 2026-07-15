@@ -42,7 +42,7 @@ English: effect graph identity is part of the same cache boundary. If read/write
 - PatchPlan evidence must exist before automatic patch application.
 - Default repair retry limit is five repair rounds.
 - Repairs that edit oracle contracts, fixture expected behavior, accepted differences, public API outside the impact set, source slice boundaries, or unsafe budget policy must be blocked.
-- Final acceptance still requires C oracle, Rust replay, schema-aware diff, negative diff, unsafe evidence, version/config binding, cache metadata, final verification, and Superpowers validation.
+- Final acceptance still requires C oracle, Rust replay, schema-aware diff, negative diff, unsafe evidence, version/config binding, cache metadata, and final verification.
 - A change to `config/competition-env/environment.json` invalidates generated translation cache identity until the affected artifacts are regenerated or explicitly reviewed as non-competition evidence.
 - 中文：`config/competition-env/environment.json` 变化会让已生成翻译缓存身份失效；受影响 artifacts 必须重新生成，或显式标注为非比赛环境 evidence 并单独审核。
 - A route may choose an L0 deterministic candidate path for scalar-only `GenericTypedIr` candidates whose `candidate_route.token_cost=0`, but that is route/cost/provenance classification only. The generated Rust draft remains candidate evidence until C oracle, Rust replay, schema-aware diff, negative diff, unsafe evidence, and final verification accept the exact draft.

@@ -4,7 +4,16 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .cargo_raw_output_evidence import persist_captured_cargo_outputs
+from .candidate_cargo_fact_binding import (
+    parse_captured_candidate_cargo_facts,
+    write_candidate_cargo_fact_binding,
+)
+from .cargo_compiler_artifact_evidence import CargoCompilerArtifactEvidenceError
+from .cargo_metadata_fact_evidence import CargoMetadataFactEvidenceError
+from .cargo_raw_output_evidence import (
+    persist_captured_cargo_outputs,
+    validate_cargo_raw_output_reference,
+)
 from .ledger_security import LedgerError
 from .native_link_trace_evidence import persist_captured_native_link_trace
 from .project_cargo_evidence import (
@@ -23,12 +32,13 @@ def bind_candidate_cargo_evidence(
     out_root: Path, out_root_rel: str,
 ) -> tuple[
     dict[str, Any], dict[str, dict[str, Any]],
-    dict[str, dict[str, Any]], dict[str, str],
+    dict[str, dict[str, Any]], dict[str, str], dict[str, Any],
 ]:
+    captured = persist_captured_native_link_trace(
+        execution, out_root=out_root, required=native_required,
+    )
     persisted = persist_captured_cargo_outputs(
-        persist_captured_native_link_trace(
-            execution, out_root=out_root, required=native_required,
-        ),
+        captured,
         out_root=out_root,
         out_root_rel=out_root_rel,
     )
@@ -38,7 +48,39 @@ def bind_candidate_cargo_evidence(
         gate: derive_project_cargo_status(gate, observation)
         for gate, observation in observations.items()
     }
-    return persisted, checks, observations, statuses
+    raw_output_bound = _raw_outputs_bound(persisted)
+    if persisted.get("status") != "passed" or not raw_output_bound:
+        return (
+            persisted, checks, observations, statuses,
+            _blocked_cargo_facts(
+                _execution_block_reason(persisted, raw_output_bound),
+                raw_output_bound=raw_output_bound,
+            ),
+        )
+    if any(status != "passed" for status in statuses.values()):
+        return (
+            persisted, checks, observations, statuses,
+            _blocked_cargo_facts(
+                "candidate_cargo_fact_source_failed", raw_output_bound=True,
+            ),
+        )
+    try:
+        parsed_facts = parse_captured_candidate_cargo_facts(captured)
+        facts = write_candidate_cargo_fact_binding(
+            parsed=parsed_facts,
+            execution=persisted,
+            observations=observations,
+            out_root=out_root,
+            out_root_rel=out_root_rel,
+        )
+    except (
+        CargoCompilerArtifactEvidenceError, CargoMetadataFactEvidenceError,
+        OSError, LedgerError,
+    ):
+        facts = _blocked_cargo_facts(
+            "candidate_cargo_fact_derivation_failed", raw_output_bound=True,
+        )
+    return persisted, checks, observations, statuses, facts
 
 
 def settle_candidate_native_links(
@@ -81,6 +123,7 @@ def candidate_verification_status(
     observations: Mapping[str, Mapping[str, Any]],
     cargo: Mapping[str, str],
     native: Mapping[str, Any], native_required: bool,
+    cargo_facts: Mapping[str, Any],
 ) -> str:
     if execution.get("status") == "blocked":
         return "blocked"
@@ -93,6 +136,8 @@ def candidate_verification_status(
     if set(cargo) != {"cargo-check", "cargo-test"} or any(
         value != "passed" for value in cargo.values()
     ):
+        return "blocked"
+    if cargo_facts.get("status") != "ready":
         return "blocked"
     if native_required and native.get("status") != "resolved":
         return "blocked"
@@ -151,6 +196,64 @@ def _blocked_native(count: int, reason: str) -> dict[str, Any]:
         context={"context_sha256": None, "requirement_count": count},
         reason_code=reason,
     )
+
+
+def _blocked_cargo_facts(
+    reason: str, *, raw_output_bound: bool,
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "blocked",
+        "reason_code": reason,
+        "raw_output_bound": raw_output_bound,
+        "claim_boundary": {
+            "interface_closure": False,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+        },
+    }
+
+
+def _raw_outputs_bound(execution: Mapping[str, Any]) -> bool:
+    checks = execution.get("checks")
+    probes = execution.get("fact_probes")
+    if not isinstance(checks, list) or not isinstance(probes, Mapping):
+        return False
+    values = [*checks, *probes.values()]
+    executed = 0
+    for check in values:
+        if not isinstance(check, Mapping):
+            return False
+        if check.get("cargo_executed") is not True:
+            continue
+        executed += 1
+        command = check.get("command")
+        stage = command[1] if isinstance(command, list) and len(command) > 1 else None
+        if stage not in {"metadata", "check", "test"}:
+            return False
+        for stream in ("stdout", "stderr"):
+            try:
+                validate_cargo_raw_output_reference(
+                    check.get(f"{stream}_ref"),
+                    gate_kind=f"cargo-{stage}", stream=stream,
+                    expected_sha256=str(check.get(f"{stream}_sha256")),
+                )
+            except (TypeError, ValueError):
+                return False
+    return executed > 0
+
+
+def _execution_block_reason(
+    execution: Mapping[str, Any], raw_output_bound: bool,
+) -> str:
+    if not raw_output_bound:
+        return "candidate_cargo_raw_output_unavailable"
+    native = execution.get("native_link_trace")
+    if isinstance(native, Mapping) and native.get("status") == "blocked":
+        return "candidate_native_link_trace_blocked"
+    if execution.get("status") == "failed":
+        return "candidate_cargo_fact_source_failed"
+    return "candidate_cargo_execution_blocked"
 
 
 __all__ = [

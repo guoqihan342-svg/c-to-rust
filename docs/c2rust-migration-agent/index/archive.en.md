@@ -1,4 +1,4 @@
-# English Mirror: Archive
+# English Mirror: Analysis
 
 Chinese original: `archive.md`.
 
@@ -6,16 +6,16 @@ This file is the English mirror for `docs/c2rust-migration-agent/index/archive.m
 
 ## Scope
 
-This mirror covers the categorized document index for the migration-agent documentation set. It is intentionally concise for older plans, templates, and Superpowers records so that the repository has a stable bilingual entry point without turning historical artifacts into the active backlog.
+This mirror covers the maintained translator-strengthening analysis index without creating a second backlog.
 
 ## Source Outline
 
 The Chinese source currently contains these major headings:
 
-- `# 归档/分析`
+- `# 分析`
 
 ## Maintenance Notes
 
 - Keep filenames paired as `archive.md` and `archive.en.md` in the same directory.
 - Keep the first line of the Chinese source pointing to `archive.en.md` with the repository-standard mirror notice.
-- For project-wide priorities, follow `docs/c2rust-migration-agent/future-vision-and-mvp.md`; local plans, Superpowers tasks, and validation checklists are scoped artifacts only.
+- For project-wide priorities, follow `docs/c2rust-migration-agent/future-vision-and-mvp.md`; analysis notes and validation checklists are scoped artifacts only.

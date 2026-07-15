@@ -19,13 +19,13 @@
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
 | 当前翻译任务 | P0-A19 项目级编排优先；P0-A18c/P0-A10 保留为有限回归与 held-out 验收 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
-| P0-A19 有限门禁 | Windows 527/527（5 项平台条件跳过）；WSL 527/527（3 项平台条件跳过） |
+| P0-A19 有限门禁 | Windows 共 867 项：861 项通过、6 项平台条件跳过；WSL 显式开启 live gate 后 867/867 全通过 |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
-| 开发工作流 | Superpowers specs/plans + canonical roadmap + harness evidence gates |
+| 开发工作流 | canonical roadmap + code/tests + harness evidence gates |
 
 能力计数只代表已绑定 named-slice 边界。它不表示完整 C 语言覆盖、完整 `fdb_kv_iterate`、FlashDB 全项目自动迁移或生产级安全性。
 
-全局待办唯一入口：[future-vision-and-mvp.md](docs/c2rust-migration-agent/future-vision-and-mvp.md)。设计与实施计划维护在 `docs/superpowers/specs/` 和 `docs/superpowers/plans/`。
+全局待办、阶段状态和实施顺序的唯一入口是 [future-vision-and-mvp.md](docs/c2rust-migration-agent/future-vision-and-mvp.md)；架构合同维护在 `docs/c2rust-migration-agent/`，是否通过只由代码、测试和 `validation/**` 证据决定。
 
 ## Harness 解决什么问题
 
@@ -238,7 +238,6 @@ flowchart TB
         SPEC["Slice spec / extract spec"]
         PROFILE["Batch profile"]
         JCFG["Judge entrypoints"]
-        SP["Superpowers specs and plans"]
     end
 
     subgraph Control["控制平面"]
@@ -277,7 +276,6 @@ flowchart TB
         PACKET["public-release-packet"]
     end
 
-    SP -. "开发约束" .-> PLAN
     SRC --> EXTRACT
     SPEC --> EXTRACT
     PROFILE --> HARNESS
@@ -558,16 +556,15 @@ python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
 
 只有同一 run/runtime 的 preflight report 为 passed、marker 存在且 contract verification 已执行，才能启动 OpenCode worker。
 
-## Superpowers 工作流
+## 开发与验收入口
 
-项目只维护以下开发入口：
+项目只维护以下权威入口：
 
-1. `docs/superpowers/specs/`：行为、架构和边界设计。
-2. `docs/superpowers/plans/`：可执行实施计划、测试和回滚步骤。
-3. `docs/c2rust-migration-agent/future-vision-and-mvp.md`：唯一全局 backlog 和当前状态。
-4. `validation/**`：机器可执行合同和 evidence；它们决定是否通过，不由文档勾选替代。
+1. `docs/c2rust-migration-agent/future-vision-and-mvp.md`：唯一全局 backlog、实施顺序和当前状态。
+2. `docs/c2rust-migration-agent/`：维护架构、运行手册、能力边界和比赛环境说明。
+3. `validation/**`：机器可执行合同和 evidence；它们决定是否通过，不由文档勾选替代。
 
-设计或计划变更必须与实际代码、测试、coverage matrix 和 evidence 一起收口。Superpowers 文档是开发指导，不进入比赛 preflight，也不是 semantic gate。
+设计或计划变更必须与实际代码、测试、coverage matrix 和 evidence 一起收口。文档不进入比赛 preflight，也不是 semantic gate。
 
 ## 核心目录
 
@@ -580,7 +577,6 @@ python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
 | `validation/l2_slices/` | Rust replay 与 C oracle fixture |
 | `flashDB_rust/` | FlashDB Rust skeleton/reference runtime |
 | `config/competition-env/` | 比赛环境、planned batch、judge entrypoints、OpenCode runbook |
-| `docs/superpowers/` | 当前设计与实施计划 |
 | `docs/c2rust-migration-agent/` | 架构、运行手册、roadmap 和边界说明 |
 | `scripts/` | 全量回归和辅助脚本 |
 

@@ -128,6 +128,32 @@ class ProjectMigrationCargoRawOutputEvidenceTests(unittest.TestCase):
                 ),
             )
 
+    def test_metadata_fact_probe_is_persisted_under_its_own_gate(self) -> None:
+        stdout, stderr = b'{"version":1}', b""
+        execution = {
+            "status": "passed", "diagnostics": [], "checks": [],
+            "fact_probes": {"cargo-metadata": {
+                "command": ["cargo", "metadata"], "status": "passed",
+                "cargo_executed": True,
+                "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
+                "stderr_sha256": hashlib.sha256(stderr).hexdigest(),
+                "stdout_ref": None, "stderr_ref": None,
+                "_captured_stdout": stdout, "_captured_stderr": stderr,
+            }},
+        }
+        persisted = persist_captured_cargo_outputs(
+            execution, out_root=self.out_root, out_root_rel="target/run",
+        )
+        probe = persisted["fact_probes"]["cargo-metadata"]
+        self.assertNotIn("_captured_stdout", probe)
+        self.assertEqual(
+            stdout,
+            read_cargo_raw_output(
+                self.database, probe["stdout_ref"], gate_kind="cargo-metadata",
+                stream="stdout", expected_sha256=probe["stdout_sha256"],
+            ),
+        )
+
     def test_raw_bytes_round_trip_without_text_normalization(self) -> None:
         data = b"\xff\x00\r\n"
         reference = write_cargo_raw_output(

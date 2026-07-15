@@ -116,8 +116,9 @@ def verify_candidate_project(
             timeout_seconds=timeout_seconds,
             capture_raw_output=True,
             capture_native_link_trace=native_required,
+            capture_cargo_facts=True,
         )
-        execution, checks, observations, cargo_statuses = (
+        execution, checks, observations, cargo_statuses, cargo_facts = (
             bind_candidate_cargo_evidence(
                 execution,
                 native_required=native_required,
@@ -131,6 +132,19 @@ def verify_candidate_project(
             cargo_executed=_cargo_executed(execution),
             build_ir_verification=build_ir,
             materialization=materialized,
+        )
+    if cargo_facts.get("status") != "ready":
+        return _blocked(
+            str(cargo_facts.get(
+                "reason_code", "candidate_cargo_fact_evidence_blocked",
+            )),
+            cargo_executed=_cargo_executed(execution),
+            build_ir_verification=build_ir,
+            materialization=materialized,
+            execution=execution,
+            cargo_observations=observations,
+            cargo_statuses=cargo_statuses,
+            cargo_fact_evidence=cargo_facts,
         )
     native = settle_candidate_native_links(
         rust_project_ir=rust_project_ir,
@@ -146,9 +160,10 @@ def verify_candidate_project(
     )
     status = candidate_verification_status(
         execution, observations, cargo_statuses, native, native_required,
+        cargo_facts,
     )
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_kind": "candidate-project-verification",
         "status": status,
         **domain,
@@ -157,6 +172,7 @@ def verify_candidate_project(
         "execution": execution,
         "cargo_observations": observations,
         "cargo_statuses": cargo_statuses,
+        "cargo_fact_evidence": cargo_facts,
         "native_link_settlement": native,
         "state_effects": {
             "final_current_updated": False,
@@ -169,6 +185,7 @@ def verify_candidate_project(
     }
     payload["verification_context_sha256"] = candidate_verification_context(
         domain, build_ir, materialized, execution, observations, native,
+        cargo_facts,
     )
     try:
         payload = validate_candidate_project_verification(payload)
@@ -222,7 +239,7 @@ def _blocked(
     reason_code: str, *, cargo_executed: bool = False, **details: Any,
 ) -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_kind": "candidate-project-verification",
         "status": "blocked",
         "reason_code": reason_code,
