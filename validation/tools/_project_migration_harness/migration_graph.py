@@ -7,6 +7,12 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from .migration_graph_visibility import (
+    ambiguous_external_definition_nodes,
+    unit_target_domains,
+    visible_definitions,
+)
+
 
 def build_migration_graph(c_index: Mapping[str, Any]) -> dict[str, Any]:
     """Resolve visible symbols, condense calls with Tarjan SCCs, and classify units."""
@@ -17,13 +23,10 @@ def build_migration_graph(c_index: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("c_index.nodes must have unique node_id values")
     functions = _by_symbol(nodes)
     global_symbols = _by_symbol(globals_, key="symbol")
-    ambiguous_definition_nodes = {
-        str(item["node_id"])
-        for definitions in functions.values()
-        if len([item for item in definitions if item.get("linkage") == "external"]) > 1
-        for item in definitions
-        if item.get("linkage") == "external"
-    }
+    target_domains = unit_target_domains(c_index)
+    ambiguous_definition_nodes = ambiguous_external_definition_nodes(
+        functions, target_domains,
+    )
     bindings: list[dict[str, Any]] = []
     edges: set[tuple[str, str]] = set()
     external_calls: list[dict[str, Any]] = []
@@ -33,7 +36,9 @@ def build_migration_graph(c_index: Mapping[str, Any]) -> dict[str, Any]:
         resolved_calls: list[dict[str, str]] = []
         node_external: list[dict[str, Any]] = []
         for symbol in _strings(node.get("direct_calls", []), "direct_calls"):
-            candidates = _visible_definitions(node, functions.get(symbol, []), "node_id")
+            candidates = visible_definitions(
+                node, functions.get(symbol, []), "node_id", target_domains,
+            )
             if len(candidates) == 1:
                 callee = str(candidates[0]["node_id"])
                 edges.add((node_id, callee))
@@ -46,7 +51,9 @@ def build_migration_graph(c_index: Mapping[str, Any]) -> dict[str, Any]:
                 external_calls.append(record)
         node_globals: list[dict[str, Any]] = []
         for symbol in _strings(node.get("referenced_globals", []), "referenced_globals"):
-            candidates = _visible_definitions(node, global_symbols.get(symbol, []), "global_id")
+            candidates = visible_definitions(
+                node, global_symbols.get(symbol, []), "global_id", target_domains,
+            )
             declarations = [item for item in global_symbols.get(symbol, [])
                             if item.get("linkage") == "external_declaration"]
             if len(candidates) == 1:
@@ -186,14 +193,6 @@ def _by_symbol(items: Sequence[Mapping[str, Any]], key: str = "symbol") -> dict[
             raise ValueError(f"indexed {key} must be a non-empty string")
         result.setdefault(symbol, []).append(item)
     return result
-
-
-def _visible_definitions(caller: Mapping[str, Any], candidates: Sequence[Mapping[str, Any]],
-                         id_key: str) -> list[Mapping[str, Any]]:
-    local = [item for item in candidates if item.get("linkage") == "internal"
-             and item.get("unit_id") == caller.get("unit_id")]
-    visible = local or [item for item in candidates if item.get("linkage") == "external"]
-    return sorted(visible, key=lambda item: str(item.get(id_key)))
 
 
 def _tarjan(adjacency: Mapping[str, set[str]]) -> list[list[str]]:

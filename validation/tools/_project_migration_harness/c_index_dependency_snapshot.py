@@ -153,6 +153,12 @@ class DependencySnapshot:
     def header_facts(self) -> dict[str, dict[str, Any]]:
         return {key: self._header_facts[key] for key in sorted(self._header_facts)}
 
+    def header_source(self, digest: str) -> dict[str, Any]:
+        fact = self._header_facts.get(digest)
+        if fact is None or not isinstance(fact.get("source"), Mapping):
+            raise ValueError("dependency snapshot header fact is unavailable")
+        return dict(fact["source"])
+
     def report(self) -> dict[str, Any]:
         self.verify_stability()
         return {

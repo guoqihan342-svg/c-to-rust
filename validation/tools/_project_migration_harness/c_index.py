@@ -19,6 +19,7 @@ from .c_index_build_targets import normalized_build_target_context
 from .c_compilation_fact_bundle import compiler_facts_for_index
 from .c_index_macros import (
     conditional_ranges,
+    function_like_macro_names,
     source_macro_definitions,
 )
 from .c_index_records import function_records, global_records
@@ -79,8 +80,11 @@ def index_translation_units(repo_root: str | Path,
     scanned: list[dict[str, Any]] = []
     blockers: list[dict[str, Any]] = []
     for unit in sorted(units, key=lambda item: item["unit_id"]):
-        scan = _scan_unit(unit)
         dependencies = _dependency_context(root, unit, dependency_snapshot)
+        scan = _scan_unit(
+            unit,
+            _function_macro_names(unit, dependencies, dependency_snapshot),
+        )
         scan["blockers"].extend(dependencies["blockers"])
         scan["blockers"] = sorted(
             {tuple(sorted(item.items())): item for item in scan["blockers"]}.values(),
@@ -174,7 +178,9 @@ def _safe_relative(value: str) -> bool:
     windows = PureWindowsPath(value)
     return (bool(value) and "\\" not in value and not posix.is_absolute() and not windows.drive
             and ".." not in posix.parts and posix.as_posix() == value)
-def _scan_unit(unit: dict[str, Any]) -> dict[str, Any]:
+def _scan_unit(
+    unit: dict[str, Any], function_macros: set[str],
+) -> dict[str, Any]:
     text = unit["raw"].decode("latin-1")
     masked, lexical = _mask_non_code(text)
     blockers = [{"unit_id": unit["unit_id"], "kind": kind, "byte_offset": offset,
@@ -194,7 +200,16 @@ def _scan_unit(unit: dict[str, Any]) -> dict[str, Any]:
             name = _function_name(header)
             if name is not None:
                 source_start = start + len(header) - len(header.lstrip())
-                functions.append({"symbol": name, "start": source_start, "open": index, "end": close + 1, "header": header})
+                if name in function_macros:
+                    blockers.append(_source_blocker(
+                        unit, "function_like_macro_definition_unsupported",
+                        source_start,
+                    ))
+                else:
+                    functions.append({
+                        "symbol": name, "start": source_start, "open": index,
+                        "end": close + 1, "header": header,
+                    })
                 start = close + 1
             index = close + 1
             continue
@@ -213,6 +228,32 @@ def _scan_unit(unit: dict[str, Any]) -> dict[str, Any]:
             "source_macros": source_macro_definitions(unit),
             "conditional_ranges": conditional_ranges(unit["raw"]),
             "function_spans_reliable": function_spans_reliable(functions, blockers)}
+
+
+def _function_macro_names(
+    unit: Mapping[str, Any],
+    dependencies: Mapping[str, Any],
+    snapshot: DependencySnapshot,
+) -> set[str]:
+    result = function_like_macro_names(bytes(unit["raw"]))
+    for header in dependencies.get("headers", []):
+        if not isinstance(header, Mapping):
+            raise ValueError("translation unit header context is invalid")
+        digest = header.get("header_fact_sha256")
+        if not isinstance(digest, str):
+            raise ValueError("translation unit header fact binding is invalid")
+        source = snapshot.header_source(digest)
+        content = source.get("content")
+        encoding = source.get("encoding")
+        if not isinstance(content, str) or encoding not in {
+            "utf-8", "latin-1-byte-map",
+        }:
+            raise ValueError("translation unit header content is invalid")
+        raw = content.encode("utf-8" if encoding == "utf-8" else "latin-1")
+        result.update(function_like_macro_names(raw))
+    return result
+
+
 def _source_blocker(unit: Mapping[str, Any], kind: str, offset: int) -> dict[str, Any]:
     return {"unit_id": str(unit["unit_id"]), "kind": kind,
             "byte_offset": offset, "source_path": str(unit["path"]),

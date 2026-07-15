@@ -58,6 +58,19 @@ def source_macro_definitions(unit: Mapping[str, Any]) -> list[dict[str, Any]]:
     return sorted(result, key=lambda item: (item["name"], item["byte_offset"]))
 
 
+def function_like_macro_names(raw: bytes) -> set[str]:
+    result: set[str] = set()
+    for logical in logical_directives(raw):
+        if logical["kind"] != "define":
+            continue
+        parsed = _DEFINE.fullmatch(logical["body"])
+        if parsed is not None and parsed.group(2) is not None:
+            result.add(parsed.group(1))
+        if len(result) > MAX_SOURCE_MACROS:
+            raise ValueError("translation unit function-like macro limit exceeded")
+    return result
+
+
 def conditional_ranges(raw: bytes) -> list[tuple[int, int]]:
     stack: list[int] = []
     ranges: list[tuple[int, int]] = []
@@ -105,6 +118,7 @@ def logical_directives(raw: bytes) -> list[dict[str, Any]]:
 
 __all__ = [
     "conditional_ranges",
+    "function_like_macro_names",
     "logical_directives",
     "source_macro_definitions",
     "span_is_unconditional",

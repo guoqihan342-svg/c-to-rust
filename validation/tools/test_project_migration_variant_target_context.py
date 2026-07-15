@@ -60,6 +60,11 @@ class VariantTargetContextTests(unittest.TestCase):
 
             index = index_translation_units(root, projected)
             graph = build_migration_graph(index)
+            self.assertEqual([], graph["external_calls"])
+            self.assertTrue(all(
+                "ambiguous_external_definition" not in item["structural_reasons"]
+                for item in graph["sccs"]
+            ))
             pages = build_context_pages(index, graph)
             facts = list(pages["shared_facts"].values())
             membership = [
@@ -114,6 +119,45 @@ class VariantTargetContextTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "consumer target binding"):
             normalized_build_target_context(context, unit_id="variant-debug")
+
+    def test_overlapping_target_domain_keeps_duplicate_definition_ambiguous(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="variant-target-overlap-") as temporary:
+            root = Path(temporary)
+            source = root / "src/unit.c"
+            source.parent.mkdir()
+            source.write_text("int unit(void) { return 1; }\n", encoding="utf-8")
+            build_ir = self._build_ir(
+                hashlib.sha256(source.read_bytes()).hexdigest(), source.stat().st_size,
+            )
+            release_link = build_ir["targets"][5]
+            release_link["dependency_target_ids"].append("archive-debug")
+            release_link["ordered_inputs"].append({
+                "dependency_target_id": "archive-debug",
+            })
+
+            graph = build_migration_graph(index_translation_units(
+                root, translation_units_for_index(build_ir),
+            ))
+
+            self.assertEqual(2, sum(
+                "ambiguous_external_definition" in item["structural_reasons"]
+                for item in graph["sccs"]
+            ))
+
+    def test_partially_bound_target_domains_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="variant-target-partial-") as temporary:
+            root = Path(temporary)
+            source = root / "src/unit.c"
+            source.parent.mkdir()
+            source.write_text("int unit(void) { return 1; }\n", encoding="utf-8")
+            projected = translation_units_for_index(self._build_ir(
+                hashlib.sha256(source.read_bytes()).hexdigest(), source.stat().st_size,
+            ))
+            projected[1].pop("build_target_context")
+            index = index_translation_units(root, projected)
+
+            with self.assertRaisesRegex(ValueError, "target_domains_incomplete"):
+                build_migration_graph(index)
 
     @staticmethod
     def _build_ir(source_sha: str, source_size: int) -> dict:
