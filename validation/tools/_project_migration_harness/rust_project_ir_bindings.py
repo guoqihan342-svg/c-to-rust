@@ -1,27 +1,29 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
-from .artifacts import canonical_json_bytes, checked_relative_path, content_sha256
-from .build_facts import is_linklike
-from .build_ir import canonical_build_ir_bytes, is_sha256
+from .artifacts import content_sha256
+from .build_ir import canonical_build_ir_bytes
 from .build_ir_validation import BuildIRValidationError, validate_build_ir
 from .rust_project_ir_native import DERIVED_INTERFACE_PRODUCER, validate_bound_native_link_requirements
 from .rust_project_ir_compilation_facts import (
     reopen_manifest_compilation_facts, validate_dag_metadata,
 )
 from .rust_project_ir_reopen_facts import recompute_bound_interface_plan
+from .migration_target_scope_reopen import reopen_bound_target_scope_bindings
 from .rust_project_ir_validation import RustProjectIRError, validate_rust_project_ir
 from .rust_project_ir_cohort import PARENT_DAG_KEY, validate_cohort_dag
-MAX_BOUND_ARTIFACT_BYTES = 64 * 1024 * 1024
+from .rust_project_ir_binding_io import (
+    MAX_BOUND_ARTIFACT_BYTES, artifact_identity as _artifact_identity,
+    fail as _fail, read_reference as _read_reference, strict_json as _strict_json,
+)
 _DAG_REQUIRED_KEYS = {"schema_version", "dag", "dag_order"}
 _DAG_ALLOWED_KEYS = _DAG_REQUIRED_KEYS | {
     "unsafe_policy", "generated_build_closure", "build_ir", "claim_boundary",
     "c_compilation_facts", "profile", PARENT_DAG_KEY,
+    "migration_graph", "target_scopes",
 }
 _EVIDENCE_SECTIONS = (
     "modules", "public_api", "shared_types", "global_ownership",
@@ -56,6 +58,14 @@ def reopen_rust_project_ir_bindings(
     if build_unit_count == 0:
         _fail("RustProjectIR BuildIR closure has no translation units")
     try:
+        target_scope_facts = reopen_bound_target_scope_bindings(
+            dag, list(build_payloads.values()), artifact_root,
+        )
+    except (OSError, TypeError, ValueError) as error:
+        raise RustProjectIRError(
+            f"bound migration target scope validation failed: {error}"
+        ) from error
+    try:
         compilation_facts = reopen_manifest_compilation_facts(
             artifact_root, dag, bindings["c_compilation_facts"],
             list(build_payloads.values()),
@@ -84,6 +94,7 @@ def reopen_rust_project_ir_bindings(
         "build_ir_translation_unit_count": build_unit_count,
         "candidate_count": len(bindings["candidates"]),
         "c_compilation_facts": compilation_facts,
+        "target_scopes": target_scope_facts,
         "semantic_gate": False,
         "semantic_pass": False,
     }
@@ -226,67 +237,6 @@ def _validate_embedded_build_ir(
     }
     if artifact_identity not in identities:
         _fail("migration DAG and RustProjectIR bind different BuildIR artifacts")
-
-
-def _strict_json(data: bytes, label: str) -> dict[str, Any]:
-    def pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
-        result = {}
-        for key, item in items:
-            if key in result:
-                _fail(f"bound {label} contains duplicate keys")
-            result[key] = item
-        return result
-    try:
-        payload = json.loads(data.decode("utf-8"), object_pairs_hook=pairs)
-    except (UnicodeError, json.JSONDecodeError) as error:
-        raise RustProjectIRError(f"bound {label} is invalid JSON") from error
-    if not isinstance(payload, dict) or canonical_json_bytes(payload) != data:
-        _fail(f"bound {label} is not canonical JSON")
-    return payload
-
-
-def _read_reference(root: Path, reference: Mapping[str, Any]) -> bytes:
-    relative, expected_sha, size = _artifact_identity(reference)
-    try:
-        resolved_root = root.resolve(strict=True)
-        current = resolved_root
-        for part in PurePosixPath(relative).parts:
-            current /= part
-            if current.exists() and is_linklike(current):
-                _fail("bound artifact linked path is forbidden")
-        target = current.resolve(strict=True)
-        target.relative_to(resolved_root)
-        if target.stat().st_size != size:
-            _fail("bound artifact content drifted")
-        data = target.read_bytes()
-    except RustProjectIRError:
-        raise
-    except (OSError, ValueError) as error:
-        raise RustProjectIRError("bound artifact cannot be reopened") from error
-    if hashlib.sha256(data).hexdigest() != expected_sha:
-        _fail("bound artifact content drifted")
-    return data
-
-
-def _artifact_identity(value: Any) -> tuple[str, str, int]:
-    if not isinstance(value, Mapping) or set(value) != {
-        "path", "sha256", "size_bytes",
-    }:
-        _fail("bound artifact reference schema is invalid")
-    try:
-        path = checked_relative_path(value.get("path"))
-    except ValueError as error:
-        raise RustProjectIRError("bound artifact path is invalid") from error
-    digest, size = value.get("sha256"), value.get("size_bytes")
-    if not is_sha256(digest):
-        _fail("bound artifact sha256 is invalid")
-    if isinstance(size, bool) or not isinstance(size, int) or not 0 <= size <= MAX_BOUND_ARTIFACT_BYTES:
-        _fail("bound artifact size is invalid")
-    return path, digest, size
-
-
-def _fail(message: str) -> None:
-    raise RustProjectIRError(message)
 
 
 __all__ = ["MAX_BOUND_ARTIFACT_BYTES", "reopen_rust_project_ir_bindings"]

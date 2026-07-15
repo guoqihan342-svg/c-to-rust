@@ -58,6 +58,15 @@ def validate_cohort_dag(payload: Mapping[str, Any], artifact_root: Path) -> None
         raise ValueError("bound cohort DAG drifted from its parent")
     if payload.get("dag_order") != [unit for unit in full_order if unit in selected_set]:
         raise ValueError("bound cohort order drifted from its parent")
+    full_scopes = full.get("target_scopes")
+    if full_scopes is not None:
+        if not isinstance(full_scopes, Mapping) or any(unit not in full_scopes for unit in selected):
+            raise ValueError("bound cohort target scopes are unavailable")
+        expected_scopes = {unit: full_scopes[unit] for unit in selected}
+        if payload.get("target_scopes") != expected_scopes:
+            raise ValueError("bound cohort target scopes drifted from its parent")
+    if payload.get("migration_graph") != full.get("migration_graph"):
+        raise ValueError("bound cohort migration graph drifted from its parent")
 
 
 __all__ = ["PARENT_DAG_KEY", "validate_cohort_dag"]

@@ -12,6 +12,7 @@ from .migration_graph_visibility import (
     unit_target_domains,
     visible_definitions,
 )
+from .migration_target_scope import derive_scc_target_scope
 
 
 def build_migration_graph(c_index: Mapping[str, Any]) -> dict[str, Any]:
@@ -137,9 +138,14 @@ def build_migration_graph(c_index: Mapping[str, Any]) -> dict[str, Any]:
             context.add("shared_global_state")
         classification = "boundary_required" if boundary else "context_group" if context else "independent"
         reasons = sorted(boundary if boundary else context if context else {"acyclic_closed_function"})
-        sccs.append({"scc_id": scc_id, "node_ids": member_ids, "classification": classification,
-                     "structural_reasons": reasons,
-                     "dependency_scc_ids": sorted(dependencies[scc_id])})
+        target_scope = derive_scc_target_scope(c_index, member_ids)
+        record = {"scc_id": scc_id, "node_ids": member_ids,
+                  "classification": classification, "structural_reasons": reasons,
+                  "dependency_scc_ids": sorted(dependencies[scc_id])}
+        if target_scope is not None:
+            record["source_unit_ids"] = target_scope["source_unit_ids"]
+            record["target_scope"] = target_scope
+        sccs.append(record)
 
     waves = _stable_waves(dependencies, component_nodes)
     parser = c_index.get("parser", {})

@@ -35,6 +35,9 @@ def portfolio_dag(
             "structurally_eligible": classification in {"independent", "context_group"},
             "context_pack": dict(context) if context else None,
         }
+        if isinstance(raw.get("target_scope"), Mapping):
+            group["source_unit_ids"] = list(raw.get("source_unit_ids", []))
+            group["target_scope"] = dict(raw["target_scope"])
         group["content_sha256"] = content_sha256(group)
         groups.append(group)
     waves = [

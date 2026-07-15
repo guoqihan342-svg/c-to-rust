@@ -8,6 +8,7 @@ from typing import Any
 from .artifacts import canonical_json_bytes, content_sha256
 from .ledger_security import LedgerError
 from .orchestration_facts import read_artifact_reference
+from .build_ir import is_sha256
 
 
 CONTRACT_KEYS = {
@@ -37,6 +38,7 @@ def derive_migration_contract(
     ):
         raise ValueError("integration manifest is not canonical or size-bound")
     edges, order = _validated_dag(manifest, units)
+    _validated_target_scopes(manifest, units, artifacts.get("migration_graph"))
     binding = {
         "path": str(reference["path"]),
         "sha256": str(reference["sha256"]),
@@ -130,6 +132,39 @@ def _validated_dag(
     if any(unit_map[order[index]] > unit_map[order[index + 1]] for index in range(len(order) - 1)):
         raise ValueError("integration manifest DAG order crosses wave order")
     return edges, list(order)
+
+
+def _validated_target_scopes(
+    manifest: Mapping[str, Any], units: Sequence[Mapping[str, Any]],
+    expected_graph: Any = None,
+) -> None:
+    scopes = manifest.get("target_scopes")
+    graph = manifest.get("migration_graph")
+    if scopes is None and graph is None:
+        return
+    if not isinstance(scopes, Mapping) or set(scopes) != {
+        str(item.get("unit_id")) for item in units
+    }:
+        raise ValueError("integration manifest target scopes are invalid")
+    if not isinstance(graph, Mapping) or set(graph) != {
+        "path", "sha256", "size_bytes",
+    }:
+        raise ValueError("integration manifest migration graph is invalid")
+    if expected_graph is not None and graph != expected_graph:
+        raise ValueError("integration manifest migration graph binding drifted")
+    content_by_group = {
+        str(item.get("unit_id")): item.get("content_sha256") for item in units
+    }
+    for group_id in sorted(scopes):
+        binding = scopes[group_id]
+        if not isinstance(binding, Mapping) or set(binding) != {
+            "group_content_sha256", "scope_sha256",
+        }:
+            raise ValueError("integration manifest target scope binding is invalid")
+        if binding.get("group_content_sha256") != content_by_group[group_id]:
+            raise ValueError("integration manifest target scope group binding drifted")
+        if not is_sha256(binding.get("scope_sha256")):
+            raise ValueError("integration manifest target scope hash is invalid")
 
 
 __all__ = ["derive_migration_contract", "load_migration_contract"]

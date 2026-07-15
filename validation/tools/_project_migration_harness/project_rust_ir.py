@@ -71,6 +71,11 @@ def _cohort_domain(
             "artifact": dict(parent_ref), "selected_unit_ids": selected,
         },
     })
+    scopes = manifest.get("target_scopes")
+    if isinstance(scopes, Mapping):
+        cohort["target_scopes"] = {
+            unit_id: scopes[unit_id] for unit_id in selected
+        }
     digest = content_sha256(cohort)
     reference = write_json_artifact(
         artifact_root, f"project-ir-domain/cohort-dag-{digest[:24]}.json", cohort,

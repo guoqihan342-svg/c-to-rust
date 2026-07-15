@@ -27,6 +27,7 @@ def finalize_project_plan(
         output, "plan/integration-manifest.json",
         _integration_manifest(
             profile, dag, artifacts, closure_ready, build_ir_ready,
+            portfolio,
         ),
     )
     ledger = ProjectLedger(output / "state/project-migration.sqlite3")
@@ -64,8 +65,9 @@ def _integration_manifest(
     profile: str, dag: Mapping[str, Any],
     artifacts: Mapping[str, Mapping[str, Any]],
     closure_ready: bool, build_ir_ready: bool,
+    portfolio: Mapping[str, Any],
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "schema_version": 1, "profile": profile,
         "dag": {
             group["group_id"]: list(group["dependencies"])
@@ -95,6 +97,27 @@ def _integration_manifest(
             "semantic_gate": False, "translation_coverage_numerator": 0,
         },
     }
+    ledger_units = portfolio.get("ledger_units")
+    if not isinstance(ledger_units, list):
+        raise ValueError("portfolio ledger units are unavailable")
+    group_hashes = {
+        item.get("unit_id"): item.get("content_sha256")
+        for item in ledger_units if isinstance(item, Mapping)
+    }
+    if set(group_hashes) != {group["group_id"] for group in dag["groups"]}:
+        raise ValueError("portfolio ledger units do not cover migration groups")
+    scopes = {
+        group["group_id"]: {
+            "group_content_sha256": str(group_hashes[group["group_id"]]),
+            "scope_sha256": str(group["target_scope"]["scope_sha256"]),
+        }
+        for group in dag["groups"]
+        if isinstance(group.get("target_scope"), Mapping)
+    }
+    if len(scopes) == len(dag["groups"]):
+        payload["migration_graph"] = dict(artifacts["migration_graph"])
+        payload["target_scopes"] = scopes
+    return payload
 
 
 def _ledger_assignments(portfolio: Mapping[str, Any]) -> list[dict[str, Any]]:
