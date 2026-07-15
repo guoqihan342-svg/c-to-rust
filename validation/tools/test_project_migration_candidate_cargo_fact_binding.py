@@ -11,6 +11,7 @@ from unittest import mock
 
 from validation.tools._project_migration_harness.candidate_cargo_fact_binding import (
     reopen_candidate_cargo_fact_binding,
+    reopen_candidate_cargo_fact_payloads,
 )
 from validation.tools._project_migration_harness.integration_generation import (
     recover_current_generation,
@@ -74,6 +75,20 @@ class ProjectMigrationCandidateCargoFactBindingTests(unittest.TestCase):
             observations=observations,
         )
         self.assertEqual(facts, reopened)
+        payloads = reopen_candidate_cargo_fact_payloads(
+            self.ledger_path, facts,
+            execution=persisted,
+            observations=observations,
+        )
+        self.assertEqual(facts, payloads["binding"])
+        self.assertEqual(
+            facts["cargo_metadata"]["facts_sha256"],
+            payloads["cargo_metadata"]["facts_sha256"],
+        )
+        self.assertEqual(
+            facts["compiler_artifacts"]["artifact_set_sha256"],
+            payloads["compiler_artifacts"]["artifact_set_sha256"],
+        )
 
     def test_metadata_command_near_match_is_rejected_before_fact_binding(self) -> None:
         execution = copy.deepcopy(self._run())

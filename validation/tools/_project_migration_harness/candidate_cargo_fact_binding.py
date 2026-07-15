@@ -115,6 +115,15 @@ def reopen_candidate_cargo_fact_binding(
     ledger_path: Path, value: Mapping[str, Any], *,
     execution: Mapping[str, Any], observations: Mapping[str, Any],
 ) -> dict[str, Any]:
+    return reopen_candidate_cargo_fact_payloads(
+        ledger_path, value, execution=execution, observations=observations,
+    )["binding"]
+
+
+def reopen_candidate_cargo_fact_payloads(
+    ledger_path: Path, value: Mapping[str, Any], *,
+    execution: Mapping[str, Any], observations: Mapping[str, Any],
+) -> dict[str, Any]:
     try:
         binding = validate_candidate_cargo_fact_binding(
             value, execution=execution, observations=observations,
@@ -143,7 +152,11 @@ def reopen_candidate_cargo_fact_binding(
         raise LedgerError("candidate Cargo fact evidence is invalid") from error
     if binding != expected:
         raise LedgerError("candidate Cargo fact evidence binding drifted")
-    return binding
+    return {
+        "binding": binding,
+        "cargo_metadata": metadata,
+        "compiler_artifacts": compiler,
+    }
 
 
 def _binding(
@@ -218,6 +231,7 @@ def _item(value: Mapping[str, Any], key: str, keys: set[str]) -> dict[str, Any]:
 __all__ = [
     "parse_captured_candidate_cargo_facts",
     "reopen_candidate_cargo_fact_binding",
+    "reopen_candidate_cargo_fact_payloads",
     "validate_candidate_cargo_fact_binding",
     "write_candidate_cargo_fact_binding",
 ]
