@@ -8,6 +8,7 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from .artifacts import checked_relative_path
+from .rust_occurrence_manifest import render_occurrence_manifest_static
 
 
 _CARGO_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}\Z")
@@ -140,6 +141,7 @@ def render_target_root(
         if not _RUST_IDENT.fullmatch(alias):
             raise ValueError("rust_project_cargo_v3_dependency_alias_collision")
         lines.extend([f"pub use {alias}::*;", ""])
+    lines.extend(render_occurrence_manifest_static(target))
     for module in modules:
         relative = posixpath.relpath(str(module["render_path"]), root_dir)
         if module["module_id"] == entry_id:

@@ -31,6 +31,9 @@ from validation.tools._project_migration_harness.rust_project_ir_v3 import (
 from validation.tools._project_migration_harness.rust_project_ir_v3_validation import (
     module_id_for_target_candidate,
 )
+from validation.tools._project_migration_harness.rust_project_ir_v3_topology_products import (
+    input_occurrence_id,
+)
 
 
 class V3CargoFixture:
@@ -179,7 +182,19 @@ def direct_two_package_ir(
             "name": f"target_{suffix}", "kind": kind,
             "crate_types": crate_types,
             "build_ir_target_id": f"build-target-{suffix}",
-            "module_ids": [module_id], "input_occurrences": [],
+            "module_ids": [module_id], "input_occurrences": [{
+                "ordinal": 0,
+                "occurrence_id": input_occurrence_id(
+                    builds[0], f"build-target-{suffix}", 0,
+                ),
+                "role": "link-input", "dependency_target_id": None,
+                "object_target_id": f"object-target-{suffix}",
+                "source_unit_id": f"source-{suffix}",
+                "module_id": module_id,
+                "binding_sha256": hashlib.sha256(
+                    f"binding-{suffix}".encode("ascii"),
+                ).hexdigest(),
+            }],
             "ordered_link_arguments": [], "evidence": evidence,
         })
     metadata = derive_rust_metadata(sources["unit-lib"].decode())

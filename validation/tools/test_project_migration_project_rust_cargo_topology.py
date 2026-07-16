@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
-import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -23,11 +21,18 @@ from validation.tools._project_migration_harness.rust_cargo_topology_ir import (
 from validation.tools._project_migration_harness.rust_product_evidence import (
     persist_captured_rust_products,
 )
+from validation.tools._project_migration_harness.rustc_dep_info_evidence import (
+    persist_captured_rustc_dep_info,
+)
+from validation.tools.project_migration_rust_cargo_topology_test_support import (
+    captured_dep_info as _captured_dep_info,
+    captured_products as _captured_products,
+    check as _check,
+    compiler_raw as _compiler_raw,
+    metadata_raw as _metadata_raw,
+)
 from validation.tools.project_migration_rust_project_cargo_v3_test_support import (
     direct_two_package_ir,
-)
-from validation.tools.project_migration_rust_link_product_test_support import (
-    ET_DYN, ET_EXEC, ar_member, archive, elf_product, relocatable_elf,
 )
 
 
@@ -102,7 +107,7 @@ class ProjectRustCargoTopologyTests(unittest.TestCase):
     ) -> dict:
         selected = facts or self.expectation["facts"]
         metadata_raw = _metadata_raw(selected)
-        compiler_raw = _compiler_raw(selected, fresh=fresh)
+        compiler_raw = _compiler_raw(selected, self.ir, fresh=fresh)
         metadata_ref = write_cargo_raw_output(
             self.out_root, "target/run", gate_kind="cargo-metadata",
             stream="stdout", data=metadata_raw,
@@ -121,9 +126,13 @@ class ProjectRustCargoTopologyTests(unittest.TestCase):
             "structure_probes": {"cargo-build": _check(
                 list(CARGO_BUILD_COMMAND), compiler_raw, check_ref,
             )},
-            "_captured_rust_products": _captured_products(selected),
+            "_captured_rust_products": _captured_products(selected, self.ir),
+            "_captured_rustc_dep_info": _captured_dep_info(selected, self.ir),
         }
         execution = persist_captured_rust_products(
+            execution, out_root=self.out_root, required=True,
+        )
+        execution = persist_captured_rustc_dep_info(
             execution, out_root=self.out_root, required=True,
         )
         return materialize_project_rust_cargo_topology(
@@ -135,139 +144,6 @@ class ProjectRustCargoTopologyTests(unittest.TestCase):
             },
             execution=execution,
         )
-
-
-def _check(command: list[str], raw: bytes, reference: dict) -> dict:
-    return {
-        "command": list(command), "status": "passed",
-        "stdout_sha256": hashlib.sha256(raw).hexdigest(),
-        "stdout_ref": reference,
-    }
-
-
-def _metadata_raw(facts: dict) -> bytes:
-    packages = []
-    identities = []
-    for package in facts["packages"]:
-        identity = _package_id(package["name"])
-        identities.append(identity)
-        packages.append({
-            "id": identity, "name": package["name"],
-            "version": package["version"], "features": {},
-            "targets": [{
-                "name": target["name"], "kind": target["kind"],
-                "crate_types": target["crate_types"],
-                "required-features": target["required_features"],
-            } for target in package["targets"]],
-        })
-    defaults = {
-        (item["name"], item["version"]) for item in facts["default_members"]
-    }
-    root = {
-        "metadata": None, "packages": packages, "resolve": None,
-        "target_directory": "/workspace/target", "version": 1,
-        "workspace_default_members": [
-            identity for identity, package in zip(identities, packages, strict=True)
-            if (package["name"], package["version"]) in defaults
-        ],
-        "workspace_members": identities, "workspace_root": "/workspace",
-    }
-    return _json(root)
-
-
-def _compiler_raw(facts: dict, *, fresh: bool) -> bytes:
-    events = []
-    for package in facts["packages"]:
-        for target in package["targets"]:
-            filename = f"/workspace/target/debug/{target['name']}.rmeta"
-            compiler_target = {
-                "kind": target["kind"], "crate_types": target["crate_types"],
-                "name": target["name"],
-                "src_path": f"/workspace/{package['name']}/src/root.rs",
-                "edition": "2021", "doc": True,
-                "doctest": True, "test": True,
-            }
-            artifact = {
-                "reason": "compiler-artifact",
-                "package_id": _package_id(package["name"]),
-                "manifest_path": f"/workspace/{package['name']}/Cargo.toml",
-                "target": compiler_target,
-                "profile": {
-                    "opt_level": "0", "debuginfo": 2,
-                    "debug_assertions": True, "overflow_checks": True,
-                    "test": False,
-                },
-                "features": [], "filenames": [filename],
-                "executable": None, "fresh": fresh,
-            }
-            events.append(artifact)
-            if set(target["kind"]) & {"bin", "cdylib"}:
-                events.append({
-                    "reason": "compiler-message",
-                    "package_id": artifact["package_id"],
-                    "manifest_path": artifact["manifest_path"],
-                    "target": compiler_target,
-                    "message": {
-                        "level": "warning", "code": {"code": "linker_messages"},
-                        "message": "linker stdout: /usr/lib/crt1.o\n",
-                    },
-                })
-    events.append({"reason": "build-finished", "success": True})
-    return b"".join(_json(event) + b"\n" for event in events)
-
-
-def _captured_products(facts: dict) -> list[dict]:
-    result = []
-    for package in facts["packages"]:
-        for target in package["targets"]:
-            compiler_target = {
-                "kind": target["kind"], "crate_types": target["crate_types"],
-                "name": target["name"],
-                "src_path": f"/workspace/{package['name']}/src/root.rs",
-                "edition": "2021", "doc": True,
-                "doctest": True, "test": True,
-            }
-            kinds = set(target["crate_types"]) & {
-                "bin", "cdylib", "rlib", "staticlib",
-            }
-            if "lib" in target["crate_types"] and "rlib" not in kinds:
-                kinds.add("rlib")
-            for kind in sorted(kinds):
-                guest = f"/runtime/target/debug/{package['name']}-{kind}"
-                result.append({
-                    "package_id": _package_id(package["name"]),
-                    "target": compiler_target, "product_kind": kind,
-                    "guest_path_sha256": hashlib.sha256(
-                        guest.encode("utf-8"),
-                    ).hexdigest(),
-                    "data": _product_bytes(kind),
-                })
-    return result
-
-
-def _product_bytes(kind: str) -> bytes:
-    relocatable = relocatable_elf()
-    if kind == "staticlib":
-        return archive(ar_member("unit.o/", relocatable))
-    if kind == "rlib":
-        return archive(
-            ar_member("lib.rmeta/", relocatable),
-            ar_member("unit.o/", relocatable + b"code"),
-        )
-    if kind == "cdylib":
-        return elf_product(ET_DYN, executable_entry=False)
-    return elf_product(ET_EXEC)
-
-
-def _package_id(name: str) -> str:
-    return f"path+file:///workspace/{name}#{name}@0.0.0"
-
-
-def _json(value: object) -> bytes:
-    return json.dumps(
-        value, ensure_ascii=True, sort_keys=True, separators=(",", ":"),
-    ).encode("utf-8")
-
 
 if __name__ == "__main__":
     unittest.main()

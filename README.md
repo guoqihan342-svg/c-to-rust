@@ -19,7 +19,7 @@
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
 | 当前翻译任务 | P0-A19 g4c2 统一实际 rustc/linker argv 与跨类别物理顺序证明，以及 h4 剩余项目测试适配；g4c1 的对象 occurrence、根模块顺序、真实 dep-info、最终 commitment 和 archive 代码成员定位已闭合，但父 g4 仍未关闭 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
-| P0-A19 有限门禁 | Windows 仓库级全量 3161 项：3130 通过、31 项平台条件跳过；其中 Windows 项目迁移全量 1295 项：1269 通过、26 项平台条件跳过。WSL 本地比赛模拟项目迁移全量 1295 项：1283 通过、12 项显式环境条件跳过；全部零失败，证明类仍为 `wsl-local-simulation` |
+| P0-A19 有限门禁 | 本阶段 Windows 项目迁移全量 1356 项：1326 通过、30 项平台条件跳过；WSL 本地比赛模拟同组 1356 项：1344 通过、12 项显式环境条件跳过。两端均零失败/错误；WSL 证明类仍为 `wsl-local-simulation` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | canonical roadmap + code/tests + harness evidence gates |
 

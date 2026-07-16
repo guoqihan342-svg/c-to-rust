@@ -245,6 +245,9 @@ class _ProductBackend(BoundBackend):
         product = kwargs["runtime_root"] / "target" / "debug" / "app"
         product.parent.mkdir(parents=True, exist_ok=True)
         product.write_bytes(b"linked-product")
+        product.with_suffix(".d").write_bytes(
+            b"/runtime/target/debug/app: /workspace/pkg/src/main.rs\n\n",
+        )
         artifact = {
             "reason": "compiler-artifact",
             "package_id": "path+file:///workspace/pkg#pkg@0.0.0",

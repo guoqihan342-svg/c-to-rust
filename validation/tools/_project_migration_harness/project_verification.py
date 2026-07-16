@@ -7,6 +7,7 @@ from typing import Any
 
 from .anchored_artifact_io import open_directory_anchor
 from .cargo_build_product_capture import capture_cargo_build_products
+from .cargo_rustc_dep_info_capture import capture_cargo_rustc_dep_info
 from .cargo_fact_commands import CARGO_BUILD_ARGS, CARGO_METADATA_ARGS
 from .integration_generation import (
     GenerationCommitError,
@@ -34,10 +35,7 @@ from .project_verification_paths import (
     runtime_root as _runtime_root,
     validate_capture_options as _validate_capture_options,
 )
-
-
 SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
-
 def run_cargo_project_gates(
     project_root: Path, *, runtime_root: Path, cargo_command: str = "cargo",
     timeout_seconds: int = 300, capture_raw_output: bool = False,
@@ -65,7 +63,6 @@ def run_cargo_project_gates(
         capture_raw_output, capture_native_link_trace, capture_cargo_facts,
         capture_cargo_structure,
     )
-
 def run_cargo_generation_gates(
     generation_root: Path, *, runtime_root: Path, cargo_command: str = "cargo",
     timeout_seconds: int = 300, capture_raw_output: bool = False,
@@ -85,7 +82,6 @@ def run_cargo_generation_gates(
         capture_raw_output, capture_native_link_trace, capture_cargo_facts,
         capture_cargo_structure,
     )
-
 def managed_project_input_sha256(project_root: Path) -> str:
     project = _project_target(project_root)
     source = _current_managed_source(project)
@@ -95,8 +91,6 @@ def managed_project_input_sha256(project_root: Path) -> str:
             "Cargo project must be a managed last-good reconstruction with a SHA-256 state"
         )
     return state
-
-
 def _run_managed_cargo(
     source: Path, project: Path, runtime_root: Path,
     cargo_command: str, timeout_seconds: int, capture_raw_output: bool,
@@ -155,6 +149,7 @@ def _run_managed_cargo(
     fact_probes: dict[str, dict[str, Any]] = {}
     structure_probes: dict[str, dict[str, Any]] = {}
     captured_products: list[dict[str, Any]] = []
+    captured_dep_info: list[dict[str, Any]] = []
     product_capture_error = False
     target_anchor = None
     try:
@@ -185,6 +180,10 @@ def _run_managed_cargo(
             if structure_probes["cargo-build"]["status"] == "passed":
                 try:
                     captured_products = capture_cargo_build_products(
+                        structure_probes["cargo-build"], execution_root,
+                        target_anchor=target_anchor,
+                    )
+                    captured_dep_info = capture_cargo_rustc_dep_info(
                         structure_probes["cargo-build"], execution_root,
                         target_anchor=target_anchor,
                     )
@@ -289,6 +288,7 @@ def _run_managed_cargo(
     if capture_cargo_structure:
         result["structure_probes"] = structure_probes
         result["_captured_rust_products"] = captured_products
+        result["_captured_rustc_dep_info"] = captured_dep_info
     return result
 
 

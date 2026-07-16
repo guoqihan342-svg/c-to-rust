@@ -40,6 +40,7 @@ from .project_rust_cargo_topology import (
 )
 from .project_verification import run_cargo_project_gates
 from .rust_product_evidence import persist_captured_rust_products
+from .rustc_dep_info_evidence import persist_captured_rustc_dep_info
 
 
 def verify_project_cargo(
@@ -76,6 +77,9 @@ def verify_project_cargo(
         capture_cargo_structure=topology_required,
     )
     captured_execution = persist_captured_rust_products(
+        captured_execution, out_root=out_root, required=topology_required,
+    )
+    captured_execution = persist_captured_rustc_dep_info(
         captured_execution, out_root=out_root, required=topology_required,
     )
     execution = persist_captured_cargo_outputs(

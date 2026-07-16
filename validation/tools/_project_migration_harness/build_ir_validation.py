@@ -23,6 +23,7 @@ from .build_ir_external_dependencies import (
 )
 from .build_ir_toolchain_validation import validate_toolchain_references
 from .build_ir_target_extensions import validate_target_extensions
+from .build_ir_occurrence_validation import validate_target_occurrences
 from .build_ir_projection import target_closure
 from .build_ir_verification_result import build_ir_verification_result
 from .c_toolchain_schema import C_TOOLCHAIN_RAW_ROLE
@@ -217,7 +218,10 @@ def _validate_unit(unit: Mapping[str, Any]) -> None:
     _require_provenance(unit)
 
 def _validate_targets(targets: list[Mapping[str, Any]], identifiers: set[str]) -> None:
-    output_owners: dict[str, str] = {}
+    try:
+        validate_target_occurrences(targets, identifiers)
+    except ValueError as error:
+        raise BuildIRValidationError(str(error)) from error
     for target in targets:
         _require_provenance(target)
         target_id = str(target["target_id"])
@@ -225,25 +229,6 @@ def _validate_targets(targets: list[Mapping[str, Any]], identifiers: set[str]) -
             validate_target_extensions(target)
         except ValueError as error:
             raise BuildIRValidationError(str(error)) from error
-        dependencies = target.get("dependency_target_ids")
-        if not _strings(dependencies) or len(dependencies) != len(set(dependencies)):
-            raise BuildIRValidationError("build_ir_target_dependencies_invalid")
-        if target_id in dependencies or any(item not in identifiers for item in dependencies):
-            raise BuildIRValidationError("build_ir_target_dependencies_invalid")
-        for output in _objects(target.get("outputs"), "build_ir_target_outputs_invalid"):
-            validate_materialized_binding(output, output.get("materialized"))
-            path = output["path"]
-            if path in output_owners and output_owners[path] != target_id:
-                raise BuildIRValidationError("build_ir_target_output_duplicate")
-            output_owners[path] = target_id
-        inputs = _objects(target.get("ordered_inputs"), "build_ir_target_inputs_invalid")
-        if [item.get("ordinal") for item in inputs] != list(range(len(inputs))):
-            raise BuildIRValidationError("build_ir_target_input_order_invalid")
-        for item in inputs:
-            validate_materialized_binding(
-                _object(item.get("binding"), "build_ir_target_input_invalid"),
-                item["binding"].get("materialized"),
-            )
         if not _strings(target.get("ordered_link_arguments")):
             raise BuildIRValidationError("build_ir_link_arguments_invalid")
 

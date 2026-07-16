@@ -11,7 +11,7 @@ from .cargo_compiler_artifact_evidence import (
 from .cargo_fact_commands import CARGO_BUILD_COMMAND, CARGO_METADATA_COMMAND
 from .cargo_metadata_fact_evidence import parse_cargo_metadata_fact_evidence
 from .cargo_raw_output_evidence import (
-    read_cargo_raw_output, validate_cargo_raw_output_reference,
+    read_cargo_raw_output,
 )
 from .gate_evidence import (
     read_content_addressed_json, write_content_addressed_json,
@@ -22,12 +22,21 @@ from .project_rust_cargo_topology_paths import (
     topology_reference as _reference,
 )
 from .project_rust_cargo_topology_scope import PROJECT_RUST_CARGO_TOPOLOGY_SCOPE
+from .project_rust_cargo_topology_receipt import (
+    CLAIM_BOUNDARY, validate_project_rust_cargo_topology_receipt,
+    validate_topology_sources,
+)
 from .rust_cargo_link_expectation import (
     derive_rust_cargo_link_expectation,
     validate_rust_cargo_link_expectation,
 )
 from .rust_cargo_link_order_witness import build_rust_cargo_link_order_witness
 from .rust_cargo_link_trace_capture import parse_required_target_link_trace
+from .rust_cargo_occurrence_expectation import (
+    derive_rust_cargo_occurrence_expectation,
+    validate_rust_cargo_occurrence_expectation,
+)
+from .rust_cargo_occurrence_witness import build_rust_cargo_occurrence_witness
 from .rust_cargo_product_witness import build_rust_cargo_product_witness
 from .rust_cargo_topology_ir import (
     derive_rust_cargo_topology_expectation,
@@ -35,26 +44,6 @@ from .rust_cargo_topology_ir import (
 )
 from .rust_cargo_topology_witness import build_rust_cargo_topology_witness
 from .sandbox_execution_schema import is_sha256
-
-
-_CLAIM_BOUNDARY = {
-    "section_closure": False,
-    "semantic_gate": False,
-    "translation_coverage_numerator": 0,
-}
-_RECEIPT_KEYS = {
-    "schema_version", "artifact_kind", "status", "run_id",
-    "candidate_set_sha256", "project_input_sha256", "expectation",
-    "link_expectation", "raw_sources", "derived_evidence", "product_witness",
-    "link_order_witness", "coverage", "blockers", "claim_boundary",
-    "receipt_sha256",
-}
-_SOURCE_KEYS = {"cargo_metadata_stdout", "cargo_build_stdout"}
-_DERIVED_KEYS = {
-    "cargo_metadata_facts_sha256", "compiler_artifact_set_sha256",
-    "compiler_source_sha256", "witness_sha256", "product_witness_sha256",
-    "link_order_witness_sha256",
-}
 
 
 def materialize_project_rust_cargo_topology(
@@ -69,13 +58,16 @@ def materialize_project_rust_cargo_topology(
         raise ValueError("project_rust_cargo_topology_context_invalid")
     expectation = derive_rust_cargo_topology_expectation(ir)
     link_expectation = derive_rust_cargo_link_expectation(ir)
+    occurrence_expectation = derive_rust_cargo_occurrence_expectation(ir)
     sources = _execution_sources(execution, str(project_input))
     receipt = _derive_receipt(
         database, run_id=run_id,
         candidate_set_sha256=candidate_set_sha256,
         project_input_sha256=str(project_input), expectation=expectation,
-        link_expectation=link_expectation, raw_sources=sources,
+        link_expectation=link_expectation,
+        occurrence_expectation=occurrence_expectation, raw_sources=sources,
         products=execution.get("rust_products"),
+        dep_info=execution.get("rustc_dep_info"),
     )
     reference = write_content_addressed_json(
         out_root.resolve(strict=True), PROJECT_RUST_CARGO_TOPOLOGY_SCOPE,
@@ -104,7 +96,7 @@ def reopen_project_rust_cargo_topology(
     )
     if len(canonical_json_bytes(stored)) != bound["size_bytes"]:
         raise LedgerError("project Rust Cargo topology evidence size drifted")
-    receipt = _validate_receipt(stored)
+    receipt = validate_project_rust_cargo_topology_receipt(stored)
     if (
         receipt["run_id"] != run_id
         or receipt["candidate_set_sha256"] != candidate_set_sha256
@@ -116,6 +108,7 @@ def reopen_project_rust_cargo_topology(
         raise LedgerError("project Rust Cargo topology identity drifted")
     expectation = receipt["expectation"]
     link_expectation = receipt["link_expectation"]
+    occurrence_expectation = receipt["occurrence_expectation"]
     if rust_project_ir is not None and expectation != (
         derive_rust_cargo_topology_expectation(rust_project_ir)
     ):
@@ -124,13 +117,19 @@ def reopen_project_rust_cargo_topology(
         derive_rust_cargo_link_expectation(rust_project_ir)
     ):
         raise LedgerError("project Rust Cargo link expectation drifted")
+    if rust_project_ir is not None and occurrence_expectation != (
+        derive_rust_cargo_occurrence_expectation(rust_project_ir)
+    ):
+        raise LedgerError("project Rust Cargo occurrence expectation drifted")
     expected = _derive_receipt(
         database, run_id=run_id,
         candidate_set_sha256=candidate_set_sha256,
         project_input_sha256=receipt["project_input_sha256"],
         expectation=expectation, link_expectation=link_expectation,
+        occurrence_expectation=occurrence_expectation,
         raw_sources=receipt["raw_sources"],
         products=receipt["product_witness"]["products"],
+        dep_info=receipt["occurrence_witness"]["dep_info"],
     )
     if receipt != expected:
         raise LedgerError("project Rust Cargo topology evidence drifted")
@@ -140,15 +139,19 @@ def reopen_project_rust_cargo_topology(
 def _derive_receipt(
     database: Path, *, run_id: str, candidate_set_sha256: str,
     project_input_sha256: str, expectation: Mapping[str, Any],
-    link_expectation: Mapping[str, Any], raw_sources: Mapping[str, Any],
-    products: Any,
+    link_expectation: Mapping[str, Any],
+    occurrence_expectation: Mapping[str, Any],
+    raw_sources: Mapping[str, Any], products: Any, dep_info: Any,
 ) -> dict[str, Any]:
     if not run_id or not is_sha256(candidate_set_sha256) \
             or not is_sha256(project_input_sha256):
         raise ValueError("project_rust_cargo_topology_identity_invalid")
     expected = validate_rust_cargo_topology_expectation(expectation)
     expected_link = validate_rust_cargo_link_expectation(link_expectation)
-    sources = _validate_sources(raw_sources)
+    expected_occurrences = validate_rust_cargo_occurrence_expectation(
+        occurrence_expectation,
+    )
+    sources = validate_topology_sources(raw_sources)
     metadata_raw = read_cargo_raw_output(
         database, sources["cargo_metadata_stdout"],
         gate_kind="cargo-metadata", stream="stdout",
@@ -171,15 +174,18 @@ def _derive_receipt(
     link_witness = build_rust_cargo_link_order_witness(
         expected_link, compiler, products, target_trace,
     )
+    occurrence_witness = build_rust_cargo_occurrence_witness(
+        database, expected_occurrences, compiler, dep_info, products,
+    )
     blockers = [
         *witness["blockers"], *product_witness["blockers"],
-        *link_witness["blockers"],
+        *link_witness["blockers"], *occurrence_witness["blockers"],
     ]
     if any(item["fresh"] for item in compiler["artifacts"]):
         blockers.append({"code": "rust_cargo_compiler_artifact_fresh"})
     blockers = sorted(blockers, key=canonical_json_bytes)
     core = {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_kind": "project-rust-cargo-topology-receipt",
         "status": "blocked" if blockers else "ready",
         "run_id": run_id,
@@ -187,6 +193,7 @@ def _derive_receipt(
         "project_input_sha256": project_input_sha256,
         "expectation": expected,
         "link_expectation": expected_link,
+        "occurrence_expectation": expected_occurrences,
         "raw_sources": sources,
         "derived_evidence": {
             "cargo_metadata_facts_sha256": metadata["facts_sha256"],
@@ -195,17 +202,19 @@ def _derive_receipt(
             "witness_sha256": witness["witness_sha256"],
             "product_witness_sha256": product_witness["witness_sha256"],
             "link_order_witness_sha256": link_witness["witness_sha256"],
+            "occurrence_witness_sha256": occurrence_witness["witness_sha256"],
         },
         "product_witness": product_witness,
         "link_order_witness": link_witness,
+        "occurrence_witness": occurrence_witness,
         "coverage": {
             **witness["coverage"], **product_witness["coverage"],
-            **link_witness["coverage"],
+            **link_witness["coverage"], **occurrence_witness["coverage"],
         },
         "blockers": blockers,
-        "claim_boundary": dict(_CLAIM_BOUNDARY),
+        "claim_boundary": dict(CLAIM_BOUNDARY),
     }
-    return _validate_receipt({
+    return validate_project_rust_cargo_topology_receipt({
         **core, "receipt_sha256": content_sha256(core),
     })
 
@@ -229,64 +238,10 @@ def _execution_sources(
         or build.get("status") != "passed"
     ):
         raise ValueError("project_rust_cargo_topology_execution_invalid")
-    return _validate_sources({
+    return validate_topology_sources({
         "cargo_metadata_stdout": metadata.get("stdout_ref"),
         "cargo_build_stdout": build.get("stdout_ref"),
     })
-
-
-def _validate_receipt(value: Any) -> dict[str, Any]:
-    if not isinstance(value, Mapping) or set(value) != _RECEIPT_KEYS:
-        raise ValueError("project_rust_cargo_topology_receipt_schema_invalid")
-    receipt = dict(value)
-    derived = receipt.get("derived_evidence")
-    product_witness = receipt.get("product_witness")
-    link_witness = receipt.get("link_order_witness")
-    blockers = receipt.get("blockers")
-    core = {key: receipt[key] for key in receipt if key != "receipt_sha256"}
-    if (
-        receipt.get("schema_version") != 1
-        or receipt.get("artifact_kind")
-        != "project-rust-cargo-topology-receipt"
-        or receipt.get("status") not in {"ready", "blocked"}
-        or (receipt["status"] == "ready") != (blockers == [])
-        or not isinstance(blockers, list)
-        or blockers != sorted(blockers, key=canonical_json_bytes)
-        or not isinstance(derived, Mapping) or set(derived) != _DERIVED_KEYS
-        or not all(is_sha256(derived.get(key)) for key in _DERIVED_KEYS)
-        or not isinstance(product_witness, Mapping)
-        or product_witness.get("status") not in {"ready", "blocked"}
-        or not isinstance(product_witness.get("products"), list)
-        or not is_sha256(product_witness.get("witness_sha256"))
-        or not isinstance(link_witness, Mapping)
-        or link_witness.get("status") not in {"ready", "blocked"}
-        or not is_sha256(link_witness.get("witness_sha256"))
-        or not isinstance(receipt.get("coverage"), Mapping)
-        or receipt.get("claim_boundary") != _CLAIM_BOUNDARY
-        or receipt.get("receipt_sha256") != content_sha256(core)
-    ):
-        raise ValueError("project_rust_cargo_topology_receipt_invalid")
-    validate_rust_cargo_topology_expectation(receipt.get("expectation"))
-    validate_rust_cargo_link_expectation(receipt.get("link_expectation"))
-    _validate_sources(receipt.get("raw_sources"))
-    return receipt
-
-
-def _validate_sources(value: Any) -> dict[str, dict[str, Any]]:
-    if not isinstance(value, Mapping) or set(value) != _SOURCE_KEYS:
-        raise ValueError("project_rust_cargo_topology_sources_invalid")
-    result = {}
-    for key, gate in (
-        ("cargo_metadata_stdout", "cargo-metadata"),
-        ("cargo_build_stdout", "cargo-build"),
-    ):
-        source = value.get(key)
-        digest = source.get("sha256") if isinstance(source, Mapping) else None
-        result[key] = validate_cargo_raw_output_reference(
-            source, gate_kind=gate, stream="stdout",
-            expected_sha256=str(digest),
-        )
-    return result
 
 
 __all__ = [

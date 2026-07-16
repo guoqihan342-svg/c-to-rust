@@ -18,11 +18,17 @@ from validation.tools._project_migration_harness.project_verification import (
 from validation.tools._project_migration_harness.rust_link_product_inspection import (
     inspect_rust_link_product,
 )
+from validation.tools._project_migration_harness.rust_occurrence_manifest import (
+    inspect_occurrence_manifest,
+)
 from validation.tools._project_migration_harness.rust_project_cargo import (
     reconstruct_cargo_project_from_ir,
 )
 from validation.tools._project_migration_harness.rust_product_evidence import (
     persist_captured_rust_products,
+)
+from validation.tools._project_migration_harness.rustc_dep_info_evidence import (
+    persist_captured_rustc_dep_info,
 )
 from validation.tools.project_migration_rust_project_cargo_v3_test_support import (
     V3CargoFixture,
@@ -54,16 +60,30 @@ class RustProjectCargoV3StructureLiveTests(unittest.TestCase):
                 capture_raw_output=True, capture_cargo_facts=True,
                 capture_cargo_structure=True,
             )
+            for product in result.get("_captured_rust_products", []):
+                inspection = inspect_rust_link_product(
+                    product["data"], product["product_kind"],
+                )
+                inspect_occurrence_manifest(
+                    product["data"], ir["targets"][0],
+                    object_format=inspection["object_format"],
+                )
 
             out_root = root / "target" / "run"
             database = out_root / "state" / "project-migration.sqlite3"
             database.parent.mkdir(parents=True)
             database.touch()
             persisted = persist_captured_cargo_outputs(
-                persist_captured_rust_products(
-                    result, out_root=out_root, required=True,
+                persist_captured_rustc_dep_info(
+                    persist_captured_rust_products(
+                        result, out_root=out_root, required=True,
+                    ),
+                    out_root=out_root, required=True,
                 ),
                 out_root=out_root, out_root_rel="target/run",
+            )
+            self.assertEqual(
+                "passed", persisted["status"], persisted.get("diagnostics"),
             )
             topology = materialize_project_rust_cargo_topology(
                 ledger_path=database, out_root=out_root,
@@ -117,10 +137,16 @@ class RustProjectCargoV3StructureLiveTests(unittest.TestCase):
             database.parent.mkdir(parents=True)
             database.touch()
             persisted = persist_captured_cargo_outputs(
-                persist_captured_rust_products(
-                    result, out_root=out_root, required=True,
+                persist_captured_rustc_dep_info(
+                    persist_captured_rust_products(
+                        result, out_root=out_root, required=True,
+                    ),
+                    out_root=out_root, required=True,
                 ),
                 out_root=out_root, out_root_rel="target/run",
+            )
+            self.assertEqual(
+                "passed", persisted["status"], persisted.get("diagnostics"),
             )
             topology = materialize_project_rust_cargo_topology(
                 ledger_path=database, out_root=out_root,
