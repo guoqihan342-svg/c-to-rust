@@ -9,7 +9,11 @@ from unittest.mock import patch
 
 from validation.tools._project_migration_harness.artifacts import content_sha256
 from validation.tools._project_migration_harness.project_test_inventory_make import (
-    MAKE_COMMAND, collect_make_test_dry_run, inventory_from_make_observation,
+    AUTOMAKE_CHECK_COMMAND, MAKE_COMMAND, collect_make_test_dry_run,
+    inventory_from_make_observation,
+)
+from validation.tools._project_migration_harness.project_test_inventory_automake import (
+    select_make_test_command,
 )
 
 
@@ -184,6 +188,65 @@ class MakeProjectTestInventoryTests(unittest.TestCase):
         self.assertFalse(runner.call_args.kwargs["shell"])
         self.assertTrue(callable(runner.call_args.kwargs["preexec_fn"]))
 
+    def test_automake_declarations_select_check_and_bind_manifest(self) -> None:
+        manifest = self.root / "Makefile.am"
+        manifest.write_text(
+            "# TESTS = ignored\ncheck_PROGRAMS = suite-bin\n"
+            "TESTS = $(check_PROGRAMS)\n",
+            encoding="ascii",
+        )
+
+        selected = select_make_test_command(self.root)
+
+        self.assertEqual("selected", selected["status"])
+        self.assertEqual(AUTOMAKE_CHECK_COMMAND, selected["command"])
+        binding = selected["target_binding"]
+        self.assertEqual("automake-content-v1", binding["kind"])
+        self.assertEqual(
+            ["TESTS", "check_PROGRAMS"], binding["manifests"][0]["variables"],
+        )
+
+    def test_collector_executes_automake_check_dry_run(self) -> None:
+        (self.root / "Makefile.am").write_text("TESTS = suite-bin\n", encoding="ascii")
+        make, bwrap = self.root / "make", self.root / "bwrap"
+        make.write_bytes(b"make-tool")
+        bwrap.write_bytes(b"bubblewrap-tool")
+        module = (
+            "validation.tools._project_migration_harness."
+            "project_test_inventory_make"
+        )
+        with (
+            patch(f"{module}.sys.platform", "linux"),
+            patch(f"{module}.shutil.which", side_effect=[str(make), str(bwrap)]),
+            patch(
+                f"{module}.subprocess.run",
+                return_value=subprocess.CompletedProcess(["bwrap"], 0),
+            ) as runner,
+        ):
+            collected = collect_make_test_dry_run(self.root, self.build)
+        argv = runner.call_args.args[0]
+        self.assertEqual(AUTOMAKE_CHECK_COMMAND, collected["observation"]["command"])
+        self.assertEqual(
+            tuple(AUTOMAKE_CHECK_COMMAND),
+            ("make", *tuple(argv[argv.index("--") + 2:])),
+        )
+
+    def test_automake_manifest_drift_invalidates_observation(self) -> None:
+        manifest = self.root / "Makefile.am"
+        manifest.write_text("TESTS = suite-bin\n", encoding="ascii")
+        observation = self.observation(["./suite-bin --strict"])
+        manifest.write_text("TESTS = other-bin\n", encoding="ascii")
+
+        inventory = inventory_from_make_observation(
+            self.root, self.build_ir(), observation,
+            source_observation=self.source_ref,
+        )
+
+        self.assertEqual("blocked", inventory["status"])
+        self.assertEqual(
+            "project_test_make_schema_invalid", inventory["blockers"][0]["code"],
+        )
+
     def inventory(self, lines: list[str]) -> dict:
         return inventory_from_make_observation(
             self.root, self.build_ir(), self.observation(lines),
@@ -205,12 +268,15 @@ class MakeProjectTestInventoryTests(unittest.TestCase):
         }
 
     def observation(self, lines: list[str]) -> dict:
+        selected = select_make_test_command(self.root)
+        self.assertEqual("selected", selected["status"], selected)
         stdout = "" if not lines else "\n".join(lines) + "\n"
         raw = stdout.encode("utf-8")
         value = {
             "schema_version": 1,
             "artifact_kind": "make-dry-run-v1-observation",
-            "command": list(MAKE_COMMAND),
+            "command": selected["command"],
+            "target_binding": selected["target_binding"],
             "build_directory": "build",
             "tool": {"basename": "make", "sha256": "a" * 64, "size_bytes": 1},
             "sandbox_launcher": {

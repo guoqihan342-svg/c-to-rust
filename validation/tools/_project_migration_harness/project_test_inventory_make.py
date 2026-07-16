@@ -11,8 +11,10 @@ from typing import Any
 
 from .artifacts import content_sha256
 from .build_facts import resolve_repository_path
+from .project_test_inventory_automake import select_make_test_command
 from .project_test_inventory_make_parse import (
-    MAKE_COMMAND, MAX_STDERR_BYTES, MAX_STDOUT_BYTES, derive_make_inventory,
+    AUTOMAKE_CHECK_COMMAND, MAKE_COMMAND, MAX_STDERR_BYTES, MAX_STDOUT_BYTES,
+    derive_make_inventory,
 )
 from .sandbox_bubblewrap_argv import build_bubblewrap_argv, resource_limiter
 from .sandbox_contract import SandboxContract
@@ -25,7 +27,7 @@ from .project_test_inventory_sandbox import (
 def collect_make_test_dry_run(
     repo_root: Path, build_directory: Path, timeout_seconds: int = 30,
 ) -> dict[str, Any]:
-    """Observe `make -n test` inside a read-only Linux bubblewrap sandbox."""
+    """Observe a content-selected Make test target in a read-only sandbox."""
     if (
         isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int)
         or not 5 <= timeout_seconds <= 120
@@ -44,6 +46,13 @@ def collect_make_test_dry_run(
         bwrap = Path(bwrap_value).resolve(strict=True)
         tool, launcher = _file_identity(make), _file_identity(bwrap)
         contract = _sandbox_contract(tool, launcher, timeout_seconds)
+        selected = select_make_test_command(root)
+        if selected.get("status") != "selected":
+            blocker = selected.get("blocker")
+            code = blocker.get("code") if isinstance(blocker, Mapping) else None
+            return _blocked(str(code or "project_test_make_target_unbound"))
+        command = selected["command"]
+        target_binding = selected["target_binding"]
     except (OSError, TypeError, ValueError):
         return _blocked("project_test_make_input_invalid")
     temporary = Path(tempfile.mkdtemp(prefix="project-test-make-"))
@@ -55,7 +64,7 @@ def collect_make_test_dry_run(
             launcher=bwrap, workspace=root, runtime=runtime,
             tool_bindings=((make, "/toolchain/bin/make"),),
             environment=canonical_project_tool_environment(),
-            guest_command=("/toolchain/bin/make", *MAKE_COMMAND[1:]),
+            guest_command=("/toolchain/bin/make", *command[1:]),
             guest_working_directory=guest_build,
         )
         argv = restrict_project_tool_environment(argv)
@@ -96,7 +105,8 @@ def collect_make_test_dry_run(
         return _blocked("project_test_make_stdout_invalid")
     observation = {
         "schema_version": 1, "artifact_kind": "make-dry-run-v1-observation",
-        "command": list(MAKE_COMMAND), "build_directory": relative_build,
+        "command": list(command), "target_binding": target_binding,
+        "build_directory": relative_build,
         "tool": tool, "sandbox_launcher": launcher,
         "timeout_seconds": timeout_seconds, "returncode": 0, "stdout": text,
         "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
@@ -154,4 +164,7 @@ def _blocked(code: str) -> dict[str, Any]:
     return {"status": "blocked", "blocker": {"code": code}}
 
 
-__all__ = ["collect_make_test_dry_run", "inventory_from_make_observation"]
+__all__ = [
+    "AUTOMAKE_CHECK_COMMAND", "MAKE_COMMAND", "collect_make_test_dry_run",
+    "inventory_from_make_observation",
+]

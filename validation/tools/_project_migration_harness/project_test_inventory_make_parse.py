@@ -9,6 +9,10 @@ from typing import Any
 
 from .artifacts import content_sha256
 from .build_facts import resolve_repository_path
+from .project_test_inventory_automake import (
+    AUTOMAKE_CHECK_COMMAND, MAKE_TEST_COMMAND, command_for_target_binding,
+    verify_make_target_binding,
+)
 from .project_test_inventory_paths import (
     build_output_index, normalize_argument, normalize_command_path,
     normalize_environment,
@@ -16,15 +20,16 @@ from .project_test_inventory_paths import (
 
 MAX_STDOUT_BYTES, MAX_STDERR_BYTES = 4 * 1024 * 1024, 1024 * 1024
 MAX_LINE_BYTES, MAX_COMMANDS = 64 * 1024, 4_096
-MAKE_COMMAND = ["make", "-n", "--no-builtin-rules", "--no-builtin-variables", "test"]
+MAKE_COMMAND = list(MAKE_TEST_COMMAND)
 _ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 _PRESENTATION_COMMANDS = frozenset({
     "echo", "printf", "/bin/echo", "/bin/printf",
     "/usr/bin/echo", "/usr/bin/printf",
 })
 _OBSERVATION_KEYS = frozenset({
-    "schema_version", "artifact_kind", "command", "build_directory", "tool",
-    "sandbox_launcher", "timeout_seconds", "returncode", "stdout",
+    "schema_version", "artifact_kind", "command", "target_binding",
+    "build_directory", "tool", "sandbox_launcher", "timeout_seconds",
+    "returncode", "stdout",
     "stdout_sha256", "stdout_size_bytes", "stderr_sha256", "stderr_size_bytes",
     "semantic_gate", "observation_sha256",
 })
@@ -34,7 +39,12 @@ def derive_make_inventory(
     repo_root: Path, build_ir: Mapping[str, Any], observation: Mapping[str, Any],
     *, source_observation: Mapping[str, Any],
 ) -> dict[str, Any]:
-    if not _valid_observation(observation):
+    if (
+        not _valid_observation(observation)
+        or not verify_make_target_binding(
+            repo_root, observation.get("target_binding"),
+        )
+    ):
         return _blocked_inventory("project_test_make_schema_invalid")
     try:
         root = Path(repo_root).resolve(strict=True)
@@ -195,10 +205,12 @@ def _valid_observation(value: Any) -> bool:
     except UnicodeError:
         return False
     timeout, stderr_size = value.get("timeout_seconds"), value.get("stderr_size_bytes")
+    expected_command = command_for_target_binding(value.get("target_binding"))
     return (
         value.get("schema_version") == 1
         and value.get("artifact_kind") == "make-dry-run-v1-observation"
-        and value.get("command") == MAKE_COMMAND
+        and expected_command is not None
+        and value.get("command") == expected_command
         and isinstance(timeout, int) and not isinstance(timeout, bool)
         and 5 <= timeout <= 120 and value.get("returncode") == 0
         and value.get("semantic_gate") is False and len(raw) <= MAX_STDOUT_BYTES
@@ -259,6 +271,6 @@ def _sha_valid(value: Any) -> bool:
 
 
 __all__ = [
-    "MAKE_COMMAND", "MAX_STDERR_BYTES", "MAX_STDOUT_BYTES",
-    "derive_make_inventory",
+    "AUTOMAKE_CHECK_COMMAND", "MAKE_COMMAND", "MAX_STDERR_BYTES",
+    "MAX_STDOUT_BYTES", "derive_make_inventory",
 ]

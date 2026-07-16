@@ -6,6 +6,7 @@ from typing import Any
 
 from .artifacts import content_sha256, write_json_artifact
 from .build_facts import resolve_repository_path
+from .project_test_inventory_adapter import select_project_test_adapter
 from .project_test_inventory_ctest import collect_ctest_json
 from .project_test_inventory_make import (
     collect_make_test_dry_run, inventory_from_make_observation,
@@ -30,22 +31,28 @@ def collect_project_test_inventory(
     repo_root: Path, discovery: Mapping[str, Any], build_ir: Mapping[str, Any],
     *, output: Path,
 ) -> dict[str, Any]:
-    systems = discovery.get("build_system_facts", {}).get("systems", [])
-    if not isinstance(systems, list):
-        return _blocked("project_test_adapter_unavailable")
+    selection = select_project_test_adapter(repo_root, discovery, build_ir)
+    if selection.get("status") != "selected":
+        blocker = selection.get("blocker")
+        code = blocker.get("code") if isinstance(blocker, Mapping) else None
+        return _blocked(str(code or "project_test_adapter_unavailable"))
+    adapter = selection.get("adapter")
     database = discovery.get("compile_database")
     path = database.get("path") if isinstance(database, Mapping) else None
+    if not isinstance(path, str) and adapter == "make-dry-run-v1":
+        metadata = build_ir.get("build_metadata")
+        if isinstance(metadata, list) and len(metadata) == 1:
+            value = metadata[0]
+            path = value.get("path") if isinstance(value, Mapping) else None
     if not isinstance(path, str):
         return _blocked("project_test_build_directory_unbound")
     try:
         build_directory = resolve_repository_path(repo_root, path).parent
     except (OSError, ValueError):
         return _blocked("project_test_build_directory_unbound")
-    if "cmake" in systems:
-        adapter = "ctest-json-v1"
+    if adapter == "ctest-json-v1":
         collected = collect_ctest_json(repo_root, build_directory)
-    elif "make" in systems:
-        adapter = "make-dry-run-v1"
+    elif adapter == "make-dry-run-v1":
         collected = collect_make_test_dry_run(repo_root, build_directory)
     else:
         return _blocked("project_test_adapter_unavailable")
