@@ -29,7 +29,7 @@
   },
   "oracle_evidence": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-verification.json",
-    "sha256": "3eafed3cd8407d34dbd2b0a323b1216e84927c1c4619f09eb60d90c837363a45"
+    "sha256": "f08b228dd5c2640809c4b1dfc1523c8b4a2a3e9419064e8bde6703a0f0cc2d72"
   },
   "patch_log": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-safety-step-log.jsonl",
@@ -43,7 +43,7 @@
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-diff.json",
-      "sha256": "742c3e01f810427d2d2b880c05ffdd6595c38c60c29822b0f47b75c524c4d072"
+      "sha256": "4279803e2c4ca7543075beb453bc4357d514369179e3a7152bdaeae35ad6c7b5"
     }
   },
   "slice_id": "store-add-one",

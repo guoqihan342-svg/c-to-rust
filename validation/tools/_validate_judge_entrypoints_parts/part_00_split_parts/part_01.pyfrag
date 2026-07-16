@@ -159,6 +159,127 @@ def validate_opencode_glm_host_acceptance_contract(
     }
 
 
+def validate_dependency_admission_policy_contract(
+    payload: dict[str, Any],
+    *,
+    canonical_environment_profile: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, Any]:
+    label = "competition dependency admission policy"
+    if payload.get("schema_version") != 2:
+        raise ValueError(f"{label} schema_version must be 2")
+    if payload.get("policy_id") != "competition-direct-dependency-admission":
+        raise ValueError(f"{label} policy_id must be competition-direct-dependency-admission")
+    if payload.get("status") != "enforced":
+        raise ValueError(f"{label} status must be enforced")
+    if payload.get("source_of_truth") != DEPENDENCY_ADMISSION_POLICY_PATH:
+        raise ValueError(f"{label} source_of_truth must be {DEPENDENCY_ADMISSION_POLICY_PATH}")
+
+    expected_environment_ref = {
+        field: canonical_environment_profile.get(field)
+        for field in ("path", "profile_id", "sha256")
+    }
+    if payload.get("environment_profile_ref") != expected_environment_ref:
+        raise ValueError(f"{label} environment_profile_ref must match canonical_environment_profile")
+    expected_supersedes = {
+        "path": expected_environment_ref["path"],
+        "json_pointer": "/dependency_admission_policy",
+        "schema_version": 1,
+        "sha256": expected_environment_ref["sha256"],
+    }
+    if payload.get("supersedes") != expected_supersedes:
+        raise ValueError(f"{label} supersedes must bind the immutable environment policy")
+
+    applies_to = require_object(payload.get("applies_to"), f"{label}.applies_to")
+    manifest_paths = applies_to.get("manifest_paths")
+    expected_manifest_paths = [
+        "crates/c2r-translator/Cargo.toml",
+        "validation/l2_slices/Cargo.toml",
+        "flashDB_rust/Cargo.toml",
+    ]
+    if manifest_paths != expected_manifest_paths:
+        raise ValueError(f"{label}.applies_to.manifest_paths must list all governed Cargo manifests")
+    if applies_to.get("default_paths_must_not_require") != ["go", "cmake", "clang"]:
+        raise ValueError(f"{label}.applies_to.default_paths_must_not_require must be go, cmake, clang")
+    admission_rule = require_object(payload.get("admission_rule"), f"{label}.admission_rule")
+    if admission_rule.get("required_risk_basis") != [
+        "semantic_risk",
+        "generation_quality_risk",
+        "maintainability_risk",
+    ]:
+        raise ValueError(f"{label}.admission_rule.required_risk_basis drifted")
+    if admission_rule.get("required_environment_fit") != [
+        "compatible_with_rust_1_96",
+        "does_not_require_unavailable_tool",
+        "uses_configured_mirrors",
+    ]:
+        raise ValueError(f"{label}.admission_rule.required_environment_fit drifted")
+    if admission_rule.get("default_decision") != "not_approved_until_documented":
+        raise ValueError(f"{label}.admission_rule.default_decision must fail closed")
+
+    approved = require_object(
+        require_object(
+            payload.get("approved_direct_dependencies"),
+            f"{label}.approved_direct_dependencies",
+        ).get("rust"),
+        f"{label}.approved_direct_dependencies.rust",
+    )
+    direct_dependencies: dict[str, dict[str, Any] | str] = {}
+    for manifest_path_text in manifest_paths:
+        manifest_path = repo_path(manifest_path_text, repo_root=repo_root)
+        cargo_toml = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+        dependencies = cargo_toml.get("dependencies", {})
+        if not isinstance(dependencies, dict):
+            raise ValueError(f"{label} Cargo dependencies must be an object: {manifest_path_text}")
+        for dependency_name, declaration in dependencies.items():
+            if (
+                dependency_name in direct_dependencies
+                and direct_dependencies[dependency_name] != declaration
+            ):
+                raise ValueError(f"{label}.{dependency_name} declaration differs across governed manifests")
+            direct_dependencies[dependency_name] = declaration
+    if set(approved) != set(direct_dependencies):
+        raise ValueError(f"{label} approved Rust dependencies must exactly match governed direct dependencies")
+    for dependency_name, declaration in direct_dependencies.items():
+        admission = require_object(approved.get(dependency_name), f"{label}.{dependency_name}")
+        if admission.get("admission") != "approved":
+            raise ValueError(f"{label}.{dependency_name}.admission must be approved")
+        if not isinstance(admission.get("risk_basis"), list) or not admission["risk_basis"]:
+            raise ValueError(f"{label}.{dependency_name}.risk_basis must be non-empty")
+        if not isinstance(admission.get("environment_fit"), list) or not admission["environment_fit"]:
+            raise ValueError(f"{label}.{dependency_name}.environment_fit must be non-empty")
+        for environment_fit in (
+            "rust_1_96_compatible",
+            "uses_configured_cargo_mirror",
+            "does_not_require_go_cmake_or_default_clang",
+        ):
+            if environment_fit not in admission["environment_fit"]:
+                raise ValueError(f"{label}.{dependency_name}.environment_fit missing {environment_fit}")
+        actual_version = declaration if isinstance(declaration, str) else declaration.get("version")
+        actual_features = [] if isinstance(declaration, str) else sorted(declaration.get("features", []))
+        if admission.get("version") != actual_version:
+            raise ValueError(f"{label}.{dependency_name}.version must match Cargo.toml")
+        if admission.get("features") != actual_features:
+            raise ValueError(f"{label}.{dependency_name}.features must match Cargo.toml")
+
+    candidates = require_object(payload.get("candidate_dependencies"), f"{label}.candidate_dependencies")
+    for dependency_name in ("libclang", "bindgen", "tracing", "anyhow"):
+        candidate = require_object(candidates.get(dependency_name), f"{label}.candidate_dependencies.{dependency_name}")
+        if candidate.get("admission") != "not_approved":
+            raise ValueError(f"{label}.{dependency_name} candidate admission must be not_approved")
+        if not isinstance(candidate.get("required_before_use"), list) or not candidate["required_before_use"]:
+            raise ValueError(f"{label}.{dependency_name}.required_before_use must be non-empty")
+    for dependency_name in approved:
+        if dependency_name in candidates:
+            raise ValueError(f"{label}.{dependency_name} cannot be both approved and a candidate")
+    assert_payload_has_no_local_absolute_path(payload, label=label)
+    return {
+        "status": "passed",
+        "policy_id": payload["policy_id"],
+        "approved_direct_dependency_count": len(approved),
+    }
+
+
 def validate_competition_env_bundle_contract(
     config: dict[str, Any],
     *,
@@ -194,6 +315,26 @@ def validate_competition_env_bundle_contract(
     flashdb_source_pin = require_object(
         require_object(environment_payload.get("source_pins"), "environment.source_pins").get("flashdb"),
         "environment.source_pins.flashdb",
+    )
+    canonical_dependency_policy = require_object(
+        manifest.get("canonical_dependency_admission_policy"),
+        "competition env bundle canonical_dependency_admission_policy",
+    )
+    if canonical_dependency_policy.get("path") != DEPENDENCY_ADMISSION_POLICY_PATH:
+        raise ValueError(
+            f"competition env bundle canonical_dependency_admission_policy.path must be {DEPENDENCY_ADMISSION_POLICY_PATH}"
+        )
+    dependency_policy_path = repo_path(DEPENDENCY_ADMISSION_POLICY_PATH, repo_root=repo_root)
+    dependency_policy_sha256 = sha256_file(dependency_policy_path)
+    if canonical_dependency_policy.get("sha256") != dependency_policy_sha256:
+        raise ValueError("competition env bundle canonical_dependency_admission_policy.sha256 mismatch")
+    dependency_policy = load_json(dependency_policy_path)
+    if canonical_dependency_policy.get("policy_id") != dependency_policy.get("policy_id"):
+        raise ValueError("competition env bundle canonical_dependency_admission_policy.policy_id mismatch")
+    dependency_policy_contract = validate_dependency_admission_policy_contract(
+        dependency_policy,
+        canonical_environment_profile=canonical_profile,
+        repo_root=repo_root,
     )
 
     files = manifest.get("files")
@@ -236,6 +377,9 @@ def validate_competition_env_bundle_contract(
     missing_required = sorted(required_paths - set(result_files))
     if missing_required:
         raise ValueError(f"competition env bundle missing required files: {missing_required}")
+    policy_file = result_files[DEPENDENCY_ADMISSION_POLICY_PATH]
+    if policy_file["sha256"] != canonical_dependency_policy.get("sha256"):
+        raise ValueError("competition env bundle dependency admission policy file must match canonical policy")
     bundle_root = repo_path(COMPETITION_ENV_ROOT, repo_root=repo_root)
     actual_config_files = {
         repo_relative(path, repo_root)
@@ -308,6 +452,7 @@ def validate_competition_env_bundle_contract(
             "profile_id": str(canonical_profile.get("profile_id")),
             "sha256": str(canonical_profile.get("sha256")),
         },
+        "dependency_admission_policy": dependency_policy_contract,
         "semantic_gate": False,
         "file_count": len(result_files),
         "files": sorted(result_files),

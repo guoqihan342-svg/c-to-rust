@@ -150,7 +150,12 @@ def validate_judge_evidence_index_contract(
         raise ValueError("judge_evidence_index.claim_boundary.index_is_semantic_gate must be false")
 
     core_quality = payload.get("core_translation_quality")
-    if semantic_claim_source != "accepted_evidence_binding" or translation_coverage_numerator != 0:
+    requires_core_role_binding = (
+        payload.get("entrypoint") == "judge_demo"
+        or semantic_claim_source != "accepted_evidence_binding"
+        or translation_coverage_numerator != 0
+    )
+    if requires_core_role_binding:
         core_quality = require_object(core_quality, "judge_evidence_index.core_translation_quality")
         if core_quality.get("semantic_claim_source") != semantic_claim_source:
             raise ValueError(

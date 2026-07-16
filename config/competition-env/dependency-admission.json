@@ -1,0 +1,150 @@
+{
+  "schema_version": 2,
+  "policy_id": "competition-direct-dependency-admission",
+  "status": "enforced",
+  "source_of_truth": "config/competition-env/dependency-admission.json",
+  "environment_profile_ref": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
+  "supersedes": {
+    "path": "config/competition-env/environment.json",
+    "json_pointer": "/dependency_admission_policy",
+    "schema_version": 1,
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
+  "applies_to": {
+    "manifest_paths": [
+      "crates/c2r-translator/Cargo.toml",
+      "validation/l2_slices/Cargo.toml",
+      "flashDB_rust/Cargo.toml"
+    ],
+    "default_paths_must_not_require": [
+      "go",
+      "cmake",
+      "clang"
+    ],
+    "clang_policy": "clang is not required for default paths. The competition clang lane is opt-in. clang may be provided as a vendored local binary under tools/llvm/bin/ or tools/clang/bin/; this is not a system dependency and does not violate the no-default-clang rule.",
+    "rust_toolchain": "stable-1.96.0",
+    "python": "3.12.3",
+    "node": "v24.13.0"
+  },
+  "admission_rule": {
+    "required_risk_basis": [
+      "semantic_risk",
+      "generation_quality_risk",
+      "maintainability_risk"
+    ],
+    "required_environment_fit": [
+      "compatible_with_rust_1_96",
+      "does_not_require_unavailable_tool",
+      "uses_configured_mirrors"
+    ],
+    "default_decision": "not_approved_until_documented"
+  },
+  "approved_direct_dependencies": {
+    "rust": {
+      "quote": {
+        "admission": "approved",
+        "version": "=1.0.46",
+        "features": [],
+        "risk_basis": [
+          "stable_token_stream_rendering_for_hash_bound_rust_source_witnesses"
+        ],
+        "environment_fit": [
+          "rust_1_96_compatible",
+          "uses_configured_cargo_mirror",
+          "does_not_require_go_cmake_or_default_clang"
+        ]
+      },
+      "serde": {
+        "admission": "approved",
+        "version": "1",
+        "features": [
+          "derive"
+        ],
+        "risk_basis": [
+          "machine_readable_validation_and_translation_evidence"
+        ],
+        "environment_fit": [
+          "rust_1_96_compatible",
+          "uses_configured_cargo_mirror",
+          "does_not_require_go_cmake_or_default_clang"
+        ]
+      },
+      "serde_json": {
+        "admission": "approved",
+        "version": "1",
+        "features": [],
+        "risk_basis": [
+          "machine_readable_validation_and_translation_evidence"
+        ],
+        "environment_fit": [
+          "rust_1_96_compatible",
+          "uses_configured_cargo_mirror",
+          "does_not_require_go_cmake_or_default_clang"
+        ]
+      },
+      "sha2": {
+        "admission": "approved",
+        "version": "0.10",
+        "features": [],
+        "risk_basis": [
+          "stable_hashing_for_validation_fixtures_and_evidence_identity"
+        ],
+        "environment_fit": [
+          "rust_1_96_compatible",
+          "uses_configured_cargo_mirror",
+          "does_not_require_go_cmake_or_default_clang"
+        ]
+      },
+      "syn": {
+        "admission": "approved",
+        "version": "=2.0.118",
+        "features": [
+          "full",
+          "visit"
+        ],
+        "risk_basis": [
+          "structured_rust_source_parsing_for_content_bound_pre_cfg_witnesses"
+        ],
+        "environment_fit": [
+          "rust_1_96_compatible",
+          "uses_configured_cargo_mirror",
+          "does_not_require_go_cmake_or_default_clang"
+        ]
+      }
+    }
+  },
+  "candidate_dependencies": {
+    "libclang": {
+      "admission": "not_approved",
+      "required_before_use": [
+        "prove it removes a concrete semantic frontend risk not covered by CLANG_PATH AST dump JSON",
+        "prove competition profile fit and keep default non-clang gates working"
+      ]
+    },
+    "bindgen": {
+      "admission": "not_approved",
+      "required_before_use": [
+        "prove generated bindings remove a concrete ABI or header modeling risk",
+        "prove no default dependency on clang, libclang, cmake, or go"
+      ]
+    },
+    "tracing": {
+      "admission": "not_approved",
+      "required_before_use": [
+        "prove it removes a concrete observability or maintainability risk",
+        "record runtime/logging impact for competition validation"
+      ]
+    },
+    "anyhow": {
+      "admission": "not_approved",
+      "required_before_use": [
+        "prove it removes a concrete error-reporting maintainability risk",
+        "show it does not weaken structured evidence errors or fail-closed reasons"
+      ]
+    }
+  }
+}

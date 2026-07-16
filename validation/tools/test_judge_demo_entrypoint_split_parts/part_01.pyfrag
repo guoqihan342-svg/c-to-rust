@@ -27,6 +27,14 @@
         self.assertEqual(report["core_translation_quality"]["final_gate_status"], "failed")
         self.assertEqual(report["core_translation_quality"]["judge_demo_gate"]["status"], "passed")
         self.assertEqual(report["core_translation_quality"]["judge_demo_gate"]["source"], "before_after_exhibit")
+        self.assertEqual(
+            report["core_translation_quality"]["semantic_claim_source"],
+            "accepted_evidence_binding",
+        )
+        self.assertEqual(
+            report["claim_boundary"]["semantic_claim_source"],
+            "accepted_evidence_binding",
+        )
         self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
         self.assertEqual(report["metrics"]["review_gate"]["status"], "passed")
 
@@ -44,7 +52,7 @@
         try:
             with self.assertRaisesRegex(
                 ValueError,
-                "acceptance_boundary.semantic_claim_source must be a non-empty string",
+                "acceptance_boundary.semantic_claim_source must be a supported bound semantic claim source",
             ):
                 judge_demo.build_report(
                     profile_path=profile_path,

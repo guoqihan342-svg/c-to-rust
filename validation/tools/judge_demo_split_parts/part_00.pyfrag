@@ -19,6 +19,18 @@ from validation.tools import opencode_agent_harness as harness
 from validation.tools import validate_competition_run_summary
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
+JUDGE_DEMO_BOUND_SEMANTIC_CLAIM_SOURCES = frozenset(
+    {
+        "accepted_evidence_binding",
+        "c2rust_safety_transform_replay_with_accepted_c_oracle",
+    }
+)
+
+
+def require_judge_demo_semantic_claim_source(value: Any, label: str) -> str:
+    if value not in JUDGE_DEMO_BOUND_SEMANTIC_CLAIM_SOURCES:
+        raise ValueError(f"{label} must be a supported bound semantic claim source")
+    return str(value)
 
 
 def main() -> int:
@@ -487,12 +499,24 @@ def write_judge_demo_evidence_index(
         else {}
     )
     acceptance_boundary = (
-        profile.get("acceptance_boundary")
+        json.loads(json.dumps(profile.get("acceptance_boundary")))
         if isinstance(profile.get("acceptance_boundary"), dict)
         else {}
     )
-    if "semantic_claim_source" not in core_quality and isinstance(acceptance_boundary, dict):
-        core_quality["semantic_claim_source"] = acceptance_boundary.get("semantic_claim_source", "accepted_evidence_binding")
+    report_boundary = (
+        report.get("claim_boundary")
+        if isinstance(report.get("claim_boundary"), dict)
+        else {}
+    )
+    semantic_claim_source = require_judge_demo_semantic_claim_source(
+        report_boundary.get("semantic_claim_source"),
+        "judge demo report claim_boundary.semantic_claim_source",
+    )
+    if core_quality.get("semantic_claim_source") != semantic_claim_source:
+        raise ValueError(
+            "judge demo report core_translation_quality.semantic_claim_source must match claim_boundary"
+        )
+    acceptance_boundary["semantic_claim_source"] = semantic_claim_source
 
     artifacts = report.get("artifacts") if isinstance(report.get("artifacts"), dict) else {}
     competition_summary = artifacts.get("competition_summary") if isinstance(artifacts.get("competition_summary"), dict) else {}

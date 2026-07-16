@@ -1,14 +1,14 @@
 {
   "bundle_root": "config/competition-env",
-  "canonical_environment_profile": {
-    "path": "config/competition-env/environment.json",
-    "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "36e5204f7a25844b3553f1220a6616436867d3e348956e91f9a6d8033413e829"
-  },
   "canonical_dependency_admission_policy": {
     "path": "config/competition-env/dependency-admission.json",
     "policy_id": "competition-direct-dependency-admission",
     "sha256": "9d0173d66016129ce6c62318ef79f3d810e9939d937108b457e19edc44123d9f"
+  },
+  "canonical_environment_profile": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
   },
   "claim_boundary": {
     "archive_is_semantic_gate": false,
@@ -66,7 +66,7 @@
     {
       "path": "config/competition-env/environment.json",
       "role": "environment-profile",
-      "sha256": "36e5204f7a25844b3553f1220a6616436867d3e348956e91f9a6d8033413e829"
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
     },
     {
       "path": "config/competition-env/dependency-admission.json",
@@ -146,7 +146,7 @@
     {
       "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
       "role": "judge-entrypoint-index",
-      "sha256": "25a68e70fba22c0d774630fe92c9d14c30f39ff9338b57455a83c328af64dbd4"
+      "sha256": "ac11cc2e5c1a6b8f4337d98d4384ef117fc517f946b714d4ef367d670a5045e6"
     },
     {
       "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",

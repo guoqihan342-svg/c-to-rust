@@ -14,7 +14,7 @@
   "environment_profile": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "36e5204f7a25844b3553f1220a6616436867d3e348956e91f9a6d8033413e829"
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
   },
   "evaluate_profile_artifacts": {
     "artifacts": {
@@ -76,8 +76,14 @@
   "run_id": "harness-flashdb-explicit-workers-20260701",
   "schema_version": 1,
   "source": {
+    "checkout_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "hash_basis": "git_blob_at_source_commit",
     "path": "sources/FlashDB/src/fdb_utils.c",
-    "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+    "sha256": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0",
+    "source_commits": [
+      "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "93d175549da579b8abac07bd175ce4c3f9dde829"
+    ]
   },
   "status": "passed",
   "summary": {

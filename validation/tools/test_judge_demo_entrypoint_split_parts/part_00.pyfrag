@@ -247,6 +247,10 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             judge_index["core_translation_quality"]["semantic_claim_source"],
             expected_semantic_claim_source,
         )
+        self.assertEqual(
+            judge_index["judge_headline"]["semantic_claim_source"],
+            expected_semantic_claim_source,
+        )
         self.assertFalse(judge_index["claim_boundary"]["generated_draft_semantic_pass"])
         self.assertEqual(judge_index["claim_boundary"]["translation_coverage_numerator"], 0)
         refs = judge_index["evidence_artifact_refs"]
@@ -270,6 +274,19 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             "--review-checklist target/judge-demo-unit/summary/milestone-review-checklist.json",
             judge_index["reproduction_commands"]["milestone_release_report"],
         )
+        from validation.tools import validate_judge_entrypoints as judge_validator
+
+        mismatched_index = json.loads(json.dumps(judge_index))
+        mismatched_index["claim_boundary"]["semantic_claim_source"] = "accepted_evidence_binding"
+        mismatched_index["judge_headline"]["semantic_claim_source"] = "accepted_evidence_binding"
+        with self.assertRaisesRegex(
+            ValueError,
+            "core_translation_quality.semantic_claim_source must match claim_boundary",
+        ):
+            judge_validator.validate_judge_evidence_index_contract(
+                mismatched_index,
+                path_text="target/judge-demo-unit/harness/judge-evidence-index.json",
+            )
 
     def test_judge_demo_passes_proof_class_override_to_batch_profile(self) -> None:
         from validation.tools import judge_demo

@@ -12,6 +12,7 @@ import re
 import shlex
 import sqlite3
 import sys
+import tomllib
 from typing import Any
 
 import jsonschema
@@ -28,12 +29,14 @@ from validation.tools import milestone_release_report
 DEFAULT_CONFIG = REPO_ROOT / "config" / "competition-env" / "judge-entrypoints" / "flashdb-harness.json"
 COMPETITION_ENV_ROOT = "config/competition-env"
 COMPETITION_ENV_BUNDLE_MANIFEST = Path("config") / "competition-env" / "bundle-manifest.json"
+DEPENDENCY_ADMISSION_POLICY_PATH = "config/competition-env/dependency-admission.json"
 OPENCODE_GLM_HOST_ACCEPTANCE_PATH = "config/competition-env/review-checklists/opencode-glm-host-acceptance.json"
 COMPETITION_ENV_BUNDLE_FILE_ROLES = {
     "config/competition-env/README.en.md": "competition-env-readme",
     "config/competition-env/README.md": "competition-env-readme",
     "config/competition-env/apt/sources.list": "apt-mirror",
     "config/competition-env/cargo/config.toml": "cargo-mirror",
+    DEPENDENCY_ADMISSION_POLICY_PATH: "dependency-admission-policy",
     "config/competition-env/env.sh": "environment-shell-entrypoint",
     "config/competition-env/environment.json": "environment-profile",
     "config/competition-env/judge-entrypoints/flashdb-harness.json": "judge-entrypoint-index",

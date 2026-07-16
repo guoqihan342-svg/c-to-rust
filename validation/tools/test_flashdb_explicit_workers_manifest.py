@@ -1,6 +1,7 @@
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
+import subprocess
 import unittest
 
 
@@ -63,15 +64,60 @@ class FlashDBExplicitWorkersManifestTests(unittest.TestCase):
         tracked_roots = [
             self.manifest["profile"],
             self.manifest["environment_profile"],
-            self.manifest["source"],
             self.manifest["workers"],
         ]
         refs = [ref for root in tracked_roots for ref in refs_from(root)]
-        self.assertGreaterEqual(len(refs), 5)
+        self.assertGreaterEqual(len(refs), 4)
         for ref in refs:
             path = repo_path(ref["path"])
             self.assertTrue(path.exists(), ref["path"])
             self.assertEqual(sha256(path), ref["sha256"], ref["path"])
+
+    def test_source_hash_binds_each_worker_git_blob(self):
+        source = self.manifest["source"]
+        profile = json.loads(repo_path(self.manifest["profile"]["path"]).read_text(encoding="utf-8"))
+        workers = profile["workers"]
+        source_repo_root = repo_path(workers[0]["source_repo_root"])
+        source_file = workers[0]["source_file"]
+        source_commits = list(dict.fromkeys(worker["source_commit"] for worker in workers))
+
+        self.assertEqual(source["hash_basis"], "git_blob_at_source_commit")
+        self.assertEqual(source["source_commits"], source_commits)
+        self.assertEqual(
+            source["path"],
+            f"{workers[0]['source_repo_root']}/{source_file}",
+        )
+        for worker in workers:
+            self.assertEqual(worker["source_repo_root"], workers[0]["source_repo_root"])
+            self.assertEqual(worker["source_file"], source_file)
+            self.assertEqual(worker["require_source_commit"], worker["source_commit"])
+
+        checkout_commit = subprocess.run(
+            ["git", "-C", str(source_repo_root), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        self.assertEqual(source["checkout_commit"], checkout_commit)
+        source_diff = subprocess.run(
+            ["git", "-C", str(source_repo_root), "diff", "--quiet", "--", source_file],
+            check=False,
+        )
+        self.assertEqual(source_diff.returncode, 0, "FlashDB tracked source must be clean")
+
+        for source_commit in source_commits:
+            with self.subTest(source_commit=source_commit):
+                completed = subprocess.run(
+                    ["git", "-C", str(source_repo_root), "show", f"{source_commit}:{source_file}"],
+                    check=False,
+                    capture_output=True,
+                )
+                self.assertEqual(
+                    completed.returncode,
+                    0,
+                    completed.stderr.decode("utf-8", errors="replace"),
+                )
+                self.assertEqual(hashlib.sha256(completed.stdout).hexdigest(), source["sha256"])
 
     def test_target_artifact_hashes_match_when_reproduced_locally(self):
         target_root = self.manifest["target_run_root"]

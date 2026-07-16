@@ -490,11 +490,34 @@
         self.assertIn("--out-root", smoke_script)
 
     def test_dependency_admission_policy_governs_current_direct_dependencies(self) -> None:
-        profile = load_json(PROFILE_DIR / "environment.json")
-        policy = profile["dependency_admission_policy"]
+        environment_path = PROFILE_DIR / "environment.json"
+        policy_path = PROFILE_DIR / "dependency-admission.json"
+        profile = load_json(environment_path)
+        policy = load_json(policy_path)
 
-        self.assertEqual(policy["schema_version"], 1)
+        self.assertEqual(policy["schema_version"], 2)
+        self.assertEqual(policy["policy_id"], "competition-direct-dependency-admission")
         self.assertEqual(policy["status"], "enforced")
-        self.assertEqual(policy["source_of_truth"], "config/competition-env/environment.json")
+        self.assertEqual(policy["source_of_truth"], "config/competition-env/dependency-admission.json")
+        environment_ref = {
+            "path": "config/competition-env/environment.json",
+            "profile_id": "huawei-competition-ubuntu-24.04",
+            "sha256": sha256_file(environment_path),
+        }
+        self.assertEqual(policy["environment_profile_ref"], environment_ref)
+        self.assertEqual(
+            policy["supersedes"],
+            {
+                "path": environment_ref["path"],
+                "json_pointer": "/dependency_admission_policy",
+                "schema_version": 1,
+                "sha256": environment_ref["sha256"],
+            },
+        )
+        self.assertEqual(profile["dependency_admission_policy"]["schema_version"], 1)
+        self.assertEqual(
+            profile["dependency_admission_policy"]["source_of_truth"],
+            "config/competition-env/environment.json",
+        )
         self.assertEqual(
             policy["applies_to"]["manifest_paths"],

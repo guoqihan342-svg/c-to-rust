@@ -154,9 +154,10 @@ def build_report(
         if isinstance(profile.get("acceptance_boundary"), dict)
         else {}
     )
-    semantic_claim_source = acceptance_boundary.get("semantic_claim_source")
-    if not isinstance(semantic_claim_source, str) or not semantic_claim_source.strip():
-        raise ValueError("profile acceptance_boundary.semantic_claim_source must be a non-empty string")
+    profile_semantic_claim_source = require_judge_demo_semantic_claim_source(
+        acceptance_boundary.get("semantic_claim_source"),
+        "profile acceptance_boundary.semantic_claim_source",
+    )
     summary = load_json_if_exists(summary_path)
     workflow_metrics_path = resolve_workflow_metrics_path(summary, summary_path, repo_root=repo_root)
     workflow_metrics = load_json_if_exists(workflow_metrics_path) if workflow_metrics_path is not None else {}
@@ -181,6 +182,14 @@ def build_report(
         final_gate_status=final_gate_status,
         workflow_metrics=workflow_metrics,
         before_after_exhibit=before_after_exhibit,
+    )
+    semantic_claim_source = (
+        require_judge_demo_semantic_claim_source(
+            judge_demo_gate.get("claim_source"),
+            "judge demo accepted-evidence gate claim_source",
+        )
+        if judge_demo_gate.get("source") == "before_after_exhibit"
+        else profile_semantic_claim_source
     )
     command_status = summarize_command_status(
         commands,
@@ -225,6 +234,7 @@ def build_report(
         "agent_index": batch_profile_report.get("agent_index"),
     }
     core_translation_quality = {
+        "semantic_claim_source": semantic_claim_source,
         "final_gate_status": final_gate_status,
         "semantic_pass_count": semantic_pass_count,
         "unsafe_reduction": workflow_metrics.get("unsafe_reduction", {"status": "not_measured"}),

@@ -36,6 +36,16 @@
                 "does_not_require_go_cmake_or_default_clang",
                 approved_rust[dependency_name]["environment_fit"],
             )
+        translator_dependencies = tomllib.loads(RUST_MANIFESTS[0].read_text(encoding="utf-8"))["dependencies"]
+        for dependency_name in ("syn", "quote"):
+            dependency = translator_dependencies[dependency_name]
+            version = dependency if isinstance(dependency, str) else dependency["version"]
+            features = [] if isinstance(dependency, str) else sorted(dependency.get("features", []))
+            self.assertEqual(approved_rust[dependency_name]["version"], version)
+            self.assertEqual(
+                approved_rust[dependency_name]["features"],
+                features,
+            )
 
         for manifest in RUST_MANIFESTS:
             with self.subTest(manifest=manifest.relative_to(REPO_ROOT).as_posix()):
@@ -48,6 +58,73 @@
             with self.subTest(dependency_name=dependency_name):
                 self.assertEqual(candidates[dependency_name]["admission"], "not_approved")
                 self.assertTrue(candidates[dependency_name]["required_before_use"])
+
+        bundle = load_json(PROFILE_DIR / "bundle-manifest.json")
+        canonical_policy = bundle["canonical_dependency_admission_policy"]
+        self.assertEqual(
+            canonical_policy,
+            {
+                "path": "config/competition-env/dependency-admission.json",
+                "policy_id": policy["policy_id"],
+                "sha256": sha256_file(PROFILE_DIR / "dependency-admission.json"),
+            },
+        )
+        policy_entries = [
+            entry
+            for entry in bundle["files"]
+            if entry["path"] == canonical_policy["path"]
+        ]
+        self.assertEqual(
+            policy_entries,
+            [
+                {
+                    "path": canonical_policy["path"],
+                    "role": "dependency-admission-policy",
+                    "sha256": canonical_policy["sha256"],
+                }
+            ],
+        )
+
+    def test_dependency_admission_policy_rejects_contract_drift(self) -> None:
+        policy = load_json(PROFILE_DIR / "dependency-admission.json")
+        bundle = load_json(PROFILE_DIR / "bundle-manifest.json")
+        canonical_environment_profile = bundle["canonical_environment_profile"]
+
+        missing_syn = json.loads(json.dumps(policy))
+        missing_syn["approved_direct_dependencies"]["rust"].pop("syn")
+        with self.assertRaisesRegex(ValueError, "must exactly match governed direct dependencies"):
+            judge_validator.validate_dependency_admission_policy_contract(
+                missing_syn,
+                canonical_environment_profile=canonical_environment_profile,
+                repo_root=REPO_ROOT,
+            )
+
+        version_drift = json.loads(json.dumps(policy))
+        version_drift["approved_direct_dependencies"]["rust"]["quote"]["version"] = "1"
+        with self.assertRaisesRegex(ValueError, "quote.version must match Cargo.toml"):
+            judge_validator.validate_dependency_admission_policy_contract(
+                version_drift,
+                canonical_environment_profile=canonical_environment_profile,
+                repo_root=REPO_ROOT,
+            )
+
+        candidate_overlap = json.loads(json.dumps(policy))
+        candidate_overlap["candidate_dependencies"]["syn"] = {"admission": "not_approved"}
+        with self.assertRaisesRegex(ValueError, "syn cannot be both approved and a candidate"):
+            judge_validator.validate_dependency_admission_policy_contract(
+                candidate_overlap,
+                canonical_environment_profile=canonical_environment_profile,
+                repo_root=REPO_ROOT,
+            )
+
+        environment_drift = json.loads(json.dumps(policy))
+        environment_drift["environment_profile_ref"]["sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "environment_profile_ref must match"):
+            judge_validator.validate_dependency_admission_policy_contract(
+                environment_drift,
+                canonical_environment_profile=canonical_environment_profile,
+                repo_root=REPO_ROOT,
+            )
 
     def test_core_validation_ci_runs_competition_environment_profile_tests(self) -> None:
         workflow = (REPO_ROOT / ".github" / "workflows" / "core-translator-validation-ci.yml").read_text(
