@@ -5,9 +5,11 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 import subprocess
-from typing import Callable
+import tempfile
+from typing import BinaryIO, Callable
 
 from .provider_session import export_session_identity, parse_session_identity_export
+from .provider_process_tree import process_group_popen_kwargs, terminate_and_drain
 
 
 MAX_PROVIDER_STDOUT_BYTES = 2_000_000
@@ -93,41 +95,45 @@ def _run_process(
     on_started: Callable[[], None] | None,
 ) -> subprocess.CompletedProcess[str]:
     common = {
-        "text": True,
-        "encoding": "utf-8",
-        "errors": "replace",
         "env": environment,
         "cwd": str(cwd) if cwd is not None else None,
     }
-    if on_started is None:
-        return subprocess.run(
+    with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+        process = subprocess.Popen(
             argv,
-            check=False,
-            capture_output=True,
-            timeout=timeout_seconds,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            **process_group_popen_kwargs(),
             **common,
         )
-    process = subprocess.Popen(
-        argv,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        **common,
-    )
-    try:
-        on_started()
-    except BaseException:
-        process.kill()
-        process.communicate()
-        raise
-    try:
-        stdout, stderr = process.communicate(timeout=timeout_seconds)
-    except subprocess.TimeoutExpired as error:
-        process.kill()
-        stdout, stderr = process.communicate()
-        error.stdout = stdout
-        error.stderr = stderr
-        raise
-    return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
+        try:
+            if on_started is not None:
+                on_started()
+        except BaseException:
+            terminate_and_drain(process)
+            raise
+        try:
+            returncode = process.wait(timeout=timeout_seconds)
+        except subprocess.TimeoutExpired as error:
+            terminate_and_drain(process)
+            error.stdout = _bounded_process_output(
+                stdout_file, MAX_PROVIDER_STDOUT_BYTES,
+            )
+            error.stderr = _bounded_process_output(
+                stderr_file, MAX_PROVIDER_STDERR_BYTES,
+            )
+            raise
+        return subprocess.CompletedProcess(
+            argv,
+            returncode,
+            _bounded_process_output(stdout_file, MAX_PROVIDER_STDOUT_BYTES),
+            _bounded_process_output(stderr_file, MAX_PROVIDER_STDERR_BYTES),
+        )
+
+
+def _bounded_process_output(stream: BinaryIO, limit: int) -> str:
+    stream.seek(0)
+    return stream.read(limit + 1).decode("utf-8", errors="replace")
 
 
 def snapshot_opencode_log(

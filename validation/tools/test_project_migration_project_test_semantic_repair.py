@@ -99,6 +99,69 @@ class ProjectTestSemanticRepairTests(unittest.TestCase):
             )
         self.assertEqual(["ua", "ub"], result["affected_unit_ids"])
 
+    def test_failed_executable_attributes_dependency_package_units(self) -> None:
+        ledger = mock.Mock()
+        ir = {
+            "targets": [{
+                "build_ir_target_id": "source-bin", "package_id": "app",
+                "module_ids": ["test-main"],
+            }],
+            "packages": [
+                {
+                    "package_id": "app", "module_ids": ["test-main"],
+                    "dependency_package_ids": ["library"],
+                },
+                {
+                    "package_id": "library", "module_ids": ["implementation"],
+                    "dependency_package_ids": ["core"],
+                },
+                {
+                    "package_id": "core", "module_ids": ["core-module"],
+                    "dependency_package_ids": [],
+                },
+                {
+                    "package_id": "unrelated", "module_ids": ["unrelated-module"],
+                    "dependency_package_ids": [],
+                },
+            ],
+            "modules": [
+                {"module_id": "test-main", "unit_id": "test-unit"},
+                {"module_id": "implementation", "unit_id": "library-unit"},
+                {"module_id": "core-module", "unit_id": "core-unit"},
+                {"module_id": "unrelated-module", "unit_id": "unrelated-unit"},
+            ],
+        }
+        mapping = {"mappings": [{
+            "source_target_id": "source-bin", "test_ids": ["test-a"],
+        }]}
+        oracle = {"evidence": {
+            "failure_details": [{"test_id": "test-a"}],
+            "details_truncated": False,
+        }}
+        members = [
+            {"unit_id": "test-unit", "artifact_id": "test-candidate"},
+            {"unit_id": "library-unit", "artifact_id": "library-candidate"},
+            {"unit_id": "core-unit", "artifact_id": "core-candidate"},
+            {"unit_id": "unrelated-unit", "artifact_id": "unrelated-candidate"},
+        ]
+
+        with mock.patch(
+            "validation.tools._project_migration_harness."
+            "project_test_semantic_repair.record_candidate_gate",
+            return_value={},
+        ):
+            result = register_project_test_candidate_repairs(
+                ledger=ledger, run_id="run", out_root=mock.Mock(),
+                out_root_rel="out", candidate_set_sha256="a" * 64,
+                project_record_id="record", candidate_members=members,
+                rust_project_ir=ir, mapping=mapping, oracle=oracle,
+            )
+
+        self.assertEqual(
+            ["core-unit", "library-unit", "test-unit"],
+            result["affected_unit_ids"],
+        )
+
     def test_failure_signature_exposes_channels_without_answer_values(self) -> None:
         oracle = {
             "observation": {"crash_count": 1},

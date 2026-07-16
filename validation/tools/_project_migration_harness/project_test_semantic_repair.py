@@ -140,12 +140,65 @@ def _affected_units(
         str(item["module_id"]): item for item in ir.get("modules", [])
         if isinstance(item, Mapping)
     }
-    return {
-        str(modules[module_id]["unit_id"])
-        for source_target in source_targets
-        for module_id in targets.get(source_target, {}).get("module_ids", [])
-        if module_id in modules
-    }
+    packages = _package_index(ir)
+    module_ids: set[str] = set()
+    for source_target in source_targets:
+        target = targets.get(source_target)
+        if target is None:
+            continue
+        module_ids.update(str(item) for item in target.get("module_ids", []))
+        if packages is not None:
+            module_ids.update(_dependency_module_ids(target, packages))
+    if not module_ids <= set(modules):
+        raise ValueError("project_test_repair_module_attribution_drifted")
+    return {str(modules[module_id]["unit_id"]) for module_id in module_ids}
+
+
+def _package_index(
+    ir: Mapping[str, Any],
+) -> dict[str, Mapping[str, Any]] | None:
+    if "packages" not in ir:
+        return None
+    values = ir.get("packages")
+    if not isinstance(values, list):
+        raise ValueError("project_test_repair_package_topology_invalid")
+    result: dict[str, Mapping[str, Any]] = {}
+    for item in values:
+        package_id = item.get("package_id") if isinstance(item, Mapping) else None
+        if (
+            not isinstance(package_id, str) or not package_id
+            or package_id in result
+            or not isinstance(item.get("module_ids"), list)
+            or not isinstance(item.get("dependency_package_ids"), list)
+        ):
+            raise ValueError("project_test_repair_package_topology_invalid")
+        result[package_id] = item
+    return result
+
+
+def _dependency_module_ids(
+    target: Mapping[str, Any], packages: Mapping[str, Mapping[str, Any]],
+) -> set[str]:
+    package_id = target.get("package_id")
+    if not isinstance(package_id, str) or package_id not in packages:
+        raise ValueError("project_test_repair_target_package_missing")
+    pending = [package_id]
+    visited: set[str] = set()
+    modules: set[str] = set()
+    while pending:
+        current = pending.pop()
+        if current in visited:
+            continue
+        package = packages.get(current)
+        if package is None:
+            raise ValueError("project_test_repair_package_dependency_missing")
+        visited.add(current)
+        modules.update(str(item) for item in package["module_ids"])
+        dependencies = package["dependency_package_ids"]
+        if any(not isinstance(item, str) or not item for item in dependencies):
+            raise ValueError("project_test_repair_package_topology_invalid")
+        pending.extend(dependencies)
+    return modules
 
 
 def _blocked(code: str) -> dict[str, Any]:

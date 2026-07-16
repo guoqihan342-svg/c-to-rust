@@ -33,7 +33,6 @@ from validation.tools._project_migration_harness.gate_authority import (
 )
 from validation.tools._project_migration_harness.ledger import ProjectLedger
 from validation.tools._project_migration_harness.make_dry_run_cli import run_collect_make_command
-from validation.tools._project_migration_harness.orchestrator import plan_project
 from validation.tools._project_migration_harness.project_migration_cli import (
     load_array,
     load_next_frontier_bindings,
@@ -46,6 +45,12 @@ from validation.tools._project_migration_harness.project_preflight_runner import
 )
 from validation.tools._project_migration_harness.project_completion_cli import (
     run_completion_cli_command,
+)
+from validation.tools._project_migration_harness.project_migrate_cli import (
+    run_migrate_cli_command,
+)
+from validation.tools._project_migration_harness.project_plan_cli import (
+    run_plan_cli_command,
 )
 
 
@@ -82,25 +87,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = run_collect_make_command(args)
     elif command == "c2rust-baseline":
         result = run_c2rust_baseline_command(args, harness_root=REPO_ROOT)
+    elif command == "migrate":
+        result = run_migrate_cli_command(args, harness_root=REPO_ROOT)
     elif command == "plan":
-        out_root_rel = _target_relative(args.out_root, "out-root")
-        result = plan_project(
-            args.repo_root,
-            harness_root=REPO_ROOT,
-            out_root=out_root_rel,
-            compile_database=args.compile_database,
-            make_report=args.make_report,
-            run_id=args.run_id,
-            source_commit=args.source_commit,
-            max_units=args.max_units,
-            max_concurrency=args.max_concurrency,
-            max_attempts=args.max_attempts,
-            context_page_bytes=args.context_page_bytes,
-            context_page_tokens=args.context_page_tokens,
-            context_group_pages=args.context_group_pages,
-            require_build_closure=args.build_closure_policy == "required",
-            profile=args.profile,
-        )
+        result = run_plan_cli_command(args, harness_root=REPO_ROOT)
     elif command == "dispatch":
         plan_path = _target_path(args.plan, "plan", must_exist=True)
         plan = load_object(plan_path)

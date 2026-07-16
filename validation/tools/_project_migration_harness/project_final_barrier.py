@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .artifacts import canonical_json_bytes
+from .candidate_provider_execution import require_candidate_provider_execution
 from .gate_authority import (
     CANDIDATE_GATE_FAMILIES,
     CANDIDATE_REQUIRED_GATES,
@@ -29,6 +30,13 @@ def require_project_final_candidate_passes(
     for member in manifest["members"]:
         _require_member_passes(
             ledger, connection, run_id, candidate_set_sha256, member,
+        )
+        require_candidate_provider_execution(
+            ledger,
+            connection,
+            run_id=run_id,
+            unit_id=member["unit_id"],
+            candidate_artifact_id=member["artifact_id"],
         )
 
 

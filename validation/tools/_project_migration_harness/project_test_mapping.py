@@ -80,19 +80,6 @@ def derive_project_test_mapping(
         })
     if processed_groups != len(grouped):
         blockers.append({"code": "project_test_mapping_closure_drifted"})
-    covered_source_targets = set(grouped)
-    executable_source_targets = {
-        str(package["build_ir_target_id"])
-        for package in packages.values()
-        if package.get("product_kind") == "executable"
-    }
-    for source_target_id in sorted(
-        executable_source_targets - covered_source_targets
-    ):
-        blockers.append({
-            "code": "project_test_executable_target_uncovered",
-            "source_target_id": source_target_id,
-        })
     payload = {
         "schema_version": 1,
         "artifact_kind": "project-test-mapping",

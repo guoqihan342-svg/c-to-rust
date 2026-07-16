@@ -65,7 +65,7 @@ def target_relative(value: str | Path, label: str, *, repo_root: Path) -> str:
 
 
 def exit_code(result: dict[str, Any], *, command: str | None = None) -> int:
-    if command in {"complete", "run-to-completion"} and result.get("status") != "completed":
+    if command in {"complete", "migrate", "run-to-completion"} and result.get("status") != "completed":
         return 1
     successful = {
         "completed", "dispatched", "integrated", "last-good", "materialized",

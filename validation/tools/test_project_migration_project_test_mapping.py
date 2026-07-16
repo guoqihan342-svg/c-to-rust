@@ -53,18 +53,19 @@ class ProjectTestMappingTests(unittest.TestCase):
             mapping["blockers"][0]["code"],
         )
 
-    def test_uncovered_executable_target_blocks_project_completion(self) -> None:
+    def test_non_test_executable_does_not_pollute_test_inventory(self) -> None:
         ir, _sources = direct_two_package_ir(second_package_executable=True)
 
         mapping = derive_project_test_mapping(
             self.inventory("build-target-bin"), ir,
         )
 
-        self.assertEqual("blocked", mapping["status"])
-        self.assertIn({
-            "code": "project_test_executable_target_uncovered",
-            "source_target_id": "build-target-lib",
-        }, mapping["blockers"])
+        self.assertEqual("ready", mapping["status"])
+        self.assertEqual([], mapping["blockers"])
+        self.assertEqual(
+            ["build-target-bin"],
+            [item["source_target_id"] for item in mapping["mappings"]],
+        )
 
     def test_invalid_ir_never_falls_back_to_test_name_matching(self) -> None:
         changed = copy.deepcopy(self.ir)

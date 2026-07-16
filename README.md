@@ -65,7 +65,7 @@ AI candidate manifest v9 的 `prompt_scope` 由实际 ContextPack 计算，并�
 
 ## 整项目 AI 编排
 
-比赛平台上的外层 OpenCode 不需要逐函数编写 spec。它先调用 `project_migration_harness.py plan` 并提供仓库根，再把生成的 plan 交给 `run-to-completion`；只有后者返回 `completed` 才算结束，绝不能在 `plan`、`preflight`、`dispatch` 或单个 gate 后停止。harness 会发现 compile database、CMake/Ninja/Meson/Make 构建事实、编译输出、静态归档和链接边，生成 SCC/DAG、内容寻址 ContextPack catalog/frontier、角色组合和 SQLite 状态。`plan` CLI 默认使用 `--profile competition` 和 `--build-closure-policy required`；`--profile development` 只是必须显式选择的非比赛兼容路径。BuildIR 已验证但 required 闭包仍不完整时，调度器只放行原本条件满足的当前前沿，并把 assignment、request 和 Rust artifact 全部绑定为 `candidate-only` 隔离候选；SQLite 最低层晋升权威会拒绝其成为 `last-good`，后续依赖、项目集成、semantic gate 和翻译计数仍保持阻塞。`bounded-source` 同样只能生成 `semantic_gate=false` 的调查候选，不能进入项目完成路径。
+比赛平台上的外层 OpenCode 不需要逐函数编写 spec。仓库根 `AGENTS.md` 指示它只调用 `project_migration_harness.py migrate` 并提供目标 C 仓库；该入口内部固定衔接 plan 与 `run-to-completion`，只有返回 `completed` 且 `semantic_gate=true` 才算结束，绝不能在 `plan`、`preflight`、`dispatch` 或单个 gate 后停止。harness 会发现 compile database、CMake/Ninja/Meson/Make 构建事实、编译输出、静态归档和链接边，生成 SCC/DAG、内容寻址 ContextPack catalog/frontier、角色组合和 SQLite 状态。`migrate` 默认使用 `--profile competition` 和 `--build-closure-policy required`；`--profile development` 只是必须显式选择的非比赛兼容路径。BuildIR 已验证但 required 闭包仍不完整时，调度器只放行原本条件满足的当前前沿，并把 assignment、request 和 Rust artifact 全部绑定为 `candidate-only` 隔离候选；SQLite 最低层晋升权威会拒绝其成为 `last-good`，后续依赖、项目集成、semantic gate 和翻译计数仍保持阻塞。`bounded-source` 同样只能生成 `semantic_gate=false` 的调查候选，不能进入项目完成路径。
 
 competition profile 在发现完成后、任何 worker/AI 启动前，从发现到的 compiler driver/wrapper、linker driver/linker、archiver 和 ranlib 构造 `c-toolchain-evidence`。证据绑定 `config/competition-env/environment.json` 的 path/SHA/size/profile id、环境白名单与 PATH 快照哈希、host/WSL 指纹、绝对解析路径和 binary SHA/size，并只运行固定且有界的 version、target、sysroot、resource-dir 和 derived-linker 探针。每个探针的原始 stdout/stderr 以有界 base64、SHA-256 和 size 保存在 BuildIR 哈希绑定的内容寻址 attachment；工具缺失、探针失败或漂移、平台不符以及 competition GCC 版本不符都会在调度前 fail closed。
 
@@ -77,7 +77,7 @@ ContextPack 检索不再只靠 lexical identifier seed 判断可启动性。`pen
 
 运行时以 AI 为主：boundary group 先由 planner 选择“带上下文翻译、保留可验证 FFI 边界或明确拒绝”，translator 输出 Rust source，reviewer 只给结构审查，repairer 只消费允许的失败诊断。typed IR/C2Rust 是事实或候选来源，不是默认路由优先级；任何模型都不能写 semantic pass、last-good 或项目完成状态。
 
-项目级 preflight 固定精确模型、`c2rust-candidate`、`max` 和不可变 agent snapshot。每个 attempt 只继承显式环境白名单，并使用独立 config/data/state/cache/tmp/out；真实调用的 receipt、session export projection、prompt/response SHA 和 provider-execution report 进入同一 ledger attempt/fence。候选接受由固定 host authority 完成：候选 gate、项目 gate、证据 SHA、最新 epoch 和不可变 candidate set 全部进入 SQLite，并在晋升/完成前重新打开内容寻址证据。Cargo 项目使用不可变 generation 和原子 `CURRENT` 指针；候选 `cargo check/test` 只允许在通过 capability probe 的 Linux bubblewrap 无网络沙箱中运行。VerificationPlan 显式绑定固定命令、managed-generation 输入、timeout 与严格能力集；rustup 场景先用 `rustup which` 解析实际 `cargo/rustc/rustdoc`，对受限 toolchain 树做完整内容哈希、执行前复算并只读挂载。candidate compile 与 project Cargo 复用同一 reopener，重新核对 contract、probe、plan、command-start、input 和 cleanup；项目 final/completion 还要求 check/test 输入等于最新 integration manifest。缺沙箱、能力 probe、oracle 或 ABI 证据时返回 blocked，不在宿主机降级执行。
+项目级 preflight 固定精确模型、`c2rust-candidate`、`max` 和不可变 agent snapshot。每个 attempt 只继承显式环境白名单，并使用独立 config/data/state/cache/tmp/out；真实调用的 receipt、session export projection、prompt/response SHA 和 provider-execution report 进入同一 ledger attempt/fence。provider stdout/stderr 先写临时文件，宿主只读取各自上限加一个字节；超时或 ledger 启动回调失败会终止整个新进程组并有界等待，避免子进程持有管道或异常大响应耗尽内存。候选接受由固定 host authority 完成：候选 gate、项目 gate、证据 SHA、最新 epoch 和不可变 candidate set 全部进入 SQLite，并在晋升以及最终项目完成前重新打开 provider receipt 和内容寻址证据。Cargo 项目使用不可变 generation 和原子 `CURRENT` 指针；候选 `cargo check/test` 只允许在通过 capability probe 的 Linux bubblewrap 无网络沙箱中运行。VerificationPlan 显式绑定固定命令、managed-generation 输入、timeout 与严格能力集；rustup 场景先用 `rustup which` 解析实际 `cargo/rustc/rustdoc`，对受限 toolchain 树做完整内容哈希、执行前复算并只读挂载。candidate compile 与 project Cargo 复用同一 reopener，重新核对 contract、probe、plan、command-start、input 和 cleanup；项目 final/completion 还要求 check/test 输入等于最新 integration manifest。缺沙箱、能力 probe、oracle 或 ABI 证据时返回 blocked，不在宿主机降级执行。
 
 Cargo generation 现在强制经过 canonical RustProjectIR。wave-provisional 会生成“当前候选 + last-good 依赖”的内容寻址子 DAG，并回指不可变完整 DAG；project-final 必须覆盖全部迁移单元。host 从当前 Rust source 复算 public/required/unsafe/FFI facts，重开 BuildIR、DAG 和每个 candidate source，再由唯一 interface coordinator 检查 module parent/cycle/orphan、跨单元 API/type/global/FFI/feature/cfg/init 冲突。只有 `candidate-ready` receipt 才能生成 Cargo；generation 内嵌 IR，并绑定 IR/interface/domain/coordinator SHA，integration verifier 会从原 artifact root 重建并逐字节比较。生产模块已删除 descriptor-only 写入口和直接写 generation 的 `integrate` CLI；只有绑定权威 ledger/run contract 的 `integrate-verified` 可以发布 full-project generation。
 
@@ -85,7 +85,7 @@ Cargo generation 现在强制经过 canonical RustProjectIR。wave-provisional �
 
 RustProjectIR v3 已把 BuildIR 的 target scope 重建为确定性的多 package Cargo workspace，支持静态库、共享库和可执行目标，并按 package/target/module 身份隔离同源 variant。生成物会从绑定的 DAG、BuildIR、candidate source 和 target scope 逐字节重开；唯一入口、crate/module 命名、依赖方向或链接参数无法表达时 fail closed。`cargo metadata --locked --offline`、all-target 编译和 linker/ELF/archive 独立重开仍未全部进入生产完成门，shared-type layout、ownership、init/destruction、cfg/feature 和受证明的 native link 等价性也继续保持 blocker。
 
-项目逻辑验收已有 `ProjectTestInventory v1` 的 CMake/CTest 与受限 Make 显式配方适配器。CTest 只在沙箱中读取内容绑定的 `ctest --show-only=json-v1`；纯 Make 项目只在只读、无网络且带资源上限的 bubblewrap 中执行固定 `make -n --no-builtin-rules --no-builtin-variables test`，不执行测试配方。Make 输出只接受无 shell 控制的直接 argv；`echo/printf` 之外的未映射命令一律阻断，测试可执行文件必须精确映射到 materialized BuildIR link target。两类 inventory 都在完成期重新采集和逐字段重算。RustProjectIR 中每个 executable target 都必须至少被一个清单测试覆盖，未注册的可执行目标会阻断整项目完成。argv/env 使用 `literal`、`repo-path` 或有界 path-template 结构表示；未声明外部路径、链接、特殊文件、隐式工作目录输入和包含原 C 可执行文件的 fixture 闭包均 fail closed。宿主只建立一次最小只读输入快照，随后在两个独立 bubblewrap 沙箱中运行原 C 与 Rust 目标；Rust 侧不挂载 C 可执行文件、C 源树、C 运行状态或 C 输出，最终由可信宿主比较 exit/signal/stdout/stderr。原 C baseline 必须成功，匹配的双端失败不能伪装通过。
+项目逻辑验收已有 `ProjectTestInventory v1` 的 CMake/CTest 与受限 Make 显式配方适配器。CTest 只在沙箱中读取内容绑定的 `ctest --show-only=json-v1`；纯 Make 项目只在只读、无网络且带资源上限的 bubblewrap 中执行固定 `make -n --no-builtin-rules --no-builtin-variables test`，不执行测试配方。Make 输出只接受无 shell 控制的直接 argv；`echo/printf` 之外的未映射命令一律阻断，清单声明的每个测试可执行文件必须精确且唯一地映射到 materialized BuildIR link target。两类 inventory 都在完成期重新采集和逐字段重算。普通应用/CLI executable 仍由 Cargo all-target 门编译，但不会被误塞进测试清单，也不会仅因不是测试而阻断；真正发现的测试不允许遗漏、合并或额外猜测。argv/env 使用 `literal`、`repo-path` 或有界 path-template 结构表示；未声明外部路径、链接、特殊文件、隐式工作目录输入和包含原 C 可执行文件的 fixture 闭包均 fail closed。宿主只建立一次最小只读输入快照，随后在两个独立 bubblewrap 沙箱中运行原 C 与 Rust 目标；Rust 侧不挂载 C 可执行文件、C 源树、C 运行状态或 C 输出，最终由可信宿主比较 exit/signal/stdout/stderr。原 C baseline 必须成功，匹配的双端失败不能伪装通过。
 
 project repair queue 已接入 schema v7 TransitionAuthority ledger 和专属 AI repairer。CompletionCoordinator 首次只观察最新 receipt，不创建 attempt；隔离的零调用 preflight 通过后，host-issued permit 会绑定精确 receipt/queue/item 状态、模型、agent 和运行时输入，再允许一次 resume 最多启动一个 provider call。provider 完整结果先按哈希写入 ledger，摄取阶段崩溃时下一次 resume 只重开证据并摄取，不再调用模型；证据不全或结果未知仍进入人工对账。attempt 预算沿稳定 diagnostic lineage 跨 receipt epoch 单调继承，另有每 run 64 次 provider call 和 65 个 receipt epoch 的硬上限。
 
@@ -97,39 +97,16 @@ schema v7 还增加了不可变 project diagnostic intake：host 会重开当前
 
 正向完成链现在会自动推进 gate-pending candidate 的 compile、oracle-replay、negative、unsafe-alias、ABI-layout、final 和 promotion，再执行集成、Cargo、C/Rust 项目 oracle 以及项目 gate 汇总。逻辑不一致会按 target/module/unit 归因并原子回到 AI repair，`run-to-completion` 会继续 dispatch repairer、reviewer 和复验，直至完成或产生稳定 blocker；attempt/cycle 上限不会再以异常中断。完整 oracle 使用内容寻址文件，host gate 和 completion receipt 绑定其 SHA，并在发布完成状态前重开 inventory、mapping、oracle、原始 observation、gate summary 和 SQLite gate record。当前支持 CMake/CTest direct executable，以及只含 BuildIR 映射可执行命令和展示行的受限 Make `test` 配方；Meson、Automake 清单、递归 Make、自定义 runner、Kconfig、stdin、声明式/隐式 fixture、完整资源合同、双向 zero-test/遗漏证明和真实 held-out 整项目验收仍未完成，因此不能称为任意 C 项目或 `competition-exact` 已通过。
 
-阶段入口如下。`run-to-completion` 是比赛外层 OpenCode 应优先调用的一键状态机；只有它返回 `completed` 且最终 receipt 全部重开通过才是项目完成，规划、预检或单个 gate 均不是验收结束：
+比赛入口如下。`migrate` 是外层 OpenCode 唯一应调用的状态机；它在同一命令内规划并运行到完成或稳定 blocker。`plan`、`preflight`、`dispatch`、`complete` 和 `run-to-completion` 保留为内部诊断/恢复工具，不能作为比赛验收成功点：
 
 ```bash
-python3 -B validation/tools/project_migration_harness.py plan \
+python3 -B validation/tools/project_migration_harness.py migrate \
   --repo-root /path/to/c-project \
   --profile competition \
   --compile-database /path/to/c-project/build/compile_commands.json \
   --out-root target/project-migration/run-001 \
   --run-id run-001 \
-  --build-closure-policy required
-python3 -B validation/tools/project_migration_harness.py preflight \
-  --out-root target/project-migration/run-001 \
-  --run-id run-001 \
-  --logical-model GLM-5.1 \
-  --resolved-model zai/glm-5.1
-python3 -B validation/tools/project_migration_harness.py dispatch \
-  --plan target/project-migration/run-001/project-migration-plan.json
-python3 -B validation/tools/project_migration_harness.py prepare-next-context-frontier-wave \
-  --plan target/project-migration/run-001/project-migration-plan.json \
-  --latest-dag-path target/project-migration/run-001/project/portfolio-dag.json \
-  --latest-dag-sha256 SHA256 --latest-dag-size-bytes SIZE \
-  --completed-wave-index 0 \
-  --failure-evidence target/project-migration/run-001/failure-evidence.json \
-  --expansion-queries target/project-migration/run-001/expansion-queries.json
-python3 -B validation/tools/project_migration_harness.py complete \
-  --db target/project-migration/run-001/state/project-migration.sqlite3 \
-  --run-id run-001 \
-  --repo-root /path/to/c-project \
-  --logical-model GLM-5.1 \
-  --resolved-model zai/glm-5.1
-python3 -B validation/tools/project_migration_harness.py run-to-completion \
-  --plan target/project-migration/run-001/project-migration-plan.json \
-  --repo-root /path/to/c-project \
+  --build-closure-policy required \
   --logical-model GLM-5.1 \
   --resolved-model zai/glm-5.1
 ```

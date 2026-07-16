@@ -23,29 +23,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     add_c2rust_baseline_parser(commands)
 
     plan = commands.add_parser("plan")
-    plan.add_argument("--repo-root", type=Path, required=True)
-    plan.add_argument(
-        "--profile", choices=("development", "competition"),
-        default="competition",
-    )
-    plan.add_argument("--compile-database", type=Path)
-    plan.add_argument("--make-report", type=Path)
-    plan.add_argument("--make-report-sha256")
-    plan.add_argument("--make-report-size-bytes", type=int)
-    plan.add_argument("--out-root", default="target/project-migration")
-    plan.add_argument("--run-id")
-    plan.add_argument("--source-commit", default="unversioned")
-    plan.add_argument("--max-units", type=int, default=10_000)
-    plan.add_argument("--max-concurrency", type=int, default=4)
-    plan.add_argument("--max-attempts", type=int, default=5)
-    plan.add_argument("--context-page-bytes", type=int, default=16_384)
-    plan.add_argument("--context-page-tokens", type=int, default=4_096)
-    plan.add_argument("--context-group-pages", type=int, default=32)
-    plan.add_argument(
-        "--build-closure-policy",
-        choices=("required", "bounded-source"),
-        default="required",
-    )
+    _add_plan_arguments(plan)
+
+    migrate = commands.add_parser("migrate")
+    _add_plan_arguments(migrate)
+    _add_completion_runtime_arguments(migrate)
 
     dispatch = commands.add_parser("dispatch")
     dispatch.add_argument("--plan", type=Path, required=True)
@@ -165,18 +147,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     run = commands.add_parser("run-to-completion")
     run.add_argument("--plan", type=Path, required=True)
     run.add_argument("--repo-root", type=Path, required=True)
-    run.add_argument("--logical-model", default="GLM-5.1")
-    run.add_argument("--resolved-model", default="zai/glm-5.1")
-    run.add_argument("--timeout-seconds", type=int, default=300)
-    run.add_argument("--preflight-timeout-seconds", type=int, default=60)
-    run.add_argument("--lease-ttl-seconds", type=int, default=900)
-    run.add_argument("--max-cycles", type=int, default=256)
+    _add_completion_runtime_arguments(run)
 
     status = commands.add_parser("status")
     status.add_argument("--db", type=Path, required=True)
     status.add_argument("--run-id", required=True)
     parsed = parser.parse_args(argv)
-    if parsed.command == "plan":
+    if parsed.command in {"plan", "migrate"}:
         make_values = (
             parsed.make_report, parsed.make_report_sha256,
             parsed.make_report_size_bytes,
@@ -196,6 +173,41 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             except ValueError as error:
                 parser.error(str(error))
     return parsed
+
+
+def _add_plan_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--repo-root", type=Path, required=True)
+    parser.add_argument(
+        "--profile", choices=("development", "competition"),
+        default="competition",
+    )
+    parser.add_argument("--compile-database", type=Path)
+    parser.add_argument("--make-report", type=Path)
+    parser.add_argument("--make-report-sha256")
+    parser.add_argument("--make-report-size-bytes", type=int)
+    parser.add_argument("--out-root", default="target/project-migration")
+    parser.add_argument("--run-id")
+    parser.add_argument("--source-commit", default="unversioned")
+    parser.add_argument("--max-units", type=int, default=10_000)
+    parser.add_argument("--max-concurrency", type=int, default=4)
+    parser.add_argument("--max-attempts", type=int, default=5)
+    parser.add_argument("--context-page-bytes", type=int, default=16_384)
+    parser.add_argument("--context-page-tokens", type=int, default=4_096)
+    parser.add_argument("--context-group-pages", type=int, default=32)
+    parser.add_argument(
+        "--build-closure-policy",
+        choices=("required", "bounded-source"),
+        default="required",
+    )
+
+
+def _add_completion_runtime_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--logical-model", default="GLM-5.1")
+    parser.add_argument("--resolved-model", default="zai/glm-5.1")
+    parser.add_argument("--timeout-seconds", type=int, default=300)
+    parser.add_argument("--preflight-timeout-seconds", type=int, default=60)
+    parser.add_argument("--lease-ttl-seconds", type=int, default=900)
+    parser.add_argument("--max-cycles", type=int, default=256)
 
 
 def load_object(path: Path) -> dict[str, Any]:

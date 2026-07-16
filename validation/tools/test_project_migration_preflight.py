@@ -212,7 +212,7 @@ class ProjectMigrationPreflightTests(unittest.TestCase):
 
         def process(argv: list[str], **kwargs: object) -> object:
             calls.append({"argv": list(argv), **kwargs})
-            payload = exported if "export" in argv else response
+            payload = exported
             return __import__("subprocess").CompletedProcess(
                 argv, 0, stdout=payload, stderr=""
             )
@@ -222,14 +222,26 @@ class ProjectMigrationPreflightTests(unittest.TestCase):
             "opencode", "run", "--model", RESOLVED_MODEL,
             "--agent", "c2rust-candidate", "prompt",
         ]
-        with mock.patch(
-            "validation.tools._ai_candidate_harness_parts.provider_process.subprocess.run",
-            side_effect=process,
+        with (
+            mock.patch(
+                "validation.tools._ai_candidate_harness_parts.provider_process."
+                "_run_process",
+                return_value=__import__("subprocess").CompletedProcess(
+                    argv, 0, stdout=response, stderr="",
+                ),
+            ) as primary,
+            mock.patch(
+                "validation.tools._ai_candidate_harness_parts.provider_session."
+                "subprocess.run",
+                side_effect=process,
+            ),
         ):
             execution = subprocess_runner_with_environment(
                 argv, 30, environment=environment, cwd=self.root
             )
-        self.assertEqual(2, len(calls))
+        self.assertEqual(1, len(calls))
+        self.assertEqual(environment, primary.call_args.kwargs["environment"])
+        self.assertEqual(self.root, primary.call_args.kwargs["cwd"])
         self.assertTrue(all(call["env"] == environment for call in calls))
         self.assertTrue(all(call["cwd"] == str(self.root) for call in calls))
         self.assertEqual("opencode-session-export", execution.identity_receipt["source"])

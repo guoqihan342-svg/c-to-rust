@@ -125,6 +125,35 @@ class ProjectMigrationProjectGateAuthorityTests(ProjectMigrationGateAuthorityCas
                 run_id="run", candidate_set_sha256=first_set
             )
 
+    def test_completion_reopens_provider_execution_evidence(self) -> None:
+        self.promote_current_candidate()
+        self.register_project_interface_ready()
+        candidate_set = record_project_final_candidate_bundle(self)
+        with self.ledger.connect() as connection:
+            attempt = connection.execute(
+                """select attempt_id,worker_id,fencing_token from artifacts
+                   where run_id='run' and unit_id='unit' and artifact_id=?""",
+                (self.candidate_id,),
+            ).fetchone()
+            connection.execute(
+                """insert into artifacts(run_id,artifact_id,unit_id,attempt_id,
+                   worker_id,fencing_token,kind,repo_rel_path,content_sha256,
+                   status,created_at,metadata_json)
+                   values ('run','late-provider-evidence','unit',?,?,?,
+                           'provider-execution','target/run/missing-provider.json',?,
+                           'written','2026-01-01T00:00:20Z','{}')""",
+                (
+                    attempt["attempt_id"], attempt["worker_id"],
+                    attempt["fencing_token"], "f" * 64,
+                ),
+            )
+        with self.assertRaisesRegex(
+            LedgerError, "provider execution evidence revalidation failed",
+        ):
+            self.ledger.complete_project_run(
+                run_id="run", candidate_set_sha256=candidate_set,
+            )
+
     def test_completion_rejects_a_running_worker_attempt(self) -> None:
         self.promote_current_candidate()
         self.register_project_interface_ready()
