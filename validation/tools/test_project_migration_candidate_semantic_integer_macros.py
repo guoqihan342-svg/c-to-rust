@@ -56,6 +56,36 @@ int scalar_probe(int value) {
         self.assertEqual((4096,), boundaries.magnitudes)
         self.assertEqual("ready", boundaries.binding["status"])
 
+    def test_flag_only_and_split_compile_definitions_follow_driver_semantics(self) -> None:
+        source = """int scalar_probe(int value) {
+    return value == ACTIVE_LIMIT || value == FEATURE_ENABLED ? 1 : 0;
+}
+"""
+
+        boundaries = self._collect(
+            source,
+            compile_arguments=("-D", "ACTIVE_LIMIT=4096", "-DFEATURE_ENABLED"),
+        )
+
+        self.assertEqual((4096, 1), boundaries.magnitudes)
+        self.assertEqual("ready", boundaries.binding["status"])
+
+    def test_compile_undefinition_is_not_sampled_as_an_active_macro(self) -> None:
+        source = """int scalar_probe(int value) {
+    return value == ACTIVE_LIMIT ? 1 : 0;
+}
+"""
+
+        boundaries = self._collect(
+            source,
+            compile_arguments=("-DACTIVE_LIMIT=4096", "-U", "ACTIVE_LIMIT"),
+        )
+
+        self.assertEqual((), boundaries.magnitudes)
+        self.assertEqual(
+            1, boundaries.binding["blocker_counts"]["undefined_or_redefined"],
+        )
+
     def test_unconditional_bound_header_macro_is_eligible(self) -> None:
         source = """#include "limits.h"
 int scalar_probe(int value) { return value >= HEADER_LIMIT; }

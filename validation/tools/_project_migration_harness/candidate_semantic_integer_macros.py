@@ -105,7 +105,10 @@ def collect_integer_macro_boundaries(
         else:
             definitions[name].append(str(record["replacement"]))
     for name, replacement in compile_macros:
-        definitions[name].append(replacement)
+        if replacement is None:
+            blocked[name].add("undefined_or_redefined")
+        else:
+            definitions[name].append(replacement)
     for name, values in definitions.items():
         if len(values) != 1:
             blocked[name].add("redefined")
@@ -171,7 +174,7 @@ def _validate_inputs(
 def _input_binding(
     function_source: bytes, units: Sequence[tuple[str, bytes, str]],
     function_start: int, facts: Sequence[Mapping[str, Any]],
-    compile_macros: Sequence[tuple[str, str]],
+    compile_macros: Sequence[tuple[str, str | None]],
 ) -> dict[str, object]:
     return {
         "function_source_sha256": hashlib.sha256(function_source).hexdigest(),

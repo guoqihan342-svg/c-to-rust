@@ -69,21 +69,36 @@ def scan_macro_source(
 
 def compile_definitions(
     arguments: Sequence[str], *, max_definitions: int,
-) -> tuple[tuple[str, str], ...]:
+) -> tuple[tuple[str, str | None], ...]:
     if type(max_definitions) is not int or max_definitions < 1:
         raise ValueError("macro compile definition budget is invalid")
-    result = []
-    for argument in arguments:
+    result: list[tuple[str, str | None]] = []
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
         if not isinstance(argument, str):
             raise ValueError("macro compile argument is invalid")
-        if not argument.startswith("-D"):
+        if argument in {"-D", "-U"}:
+            index += 1
+            if index >= len(arguments) or not isinstance(arguments[index], str):
+                raise ValueError("macro compile definition is invalid")
+            operand = arguments[index]
+            option = argument
+        elif argument.startswith("-D") or argument.startswith("-U"):
+            option, operand = argument[:2], argument[2:]
+        else:
+            index += 1
             continue
-        name, separator, value = argument[2:].partition("=")
-        if not separator or _IDENTIFIER.fullmatch(name) is None:
+        name, separator, value = operand.partition("=")
+        if (
+            _IDENTIFIER.fullmatch(name) is None
+            or option == "-U" and separator
+        ):
             raise ValueError("macro compile definition is invalid")
-        result.append((name, value))
+        result.append((name, None if option == "-U" else value if separator else "1"))
         if len(result) >= max_definitions:
             break
+        index += 1
     return tuple(result)
 
 
