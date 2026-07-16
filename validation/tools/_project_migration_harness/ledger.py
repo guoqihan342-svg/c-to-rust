@@ -25,6 +25,7 @@ from .ledger_project_repair import ProjectRepairLedgerMixin
 from .ledger_project_repair_artifacts import ProjectRepairArtifactMixin
 from .ledger_recovery import LedgerRecoveryMixin
 from .ledger_run_metadata import prepare_run_metadata
+from .ledger_run_state import require_active_completion
 from .ledger_security import (
     LedgerError, LeaseConflict, SchemaVersionError, StaleFence,
     assert_no_semantic_claims,
@@ -135,9 +136,7 @@ class ProjectLedger(
     def register_assignments(self, *, run_id: str, assignments: Iterable[Mapping[str, Any]]) -> None:
         now = _now_text()
         with self.connect() as connection, atomic(connection):
-            run = connection.execute("select status from project_runs where run_id=?", (run_id,)).fetchone()
-            if not run or run["status"] != "active":
-                raise LedgerError("assignments require an active run")
+            require_active_completion(connection, run_id, action="assignments")
             if connection.execute(
                 "select 1 from context_frontiers where run_id=? limit 1", (run_id,),
             ).fetchone():
@@ -230,6 +229,7 @@ class ProjectLedger(
             raise ValueError(f"unsupported worker role: {role}")
         assert_no_semantic_claims(metadata or {})
         with self.connect() as connection, atomic(connection):
+            require_active_completion(connection, run_id, action="attempt start")
             reject_split_lease_for_context_frontier(
                 connection, run_id=run_id, unit_id=unit_id,
             )

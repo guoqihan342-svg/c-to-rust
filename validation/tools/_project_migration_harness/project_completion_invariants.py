@@ -11,7 +11,8 @@ def require_quiescent_last_good_run(
 ) -> None:
     audit_transition_projections(connection, run_id)
     run = connection.execute(
-        "select status from project_runs where run_id=?", (run_id,),
+        "select completion_status as status from project_runs where run_id=?",
+        (run_id,),
     ).fetchone()
     if run is None or run["status"] != "active":
         raise LedgerError("project completion requires an active run")

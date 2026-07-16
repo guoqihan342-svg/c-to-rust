@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import re
-import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from itertools import count
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from typing import Any, Iterator, Mapping
 
+from .ledger_connection import connect_database
 from .ledger_security import SchemaVersionError, assert_no_secrets, safe_json
 from .ledger_project_diagnostic_schema import PROJECT_DIAGNOSTIC_SCHEMA
 from .ledger_project_repair_schema import PROJECT_REPAIR_SCHEMA
@@ -15,7 +15,7 @@ from .ledger_context_frontier_schema import CONTEXT_FRONTIER_SCHEMA
 from .schema_integrity import assert_schema_integrity
 
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SAVEPOINTS = count()
 
@@ -44,7 +44,7 @@ def _json(value: Mapping[str, Any] | None) -> str:
 
 
 @contextmanager
-def atomic(connection: sqlite3.Connection, *, immediate: bool = True) -> Iterator[sqlite3.Connection]:
+def atomic(connection: Any, *, immediate: bool = True) -> Iterator[Any]:
     nested = connection.in_transaction
     savepoint = f"project_ledger_{next(_SAVEPOINTS)}"
     connection.execute(f"SAVEPOINT {savepoint}" if nested else ("BEGIN IMMEDIATE" if immediate else "BEGIN"))
@@ -61,10 +61,7 @@ def atomic(connection: sqlite3.Connection, *, immediate: bool = True) -> Iterato
         connection.execute(f"RELEASE {savepoint}") if nested else connection.commit()
 
 
-_SCHEMA = (
-    f"""create table if not exists schema_migrations(version integer primary key
-        check(version={SCHEMA_VERSION}), applied_at text not null, schema_sha256 text not null
-        check(length(schema_sha256)=64))""",
+_SCHEMA_BASE = (
     """create table if not exists project_runs(run_id text primary key, project_key text not null,
        source_commit text not null, dag_sha256 text not null, initial_status text not null check(initial_status in
        ('active','completed','failed','cancelled')), status text not null check(status in
@@ -197,47 +194,49 @@ _SCHEMA = (
     "create index if not exists project_gates_latest on project_gate_records(run_id,candidate_set_sha256,gate_kind,gate_epoch)",
 ) + CONTEXT_FRONTIER_SCHEMA + PROJECT_DIAGNOSTIC_SCHEMA + PROJECT_REPAIR_SCHEMA
 
+_SCHEMA_METADATA = lambda version: f"""create table if not exists schema_migrations(
+    version integer primary key check(version={version}), applied_at text not null,
+    schema_sha256 text not null check(length(schema_sha256)=64))"""
+_SCHEMA_V8_METADATA = """create table if not exists schema_migrations(version integer primary key
+        check(version=8), applied_at text not null, schema_sha256 text not null
+        check(length(schema_sha256)=64))"""
+_COMPLETION_SCHEMA = (
+    """alter table project_runs add column completion_status text not null default 'active'
+       check(completion_status in ('active','finalizing','completed','failed','cancelled'))""",
+    """alter table project_runs add column completion_epoch integer not null default 0
+       check(completion_epoch>=0)""",
+    "alter table project_runs add column completion_cohort_sha256 text",
+    "alter table project_runs add column completion_generation_sha256 text",
+    "alter table project_runs add column completion_gate_bundle_sha256 text",
+    "alter table project_runs add column completion_invariant_sha256 text",
+    "alter table project_runs add column completion_receipt_sha256 text",
+    "alter table transitions add column from_completion_json text not null default '{}'",
+    "alter table transitions add column to_completion_json text not null default '{}'",
+    """create trigger if not exists project_run_completion_epoch_monotonic
+       before update of completion_epoch on project_runs
+       when new.completion_epoch<old.completion_epoch
+         or new.completion_epoch>old.completion_epoch+1
+       begin select raise(abort,'project completion epoch is not monotonic'); end""",
+    """create trigger if not exists lease_requires_active_completion before insert on leases
+       when (select completion_status from project_runs where run_id=new.run_id)<>'active'
+       begin select raise(abort,'lease requires active completion state'); end""",
+    """create trigger if not exists attempt_requires_active_completion before insert on attempts
+       when (select completion_status from project_runs where run_id=new.run_id)<>'active'
+       begin select raise(abort,'attempt requires active completion state'); end""",
+    """create trigger if not exists repair_attempt_requires_active_completion
+       before insert on project_repair_attempts
+       when (select completion_status from project_runs where run_id=new.run_id)<>'active'
+       begin select raise(abort,'repair attempt requires active completion state'); end""",
+    """create trigger if not exists project_gate_requires_active_completion
+       before insert on project_gate_records
+       when (select completion_status from project_runs where run_id=new.run_id)<>'active'
+       begin select raise(abort,'project gate requires active completion state'); end""",
+)
+_SCHEMA_V8 = (_SCHEMA_V8_METADATA,) + _SCHEMA_BASE
+_SCHEMA = (_SCHEMA_METADATA(SCHEMA_VERSION),) + _SCHEMA_BASE + _COMPLETION_SCHEMA
 
-class _ClosingConnection(sqlite3.Connection):
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> bool:
-        try:
-            return bool(super().__exit__(exc_type, exc, traceback))
-        finally:
-            self.close()
 
-
-def connect_database(
-    path: str | Path, *, busy_timeout_ms: int = 5_000,
-    read_only: bool = False,
-) -> sqlite3.Connection:
-    if busy_timeout_ms < 1:
-        raise ValueError("busy_timeout_ms must be positive")
-    database = Path(path)
-    if read_only:
-        if not database.is_file():
-            raise FileNotFoundError(database)
-        uri = database.resolve(strict=True).as_uri() + "?mode=ro"
-        connection = sqlite3.connect(
-            uri, uri=True, isolation_level=None,
-            timeout=busy_timeout_ms / 1000, factory=_ClosingConnection,
-        )
-    else:
-        database.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(
-            database, isolation_level=None, timeout=busy_timeout_ms / 1000,
-            factory=_ClosingConnection,
-        )
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys=ON")
-    connection.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
-    if read_only:
-        connection.execute("PRAGMA query_only=ON")
-    else:
-        connection.execute("PRAGMA journal_mode=WAL")
-    return connection
-
-
-def migrate_schema(connection: sqlite3.Connection) -> None:
+def migrate_schema(connection: Any) -> None:
     existing = connection.execute(
         "select 1 from sqlite_master where type='table' and name='schema_migrations'"
     ).fetchone()
@@ -249,6 +248,15 @@ def migrate_schema(connection: sqlite3.Connection) -> None:
             "select version,schema_sha256 from schema_migrations order by version"
         ).fetchall()
         user_version = connection.execute("PRAGMA user_version").fetchone()[0]
+        if len(rows) == 1 and rows[0][0] == 8 and user_version == 8:
+            from .ledger_schema_upgrade import upgrade_v8_to_v9
+            upgrade_v8_to_v9(
+                connection, legacy_schema=_SCHEMA_V8, current_schema=_SCHEMA,
+                upgrade_statements=_COMPLETION_SCHEMA,
+                metadata_statement=_SCHEMA_METADATA(SCHEMA_VERSION),
+                now=_now_text(),
+            )
+            return
         if len(rows) != 1 or rows[0][0] != SCHEMA_VERSION or user_version != SCHEMA_VERSION:
             raise SchemaVersionError(
                 f"ledger schema version mismatch: user_version={user_version}, expected={SCHEMA_VERSION}"

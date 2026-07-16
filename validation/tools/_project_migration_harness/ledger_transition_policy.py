@@ -6,6 +6,11 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .ledger_run_transition import (
+    RUN_COMMAND_POLICIES, RUN_STATUSES, RunProjection, RunTransitionCommand,
+    assert_run_transition_allowed,
+)
+
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _COMMAND_ID = re.compile(r"^[a-z][a-z0-9_.:-]{0,191}$")
@@ -93,23 +98,6 @@ UNIT_COMMAND_POLICIES = {
     ),
 }
 
-RUN_COMMAND_POLICIES = {
-    "terminal_worker_run_failed": (
-        frozenset({("active", "failed")}),
-        frozenset({"terminal_worker_result"}), "fenced",
-    ),
-    "lease_recovery_run_failed": (
-        frozenset({("active", "failed")}),
-        frozenset({"worker_command_result_unknown"}), "fenced",
-    ),
-    "project_run_completed": (
-        frozenset({("active", "completed")}),
-        frozenset({"project_gate_bundle_passed"}), "none",
-    ),
-}
-RUN_STATUSES = frozenset({"active", "completed", "failed", "cancelled"})
-
-
 @dataclass(frozen=True, slots=True)
 class UnitState:
     status: str
@@ -127,17 +115,6 @@ class UnitProjection:
     version: int
 
     def __post_init__(self) -> None:
-        _version(self.version)
-
-
-@dataclass(frozen=True, slots=True)
-class RunProjection:
-    status: str
-    version: int
-
-    def __post_init__(self) -> None:
-        if self.status not in RUN_STATUSES:
-            raise ValueError("run status is invalid")
         _version(self.version)
 
 
@@ -172,29 +149,6 @@ class TransitionCommand:
             raise ValueError("last-good projection cannot clear and set simultaneously")
 
 
-@dataclass(frozen=True, slots=True)
-class RunTransitionCommand:
-    command_kind: str
-    command_id: str
-    run_id: str
-    anchor_unit_id: str
-    expected_status: str
-    expected_version: int
-    target_status: str
-    reason: str
-    evidence_sha256: str
-    attempt_id: str | None = None
-    fencing_token: int | None = None
-
-    def __post_init__(self) -> None:
-        _validate_common(self)
-        _version(self.expected_version)
-        if not _identity(self.anchor_unit_id):
-            raise ValueError("run transition anchor_unit_id is invalid")
-        if self.expected_status not in RUN_STATUSES or self.target_status not in RUN_STATUSES:
-            raise ValueError("run transition status is invalid")
-
-
 def assert_transition_allowed(command: TransitionCommand) -> None:
     policy = UNIT_COMMAND_POLICIES.get(command.command_kind)
     if policy is None:
@@ -216,18 +170,6 @@ def assert_transition_allowed(command: TransitionCommand) -> None:
         not command.set_last_good_artifact_id or command.clear_last_good_if
     ):
         raise ValueError("unit transition kind requires a last-good set binding")
-
-
-def assert_run_transition_allowed(command: RunTransitionCommand) -> None:
-    policy = RUN_COMMAND_POLICIES.get(command.command_kind)
-    if policy is None:
-        raise ValueError("run transition command kind is not registered")
-    edges, reasons, attempt_binding = policy
-    if (command.expected_status, command.target_status) not in edges:
-        raise ValueError("run transition is not permitted for its command kind")
-    if command.reason not in reasons:
-        raise ValueError("run transition reason is not permitted for its command kind")
-    _assert_attempt_binding(command, attempt_binding)
 
 
 def stable_transition_command_id(action: str, *identity: Any) -> str:

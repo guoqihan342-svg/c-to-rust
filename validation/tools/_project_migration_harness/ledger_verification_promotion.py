@@ -17,6 +17,7 @@ from .gate_evidence import read_content_addressed_json
 from .ledger_candidate_state import candidate_row, latest_candidate_records
 from .ledger_schema import _now_text, atomic
 from .ledger_security import LedgerError
+from .ledger_run_state import require_active_completion
 from .ledger_transition_authority import TransitionAuthority, load_unit_projection
 from .ledger_transition_commands import host_verifier_promoted_command
 from .ledger_transition_policy import (
@@ -32,6 +33,9 @@ def promote_last_good(
     if verifier_record_id == gate_record_id:
         raise LedgerError("last-good promotion requires distinct verifier and gate records")
     with ledger.connect() as connection, atomic(connection):
+        require_active_completion(
+            connection, run_id, action="last-good promotion",
+        )
         candidate = candidate_row(
             connection, run_id, unit_id, candidate_artifact_id, active=True,
         )

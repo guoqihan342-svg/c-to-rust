@@ -14,7 +14,8 @@ class LedgerViewMixin:
             rows = connection.execute(
                 """select u.*,r.max_attempts from migration_units u join project_runs r using(run_id)
                    left join context_frontiers f on f.run_id=u.run_id and f.unit_id=u.unit_id
-                   where u.run_id=? and r.status='active' and u.status not in
+                   where u.run_id=? and r.status='active'
+                   and r.completion_status='active' and u.status not in
                    ('running','completed','cancelled','exhausted')
                    and u.resumable_status not in ('terminal','exhausted')
                    and (f.unit_id is null or f.status='ready')
@@ -35,7 +36,8 @@ class LedgerViewMixin:
     def unit_states(self, run_id: str) -> list[dict[str, Any]]:
         with self.connect() as connection:
             rows = connection.execute(
-                """select u.*,r.max_attempts,r.max_concurrency,r.status as run_status
+                """select u.*,r.max_attempts,r.max_concurrency,
+                          r.completion_status as run_status
                    from migration_units u join project_runs r using(run_id)
                    where u.run_id=? order by u.wave_index,u.group_id,u.unit_id""",
                 (run_id,),

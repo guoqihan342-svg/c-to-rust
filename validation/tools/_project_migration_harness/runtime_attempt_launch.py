@@ -8,6 +8,7 @@ from .artifacts import content_sha256
 from .ledger_frontier_gate import require_attempt_context_frontier
 from .ledger_schema import _json, _now_text, _require_sha256, atomic
 from .ledger_security import LedgerError
+from .ledger_run_state import require_active_completion
 from .ledger_transition_authority import TransitionAuthority, load_unit_projection
 from .ledger_transition_commands import worker_command_started_command
 
@@ -17,6 +18,13 @@ class RuntimeAttemptLaunchMixin:
         self, *, attempt_id: str, owner: str, fencing_token: int,
     ) -> None:
         with self.connect() as connection, atomic(connection):
+            run = connection.execute(
+                "select run_id from attempts where attempt_id=?", (attempt_id,),
+            ).fetchone()
+            require_active_completion(
+                connection, str(run["run_id"]) if run else "",
+                action="provider launch authorization",
+            )
             attempt = self._running_attempt(
                 connection, attempt_id, owner, fencing_token,
             )
@@ -44,6 +52,13 @@ class RuntimeAttemptLaunchMixin:
         self, *, attempt_id: str, owner: str, fencing_token: int,
     ) -> None:
         with self.connect() as connection, atomic(connection):
+            run = connection.execute(
+                "select run_id from attempts where attempt_id=?", (attempt_id,),
+            ).fetchone()
+            require_active_completion(
+                connection, str(run["run_id"]) if run else "",
+                action="provider command start",
+            )
             attempt = self._running_attempt(
                 connection, attempt_id, owner, fencing_token,
             )

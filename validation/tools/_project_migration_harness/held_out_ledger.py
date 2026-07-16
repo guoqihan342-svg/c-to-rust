@@ -35,6 +35,11 @@ def verify_completed_project(
     before = _file_identity(ledger_file)
     try:
         ledger = ProjectLedger(ledger_file, read_only=True)
+        completion = ledger.reopen_completed_project_run(run_id=run_id)
+        _require(
+            completion is not None,
+            "completed run receipt/FSM could not be reopened",
+        )
         with ledger.connect() as connection:
             run = connection.execute(
                 "select * from project_runs where run_id=?", (run_id,),

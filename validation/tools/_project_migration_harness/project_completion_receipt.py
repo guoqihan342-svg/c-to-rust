@@ -11,16 +11,20 @@ from .artifact_verification import read_verified_json_object
 from .artifacts import canonical_json_bytes, write_json_artifact
 from .build_facts import is_linklike
 from .ledger_security import LedgerError, assert_no_secrets
+from .project_completion_receipt_finalization import (
+    finalization_payload, validate_receipt_finalization,
+)
 
 
 COMPLETION_RECEIPT_PATH = "completion/completion-receipt.json"
 MAX_COMPLETION_RECEIPT_BYTES = 2 * 1024 * 1024
-_RECEIPT_KEYS = {
+_RECEIPT_KEYS_V1 = {
     "schema_version", "artifact_kind", "status", "run_id",
     "candidate_set_sha256", "project_final_record_id",
     "project_final_evidence", "build_ir_verifications",
     "project_test_evidence", "semantic_gate",
 }
+_RECEIPT_KEYS = _RECEIPT_KEYS_V1 | {"finalization"}
 _REFERENCE_KEYS = {"path", "sha256", "size_bytes"}
 _BUILD_PHASES = {
     "before_candidate_execution": "before-candidate-execution",
@@ -33,9 +37,10 @@ def completion_receipt_payload(
     project_final: Mapping[str, Any], project_test_evidence: Mapping[str, Any],
     initial_build_ir_ref: Mapping[str, Any],
     final_build_ir_ref: Mapping[str, Any],
+    finalization: Mapping[str, Any],
 ) -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_kind": "project-completion-receipt",
         "status": "completed",
         "run_id": run_id,
@@ -47,6 +52,7 @@ def completion_receipt_payload(
             "before_project_final": dict(final_build_ir_ref),
         },
         "project_test_evidence": dict(project_test_evidence),
+        "finalization": finalization_payload(finalization),
         "semantic_gate": True,
     }
 
@@ -83,6 +89,7 @@ def validate_completion_receipt_bindings(
     receipt: Mapping[str, Any], reference: Mapping[str, Any], *,
     run_id: str, candidate_set_sha256: str,
     project_gate_records: Sequence[tuple[Any, Mapping[str, Any]]],
+    finalization: Mapping[str, Any] | None = None,
 ) -> None:
     _validate_receipt_shape(receipt)
     if (
@@ -121,6 +128,10 @@ def validate_completion_receipt_bindings(
         or summary.get("crash_count") != 0
     ):
         raise LedgerError("project completion receipt host evidence binding drifted")
+    if receipt.get("schema_version") == 2:
+        validate_receipt_finalization(receipt, finalization)
+    elif finalization is not None:
+        raise LedgerError("legacy completion receipt cannot complete a finalizing run")
 
 
 def _read_receipt(out_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -171,9 +182,11 @@ def _validate_receipt_shape(receipt: Mapping[str, Any]) -> None:
         raise LedgerError("project completion receipt contains sensitive data") from error
     final = receipt.get("project_final_evidence")
     builds = receipt.get("build_ir_verifications")
+    version = receipt.get("schema_version")
+    keys = _RECEIPT_KEYS if version == 2 else _RECEIPT_KEYS_V1
     if (
-        set(receipt) != _RECEIPT_KEYS
-        or receipt.get("schema_version") != 1
+        set(receipt) != keys
+        or version not in {1, 2}
         or receipt.get("artifact_kind") != "project-completion-receipt"
         or receipt.get("status") != "completed"
         or receipt.get("semantic_gate") is not True

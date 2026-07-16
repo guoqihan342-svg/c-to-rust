@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from unittest import mock
 
+from validation.tools._project_migration_harness.artifacts import content_sha256
 from validation.tools._project_migration_harness.project_completion_coordinator import (
     resume_project_completion,
 )
@@ -56,6 +57,15 @@ PROJECT_TEST_EVIDENCE = {
     },
     "project_gate_record_id": "host-oracle-replay-record",
     "semantic_gate": False,
+}
+_INVARIANT = {"schema_version": 1, "artifact_kind": "test-finalization-invariant"}
+FINALIZATION = {
+    "completion_epoch": 1,
+    "cohort_sha256": "8" * 64,
+    "generation_sha256": "9" * 64,
+    "gate_bundle_sha256": "a" * 64,
+    "invariant": {"payload": _INVARIANT, "sha256": content_sha256(_INVARIANT)},
+    "records": [],
 }
 
 
@@ -112,6 +122,10 @@ class CompletionBuildIRCase(ProjectMigrationGateAuthorityCase):
                 COORDINATOR + "_record_host_project_final",
                 return_value=project_final_result,
             ) as project_final,
+            mock.patch.object(
+                self.ledger, "begin_project_finalization",
+                return_value=FINALIZATION,
+            ),
             mock.patch(
                 COORDINATOR + "complete_verified_project",
                 return_value={"schema_version": 1, "status": "completed"},

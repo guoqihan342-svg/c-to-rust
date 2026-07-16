@@ -8,6 +8,7 @@ from .artifacts import content_sha256
 from .ledger_attempt_budget import consumed_attempt_count, next_attempt_ordinal
 from .ledger_schema import _json, _now_text, _require_sha256, atomic
 from .ledger_security import LedgerError, LeaseConflict, assert_no_semantic_claims
+from .ledger_run_state import require_active_completion
 from .ledger_frontier_gate import (
     reject_split_lease_for_context_frontier, require_ready_context_frontier,
 )
@@ -38,7 +39,8 @@ class LeaseLifecycleMixin:
         clock = int(time.time()) if now is None else int(now)
         with self.connect() as connection, atomic(connection):
             assignment = connection.execute(
-                """select a.role,r.max_concurrency,r.status as run_status,u.resumable_status
+                """select a.role,r.max_concurrency,r.status as legacy_run_status,
+                          r.completion_status as run_status,u.resumable_status
                    from assignments a join project_runs r using(run_id)
                    join migration_units u using(run_id,unit_id)
                    where a.run_id=? and a.unit_id=? and a.worker_id=? and a.status='active'""",
@@ -46,6 +48,7 @@ class LeaseLifecycleMixin:
             ).fetchone()
             if (
                 not assignment or assignment["run_status"] != "active"
+                or assignment["legacy_run_status"] != "active"
                 or assignment["resumable_status"] in {"terminal", "exhausted"}
             ):
                 raise LeaseConflict("lease owner is not actively assigned to this runnable unit")
@@ -95,8 +98,11 @@ class LeaseLifecycleMixin:
         clock = int(time.time()) if now is None else int(now)
         assert_no_semantic_claims(metadata or {})
         with self.connect() as connection, atomic(connection):
+            require_active_completion(connection, run_id, action="worker attempt")
             run = connection.execute(
-                "select status,max_concurrency,metadata_json from project_runs where run_id=?",
+                """select status as legacy_status,completion_status as status,
+                          max_concurrency,metadata_json
+                   from project_runs where run_id=?""",
                 (run_id,),
             ).fetchone()
             unit = connection.execute(
@@ -109,7 +115,8 @@ class LeaseLifecycleMixin:
                 (run_id, unit_id, worker_id),
             ).fetchone()
             if (
-                not run or run["status"] != "active" or not unit or unit["group_id"] != unit_id
+                not run or run["status"] != "active" or run["legacy_status"] != "active"
+                or not unit or unit["group_id"] != unit_id
                 or unit["resumable_status"] in {"terminal", "exhausted"}
                 or not row or row["status"] != "active" or row["role"] != role
                 or row["out_root"] != assignment.get("out_root")
@@ -226,11 +233,12 @@ class LeaseLifecycleMixin:
         recovered: list[str] = []
         with self.connect() as connection, atomic(connection):
             run = connection.execute(
-                "select status from project_runs where run_id=?", (run_id,),
+                """select status as legacy_status,completion_status as status
+                   from project_runs where run_id=?""", (run_id,),
             ).fetchone()
             if not run:
                 raise LedgerError("run does not exist")
-            if run["status"] != "active":
+            if run["status"] != "active" or run["legacy_status"] != "active":
                 return recovered
             rows = connection.execute(
                 """select t.*,a.max_attempts,l.status as lease_status,l.expires_at

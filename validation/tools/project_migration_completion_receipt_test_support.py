@@ -15,6 +15,9 @@ def write_completion_receipt(
     case: Any, candidate_set_sha256: str, *,
     project_final_record_id: str | None = None,
 ) -> dict[str, Any]:
+    finalization = case.ledger.begin_project_finalization(
+        run_id="run", candidate_set_sha256=candidate_set_sha256,
+    )
     with case.ledger.connect() as connection:
         final = connection.execute(
             """select record_id,evidence_path,evidence_sha256 from project_gate_records
@@ -75,6 +78,7 @@ def write_completion_receipt(
         project_test_evidence=project_test_evidence,
         initial_build_ir_ref=builds["before_candidate_execution"],
         final_build_ir_ref=builds["before_project_final"],
+        finalization=finalization,
     )
     return write_durable_completion_receipt(case.out_root, payload)
 

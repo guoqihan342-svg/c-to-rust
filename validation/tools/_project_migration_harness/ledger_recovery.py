@@ -18,7 +18,8 @@ class LedgerRecoveryMixin:
         recovered: list[str] = []
         with self.connect() as connection, atomic(connection):
             run = connection.execute(
-                "select status from project_runs where run_id=?", (run_id,)
+                "select completion_status as status from project_runs where run_id=?",
+                (run_id,),
             ).fetchone()
             if not run:
                 raise LedgerError("run does not exist")

@@ -11,6 +11,13 @@ from validation.tools._project_migration_harness.ledger import (
     ProjectLedger,
     SchemaVersionError,
 )
+from validation.tools._project_migration_harness.ledger_schema import _SCHEMA_V8
+from validation.tools._project_migration_harness.schema_integrity import (
+    assert_schema_integrity,
+)
+from validation.tools._project_migration_harness.ledger_transition_replay import (
+    assert_run_event_projection,
+)
 
 
 def digest(label: str) -> str:
@@ -105,6 +112,93 @@ class ProjectMigrationLedgerSchemaTests(unittest.TestCase):
                  "target/workers/worker-one/out/cross.rs", digest("cross"), "candidate",
                  "2026-01-01T00:00:00Z", "{}"),
             )
+
+    def test_v8_database_is_migrated_without_losing_legacy_state(self) -> None:
+        path = self.root / "v8.sqlite3"
+        connection = sqlite3.connect(path)
+        connection.execute("pragma foreign_keys=on")
+        for statement in _SCHEMA_V8:
+            connection.execute(statement)
+        fingerprint = assert_schema_integrity(connection, _SCHEMA_V8)
+        connection.execute(
+            """insert into project_runs(
+               run_id,project_key,source_commit,dag_sha256,initial_status,status,
+               max_concurrency,max_attempts,created_at,updated_at,state_version,
+               metadata_json) values
+               ('legacy-run','project','commit',?,'active','active',1,1,
+                '2026-01-01T00:00:00Z','2026-01-01T00:00:00Z',0,'{}')""",
+            (digest("legacy-dag"),),
+        )
+        connection.execute(
+            """insert into project_runs(
+               run_id,project_key,source_commit,dag_sha256,initial_status,status,
+               max_concurrency,max_attempts,created_at,updated_at,state_version,
+               metadata_json) values
+               ('legacy-completed','project','commit',?,'active','completed',1,1,
+                '2026-01-01T00:00:00Z','2026-01-01T00:00:01Z',1,'{}')""",
+            (digest("legacy-completed-dag"),),
+        )
+        connection.execute(
+            """insert into migration_units(
+               run_id,unit_id,group_id,wave_index,initial_status,
+               initial_resumable_status,status,resumable_status,state_version,
+               content_sha256,last_good_artifact_id,updated_at) values
+               ('legacy-completed','unit','unit',0,'pending','ready',
+                'pending','ready',0,?,null,'2026-01-01T00:00:00Z')""",
+            (digest("legacy-completed-unit"),),
+        )
+        connection.execute(
+            """insert into transitions(
+               run_id,unit_id,scope,command_kind,command_id,from_status,to_status,
+               from_resumable_status,to_resumable_status,from_version,to_version,
+               reason,evidence_sha256,attempt_id,fencing_token,
+               clear_last_good_if,set_last_good_artifact_id,created_at) values
+               ('legacy-completed','unit','run','project_run_completed',
+                'project-run-completed:legacy','active','completed',null,null,0,1,
+                'project_gate_bundle_passed',?,null,null,null,null,
+                '2026-01-01T00:00:01Z')""",
+            (digest("legacy-receipt"),),
+        )
+        connection.execute(
+            """insert into schema_migrations(version,applied_at,schema_sha256)
+               values (8,'2026-01-01T00:00:00Z',?)""", (fingerprint,),
+        )
+        connection.execute("pragma user_version=8")
+        connection.commit()
+        connection.close()
+
+        ledger = ProjectLedger(path)
+        with ledger.connect() as migrated:
+            self.assertEqual(9, migrated.execute(
+                "pragma user_version"
+            ).fetchone()[0])
+            columns = {
+                row[1] for row in migrated.execute("pragma table_info(project_runs)")
+            }
+            transition_columns = {
+                row[1] for row in migrated.execute("pragma table_info(transitions)")
+            }
+            legacy = migrated.execute(
+                """select status,completion_status,completion_epoch
+                   from project_runs where run_id='legacy-run'""",
+            ).fetchone()
+            legacy_completed = assert_run_event_projection(
+                migrated, "legacy-completed",
+            )
+        self.assertTrue({
+            "completion_status", "completion_epoch",
+            "completion_cohort_sha256", "completion_generation_sha256",
+            "completion_gate_bundle_sha256", "completion_invariant_sha256",
+            "completion_receipt_sha256",
+        }.issubset(columns))
+        self.assertTrue({
+            "from_completion_json", "to_completion_json",
+        }.issubset(transition_columns))
+        self.assertEqual(("active", "active", 0), tuple(legacy))
+        self.assertEqual(("completed", 1, 0), (
+            legacy_completed.status, legacy_completed.version,
+            legacy_completed.completion.epoch,
+        ))
 
     def test_production_files_are_bounded_and_use_explicit_insert_columns(self) -> None:
         harness = Path(__file__).parent / "_project_migration_harness"

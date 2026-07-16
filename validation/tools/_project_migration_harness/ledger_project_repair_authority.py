@@ -13,6 +13,7 @@ from .ledger_project_repair_core import (
 )
 from .ledger_schema import _json, _now_text, _require_sha256, atomic
 from .ledger_security import LedgerError, assert_no_secrets, sanitize_error_key
+from .ledger_run_state import require_active_completion
 from .project_repair_policy import ProjectRepairProjection
 
 
@@ -47,6 +48,9 @@ class ProjectRepairAuthority(ProjectRepairCandidateMixin, ProjectRepairCore):
         metadata_json = _json(metadata)
         attempt_id = _attempt_id(run_id, queue_sha256, repair_id, command_id)
         with atomic(self.connection):
+            require_active_completion(
+                self.connection, run_id, action="project repair attempt",
+            )
             replay = self._event_replay(
                 run_id, command_id, queue_sha256, repair_id,
                 kind="attempt_started", expected_status=expected_status,
@@ -120,6 +124,9 @@ class ProjectRepairAuthority(ProjectRepairCandidateMixin, ProjectRepairCore):
         with atomic(self.connection):
             attempt = self._attempt(attempt_id)
             run_id, queue_sha, repair_id = attempt_scope(attempt)
+            require_active_completion(
+                self.connection, run_id, action="project repair provider start",
+            )
             projection = self._expected(
                 run_id, queue_sha, repair_id, "running", expected_version,
             )

@@ -46,7 +46,8 @@ class ContextFrontierLedgerMixin:
                 permit, harness_root=harness_root,
             )
             run = connection.execute(
-                "select status,metadata_json from project_runs where run_id=?",
+                """select completion_status as status,metadata_json
+                   from project_runs where run_id=?""",
                 (binding["run_id"],),
             ).fetchone()
             if run is None or run["status"] != "active":
@@ -115,7 +116,8 @@ class ContextFrontierLedgerMixin:
                 raise LedgerError("context frontier wave permit set drifted")
             run_id = str(bindings[0]["run_id"])
             run = connection.execute(
-                "select status,dag_sha256 from project_runs where run_id=?", (run_id,),
+                """select completion_status as status,dag_sha256
+                   from project_runs where run_id=?""", (run_id,),
             ).fetchone()
             units = {
                 str(row["unit_id"]): row for row in connection.execute(

@@ -64,7 +64,8 @@ class ProjectRepairRegistry:
                     "project interface receipt is not recomputable from RustProjectIR"
                 )
             run = self.connection.execute(
-                "select status,dag_sha256 from project_runs where run_id=?", (run_id,),
+                """select completion_status as status,dag_sha256
+                   from project_runs where run_id=?""", (run_id,),
             ).fetchone()
             if run is None:
                 raise LedgerError("project repair receipt run does not exist")

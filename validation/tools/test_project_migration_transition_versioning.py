@@ -171,6 +171,22 @@ class ProjectMigrationTransitionVersioningTests(unittest.TestCase):
                 "select count(*) from transitions"
             ).fetchone()[0])
 
+    def test_new_completion_cannot_use_legacy_active_to_completed_edge(self) -> None:
+        command = RunTransitionCommand(
+            command_kind="project_run_completed",
+            command_id="project-run-completed:legacy-bypass",
+            run_id="run", anchor_unit_id="unit",
+            expected_status="active", expected_version=0,
+            target_status="completed", reason="project_gate_bundle_passed",
+            evidence_sha256=digest("legacy-bypass"),
+        )
+        with self.ledger.connect() as connection:
+            with self.assertRaisesRegex(LedgerError, "enter finalizing first"):
+                TransitionAuthority(connection).apply_run(command)
+            self.assertEqual(0, connection.execute(
+                "select count(*) from transitions where scope='run'"
+            ).fetchone()[0])
+
     def test_cancelled_prelaunch_attempt_does_not_consume_budget(self) -> None:
         with tempfile.TemporaryDirectory(prefix="cancelled-attempt-budget-") as root:
             ledger = ProjectLedger(Path(root) / "ledger.sqlite3")

@@ -21,6 +21,7 @@ from .gate_evidence import (
 from .ledger_schema import _json, _now_text, _require_repo_path, _require_sha256, atomic
 from .ledger_project_diagnostics import insert_project_diagnostic_intake
 from .ledger_security import LedgerError
+from .ledger_run_state import require_active_completion
 from .project_gate_bindings import require_cargo_integration_binding
 from .project_gate_source_verification import verify_project_sources
 
@@ -56,6 +57,9 @@ class ProjectGateMixin:
         evidence_path = _require_repo_path(evidence_path, "evidence_path")
         evidence_sha256 = _require_sha256(evidence_sha256, "evidence_sha256")
         with self.connect() as connection, atomic(connection):
+            require_active_completion(
+                connection, run_id, action="project gate recording",
+            )
             requirement = connection.execute(
                 """select 1 from project_gate_requirements
                    where run_id=? and gate_kind=? and required=1""",

@@ -7,13 +7,13 @@ from typing import Any
 from .ledger_schema import _now_text, atomic
 from .ledger_security import LedgerError
 from .ledger_transition_audit import command_rows
+from .ledger_run_transition_authority import apply_run_transition
 from .ledger_transition_policy import (
     RunProjection, RunTransitionCommand, TransitionCommand, UnitProjection,
-    UnitState, assert_run_transition_allowed, assert_transition_allowed,
+    UnitState, assert_transition_allowed,
 )
 from .ledger_transition_replay import (
-    assert_run_event_projection, assert_unit_event_projection,
-    load_run_projection, load_unit_projection,
+    assert_unit_event_projection, load_run_projection, load_unit_projection,
 )
 
 
@@ -93,43 +93,11 @@ class TransitionAuthority:
         self, command: RunTransitionCommand, *, created_at: str | None = None,
     ) -> RunTransitionResult:
         with atomic(self.connection):
-            replay = self._find_run_replay(command)
-            if replay is not None:
-                assert_run_event_projection(self.connection, command.run_id)
-                return replay
-            assert_run_event_projection(self.connection, command.run_id)
-            assert_run_transition_allowed(command)
-            current = load_run_projection(self.connection, command.run_id)
-            expected = RunProjection(
-                command.expected_status, command.expected_version,
-            )
-            if current != expected:
-                raise LedgerError("transition expected run state/version is stale")
-            if not self.connection.execute(
-                "select 1 from migration_units where run_id=? and unit_id=?",
-                (command.run_id, command.anchor_unit_id),
-            ).fetchone():
-                raise LedgerError("run transition anchor unit does not exist")
             timestamp = created_at or _now_text()
-            cursor = self._append_run(command, timestamp)
-            updated = self.connection.execute(
-                """update project_runs set status=?,state_version=state_version+1,
-                   updated_at=? where run_id=? and status=? and state_version=?""",
-                (
-                    command.target_status, timestamp, command.run_id,
-                    command.expected_status, command.expected_version,
-                ),
+            result = apply_run_transition(
+                self.connection, command, created_at=timestamp,
             )
-            if updated.rowcount != 1:
-                raise LedgerError("transition projection lost its expected run state/version")
-            projected = RunProjection(
-                command.target_status, command.expected_version + 1,
-            )
-            if assert_run_event_projection(self.connection, command.run_id) != projected:
-                raise LedgerError("run transition projection audit failed")
-            return RunTransitionResult(
-                True, int(cursor.lastrowid), expected, projected,
-            )
+            return RunTransitionResult(*result)
 
     def bound_unit_expected(
         self, *, run_id: str, unit_id: str, command_kind: str,
@@ -176,38 +144,6 @@ class TransitionAuthority:
             False, int(row["transition_id"]), previous, current,
         )
 
-    def _find_run_replay(
-        self, command: RunTransitionCommand,
-    ) -> RunTransitionResult | None:
-        matches = command_rows(
-            self.connection, run_id=command.run_id,
-            command_id=command.command_id, scope="run",
-        )
-        if not matches:
-            return None
-        row = _one(matches)
-        previous = RunProjection(str(row["from_status"]), int(row["from_version"]))
-        current = RunProjection(str(row["to_status"]), int(row["to_version"]))
-        binding = (
-            row["unit_id"] == command.anchor_unit_id
-            and row["command_kind"] == command.command_kind
-            and previous == RunProjection(
-                command.expected_status, command.expected_version,
-            )
-            and current == RunProjection(
-                command.target_status, command.expected_version + 1,
-            )
-            and row["reason"] == command.reason
-            and row["evidence_sha256"] == command.evidence_sha256
-            and row["attempt_id"] == command.attempt_id
-            and row["fencing_token"] == command.fencing_token
-        )
-        if not binding:
-            raise LedgerError("run command_id replay changed its evidence binding")
-        return RunTransitionResult(
-            False, int(row["transition_id"]), previous, current,
-        )
-
     def _append_unit(
         self, command: TransitionCommand, created_at: str,
     ) -> sqlite3.Cursor:
@@ -220,19 +156,6 @@ class TransitionAuthority:
             to_resumable=command.target.resumable_status,
             clear_last_good_if=command.clear_last_good_if,
             set_last_good_artifact_id=command.set_last_good_artifact_id,
-            created_at=created_at,
-        )
-
-    def _append_run(
-        self, command: RunTransitionCommand, created_at: str,
-    ) -> sqlite3.Cursor:
-        return self._append(
-            scope="run", command=command,
-            unit_id=command.anchor_unit_id,
-            from_status=command.expected_status,
-            to_status=command.target_status,
-            from_resumable=None, to_resumable=None,
-            clear_last_good_if=None, set_last_good_artifact_id=None,
             created_at=created_at,
         )
 

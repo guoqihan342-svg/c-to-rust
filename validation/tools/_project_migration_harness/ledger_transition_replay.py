@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from typing import Any
 
@@ -9,6 +10,7 @@ from .ledger_transition_policy import (
     RunProjection, RunTransitionCommand, TransitionCommand, UnitProjection,
     UnitState, assert_run_transition_allowed, assert_transition_allowed,
 )
+from .ledger_run_transition import CompletionProjection
 
 
 def load_unit_projection(
@@ -34,12 +36,19 @@ def load_run_projection(
     connection: sqlite3.Connection, run_id: str,
 ) -> RunProjection:
     row = connection.execute(
-        "select status,state_version from project_runs where run_id=?", (run_id,),
+        """select completion_status,state_version,completion_epoch,
+                  completion_cohort_sha256,completion_generation_sha256,
+                  completion_gate_bundle_sha256,completion_invariant_sha256,
+                  completion_receipt_sha256 from project_runs where run_id=?""",
+        (run_id,),
     ).fetchone()
     if row is None:
         raise LedgerError("project run does not exist")
     try:
-        return RunProjection(str(row["status"]), int(row["state_version"]))
+        return RunProjection(
+            str(row["completion_status"]), int(row["state_version"]),
+            _completion_columns(row),
+        )
     except (TypeError, ValueError) as error:
         raise LedgerError("project run projection is invalid") from error
 
@@ -98,7 +107,10 @@ def assert_run_event_projection(
     connection: sqlite3.Connection, run_id: str,
 ) -> RunProjection:
     row = connection.execute(
-        """select initial_status,status,state_version from project_runs
+        """select initial_status,completion_status,state_version,completion_epoch,
+                  completion_cohort_sha256,completion_generation_sha256,
+                  completion_gate_bundle_sha256,completion_invariant_sha256,
+                  completion_receipt_sha256 from project_runs
            where run_id=?""", (run_id,),
     ).fetchone()
     if row is None:
@@ -113,8 +125,16 @@ def assert_run_event_projection(
                 or int(event["to_version"]) != projection.version + 1
             ):
                 raise LedgerError("run transition event chain is discontinuous")
-            projection = RunProjection(command.target_status, int(event["to_version"]))
-        current = RunProjection(str(row["status"]), int(row["state_version"]))
+            if command.expected_completion != projection.completion:
+                raise LedgerError("run transition completion chain is discontinuous")
+            projection = RunProjection(
+                command.target_status, int(event["to_version"]),
+                command.target_completion,
+            )
+        current = RunProjection(
+            str(row["completion_status"]), int(row["state_version"]),
+            _completion_columns(row),
+        )
     except (TypeError, ValueError) as error:
         raise LedgerError("run transition event is invalid") from error
     if current != projection:
@@ -140,6 +160,7 @@ def audit_transition_projections(
         "run_id": run_id,
         "run_status": run.status,
         "run_state_version": run.version,
+        "completion_epoch": run.completion.epoch,
         "unit_count": len(units),
         "unit_state_versions": {
             unit_id: projection.version
@@ -185,9 +206,31 @@ def _run_command(row: Any) -> RunTransitionCommand:
         evidence_sha256=str(row["evidence_sha256"]),
         attempt_id=row["attempt_id"],
         fencing_token=row["fencing_token"],
+        expected_completion=_completion_json(row["from_completion_json"]),
+        target_completion=_completion_json(row["to_completion_json"]),
     )
     assert_run_transition_allowed(command)
     return command
+
+
+def _completion_columns(row: Any) -> CompletionProjection:
+    return CompletionProjection(
+        epoch=int(row["completion_epoch"]),
+        cohort_sha256=row["completion_cohort_sha256"],
+        generation_sha256=row["completion_generation_sha256"],
+        gate_bundle_sha256=row["completion_gate_bundle_sha256"],
+        invariant_sha256=row["completion_invariant_sha256"],
+        receipt_sha256=row["completion_receipt_sha256"],
+    )
+
+
+def _completion_json(raw: Any) -> CompletionProjection:
+    if not isinstance(raw, str):
+        raise ValueError("run completion transition binding is invalid")
+    value = json.loads(raw)
+    if json.dumps(value, sort_keys=True, separators=(",", ":")) != raw:
+        raise ValueError("run completion transition binding is not canonical")
+    return CompletionProjection.from_payload(value)
 
 
 __all__ = [

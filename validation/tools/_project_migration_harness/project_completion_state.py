@@ -6,6 +6,7 @@ from typing import Any
 from .artifacts import content_sha256, write_json_artifact
 from .ledger import LedgerError, ProjectLedger
 from .project_generation_context import managed_project_root
+from .ledger_transition_authority import load_run_projection
 
 
 def completion_paths(
@@ -56,6 +57,28 @@ def completion_result(
 def reopen_completed_result(
     ledger: ProjectLedger, paths: dict[str, Any], run_id: str,
 ) -> dict[str, Any] | None:
+    with ledger.connect() as connection:
+        projection = load_run_projection(connection, run_id)
+    if projection.status == "finalizing":
+        try:
+            recovered = ledger.complete_project_run(
+                run_id=run_id,
+                candidate_set_sha256=str(projection.completion.cohort_sha256),
+            )
+        except LedgerError as error:
+            message = str(error)[:160]
+            waiting = "receipt is missing" in message
+            return completion_result(
+                paths, run_id, "waiting" if waiting else "blocked",
+                "project-finalizing-recovery", [message],
+                str(projection.completion.cohort_sha256),
+                completion_epoch=projection.completion.epoch,
+            )
+        return {
+            **recovered["receipt"],
+            "stage": "project-finalizing-recovered", "blockers": [],
+            "completion_receipt": recovered["reference"],
+        }
     try:
         recovered = ledger.reopen_completed_project_run(run_id=run_id)
     except LedgerError as error:

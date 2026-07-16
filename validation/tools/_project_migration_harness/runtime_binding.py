@@ -109,7 +109,8 @@ class RuntimeBindingMixin(RuntimeAttemptLaunchMixin, PrelaunchCancellationMixin)
         expected = compute_portfolio_binding(portfolio)
         with self.connect() as connection:
             run = connection.execute(
-                "select status,dag_sha256,metadata_json from project_runs where run_id=?",
+                """select completion_status as status,dag_sha256,metadata_json
+                   from project_runs where run_id=?""",
                 (expected["run_id"],),
             ).fetchone()
             if not run or run["status"] != "active" or run["dag_sha256"] != expected["dag_sha256"]:

@@ -7,6 +7,7 @@ from .ledger_transition_policy import (
     RunProjection, RunTransitionCommand, TransitionCommand, UnitProjection,
     UnitState, stable_transition_command_id, transition_evidence_sha256,
 )
+from .ledger_run_transition import CompletionProjection
 
 
 def attempt_started_command(
@@ -169,15 +170,48 @@ def project_unit_completed_command(
     )
 
 
+def project_run_finalizing_command(
+    *, run_id: str, anchor_unit_id: str, expected: RunProjection,
+    completion_epoch: int, candidate_set_sha256: str,
+    generation_sha256: str, gate_bundle_sha256: str,
+    invariant_sha256: str,
+) -> RunTransitionCommand:
+    target = CompletionProjection(
+        epoch=completion_epoch,
+        cohort_sha256=candidate_set_sha256,
+        generation_sha256=generation_sha256,
+        gate_bundle_sha256=gate_bundle_sha256,
+        invariant_sha256=invariant_sha256,
+    )
+    return _run(
+        "project_run_finalizing", "project-run-finalizing", run_id,
+        anchor_unit_id, expected, "finalizing", "project_completion_frozen",
+        gate_bundle_sha256, target_completion=target,
+        identity=(completion_epoch, candidate_set_sha256, generation_sha256,
+                  gate_bundle_sha256, invariant_sha256),
+    )
+
+
 def project_run_completed_command(
     *, run_id: str, anchor_unit_id: str, expected: RunProjection,
     candidate_set_sha256: str, completion_receipt_sha256: str,
 ) -> RunTransitionCommand:
+    current = expected.completion
+    target = CompletionProjection(
+        epoch=current.epoch,
+        cohort_sha256=current.cohort_sha256,
+        generation_sha256=current.generation_sha256,
+        gate_bundle_sha256=current.gate_bundle_sha256,
+        invariant_sha256=current.invariant_sha256,
+        receipt_sha256=completion_receipt_sha256,
+    )
     return _run(
         "project_run_completed", "project-run-completed", run_id,
         anchor_unit_id, expected, "completed", "project_gate_bundle_passed",
         completion_receipt_sha256,
-        identity=(candidate_set_sha256, completion_receipt_sha256),
+        target_completion=target,
+        identity=(current.epoch, candidate_set_sha256,
+                  current.generation_sha256, completion_receipt_sha256),
     )
 
 
@@ -204,6 +238,7 @@ def _run(
     expected: RunProjection, target: str, reason: str, evidence: str,
     *, attempt_id: str | None = None, fencing_token: int | None = None,
     identity: tuple[Any, ...] = (),
+    target_completion: CompletionProjection | None = None,
 ) -> RunTransitionCommand:
     return RunTransitionCommand(
         command_kind=kind,
@@ -212,6 +247,8 @@ def _run(
         expected_status=expected.status, expected_version=expected.version,
         target_status=target, reason=reason, evidence_sha256=evidence,
         attempt_id=attempt_id, fencing_token=fencing_token,
+        expected_completion=expected.completion,
+        target_completion=target_completion or expected.completion,
     )
 
 
@@ -221,6 +258,7 @@ __all__ = [
     "host_verification_failed_command", "host_verifier_promoted_command",
     "lease_recovery_command", "lease_recovery_run_command",
     "prelaunch_cancel_command", "project_run_completed_command",
+    "project_run_finalizing_command",
     "project_unit_completed_command", "terminal_worker_run_failed_command",
     "worker_command_started_command",
 ]
