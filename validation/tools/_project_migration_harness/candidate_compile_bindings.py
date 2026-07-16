@@ -10,7 +10,9 @@ from .ledger_artifact_binding import read_ledger_artifact
 from .ledger_run_contract import load_migration_contract
 from .ledger_security import LedgerError
 from .quarantine_manifest import QUARANTINE_MANIFEST, generation_files
-from .rust_project_cargo import GENERATOR, reconstruct_cargo_project_from_ir
+from .rust_project_cargo import (
+    generator_for_rust_project_ir, reconstruct_cargo_project_from_ir,
+)
 from .rust_project_ir import canonical_rust_project_ir_bytes
 from .rust_project_ir_validation import reopen_rust_project_ir_bindings
 
@@ -68,8 +70,9 @@ def verify_compile_bindings(
         plan = reconstruct_cargo_project_from_ir(ir, artifact_root)
     except (OSError, TypeError, ValueError) as error:
         raise LedgerError("candidate compile RustProjectIR cannot be replayed") from error
+    generator = generator_for_rust_project_ir(ir)
     if (
-        quarantine.get("generator") != GENERATOR
+        quarantine.get("generator") != generator
         or quarantine.get("rust_project_ir_sha256") != ir.get("ir_sha256")
         or quarantine.get("rust_project_interface_sha256") != ir.get("interface_sha256")
         or quarantine.get("rust_project_ir_scope")
@@ -114,7 +117,7 @@ def verify_compile_bindings(
     if (
         expected_files[QUARANTINE_MANIFEST] != quarantine_data
         or expected_files["migration-last-good.json"] != generation_data
-        or generation_payload.get("generator") != GENERATOR
+        or generation_payload.get("generator") != generator
         or generation_payload.get("rust_project_ir_sha256") != ir.get("ir_sha256")
     ):
         raise LedgerError("candidate compile generation cannot be deterministically replayed")

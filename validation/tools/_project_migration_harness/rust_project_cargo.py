@@ -26,6 +26,8 @@ from .rust_project_ir_cohort import PARENT_DAG_KEY
 from .rust_project_native_cargo import native_link_build_script
 VIRTUAL_CRATE_ROOT = VIRTUAL_CRATE_ROOT_MODULE_ID
 MAX_UNSAFE_OBLIGATIONS = 4_096
+V3_GENERATOR = "deterministic-rust-project-ir-cargo-v3"
+SUPPORTED_GENERATORS = frozenset({GENERATOR, V3_GENERATOR})
 _PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}\Z")
 _FEATURE = re.compile(r"[A-Za-z_][A-Za-z0-9_-]{0,63}\Z")
 _CFG = re.compile(r'[A-Za-z0-9_ .,"=()!-]{1,256}\Z')
@@ -36,6 +38,12 @@ def reconstruct_cargo_project_from_ir(
     max_source_bytes: int = cargo_project.MAX_SOURCE_BYTES,
 ) -> cargo_project.CargoProjectPlan:
     """Render a candidate Cargo generation only from a reopened RustProjectIR."""
+    if isinstance(rust_project_ir, Mapping) and rust_project_ir.get("schema_version") == 3:
+        from .rust_project_cargo_v3 import reconstruct_cargo_project_v3
+
+        return reconstruct_cargo_project_v3(
+            rust_project_ir, artifact_root, max_source_bytes=max_source_bytes,
+        )
     if (
         isinstance(max_source_bytes, bool) or not isinstance(max_source_bytes, int)
         or not 1 <= max_source_bytes <= cargo_project.MAX_SOURCE_BYTES
@@ -214,7 +222,18 @@ def _fail(
     raise cargo_project.ProjectInputError(code, stage, group_id)
 
 
+def generator_for_rust_project_ir(rust_project_ir: Mapping[str, Any]) -> str:
+    """Select the deterministic generator bound to an IR schema version."""
+    version = rust_project_ir.get("schema_version")
+    if version == 2:
+        return GENERATOR
+    if version == 3:
+        return V3_GENERATOR
+    raise ValueError("rust_project_ir_schema_version_unsupported")
+
+
 __all__ = [
-    "GENERATOR", "RUST_PROJECT_IR_FILE", "VIRTUAL_CRATE_ROOT",
+    "GENERATOR", "RUST_PROJECT_IR_FILE", "SUPPORTED_GENERATORS", "V3_GENERATOR",
+    "VIRTUAL_CRATE_ROOT", "generator_for_rust_project_ir",
     "reconstruct_cargo_project_from_ir",
 ]

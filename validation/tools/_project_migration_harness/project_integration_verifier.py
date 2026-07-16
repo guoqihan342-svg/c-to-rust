@@ -13,7 +13,8 @@ from .integration_validation import MAX_MANIFEST_BYTES, existing_state, read_bou
 from .ledger import ProjectLedger
 from .project_host_gates import record_host_project_observation
 from .rust_project_cargo import (
-    GENERATOR, RUST_PROJECT_IR_FILE, reconstruct_cargo_project_from_ir,
+    RUST_PROJECT_IR_FILE, generator_for_rust_project_ir,
+    reconstruct_cargo_project_from_ir,
 )
 from .rust_project_ir import canonical_rust_project_ir_bytes
 
@@ -97,12 +98,12 @@ def _verified_ir_generation(
     generation_root: Path, artifact_root: Path, manifest_raw: bytes,
     manifest: dict[str, Any],
 ) -> bool:
-    if manifest.get("generator") != GENERATOR:
-        return False
     try:
         ir_raw = read_bounded(generation_root / RUST_PROJECT_IR_FILE, 2 * 1024 * 1024)
         ir = json.loads(ir_raw.decode("utf-8"))
         if not isinstance(ir, dict) or canonical_rust_project_ir_bytes(ir) != ir_raw:
+            return False
+        if manifest.get("generator") != generator_for_rust_project_ir(ir):
             return False
         if (
             manifest.get("rust_project_ir_sha256") != ir.get("ir_sha256")

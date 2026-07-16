@@ -13,7 +13,7 @@ from .sandbox_execution_schema import (
     SANDBOX_EVIDENCE_KEYS as SANDBOX_KEYS,
     validate_sandbox_execution_evidence,
 )
-from .rust_project_cargo import GENERATOR as RUST_PROJECT_IR_GENERATOR
+from .rust_project_cargo import SUPPORTED_GENERATORS
 
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -84,7 +84,7 @@ def derive_compile_status(
         or quarantine.get("rust_project_ir_scope") not in {
             "full-project", "verification-cohort",
         }
-        or quarantine.get("generator") != RUST_PROJECT_IR_GENERATOR
+        or quarantine.get("generator") not in SUPPORTED_GENERATORS
         or quarantine["generation_manifest"].get("sha256")
         != quarantine.get("generation_sha256")
         or not is_sha(run_contract.get("context_sha256"))

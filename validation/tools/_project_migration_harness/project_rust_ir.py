@@ -8,6 +8,7 @@ from .artifacts import canonical_json_bytes, content_sha256, write_json_artifact
 from .ledger import LedgerError
 from .rust_project_ir_derivation import derive_rust_project_ir_from_candidates
 from .rust_project_ir_cohort import PARENT_DAG_KEY
+from .rust_project_ir_v3_derivation import derive_rust_project_ir_v3_from_candidates
 
 
 def derive_bound_project_ir(
@@ -29,7 +30,12 @@ def derive_bound_project_ir(
         cohort_manifest, cohort_ref = _cohort_domain(
             migration_manifest, dag_ref, candidate_descriptors, artifact_root,
         )
-        return derive_rust_project_ir_from_candidates(
+        derive = (
+            derive_rust_project_ir_v3_from_candidates
+            if _full_target_scoped_domain(cohort_manifest)
+            else derive_rust_project_ir_from_candidates
+        )
+        return derive(
             migration_manifest=cohort_manifest,
             migration_dag_ref=cohort_ref,
             build_ir_refs=[build["artifact"]],
@@ -38,6 +44,18 @@ def derive_bound_project_ir(
         )
     except (OSError, TypeError, ValueError) as error:
         raise LedgerError("project RustProjectIR derivation failed") from error
+
+
+def _full_target_scoped_domain(manifest: Mapping[str, Any]) -> bool:
+    dag = manifest.get("dag")
+    scopes = manifest.get("target_scopes")
+    return (
+        PARENT_DAG_KEY not in manifest
+        and manifest.get("profile") == "competition"
+        and isinstance(dag, Mapping) and bool(dag)
+        and isinstance(scopes, Mapping) and set(scopes) == set(dag)
+        and isinstance(manifest.get("migration_graph"), Mapping)
+    )
 
 
 def _cohort_domain(

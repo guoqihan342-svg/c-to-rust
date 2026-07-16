@@ -9,7 +9,7 @@ import stat
 from typing import Any, Mapping, Sequence
 
 from . import cargo_project
-from .rust_project_cargo import GENERATOR as RUST_PROJECT_IR_GENERATOR
+from .rust_project_cargo import SUPPORTED_GENERATORS
 
 
 MAX_CANDIDATES = 512
@@ -151,7 +151,7 @@ def existing_state(root: Path) -> tuple[str, bool]:
         raw != cargo_project.canonical_json_bytes(manifest)
         or manifest.get("schema_version") != cargo_project.SCHEMA_VERSION
         or manifest.get("generator") not in {
-            "deterministic-cargo-reconstruction-v1", RUST_PROJECT_IR_GENERATOR,
+            "deterministic-cargo-reconstruction-v1", *SUPPORTED_GENERATORS,
         }
         or not isinstance(manifest.get("files"), list)
     ):
@@ -172,7 +172,10 @@ def existing_state(root: Path) -> tuple[str, bool]:
         try:
             limit = (
                 MAX_GENERATED_METADATA_BYTES
-                if relative.as_posix() == "migration-rust-project-ir.json"
+                if relative.as_posix() in {
+                    "migration-rust-project-ir.json",
+                    "migration-cargo-workspace-v1.json",
+                }
                 else cargo_project.MAX_SOURCE_BYTES
             )
             data = read_bounded(root.joinpath(*relative.parts), limit)

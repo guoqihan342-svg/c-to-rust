@@ -824,6 +824,14 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
   4. 再按依赖顺序完成 closure upgrade、global AI planner、project verifier 与 CompletionCoordinator：A19a7c-A19b4 闭合 toolchain/generated/native-link/CIndex/frontier 并可重开全部事实；A19d3c2b4、A19c4a-A19c4e 接通真实 OpenCode/GLM-5.1 全局规划、多候选和 project repair；A19e4e、A19e7、A19e8 用独立进程与不可降级沙箱执行 project verifier；最后仅由 A19e5-A19e6 的唯一 CompletionCoordinator 生成全量 `project-final` cohort/generation、重跑全部门禁并签发可恢复 final receipt。任何低层 CLI、model JSON 或局部门禁都不能提前完成项目。
   5. 最后冻结 A19f1 不超过 20 个 case 的正式矩阵，在 competition-exact 主机上按表逐项、每个 pinned case 一次执行 Q1-Q11；至少两个真实未参与规则开发的 held-out 项目必须保留该资格。逐行记录 `passed`/`blocked` 而不挑选性重跑，再按 A19g 执行有限 Windows/WSL 门禁与交付核对；禁止 1,000/10,000 轮。
 
+  **当前成功率与稳定性收口看板（2026-07-16）**：
+
+  - 当前唯一主开发切片是 A19d3d2a2g3，完成条件是 v3 多 package Cargo workspace 可确定性生成、逐字节重开，并对 entrypoint、crate/module namespace、archive/link 依赖、重复 input occurrence、native/system link 和 cfg/feature 的不可表示状态给出稳定 blocker；完成 g3 后立即进入 g4，不穿插八项目正式宣称。
+  - 成功率以固定发现分母计算：`已通过完整验证的 target/test 数 / BuildIR 与项目测试元数据发现的全部 target/test 数`。跳过、缩小仓库、只选可编译 TU、零测试、compile-only 替代 runtime 或模型自报成功都计为未通过，不能从分母删除。
+  - AI-first 顺序固定为：BuildIR/CIndex/target-scope ContextPack -> 项目级迁移 DAG -> 隔离多 worker 候选 -> Cargo/C oracle 结构化诊断 -> 有界 project repair -> 全量重验；C2Rust/typed lowering 是候选与证据来源，不是绕过 AI 或验证层的独立成功路径。
+  - 开发按完整能力切片集中实现，切片收口后才运行聚焦门禁、一次 Windows 全量和一次 WSL 比赛基线；不在每个小改动后重复全量测试，也不运行 1,000/10,000 轮。相同输入与相同失败 SHA 连续两次无信息增量时停止第三次模型调用并保留 blocker。
+  - 稳定性优先于表面通过率：所有失败必须归入身份中立、内容绑定且可重开的 capability blocker；同一通用修复必须带反例、漂移和跨 target namespace 回归。只有 Q1-Q11 全部通过才可把某项目标为 `passed`，否则即使 Cargo、原 C 测试或部分 Rust 场景通过仍标为 `blocked`。
+
   **A19g 阶段交付规则（每个独立阶段重复执行）**：完成一个可复核阶段后，先运行一次有限 Windows/WSL 门禁与 `git diff --check`，确认没有凭据、宿主缓存、`target/` 运行产物或测试身份特判进入提交；随后创建范围单一的 commit、push 当前分支，并核对本地 `HEAD` 与远端分支 SHA 完全一致。未测试、未提交、未 push 或远端未核对的阶段不得在待办中标成完成。
 
   **A19h 代码精简与模块边界**
