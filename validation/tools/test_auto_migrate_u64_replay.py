@@ -65,6 +65,7 @@ class AutoMigrateU64ReplayTests(unittest.TestCase):
         self.assertTrue(auto_migrate.single_u64_return_value_replay_supported(spec))
         source = auto_migrate.rust_replay_fixture_cases_source(spec, fixture_binding)
 
+        self.assertNotIn("TODO", source)
         self.assertIn("value: u64", source)
         self.assertIn("return_value: u64", source)
         self.assertIn("value: 4294967296u64", source)

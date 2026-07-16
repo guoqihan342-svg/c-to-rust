@@ -26,7 +26,7 @@
   },
   "compile_database": {
     "path": "validation/native-build-closures/zlib-ng-adler32-step/compile_commands.json",
-    "sha256": "c70a7dd9dedc0021b19e12694d994b7575696fc50d82d05cf6d2082c88305d44"
+    "sha256": "7ac74d70fc5d5fe83285cd870b07b398d8bb877807d87fc1aaf1cbe619d7ea22"
   },
   "defines": [
     "adler32_z=zng_adler32_z"

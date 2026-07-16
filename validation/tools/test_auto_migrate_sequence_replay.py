@@ -82,8 +82,21 @@ class AutoMigrateSequenceReplayTests(unittest.TestCase):
             rust_check, _ = self.module.run_rust_check(evidence_dir, False, self.spec)
             self.assertEqual(rust_check["status"], "passed")
             checked_draft = draft_path.read_text(encoding="utf-8")
-            self.assertIn("walked_copy: u32", checked_draft)
-            self.assertIn("Vec<[u32; 3]>", checked_draft)
+            self.assertEqual(checked_draft, renamed_rust_draft())
+            self.assertIn("let walked_copy = progress.walked;", checked_draft)
+            self.assertNotIn("Vec<[u32; 3]>", checked_draft)
+            bindings = rust_check["rust_check_harness_only_bindings"]
+            self.assertEqual(bindings["status"], "emitted")
+            self.assertEqual(
+                bindings["allowed_use"], "fixture_bound_rust_replay_only"
+            )
+            self.assertFalse(bindings["semantics_verified"])
+            self.assertIn("walked_copy: u32", bindings["bindings"][0]["signature"])
+            replay_source = (
+                evidence_dir / "l3-advance-window-tail-rust-replay-test-draft.rs"
+            ).read_text(encoding="utf-8")
+            self.assertIn("actual_marker_first_0_ledger", replay_source)
+            self.assertIn("Vec<[u32; 3]>", replay_source)
             replay = self.module.run_generated_rust_replay(
                 self.spec, evidence_dir, replay, rust_check
             )

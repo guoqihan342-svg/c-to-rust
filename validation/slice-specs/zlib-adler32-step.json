@@ -65,7 +65,7 @@
       "mode": "linked_artifacts_v1",
       "closure_manifest": {
         "path": "validation/native-build-closures/zlib-ng-adler32-step/closure.json",
-        "sha256": "0939c0e62fb538a76977ff64f626ba3c1ccbf3ec5c31bd3a749401e60794282a"
+        "sha256": "68b1664b7df79e0f86db342b75f033c5c9cf0ec0f5a40ade12c019dc1d3965cc"
       }
     },
     "include_paths": ["sources/zlib-ng"],

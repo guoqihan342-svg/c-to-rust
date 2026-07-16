@@ -44,6 +44,9 @@ class CallContinueHarnessTests(unittest.TestCase):
     def setUp(self) -> None:
         (REPO_ROOT / "target").mkdir(exist_ok=True)
         self.spec, self.cases = renamed_spec()
+        self.spec["rust_boundary"]["public_api"][0]["name"] = self.spec[
+            "function_name"
+        ]
 
     def test_renamed_contract_auto_generators_and_syntax(self) -> None:
         contract = parse_contract(self.spec)
@@ -64,7 +67,7 @@ class CallContinueHarnessTests(unittest.TestCase):
                     oracle["statements"],
                 )
         replay = auto_migrate.rust_replay_fixture_cases_source(self.spec, fixture)
-        self.assertIn("advance_window(&mut actual_hit_plain_source", replay)
+        self.assertIn("advance_window(&mut actual_hit_plain_0_source", replay)
         self.assertIn("__c2r_scripted_external_call_args()", replay)
         safety = validate_rust_call_continue_draft(renamed_rust_draft(), contract)
         self.assertEqual(safety["argument_modes"], [
@@ -178,7 +181,8 @@ class CallContinueHarnessTests(unittest.TestCase):
             candidate_source = (
                 full_source.split("std::thread_local!", 1)[0]
                 + full_source[full_source.index("fn advance_window"):]
-                + f"\nfn {callee}() {{}}\n"
+                + f"\nfn {callee}(_metrics: &mut Metrics, _window: &mut Window, "
+                "_cell: &mut Cell) -> u32 { 0u32 }\n"
             )
             draft.write_text(
                 candidate_source,

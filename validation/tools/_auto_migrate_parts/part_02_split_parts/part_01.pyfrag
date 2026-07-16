@@ -61,18 +61,31 @@ def run_rust_check(
             required_callees = unresolved_declared_external_callee_names(
                 first, external_context
             )
+            candidate_text = path.read_text(encoding="utf-8-sig")
+            candidate_owned_callees = {
+                str(callee.get("name") or "")
+                for callee in external_context.get("declared", [])
+                if callee.get("name")
+                and rust_function_declared(
+                    candidate_text,
+                    rust_identifier(str(callee["name"])),
+                )
+            }
+            required_callees.update(candidate_owned_callees)
             candidate_context = candidate_external_callee_context(
                 external_context, required_callees
             )
             final = first
-            if first["returncode"] != 0 and candidate_context["status"] == "recorded":
+            if candidate_context["status"] == "recorded" and (
+                first["returncode"] != 0 or candidate_owned_callees
+            ):
                 try:
                     inject_external_callee_stubs(path, candidate_context, spec)
                 except ValueError as error:
                     stub_contract_error = str(error)
-                if stub_contract_error is None:
+                if stub_contract_error is None and first["returncode"] != 0:
                     final = rust_check_once(path)
-                else:
+                elif stub_contract_error is not None:
                     final = {
                         "command": None,
                         "returncode": 1,

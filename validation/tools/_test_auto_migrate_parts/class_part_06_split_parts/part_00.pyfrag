@@ -256,7 +256,7 @@ class _AutoMigrateTestsPart06:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
             out_root = Path(tmp) / "evidence"
             environment = dict(os.environ)
-            environment.pop("CLANG_PATH", None)
+            environment["CLANG_PATH"] = str(Path(tmp) / "missing-clang")
             environment.pop("LIBCLANG_PATH", None)
             result = subprocess.run(
                 [
@@ -292,6 +292,11 @@ class _AutoMigrateTestsPart06:
                 (evidence_dir / "l3-real-fdb-calc-crc32-pointer-graph.json").read_text(encoding="utf-8")
             )
             rust_check = json.loads((evidence_dir / "rust-check.json").read_text(encoding="utf-8"))
+            lowering = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-clang-lowering-report.json").read_text(
+                    encoding="utf-8"
+                )
+            )
 
             route, plan = self._assert_route_refused_candidate(
                 manifest,
@@ -300,16 +305,21 @@ class _AutoMigrateTestsPart06:
             )
             self.assertEqual(
                 plan["translation_source"],
-                {
-                    "selected": "legacy-string-translator",
-                    "fallback_from": "clang-lowered-typed-ir",
-                    "fallback_reason": "clang_lowered_typed_ir_unavailable",
-                },
+                {"selected": "clang-lowered-typed-ir"},
+            )
+            self.assertEqual(lowering["status"], "unavailable")
+            self.assertIn(
+                "clang AST lowering is unavailable",
+                "\n".join(lowering["diagnostics"]),
             )
             self.assertEqual(pointer["status"], "not_applicable")
             self.assertFalse(pointer["applicability"]["has_pointer_surface"])
             self.assertEqual(pointer["not_applicable_reason"], "slice has no pointer surface")
-            self.assertEqual(plan["translation_summary"]["unsupported_node_count"], 2)
+            self.assertEqual(
+                plan["translation_summary"]["translation_rule_ids"],
+                ["clang-lowering-blocked"],
+            )
+            self.assertEqual(plan["translation_summary"]["unsupported_node_count"], 1)
             self.assertEqual(rust_check["status"], "passed")
 
     def test_real_fdb_calc_crc32_translator_input_records_real_tu_metadata(self) -> None:

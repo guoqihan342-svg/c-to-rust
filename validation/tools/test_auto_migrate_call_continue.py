@@ -34,6 +34,7 @@ class AutoMigrateCallContinueTests(unittest.TestCase):
 
     def test_schema_v2_generates_scalar_offset_and_executes_rust_replay(self) -> None:
         spec, cases = schema_v2_spec_with_five_partitions()
+        spec["rust_boundary"]["public_api"][0]["name"] = spec["function_name"]
         fixture = auto_migrate.oracle_fixture_binding(spec)
         contract = auto_migrate.call_continue_state_replay_contract(spec, fixture)
         self.assertIsNotNone(contract)
@@ -55,18 +56,19 @@ class AutoMigrateCallContinueTests(unittest.TestCase):
 
         replay = auto_migrate.rust_replay_fixture_cases_source(spec, fixture)
         self.assertIn(
-            "let actual_zero_start_plain_header_span = 25u32;",
+            "advance_window(&mut actual_zero_start_plain_1_source, "
+            "actual_zero_start_plain_1_window_seed, 25u32, "
+            "&mut actual_zero_start_plain_1_owner)",
             replay,
         )
-        self.assertNotIn("u32 {", replay)
+        self.assertNotRegex(replay, r"(?:=|,|\()\s*u32\s*\{")
         self.assertIn(
-            "advance_window(&mut actual_zero_start_plain_source, "
-            "actual_zero_start_plain_window_seed, "
-            "actual_zero_start_plain_header_span, &mut actual_zero_start_plain_owner)",
+            "let observed_probe_zero_start_wrap_0_0: usize = "
+            "__c2r_scripted_external_call_count();",
             replay,
         )
-        self.assertIn("__c2r_scripted_external_call_count(), 0usize", replay)
-        self.assertIn("__c2r_scripted_external_call_count(), 1usize", replay)
+        self.assertIn("if observed_probe_zero_start_wrap_0_0 != 0usize", replay)
+        self.assertIn("if observed_probe_hit_wrap_2_0 != 1usize", replay)
 
         rustc = shutil.which("rustc")
         self.assertIsNotNone(rustc)
@@ -235,6 +237,7 @@ class AutoMigrateCallContinueTests(unittest.TestCase):
 
     def test_schema_v1_generator_shape_is_unchanged(self) -> None:
         spec, cases = renamed_spec()
+        spec["rust_boundary"]["public_api"][0]["name"] = spec["function_name"]
         fixture = auto_migrate.oracle_fixture_binding(spec)
         contract = auto_migrate.call_continue_state_replay_contract(spec, fixture)
         self.assertIsNotNone(contract)
@@ -246,7 +249,12 @@ class AutoMigrateCallContinueTests(unittest.TestCase):
         oracle = auto_migrate.oracle_fixture_execution_source(spec, fixture)
         replay = auto_migrate.rust_replay_fixture_cases_source(spec, fixture)
         self.assertNotIn("struct u32", oracle["statements"])
-        self.assertNotIn("u32 {", replay)
+        self.assertNotRegex(replay, r"(?:=|,|\()\s*u32\s*\{")
+        self.assertIn(
+            "advance_window(&mut actual_hit_plain_0_source, "
+            "actual_hit_plain_0_window_seed, &mut actual_hit_plain_0_owner)",
+            replay,
+        )
         for case in cases:
             self.assertEqual(case["expected_outputs"]["call_count"], 1)
 

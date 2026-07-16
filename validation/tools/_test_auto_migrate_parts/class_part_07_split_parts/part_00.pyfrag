@@ -189,7 +189,6 @@ class _AutoMigrateTestsPart07:
                     str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
                     "--out-root",
                     str(out_root),
-                    "--skip-c-oracle",
                     "--emit-clang-lowering-report",
                     "--accept-existing-evidence",
                 ],
@@ -247,37 +246,57 @@ class _AutoMigrateTestsPart07:
             self.assertFalse(route["candidate_generation"]["generated_draft_semantic_pass"])
             self.assertFalse(route["policy"]["generated_draft_semantic_pass"])
             self.assertTrue(manifest["semantic_pass"])
-            self.assertTrue(profile["generated_draft_semantic_pass"])
-            self.assertTrue(manifest["claim_boundary"]["generated_draft_semantic_pass"])
-            self.assertTrue(final["generated_draft_semantic_pass"])
-            self.assertTrue(l3_manifest["claim_boundary"]["generated_draft_semantic_pass"])
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+            self.assertFalse(final["generated_draft_semantic_pass"])
+            self.assertFalse(l3_manifest["claim_boundary"]["generated_draft_semantic_pass"])
             acceptance = profile["generated_draft_acceptance"]
-            self.assertEqual(acceptance["status"], "passed")
-            self.assertTrue(acceptance["generated_draft_semantic_pass"])
+            self.assertEqual(acceptance["status"], "blocked")
+            self.assertEqual(
+                acceptance["blocked_reasons"],
+                ["route_refused_candidate_generation"],
+            )
+            self.assertTrue(acceptance["generated_draft_replay_pass"])
+            self.assertFalse(acceptance["generated_draft_semantic_pass"])
+            self.assertEqual(acceptance["rust_draft"]["status"], "blocked")
             self.assertEqual(
                 acceptance["rust_draft"]["sha256"],
                 route["candidate_generation"]["typed_ir"]["rust_draft_sha256"],
             )
-            self.assertEqual(final["generated_draft_acceptance"], acceptance)
-            self.assertEqual(manifest["claim_boundary"]["generated_draft_acceptance"], acceptance)
-            self.assertEqual(l3_manifest["claim_boundary"]["generated_draft_acceptance"], acceptance)
-            self.assertIn("let actual = fdb_calc_crc32(case.crc, case.buf, case.size);", replay_draft)
+            self.assertNotIn("generated_draft_acceptance", final)
+            self.assertNotIn("generated_draft_acceptance", manifest["claim_boundary"])
+            self.assertNotIn("generated_draft_acceptance", l3_manifest["claim_boundary"])
+            self.assertIn("// ReplayCallPlan-SHA256:", replay_draft)
+            self.assertIn(
+                "let actual_empty_crc_zero_0: u32 = "
+                "fdb_calc_crc32(0u32, &[], 0usize);",
+                replay_draft,
+            )
+            self.assertIn(
+                "let actual_ascii_123456789_crc_zero_1: u32 = "
+                "fdb_calc_crc32(0u32, &[49u8, 50u8, 51u8, 52u8, 53u8, "
+                "54u8, 55u8, 56u8, 57u8], 9usize);",
+                replay_draft,
+            )
+            self.assertEqual(replay_draft.count("C2R_REPLAY_ASSERT:"), 2)
             self.assertEqual(test_translation["status"], "recorded")
-            self.assertEqual(test_translation["evidence_links"]["rust_draft"]["status"], "accepted_after_gates")
+            self.assertEqual(test_translation["evidence_links"]["rust_draft"]["status"], "blocked")
             self.assertEqual(test_translation["replay_execution"]["status"], "passed")
             self.assertTrue(test_translation.get("generated_draft_replay_pass", False))
-            self.assertTrue(test_translation.get("generated_draft_semantic_pass", False))
+            self.assertFalse(test_translation.get("generated_draft_semantic_pass", False))
             self.assertEqual(test_translation["generated_draft_acceptance"], acceptance)
             self.assertEqual(rust_report["status"], "passed")
             self.assertTrue(rust_report["semantic_pass"])
             self.assertTrue(rust_report["replay"]["generated_draft_replay_pass"])
+            self.assertFalse(rust_report["replay"]["generated_draft_semantic_pass"])
+            self.assertEqual(rust_report["replay"]["generated_draft_acceptance"], acceptance)
             self.assertEqual(diff["status"], "passed")
             self.assertEqual(
                 capability_delta["capability_delta"][0]["generated_candidate_status"],
                 "candidate",
             )
             self.assertEqual(capability_delta["capability_delta"][0]["kind"], "candidate_status")
-            self.assertTrue(capability_delta["capability_delta"][0]["semantic_pass"])
+            self.assertFalse(capability_delta["capability_delta"][0]["semantic_pass"])
             self.assertIn(
                 "semantic acceptance",
                 blocked_repairs["blocked_repairs"][0]["blocked_reason"],
