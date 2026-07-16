@@ -155,6 +155,10 @@ def build_spec(*, path_prefix: str = "") -> tuple[dict[str, Any], dict[str, Any]
             "pointer_contract": {"aliasing_proven": True, "noalias_required": []},
             "target_abi_contract": dict(target_abi),
         },
+        "rust_boundary": {
+            "public_api": [{"name": "apply_stats"}],
+            "raw_pointer_policy": "internal_only",
+        },
         "build_profile": {
             "compiler": "cc",
             "include_paths": [],
