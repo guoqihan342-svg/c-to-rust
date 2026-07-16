@@ -14,6 +14,9 @@ from .ledger_security import LedgerError, assert_no_secrets
 from .project_completion_receipt_finalization import (
     finalization_payload, validate_receipt_finalization,
 )
+from .project_completion_topology_binding import (
+    validate_completion_rust_cargo_topology,
+)
 
 
 COMPLETION_RECEIPT_PATH = "completion/completion-receipt.json"
@@ -24,7 +27,8 @@ _RECEIPT_KEYS_V1 = {
     "project_final_evidence", "build_ir_verifications",
     "project_test_evidence", "semantic_gate",
 }
-_RECEIPT_KEYS = _RECEIPT_KEYS_V1 | {"finalization"}
+_RECEIPT_KEYS_V2 = _RECEIPT_KEYS_V1 | {"finalization"}
+_RECEIPT_KEYS_V3 = _RECEIPT_KEYS_V2 | {"rust_cargo_topology_evidence"}
 _REFERENCE_KEYS = {"path", "sha256", "size_bytes"}
 _BUILD_PHASES = {
     "before_candidate_execution": "before-candidate-execution",
@@ -38,9 +42,10 @@ def completion_receipt_payload(
     initial_build_ir_ref: Mapping[str, Any],
     final_build_ir_ref: Mapping[str, Any],
     finalization: Mapping[str, Any],
+    rust_cargo_topology_ref: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
-        "schema_version": 2,
+    payload = {
+        "schema_version": 3 if rust_cargo_topology_ref is not None else 2,
         "artifact_kind": "project-completion-receipt",
         "status": "completed",
         "run_id": run_id,
@@ -55,6 +60,11 @@ def completion_receipt_payload(
         "finalization": finalization_payload(finalization),
         "semantic_gate": True,
     }
+    if rust_cargo_topology_ref is not None:
+        payload["rust_cargo_topology_evidence"] = dict(
+            rust_cargo_topology_ref,
+        )
+    return payload
 
 
 def write_durable_completion_receipt(
@@ -63,6 +73,7 @@ def write_durable_completion_receipt(
     value = dict(payload)
     _validate_receipt_shape(value)
     _validate_build_ir_bindings(out_root, value)
+    validate_completion_rust_cargo_topology(out_root, value)
     reference = write_json_artifact(out_root, COMPLETION_RECEIPT_PATH, value)
     target = out_root.resolve(strict=True) / COMPLETION_RECEIPT_PATH
     # Windows only exposes FlushFileBuffers through a writable descriptor.
@@ -82,6 +93,7 @@ def read_completion_receipt(
     out_root = database_path.resolve().parent.parent
     receipt, reference = _read_receipt(out_root)
     _validate_build_ir_bindings(out_root, receipt)
+    validate_completion_rust_cargo_topology(out_root, receipt)
     return receipt, reference
 
 
@@ -128,7 +140,7 @@ def validate_completion_receipt_bindings(
         or summary.get("crash_count") != 0
     ):
         raise LedgerError("project completion receipt host evidence binding drifted")
-    if receipt.get("schema_version") == 2:
+    if receipt.get("schema_version") in {2, 3}:
         validate_receipt_finalization(receipt, finalization)
     elif finalization is not None:
         raise LedgerError("legacy completion receipt cannot complete a finalizing run")
@@ -183,10 +195,14 @@ def _validate_receipt_shape(receipt: Mapping[str, Any]) -> None:
     final = receipt.get("project_final_evidence")
     builds = receipt.get("build_ir_verifications")
     version = receipt.get("schema_version")
-    keys = _RECEIPT_KEYS if version == 2 else _RECEIPT_KEYS_V1
+    keys = (
+        _RECEIPT_KEYS_V3 if version == 3
+        else _RECEIPT_KEYS_V2 if version == 2
+        else _RECEIPT_KEYS_V1
+    )
     if (
         set(receipt) != keys
-        or version not in {1, 2}
+        or version not in {1, 2, 3}
         or receipt.get("artifact_kind") != "project-completion-receipt"
         or receipt.get("status") != "completed"
         or receipt.get("semantic_gate") is not True
@@ -198,6 +214,10 @@ def _validate_receipt_shape(receipt: Mapping[str, Any]) -> None:
         or set(builds) != set(_BUILD_PHASES)
         or not all(_reference(builds.get(key)) for key in _BUILD_PHASES)
         or not isinstance(receipt.get("project_test_evidence"), Mapping)
+        or (
+            version == 3
+            and not _reference(receipt.get("rust_cargo_topology_evidence"))
+        )
     ):
         raise LedgerError("project completion receipt schema is invalid")
 

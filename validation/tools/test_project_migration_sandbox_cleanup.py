@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import replace
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -12,14 +14,18 @@ from validation.tools._project_migration_harness.project_verification import (
     run_cargo_generation_gates,
     run_cargo_project_gates,
 )
+from validation.tools._project_migration_harness.artifacts import content_sha256
 from validation.tools._project_migration_harness.cargo_fact_commands import (
-    CARGO_METADATA_ARGS,
+    CARGO_BUILD_ARGS, CARGO_METADATA_ARGS,
 )
 from validation.tools._project_migration_harness.integration_generation import (
     recover_current_generation,
 )
 from validation.tools._project_migration_harness.sandbox_contract import (
     SandboxDiscovery,
+)
+from validation.tools._project_migration_harness.sandbox_native_linker_contract import (
+    NativeLinkerContract,
 )
 from validation.tools.project_migration_sandbox_test_support import (
     BoundBackend,
@@ -113,6 +119,35 @@ class ProjectMigrationSandboxCleanupTests(unittest.TestCase):
                 capture_cargo_facts=True,
             )
 
+    def test_structure_capture_runs_real_build_before_check_and_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sandbox-cargo-structure-") as temporary:
+            root = Path(temporary)
+            project, cargo = managed_project(root)
+            generation = recover_current_generation(project)
+            self.assertIsNotNone(generation)
+            backend = _ProductBackend()
+            runtime = root / "runtime"
+            with self._sandbox(backend, cargo):
+                result = run_cargo_generation_gates(
+                    generation, runtime_root=runtime, timeout_seconds=60,
+                    capture_raw_output=True, capture_cargo_facts=True,
+                    capture_cargo_structure=True,
+                )
+
+        self.assertEqual("passed", result["status"])
+        self.assertEqual(
+            [list(CARGO_METADATA_ARGS), list(CARGO_BUILD_ARGS),
+             ["check", "--all-targets", "--all-features", "--offline",
+              "--locked", "--message-format=json"],
+             ["test", "--all-targets", "--all-features", "--offline",
+              "--locked", "--message-format=json"]],
+            [item["cargo_args"] for item in backend.calls],
+        )
+        self.assertEqual(
+            b"linked-product", result["_captured_rust_products"][0]["data"],
+        )
+        self.assertEqual([], list(runtime.glob("cargo-sandbox-*")))
+
     def test_timeout_is_an_environment_block_not_a_compile_failure(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sandbox-timeout-") as temporary:
             root = Path(temporary)
@@ -184,6 +219,57 @@ class ProjectMigrationSandboxCleanupTests(unittest.TestCase):
             ),
         ):
             yield
+
+
+class _ProductBackend(BoundBackend):
+    def __init__(self):
+        super().__init__()
+        binding = {
+            "driver": {"basename": "cc", "family": "gnu-compiler",
+                       "sha256": "4" * 64},
+            "linker": {"basename": "ld", "family": "linker",
+                       "sha256": "5" * 64},
+            "target_triple": "x86_64-unknown-linux-gnu",
+        }
+        self.contract = replace(self.contract, native_linker=NativeLinkerContract(
+            driver_basename="cc", driver_sha256="4" * 64,
+            linker_basename="ld", linker_sha256="5" * 64,
+            target_triple="x86_64-unknown-linux-gnu",
+            binding_sha256=content_sha256(binding),
+        ))
+
+    def execute(self, cargo_binary, cargo_args, **kwargs):
+        result = super().execute(cargo_binary, cargo_args, **kwargs)
+        if cargo_args[0] != "build":
+            return result
+        product = kwargs["runtime_root"] / "target" / "debug" / "app"
+        product.parent.mkdir(parents=True, exist_ok=True)
+        product.write_bytes(b"linked-product")
+        artifact = {
+            "reason": "compiler-artifact",
+            "package_id": "path+file:///workspace/pkg#pkg@0.0.0",
+            "manifest_path": "/workspace/pkg/Cargo.toml",
+            "target": {
+                "kind": ["bin"], "crate_types": ["bin"], "name": "app",
+                "src_path": "/workspace/pkg/src/main.rs", "edition": "2021",
+                "doc": True, "doctest": True, "test": True,
+            },
+            "profile": {
+                "opt_level": "0", "debuginfo": 2,
+                "debug_assertions": True, "overflow_checks": True,
+                "test": False,
+            },
+            "features": [], "filenames": ["/runtime/target/debug/app"],
+            "executable": "/runtime/target/debug/app", "fresh": False,
+        }
+        stdout = "\n".join((
+            json.dumps(artifact, sort_keys=True, separators=(",", ":")),
+            '{"reason":"build-finished","success":true}', "",
+        ))
+        completed = subprocess.CompletedProcess(
+            result.completed.args, 0, stdout, "",
+        )
+        return replace(result, completed=completed)
 
 
 if __name__ == "__main__":

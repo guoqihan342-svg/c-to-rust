@@ -14,15 +14,18 @@ from .project_candidate_gate_aggregation import (
 )
 from .project_candidate_completion import advance_gate_pending_candidates
 from .project_completion_build_ir import (
-    build_ir_allows_candidate_execution, build_ir_allows_completion,
-    build_ir_blocker_kinds, record_build_ir_checkpoint,
+    build_ir_allows_candidate_execution as _build_ir_allows_candidate_execution,
+    build_ir_allows_completion as _build_ir_allows_completion,
+    build_ir_blocker_kinds as _build_ir_blocker_kinds,
+    record_build_ir_checkpoint as _write_build_ir_verification,
     verify_project_final_build_ir,
 )
 from .project_completion_semantics import (
     SEMANTIC_RUNNERS, missing_candidate_semantic_gates as _missing_candidate_semantic_gates,
     semantic_runner as _semantic_runner,
 )
-from .project_completion_state import completion_paths, completion_result, reopen_completed_result
+from .project_completion_state import completion_paths, completion_result as _result, reopen_completed_result
+from .project_completion_topology_binding import ready_rust_cargo_topology_reference
 from .project_completion_finalize import finalize_verified_project
 from .project_completion_repair_phase import execute_project_repair_completion_step
 from .project_completion_verifier_phase import advance_project_verifier_phase
@@ -32,11 +35,6 @@ from .project_integration_verifier import verify_integrated_project
 from .project_test_semantic_verifier import (
     reopen_project_test_semantic_evidence, verify_project_test_semantics,
 )
-_write_build_ir_verification = record_build_ir_checkpoint
-_build_ir_allows_candidate_execution = build_ir_allows_candidate_execution
-_build_ir_allows_completion = build_ir_allows_completion
-_build_ir_blocker_kinds = build_ir_blocker_kinds
-_result = completion_result
 def resume_project_completion(
     *, ledger: ProjectLedger, run_id: str, harness_root: Path,
     repo_root: Path | None = None,
@@ -233,6 +231,7 @@ def resume_project_completion(
             paths, run_id, str(cargo.get("status", "blocked")),
             "project-final-cargo", [], candidate_set,
         )
+    cargo_topology_ref = ready_rust_cargo_topology_reference(cargo)
     project_semantics = verify_project_test_semantics(
         ledger=ledger, run_id=run_id, repo_root=repo_root,
         artifact_root=paths["out_root"], out_root_rel=paths["out_root_rel"],
@@ -294,6 +293,7 @@ def resume_project_completion(
         evidence_reopener=reopen_project_test_semantic_evidence,
         project_final_recorder=_record_host_project_final,
         project_completer=complete_verified_project,
+        rust_cargo_topology_ref=cargo_topology_ref,
     )
 
 

@@ -11,12 +11,13 @@ from .artifacts import checked_relative_path
 from .bounded_artifact_io import (
     BoundedArtifactIOError, read_bounded_artifact, write_immutable_artifact,
 )
+from .cargo_output_limits import MAX_CARGO_STREAM_BYTES
 from .ledger_security import LedgerError
 
 
-MAX_CARGO_RAW_OUTPUT_BYTES = 1024 * 1024
+MAX_CARGO_RAW_OUTPUT_BYTES = MAX_CARGO_STREAM_BYTES
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
-_GATES = {"cargo-metadata", "cargo-check", "cargo-test"}
+_GATES = {"cargo-metadata", "cargo-build", "cargo-check", "cargo-test"}
 _STREAMS = {"stdout", "stderr"}
 
 
@@ -131,6 +132,16 @@ def persist_captured_cargo_outputs(
             complete = False
         else:
             captured.append(fact_probes["cargo-metadata"])
+    structure_probes = result.get("structure_probes")
+    if structure_probes is not None:
+        if (
+            not isinstance(structure_probes, Mapping)
+            or set(structure_probes) != {"cargo-build"}
+            or not isinstance(structure_probes.get("cargo-build"), dict)
+        ):
+            complete = False
+        else:
+            captured.append(structure_probes["cargo-build"])
     for check in captured:
         if not isinstance(check, dict):
             complete = False
@@ -138,7 +149,8 @@ def persist_captured_cargo_outputs(
         command = check.get("command")
         stage = command[1] if isinstance(command, list) and len(command) > 1 else None
         gate_kind = (
-            f"cargo-{stage}" if stage in {"metadata", "check", "test"} else None
+            f"cargo-{stage}"
+            if stage in {"metadata", "build", "check", "test"} else None
         )
         executed = check.get("cargo_executed") is True and check.get("status") in {
             "passed", "failed",

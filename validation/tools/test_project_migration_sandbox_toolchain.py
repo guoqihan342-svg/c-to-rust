@@ -43,7 +43,8 @@ class ProjectMigrationSandboxToolchainTests(unittest.TestCase):
             rustup = Path(temporary) / "rustup"
             rustup.write_bytes(b"test rustup proxy")
             with mock.patch(
-                "validation.tools._project_migration_harness.project_verification.shutil.which",
+                "validation.tools._project_migration_harness."
+                "project_verification_paths.shutil.which",
                 return_value=str(rustup),
             ):
                 self.assertEqual(rustup.resolve(), _cargo_binary("cargo"))
@@ -103,9 +104,11 @@ class ProjectMigrationSandboxToolchainTests(unittest.TestCase):
                 requirements=strict_sandbox_requirements(cpu_seconds=60),
             )
             observed: list[list[str]] = []
+            controls: list[Path] = []
 
-            def executor(argv: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+            def executor(argv: list[str], **values: object) -> subprocess.CompletedProcess[str]:
                 observed.append(argv)
+                controls.append(Path(values["stdout"].name).parent)  # type: ignore[union-attr]
                 command_sha256 = canonical_sha256(["cargo", "check"])
                 (runtime / f"sandbox-{command_sha256}.started").write_text(
                     f"{contract.sha256}\n{command_sha256}\n",
@@ -136,6 +139,8 @@ class ProjectMigrationSandboxToolchainTests(unittest.TestCase):
             self.assertIn("--unshare-all", argv)
             self.assertNotIn("--share-net", argv)
             self.assertIn("/toolchain/bin/cargo", argv)
+            self.assertTrue(all(not item.is_relative_to(runtime) for item in controls))
+            self.assertTrue(all(not item.exists() for item in controls))
 
             first.rustc.write_bytes(b"drifted rustc")
             with self.assertRaisesRegex(ValueError, "content drifted"):

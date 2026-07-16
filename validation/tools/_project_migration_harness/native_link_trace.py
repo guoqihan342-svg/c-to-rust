@@ -10,14 +10,18 @@ from typing import Any
 import unicodedata
 
 from .artifacts import content_sha256
+from .cargo_output_limits import (
+    MAX_CARGO_JSON_LINE_BYTES as _MAX_CARGO_JSON_LINE_BYTES,
+    MAX_CARGO_STREAM_BYTES,
+)
 from .native_link_trace_json import (
     JsonObjectRequiredError, StrictJsonError, optional_json_object,
     required_json_object, trusted_linker_stdout,
 )
 
 NATIVE_LINK_TRACE_SCHEMA_VERSION = 2
-MAX_CARGO_LINKER_TRACE_BYTES = 1024 * 1024
-MAX_CARGO_JSON_LINE_BYTES = 960 * 1024
+MAX_CARGO_LINKER_TRACE_BYTES = MAX_CARGO_STREAM_BYTES
+MAX_CARGO_JSON_LINE_BYTES = _MAX_CARGO_JSON_LINE_BYTES
 MAX_LINKER_TRACE_LINE_BYTES = 4 * 1024
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 _WINDOWS_DRIVE = re.compile(r"[A-Za-z]:[^/]*\Z", re.ASCII)

@@ -8,13 +8,13 @@ from collections.abc import Mapping
 from typing import Any
 
 from .artifacts import content_sha256
+from .cargo_output_limits import MAX_CARGO_JSON_LINE_BYTES, MAX_CARGO_STREAM_BYTES
 from .native_link_trace_json import (
     JsonObjectRequiredError, StrictJsonError, required_json_object,
 )
-
 CARGO_COMPILER_ARTIFACT_EVIDENCE_SCHEMA_VERSION = 1
-MAX_CARGO_COMPILER_ARTIFACT_EVIDENCE_BYTES = 4 * 1024 * 1024
-MAX_CARGO_COMPILER_ARTIFACT_JSON_LINE_BYTES = 1024 * 1024
+MAX_CARGO_COMPILER_ARTIFACT_EVIDENCE_BYTES = MAX_CARGO_STREAM_BYTES
+MAX_CARGO_COMPILER_ARTIFACT_JSON_LINE_BYTES = MAX_CARGO_JSON_LINE_BYTES
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 _DRIVE_PATH = re.compile(r"(?P<drive>[A-Za-z]):/(?P<tail>.+)\Z", re.ASCII)
 _EVENT_KEYS = {

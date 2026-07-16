@@ -50,6 +50,8 @@ def reopen_rust_source_pre_cfg_context(
         quarantine_root=quarantine_root, environment=environment,
         resolver=resolver, runner=domain_runner,
     )
+    if topology.get("status") != "ready":
+        raise LedgerError("Rust source witness requires ready Cargo topology")
     _bind_parent_receipts(
         domain_reference, domain, b2a_reference, b2a, topology,
     )

@@ -43,6 +43,7 @@ class RustCargoTopologyEvidenceTests(unittest.TestCase):
             "candidate_set": {"sha256": "5" * 64},
             "rust_project_ir": {
                 "ir_sha256": "6" * 64, "interface_sha256": "7" * 64,
+                "reference": self.b2a_ref,
             },
             "candidate_project_verification": {"reference": self.b2a_ref},
         }
@@ -63,6 +64,7 @@ class RustCargoTopologyEvidenceTests(unittest.TestCase):
             "status": "ready", "witness_sha256": "4" * 64,
             "claim_boundary": {"section_closure": False},
         }
+        self.expectation = {"expectation_sha256": "8" * 64}
 
     def test_materialize_and_reopen_bind_b2a_and_rederived_payloads(self) -> None:
         with self._dependencies() as calls:
@@ -146,6 +148,14 @@ class RustCargoTopologyEvidenceTests(unittest.TestCase):
         stack.enter(patch(
             f"{MODULE}.build_rust_cargo_topology_witness",
             return_value=self.witness,
+        ))
+        stack.enter(patch(
+            f"{MODULE}.read_bound_rust_project_ir",
+            return_value={"schema_version": 3},
+        ))
+        stack.enter(patch(
+            f"{MODULE}.derive_rust_cargo_topology_expectation",
+            return_value=self.expectation,
         ))
         stack.calls = calls
         return stack

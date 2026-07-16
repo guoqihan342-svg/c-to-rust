@@ -35,7 +35,11 @@ from .project_cargo_verifier_support import (
     project_diagnostic_input as _project_diagnostic_input,
 )
 from .project_host_gates import record_host_project_observation
+from .project_rust_cargo_topology import (
+    materialize_project_rust_cargo_topology,
+)
 from .project_verification import run_cargo_project_gates
+from .rust_product_evidence import persist_captured_rust_products
 
 
 def verify_project_cargo(
@@ -57,6 +61,10 @@ def verify_project_cargo(
     except (GenerationCommitError, OSError, UnicodeError, ValueError):
         context = None
     native_link_trace_required = _native_link_trace_required(context)
+    context_ir = context.get("rust_project_ir") if context is not None else None
+    topology_required = bool(
+        isinstance(context_ir, dict) and context_ir.get("schema_version") == 3
+    )
     captured_execution = run_cargo_project_gates(
         project_root,
         runtime_root=runtime_root,
@@ -64,6 +72,11 @@ def verify_project_cargo(
         timeout_seconds=timeout_seconds,
         capture_raw_output=True,
         capture_native_link_trace=native_link_trace_required,
+        capture_cargo_facts=topology_required,
+        capture_cargo_structure=topology_required,
+    )
+    captured_execution = persist_captured_rust_products(
+        captured_execution, out_root=out_root, required=topology_required,
     )
     execution = persist_captured_cargo_outputs(
         persist_captured_native_link_trace(
@@ -72,6 +85,22 @@ def verify_project_cargo(
         ),
         out_root=out_root, out_root_rel=out_root_rel,
     )
+    topology: dict[str, Any] = {
+        "status": "not-required", "semantic_gate": False,
+    }
+    if topology_required:
+        try:
+            topology = materialize_project_rust_cargo_topology(
+                ledger_path=ledger.path, out_root=out_root, run_id=run_id,
+                candidate_set_sha256=candidate_set, context=context,
+                execution=execution,
+            )
+        except (KeyError, OSError, TypeError, ValueError, LedgerError):
+            topology = {
+                "status": "blocked",
+                "blockers": ["rust-cargo-topology-evidence-unavailable"],
+                "semantic_gate": False,
+            }
     raw_checks = execution.get("checks")
     checks: dict[str, dict[str, Any]] = {}
     if isinstance(raw_checks, list):
@@ -189,6 +218,9 @@ def verify_project_cargo(
         and native_link_settlement["status"] != "resolved"
     ):
         status = "blocked"
+    if status == "passed" and topology_required \
+            and topology.get("status") != "ready":
+        status = "blocked"
     return {
         "schema_version": 1,
         "status": status,
@@ -203,6 +235,7 @@ def verify_project_cargo(
         "diagnostic_admission": admission.payload(),
         "execution": execution,
         "native_link_settlement": native_link_settlement,
+        "rust_cargo_topology": topology,
         "semantic_gate": False,
         **(
             {"classification_receipt": classification_receipt}

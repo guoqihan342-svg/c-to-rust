@@ -80,6 +80,20 @@ class ProjectMigrationCargoMetadataFactEvidenceTests(unittest.TestCase):
         self.assertEqual(first_result["facts"], second_result["facts"])
         self.assertEqual(first_result["facts_sha256"], second_result["facts_sha256"])
 
+    def test_explicit_library_crate_types_are_valid_target_kinds(self) -> None:
+        payload = _metadata()
+        library = payload["packages"][0]["targets"][0]
+        library["kind"] = ["staticlib", "rlib"]
+        library["crate_types"] = ["staticlib", "rlib"]
+
+        result = parse_cargo_metadata_fact_evidence(_encoded(payload))
+
+        self.assertEqual("ready", result["status"])
+        self.assertEqual(
+            ["rlib", "staticlib"],
+            result["facts"]["packages"][0]["targets"][1]["kind"],
+        )
+
     def test_feature_drift_changes_facts_sha256(self) -> None:
         baseline = _metadata()
         changed = copy.deepcopy(baseline)

@@ -2,15 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-import shutil
 import tempfile
 from typing import Any
 
-from .cargo_fact_commands import CARGO_METADATA_ARGS
+from .anchored_artifact_io import open_directory_anchor
+from .cargo_build_product_capture import capture_cargo_build_products
+from .cargo_fact_commands import CARGO_BUILD_ARGS, CARGO_METADATA_ARGS
 from .integration_generation import (
     GenerationCommitError,
-    generation_store_root,
-    recover_current_generation,
 )
 from .integration_validation import existing_state
 from .sandbox_contract import (
@@ -21,29 +20,37 @@ from .sandbox_probe import (
     SandboxProbeReceipt, validate_probe_receipt,
 )
 from .project_verification_execution import (
-    MAX_OUTPUT_BYTES,
     blocked_result as _blocked,
     environment_policy as _environment_policy,
     run_cargo_check as _run,
     sandbox_evidence as _sandbox_evidence,
 )
+from .project_verification_paths import (
+    cargo_binary as _cargo_binary,
+    cleanup_execution_root as _cleanup_execution_root,
+    current_managed_source as _current_managed_source,
+    is_linklike as _is_linklike,
+    project_target as _project_target,
+    runtime_root as _runtime_root,
+    validate_capture_options as _validate_capture_options,
+)
 
 
 SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
-
 
 def run_cargo_project_gates(
     project_root: Path, *, runtime_root: Path, cargo_command: str = "cargo",
     timeout_seconds: int = 300, capture_raw_output: bool = False,
     capture_native_link_trace: bool = False,
     capture_cargo_facts: bool = False,
+    capture_cargo_structure: bool = False,
 ) -> dict[str, Any]:
-    if timeout_seconds < 30 or timeout_seconds > 3_600:
-        raise ValueError("timeout_seconds must be between 30 and 3600")
-    if capture_native_link_trace and not capture_raw_output:
-        raise ValueError("native linker trace requires raw Cargo output capture")
-    if capture_cargo_facts and not capture_raw_output:
-        raise ValueError("Cargo facts require raw Cargo output capture")
+    _validate_capture_options(
+        timeout_seconds, capture_raw_output=capture_raw_output,
+        capture_native_link_trace=capture_native_link_trace,
+        capture_cargo_facts=capture_cargo_facts,
+        capture_cargo_structure=capture_cargo_structure,
+    )
     project = _project_target(project_root)
     try:
         source = _current_managed_source(project)
@@ -56,27 +63,28 @@ def run_cargo_project_gates(
     return _run_managed_cargo(
         source, project, runtime_root, cargo_command, timeout_seconds,
         capture_raw_output, capture_native_link_trace, capture_cargo_facts,
+        capture_cargo_structure,
     )
-
 
 def run_cargo_generation_gates(
     generation_root: Path, *, runtime_root: Path, cargo_command: str = "cargo",
     timeout_seconds: int = 300, capture_raw_output: bool = False,
     capture_native_link_trace: bool = False,
     capture_cargo_facts: bool = False,
+    capture_cargo_structure: bool = False,
 ) -> dict[str, Any]:
-    if timeout_seconds < 30 or timeout_seconds > 3_600:
-        raise ValueError("timeout_seconds must be between 30 and 3600")
-    if capture_native_link_trace and not capture_raw_output:
-        raise ValueError("native linker trace requires raw Cargo output capture")
-    if capture_cargo_facts and not capture_raw_output:
-        raise ValueError("Cargo facts require raw Cargo output capture")
+    _validate_capture_options(
+        timeout_seconds, capture_raw_output=capture_raw_output,
+        capture_native_link_trace=capture_native_link_trace,
+        capture_cargo_facts=capture_cargo_facts,
+        capture_cargo_structure=capture_cargo_structure,
+    )
     source = _project_target(generation_root).resolve(strict=True)
     return _run_managed_cargo(
         source, source, runtime_root, cargo_command, timeout_seconds,
         capture_raw_output, capture_native_link_trace, capture_cargo_facts,
+        capture_cargo_structure,
     )
-
 
 def managed_project_input_sha256(project_root: Path) -> str:
     project = _project_target(project_root)
@@ -93,6 +101,7 @@ def _run_managed_cargo(
     source: Path, project: Path, runtime_root: Path,
     cargo_command: str, timeout_seconds: int, capture_raw_output: bool,
     capture_native_link_trace: bool, capture_cargo_facts: bool,
+    capture_cargo_structure: bool,
 ) -> dict[str, Any]:
     before, managed = existing_state(source)
     if not managed:
@@ -135,7 +144,7 @@ def _run_managed_cargo(
             project_state=before,
             project_input_sha256=before,
         )
-    if capture_native_link_trace and backend.contract.native_linker is None:
+    if (capture_native_link_trace or capture_cargo_structure) and backend.contract.native_linker is None:
         return _blocked(
             "sandbox_native_linker_unavailable",
             project_state=before,
@@ -144,9 +153,18 @@ def _run_managed_cargo(
     execution_root = Path(tempfile.mkdtemp(prefix="cargo-sandbox-", dir=runtime))
     checks = []
     fact_probes: dict[str, dict[str, Any]] = {}
+    structure_probes: dict[str, dict[str, Any]] = {}
+    captured_products: list[dict[str, Any]] = []
+    product_capture_error = False
+    target_anchor = None
     try:
         for name in ("cargo-home", "target"):
             (execution_root / name).mkdir(mode=0o700)
+        if capture_cargo_structure:
+            try:
+                target_anchor = open_directory_anchor(execution_root / "target")
+            except ValueError:
+                product_capture_error = True
         if capture_cargo_facts:
             fact_probes["cargo-metadata"] = _run(
                 cargo, list(CARGO_METADATA_ARGS), source, execution_root,
@@ -154,6 +172,24 @@ def _run_managed_cargo(
                 capture_raw_output=True,
                 native_link_trace=False,
             )
+        metadata_ready = (
+            not capture_cargo_facts
+            or fact_probes["cargo-metadata"]["status"] == "passed"
+        )
+        if capture_cargo_structure and metadata_ready and not product_capture_error:
+            structure_probes["cargo-build"] = _run(
+                cargo, list(CARGO_BUILD_ARGS), source, execution_root,
+                timeout_seconds, backend, before, probe_receipt,
+                capture_raw_output=True, native_link_trace=True,
+            )
+            if structure_probes["cargo-build"]["status"] == "passed":
+                try:
+                    captured_products = capture_cargo_build_products(
+                        structure_probes["cargo-build"], execution_root,
+                        target_anchor=target_anchor,
+                    )
+                except (KeyError, OSError, TypeError, ValueError):
+                    product_capture_error = True
         commands = [
             (["check", "--all-targets", "--all-features", "--offline", "--locked",
               "--message-format=json"], False),
@@ -162,7 +198,14 @@ def _run_managed_cargo(
                   ["--jobs", "1"] if capture_native_link_trace else []
               )], capture_native_link_trace),
         ]
-        if not capture_cargo_facts or fact_probes["cargo-metadata"]["status"] == "passed":
+        structure_ready = (
+            not capture_cargo_structure
+            or (
+                structure_probes.get("cargo-build", {}).get("status") == "passed"
+                and bool(captured_products) and not product_capture_error
+            )
+        )
+        if metadata_ready and structure_ready:
             for cargo_args, native_link_trace in commands:
                 checks.append(_run(
                     cargo, cargo_args, source, execution_root,
@@ -177,19 +220,27 @@ def _run_managed_cargo(
         except ValueError:
             after, still_managed = "unreadable", False
     finally:
+        if target_anchor is not None:
+            target_anchor.close()
         cleanup_verified = _cleanup_execution_root(execution_root)
     unchanged = still_managed and after == before
-    all_results = [*fact_probes.values(), *checks]
+    all_results = [*fact_probes.values(), *structure_probes.values(), *checks]
     facts_passed = not capture_cargo_facts or (
         set(fact_probes) == {"cargo-metadata"}
         and fact_probes["cargo-metadata"]["status"] == "passed"
     )
+    structure_passed = not capture_cargo_structure or (
+        set(structure_probes) == {"cargo-build"}
+        and structure_probes["cargo-build"]["status"] == "passed"
+        and bool(captured_products) and not product_capture_error
+    )
     passed = (
-        cleanup_verified and unchanged and facts_passed and len(checks) == 2
+        cleanup_verified and unchanged and facts_passed and structure_passed
+        and len(checks) == 2
         and all(item["status"] == "passed" for item in checks)
     )
     blocked = (
-        not cleanup_verified or not unchanged
+        not cleanup_verified or not unchanged or product_capture_error
         or any(item["status"] == "blocked" for item in all_results)
     )
     diagnostics = [
@@ -208,6 +259,12 @@ def _run_managed_cargo(
             "code": "sandbox_cleanup_failed",
             "stage": "cargo-sandbox",
             "message": "Sandbox execution root could not be proven removed",
+        })
+    if product_capture_error:
+        diagnostics.append({
+            "code": "cargo_build_product_capture_invalid",
+            "stage": "cargo-build-products",
+            "message": "Cargo build products could not be captured safely",
         })
     result = {
         "schema_version": 1,
@@ -229,68 +286,10 @@ def _run_managed_cargo(
     }
     if capture_cargo_facts:
         result["fact_probes"] = fact_probes
+    if capture_cargo_structure:
+        result["structure_probes"] = structure_probes
+        result["_captured_rust_products"] = captured_products
     return result
-
-
-def _cleanup_execution_root(root: Path) -> bool:
-    try:
-        if _is_linklike(root):
-            return False
-        shutil.rmtree(root)
-        return not root.exists()
-    except OSError:
-        return False
-
-
-def _current_managed_source(project: Path) -> Path:
-    generation = recover_current_generation(project)
-    return generation or project.resolve(strict=True)
-
-
-def _project_target(value: Path) -> Path:
-    requested = Path(value).expanduser()
-    if requested.name in {"", ".", ".."} or _is_linklike(requested):
-        raise ValueError("project_root is invalid")
-    parent = requested.parent.resolve(strict=True)
-    return parent / requested.name
-
-
-def _runtime_root(value: Path, project: Path, source: Path) -> Path:
-    requested = Path(value).expanduser()
-    if _is_linklike(requested):
-        raise ValueError("runtime_root must not be a link")
-    requested.mkdir(parents=True, exist_ok=True, mode=0o700)
-    runtime = requested.resolve(strict=True)
-    protected = (project, source, generation_store_root(project))
-    if any(_overlaps(runtime, item.resolve()) for item in protected if item.exists()):
-        raise ValueError("runtime_root must not overlap managed project state")
-    return runtime
-
-
-def _overlaps(left: Path, right: Path) -> bool:
-    return left == right or left.is_relative_to(right) or right.is_relative_to(left)
-
-
-def _is_linklike(path: Path) -> bool:
-    is_junction = getattr(path, "is_junction", None)
-    return path.is_symlink() or bool(is_junction and is_junction())
-
-
-def _cargo_binary(value: str) -> Path:
-    if (
-        not isinstance(value, str)
-        or value.lower() not in {"cargo", "cargo.exe"}
-        or Path(value).name != value
-        or any(char in value for char in "\r\n\x00")
-    ):
-        raise ValueError("cargo_command is invalid")
-    resolved = shutil.which(value)
-    if not resolved:
-        raise ValueError("cargo_command is unavailable")
-    path = Path(resolved).resolve(strict=True)
-    if path.name.lower() not in {"cargo", "cargo.exe", "rustup", "rustup.exe"} or not path.is_file():
-        raise ValueError("cargo_command must resolve to Cargo")
-    return path
 
 
 __all__ = [

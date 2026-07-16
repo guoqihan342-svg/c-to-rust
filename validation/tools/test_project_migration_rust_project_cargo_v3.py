@@ -12,6 +12,15 @@ from validation.tools.project_migration_rust_project_cargo_v3_test_support impor
     V3CargoFixture, direct_two_package_ir,
 )
 from validation.tools._project_migration_harness import cargo_project
+from validation.tools._project_migration_harness.cargo_compiler_artifact_evidence import (
+    parse_cargo_compiler_artifact_evidence,
+)
+from validation.tools._project_migration_harness.cargo_fact_commands import (
+    CARGO_METADATA_COMMAND,
+)
+from validation.tools._project_migration_harness.cargo_metadata_fact_evidence import (
+    parse_cargo_metadata_fact_evidence,
+)
 from validation.tools._project_migration_harness.integration_validation import (
     existing_state,
 )
@@ -29,6 +38,12 @@ from validation.tools._project_migration_harness.rust_project_cargo_v3_render im
 )
 from validation.tools._project_migration_harness.rust_project_cargo_v3_source_layout import (
     derive_rust_project_cargo_v3_source_layout,
+)
+from validation.tools._project_migration_harness.rust_cargo_topology_ir import (
+    derive_rust_cargo_topology_expectation,
+)
+from validation.tools._project_migration_harness.rust_cargo_topology_witness import (
+    build_rust_cargo_topology_witness,
 )
 
 
@@ -182,6 +197,37 @@ class RustProjectCargoV3Tests(unittest.TestCase):
         self.assertEqual(0, metadata.returncode, metadata.stderr)
         self.assertEqual(2, len(json.loads(metadata.stdout)["packages"]))
         self.assertEqual(0, check.returncode, check.stderr)
+
+    @unittest.skipUnless(shutil.which("cargo"), "cargo is unavailable")
+    def test_two_package_live_cargo_exactly_matches_v3_topology(self) -> None:
+        ir, sources = direct_two_package_ir()
+        layout = derive_rust_project_cargo_v3_source_layout(ir, sources)
+        projection = derive_rust_project_cargo_v3_projection(ir, layout)
+        files = render_rust_project_cargo_v3_files(ir, projection, sources)
+        project = Path(self.temporary.name) / "cargo-topology-live"
+        self._materialize(project, files)
+
+        metadata = subprocess.run(
+            list(CARGO_METADATA_COMMAND), cwd=project, check=False,
+            capture_output=True,
+        )
+        compiler = subprocess.run(
+            [
+                "cargo", "check", "--all-targets", "--all-features",
+                "--offline", "--locked", "--message-format=json",
+            ],
+            cwd=project, check=False, capture_output=True,
+        )
+
+        self.assertEqual(0, metadata.returncode, metadata.stderr.decode())
+        self.assertEqual(0, compiler.returncode, compiler.stderr.decode())
+        witness = build_rust_cargo_topology_witness(
+            parse_cargo_metadata_fact_evidence(metadata.stdout),
+            parse_cargo_compiler_artifact_evidence(compiler.stdout),
+            derive_rust_cargo_topology_expectation(ir),
+        )
+        self.assertEqual("ready", witness["status"], witness["blockers"])
+        self.assertTrue(witness["coverage"]["rust_project_ir_alignment_complete"])
 
     def test_source_layout_rejects_cfg_guarded_main(self) -> None:
         ir = self.fixture.build('#[cfg(feature = "x")]\nfn main() {}\n', product="link")

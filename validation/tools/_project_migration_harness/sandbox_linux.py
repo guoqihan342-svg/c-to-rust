@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 import subprocess
+import tempfile
 from collections.abc import Mapping
 from typing import Any, Callable, Sequence
 
+from .cargo_output_limits import MAX_CARGO_STREAM_BYTES
 from .sandbox_bubblewrap_argv import (
     build_bubblewrap_argv,
     redacted_bubblewrap_argv as _redacted_argv,
@@ -34,7 +37,7 @@ from .sandbox_toolchain import (
 )
 
 
-MAX_CAPTURE_BYTES = 1024 * 1024 + 1
+MAX_CAPTURE_BYTES = MAX_CARGO_STREAM_BYTES + 1
 Executor = Callable[..., subprocess.CompletedProcess[Any]]
 
 
@@ -105,24 +108,9 @@ class BubblewrapBackend:
             project_root, runtime_root, cargo_args, marker.name,
             command_sha256, verification_plan.environment,
         )
-        stdout_path = runtime_root / f"sandbox-{command_sha256}.stdout"
-        stderr_path = runtime_root / f"sandbox-{command_sha256}.stderr"
-        with stdout_path.open("wb") as stdout_handle, stderr_path.open("wb") as stderr_handle:
-            completed = self._executor(
-                argv,
-                cwd=runtime_root,
-                env={"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
-                stdout=stdout_handle,
-                stderr=stderr_handle,
-                timeout=verification_plan.timeout_seconds,
-                check=False,
-                preexec_fn=_resource_limiter(self._contract),
-            )
-        completed = subprocess.CompletedProcess(
-            completed.args,
-            completed.returncode,
-            _read_capture(stdout_path),
-            _read_capture(stderr_path),
+        completed = self._execute_with_private_capture(
+            argv, runtime_root, verification_plan.timeout_seconds,
+            command_sha256,
         )
         command_started = _marker_matches(marker, self._contract.sha256, command_sha256)
         return SandboxRunResult(
@@ -135,6 +123,34 @@ class BubblewrapBackend:
             verification_plan_sha256=verification_plan.sha256,
             probe_receipt_sha256=probe_receipt.sha256,
         )
+
+    def _execute_with_private_capture(
+        self, argv: list[str], runtime_root: Path, timeout_seconds: int,
+        command_sha256: str,
+    ) -> subprocess.CompletedProcess[bytes]:
+        control = Path(tempfile.mkdtemp(
+            prefix="cargo-control-", dir=runtime_root.parent,
+        ))
+        stdout_path = control / f"{command_sha256}.stdout"
+        stderr_path = control / f"{command_sha256}.stderr"
+        try:
+            with (
+                stdout_path.open("xb") as stdout_handle,
+                stderr_path.open("xb") as stderr_handle,
+            ):
+                completed = self._executor(
+                    argv, cwd=control,
+                    env={"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
+                    stdout=stdout_handle, stderr=stderr_handle,
+                    timeout=timeout_seconds, check=False,
+                    preexec_fn=_resource_limiter(self._contract),
+                )
+            return subprocess.CompletedProcess(
+                completed.args, completed.returncode,
+                _read_capture(stdout_path), _read_capture(stderr_path),
+            )
+        finally:
+            shutil.rmtree(control, ignore_errors=False)
 
     def execute_project_test_process(
         self, executable: Path, *, project_root: Path, runtime_root: Path,

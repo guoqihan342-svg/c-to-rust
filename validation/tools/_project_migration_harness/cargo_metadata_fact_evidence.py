@@ -6,9 +6,10 @@ import unicodedata
 from collections.abc import Mapping
 from typing import Any
 from .artifacts import canonical_json_bytes, content_sha256
+from .cargo_output_limits import MAX_CARGO_STREAM_BYTES
 from .native_link_trace_json import StrictJsonError, load_strict_json
 CARGO_METADATA_FACT_EVIDENCE_SCHEMA_VERSION = 1
-MAX_CARGO_METADATA_FACT_EVIDENCE_BYTES = 4 * 1024 * 1024
+MAX_CARGO_METADATA_FACT_EVIDENCE_BYTES = MAX_CARGO_STREAM_BYTES
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 _REQUIRED_TOP_KEYS = {
     "metadata", "packages", "resolve", "target_directory", "version",
@@ -17,7 +18,8 @@ _REQUIRED_TOP_KEYS = {
 _ALLOWED_TOP_KEYS = _REQUIRED_TOP_KEYS | {"build_directory"}
 _PATH_FIELDS = {"build_directory", "target_directory", "workspace_root"}
 _SUPPORTED_TARGET_KINDS = {
-    "bench", "bin", "custom-build", "example", "lib", "proc-macro", "test",
+    "bench", "bin", "cdylib", "custom-build", "dylib", "example", "lib",
+    "proc-macro", "rlib", "staticlib", "test",
 }
 _SUPPORTED_CRATE_TYPES = {
     "bin", "cdylib", "dylib", "lib", "proc-macro", "rlib", "staticlib",

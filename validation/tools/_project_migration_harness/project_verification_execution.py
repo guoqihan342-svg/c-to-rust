@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
+from .cargo_output_limits import MAX_CARGO_STREAM_BYTES
 from .sandbox_contract import (
     SandboxBackend,
     SandboxContract,
@@ -15,7 +16,7 @@ from .sandbox_probe import SandboxProbeReceipt
 from .sandbox_requirements import cargo_verification_plan
 
 
-MAX_OUTPUT_BYTES = 1024 * 1024
+MAX_OUTPUT_BYTES = MAX_CARGO_STREAM_BYTES
 
 
 def run_cargo_check(

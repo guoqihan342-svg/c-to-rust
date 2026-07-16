@@ -19,6 +19,8 @@ from .project_candidate_verification_receipt import (
 from .project_interface_validation_domain import (
     reopen_project_interface_validation_domain,
 )
+from .project_repair_worker_request import read_bound_rust_project_ir
+from .rust_cargo_topology_ir import derive_rust_cargo_topology_expectation
 from .rust_cargo_topology_witness import build_rust_cargo_topology_witness
 
 
@@ -107,8 +109,12 @@ def _derive(
         database, b2a["cargo_fact_evidence"],
         execution=b2a["execution"], observations=b2a["cargo_observations"],
     )
+    rust_project_ir = read_bound_rust_project_ir(
+        harness_root, domain["rust_project_ir"]["reference"],
+    )
+    expectation = derive_rust_cargo_topology_expectation(rust_project_ir)
     witness = build_rust_cargo_topology_witness(
-        payloads["cargo_metadata"], payloads["compiler_artifacts"],
+        payloads["cargo_metadata"], payloads["compiler_artifacts"], expectation,
     )
     core = {
         "schema_version": 1,

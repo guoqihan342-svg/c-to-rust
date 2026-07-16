@@ -9,6 +9,9 @@ from .cargo_compiler_artifact_evidence import (
     validate_cargo_compiler_artifact_evidence,
 )
 from .cargo_metadata_fact_evidence import validate_cargo_metadata_fact_evidence
+from .rust_cargo_topology_ir import (
+    validate_rust_cargo_topology_expectation,
+)
 
 
 RUST_CARGO_TOPOLOGY_WITNESS_SCHEMA_VERSION = 1
@@ -30,9 +33,13 @@ _CLAIM_BOUNDARY = {
 def build_rust_cargo_topology_witness(
     metadata_evidence: Mapping[str, Any],
     compiler_evidence: Mapping[str, Any],
+    topology_expectation: Mapping[str, Any],
 ) -> dict[str, Any]:
     metadata = validate_cargo_metadata_fact_evidence(metadata_evidence)
     compiler = validate_cargo_compiler_artifact_evidence(compiler_evidence)
+    expectation = validate_rust_cargo_topology_expectation(
+        topology_expectation,
+    )
     declared = metadata["facts"]["packages"]
     _limits(declared)
     observed, identity_blockers = _observed_packages(compiler["artifacts"])
@@ -40,7 +47,7 @@ def build_rust_cargo_topology_witness(
     blockers = [
         _block("rust_cargo_metadata_blocked", detail=code)
         for code in metadata["blockers"]
-    ] + identity_blockers
+    ] + identity_blockers + _expectation_blockers(metadata["facts"], expectation)
     target_count = 0
     feature_count = 0
     for package in declared:
@@ -51,6 +58,14 @@ def build_rust_cargo_topology_witness(
         blockers.extend(local)
         target_count += len(projected["targets"])
         feature_count += len(projected["declared_features"])
+    declared_semantics = {
+        (item["name"], item["version"]) for item in declared
+    }
+    for name, version in sorted(set(observed) - declared_semantics):
+        blockers.append(_block(
+            "rust_cargo_compiler_workspace_package_undeclared",
+            _semantic(name, version),
+        ))
     if target_count > MAX_TOPOLOGY_TARGETS or feature_count > MAX_TOPOLOGY_FEATURES:
         raise ValueError("rust_cargo_topology_witness_limit_exceeded")
     feature_complete = feature_count == 0 and not any(
@@ -70,13 +85,18 @@ def build_rust_cargo_topology_witness(
                 "rust_cargo_package_artifact_missing",
                 "rust_cargo_package_identity_ambiguous",
                 "rust_cargo_compiler_package_id_unparseable",
+                "rust_cargo_compiler_workspace_package_undeclared",
                 "rust_cargo_declared_target_duplicate",
+                "rust_cargo_target_artifact_cardinality_mismatch",
                 "rust_cargo_target_artifact_missing",
                 "rust_cargo_workspace_target_undeclared",
             }
             for item in blockers
         ),
         "feature_matrix_complete": feature_complete,
+        "rust_project_ir_alignment_complete": not any(
+            item["code"].startswith("rust_cargo_ir_") for item in blockers
+        ),
     }
     core = {
         "schema_version": RUST_CARGO_TOPOLOGY_WITNESS_SCHEMA_VERSION,
@@ -86,6 +106,8 @@ def build_rust_cargo_topology_witness(
             "cargo_metadata_facts_sha256": metadata["facts_sha256"],
             "compiler_artifact_set_sha256": compiler["artifact_set_sha256"],
             "compiler_source_sha256": compiler["source_sha256"],
+            "rust_project_ir_sha256": expectation["rust_project_ir_sha256"],
+            "topology_expectation_sha256": expectation["expectation_sha256"],
         },
         "packages": packages,
         "coverage": coverage,
@@ -99,11 +121,12 @@ def validate_rust_cargo_topology_witness(
     value: Any,
     metadata_evidence: Mapping[str, Any],
     compiler_evidence: Mapping[str, Any],
+    topology_expectation: Mapping[str, Any],
 ) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise ValueError("rust_cargo_topology_witness_schema_invalid")
     expected = build_rust_cargo_topology_witness(
-        metadata_evidence, compiler_evidence,
+        metadata_evidence, compiler_evidence, topology_expectation,
     )
     if dict(value) != expected:
         raise ValueError("rust_cargo_topology_witness_source_drifted")
@@ -139,6 +162,11 @@ def _project_package(
         if not matched:
             blockers.append(_block(
                 "rust_cargo_target_artifact_missing", semantic, target["name"],
+            ))
+        elif len(matched) != 1:
+            blockers.append(_block(
+                "rust_cargo_target_artifact_cardinality_mismatch",
+                semantic, target["name"],
             ))
         profiles = sorted(
             {content_sha256(item["profile"]) for item in matched}
@@ -184,6 +212,22 @@ def _observed_packages(
         }
         result.setdefault((package["name"], package["version"]), []).append(projection)
     return result, blockers
+
+
+def _expectation_blockers(
+    facts: Mapping[str, Any], expectation: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    expected = expectation["facts"]
+    fields = (
+        ("resolver", "rust_cargo_ir_resolver_mismatch"),
+        ("packages", "rust_cargo_ir_package_target_set_mismatch"),
+        ("workspace_members", "rust_cargo_ir_workspace_member_set_mismatch"),
+        ("default_members", "rust_cargo_ir_default_member_set_mismatch"),
+    )
+    return [
+        _block(code, detail=content_sha256(facts.get(field)))
+        for field, code in fields if facts.get(field) != expected[field]
+    ]
 
 
 def _package_id(value: str) -> dict[str, str] | None:

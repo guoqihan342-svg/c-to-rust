@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 from validation.tools._project_migration_harness.cargo_raw_output_evidence import (
+    MAX_CARGO_RAW_OUTPUT_BYTES,
     persist_captured_cargo_outputs,
     read_cargo_raw_output,
     validate_cargo_raw_output_reference,
@@ -80,7 +81,7 @@ class ProjectMigrationCargoRawOutputEvidenceTests(unittest.TestCase):
             )
 
     def test_oversized_file_is_rejected_before_reading(self) -> None:
-        data = b"x" * (1024 * 1024 + 1)
+        data = b"x" * (MAX_CARGO_RAW_OUTPUT_BYTES + 1)
         digest = hashlib.sha256(data).hexdigest()
         relative = Path(
             "target/run/verification/raw-output/cargo-check/stdout"

@@ -19,6 +19,7 @@ def finalize_verified_project(
     evidence_reopener: Callable[..., dict[str, Any]],
     project_final_recorder: Callable[..., dict[str, Any]],
     project_completer: Callable[..., dict[str, Any]],
+    rust_cargo_topology_ref: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     out_root = paths["out_root"]
     out_root_rel = paths["out_root_rel"]
@@ -63,6 +64,7 @@ def finalize_verified_project(
         initial_build_ir_ref=initial_build_ir_ref,
         final_build_ir_ref=final_build_ir_ref,
         finalization=finalization,
+        rust_cargo_topology_ref=rust_cargo_topology_ref,
     )
     try:
         reference = write_durable_completion_receipt(out_root, receipt)
