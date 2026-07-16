@@ -11,6 +11,9 @@ from .project_test_inventory_ctest import collect_ctest_json
 from .project_test_inventory_make import (
     collect_make_test_dry_run, inventory_from_make_observation,
 )
+from .project_test_inventory_meson import collect_meson_test_introspection
+from .project_test_inventory_meson_binding import MESON_TEST_ADAPTER
+from .project_test_inventory_meson_parse import inventory_from_meson_observation
 from .project_test_inventory_paths import (
     build_output_index, normalize_argument, normalize_command_path,
     normalize_environment,
@@ -47,13 +50,18 @@ def collect_project_test_inventory(
     if not isinstance(path, str):
         return _blocked("project_test_build_directory_unbound")
     try:
-        build_directory = resolve_repository_path(repo_root, path).parent
+        input_path = resolve_repository_path(repo_root, path)
+        build_directory = input_path.parent
     except (OSError, ValueError):
         return _blocked("project_test_build_directory_unbound")
     if adapter == "ctest-json-v1":
         collected = collect_ctest_json(repo_root, build_directory)
     elif adapter == "make-dry-run-v1":
         collected = collect_make_test_dry_run(repo_root, build_directory)
+    elif adapter == MESON_TEST_ADAPTER:
+        collected = collect_meson_test_introspection(
+            repo_root, build_directory, input_path,
+        )
     else:
         return _blocked("project_test_adapter_unavailable")
     observation = collected.get("observation")
@@ -61,17 +69,19 @@ def collect_project_test_inventory(
         blocker = collected.get("blocker")
         code = blocker.get("code") if isinstance(blocker, Mapping) else None
         return _blocked(str(code or f"project_test_{adapter}_collection_failed"))
-    observation_name = (
-        "project-test-ctest-observation.json"
-        if adapter == "ctest-json-v1" else "project-test-make-observation.json"
-    )
+    observation_name = {
+        "ctest-json-v1": "project-test-ctest-observation.json",
+        "make-dry-run-v1": "project-test-make-observation.json",
+        MESON_TEST_ADAPTER: "project-test-meson-observation.json",
+    }[adapter]
     reference = write_json_artifact(
         output, f"plan/{observation_name}", observation,
     )
-    derive = (
-        inventory_from_ctest_observation
-        if adapter == "ctest-json-v1" else inventory_from_make_observation
-    )
+    derive = {
+        "ctest-json-v1": inventory_from_ctest_observation,
+        "make-dry-run-v1": inventory_from_make_observation,
+        MESON_TEST_ADAPTER: inventory_from_meson_observation,
+    }[adapter]
     return derive(repo_root, build_ir, observation, source_observation=reference)
 
 
@@ -225,4 +235,5 @@ def _blocked(code: str) -> dict[str, Any]:
 
 __all__ = [
     "collect_project_test_inventory", "inventory_from_ctest_observation",
+    "inventory_from_meson_observation",
 ]

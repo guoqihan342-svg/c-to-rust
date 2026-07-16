@@ -11,6 +11,9 @@ from .project_test_inventory_ctest import collect_ctest_json
 from .project_test_inventory_make import (
     collect_make_test_dry_run, inventory_from_make_observation,
 )
+from .project_test_inventory_meson import collect_meson_test_introspection
+from .project_test_inventory_meson_binding import MESON_TEST_ADAPTER
+from .project_test_inventory_meson_parse import inventory_from_meson_observation
 from .rust_project_ir_binding_domain import validate_bound_build_ir
 from .rust_project_ir_binding_io import (
     artifact_identity, read_reference, strict_json,
@@ -77,6 +80,21 @@ def reopen_manifest_project_test_inventory(
     elif adapter == "make-dry-run-v1":
         recollected = collect_make_test_dry_run(root, build_directory)
         derive = inventory_from_make_observation
+    elif adapter == MESON_TEST_ADAPTER:
+        binding = observation.get("build_binding")
+        database = binding.get("compile_database") if isinstance(
+            binding, Mapping,
+        ) else None
+        database_path = database.get("path") if isinstance(
+            database, Mapping,
+        ) else None
+        if not isinstance(database_path, str):
+            raise ValueError("project_test_meson_compile_database_invalid")
+        recollected = collect_meson_test_introspection(
+            root, build_directory,
+            resolve_repository_path(root, database_path),
+        )
+        derive = inventory_from_meson_observation
     else:
         raise ValueError("project_test_inventory_adapter_invalid")
     current_observation = recollected.get("observation")
@@ -127,7 +145,9 @@ def _validate_inventory_shape(value: Mapping[str, Any]) -> None:
     ):
         raise ValueError("project_test_inventory_schema_invalid")
     if value["status"] == "ready" and (
-        value["adapter"] not in {"ctest-json-v1", "make-dry-run-v1"}
+        value["adapter"] not in {
+            "ctest-json-v1", "make-dry-run-v1", MESON_TEST_ADAPTER,
+        }
         or not value["tests"] or value["blockers"]
         or not isinstance(value["source_observation"], Mapping)
     ):

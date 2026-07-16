@@ -9,9 +9,15 @@ from .build_facts import resolve_repository_path
 from .build_adapter import MAKE_REPORT_INPUT_KIND, MAKE_REPORT_RAW_ROLE
 from .compile_database import command_arguments
 from .discovery_database import load_compile_database
+from .project_test_inventory_meson_binding import MESON_TEST_ADAPTER
+from .project_test_inventory_meson_selection import meson_selection_is_bound
 
 
-_ADAPTERS = {"cmake": "ctest-json-v1", "make": "make-dry-run-v1"}
+_ADAPTERS = {
+    "cmake": "ctest-json-v1",
+    "make": "make-dry-run-v1",
+    "meson": MESON_TEST_ADAPTER,
+}
 MAX_COMPILE_EVIDENCE_ENTRIES = 10_000
 MAX_BUILD_IR_EVIDENCE_PATHS = 100_000
 _AUTOMAKE_DEPFILE = re.compile(r"\.(?:Po|Plo|Tpo|Tlo)\Z", re.ASCII)
@@ -30,11 +36,22 @@ def select_project_test_adapter(
     systems = set(raw)
     if len(systems) == 1:
         system = next(iter(systems))
+        if system == "meson":
+            try:
+                _bound_compile_database(
+                    repo_root, _compile_database_binding(discovery), build_ir,
+                )
+                bound = meson_selection_is_bound(repo_root, discovery, build_ir)
+            except (OSError, TypeError, ValueError):
+                return _blocked("project_test_adapter_evidence_invalid")
+            return _selected(MESON_TEST_ADAPTER) if bound else _blocked(
+                "project_test_adapter_unbound"
+            )
         adapter = _ADAPTERS.get(system)
         return _selected(adapter) if adapter else _blocked(
             "project_test_adapter_unavailable"
         )
-    if systems != set(_ADAPTERS):
+    if not systems <= set(_ADAPTERS):
         return _blocked("project_test_adapter_ambiguous")
     try:
         candidates = _mixed_candidates(repo_root, discovery, build_ir)
@@ -88,9 +105,21 @@ def _mixed_candidates(
                 if isinstance((value := entry.get(key)), str)
             )
             candidates.update(_path_candidates(values))
+        if "meson" in set(discovery["build_system_facts"]["systems"]):
+            if meson_selection_is_bound(repo_root, discovery, build_ir):
+                candidates.add("meson")
     elif not candidates:
         raise ValueError("compile evidence unavailable")
-    return candidates
+    return candidates & set(discovery["build_system_facts"]["systems"])
+
+
+def _compile_database_binding(
+    discovery: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    value = discovery.get("compile_database")
+    if not isinstance(value, Mapping) or value.get("status") != "bound":
+        raise ValueError("compile database is not bound")
+    return value
 
 
 def _bound_compile_database(
