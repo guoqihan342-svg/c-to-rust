@@ -9,6 +9,7 @@ import unittest
 from unittest import mock
 
 from validation.tools._ai_candidate_harness_parts import provider
+from validation.tools._ai_candidate_harness_parts import provider_process
 from validation.tools._ai_candidate_harness_parts import provider_runtime
 
 
@@ -19,14 +20,18 @@ class AiCandidateHarnessRuntimeLogTests(unittest.TestCase):
             log_path.write_text("existing log\n", encoding="utf-8")
             secret_marker = "must-not-enter-provider-execution"
 
-            def fake_run(argv: list[str], **kwargs: object) -> object:
+            def fake_run(
+                argv: list[str], timeout_seconds: int, **_kwargs: object,
+            ) -> object:
                 with log_path.open("a", encoding="utf-8") as handle:
                     handle.write(
                         "level=ERROR providerID=zai modelID=glm-5.1 agent=c2rust-migrator "
                         "error='Insufficient balance or no resource package' "
                         f"api_key={secret_marker}\n"
                     )
-                raise subprocess.TimeoutExpired(argv, kwargs["timeout"], output=b"", stderr=b"")
+                raise subprocess.TimeoutExpired(
+                    argv, timeout_seconds, output=b"", stderr=b"",
+                )
 
             argv = [
                 "opencode",
@@ -38,7 +43,7 @@ class AiCandidateHarnessRuntimeLogTests(unittest.TestCase):
                 "prompt",
             ]
             with mock.patch.dict(os.environ, {provider.OPENCODE_LOG_PATH_ENV: str(log_path)}):
-                with mock.patch.object(provider.subprocess, "run", side_effect=fake_run):
+                with mock.patch.object(provider_process, "_run_process", side_effect=fake_run):
                     execution = provider.subprocess_runner(argv, 30)
 
             self.assertTrue(execution.timed_out)
@@ -54,14 +59,18 @@ class AiCandidateHarnessRuntimeLogTests(unittest.TestCase):
             log_path = Path(tmp) / "opencode.log"
             secret_marker = "must-not-enter-first-log-execution"
 
-            def fake_run(argv: list[str], **kwargs: object) -> object:
+            def fake_run(
+                argv: list[str], timeout_seconds: int, **_kwargs: object,
+            ) -> object:
                 log_path.write_text(
                     "level=ERROR providerID=zai modelID=glm-5.1 agent=c2rust-migrator "
                     "error='Insufficient balance or no resource package' "
                     f"api_key={secret_marker}\n",
                     encoding="utf-8",
                 )
-                raise subprocess.TimeoutExpired(argv, kwargs["timeout"], output=b"", stderr=b"")
+                raise subprocess.TimeoutExpired(
+                    argv, timeout_seconds, output=b"", stderr=b"",
+                )
 
             argv = [
                 "opencode",
@@ -73,7 +82,7 @@ class AiCandidateHarnessRuntimeLogTests(unittest.TestCase):
                 "prompt",
             ]
             with mock.patch.dict(os.environ, {provider.OPENCODE_LOG_PATH_ENV: str(log_path)}):
-                with mock.patch.object(provider.subprocess, "run", side_effect=fake_run):
+                with mock.patch.object(provider_process, "_run_process", side_effect=fake_run):
                     execution = provider.subprocess_runner(argv, 30)
 
             self.assertTrue(execution.timed_out)
@@ -90,7 +99,9 @@ class AiCandidateHarnessRuntimeLogTests(unittest.TestCase):
             log_path.write_text("existing log\n", encoding="utf-8")
             secret_marker = "must-not-enter-nonzero-execution"
 
-            def fake_run(argv: list[str], **_kwargs: object) -> object:
+            def fake_run(
+                argv: list[str], _timeout_seconds: int, **_kwargs: object,
+            ) -> object:
                 with log_path.open("a", encoding="utf-8") as handle:
                     handle.write(
                         "level=ERROR providerID=zai modelID=glm-5.1 agent=c2rust-migrator "
@@ -109,7 +120,7 @@ class AiCandidateHarnessRuntimeLogTests(unittest.TestCase):
                 "prompt",
             ]
             with mock.patch.dict(os.environ, {provider.OPENCODE_LOG_PATH_ENV: str(log_path)}):
-                with mock.patch.object(provider.subprocess, "run", side_effect=fake_run):
+                with mock.patch.object(provider_process, "_run_process", side_effect=fake_run):
                     execution = provider.subprocess_runner(argv, 30)
 
             self.assertFalse(execution.timed_out)
@@ -128,7 +139,9 @@ class AiCandidateHarnessRuntimeLogTests(unittest.TestCase):
             log_path = Path(tmp) / "opencode.log"
             log_path.write_text("existing log\n", encoding="utf-8")
 
-            def fake_run(argv: list[str], **_kwargs: object) -> object:
+            def fake_run(
+                argv: list[str], _timeout_seconds: int, **_kwargs: object,
+            ) -> object:
                 with log_path.open("a", encoding="utf-8") as handle:
                     handle.write(
                         "level=ERROR providerID=zai modelID=glm-5.1 agent=c2rust-migrator "
@@ -146,7 +159,7 @@ class AiCandidateHarnessRuntimeLogTests(unittest.TestCase):
                 "prompt",
             ]
             with mock.patch.dict(os.environ, {provider.OPENCODE_LOG_PATH_ENV: str(log_path)}):
-                with mock.patch.object(provider.subprocess, "run", side_effect=fake_run):
+                with mock.patch.object(provider_process, "_run_process", side_effect=fake_run):
                     execution = provider.subprocess_runner(argv, 30)
 
             self.assertEqual(0, execution.returncode)
@@ -175,19 +188,6 @@ class AiCandidateHarnessRuntimeLogTests(unittest.TestCase):
             },
             "messages": [{"sensitive": "must-not-enter-receipt"}],
         }
-        calls: list[list[str]] = []
-
-        def fake_run(argv: list[str], **_kwargs: object) -> object:
-            calls.append(list(argv))
-            if "export" in argv:
-                return subprocess.CompletedProcess(
-                    argv,
-                    0,
-                    stdout=json.dumps(export_payload),
-                    stderr="",
-                )
-            return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
-
         argv = [
             "opencode",
             "run",
@@ -197,12 +197,21 @@ class AiCandidateHarnessRuntimeLogTests(unittest.TestCase):
             "c2rust-candidate",
             "prompt",
         ]
-        with mock.patch.object(provider_runtime.subprocess, "run", side_effect=fake_run):
-            execution = provider_runtime.subprocess_runner(argv, 30)
+        completed = subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+        exported = subprocess.CompletedProcess(
+            ["opencode", "export", session_id],
+            0,
+            stdout=json.dumps(export_payload),
+            stderr="",
+        )
+        with mock.patch.object(provider_process, "_run_process", return_value=completed):
+            with mock.patch.object(
+                provider_runtime.subprocess, "run", return_value=exported,
+            ) as export_run:
+                execution = provider_runtime.subprocess_runner(argv, 30)
 
         self.assertEqual(
-            ["opencode", "export", session_id],
-            calls[1],
+            ["opencode", "export", session_id], export_run.call_args.args[0],
         )
         self.assertEqual("opencode-session-export", execution.identity_receipt["source"])
         self.assertEqual(session_id, execution.identity_receipt["session_id"])
@@ -230,8 +239,8 @@ class AiCandidateHarnessRuntimeLogTests(unittest.TestCase):
         ]
         sensitive_detail = "C:/private/provider/opencode.exe"
         with mock.patch.object(
-            provider.subprocess,
-            "run",
+            provider_process,
+            "_run_process",
             side_effect=FileNotFoundError(sensitive_detail),
         ):
             execution = provider.subprocess_runner(argv, 30)

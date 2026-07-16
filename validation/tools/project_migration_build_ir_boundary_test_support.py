@@ -57,6 +57,7 @@ ADAPTER_ZONE = GENERIC_FACADES | MAKE_MODULES
 FACADE_EXPORTS = {
     module_name("build_adapter"): frozenset(
         "BuildInputSelection BuildInputSelectionLike MAKE_REPORT_INPUT_KIND "
+        "MAKE_REPORT_RAW_ROLE "
         "MAX_BUILD_INPUT_BYTES discover_selected_project "
         "materialize_selected_build_ir_stage normalize_build_input_selection".split()
     ),
@@ -71,6 +72,8 @@ FACADE_IMPORTS = _edges(
      "BuildInputSelectionLike materialize_selected_build_ir_stage"),
     ("project_migration_cli", "build_adapter",
      "BuildInputSelection MAKE_REPORT_INPUT_KIND"),
+    ("project_test_inventory_adapter", "build_adapter",
+     "MAKE_REPORT_INPUT_KIND MAKE_REPORT_RAW_ROLE"),
     ("build_ir_validation", "build_ir_reopen",
      "accepted_provenance_role accepted_raw_roles reproject_bound_build_ir"),
 )

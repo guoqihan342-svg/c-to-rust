@@ -12,6 +12,7 @@ from validation.tools._ai_candidate_harness_parts import provider
 from validation.tools._ai_candidate_harness_parts import provider_command
 from validation.tools._ai_candidate_harness_parts import provider_generation
 from validation.tools._ai_candidate_harness_parts import provider_manifest
+from validation.tools._ai_candidate_harness_parts import provider_process
 from validation.tools._ai_candidate_harness_parts import provider_runtime
 
 
@@ -109,7 +110,7 @@ class AiCandidateProviderSplitTests(unittest.TestCase):
         self.assertIs(provider.candidate_record, provider_manifest.candidate_record)
         self.assertIs(provider.manifest_base, provider_manifest.manifest_base)
 
-    def test_facade_subprocess_patch_point_remains_live(self) -> None:
+    def test_facade_process_runner_patch_point_remains_live(self) -> None:
         completed = subprocess.CompletedProcess(
             args=["opencode"],
             returncode=7,
@@ -119,7 +120,9 @@ class AiCandidateProviderSplitTests(unittest.TestCase):
         self.assertIs(provider.subprocess, provider_runtime.subprocess)
         self.assertIs(provider.subprocess_runner, provider_runtime.subprocess_runner)
 
-        with mock.patch.object(provider.subprocess, "run", return_value=completed) as runner:
+        with mock.patch.object(
+            provider_process, "_run_process", return_value=completed,
+        ) as runner:
             execution = provider.subprocess_runner(["opencode"], 30)
 
         self.assertEqual(7, execution.returncode)

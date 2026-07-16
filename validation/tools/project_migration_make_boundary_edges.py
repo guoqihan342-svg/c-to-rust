@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 PRIVATE_IMPORT_SPECS = (
-    ("build_adapter", "make_build_ir_adapter", "MAKE_INPUT_KIND MakeReportSelection discover_make_project materialize_make_build_ir_stage"),
+    ("build_adapter", "make_build_ir_adapter", "MAKE_INPUT_KIND MAKE_RAW_ROLE MakeReportSelection discover_make_project materialize_make_build_ir_stage"),
     ("build_ir_reopen", "make_build_ir_reopen", "accepted_make_provenance_role accepted_make_raw_roles reproject_bound_make_build_ir"),
     ("make_build_ir_adapter", "make_build_ir_closure_artifacts", "project_make_closure_artifacts"),
     ("make_build_ir_adapter", "make_build_ir_projection", "MAKE_RAW_ROLE normalize_make_translation_units project_make_build_ir"),

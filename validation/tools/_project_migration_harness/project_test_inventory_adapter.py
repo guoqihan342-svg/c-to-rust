@@ -6,10 +6,9 @@ from pathlib import Path
 from typing import Any
 
 from .build_facts import resolve_repository_path
+from .build_adapter import MAKE_REPORT_INPUT_KIND, MAKE_REPORT_RAW_ROLE
 from .compile_database import command_arguments
 from .discovery_database import load_compile_database
-from .make_build_ir_adapter import MAKE_INPUT_KIND
-from .make_build_ir_projection import MAKE_RAW_ROLE
 
 
 _ADAPTERS = {"cmake": "ctest-json-v1", "make": "make-dry-run-v1"}
@@ -64,9 +63,10 @@ def _mixed_candidates(
         if isinstance(item.get("provenance"), Mapping)
     }
     make_role_bound = (
-        MAKE_RAW_ROLE in raw_roles and MAKE_RAW_ROLE in provenance_roles
+        MAKE_REPORT_RAW_ROLE in raw_roles
+        and MAKE_REPORT_RAW_ROLE in provenance_roles
     )
-    make_input_selected = discovery.get("input_kind") == MAKE_INPUT_KIND
+    make_input_selected = discovery.get("input_kind") == MAKE_REPORT_INPUT_KIND
     if make_role_bound != make_input_selected:
         raise ValueError("Make adapter evidence is inconsistent")
     if make_role_bound:

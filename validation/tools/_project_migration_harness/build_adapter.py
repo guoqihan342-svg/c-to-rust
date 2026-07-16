@@ -9,6 +9,7 @@ from typing import Any, TypeAlias
 from .build_ir import is_sha256
 from .make_build_ir_adapter import (
     MAKE_INPUT_KIND,
+    MAKE_RAW_ROLE,
     MakeReportSelection,
     discover_make_project,
     materialize_make_build_ir_stage,
@@ -16,6 +17,7 @@ from .make_build_ir_adapter import (
 
 
 MAKE_REPORT_INPUT_KIND = MAKE_INPUT_KIND
+MAKE_REPORT_RAW_ROLE = MAKE_RAW_ROLE
 MAX_BUILD_INPUT_BYTES = 64 * 1024 * 1024
 _INPUT_KIND = re.compile(r"[a-z][a-z0-9-]{0,95}\Z", re.ASCII)
 
@@ -123,6 +125,7 @@ __all__ = [
     "BuildInputSelection",
     "BuildInputSelectionLike",
     "MAKE_REPORT_INPUT_KIND",
+    "MAKE_REPORT_RAW_ROLE",
     "MAX_BUILD_INPUT_BYTES",
     "discover_selected_project",
     "materialize_selected_build_ir_stage",
