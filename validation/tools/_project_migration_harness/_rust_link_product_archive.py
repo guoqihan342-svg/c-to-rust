@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 from . import native_object_inspection as native
 from . import native_object_symbols_archive as archive
 from ._rust_link_product_common import (
@@ -12,28 +14,38 @@ from ._rust_link_product_common import (
 
 def inspect_archive(data: bytes) -> ProductFacts:
     parse_data = data
+    payload_count: int | None
     try:
         payloads = archive.archive_payloads(parse_data)
     except ValueError as error:
-        if str(error) != "native_object_symbols_archive_long_name_table_invalid":
+        detail = str(error)
+        if detail == "native_object_symbols_archive_duplicate_member_name":
+            parse_data = _normalize_special_fields(data)
+            if parse_data is None:
+                dependency_failure(error)
+            payload_count = None
+        elif detail != "native_object_symbols_archive_long_name_table_invalid":
             dependency_failure(error)
-        parse_data = _normalize_gnu_long_name_padding(data)
-        if parse_data is None:
-            dependency_failure(error)
-        try:
-            payloads = archive.archive_payloads(parse_data)
-        except ValueError as normalized_error:
-            dependency_failure(normalized_error)
+        else:
+            parse_data = _normalize_gnu_long_name_padding(data)
+            if parse_data is None:
+                dependency_failure(error)
+            try:
+                payloads = archive.archive_payloads(parse_data)
+            except ValueError as normalized_error:
+                dependency_failure(normalized_error)
+            payload_count = len(payloads)
     else:
         normalized_fields = _normalize_special_fields(data)
         if normalized_fields is None:
             fail("archive_layout_invalid")
         parse_data = normalized_fields
-    payload_count = len(payloads)
-    del payloads
+        payload_count = len(payloads)
 
     objects = _archive_objects(parse_data)
-    if len(objects) != payload_count or not objects:
+    if not objects or (
+        payload_count is not None and len(objects) != payload_count
+    ):
         fail("archive_member_set_ambiguous")
     first = objects[0][2]
     abi = (first.class_bits, first.endianness, first.machine)
@@ -50,6 +62,18 @@ def inspect_archive(data: bytes) -> ProductFacts:
     if metadata_positions and metadata_positions != [0]:
         fail("archive_rust_metadata_ambiguous")
     product_kind = "rlib" if metadata_positions else "staticlib"
+    members = tuple(
+        {
+            "ordinal": ordinal,
+            "member_name_sha256": hashlib.sha256(name).hexdigest(),
+            "payload_sha256": hashlib.sha256(payload).hexdigest(),
+            "elf_type": "ET_REL",
+            "machine": identity.machine,
+            "class_bits": identity.class_bits,
+            "endianness": identity.endianness,
+        }
+        for ordinal, (name, payload, identity) in enumerate(objects)
+    )
     return ProductFacts(
         product_kind=product_kind,
         object_format="unix-ar",
@@ -59,7 +83,7 @@ def inspect_archive(data: bytes) -> ProductFacts:
         class_bits=first.class_bits,
         endianness=first.endianness,
         member_count=len(objects),
-        member_identity_sha256=native._member_identity(objects),
+        members=members,
     )
 
 
@@ -71,11 +95,15 @@ def _archive_objects(parse_data: bytes) -> list[tuple[bytes, bytes, object]]:
             raise ValueError("native_object_archive_duplicate_long_names")
         names = native._parse_gnu_names(long_tables[0].payload) if long_tables else {}
         objects = []
+        symbol_index_seen = False
         for member in raw_members:
             if member.token == b"//":
                 continue
             name, payload, is_gnu_index = native._resolve_member(member, names)
             if is_gnu_index or name in native._BSD_SYMBOL_NAMES:
+                if symbol_index_seen:
+                    raise ValueError("native_object_archive_duplicate_symbol_index")
+                symbol_index_seen = True
                 continue
             identity = native._parse_elf(payload, required_type=ET_REL)
             objects.append((name, payload, identity))

@@ -20,9 +20,9 @@ OBJECT_KINDS = {
 REPORT_FIELDS = {
     "schema_version", "artifact_kind", "product_kind", "object_kind",
     "object_format", "elf_type", "pie", "machine", "class_bits",
-    "endianness", "member_count", "member_identity_sha256", "file_sha256",
-    "size_bytes", "semantic_gate", "translation_coverage_numerator",
-    "inspection_sha256",
+    "endianness", "member_count", "members", "member_identity_sha256",
+    "file_sha256", "size_bytes", "semantic_gate",
+    "translation_coverage_numerator", "inspection_sha256",
 }
 
 
@@ -145,21 +145,21 @@ def archive(*members: bytes) -> bytes:
 def product_cases() -> list[tuple[str, bytes, str, str, bool, int]]:
     relocatable = relocatable_elf()
     return [
-        ("et-exec", elf_product(ET_EXEC), "bin", "ET_EXEC", False, 1),
+        ("et-exec", elf_product(ET_EXEC), "bin", "ET_EXEC", False, 0),
         (
             "pie-interp",
             elf_product(
                 ET_DYN, class_bits=32, endianness="big", interpreter=True,
             ),
-            "bin", "ET_DYN", True, 1,
+            "bin", "ET_DYN", True, 0,
         ),
         (
             "pie-flags", elf_product(ET_DYN, pie_flag=True),
-            "bin", "ET_DYN", True, 1,
+            "bin", "ET_DYN", True, 0,
         ),
         (
             "cdylib", elf_product(ET_DYN, executable_entry=False),
-            "cdylib", "ET_DYN", False, 1,
+            "cdylib", "ET_DYN", False, 0,
         ),
         (
             "staticlib", archive(ar_member("unit.o/", relocatable)),

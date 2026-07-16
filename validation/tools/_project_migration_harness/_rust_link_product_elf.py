@@ -89,8 +89,8 @@ def inspect_elf(data: bytes) -> ProductFacts:
         machine=identity.machine,
         class_bits=identity.class_bits,
         endianness=identity.endianness,
-        member_count=1,
-        member_identity_sha256=native._member_identity([(b"", data, identity)]),
+        member_count=0,
+        members=(),
     )
 
 

@@ -37,7 +37,7 @@ class ProductFacts:
     class_bits: int
     endianness: str
     member_count: int
-    member_identity_sha256: str
+    members: tuple[dict[str, object], ...]
 
 
 def uint(

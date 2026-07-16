@@ -92,6 +92,46 @@ class RustLinkProductInspectionFailClosedTests(unittest.TestCase):
             ):
                 validate_rust_link_product_inspection(malformed)
 
+    def test_member_schema_and_legacy_reports_fail_closed(self) -> None:
+        payload = relocatable_elf()
+        report = inspect_rust_link_product(
+            archive(ar_member("unit.o/", payload)), "staticlib",
+        )
+        cases = []
+        legacy = copy.deepcopy(report)
+        legacy["schema_version"] = 1
+        cases.append(legacy)
+        non_list = copy.deepcopy(report)
+        non_list["members"] = {}
+        cases.append(non_list)
+        for key, value in (
+            ("ordinal", 1),
+            ("member_name_sha256", "not-a-sha"),
+            ("elf_type", "ET_DYN"),
+            ("machine", 3),
+            ("endianness", []),
+        ):
+            malformed = copy.deepcopy(report)
+            malformed["members"][0][key] = value
+            cases.append(malformed)
+        unexpected = copy.deepcopy(report)
+        unexpected["members"][0]["member_name"] = "unit.o"
+        cases.append(unexpected)
+        for malformed in cases:
+            with self.subTest(malformed=malformed), self.assertRaisesRegex(
+                ValueError, "rust_link_product_report_invalid",
+            ):
+                validate_rust_link_product_inspection(malformed)
+
+    def test_duplicate_members_do_not_hide_duplicate_symbol_indexes(self) -> None:
+        payload = relocatable_elf()
+        data = archive(
+            ar_member("same.o/", payload), ar_member("same.o/", payload),
+            ar_member("/", b"first-index"), ar_member("/", b"second-index"),
+        )
+        with self.assertRaisesRegex(ValueError, "duplicate_symbol_index"):
+            inspect_rust_link_product(data, "staticlib")
+
 
 if __name__ == "__main__":
     unittest.main()
