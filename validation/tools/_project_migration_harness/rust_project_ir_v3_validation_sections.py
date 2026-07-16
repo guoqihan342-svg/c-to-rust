@@ -4,27 +4,24 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .artifacts import checked_relative_path, content_sha256
+from .rust_project_cargo_v3_link_semantics import occurrence_module_order
+from .rust_project_ir_v3_topology_products import input_occurrence_id
 from .rust_project_ir_validation import (
     RustProjectIRError, _FIELDS as _V2_FIELDS, _evidence, _record_shape, _sha,
     _string_list, _text,
 )
 
-_WORKSPACE_KEYS = {
-    "workspace_id", "resolver", "package_ids", "default_package_ids", "evidence",
-}
+_WORKSPACE_KEYS = {"workspace_id", "resolver", "package_ids",
+                   "default_package_ids", "evidence"}
 _PACKAGE_KEYS = {
     "package_id", "name", "build_ir_target_id", "product_kind",
-    "dependency_package_ids", "target_ids", "module_ids", "evidence",
-}
+    "dependency_package_ids", "target_ids", "module_ids", "evidence"}
 _TARGET_KEYS = {
     "target_id", "package_id", "name", "kind", "crate_types", "build_ir_target_id",
-    "module_ids", "input_occurrences", "ordered_link_arguments", "evidence",
-}
+    "module_ids", "input_occurrences", "ordered_link_arguments", "evidence"}
 _MODULE_KEYS = {
     "module_id", "package_id", "target_id", "target_namespace_id", "rust_path",
-    "unit_id", "source_unit_ids", "candidate_sha256", "visibility", "evidence",
-}
-_OCCURRENCE_KEYS = {"ordinal", "role", "dependency_target_id", "binding_sha256"}
+    "unit_id", "source_unit_ids", "candidate_sha256", "visibility", "evidence"}
 _SECTION_IDS = {
     "public_api": "declaration_id", "shared_types": "declaration_id",
     "global_ownership": "declaration_id", "initialization": "init_id",
@@ -48,18 +45,17 @@ def module_id_for_target_candidate(
     })
     return f"module-{digest[:24]}"
 
-
-def validate_v3_sections(
-    value: Mapping[str, Any], candidates: Mapping[str, Mapping[str, Any]],
-    builds: set[str],
-) -> None:
+def validate_v3_sections(value: Mapping[str, Any],
+                         candidates: Mapping[str, Mapping[str, Any]],
+                         builds: set[str]) -> None:
     packages, targets, modules = _topology(value, candidates, builds)
     _interface_sections(value, modules, candidates, builds)
     _topology_state(value, packages, targets, modules)
 
 
 def _topology(
-    value: Mapping[str, Any], candidates: Mapping[str, Mapping[str, Any]], builds: set[str],
+    value: Mapping[str, Any], candidates: Mapping[str, Mapping[str, Any]],
+    builds: set[str],
 ) -> tuple[dict[str, Mapping[str, Any]], dict[str, Mapping[str, Any]],
            dict[str, Mapping[str, Any]]]:
     workspace = value.get("workspace")
@@ -93,11 +89,12 @@ def _topology(
         _string_list(target.get("crate_types"), "target.crate_types", nonempty=True)
         _string_list(target.get("module_ids"), "target.module_ids")
         _ordered_strings(target.get("ordered_link_arguments"), "ordered_link_arguments")
-        _occurrences(target.get("input_occurrences"))
         _evidence(target.get("evidence"), candidates, builds)
+        _occurrences(target)
     modules = _indexed(value.get("modules"), "modules", "module_id", _MODULE_KEYS)
     for module in modules.values():
-        for key in ("package_id", "target_id", "target_namespace_id", "unit_id", "visibility"):
+        for key in ("package_id", "target_id", "target_namespace_id",
+                    "unit_id", "visibility"):
             _text(module.get(key), f"module.{key}")
         checked_relative_path(module.get("rust_path"))
         _sha(module.get("candidate_sha256"), "module.candidate_sha256")
@@ -126,11 +123,10 @@ def _topology(
     return packages, targets, modules
 
 
-def _topology_closure(
-    workspace: Mapping[str, Any], packages: Mapping[str, Mapping[str, Any]],
-    targets: Mapping[str, Mapping[str, Any]], modules: Mapping[str, Mapping[str, Any]],
-    candidates: Mapping[str, Any], *, status: Any,
-) -> None:
+def _topology_closure(workspace: Mapping[str, Any], packages: Mapping[str, Mapping[str, Any]],
+                      targets: Mapping[str, Mapping[str, Any]],
+                      modules: Mapping[str, Mapping[str, Any]],
+                      candidates: Mapping[str, Any], *, status: Any) -> None:
     package_ids, target_ids = set(packages), set(targets)
     if set(workspace["package_ids"]) != package_ids or not set(
         workspace["default_package_ids"]
@@ -170,16 +166,20 @@ def _topology_closure(
         if set(target["module_ids"]) != expected_modules:
             _fail("RustProjectIR v3 target module closure drifted")
         _owner_evidence(target, expected_modules, modules)
+        try:
+            occurrence_module_order(target, {key: modules[key]["source_unit_ids"]
+                                             for key in expected_modules})
+        except ValueError as error:
+            _fail(str(error))
         if any(item["dependency_target_id"] is not None and
                item["dependency_target_id"] not in target_ids
                for item in target["input_occurrences"]):
             _fail("RustProjectIR v3 input occurrence target is unknown")
 
 
-def _interface_sections(
-    value: Mapping[str, Any], modules: Mapping[str, Mapping[str, Any]],
-    candidates: Mapping[str, Mapping[str, Any]], builds: set[str],
-) -> None:
+def _interface_sections(value: Mapping[str, Any], modules: Mapping[str, Mapping[str, Any]],
+                        candidates: Mapping[str, Mapping[str, Any]],
+                        builds: set[str]) -> None:
     for name, id_field in _SECTION_IDS.items():
         records = _indexed(value.get(name), name, id_field, _V2_FIELDS[name])
         for record in records.values():
@@ -198,10 +198,8 @@ def _interface_sections(
             _fail("RustProjectIR v3 initialization reference is unknown")
 
 
-def _topology_state(
-    value: Mapping[str, Any], packages: Mapping[str, Any],
-    targets: Mapping[str, Any], modules: Mapping[str, Any],
-) -> None:
+def _topology_state(value: Mapping[str, Any], packages: Mapping[str, Any],
+                    targets: Mapping[str, Any], modules: Mapping[str, Any]) -> None:
     status, blockers = value.get("topology_status"), value.get("topology_blockers")
     if status not in {"ready", "blocked"} or not isinstance(blockers, list):
         _fail("RustProjectIR v3 topology state is invalid")
@@ -243,8 +241,8 @@ def _indexed(value: Any, label: str, id_field: str,
     return result
 
 
-def _evidence_sets(value: Any, candidates: Mapping[str, Mapping[str, Any]],
-                   builds: set[str]) -> tuple[set[str], set[str], set[str]]:
+def _evidence_sets(value: Any, candidates: Mapping[str, Mapping[str, Any]], builds: set[str]
+                   ) -> tuple[set[str], set[str], set[str]]:
     _evidence(value, candidates, builds)
     return (set(value["dag_unit_ids"]), set(value["candidate_sha256s"]),
             set(value["build_ir_sha256s"]))
@@ -259,19 +257,29 @@ def _owner_evidence(owner: Mapping[str, Any], module_ids: set[str],
         _fail("RustProjectIR v3 owner evidence does not cover its modules")
 
 
-def _occurrences(value: Any) -> None:
+def _occurrences(target: Mapping[str, Any]) -> None:
+    value = target.get("input_occurrences")
     if not isinstance(value, list):
         _fail("RustProjectIR v3 input_occurrences must be an array")
+    try:
+        explicit_order = occurrence_module_order(target)
+    except ValueError as error:
+        _fail(str(error))
+    build_shas = target["evidence"]["build_ir_sha256s"]
+    if explicit_order is not None and len(build_shas) != 1:
+        _fail("RustProjectIR v3 occurrence BuildIR binding is ambiguous")
     ordinals = []
     for item in value:
-        if not isinstance(item, Mapping) or set(item) != _OCCURRENCE_KEYS:
-            _fail("RustProjectIR v3 input occurrence schema is invalid")
         ordinal = item.get("ordinal")
         if isinstance(ordinal, bool) or not isinstance(ordinal, int) or ordinal < 0:
             _fail("RustProjectIR v3 input occurrence ordinal is invalid")
         _text(item.get("role"), "input occurrence role")
         if item.get("dependency_target_id") is not None:
             _text(item["dependency_target_id"], "input occurrence dependency_target_id")
+        if explicit_order is not None and item["occurrence_id"] != input_occurrence_id(
+            build_shas[0], target["build_ir_target_id"], ordinal,
+        ):
+            _fail("RustProjectIR v3 occurrence identity is invalid")
         _sha(item.get("binding_sha256"), "input occurrence binding_sha256")
         ordinals.append(ordinal)
     if ordinals != list(range(len(value))):

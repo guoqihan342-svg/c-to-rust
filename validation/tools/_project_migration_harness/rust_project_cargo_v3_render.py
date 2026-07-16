@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .artifacts import canonical_json_bytes
+from .rust_project_cargo_v3_link_semantics import occurrence_module_order
 from .rust_project_cargo_v3_projection_validation import (
     validate_rust_project_cargo_v3_projection,
 )
@@ -93,13 +94,18 @@ def _require_ir_binding(ir, projection, packages, targets, modules) -> None:
         "dependency_package_ids", "target_ids", "module_ids",
     )
     target_fields = (
-        "package_id", "name", "kind", "build_ir_target_id", "crate_types", "module_ids",
+        "package_id", "name", "kind", "build_ir_target_id", "crate_types",
         "input_occurrences", "ordered_link_arguments",
     )
     module_fields = ("package_id", "target_id", "unit_id")
     _equal_fields(packages, ir_packages, package_fields)
     _equal_fields(targets, ir_targets, target_fields)
     _equal_fields(modules, ir_modules, module_fields)
+    for target_id, target in targets.items():
+        expected = occurrence_module_order(ir_targets[target_id])
+        expected = ir_targets[target_id]["module_ids"] if expected is None else expected
+        if target["module_ids"] != expected:
+            raise ValueError("rust_project_cargo_v3_projection_module_order_drift")
     defaults = sorted(
         package_root(str(item))
         for item in ir["workspace"]["default_package_ids"]

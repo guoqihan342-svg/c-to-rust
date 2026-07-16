@@ -9,6 +9,7 @@ from .rust_project_cargo_v3_projection_analysis import (
     block, entry_module, link_order_unproven, public_namespaces, root_path,
     topology_blockers,
 )
+from .rust_project_cargo_v3_link_semantics import occurrence_module_order
 from .rust_project_cargo_v3_projection_validation import (
     ARTIFACT_KIND, SCHEMA_VERSION, cargo_alias, module_identifier,
     package_member_path, validate_rust_project_cargo_v3_projection,
@@ -50,7 +51,11 @@ def derive_rust_project_cargo_v3_projection(
     targets = []
     for target_id in sorted(ir_targets):
         raw = ir_targets[target_id]
-        owned = [module_map[key] for key in raw["module_ids"]]
+        occurrence_order = occurrence_module_order(raw)
+        module_ids = (
+            list(raw["module_ids"]) if occurrence_order is None else occurrence_order
+        )
+        owned = [module_map[key] for key in module_ids]
         entry = entry_module(raw, owned, units, blockers)
         if link_order_unproven(raw):
             block(blockers, "link_occurrence_order_unproven", "target", target_id)
@@ -60,7 +65,7 @@ def derive_rust_project_cargo_v3_projection(
             "build_ir_target_id": str(raw["build_ir_target_id"]),
             "crate_types": sorted(raw["crate_types"]),
             "root_path": root_path(str(raw["package_id"]), str(raw["kind"])),
-            "entry_module_id": entry, "module_ids": sorted(raw["module_ids"]),
+            "entry_module_id": entry, "module_ids": module_ids,
             "input_occurrences": _clone(raw["input_occurrences"]),
             "ordered_link_arguments": list(raw["ordered_link_arguments"]),
             "export_namespace_sha256": namespace_hashes[target_id],

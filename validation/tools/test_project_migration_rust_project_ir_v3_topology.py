@@ -9,6 +9,9 @@ from validation.tools._project_migration_harness.rust_project_ir_v3 import (
 from validation.tools._project_migration_harness.rust_project_ir_v3_topology import (
     derive_rust_project_ir_v3_topology,
 )
+from validation.tools._project_migration_harness.rust_project_ir_v3_topology_products import (
+    input_occurrence_id,
+)
 from validation.tools._project_migration_harness.rust_project_ir_v3_validation import (
     module_id_for_target_candidate,
 )
@@ -19,8 +22,8 @@ ARTIFACT = "a" * 64
 
 
 class RustProjectIRV3TopologyTests(unittest.TestCase):
-    def test_archive_executable_dependency_and_ordered_duplicates(self) -> None:
-        archive = _product("archive", "archive", ["obj-lib", "obj-lib"], [])
+    def test_archive_executable_dependency_and_object_mapping(self) -> None:
+        archive = _product("archive", "archive", ["obj-lib"], [])
         binary = _product(
             "application", "link", ["archive", "obj-main"],
             ["-Wl,--as-needed"], name="lib-misleading.so",
@@ -48,13 +51,28 @@ class RustProjectIRV3TopologyTests(unittest.TestCase):
             [packages["archive"]["package_id"]],
             packages["application"]["dependency_package_ids"],
         )
-        self.assertEqual([0, 1], [
+        self.assertEqual([0], [
             item["ordinal"] for item in targets["archive"]["input_occurrences"]
         ])
+        archive_input = targets["archive"]["input_occurrences"][0]
+        self.assertEqual("obj-lib", archive_input["object_target_id"])
+        self.assertEqual("lib", archive_input["source_unit_id"])
+        self.assertIsNone(archive_input["dependency_target_id"])
         self.assertEqual(
-            targets["archive"]["input_occurrences"][0]["binding_sha256"],
-            targets["archive"]["input_occurrences"][1]["binding_sha256"],
+            input_occurrence_id(ARTIFACT, "archive", 0),
+            archive_input["occurrence_id"],
         )
+        application_inputs = targets["application"]["input_occurrences"]
+        self.assertEqual([
+            input_occurrence_id(ARTIFACT, "application", ordinal)
+            for ordinal in range(2)
+        ], [item["occurrence_id"] for item in application_inputs])
+        self.assertEqual(targets["archive"]["target_id"],
+                         application_inputs[0]["dependency_target_id"])
+        self.assertTrue(all(application_inputs[0][key] is None for key in (
+            "object_target_id", "source_unit_id", "module_id",
+        )))
+        self.assertEqual("obj-main", application_inputs[1]["object_target_id"])
         self.assertEqual(
             ["-Wl,--as-needed"], targets["application"]["ordered_link_arguments"],
         )
@@ -159,6 +177,10 @@ class RustProjectIRV3TopologyTests(unittest.TestCase):
         for label, build, scope, code, include_scope in cases:
             with self.subTest(label=label):
                 scopes = {"group": scope} if include_scope else {}
+                if label == "missing-scope":
+                    with self.assertRaisesRegex(ValueError, "object_input_unowned"):
+                        _derive([build], scopes, [_candidate("group")])
+                    continue
                 topology = _derive([build], scopes, [_candidate("group")])
                 self.assertEqual("blocked", topology["topology_status"])
                 self.assertIn(code, _codes(topology))

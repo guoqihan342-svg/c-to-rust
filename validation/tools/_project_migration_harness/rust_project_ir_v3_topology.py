@@ -112,6 +112,12 @@ def derive_rust_project_ir_v3_topology(
             if dependency in products
         })
         suffix = content_sha256({"build_ir_target_id": raw_id})[:16]
+        input_occurrences = project_input_occurrences(
+            product["raw"], products, targets,
+            _object_bindings(module_ids, modules, scopes, targets),
+            build_ir_artifact_sha256=product["evidence_sha256"],
+            consumer_target_id=raw_id,
+        )
         packages.append({
             "package_id": product["package_id"], "name": f"package_{suffix}",
             "build_ir_target_id": raw_id, "product_kind": product["product_kind"],
@@ -124,9 +130,7 @@ def derive_rust_project_ir_v3_topology(
             "name": f"target_{suffix}", "kind": product["rust_kind"],
             "crate_types": list(product["crate_types"]),
             "build_ir_target_id": raw_id, "module_ids": module_ids,
-            "input_occurrences": project_input_occurrences(
-                product["raw"], products,
-            ),
+            "input_occurrences": input_occurrences,
             "ordered_link_arguments": list(product["raw"].get(
                 "ordered_link_arguments", [])),
             "evidence": evidence,
@@ -233,6 +237,29 @@ def _index_builds(builds: Sequence[Mapping[str, Any]], bindings: Mapping[str, st
                 raise ValueError("rust_project_ir_v3_topology_build_unit_collision")
             units[unit_id] = unit
     return targets, units, collisions
+
+def _object_bindings(module_ids, modules, scopes, targets):
+    result = {}
+    for module_id in module_ids:
+        module = modules[module_id]
+        scope = scopes[module["unit_id"]]
+        records = scope["unit_scopes"]
+        if [item["unit_id"] for item in records] != module["source_unit_ids"]:
+            raise ValueError("rust_project_ir_v3_topology_object_owner_invalid")
+        for item in records:
+            object_id = str(item["object_owner_target_id"])
+            target = targets.get(object_id)
+            if target is None or target["target"].get("kind") != "object":
+                raise ValueError("rust_project_ir_v3_topology_object_owner_invalid")
+            owner = {
+                "source_unit_id": str(item["unit_id"]),
+                "module_id": module_id,
+                "module_source_unit_ids": list(module["source_unit_ids"]),
+            }
+            if object_id in result and result[object_id] != owner:
+                raise ValueError("rust_project_ir_v3_topology_object_owner_conflict")
+            result[object_id] = owner
+    return result
 
 def _ancestors(target_id: str, targets: Mapping[str, Any]) -> set[str]:
     pending = list(targets[target_id]["target"].get("dependency_target_ids", []))

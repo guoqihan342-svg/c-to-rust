@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .artifacts import checked_relative_path, content_sha256
+from .rust_project_cargo_v3_link_semantics import occurrence_module_order
 from .rust_project_cargo_v3_projection_ready import validate_ready_projection
 
 
@@ -12,32 +13,21 @@ SCHEMA_VERSION = 1
 ARTIFACT_KIND = "rust-project-cargo-v3-workspace-projection"
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
-_TOP_KEYS = {
-    "schema_version", "artifact_kind", "rust_project_ir_sha256",
-    "source_layout_sha256", "workspace", "packages", "targets", "modules",
-    "status", "blockers", "claim_boundary", "projection_sha256",
-}
-_WORKSPACE_KEYS = {
-    "workspace_id", "resolver", "member_paths", "default_member_paths",
-}
+_TOP_KEYS = {"schema_version", "artifact_kind", "rust_project_ir_sha256", "source_layout_sha256",
+             "workspace", "packages", "targets", "modules",
+             "status", "blockers", "claim_boundary", "projection_sha256"}
+_WORKSPACE_KEYS = {"workspace_id", "resolver", "member_paths", "default_member_paths"}
 _PACKAGE_KEYS = {
     "package_id", "name", "manifest_path", "build_ir_target_id",
-    "product_kind", "dependency_package_ids", "dependency_aliases",
-    "target_ids", "module_ids",
-}
+    "product_kind", "dependency_package_ids", "dependency_aliases", "target_ids", "module_ids"}
 _TARGET_KEYS = {
     "target_id", "package_id", "name", "kind", "build_ir_target_id",
     "crate_types", "root_path", "entry_module_id", "module_ids", "input_occurrences",
-    "ordered_link_arguments", "export_namespace_sha256",
-}
+    "ordered_link_arguments", "export_namespace_sha256"}
 _MODULE_KEYS = {
     "module_id", "package_id", "target_id", "unit_id", "identifier",
     "source_path", "render_path", "source_sha256", "top_level_names",
-    "binary_entry_count", "test_entry_count",
-}
-_OCCURRENCE_KEYS = {
-    "ordinal", "role", "dependency_target_id", "binding_sha256",
-}
+    "binary_entry_count", "test_entry_count"}
 _BLOCKER_KEYS = {"code", "entity_kind", "entity_id"}
 _PRODUCT_KINDS = {"static-library", "shared-library", "executable"}
 _TARGET_KINDS = {"lib", "cdylib", "bin"}
@@ -136,8 +126,10 @@ def _targets(values: Mapping[str, Mapping[str, Any]]) -> None:
         entry = target.get("entry_module_id")
         if entry is not None:
             _text(entry, "target.entry_module_id")
-        _strings(target.get("module_ids"), "target.module_ids")
-        _occurrences(target.get("input_occurrences"))
+        _ordered_unique(target.get("module_ids"), "target.module_ids")
+        order = _occurrences(target.get("input_occurrences"))
+        if order is not None and target["module_ids"] != order:
+            _fail("Cargo v3 projection target module order drifted")
         _ordered_strings(target.get("ordered_link_arguments"), "ordered_link_arguments")
         _sha(target.get("export_namespace_sha256"), "export_namespace_sha256")
 
@@ -243,24 +235,33 @@ def _indexed(value, label, identity, fields):
     return result
 
 
-def _occurrences(value: Any) -> None:
+def _occurrences(value: Any) -> list[str] | None:
     if not isinstance(value, list):
         _fail("Cargo v3 projection input occurrences must be an array")
+    try:
+        order = occurrence_module_order({"input_occurrences": value})
+    except ValueError as error:
+        _fail(str(error))
     for ordinal, item in enumerate(value):
-        if not isinstance(item, Mapping) or set(item) != _OCCURRENCE_KEYS:
-            _fail("Cargo v3 projection input occurrence schema is invalid")
         if item.get("ordinal") != ordinal:
             _fail("Cargo v3 projection input occurrence order drifted")
         _text(item.get("role"), "input occurrence role")
         if item.get("dependency_target_id") is not None:
             _text(item["dependency_target_id"], "input occurrence dependency target")
         _sha(item.get("binding_sha256"), "input occurrence binding_sha256")
+    return order
 
 
 def _strings(value, label, *, nonempty=False):
     _ordered_strings(value, label)
     if (nonempty and not value) or value != sorted(set(value)):
         _fail(f"Cargo v3 projection {label} is not a canonical set")
+
+
+def _ordered_unique(value, label):
+    _ordered_strings(value, label)
+    if len(value) != len(set(value)):
+        _fail(f"Cargo v3 projection {label} contains duplicates")
 
 
 def _ordered_strings(value, label):

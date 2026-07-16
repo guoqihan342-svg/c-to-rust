@@ -141,18 +141,15 @@ def render_target_root(
             raise ValueError("rust_project_cargo_v3_dependency_alias_collision")
         lines.extend([f"pub use {alias}::*;", ""])
     for module in modules:
-        if module["module_id"] == entry_id:
-            continue
         relative = posixpath.relpath(str(module["render_path"]), root_dir)
+        if module["module_id"] == entry_id:
+            lines.extend([f"include!({_rust_string(relative)});", ""])
+            continue
         name = module_name(module)
         lines.extend([
             f"#[path = {_rust_string(relative)}]", f"mod {name};",
             f"pub use self::{name}::*;", "",
         ])
-    if entry_id is not None:
-        entry = next(item for item in modules if item["module_id"] == entry_id)
-        relative = posixpath.relpath(str(entry["render_path"]), root_dir)
-        lines.append(f"include!({_rust_string(relative)});")
     return ("\n".join(lines).rstrip() + "\n").encode("utf-8")
 
 
