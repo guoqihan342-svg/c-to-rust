@@ -34,7 +34,7 @@
     {
       "path": "crates/c2r-translator/Cargo.lock",
       "role": "rust-translator-dependency-lock",
-      "sha256": "4dc5876cddcb2b539fdabdcf0078d64ed4e8c1ddae95a30bf8b80520381e9fdc"
+      "sha256": "0d463cfaf506a76404644fba374d860aa6fffc2090f99837c3e7ebc6d8304675"
     },
     {
       "path": "validation/l2_slices/Cargo.lock",
