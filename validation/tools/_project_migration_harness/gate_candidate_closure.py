@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .candidate_pool_selection import load_candidate_pool
 from .ledger_security import LedgerError
 
 
@@ -60,7 +61,7 @@ def verification_candidate_members(
     members = []
     for unit_id in sorted(closure):
         if unit_id in roots:
-            members.append(_latest_candidate(connection, run_id, unit_id))
+            members.append(_selected_candidate(connection, run_id, unit_id))
             continue
         state = states[unit_id]
         if state["resumable_status"] != "last_good" or not state["last_good_artifact_id"]:
@@ -96,18 +97,11 @@ def _dependency_map(
     return result
 
 
-def _latest_candidate(connection: Any, run_id: str, unit_id: str) -> dict[str, str]:
-    latest = connection.execute(
-        """select a.artifact_id,a.content_sha256 from artifacts a join attempts t
-             on t.attempt_id=a.attempt_id
-           where a.run_id=? and a.unit_id=? and a.kind='rust-candidate'
-             and a.status='candidate' and t.status='completed'
-             and t.role in ('translator','repairer') order by a.rowid desc limit 1""",
-        (run_id, unit_id),
-    ).fetchone()
-    if latest is None:
-        raise LedgerError("active verification unit has no latest completed candidate")
-    return _member(unit_id, latest["artifact_id"], latest["content_sha256"])
+def _selected_candidate(connection: Any, run_id: str, unit_id: str) -> dict[str, str]:
+    selected = load_candidate_pool(connection, run_id, unit_id)["selected_candidate"]
+    if selected is None:
+        raise LedgerError("active verification unit has no selected completed candidate")
+    return _member(unit_id, selected["artifact_id"], selected["content_sha256"])
 
 
 def _transitive_dependencies(

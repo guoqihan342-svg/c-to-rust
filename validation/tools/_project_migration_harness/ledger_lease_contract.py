@@ -17,7 +17,7 @@ _CLAIM_KEYS = {
 _ROLE_STATES = {
     "planner": frozenset({"pending", "retry-ready"}),
     "translator": frozenset({"pending", "candidate-ready"}),
-    "reviewer": frozenset({"candidate-ready", "gate-pending"}),
+    "reviewer": frozenset({"candidate-ready", "gate-pending", "retry-ready"}),
     "repairer": frozenset({"retry-ready"}),
 }
 

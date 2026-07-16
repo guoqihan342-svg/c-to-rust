@@ -14,6 +14,7 @@ from .project_knowledge import validate_knowledge_reference
 from .model_safe_test_contract import validate_test_contract_reference
 from .schedule_graph import critical_path_weights
 from .candidate_strategy import validate_candidate_strategy
+from .candidate_pool_selection import validate_candidate_pool_summary
 from .project_interface_model_context import validate_model_coordinator_context
 from .context_required_facts import context_retrieval_ready
 from .context_frontier_state import (
@@ -162,15 +163,28 @@ def _deferred_reasons(
         needs_planner = "planner_decision_sha256" in assignment.get("launch_policy", {}).get("requires", [])
         if needs_planner and decision not in {"translate_with_context", "preserve_ffi_boundary"}:
             return ["planner_decision_not_translation"]
+        candidate_pool = _candidate_pool(facts)
         if sha_fact(facts, "candidate_artifact_sha256") is not None:
-            return ["candidate_already_recorded"]
+            if candidate_pool is None:
+                return ["candidate_already_recorded"]
+            if not candidate_pool["needs_additional_candidate"]:
+                return ["candidate_pool_ready"]
+        elif candidate_pool is not None and candidate_pool["attempt_budget_exhausted"]:
+            return ["candidate_generation_exhausted"]
         return [] if state.get("status") in {"pending", "candidate-ready"} else ["translator_state_not_ready"]
     if role == "reviewer":
         if sha_fact(facts, "candidate_artifact_sha256") is None:
             return ["candidate_artifact_missing"]
+        candidate_pool = _candidate_pool(facts)
+        if candidate_pool is not None and not candidate_pool["pool_ready"]:
+            return ["candidate_pool_incomplete"]
+        if sha_fact(facts, "failed_gate_result_sha256") is not None:
+            return ["candidate_host_gate_failed"]
         if sha_fact(facts, "review_artifact_sha256") is not None:
             return ["review_already_recorded"]
-        return [] if state.get("status") in {"candidate-ready", "gate-pending"} else ["reviewer_state_not_ready"]
+        return [] if state.get("status") in {
+            "candidate-ready", "gate-pending", "retry-ready",
+        } else ["reviewer_state_not_ready"]
     if role == "repairer":
         mode = repair_mode(facts)
         if mode is None:
@@ -184,6 +198,11 @@ def _string(value: Mapping[str, Any], key: str) -> str:
     if not isinstance(result, str) or not result:
         raise ValueError(f"{key} must be a non-empty string")
     return result
+
+
+def _candidate_pool(facts: Mapping[str, Any]) -> dict[str, Any] | None:
+    value = facts.get("candidate_pool")
+    return None if value is None else validate_candidate_pool_summary(value)
 
 
 def _frontier_binding(state: Mapping[str, Any]) -> dict[str, Any] | None:

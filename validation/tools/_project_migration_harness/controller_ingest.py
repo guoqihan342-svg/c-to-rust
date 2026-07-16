@@ -154,7 +154,10 @@ def _materialize_result(
     root = PurePosixPath(out_root)
     if normalized["artifact_kind"] == "rust-candidate":
         digest = str(normalized["candidate_sha256"])
-        relative = (root / f"candidate-{digest[:24]}.rs").as_posix()
+        attempt_key = content_sha256(attempt_id)[:10]
+        relative = (
+            root / f"candidate-{digest[:20]}-{attempt_key}.rs"
+        ).as_posix()
         reference = write_bytes_artifact(
             harness_root, relative, bytes(normalized["candidate_source"])
         )
@@ -163,7 +166,7 @@ def _materialize_result(
         if boundary is not None:
             boundary_ref = write_json_artifact(
                 harness_root,
-                (root / f"boundary-{digest[:24]}.json").as_posix(),
+                (root / f"boundary-{digest[:20]}-{attempt_key}.json").as_posix(),
                 boundary,
             )
             metadata["boundary_manifest"] = boundary_ref

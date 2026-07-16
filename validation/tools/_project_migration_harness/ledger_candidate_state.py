@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from .candidate_pool_selection import load_candidate_pool
 from .gate_evidence import read_content_addressed_json
 from .gate_candidate_sets import assert_verification_candidate_set
 from .ledger_schema import atomic
@@ -116,6 +117,7 @@ class CandidateStateMixin:
 def candidate_row(
     connection: Any, run_id: str, unit_id: str, artifact_id: str, *, active: bool = False,
 ) -> Any:
+    selected = load_candidate_pool(connection, run_id, unit_id)["selected_candidate"]
     row = connection.execute(
         """select a.attempt_id,a.worker_id,a.fencing_token,a.status,a.content_sha256,
                   a.repo_rel_path,a.metadata_json as artifact_metadata_json,
@@ -123,20 +125,19 @@ def candidate_row(
                   r.status as run_status
            from artifacts a join attempts t on t.attempt_id=a.attempt_id
            join project_runs r on r.run_id=a.run_id
-           where a.run_id=? and a.unit_id=? and a.artifact_id=?
-             and a.rowid=(select max(newer.rowid) from artifacts newer
-                 where newer.run_id=a.run_id and newer.unit_id=a.unit_id
-                   and newer.status='candidate')""",
+           where a.run_id=? and a.unit_id=? and a.artifact_id=?""",
         (run_id, unit_id, artifact_id),
     ).fetchone()
     if (
-        not row
+        selected is None
+        or selected["artifact_id"] != artifact_id
+        or not row
         or row["status"] != "candidate"
         or row["attempt_status"] != "completed"
         or row["role"] not in {"translator", "repairer"}
         or (active and row["run_status"] != "active")
     ):
-        raise LedgerError("host verification requires the latest completed candidate")
+        raise LedgerError("host verification requires the host-selected completed candidate")
     return row
 
 

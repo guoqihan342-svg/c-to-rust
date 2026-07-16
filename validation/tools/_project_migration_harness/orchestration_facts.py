@@ -9,6 +9,7 @@ from typing import Any
 from .artifacts import content_sha256
 from .build_facts import is_linklike
 from .candidate_strategy import select_candidate_strategy
+from .candidate_pool_selection import load_candidate_pool
 from .gate_authority import (
     candidate_authority, candidate_kind, validate_candidate_verdict,
 )
@@ -39,6 +40,18 @@ def build_gate_facts(
                 (run_id,),
             ).fetchall()
         }
+        translator_units = {
+            str(row["unit_id"])
+            for row in connection.execute(
+                """select unit_id from assignments
+                   where run_id=? and role='translator'""",
+                (run_id,),
+            ).fetchall()
+        }
+        candidate_pools = {
+            unit_id: load_candidate_pool(connection, run_id, unit_id)
+            for unit_id in translator_units
+        }
     latest_receipt = ledger.load_latest_project_interface_receipt(run_id=run_id)
     by_unit: dict[str, list[dict[str, Any]]] = {}
     by_id: dict[tuple[str, str], dict[str, Any]] = {}
@@ -65,13 +78,14 @@ def build_gate_facts(
                 raise ValueError("planner decision artifact is malformed")
             facts["planner_decision"] = dict(decision)
             facts["planner_decision_sha256"] = content_sha256(decision)
-        candidates = [
-            item
-            for item in unit_artifacts
-            if item["kind"] == "rust-candidate" and item["status"] == "candidate"
-        ]
-        if candidates:
-            candidate = candidates[-1]
+        candidate_pool = candidate_pools.get(unit_id)
+        if candidate_pool is not None:
+            facts["candidate_pool"] = candidate_pool["summary"]
+        candidate = (
+            candidate_pool["selected_candidate"]
+            if candidate_pool is not None else None
+        )
+        if candidate is not None:
             facts.update(_artifact_facts("candidate_artifact", harness_root, candidate))
             candidate_records = [
                 item
