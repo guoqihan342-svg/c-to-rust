@@ -10,8 +10,7 @@ from validation.tools._project_migration_harness.candidate_semantic_backend_cont
     parse_scalar_function,
 )
 from validation.tools._project_migration_harness.candidate_semantic_integer_macros import (
-    MAX_MACRO_DEFINITIONS,
-    MAX_MACRO_TOTAL_SOURCE_BYTES,
+    MAX_MACRO_DEFINITIONS, MAX_MACRO_TOTAL_SOURCE_BYTES,
     collect_integer_macro_boundaries,
 )
 from validation.tools._project_migration_harness.candidate_semantic_stimuli import (

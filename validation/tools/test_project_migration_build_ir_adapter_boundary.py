@@ -15,6 +15,9 @@ ALLOWED_MODULES = {
     "build_ir_meson.py",
     "generated_build_facts.py",
     "generated_closure.py",
+    "project_test_inventory_meson_binding.py",
+    "project_test_inventory_meson_parse.py",
+    "project_test_inventory_meson_selection.py",
 }
 
 

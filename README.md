@@ -17,9 +17,9 @@
 | Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
-| 当前翻译任务 | P0-A19 g4 独立 Cargo 重开与 h4 项目测试适配扩展；P0-A18c/P0-A10 保留为有限回归 |
+| 当前翻译任务 | P0-A19 g4 独立 Cargo 重开与 h4 剩余项目测试适配扩展；P0-A18c/P0-A10 保留为有限回归 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
-| P0-A19 有限门禁 | Windows 全量 1157 项：1133 通过、24 项平台条件跳过；WSL 双沙箱项目逻辑 live 4/4 通过 |
+| P0-A19 有限门禁 | Windows 项目迁移全量 1250 项：1224 通过、26 项平台条件跳过；WSL 双沙箱项目逻辑 live 4/4 通过 |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | canonical roadmap + code/tests + harness evidence gates |
 
@@ -95,7 +95,7 @@ schema v7 还增加了不可变 project diagnostic intake：host 会重开当前
 
 只有在新 managed generation 上由同一 host gate 产生更高 epoch 的新 pass，才能写出内容寻址 revalidation receipt。结算事务会同时重开 source intake、当前 cohort、原始与新 project input、ledger gate record、raw observation/evidence、分类回执、候选 IR/interface 和当前 generation，然后注册 successor receipt、resolve 目标并取消已被 successor 取代的同队列项；复验失败则回滚旧候选、登记新诊断并继承 attempt 预算。该闭环已接入 Cargo compile/link 的严格分类路径；initialization、feature/cfg、ABI 专属 verifier、A19e7 独立进程 capability、A19e8 non-degrading SandboxBackend 和完整 project-final semantic acceptance 仍未完成，AI 候选不会增加 translator numerator。
 
-正向完成链现在会自动推进 gate-pending candidate 的 compile、oracle-replay、negative、unsafe-alias、ABI-layout、final 和 promotion，再执行集成、Cargo、C/Rust 项目 oracle 以及项目 gate 汇总。逻辑不一致会按 target/module/unit 归因并原子回到 AI repair，且会包含失败测试可执行包的传递 Rust package 依赖单元；`run-to-completion` 会继续 dispatch repairer、reviewer 和复验，直至完成或产生稳定 blocker。完成 receipt 先原子落盘并 fsync，随后单个 SQLite 事务把 unit/run 完成 transition 绑定到 receipt SHA；重启会重开 receipt、最终项目门和 transition，缺失或漂移只能 blocked。当前支持 CMake/CTest direct executable、内容绑定的 Automake `check` 与受限 Make `test`；Meson、任意显式 target、递归 Make、自定义 runner、Kconfig、stdin、声明式/隐式 fixture、完整资源合同、双向 zero-test/遗漏证明和真实 held-out 整项目验收仍未完成，因此不能称为任意 C 项目或 `competition-exact` 已通过。
+正向完成链现在会自动推进 gate-pending candidate 的 compile、oracle-replay、negative、unsafe-alias、ABI-layout、final 和 promotion，再执行集成、Cargo、C/Rust 项目 oracle 以及项目 gate 汇总。逻辑不一致会按 target/module/unit 归因并原子回到 AI repair，且会包含失败测试可执行包的传递 Rust package 依赖单元；`run-to-completion` 会继续 dispatch repairer、reviewer 和复验，直至完成或产生稳定 blocker。数据库侧已增加单调 `completion_epoch` 与 `active -> finalizing -> completed`：进入 finalizing 会冻结并重开同一 cohort/generation/gate/invariant，拒绝新 lease、attempt、repair、project gate 和 provider start；完成 receipt v2 先原子落盘并 fsync，随后单个 SQLite 事务把 unit/run 完成 transition 绑定到 receipt SHA。重启会复用同一 epoch 并重开全部绑定，缺失或漂移只能 blocked。现有 `CURRENT` 仍未实现绑定 epoch/cohort/generation/receipt 的 prepare/commit 两阶段发布，所以完整完成协议尚未关闭。当前支持 CMake/CTest direct executable、内容绑定的 Automake `check`、受限 Make `test` 与有界 Meson direct-executable inventory；任意显式 target、递归 Make、自定义 runner、Kconfig、stdin、声明式/隐式 fixture、完整资源合同、双向 zero-test/遗漏证明和真实 held-out 整项目验收仍未完成，因此不能称为任意 C 项目或 `competition-exact` 已通过。
 
 比赛入口如下。`migrate` 是外层 OpenCode 唯一应调用的状态机；它在同一命令内规划并运行到完成或稳定 blocker。`plan`、`preflight`、`dispatch`、`complete` 和 `run-to-completion` 保留为内部诊断/恢复工具，不能作为比赛验收成功点：
 
@@ -255,7 +255,7 @@ flowchart LR
     V2 --> N["27. Content-addressed oracle + completed receipt"]
 ```
 
-每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已补齐 candidate 正向门禁推进、CTest direct-executable、内容绑定的 Automake `check` 与受限 Make `test` 清单、C/Rust 双沙箱宿主差分、逻辑失败回投 AI repair、内容寻址 oracle 和完成凭据崩溃恢复。当前开放项仍包括受限 Meson/configure 生成、Meson/任意 target/递归 Make/Kconfig/custom-test 适配、stdin/fixture/resource 完整投影、A19e7 独立进程 capability、A19e8 完整后端等价性和真实 held-out 整项目验收；这些证据保持 `competition_exact=false`，该流程图是实现合同，不是任意 C 项目成功声明。
+每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已补齐 candidate 正向门禁推进、CTest direct-executable、内容绑定的 Automake `check`、受限 Make `test` 与有界 Meson direct-executable 清单、C/Rust 双沙箱宿主差分、逻辑失败回投 AI repair、内容寻址 oracle 和完成凭据崩溃恢复。当前开放项仍包括受限 Meson/configure 构建生成、任意 target/递归 Make/Kconfig/custom-test 适配、stdin/fixture/resource 完整投影、A19e7 独立进程 capability、A19e8 完整后端等价性和真实 held-out 整项目验收；这些证据保持 `competition_exact=false`，该流程图是实现合同，不是任意 C 项目成功声明。
 
 ## 切片验证与发布架构
 

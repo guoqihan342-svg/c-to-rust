@@ -31,12 +31,25 @@ FORBIDDEN = {
         re.IGNORECASE,
     ),
 }
-EXEMPT = {"ledger_schema.py", "ledger_transition_authority.py"}
+ALLOWED_PRIMITIVES = {
+    "ledger_transition_authority.py": {
+        "direct unit projection", "direct transition append",
+    },
+    "ledger_run_transition_authority.py": {
+        "direct run projection", "direct transition append",
+    },
+    "ledger_schema_upgrade.py": {"direct run projection"},
+}
 COMMAND_CONSTRUCTOR_EXEMPT = {
     "ledger_transition_commands.py", "ledger_transition_replay.py",
 }
 AUTHORITY_PRIMITIVES = {
-    "direct unit projection", "direct run projection", "direct transition append",
+    "ledger_transition_authority.py": {
+        "direct unit projection", "direct transition append",
+    },
+    "ledger_run_transition_authority.py": {
+        "direct run projection", "direct transition append",
+    },
 }
 
 
@@ -96,24 +109,23 @@ class ProjectMigrationTransitionAuditTests(unittest.TestCase):
         harness = Path(__file__).parent / "_project_migration_harness"
         offenders: dict[str, list[str]] = {}
         for path in sorted(harness.glob("*.py")):
-            if path.name in EXEMPT:
-                continue
             source = path.read_text(encoding="utf-8")
-            matches = [label for label, pattern in FORBIDDEN.items() if pattern.search(source)]
+            allowed = ALLOWED_PRIMITIVES.get(path.name, set())
+            matches = [
+                label for label, pattern in FORBIDDEN.items()
+                if label not in allowed and pattern.search(source)
+            ]
             if matches:
                 offenders[path.name] = matches
         self.assertEqual({}, offenders)
 
     def test_authority_contains_every_guarded_projection_primitive(self) -> None:
-        authority = (
-            Path(__file__).parent / "_project_migration_harness"
-            / "ledger_transition_authority.py"
-        ).read_text(encoding="utf-8")
-        for label, pattern in FORBIDDEN.items():
-            if label not in AUTHORITY_PRIMITIVES:
-                continue
-            with self.subTest(label=label):
-                self.assertIsNotNone(pattern.search(authority))
+        harness = Path(__file__).parent / "_project_migration_harness"
+        for module, labels in AUTHORITY_PRIMITIVES.items():
+            authority = (harness / module).read_text(encoding="utf-8")
+            for label in sorted(labels):
+                with self.subTest(module=module, label=label):
+                    self.assertIsNotNone(FORBIDDEN[label].search(authority))
 
     def test_production_modules_use_registered_transition_factories(self) -> None:
         harness = Path(__file__).parent / "_project_migration_harness"
