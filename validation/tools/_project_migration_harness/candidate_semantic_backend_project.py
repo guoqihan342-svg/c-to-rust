@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -11,6 +10,9 @@ from .candidate_semantic_backend_inputs import (
 )
 from .candidate_semantic_stimuli import (
     held_out_scalar_cases, rust_negative_source, stimulus_binding,
+)
+from .candidate_semantic_scalar_render import (
+    c_scalar_literal, rust_scalar_literal, rust_string,
 )
 from .sandbox_contract import contract_from_payload
 from .sandbox_native_linker import resolve_native_linker_toolchain
@@ -22,7 +24,11 @@ def materialize_behavior_project(
 ) -> dict[str, Any]:
     native_driver = _native_driver(inputs)
     _materialize_bound_inputs(inputs, root)
-    cases = held_out_scalar_cases(inputs.function, verifier_nonce)
+    signed_wrapping = "-fwrapv" in inputs.compile_arguments
+    cases = held_out_scalar_cases(
+        inputs.function, verifier_nonce, inputs.function_source,
+        signed_wrapping=signed_wrapping,
+    )
     wrapper = _c_behavior_wrapper(inputs.function, inputs.source_path, cases)
     wrapper_path = _write_wrapper(root, inputs.source_path, wrapper)
     _write(root / "Cargo.toml", _cargo_toml(build=True, negative=True))
@@ -34,7 +40,9 @@ def materialize_behavior_project(
     _write(root / "src/rust_negative.rs", rust_negative_source(inputs.function, cases))
     return _manifest(inputs, "behavior", {
         "case_count": len(cases),
-        "stimulus": stimulus_binding(verifier_nonce, cases),
+        "stimulus": stimulus_binding(
+            verifier_nonce, cases, signed_wrapping=signed_wrapping,
+        ),
     })
 
 
@@ -97,7 +105,7 @@ def _c_behavior_wrapper(
     lines = [f'#include "{source_name}"', "#include <stdio.h>", "int main(void) {"]
     for index, values in enumerate(cases):
         arguments = ", ".join(
-            f"({kind.c_name}){value}"
+            f"({kind.c_name}){c_scalar_literal(kind, value)}"
             for kind, value in zip(function.parameters, values, strict=True)
         )
         expression = f"{function.symbol}({arguments})"
@@ -119,7 +127,7 @@ def _rust_behavior(
     lines = ["#[path = \"candidate.rs\"]", "mod candidate;", "fn main() {"]
     for index, values in enumerate(cases):
         arguments = ", ".join(
-            _rust_literal(kind, value)
+            rust_scalar_literal(kind, value)
             for kind, value in zip(function.parameters, values, strict=True)
         )
         cast = "i128" if function.result.signed else "u128"
@@ -169,17 +177,17 @@ def _build_script(
 ) -> str:
     standard = () if any(value.startswith("-std=") for value in arguments) else ("-std=c11",)
     values = [*standard, wrapper_path, "-o"]
-    encoded_args = ", ".join(_rust_string(value) for value in arguments)
+    encoded_args = ", ".join(rust_string(value) for value in arguments)
     argument_line = (
         f"    for argument in [{encoded_args}] {{ command.arg(argument); }}"
         if arguments else ""
     )
-    fixed_args = ", ".join(_rust_string(value) for value in values)
+    fixed_args = ", ".join(rust_string(value) for value in values)
     return "\n".join(item for item in (
         "use std::{env, path::PathBuf, process::Command};",
         "fn main() {",
         "    let output = PathBuf::from(env::var_os(\"OUT_DIR\").unwrap()).join(\"c-oracle\");",
-        f"    let mut command = Command::new({_rust_string(native_driver)});",
+        f"    let mut command = Command::new({rust_string(native_driver)});",
         argument_line,
         f"    command.args([{fixed_args}]).arg(&output);",
         "    let status = command.status().expect(\"C oracle compiler unavailable\");",
@@ -191,7 +199,7 @@ def _build_script(
 
 def _write_linker_config(root: Path, native_driver: str) -> None:
     content = "[target.'cfg(target_os = \"linux\")']\n"
-    _write(root / ".cargo/config.toml", content + f"linker = {_rust_string(native_driver)}\n")
+    _write(root / ".cargo/config.toml", content + f"linker = {rust_string(native_driver)}\n")
 
 
 def _native_driver(inputs: BackendInputs) -> str:
@@ -282,14 +290,6 @@ def _target(root: Path, relative: str) -> Path:
 def _write(path: Path, value: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(value, encoding="utf-8", newline="\n")
-
-
-def _rust_literal(kind: ScalarType, value: int) -> str:
-    return f"{value}{kind.rust_name}"
-
-
-def _rust_string(value: str) -> str:
-    return json.dumps(value, ensure_ascii=True)
 
 
 __all__ = [

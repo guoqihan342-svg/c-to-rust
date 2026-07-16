@@ -26,6 +26,7 @@ class BackendInputs:
     candidate_source: bytes
     source_path: str
     source_bytes: bytes
+    function_source: bytes
     headers: tuple[tuple[str, bytes], ...]
     function: ScalarFunction
     compile_arguments: tuple[str, ...]
@@ -86,7 +87,8 @@ def load_backend_inputs(
     )
     return BackendInputs(
         candidate_source=candidate, source_path=source_path,
-        source_bytes=source_bytes, headers=headers, function=function,
+        source_bytes=source_bytes, function_source=function_source,
+        headers=headers, function=function,
         compile_arguments=compile_arguments_value,
         compiler_basename=compiler_identity[0],
         compiler_binary_sha256=compiler_identity[1],
