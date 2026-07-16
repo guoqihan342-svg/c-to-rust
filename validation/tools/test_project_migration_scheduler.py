@@ -213,7 +213,6 @@ class ProjectMigrationSchedulerTests(unittest.TestCase):
                 {"beta": {"scheduler_evidence": invalid}},
             )
 
-
 def assignment(
     group_id: str, role: str, wave: int, dependencies: list[str] | None = None
 ) -> dict:

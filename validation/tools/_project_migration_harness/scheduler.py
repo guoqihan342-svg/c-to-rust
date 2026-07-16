@@ -11,6 +11,7 @@ from .schedule_facts import (
 from .runtime_binding import compute_portfolio_binding
 from .schedule_priority import scheduling_priority
 from .project_knowledge import validate_knowledge_reference
+from .model_safe_test_contract import validate_test_contract_reference
 from .schedule_graph import critical_path_weights
 from .candidate_strategy import validate_candidate_strategy
 from .project_interface_model_context import validate_model_coordinator_context
@@ -246,6 +247,10 @@ def _input_facts(role: str, facts: Mapping[str, Any]) -> dict[str, Any]:
     if "project_knowledge" in facts:
         result["project_knowledge"] = validate_knowledge_reference(
             facts["project_knowledge"]
+        )
+    if role in {"translator", "repairer"} and "model_safe_test_contract" in facts:
+        result["model_safe_test_contract"] = validate_test_contract_reference(
+            facts["model_safe_test_contract"]
         )
     if role in {"planner", "translator", "repairer"} and "coordinator_context" in facts:
         result["coordinator_context"] = validate_model_coordinator_context(

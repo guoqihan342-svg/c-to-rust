@@ -62,6 +62,7 @@ def materialize_worker_requests(
                 "oracle_values": "withheld",
                 "expected_actual": "withheld",
                 "context_loading": "hash_bound_pages_only",
+                "test_contract": "shape_and_input_dependencies_only",
             },
             "output_contract": _output_contract(role, launch_policy),
         }

@@ -179,13 +179,17 @@ def plan_project(
     del c_index
 
     try:
-        dag, portfolio, page_refs, materialization_ref = build_context_portfolio(
+        (
+            dag, portfolio, page_refs, materialization_ref,
+            test_contract_index_ref,
+        ) = build_context_portfolio(
             contexts, graph, output=output, out_rel=out_rel,
             run_id=effective_run_id, project_key=project_key,
             max_concurrency=max_concurrency, max_attempts=max_attempts,
             context_page_bytes=context_page_bytes,
             context_page_tokens=context_page_tokens,
             context_group_pages=context_group_pages,
+            project_test_inventory=project_test_inventory,
             admission_evidence={
                 "build_ir": {
                     "status": "bound",
@@ -203,6 +207,7 @@ def plan_project(
             },
         )
         artifacts["context_materialization"] = materialization_ref
+        artifacts["model_safe_test_contract_index"] = test_contract_index_ref
     except ContextPortfolioError as error:
         return _blocked(output, artifacts, error.stage)
     del contexts, graph

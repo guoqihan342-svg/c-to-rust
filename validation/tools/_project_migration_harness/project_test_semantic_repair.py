@@ -22,10 +22,7 @@ def register_project_test_candidate_repairs(
     }
     if not unit_ids or not unit_ids <= set(members):
         return _blocked("project_test_repair_attribution_unavailable")
-    crash_count = oracle.get("observation", {}).get("crash_count")
-    code = "project-process-crash" if isinstance(crash_count, int) and crash_count else (
-        "project-logic-mismatch"
-    )
+    diagnostics = model_safe_project_failure_diagnostics(oracle)
     records = []
     failures = []
     for unit_id in sorted(unit_ids):
@@ -41,9 +38,8 @@ def register_project_test_candidate_repairs(
             run_id=run_id, unit_id=unit_id,
             candidate_artifact_id=artifact_id, record_id=record_id,
             kind="verifier", gate_family="oracle-replay-diff", status="failed",
-            verifier_id="host-derived", diagnostics=[{
-                "code": code, "stage": "project-oracle",
-            }], candidate_set_sha256=candidate_set_sha256,
+            verifier_id="host-derived", diagnostics=diagnostics,
+            candidate_set_sha256=candidate_set_sha256,
             project_record_id=project_record_id, defer_transition=True,
         ))
         failures.append({
@@ -57,8 +53,63 @@ def register_project_test_candidate_repairs(
     return {
         "schema_version": 1, "status": "repair-required",
         "affected_unit_ids": sorted(unit_ids), "candidate_gate_records": records,
+        "failure_signature_sha256": content_sha256(diagnostics),
         "answer_values_withheld": True, "semantic_gate": False,
     }
+
+
+def model_safe_project_failure_diagnostics(
+    oracle: Mapping[str, Any],
+) -> list[dict[str, str]]:
+    evidence = oracle.get("evidence")
+    details = evidence.get("failure_details") if isinstance(evidence, Mapping) else None
+    codes: set[str] = set()
+    if isinstance(details, list):
+        for detail in details:
+            if not isinstance(detail, Mapping):
+                continue
+            baseline, candidate = detail.get("oracle"), detail.get("replay")
+            if not isinstance(baseline, Mapping) or not isinstance(candidate, Mapping):
+                continue
+            for field, channel in (
+                ("status", "status"), ("exit_code", "exit"),
+                ("signal", "signal"), ("timed_out", "timeout"),
+                ("oversized", "oversized"), ("stdout_sha256", "stdout"),
+                ("stderr_sha256", "stderr"),
+            ):
+                if baseline.get(field) != candidate.get(field):
+                    codes.add(f"project-channel.{channel}")
+            process_class = _candidate_process_class(candidate)
+            if process_class != "completed-zero-exit":
+                codes.add(f"project-process.{process_class}")
+    if not codes:
+        observation = oracle.get("observation")
+        crash_count = observation.get("crash_count") if isinstance(
+            observation, Mapping
+        ) else None
+        codes.add(
+            "project-process-crash"
+            if isinstance(crash_count, int) and crash_count
+            else "project-logic-mismatch"
+        )
+    return [
+        {"code": code, "stage": "project-oracle"}
+        for code in sorted(codes)
+    ][:32]
+
+
+def _candidate_process_class(value: Mapping[str, Any]) -> str:
+    if value.get("timed_out") is True:
+        return "timeout"
+    if value.get("oversized") is True:
+        return "oversized"
+    if value.get("signal") is not None:
+        return "signal"
+    if value.get("status") != "completed":
+        return "blocked"
+    if value.get("exit_code") != 0:
+        return "nonzero-exit"
+    return "completed-zero-exit"
 
 
 def _affected_units(
@@ -105,4 +156,7 @@ def _blocked(code: str) -> dict[str, Any]:
     }
 
 
-__all__ = ["register_project_test_candidate_repairs"]
+__all__ = [
+    "model_safe_project_failure_diagnostics",
+    "register_project_test_candidate_repairs",
+]

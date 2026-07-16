@@ -10,11 +10,15 @@ from .controller_runtime import run_and_ingest_opencode_worker
 from .ledger import LedgerError, ProjectLedger
 from .project_completion_coordinator import resume_project_completion
 from .project_preflight_runner import run_project_worker_preflight
+from .project_worker_batch import (
+    execute_project_worker_batch, safe_prelaunch_retry, worker_summary,
+)
 
 
-_WORKER_FAILURES = {
-    "blocked", "failed", "manual-reconcile", "prelaunch-blocked", "rejected",
+_TERMINAL_WORKER_FAILURES = {
+    "blocked", "failed", "manual-reconcile", "rejected",
 }
+_MAX_CONSECUTIVE_PRELAUNCH_RETRIES = 2
 
 
 def run_project_to_completion(
@@ -35,6 +39,7 @@ def run_project_to_completion(
     preflight: Mapping[str, Any] | None = None
     preflight_reference: Mapping[str, Any] | None = None
     cycles: list[dict[str, Any]] = []
+    consecutive_prelaunch_retries = 0
     for cycle_index in range(max_cycles):
         completion = resume_project_completion(
             ledger=ledger, run_id=run_id, harness_root=harness_root,
@@ -130,49 +135,49 @@ def run_project_to_completion(
                 cycles=cycles, completion=completion,
                 dispatch=dispatch, semantic_gate=False,
             )
-        workers = []
-        for launch in launches:
-            request = launch.get("request") if isinstance(launch, Mapping) else None
-            if not isinstance(request, Mapping):
-                return _finish(
-                    out_root, run_id=run_id, status="blocked",
-                    reason_code="project_worker_request_missing",
-                    preflight=preflight, cycles=cycles,
-                    completion=completion, dispatch=dispatch,
-                    semantic_gate=False,
-                )
-            worker = run_and_ingest_opencode_worker(
-                request, preflight_reference, ledger=ledger,
-                harness_root=harness_root, logical_model=logical_model,
-                resolved_model=resolved_model, opencode_command="opencode",
-                timeout_seconds=timeout_seconds,
-            )
-            workers.append({
-                "worker_id": launch.get("worker_id"),
-                "unit_id": launch.get("unit_id"),
-                "attempt_id": launch.get("attempt_id"),
-                "status": worker.get("status"),
-            })
-            if worker.get("status") in _WORKER_FAILURES:
-                cycles.append({
-                    "cycle_index": cycle_index,
-                    "completion": completion_summary,
-                    "dispatch": _dispatch_summary(dispatch),
-                    "workers": workers,
-                })
-                return _finish(
-                    out_root, run_id=run_id,
-                    status=str(worker.get("status", "blocked")),
-                    reason_code="project_worker_execution_blocked",
-                    preflight=preflight, cycles=cycles,
-                    completion=completion, worker=worker,
-                    semantic_gate=False,
-                )
+        executions = execute_project_worker_batch(
+            launches, preflight_reference=preflight_reference,
+            ledger=ledger, harness_root=harness_root,
+            logical_model=logical_model, resolved_model=resolved_model,
+            timeout_seconds=timeout_seconds,
+            worker_runner=run_and_ingest_opencode_worker,
+        )
+        workers = [worker_summary(launch, worker) for launch, worker in executions]
         cycles.append({
             "cycle_index": cycle_index,
             "completion": completion_summary,
             "dispatch": _dispatch_summary(dispatch), "workers": workers,
         })
+        terminal = next(
+            (worker for _launch, worker in executions
+             if worker.get("status") in _TERMINAL_WORKER_FAILURES),
+            None,
+        )
+        if terminal is not None:
+            return _finish(
+                out_root, run_id=run_id,
+                status=str(terminal.get("status", "blocked")),
+                reason_code="project_worker_execution_blocked",
+                preflight=preflight, cycles=cycles,
+                completion=completion, worker=terminal,
+                semantic_gate=False,
+            )
+        retryable = [
+            worker for _launch, worker in executions
+            if safe_prelaunch_retry(worker)
+        ]
+        if retryable and len(retryable) == len(executions):
+            consecutive_prelaunch_retries += 1
+            if consecutive_prelaunch_retries >= _MAX_CONSECUTIVE_PRELAUNCH_RETRIES:
+                return _finish(
+                    out_root, run_id=run_id, status="blocked",
+                    reason_code="project_worker_prelaunch_retry_exhausted",
+                    preflight=preflight, cycles=cycles,
+                    completion=completion, workers=workers,
+                    semantic_gate=False,
+                )
+        else:
+            consecutive_prelaunch_retries = 0
     return _finish(
         out_root, run_id=run_id, status="blocked",
         reason_code="project_run_cycle_limit_reached", preflight=preflight,

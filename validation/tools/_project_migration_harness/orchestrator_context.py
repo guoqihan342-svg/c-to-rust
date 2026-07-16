@@ -8,6 +8,7 @@ from .artifacts import content_sha256
 from .artifact_write_once import write_once_json_artifact
 from .context_plan_indexes import prepare_plan_context_indexes
 from .generated_closure import apply_generated_closure_admission
+from .model_safe_test_contract_bindings import materialize_model_safe_test_contracts
 from .orchestration_model import portfolio_dag
 from .portfolio import plan_portfolio
 
@@ -24,7 +25,11 @@ def build_context_portfolio(
     max_concurrency: int, max_attempts: int, context_page_bytes: int,
     context_page_tokens: int, context_group_pages: int,
     admission_evidence: Mapping[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+    project_test_inventory: Mapping[str, Any],
+) -> tuple[
+    dict[str, Any], dict[str, Any], list[dict[str, Any]],
+    dict[str, Any], dict[str, Any],
+]:
     try:
         bindings, page_proofs, index_summary = prepare_plan_context_indexes(
             contexts, out_root=output, out_root_rel=out_rel,
@@ -33,6 +38,9 @@ def build_context_portfolio(
         dag = portfolio_dag(
             graph, bindings, run_id=run_id, project_key=project_key
         )
+        test_contracts, test_contract_index = materialize_model_safe_test_contracts(
+            project_test_inventory, dag, output=output, out_root_rel=out_rel,
+        )
         portfolio = plan_portfolio(
             dag, out_root=out_rel, max_concurrency=max_concurrency,
             max_attempts=max_attempts,
@@ -40,6 +48,7 @@ def build_context_portfolio(
             context_token_budget=context_page_tokens * context_group_pages,
             context_page_limit=context_group_pages,
             context_page_proof_set=page_proofs,
+            model_safe_test_contracts=test_contracts,
         )
         portfolio = apply_generated_closure_admission(
             portfolio, admission_evidence=dict(admission_evidence),
@@ -70,7 +79,7 @@ def build_context_portfolio(
         )
     except (OSError, ValueError) as error:
         raise ContextPortfolioError("context_materialization_invalid") from error
-    return dag, portfolio, page_refs, materialization
+    return dag, portfolio, page_refs, materialization, test_contract_index
 
 
 __all__ = ["ContextPortfolioError", "build_context_portfolio"]

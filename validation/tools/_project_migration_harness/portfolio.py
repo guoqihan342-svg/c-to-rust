@@ -25,6 +25,7 @@ from .portfolio_integrity import (
     wave_layout,
 )
 from .portfolio_roles import boundary_required, roles_for_group, worker_descriptor
+from .model_safe_test_contract_bindings import portfolio_test_contract_references
 
 
 SCHEMA_VERSION = 1
@@ -49,6 +50,7 @@ def plan_portfolio(
     context_page_payloads: Mapping[str, Any] | None = None,
     context_page_root: str | Path | None = None,
     context_page_proof_set: Any | None = None,
+    model_safe_test_contracts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build hash-bound assignments; this function never materializes or launches them."""
     assert_no_secrets(dag, "migration_dag")
@@ -75,6 +77,10 @@ def plan_portfolio(
     project_key = dag.get("project_key", dag.get("project_id"))
     if not isinstance(run_id, str) or not run_id or not isinstance(project_key, str) or not project_key:
         raise PortfolioError("migration DAG requires run_id and project_key")
+    test_contracts = list(model_safe_test_contracts or [])
+    portfolio_test_contract_references({
+        "model_safe_test_contracts": test_contracts,
+    })
 
     groups = groups_by_id(dag)
     layout, membership = wave_layout(dag, groups)
@@ -244,6 +250,7 @@ def plan_portfolio(
         "units": units,
         "ledger_units": ledger_units,
         "context_frontiers": context_frontiers,
+        "model_safe_test_contracts": test_contracts,
         "initial_ready": {
             "selected_worker_ids": [item["worker_id"] for item in units],
             "deferred_worker_ids": [item["worker_id"] for item in ready[max_concurrency:]],

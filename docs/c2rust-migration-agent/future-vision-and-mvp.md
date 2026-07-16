@@ -182,7 +182,7 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
 | 顺序 | 待办 | 状态 | 本轮完成判据 |
 | ---: | --- | --- | --- |
 | 1 | P0-A18c7 跨项目 AI 输入与证据合同闭包 | 完成 | Windows/WSL 125 项回归通过；固定 12 项生成 12 个候选、0 contract failure、6 exact pass |
-| 2 | P0-A19 陌生 C 项目整项目 AI harness | 进行中：BuildIR、检索前沿与 verifier capability 收口 | 任意 repo root 的发现、分页 DAG、角色组合、SQLite ledger、Cargo generation、实际 C toolchain 绑定、CMake/Ninja/Meson 只读事实、link/archive 闭包和 fail-closed 沙箱合同已落地；当前先补外部 native-link 可验证解析、显式受限 configure/Make 采集、frontier selection 状态转移和独立 verifier capability，再接 initialization/feature/cfg/ABI 与真实 held-out build/oracle。禁止项目/函数/路径/fixture 身份分派 |
+| 2 | P0-A19 陌生 C 项目整项目 AI harness | 进行中：AI 行为上下文与运行稳定性收口 | 任意 repo root 的发现、分页 DAG、角色组合、SQLite ledger、Cargo generation、实际 C toolchain 绑定、CMake/Ninja/Meson 只读事实、link/archive 闭包和 fail-closed 沙箱合同已落地；当前优先闭合同单元多候选、自动项目知识、共享预算/收敛窗口和独立 verifier。已完成的测试契约、repair 通道签名和并发 worker 批次只改善首轮信息与运行稳定性，不能替代真实 held-out build/oracle。禁止项目/函数/路径/fixture 身份分派 |
 | 3 | P0-A18c8 剩余 exact failure 收敛 | 进行中 | h5a-h5d 已完成且不扩大语义覆盖；保留父项未完成边界，后续只在 P0-A19 项目级 gate 暴露真实阻塞时回收，不再围绕单个已知切片顺序加规则 |
 | 4 | P0-A10 有限 held-out 跨项目验收 | 待开始 | 固定 12 项继续作为非回归基线，新增有限的未参与规则开发的整项目验收；只运行有限集合一次，不用重复轮次放大成功率 |
 | 5 | P0-H9 比赛主机复验 | 外部阻塞 | 真实主机 attestation、OpenCode preflight、GLM-5.1 session 和发布包全部闭合 |
@@ -664,9 +664,12 @@ python3 -B -m validation.tools.validate_judge_entrypoints \
       - [ ] A19c4b2：让同一高风险 unit 在一个共享 token/时间预算内保留多个并行或顺序候选，按 source SHA 去重并在同一 cohort 上运行完全相同的 host gates；选择结果必须由 gate evidence 决定并可恢复重放。
     - [ ] A19c4c：调度器按 failure fingerprint、未决不确定性、依赖关键路径、预期信息增益、token/时间成本和历史收敛率决定下一次 planner/translator/reviewer/repairer 调用；输入与失败不变、低信息重复或预算耗尽时停止，不机械运行所有角色或固定轮数。
       - [x] A19c4c1：增加只接受 `external-verifier` evidence 的确定性信息增益排序，并由绑定 DAG 重算关键路径；新失败、输入/策略变化、不确定性、token 估算和收敛次数参与优先级，失败/输入/策略均未变化的重复 repair 被停止，模型自评分或调用方自报关键路径不能改变 fallback 顺序。
+        - [x] A19c4c1a：`run-to-completion` 对一次 dispatch 的 worker 使用真实并发批次并等待整批收口，避免预先租出的后续 lease 因串行执行过期；单个 terminal 结果不再遗留未执行 sibling，只有宿主确认未启动且未消耗 attempt 的 `prelaunch-blocked` 可重试，连续两批无进展后写入稳定 blocker。
+        - [x] A19c4c1b：项目 oracle 失败会派生不含答案的通道签名，区分 `stdout`、`stderr`、退出、信号、超时、超限和进程类别；repair 只收到通道关系与稳定 fingerprint，不接收 expected/actual、前缀、哈希内容或原始输出。
       - [ ] A19c4c2：从 ledger、BuildIR/DAG 和 verifier receipt 自动派生上述 facts，增加跨 worker 的共享 token/时间预算、策略覆盖率和收敛窗口，并把预算耗尽写成可恢复 blocked/deferred evidence。
     - [ ] A19c4d：建立有界、内容寻址的项目知识记忆，只保存经 host 提取或验证的 API/type/ABI/ownership/build facts、失败分类和候选决策；按当前 unit/接口/repair 查询最小相关上下文，禁止把 oracle 答案、fixture expected/actual、密钥或无关完整仓库反复喂给模型。
       - [x] A19c4d1：实现严格 allowlist、内容 SHA、evidence SHA、主题相关性、entry/byte 上限和 artifact/request/prompt 绑定；oracle/expected/actual、密钥、原始源码正文和完整仓库字段在入模前 fail closed。
+        - [x] A19c4d1a：把 ready `ProjectTestInventory` 按 BuildIR target scope 投影成每个迁移单元独立、内容寻址的 model-safe 测试契约，并绑定到 portfolio、scheduler、request 和 translator/repairer prompt。模型只看到 target/test ID、参数形状、环境变量名、输入路径、工作目录与超时档位；字面参数、环境值、oracle 值和运行输出始终 withheld，单元最多携带 128 条相关测试。
       - [ ] A19c4d2：由 BuildIR、RustProjectIR、TransitionAuthority 和专属 verifier 自动写入事实，按当前 unit/interface/repair 查询并持久化复用命中率；禁止调用方直接构造知识 pass 或绕过 provenance。
     - [ ] A19c4e：global planner 与 project-level repair queue 协同处理跨单元 API、共享类型、初始化、链接和 feature 冲突；AI 可以提出成组候选补丁和迁移顺序，但每次落地仍受文件/预算边界、quarantine、回滚和 project-final 全量复验约束。
 

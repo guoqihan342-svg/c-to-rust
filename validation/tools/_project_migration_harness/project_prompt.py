@@ -16,6 +16,10 @@ from .project_knowledge import (
     validate_knowledge_reference,
     validate_project_knowledge,
 )
+from .model_safe_test_contract import (
+    validate_model_safe_test_contract,
+    validate_test_contract_reference,
+)
 from .project_interface_model_context import validate_model_coordinator_context
 
 
@@ -68,6 +72,11 @@ def render_project_worker_prompt(
         rules.append(
             "Follow the host-bound candidate strategy; do not self-score or vote on acceptance."
         )
+    if "model_safe_test_contract" in bound_inputs:
+        rules.append(
+            "Use the host-bound test contract as call-shape and input-dependency evidence; "
+            "literal arguments, environment values, oracle values, and runtime outputs are withheld."
+        )
     if "coordinator_context" in bound_inputs:
         rules.append(
             "Use the host-bound coordinator receipt as the shared project interface state; "
@@ -118,6 +127,19 @@ def _bound_inputs(
         except (UnicodeError, json.JSONDecodeError) as error:
             raise ValueError("project knowledge is not UTF-8 JSON") from error
         result["project_knowledge"] = validate_project_knowledge(knowledge)
+    test_contract_ref = facts.get("model_safe_test_contract")
+    if test_contract_ref is not None:
+        if role not in {"translator", "repairer"}:
+            raise ValueError("model-safe test contract is invalid for this worker role")
+        reference = validate_test_contract_reference(test_contract_ref)
+        raw = read_artifact_reference(root, reference)
+        try:
+            test_contract = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise ValueError("model-safe test contract is not UTF-8 JSON") from error
+        result["model_safe_test_contract"] = validate_model_safe_test_contract(
+            test_contract, group_id=str(group_id),
+        )
     if role == "translator":
         decision = facts.get("planner_decision")
         if decision is not None:

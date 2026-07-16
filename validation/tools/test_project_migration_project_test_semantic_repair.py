@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import unittest
 from unittest import mock
 
 from validation.tools._project_migration_harness.project_test_semantic_repair import (
+    model_safe_project_failure_diagnostics,
     register_project_test_candidate_repairs,
 )
 
@@ -96,6 +98,41 @@ class ProjectTestSemanticRepairTests(unittest.TestCase):
                 rust_project_ir=ir, mapping=mapping, oracle=oracle,
             )
         self.assertEqual(["ua", "ub"], result["affected_unit_ids"])
+
+    def test_failure_signature_exposes_channels_without_answer_values(self) -> None:
+        oracle = {
+            "observation": {"crash_count": 1},
+            "evidence": {"failure_details": [{
+                "test_id": "test-a",
+                "oracle": {
+                    "status": "completed", "exit_code": 0, "signal": None,
+                    "timed_out": False, "oversized": False,
+                    "stdout_sha256": "a" * 64, "stderr_sha256": "b" * 64,
+                    "stdout_prefix_hex": "expected-secret",
+                },
+                "replay": {
+                    "status": "completed", "exit_code": 7, "signal": None,
+                    "timed_out": False, "oversized": False,
+                    "stdout_sha256": "c" * 64, "stderr_sha256": "b" * 64,
+                    "stdout_prefix_hex": "actual-secret",
+                },
+            }]},
+        }
+
+        diagnostics = model_safe_project_failure_diagnostics(oracle)
+
+        self.assertEqual(
+            [
+                {"code": "project-channel.exit", "stage": "project-oracle"},
+                {"code": "project-channel.stdout", "stage": "project-oracle"},
+                {"code": "project-process.nonzero-exit", "stage": "project-oracle"},
+            ],
+            diagnostics,
+        )
+        encoded = json.dumps(diagnostics, sort_keys=True)
+        self.assertNotIn("expected-secret", encoded)
+        self.assertNotIn("actual-secret", encoded)
+        self.assertNotIn("a" * 64, encoded)
 
 
 if __name__ == "__main__":
