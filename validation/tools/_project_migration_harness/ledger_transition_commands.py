@@ -159,24 +159,25 @@ def host_verifier_promoted_command(
 
 def project_unit_completed_command(
     *, run_id: str, unit_id: str, expected: UnitProjection,
-    candidate_set_sha256: str,
+    candidate_set_sha256: str, completion_receipt_sha256: str,
 ) -> TransitionCommand:
     return _unit(
         "project_unit_completed", "project-unit-completed", run_id, unit_id,
         expected, UnitState("completed", "terminal"),
-        "project_gate_bundle_passed", candidate_set_sha256,
-        identity=(candidate_set_sha256,),
+        "project_gate_bundle_passed", completion_receipt_sha256,
+        identity=(candidate_set_sha256, completion_receipt_sha256),
     )
 
 
 def project_run_completed_command(
     *, run_id: str, anchor_unit_id: str, expected: RunProjection,
-    candidate_set_sha256: str,
+    candidate_set_sha256: str, completion_receipt_sha256: str,
 ) -> RunTransitionCommand:
     return _run(
         "project_run_completed", "project-run-completed", run_id,
         anchor_unit_id, expected, "completed", "project_gate_bundle_passed",
-        candidate_set_sha256, identity=(candidate_set_sha256,),
+        completion_receipt_sha256,
+        identity=(candidate_set_sha256, completion_receipt_sha256),
     )
 
 

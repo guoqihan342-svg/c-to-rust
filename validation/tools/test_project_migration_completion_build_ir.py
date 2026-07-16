@@ -208,6 +208,21 @@ class ProjectMigrationCompletionBuildIRTests(CompletionBuildIRCase):
         self.assertEqual(PROJECT_TEST_EVIDENCE, receipt["project_test_evidence"])
         runners["evidence_reopen"].assert_called_once()
 
+    def test_receipt_persist_failure_precedes_sqlite_completion(self) -> None:
+        target = (
+            "validation.tools._project_migration_harness."
+            "project_completion_finalize.write_durable_completion_receipt"
+        )
+        with mock.patch(target, side_effect=OSError("fault_before_receipt_durable")):
+            result, runners = self._run_completion([VERIFIED, VERIFIED])
+        self.assertEqual("blocked", result["status"])
+        self.assertEqual("project-completion-receipt-persist", result["stage"])
+        self.assertIn("fault_before_receipt_durable", result["blockers"][0])
+        runners["complete"].assert_not_called()
+        self.assertFalse(
+            (self.out_root / "completion" / "completion-receipt.json").exists(),
+        )
+
     def test_oracle_evidence_drift_blocks_before_project_final_and_completion(self) -> None:
         result, runners = self._run_completion(
             [VERIFIED, VERIFIED],

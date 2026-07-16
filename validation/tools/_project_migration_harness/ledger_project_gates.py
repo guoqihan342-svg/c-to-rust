@@ -21,16 +21,6 @@ from .gate_evidence import (
 from .ledger_schema import _json, _now_text, _require_repo_path, _require_sha256, atomic
 from .ledger_project_diagnostics import insert_project_diagnostic_intake
 from .ledger_security import LedgerError
-from .ledger_transition_authority import (
-    TransitionAuthority, load_run_projection, load_unit_projection,
-)
-from .ledger_transition_commands import (
-    project_run_completed_command, project_unit_completed_command,
-)
-from .project_final_barrier import require_project_final_candidate_passes
-from .project_completion_invariants import (
-    require_project_interface_ready, require_quiescent_last_good_run,
-)
 from .project_gate_bindings import require_cargo_integration_binding
 from .project_gate_source_verification import verify_project_sources
 
@@ -137,51 +127,6 @@ class ProjectGateMixin:
                     "size_bytes": len(canonical_json_bytes(payload)),
                 })
             return result
-
-    def complete_project_run(
-        self, *, run_id: str, candidate_set_sha256: str,
-    ) -> None:
-        candidate_set = _require_sha256(candidate_set_sha256, "candidate_set_sha256")
-        with self.connect() as connection, atomic(connection):
-            require_quiescent_last_good_run(connection, run_id)
-            require_project_interface_ready(connection, run_id)
-            assert_current_candidate_set(
-                connection, run_id, candidate_set, database_path=self.path,
-            )
-            require_project_final_candidate_passes(
-                self, connection, run_id, candidate_set,
-            )
-            records = _require_latest_project_passes(
-                self, connection, run_id, candidate_set, include_final=True
-            )
-            verifier_ids = {str(row["verifier_id"]) for row, _ in records}
-            if len(verifier_ids) < 2:
-                raise LedgerError("project completion requires independent host authorities")
-            now = _now_text()
-            units = connection.execute(
-                """select unit_id,status,resumable_status from migration_units
-                   where run_id=? order by unit_id""", (run_id,)
-            ).fetchall()
-            authority = TransitionAuthority(connection)
-            for unit in units:
-                unit_id = str(unit["unit_id"])
-                authority.apply(
-                    project_unit_completed_command(
-                        run_id=run_id, unit_id=unit_id,
-                        expected=load_unit_projection(connection, run_id, unit_id),
-                        candidate_set_sha256=candidate_set,
-                    ),
-                    created_at=now,
-                )
-            authority.apply_run(
-                project_run_completed_command(
-                    run_id=run_id, anchor_unit_id=str(units[0]["unit_id"]),
-                    expected=load_run_projection(connection, run_id),
-                    candidate_set_sha256=candidate_set,
-                ),
-                created_at=now,
-            )
-
 
 def _latest_project_records(
     connection: Any, run_id: str, candidate_set_sha256: str,

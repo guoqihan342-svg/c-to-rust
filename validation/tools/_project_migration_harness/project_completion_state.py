@@ -53,4 +53,23 @@ def completion_result(
     return payload
 
 
-__all__ = ["completion_paths", "completion_result"]
+def reopen_completed_result(
+    ledger: ProjectLedger, paths: dict[str, Any], run_id: str,
+) -> dict[str, Any] | None:
+    try:
+        recovered = ledger.reopen_completed_project_run(run_id=run_id)
+    except LedgerError as error:
+        return completion_result(
+            paths, run_id, "blocked", "project-completion-receipt-recovery",
+            [str(error)[:160]],
+        )
+    if recovered is None:
+        return None
+    return {
+        **recovered["receipt"],
+        "stage": "project-completion-receipt-reopened", "blockers": [],
+        "completion_receipt": recovered["reference"],
+    }
+
+
+__all__ = ["completion_paths", "completion_result", "reopen_completed_result"]

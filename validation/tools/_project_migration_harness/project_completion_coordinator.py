@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +22,7 @@ from .project_completion_semantics import (
     SEMANTIC_RUNNERS, missing_candidate_semantic_gates as _missing_candidate_semantic_gates,
     semantic_runner as _semantic_runner,
 )
-from .project_completion_state import completion_paths, completion_result
+from .project_completion_state import completion_paths, completion_result, reopen_completed_result
 from .project_completion_finalize import finalize_verified_project
 from .project_completion_repair_phase import execute_project_repair_completion_step
 from .project_completion_verifier_phase import advance_project_verifier_phase
@@ -33,7 +32,6 @@ from .project_integration_verifier import verify_integrated_project
 from .project_test_semantic_verifier import (
     reopen_project_test_semantic_evidence, verify_project_test_semantics,
 )
-
 _write_build_ir_verification = record_build_ir_checkpoint
 _build_ir_allows_candidate_execution = build_ir_allows_candidate_execution
 _build_ir_allows_completion = build_ir_allows_completion
@@ -46,6 +44,8 @@ def resume_project_completion(
     logical_model: str = "GLM-5.1", resolved_model: str = "zai/glm-5.1",
 ) -> dict[str, Any]:
     paths = completion_paths(ledger, harness_root)
+    if (recovered := reopen_completed_result(ledger, paths, run_id)) is not None:
+        return recovered
     candidate_wave = advance_gate_pending_candidates(
         ledger=ledger, run_id=run_id,
         out_root=paths["out_root"], out_root_rel=paths["out_root_rel"],

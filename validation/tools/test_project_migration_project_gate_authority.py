@@ -26,6 +26,9 @@ from validation.tools.project_migration_final_barrier_test_support import (
 from validation.tools.project_migration_project_repair_test_support import (
     coordinated_case,
 )
+from validation.tools.project_migration_completion_receipt_test_support import (
+    write_completion_receipt,
+)
 
 
 class ProjectMigrationProjectGateAuthorityTests(ProjectMigrationGateAuthorityCase):
@@ -108,6 +111,7 @@ class ProjectMigrationProjectGateAuthorityTests(ProjectMigrationGateAuthorityCas
                 run_id="run", candidate_set_sha256=candidate_set
             )
         self.record_project_final("project-final-two", candidate_set)
+        write_completion_receipt(self, candidate_set)
         self.ledger.complete_project_run(
             run_id="run", candidate_set_sha256=candidate_set
         )

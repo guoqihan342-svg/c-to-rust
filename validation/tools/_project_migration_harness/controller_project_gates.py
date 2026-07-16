@@ -105,7 +105,7 @@ def complete_verified_project(
     current_set = ledger.bind_current_candidate_set(run_id=run_id)
     if candidate_set_sha256 != current_set:
         raise LedgerError("completion candidate set is stale or caller-supplied")
-    ledger.complete_project_run(
+    completion = ledger.complete_project_run(
         run_id=run_id, candidate_set_sha256=current_set
     )
     return {
@@ -113,6 +113,7 @@ def complete_verified_project(
         "status": "completed",
         "run_id": run_id,
         "candidate_set_sha256": current_set,
+        "completion_receipt": completion["reference"],
         "semantic_gate": True,
         "proof_boundary": "latest host-owned project gates on the current immutable candidate set",
     }

@@ -40,6 +40,8 @@ class LedgerViewMixin:
                    where u.run_id=? order by u.wave_index,u.group_id,u.unit_id""",
                 (run_id,),
             ).fetchall()
+            if rows and rows[0]["run_status"] == "completed":
+                self.reopen_completed_project_run(run_id=run_id)
             result = []
             for row in rows:
                 state = dict(row)

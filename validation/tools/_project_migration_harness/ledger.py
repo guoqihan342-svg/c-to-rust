@@ -19,6 +19,7 @@ from .ledger_context_frontier import (
     prepare_portfolio_frontiers, verify_initial_context_frontiers,
 )
 from .ledger_project_diagnostics import ProjectDiagnosticLedgerMixin
+from .ledger_project_completion import ProjectCompletionLedgerMixin
 from .ledger_project_gates import ProjectGateMixin
 from .ledger_project_repair import ProjectRepairLedgerMixin
 from .ledger_project_repair_artifacts import ProjectRepairArtifactMixin
@@ -38,6 +39,7 @@ from .runtime_binding import RuntimeBindingMixin
 _ROLES = {"planner", "translator", "reviewer", "repairer"}
 class ProjectLedger(
     HostVerifierMixin,
+    ProjectCompletionLedgerMixin,
     ProjectGateMixin,
     ProjectDiagnosticLedgerMixin,
     ProjectRepairLedgerMixin,

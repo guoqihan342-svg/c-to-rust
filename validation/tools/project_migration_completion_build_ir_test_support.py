@@ -20,7 +20,9 @@ COORDINATOR = (
 )
 PASSED = {"schema_version": 1, "status": "passed"}
 VERIFIED = {
-    "schema_version": 1, "status": "verified", "blockers": [],
+    "schema_version": 1,
+    "artifact_kind": "project-final-build-ir-verification",
+    "status": "verified", "blockers": [],
     "native_link_config_resolved": True, "closure_complete": True,
     "unresolved_native_dependency_count": 0,
 }
