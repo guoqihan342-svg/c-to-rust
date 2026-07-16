@@ -140,7 +140,8 @@ class BubblewrapBackend:
         self, executable: Path, *, project_root: Path, runtime_root: Path,
         arguments: Sequence[str], working_directory: str,
         environment: Mapping[str, str], timeout_seconds: int,
-        input_sha256: str, probe_receipt: SandboxProbeReceipt,
+        input_sha256: str, standard_input: bytes,
+        probe_receipt: SandboxProbeReceipt,
     ) -> dict[str, Any]:
         from .project_test_process_sandbox import (
             execute_isolated_project_test_process,
@@ -153,7 +154,8 @@ class BubblewrapBackend:
             workspace=project_root, runtime=runtime_root,
             arguments=arguments, working_directory=working_directory,
             environment=environment, timeout_seconds=timeout_seconds,
-            input_sha256=input_sha256, probe_receipt=probe_receipt,
+            input_sha256=input_sha256, standard_input=standard_input,
+            probe_receipt=probe_receipt,
         )
 
     def probe(self, project_root: Path) -> object:

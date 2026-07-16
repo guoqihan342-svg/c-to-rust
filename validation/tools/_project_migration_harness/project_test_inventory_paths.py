@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .build_facts import is_absolute_any_platform, resolve_repository_path
+from .project_test_stdin import stdin_repo_path
 
 
 _RESERVED_MARKER = "<repo>"
@@ -94,6 +95,9 @@ def referenced_repo_paths(value: Mapping[str, Any]) -> tuple[str, ...]:
             paths.add(path)
         elif kind != "literal":
             raise ValueError("project_test_input_binding_invalid")
+    stdin_path = stdin_repo_path(value.get("stdin"))
+    if stdin_path is not None:
+        paths.add(stdin_path)
     return tuple(sorted(paths))
 
 

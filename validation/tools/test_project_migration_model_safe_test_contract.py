@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import tempfile
 import unittest
@@ -38,6 +39,7 @@ class ModelSafeTestContractTests(unittest.TestCase):
                 self.assertNotIn("literal-secret", encoded)
                 self.assertNotIn("environment-secret", encoded)
                 self.assertNotIn("unrelated-secret", encoded)
+                self.assertEqual(2, contract["schema_version"])
                 self.assertEqual(adapter, contract["adapter"])
                 self.assertEqual(1, contract["test_count"])
                 projected = contract["tests"][0]
@@ -50,6 +52,19 @@ class ModelSafeTestContractTests(unittest.TestCase):
                 self.assertEqual(contract, validate_model_safe_test_contract(
                     contract, group_id="unit-a",
                 ))
+
+    def test_legacy_v1_contract_reopens_without_stdin_authority(self) -> None:
+        current = build_model_safe_test_contract(
+            test_inventory(), group_id="unit-a",
+            target_scope=target_scope("target-a"),
+        )
+        legacy = legacy_contract(current)
+
+        self.assertEqual(1, legacy["schema_version"])
+        self.assertEqual(
+            legacy,
+            validate_model_safe_test_contract(legacy, group_id="unit-a"),
+        )
 
     def test_materialization_is_content_bound_and_portfolio_scoped(self) -> None:
         with tempfile.TemporaryDirectory(prefix="model-safe-test-contract-") as raw:
@@ -96,32 +111,37 @@ class ModelSafeTestContractPromptTests(RuntimeHarnessCase):
         ledger = self.ledger()
         launch = self.dispatch(plan, ledger)["launches"][0]
         request = self.load(launch["request"])
-        contract = build_model_safe_test_contract(
+        current = build_model_safe_test_contract(
             test_inventory(),
             group_id=request["group_id"],
             target_scope=target_scope("target-a"),
         )
-        reference = write_json_artifact(
-            self.harness,
-            "target/run/harness/test-contract/current.json",
-            contract,
-        )
-        request["input_facts"]["model_safe_test_contract"] = reference
-        base = {
-            key: value for key, value in request.items()
-            if key not in {"effective_input_sha256", "execution_binding"}
-        }
-        request["effective_input_sha256"] = content_sha256(base)
+        for contract in (current, legacy_contract(current)):
+            with self.subTest(schema_version=contract["schema_version"]):
+                reference = write_json_artifact(
+                    self.harness,
+                    "target/run/harness/test-contract/"
+                    f"current-v{contract['schema_version']}.json",
+                    contract,
+                )
+                request["input_facts"]["model_safe_test_contract"] = reference
+                base = {
+                    key: value for key, value in request.items()
+                    if key not in {"effective_input_sha256", "execution_binding"}
+                }
+                request["effective_input_sha256"] = content_sha256(base)
 
-        prompt = json.loads(render_project_worker_prompt(
-            request, harness_root=self.harness,
-        ))
+                prompt = json.loads(render_project_worker_prompt(
+                    request, harness_root=self.harness,
+                ))
 
-        bound = prompt["bound_inputs"]["model_safe_test_contract"]
-        self.assertEqual(contract["contract_sha256"], bound["contract_sha256"])
-        encoded = json.dumps(prompt, sort_keys=True)
-        self.assertNotIn("literal-secret", encoded)
-        self.assertNotIn("environment-secret", encoded)
+                bound = prompt["bound_inputs"]["model_safe_test_contract"]
+                self.assertEqual(
+                    contract["contract_sha256"], bound["contract_sha256"],
+                )
+                encoded = json.dumps(prompt, sort_keys=True)
+                self.assertNotIn("literal-secret", encoded)
+                self.assertNotIn("environment-secret", encoded)
 
 
 def test_inventory(adapter: str = "ctest-json-v1") -> dict:
@@ -165,6 +185,20 @@ def target_scope(target_id: str) -> dict:
         "terminal_target_ids": [target_id],
     }
     return {**payload, "scope_sha256": content_sha256(payload)}
+
+
+def legacy_contract(value: dict) -> dict:
+    legacy = copy.deepcopy(value)
+    legacy["schema_version"] = 1
+    legacy["withheld_fields"].remove("stdin_contents")
+    for test in legacy["tests"]:
+        test.pop("stdin_shape")
+    payload = {
+        key: item for key, item in legacy.items()
+        if key != "contract_sha256"
+    }
+    legacy["contract_sha256"] = content_sha256(payload)
+    return legacy
 
 
 if __name__ == "__main__":

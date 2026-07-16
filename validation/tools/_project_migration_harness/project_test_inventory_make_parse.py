@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-import shlex
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -13,10 +12,12 @@ from .project_test_inventory_automake import (
     AUTOMAKE_CHECK_COMMAND, MAKE_TEST_COMMAND, command_for_target_binding,
     verify_make_target_binding,
 )
+from .project_test_inventory_make_command import parse_direct_make_test_command
 from .project_test_inventory_paths import (
     build_output_index, normalize_argument, normalize_command_path,
     normalize_environment,
 )
+from .project_test_stdin import normalize_stdin_file
 
 MAX_STDOUT_BYTES, MAX_STDERR_BYTES = 4 * 1024 * 1024, 1024 * 1024
 MAX_LINE_BYTES, MAX_COMMANDS = 64 * 1024, 4_096
@@ -68,8 +69,9 @@ def derive_make_inventory(
                 [{"code": "project_test_make_output_invalid"}],
             )
         try:
+            argv, stdin_path = parse_direct_make_test_command(line)
             record = _test_record(
-                _direct_argv(line), index=line_number - 1,
+                argv, stdin_path=stdin_path, index=line_number - 1,
                 root=root, build=build, outputs=outputs,
             )
         except (OSError, TypeError, ValueError) as error:
@@ -102,7 +104,8 @@ def derive_make_inventory(
 
 
 def _test_record(
-    argv: list[str], *, index: int, root: Path, build: Path,
+    argv: list[str], *, stdin_path: str | None, index: int,
+    root: Path, build: Path,
     outputs: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any] | None:
     environment, command = _split_environment(argv)
@@ -134,38 +137,12 @@ def _test_record(
         ),
         "timeout_seconds": 120,
     }
+    if stdin_path is not None:
+        record["stdin"] = normalize_stdin_file(
+            _host_stdin_path(stdin_path, root), repo_root=root, base=build,
+        )
     record["test_id"] = "test-" + content_sha256(record)[:24]
     return record
-
-
-def _direct_argv(line: str) -> list[str]:
-    quote: str | None = None
-    for index, character in enumerate(line):
-        if quote == "'":
-            quote = None if character == "'" else quote
-        elif quote == '"':
-            if character == '"':
-                quote = None
-            elif character in "$`\\":
-                raise ValueError("project_test_make_shell_control_rejected")
-        elif character in "'\"":
-            quote = character
-        elif character in ";|&<>()`$\\*?[]{}":
-            raise ValueError("project_test_make_shell_control_rejected")
-        elif character == "#" and (index == 0 or line[index - 1].isspace()):
-            raise ValueError("project_test_make_shell_control_rejected")
-    if quote is not None or "\x00" in line:
-        raise ValueError("project_test_make_command_invalid")
-    try:
-        argv = shlex.split(line, posix=True)
-    except ValueError as error:
-        raise ValueError("project_test_make_command_invalid") from error
-    if (
-        not argv or not argv[0] or len(argv) > 128
-        or any(len(item.encode("utf-8")) > 4096 for item in argv)
-    ):
-        raise ValueError("project_test_make_command_invalid")
-    return argv
 
 
 def _split_environment(argv: list[str]) -> tuple[list[str], list[str]]:
@@ -190,8 +167,22 @@ def _host_assignment(value: str, root: Path) -> str:
 
 
 def _host_path(value: str, root: Path) -> str:
-    marker, host = "/workspace/", root.as_posix().rstrip("/") + "/"
-    return value.replace(marker, host) if marker in value else value
+    guest, host = "/workspace", root.as_posix().rstrip("/")
+    if value == guest or value.startswith(guest + "/"):
+        return host + value.removeprefix(guest)
+    marker = "=" + guest
+    if value.count(marker) == 1:
+        prefix, suffix = value.split(marker, 1)
+        if not suffix or suffix.startswith("/"):
+            return prefix + "=" + host + suffix
+    return value
+
+
+def _host_stdin_path(value: str, root: Path) -> str:
+    guest = "/workspace"
+    if value == guest or value.startswith(guest + "/"):
+        return root.as_posix().rstrip("/") + value.removeprefix(guest)
+    return value
 
 
 def _valid_observation(value: Any) -> bool:

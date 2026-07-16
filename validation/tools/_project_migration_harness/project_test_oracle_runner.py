@@ -18,6 +18,7 @@ from .project_test_oracle_evidence import (
 )
 from .project_test_oracle_workspace import materialize_project_oracle_workspace
 from .project_test_process_sandbox import public_process_result
+from .project_test_stdin import read_snapshot_stdin
 from .project_verification_execution import run_cargo_check
 from .sandbox_linux import discover_sandbox_backend
 from .sandbox_probe import SandboxProbeReceipt
@@ -190,12 +191,16 @@ def _run_case(
         str(key): expand_input_binding(value, guest_root="/workspace")
         for key, value in test["environment"].items()
     }
+    standard_input = read_snapshot_stdin(
+        input_root, test.get("stdin"), snapshot,
+    )
     return backend.execute_project_test_process(
         executable, project_root=input_root, runtime_root=runtime,
         arguments=arguments, working_directory=str(test["working_directory"]),
         environment=environment,
         timeout_seconds=min(int(test["timeout_seconds"]), timeout_seconds),
         input_sha256=str(snapshot["snapshot_sha256"]),
+        standard_input=standard_input,
         probe_receipt=probe_receipt,
     )
 

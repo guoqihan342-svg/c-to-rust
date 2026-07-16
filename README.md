@@ -17,9 +17,9 @@
 | Translator-generated semantic pass | `37` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `2` 个，单独统计，不进入 translator numerator |
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
-| 当前翻译任务 | P0-A19 g4 独立 Cargo 重开与 h4 剩余项目测试适配扩展；P0-A18c/P0-A10 保留为有限回归 |
+| 当前翻译任务 | P0-A19 g4 独立 Cargo 重开与 h4 剩余项目测试适配扩展；h4d 受限 Make 单文件 stdin 已闭合，P0-A18c/P0-A10 保留为有限回归 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
-| P0-A19 有限门禁 | Windows 项目迁移全量 1250 项：1224 通过、26 项平台条件跳过；WSL 项目迁移全量 1250 项：1238 通过、12 项显式 live 条件跳过 |
+| P0-A19 有限门禁 | Windows 项目迁移全量 1261 项：1235 通过、26 项平台条件跳过；WSL 项目迁移全量 1261 项：1249 通过、12 项显式环境条件跳过；WSL 真实二进制 stdin 双沙箱 oracle 1/1 通过 |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | canonical roadmap + code/tests + harness evidence gates |
 

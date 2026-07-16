@@ -36,9 +36,14 @@ class ProjectTestOracleLiveTests(unittest.TestCase):
             runtime = root / "runtime"
             binary = source / "build" / "suite"
             binary.parent.mkdir(parents=True)
+            fixture = source / "fixture.bin"
+            fixture.write_bytes(b"stdin-logic\x00\xff\n")
             c_source = source / "suite.c"
             c_source.write_text(
-                '#include <stdio.h>\nint main(void) { puts("logic-ok"); return 0; }\n',
+                '#include <stdio.h>\nint main(void) { unsigned long n = 0, sum = 0; '
+                'int c; while ((c = getchar()) != EOF) { n++; '
+                'sum = (sum + (unsigned char)c) % 1000003UL; } '
+                'printf("%lu:%lu\\n", n, sum); return 0; }\n',
                 encoding="ascii",
             )
             completed = subprocess.run(
@@ -47,8 +52,18 @@ class ProjectTestOracleLiveTests(unittest.TestCase):
             )
             self.assertEqual(0, completed.returncode, completed.stderr.decode())
             ir, _sources = direct_two_package_ir()
-            _write_generation(generation)
-            inventory = _inventory(source, binary)
+            _write_generation(
+                generation,
+                binary_source=(
+                    'use std::io::{self, Read};\nfn main() {\n'
+                    '  let mut bytes = Vec::new();\n'
+                    '  io::stdin().read_to_end(&mut bytes).unwrap();\n'
+                    '  let sum = bytes.iter().fold(0_u64, '
+                    '|n, byte| (n + u64::from(*byte)) % 1_000_003);\n'
+                    '  println!("{}:{}", bytes.len(), sum);\n}\n'
+                ),
+            )
+            inventory = _inventory(source, binary, stdin_path="fixture.bin")
             mapping = derive_project_test_mapping(inventory, ir)
             self.assertEqual("ready", mapping["status"])
 
@@ -203,7 +218,9 @@ def _write_generation(
     )
 
 
-def _inventory(root: Path, binary: Path) -> dict:
+def _inventory(
+    root: Path, binary: Path, *, stdin_path: str | None = None,
+) -> dict:
     data = binary.read_bytes()
     test = {
         "source_index": 0, "name": "suite",
@@ -216,6 +233,8 @@ def _inventory(root: Path, binary: Path) -> dict:
         "arguments": [], "working_directory": "build", "environment": {},
         "timeout_seconds": 30, "test_id": "test-live",
     }
+    if stdin_path is not None:
+        test["stdin"] = {"kind": "repo-path", "path": stdin_path}
     value = {
         "schema_version": 1, "artifact_kind": "project-test-inventory",
         "status": "ready", "adapter": "ctest-json-v1",

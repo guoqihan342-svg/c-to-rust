@@ -13,9 +13,9 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | Translator-generated semantic pass | `37` named slices, derived from `validation/translator-coverage-matrix.json` |
 | Accepted-evidence authoritative | `2`, reported separately from the translator numerator |
 | Latest development stage | P0-A19: unfamiliar-repository build closure, verification authority, and real held-out contract closure |
-| Active translator task | P0-A19 g4 independent Cargo reopening and h4 project-test adapter expansion; P0-A18c/P0-A10 remain finite regressions |
+| Active translator task | P0-A19 g4 independent Cargo reopening and remaining h4 project-test adapter expansion; bounded single-file Make stdin is closed as h4d, while P0-A18c/P0-A10 remain finite regressions |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
-| P0-A19 finite gate | Windows project-migration suite: 1,224 passed and 26 platform-conditional skips out of 1,250; WSL simulation: 1,238 passed and 12 explicit live-condition skips out of 1,250 |
+| P0-A19 finite gate | Windows project-migration suite: 1,235 passed and 26 platform-conditional skips out of 1,261; WSL simulation: 1,249 passed and 12 explicit environment-conditional skips out of 1,261; the real binary-stdin dual-sandbox oracle passes 1/1 under WSL |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | canonical roadmap, code/tests, and harness evidence gates |
 

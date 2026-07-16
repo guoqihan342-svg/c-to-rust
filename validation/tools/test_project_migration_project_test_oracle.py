@@ -18,6 +18,9 @@ from validation.tools._project_migration_harness.project_test_oracle_evidence im
 from validation.tools._project_migration_harness.project_test_oracle_snapshot import (
     copy_bounded_repository_snapshot,
 )
+from validation.tools._project_migration_harness.sandbox_contract import (
+    canonical_sha256,
+)
 from validation.tools.project_migration_rust_project_cargo_v3_test_support import (
     direct_two_package_ir,
 )
@@ -96,11 +99,22 @@ def _process(
     *, stdout: bytes = b"", stderr: bytes = b"", status: str = "completed",
     exit_code: int | None = 0, invocation: str = "a" * 64,
 ) -> dict:
+    invocation_payload = {
+        "schema_version": 1, "purpose": "project-test-process",
+        "executable_sha256": invocation, "input_sha256": "c" * 64,
+        "arguments": ["--mode", "/workspace/fixture.txt"],
+        "working_directory": "build", "environment": {"MODE": "portable"},
+        "stdin_sha256": hashlib.sha256(b"").hexdigest(),
+        "stdin_size_bytes": 0, "timeout_seconds": 30,
+        "sandbox_contract_sha256": "d" * 64,
+        "sandbox_probe_receipt_sha256": "e" * 64,
+    }
     return {
         "schema_version": 1, "artifact_kind": "project-test-process-result",
         "status": status,
         "reason_code": None if status == "completed" else "project_test_process_timed_out",
-        "invocation": {}, "invocation_sha256": invocation,
+        "invocation": invocation_payload,
+        "invocation_sha256": canonical_sha256(invocation_payload),
         "exit_code": exit_code, "signal": None,
         "timed_out": status == "blocked", "oversized": False,
         "command_started": True,

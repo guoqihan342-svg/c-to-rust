@@ -11,10 +11,11 @@ from .runtime_security import assert_model_payload_safe
 MAX_BOUND_TESTS = 128
 MAX_INPUT_PATHS = 128
 SUPPORTED_TEST_ADAPTERS = frozenset({"ctest-json-v1", "make-dry-run-v1"})
-WITHHELD_FIELDS = [
+LEGACY_WITHHELD_FIELDS = [
     "argument_literals", "environment_values", "expected", "actual",
     "oracle_values", "raw_output",
 ]
+WITHHELD_FIELDS = [*LEGACY_WITHHELD_FIELDS, "stdin_contents"]
 _REFERENCE_KEYS = {"path", "sha256", "size_bytes"}
 _CONTRACT_KEYS = {
     "schema_version", "artifact_kind", "group_id", "target_scope_sha256",
@@ -22,11 +23,12 @@ _CONTRACT_KEYS = {
     "omitted_test_count", "tests", "withheld_fields", "claim_boundary",
     "contract_sha256",
 }
-_TEST_KEYS = {
+_TEST_KEYS_V1 = {
     "test_id", "source_target_id", "argument_count", "argument_shape",
     "environment_keys", "input_paths", "omitted_input_path_count",
     "working_directory", "timeout_class",
 }
+_TEST_KEYS_V2 = _TEST_KEYS_V1 | {"stdin_shape"}
 
 
 def build_model_safe_test_contract(
@@ -57,7 +59,7 @@ def build_model_safe_test_contract(
     )
     included = relevant[:MAX_BOUND_TESTS]
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_kind": "model-safe-project-test-contract",
         "group_id": group_id,
         "target_scope_sha256": scope_sha256,
@@ -84,8 +86,12 @@ def validate_model_safe_test_contract(
         raise ValueError("model-safe test contract fields are invalid")
     payload = {key: item for key, item in value.items() if key != "contract_sha256"}
     tests = value.get("tests")
+    schema_version = value.get("schema_version")
+    withheld_fields = (
+        LEGACY_WITHHELD_FIELDS if schema_version == 1 else WITHHELD_FIELDS
+    )
     if (
-        value.get("schema_version") != 1
+        schema_version not in {1, 2}
         or value.get("artifact_kind") != "model-safe-project-test-contract"
         or not isinstance(value.get("group_id"), str) or not value["group_id"]
         or group_id is not None and value.get("group_id") != group_id
@@ -97,14 +103,17 @@ def validate_model_safe_test_contract(
         or not _nonnegative_int(value.get("test_count"))
         or not _nonnegative_int(value.get("omitted_test_count"))
         or value["test_count"] != len(tests) + value["omitted_test_count"]
-        or value.get("withheld_fields") != WITHHELD_FIELDS
+        or value.get("withheld_fields") != withheld_fields
         or value.get("claim_boundary") != {
             "semantic_gate": False, "translation_coverage_numerator": 0,
         }
         or value.get("contract_sha256") != content_sha256(payload)
     ):
         raise ValueError("model-safe test contract binding is invalid")
-    normalized = [_validate_projected_test(item) for item in tests]
+    normalized = [
+        _validate_projected_test(item, schema_version=schema_version)
+        for item in tests
+    ]
     if normalized != tests or tests != sorted(tests, key=lambda item: item["test_id"]):
         raise ValueError("model-safe test contract tests are not canonical")
     result = dict(value)
@@ -137,6 +146,10 @@ def _project_test(value: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("project test environment contract is invalid")
     for item in environment.values():
         _input_shape(item, paths)
+    stdin = value.get("stdin")
+    stdin_shape = "none" if stdin is None else _input_shape(stdin, paths)
+    if stdin_shape not in {"none", "repo-path"}:
+        raise ValueError("project test stdin contract is invalid")
     selected_paths = sorted(paths)[:MAX_INPUT_PATHS]
     timeout = value.get("timeout_seconds")
     if not _nonnegative_int(timeout) or timeout < 1:
@@ -149,9 +162,10 @@ def _project_test(value: Mapping[str, Any]) -> dict[str, Any]:
         "environment_keys": environment_keys,
         "input_paths": selected_paths,
         "omitted_input_path_count": len(paths) - len(selected_paths),
+        "stdin_shape": stdin_shape,
         "working_directory": value.get("working_directory"),
         "timeout_class": "short" if timeout <= 30 else "normal" if timeout <= 120 else "long",
-    })
+    }, schema_version=2)
 
 
 def _input_shape(value: Any, paths: set[str]) -> str:
@@ -172,8 +186,11 @@ def _input_shape(value: Any, paths: set[str]) -> str:
     raise ValueError("project test argument contract is invalid")
 
 
-def _validate_projected_test(value: Any) -> dict[str, Any]:
-    if not isinstance(value, Mapping) or set(value) != _TEST_KEYS:
+def _validate_projected_test(
+    value: Any, *, schema_version: int,
+) -> dict[str, Any]:
+    expected_keys = _TEST_KEYS_V1 if schema_version == 1 else _TEST_KEYS_V2
+    if not isinstance(value, Mapping) or set(value) != expected_keys:
         raise ValueError("projected test contract fields are invalid")
     shape = value.get("argument_shape")
     environment = value.get("environment_keys")
@@ -193,6 +210,8 @@ def _validate_projected_test(value: Any) -> dict[str, Any]:
         or not _canonical_strings(paths, allow_empty=True)
         or len(paths) > MAX_INPUT_PATHS
         or not _nonnegative_int(value.get("omitted_input_path_count"))
+        or schema_version == 2
+        and value.get("stdin_shape") not in {"none", "repo-path"}
         or not isinstance(working, str) or "\\" in working
         or working.startswith(("/", "~")) or ".." in working.split("/")
         or value.get("timeout_class") not in {"short", "normal", "long"}

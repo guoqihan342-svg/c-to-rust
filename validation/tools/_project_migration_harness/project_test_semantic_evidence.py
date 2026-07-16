@@ -9,6 +9,9 @@ from .build_ir import is_sha256
 from .gate_authority import project_authority, project_summary_payload
 from .gate_evidence import require_content_addressed_reference
 from .ledger import LedgerError, ProjectLedger
+from .project_test_oracle_case_binding import (
+    validate_passed_project_oracle_evidence,
+)
 from .rust_project_ir_binding_io import artifact_identity, read_reference, strict_json
 
 
@@ -156,7 +159,7 @@ def _validate_oracle_v2(
         "comparison_authority": "trusted-host",
     }
     if (
-        evidence.get("schema_version") != 2
+        evidence.get("schema_version") not in {2, 3}
         or evidence.get("artifact_kind") != "project-test-oracle-evidence"
         or not isinstance(snapshot, Mapping) or not isinstance(workspace, Mapping)
         or snapshot.get("snapshot_sha256") != content_sha256({
@@ -179,6 +182,10 @@ def _validate_oracle_v2(
         })
     ):
         raise LedgerError("project_test_oracle_v2_binding_invalid")
+    try:
+        validate_passed_project_oracle_evidence(evidence, inventory, snapshot)
+    except (KeyError, TypeError, ValueError) as error:
+        raise LedgerError("project_test_oracle_case_binding_invalid") from error
 
 
 def _validate_gate_record(

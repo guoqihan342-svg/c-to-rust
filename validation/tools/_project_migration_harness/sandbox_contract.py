@@ -114,7 +114,7 @@ class SandboxBackend(Protocol):
         self, executable: Path, *, project_root: Path, runtime_root: Path,
         arguments: Sequence[str], working_directory: str,
         environment: Mapping[str, str], timeout_seconds: int,
-        input_sha256: str, probe_receipt: object,
+        input_sha256: str, standard_input: bytes, probe_receipt: object,
     ) -> dict[str, Any]: ...
 
 

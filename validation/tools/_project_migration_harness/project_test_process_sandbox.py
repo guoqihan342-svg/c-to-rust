@@ -15,6 +15,7 @@ from .sandbox_contract import SandboxContract, canonical_sha256
 from .sandbox_environment import canonical_environment_items, cargo_guest_environment
 from .sandbox_probe import SandboxProbeReceipt, validate_probe_receipt
 from .sandbox_toolchain import file_sha256
+from .project_test_stdin import MAX_PROJECT_TEST_STDIN_BYTES
 
 
 MAX_CAPTURE_BYTES = 1024 * 1024 + 1
@@ -28,7 +29,8 @@ def execute_isolated_project_test_process(
     executable: Path, workspace: Path, runtime: Path,
     arguments: Sequence[str], working_directory: str,
     environment: Mapping[str, str], timeout_seconds: int,
-    input_sha256: str, probe_receipt: SandboxProbeReceipt,
+    input_sha256: str, standard_input: bytes,
+    probe_receipt: SandboxProbeReceipt,
 ) -> dict[str, Any]:
     original_subject, original_project = Path(executable), Path(workspace)
     if is_linklike(original_subject) or is_linklike(original_project):
@@ -38,7 +40,7 @@ def execute_isolated_project_test_process(
     output = Path(runtime)
     _validate_inputs(
         subject, project, output, arguments, working_directory,
-        environment, timeout_seconds,
+        environment, timeout_seconds, standard_input,
     )
     validate_probe_receipt(probe_receipt, contract, contract.requirements)
     executable_sha256 = file_sha256(subject)
@@ -48,6 +50,8 @@ def execute_isolated_project_test_process(
         "input_sha256": input_sha256,
         "arguments": list(arguments), "working_directory": working_directory,
         "environment": {key: environment[key] for key in sorted(environment)},
+        "stdin_sha256": canonical_sha256_bytes(standard_input),
+        "stdin_size_bytes": len(standard_input),
         "timeout_seconds": timeout_seconds,
         "sandbox_contract_sha256": contract.sha256,
         "sandbox_probe_receipt_sha256": probe_receipt.sha256,
@@ -77,7 +81,7 @@ def execute_isolated_project_test_process(
         with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
             completed = executor(
                 argv, cwd=output, env={"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
-                stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr,
+                input=standard_input, stdout=stdout, stderr=stderr,
                 timeout=timeout_seconds, check=False,
                 preexec_fn=resource_limiter(contract),
             )
@@ -135,6 +139,8 @@ def public_process_result(value: Mapping[str, Any]) -> dict[str, Any]:
             "input_sha256": invocation.get("input_sha256"),
             "argument_count": len(invocation.get("arguments", [])),
             "environment_names": sorted(invocation.get("environment", {})),
+            "stdin_sha256": invocation.get("stdin_sha256"),
+            "stdin_size_bytes": invocation.get("stdin_size_bytes"),
             "working_directory": invocation.get("working_directory"),
             "timeout_seconds": invocation.get("timeout_seconds"),
             "sandbox_contract_sha256": invocation.get("sandbox_contract_sha256"),
@@ -146,6 +152,7 @@ def public_process_result(value: Mapping[str, Any]) -> dict[str, Any]:
 def _validate_inputs(
     subject: Path, project: Path, output: Path, arguments: Sequence[str],
     working_directory: str, environment: Mapping[str, str], timeout_seconds: int,
+    standard_input: bytes,
 ) -> None:
     if (
         not subject.is_file() or is_linklike(subject)
@@ -175,6 +182,8 @@ def _validate_inputs(
         for key, value in environment.items()
     ):
         raise ValueError("project_test_process_environment_invalid")
+    if not isinstance(standard_input, bytes) or len(standard_input) > MAX_PROJECT_TEST_STDIN_BYTES:
+        raise ValueError("project_test_process_stdin_invalid")
     output.mkdir(parents=True, mode=0o700)
 
 

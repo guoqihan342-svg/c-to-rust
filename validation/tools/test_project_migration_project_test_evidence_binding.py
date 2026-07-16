@@ -7,12 +7,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from validation.tools._project_migration_harness.artifacts import (
-    content_sha256, write_json_artifact,
-)
-from validation.tools._project_migration_harness.gate_evidence import (
-    write_content_addressed_json,
-)
+from validation.tools._project_migration_harness.artifacts import content_sha256, write_json_artifact
+from validation.tools._project_migration_harness.gate_evidence import write_content_addressed_json
 from validation.tools._project_migration_harness.ledger import LedgerError
 from validation.tools._project_migration_harness.project_host_gates import (
     record_host_project_observation,
@@ -22,6 +18,9 @@ from validation.tools._project_migration_harness.project_test_semantic_verifier 
 )
 from validation.tools.project_migration_gate_authority_test_support import (
     ProjectMigrationGateAuthorityCase,
+)
+from validation.tools.project_migration_project_test_evidence_test_support import (
+    semantic_payloads,
 )
 
 
@@ -38,7 +37,7 @@ class ProjectTestSemanticVerifierArtifactTests(unittest.TestCase):
         root = Path(temporary.name)
         artifacts = root / "target" / "run"
         artifacts.mkdir(parents=True)
-        inventory, mapping, oracle = _payloads()
+        inventory, mapping, oracle = semantic_payloads()
         inventory_ref = write_json_artifact(
             artifacts, "plan/project-test-inventory.json", inventory,
         )
@@ -96,7 +95,7 @@ class ProjectTestSemanticEvidenceReopenTests(ProjectMigrationGateAuthorityCase):
         super().setUp()
         self.promote_current_candidate()
         self.candidate_set = self.ledger.bind_current_candidate_set(run_id="run")
-        self.inventory, self.mapping, self.oracle = _payloads()
+        self.inventory, self.mapping, self.oracle = semantic_payloads()
         self.inventory_ref = write_json_artifact(
             self.out_root, "plan/project-test-inventory.json", self.inventory,
         )
@@ -201,99 +200,6 @@ class ProjectTestSemanticEvidenceReopenTests(ProjectMigrationGateAuthorityCase):
             candidate_set_sha256=self.candidate_set,
             verification=verification,
         )
-
-
-def _payloads() -> tuple[dict, dict, dict]:
-    inventory = {
-        "schema_version": 1,
-        "artifact_kind": "project-test-inventory",
-        "status": "ready", "adapter": "ctest-json-v1",
-        "source_observation": {
-            "path": "plan/ctest.json", "sha256": "8" * 64,
-            "size_bytes": 80,
-        },
-        "build_directory": "build",
-        "tests": [{"test_id": "test-1"}], "blockers": [],
-        "claim_boundary": {
-            "semantic_gate": False, "translation_coverage_numerator": 0,
-        },
-    }
-    inventory["inventory_sha256"] = content_sha256(inventory)
-    mapping = {
-        "schema_version": 1,
-        "artifact_kind": "project-test-mapping",
-        "status": "ready",
-        "inventory_sha256": inventory["inventory_sha256"],
-        "rust_project_ir_sha256": "a" * 64,
-        "mappings": [{"source_target_id": "source", "test_ids": ["test-1"]}],
-        "blockers": [],
-        "claim_boundary": {
-            "semantic_gate": False, "translation_coverage_numerator": 0,
-        },
-    }
-    mapping["mapping_sha256"] = content_sha256(mapping)
-    evidence = {
-        "schema_version": 2,
-        "artifact_kind": "project-test-oracle-evidence",
-        "inventory_sha256": inventory["inventory_sha256"],
-        "mapping_sha256": mapping["mapping_sha256"],
-        "case_count": 1, "mismatch_count": 0, "crash_count": 0,
-        "cases": [{
-            "test_id": "test-1", "oracle_invocation_sha256": "b" * 64,
-            "replay_invocation_sha256": "c" * 64,
-            "matched": True, "crashed": False,
-        }],
-        "failure_details": [], "details_truncated": False,
-        "semantic_gate": False,
-    }
-    evidence["evidence_sha256"] = content_sha256(evidence)
-    snapshot = {
-        "schema_version": 1,
-        "artifact_kind": "project-test-input-snapshot",
-        "file_count": 0, "directory_count": 1, "size_bytes": 0,
-        "files": [], "directories": [{"path": ".", "mode": 493}],
-        "required_inputs": [], "working_directories": ["."],
-        "source_executables": ["build/test"], "policy": {},
-    }
-    snapshot["snapshot_sha256"] = content_sha256(snapshot)
-    workspace = {
-        "schema_version": 1,
-        "artifact_kind": "project-test-candidate-workspace",
-        "adapter_source_sha256": "d" * 64,
-    }
-    workspace["workspace_sha256"] = content_sha256(workspace)
-    oracle_input_sha = content_sha256({
-        "inventory_sha256": inventory["inventory_sha256"],
-        "mapping_sha256": mapping["mapping_sha256"],
-        "input_snapshot_sha256": snapshot["snapshot_sha256"],
-        "workspace_sha256": workspace["workspace_sha256"],
-        "evidence_sha256": evidence["evidence_sha256"],
-    })
-    oracle = {
-        "schema_version": 2,
-        "artifact_kind": "project-test-oracle-result",
-        "status": "passed", "reason_code": None,
-        "observation": {
-            "case_count": 1, "mismatch_count": 0, "crash_count": 0,
-            "oracle_sha256": oracle_input_sha,
-            "evidence_sha256": evidence["evidence_sha256"],
-            "input_snapshot_sha256": snapshot["snapshot_sha256"],
-            "candidate_sha256": "a" * 64,
-            "execution_isolation": "independent-oracle-and-replay-sandboxes",
-        },
-        "evidence": evidence,
-        "build": {}, "build_output": {}, "run": {}, "run_output": {},
-        "input_snapshot": snapshot, "workspace": workspace,
-        "isolation": {
-            "shared_read_only_input_snapshot": True,
-            "shared_runtime_state": False,
-            "source_executable_visible_to_replay": False,
-            "comparison_authority": "trusted-host",
-        },
-        "cleanup_verified": True, "semantic_gate": False,
-    }
-    return inventory, mapping, oracle
-
 
 if __name__ == "__main__":
     unittest.main()
