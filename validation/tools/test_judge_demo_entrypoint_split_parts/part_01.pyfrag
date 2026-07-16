@@ -30,6 +30,37 @@
         self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
         self.assertEqual(report["metrics"]["review_gate"]["status"], "passed")
 
+    def test_build_report_rejects_missing_profile_semantic_claim_source(self) -> None:
+        import shutil
+
+        from validation.tools import judge_demo
+
+        out_root = REPO_ROOT / "target" / "judge-demo-missing-role-unit"
+        if out_root.exists():
+            shutil.rmtree(out_root)
+        out_root.mkdir(parents=True)
+        profile_path = out_root / "profile.json"
+        profile_path.write_text('{"profile_id":"missing-role"}\n', encoding="utf-8")
+        try:
+            with self.assertRaisesRegex(
+                ValueError,
+                "acceptance_boundary.semantic_claim_source must be a non-empty string",
+            ):
+                judge_demo.build_report(
+                    profile_path=profile_path,
+                    run_id="judge-demo-missing-role-unit",
+                    out_root=out_root,
+                    summary_path=out_root / "summary" / "competition-run-summary.json",
+                    batch_profile_report_path=out_root / "harness" / "batch-profile-report.json",
+                    milestone_report_path=out_root / "summary" / "milestone-release-report.json",
+                    review_checklist_paths=[],
+                    milestone_review_checklist_paths=[],
+                    commands=[],
+                    repo_root=REPO_ROOT,
+                )
+        finally:
+            shutil.rmtree(out_root)
+
 
 def write_judge_demo_fixture_outputs(out_root: Path) -> None:
     out_root_rel = out_root.resolve().relative_to(REPO_ROOT).as_posix()

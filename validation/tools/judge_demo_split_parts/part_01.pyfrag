@@ -149,6 +149,14 @@ def build_report(
     repo_root: Path,
 ) -> dict[str, Any]:
     profile = load_json_if_exists(profile_path)
+    acceptance_boundary = (
+        profile.get("acceptance_boundary")
+        if isinstance(profile.get("acceptance_boundary"), dict)
+        else {}
+    )
+    semantic_claim_source = acceptance_boundary.get("semantic_claim_source")
+    if not isinstance(semantic_claim_source, str) or not semantic_claim_source.strip():
+        raise ValueError("profile acceptance_boundary.semantic_claim_source must be a non-empty string")
     summary = load_json_if_exists(summary_path)
     workflow_metrics_path = resolve_workflow_metrics_path(summary, summary_path, repo_root=repo_root)
     workflow_metrics = load_json_if_exists(workflow_metrics_path) if workflow_metrics_path is not None else {}
@@ -301,7 +309,7 @@ def build_report(
         },
         "repair_summary": repair_summary,
         "claim_boundary": {
-            "semantic_claim_source": str(judge_demo_gate.get("claim_source", "competition-run-summary.final_gate")),
+            "semantic_claim_source": semantic_claim_source,
             "before_after_exhibit_role": (
                 "judge-facing artifact binding and unsafe delta; not a translator-generated semantic pass claim"
             ),

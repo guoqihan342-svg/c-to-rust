@@ -186,6 +186,17 @@
     },
     "approved_direct_dependencies": {
       "rust": {
+        "quote": {
+          "admission": "approved",
+          "risk_basis": [
+            "stable_token_stream_rendering_for_hash_bound_rust_source_witnesses"
+          ],
+          "environment_fit": [
+            "rust_1_96_compatible",
+            "uses_configured_cargo_mirror",
+            "does_not_require_go_cmake_or_default_clang"
+          ]
+        },
         "serde": {
           "admission": "approved",
           "risk_basis": [
@@ -218,6 +229,17 @@
             "uses_configured_cargo_mirror",
             "does_not_require_go_cmake_or_default_clang"
           ]
+        },
+        "syn": {
+          "admission": "approved",
+          "risk_basis": [
+            "structured_rust_source_parsing_for_content_bound_pre_cfg_witnesses"
+          ],
+          "environment_fit": [
+            "rust_1_96_compatible",
+            "uses_configured_cargo_mirror",
+            "does_not_require_go_cmake_or_default_clang"
+          ]
         }
       }
     },
@@ -234,20 +256,6 @@
         "required_before_use": [
           "prove generated bindings remove a concrete ABI or header modeling risk",
           "prove no default dependency on clang, libclang, cmake, or go"
-        ]
-      },
-      "syn": {
-        "admission": "not_approved",
-        "required_before_use": [
-          "prove it removes a concrete Rust generation-quality or maintainability risk",
-          "record direct-dependency justification separate from serde_derive transitive use"
-        ]
-      },
-      "quote": {
-        "admission": "not_approved",
-        "required_before_use": [
-          "prove it removes a concrete Rust generation-quality or maintainability risk",
-          "record direct-dependency justification separate from serde_derive transitive use"
         ]
       },
       "tracing": {

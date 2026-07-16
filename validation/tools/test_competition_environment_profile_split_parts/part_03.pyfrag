@@ -15,7 +15,7 @@
         self.assertIn("does_not_require_unavailable_tool", policy["admission_rule"]["required_environment_fit"])
 
         approved_rust = policy["approved_direct_dependencies"]["rust"]
-        self.assertEqual(sorted(approved_rust), ["serde", "serde_json", "sha2"])
+        self.assertEqual(sorted(approved_rust), ["quote", "serde", "serde_json", "sha2", "syn"])
         for dependency_name, admission in approved_rust.items():
             with self.subTest(dependency_name=dependency_name):
                 self.assertEqual(admission["admission"], "approved")
@@ -23,12 +23,28 @@
                 self.assertTrue(admission["environment_fit"])
                 self.assertIn("rust_1_96_compatible", admission["environment_fit"])
 
+        self.assertIn(
+            "structured_rust_source_parsing_for_content_bound_pre_cfg_witnesses",
+            approved_rust["syn"]["risk_basis"],
+        )
+        self.assertIn(
+            "stable_token_stream_rendering_for_hash_bound_rust_source_witnesses",
+            approved_rust["quote"]["risk_basis"],
+        )
+        for dependency_name in ("syn", "quote"):
+            self.assertIn(
+                "does_not_require_go_cmake_or_default_clang",
+                approved_rust[dependency_name]["environment_fit"],
+            )
+
         for manifest in RUST_MANIFESTS:
             with self.subTest(manifest=manifest.relative_to(REPO_ROOT).as_posix()):
                 self.assertLessEqual(direct_rust_dependencies(manifest), set(approved_rust))
 
         candidates = policy["candidate_dependencies"]
-        for dependency_name in ["libclang", "bindgen", "syn", "quote", "tracing", "anyhow"]:
+        self.assertNotIn("syn", candidates)
+        self.assertNotIn("quote", candidates)
+        for dependency_name in ["libclang", "bindgen", "tracing", "anyhow"]:
             with self.subTest(dependency_name=dependency_name):
                 self.assertEqual(candidates[dependency_name]["admission"], "not_approved")
                 self.assertTrue(candidates[dependency_name]["required_before_use"])

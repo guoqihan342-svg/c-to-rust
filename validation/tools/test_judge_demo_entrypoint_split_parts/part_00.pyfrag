@@ -234,7 +234,19 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         self.assertEqual(judge_index["report_kind"], "judge-evidence-index")
         self.assertEqual(judge_index["entrypoint"], "judge_demo")
         self.assertFalse(judge_index["claim_boundary"]["index_is_semantic_gate"])
-        self.assertEqual(judge_index["claim_boundary"]["semantic_claim_source"], "accepted_evidence_binding")
+        expected_semantic_claim_source = "c2rust_safety_transform_replay_with_accepted_c_oracle"
+        self.assertEqual(
+            persisted["claim_boundary"]["semantic_claim_source"],
+            expected_semantic_claim_source,
+        )
+        self.assertEqual(
+            judge_index["claim_boundary"]["semantic_claim_source"],
+            expected_semantic_claim_source,
+        )
+        self.assertEqual(
+            judge_index["core_translation_quality"]["semantic_claim_source"],
+            expected_semantic_claim_source,
+        )
         self.assertFalse(judge_index["claim_boundary"]["generated_draft_semantic_pass"])
         self.assertEqual(judge_index["claim_boundary"]["translation_coverage_numerator"], 0)
         refs = judge_index["evidence_artifact_refs"]
