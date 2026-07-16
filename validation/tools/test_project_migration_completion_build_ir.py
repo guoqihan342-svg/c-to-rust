@@ -11,127 +11,16 @@ from validation.tools._project_migration_harness.ledger_run_contract import (
 from validation.tools._project_migration_harness.project_completion_build_ir import (
     build_ir_allows_completion, verify_project_final_build_ir,
 )
-from validation.tools._project_migration_harness.project_completion_coordinator import (
-    resume_project_completion,
-)
 from validation.tools._project_migration_harness.project_migration_cli import (
     parse_args,
 )
-from validation.tools.project_migration_gate_authority_test_support import (
-    ProjectMigrationGateAuthorityCase,
+from validation.tools.project_migration_completion_build_ir_test_support import (
+    BUILD_VERIFIER, CompletionBuildIRCase, PROJECT_TEST_EVIDENCE, VERIFIED,
 )
 
-
-BUILD_VERIFIER = (
-    "validation.tools._project_migration_harness."
-    "project_completion_build_ir.verify_build_ir_artifact"
-)
-COORDINATOR = (
-    "validation.tools._project_migration_harness."
-    "project_completion_coordinator."
-)
-PASSED = {"schema_version": 1, "status": "passed"}
-VERIFIED = {
-    "schema_version": 1,
-    "status": "verified",
-    "blockers": [],
-    "native_link_config_resolved": True, "closure_complete": True,
-    "unresolved_native_dependency_count": 0,
-}
-INTEGRATED = {
-    "schema_version": 1,
-    "status": "integrated",
-    "rust_project_ir_completeness": {
-        "status": "complete",
-        "unresolved_sections": [],
-    },
-}
-
-
-class ProjectMigrationCompletionBuildIRTests(
-    ProjectMigrationGateAuthorityCase,
-):
-    def _run_completion(
-        self, build_ir_results: list[dict],
-    ) -> tuple[dict, dict[str, mock.Mock]]:
-        self.promote_current_candidate()
-        project_final_result = {
-            "record_id": "project-final-record",
-            "evidence": {
-                "path": "project/final.json",
-                "sha256": "c" * 64,
-                "size_bytes": 12,
-            },
-        }
-        with (
-            mock.patch(
-                BUILD_VERIFIER.rsplit(".", 1)[0] + ".verify_manifest_generated_closure",
-                return_value=VERIFIED,
-            ),
-            mock.patch(
-                BUILD_VERIFIER, side_effect=build_ir_results,
-            ) as build_ir_verifier,
-            mock.patch(
-                COORDINATOR + "verify_candidate_compile", return_value=PASSED,
-            ) as compile_runner,
-            mock.patch(
-                COORDINATOR + "_semantic_runner",
-                return_value=lambda **_: PASSED,
-            ) as semantic_runner,
-            mock.patch(
-                COORDINATOR + "_missing_candidate_semantic_gates",
-                return_value=[],
-            ) as semantic_gates,
-            mock.patch(
-                COORDINATOR + "verify_candidate_final", return_value=PASSED,
-            ) as candidate_final,
-            mock.patch(
-                COORDINATOR + "integrate_verified_project",
-                return_value=INTEGRATED,
-            ) as integration,
-            mock.patch(
-                COORDINATOR + "execute_project_repair_completion_step",
-            ) as repair,
-            mock.patch(
-                COORDINATOR + "verify_integrated_project",
-                return_value={"gate_status": "passed"},
-            ) as integration_gate,
-            mock.patch(
-                COORDINATOR + "verify_project_cargo", return_value=PASSED,
-            ) as cargo,
-            mock.patch(
-                COORDINATOR + "advance_project_verifier_phase",
-                return_value=None,
-            ) as verifier_phase,
-            mock.patch(
-                COORDINATOR + "_record_host_project_final",
-                return_value=project_final_result,
-            ) as project_final,
-            mock.patch(
-                COORDINATOR + "complete_verified_project",
-                return_value={"schema_version": 1, "status": "completed"},
-            ) as complete,
-        ):
-            result = resume_project_completion(
-                ledger=self.ledger,
-                run_id="run",
-                harness_root=self.harness,
-                repo_root=self.harness,
-            )
-        return result, {
-            "build_ir": build_ir_verifier,
-            "compile": compile_runner,
-            "semantic_runner": semantic_runner,
-            "semantic_gates": semantic_gates,
-            "candidate_final": candidate_final,
-            "integration": integration,
-            "repair": repair,
-            "integration_gate": integration_gate,
-            "cargo": cargo,
-            "verifier_phase": verifier_phase,
-            "project_final": project_final,
-            "complete": complete,
-        }
+class ProjectMigrationCompletionBuildIRTests(CompletionBuildIRCase):
+    def _run_completion(self, *args, **kwargs):
+        return self.run_completion(*args, **kwargs)
 
     def test_plan_profile_defaults_to_competition_and_accepts_development(self) -> None:
         default = parse_args(["plan", "--repo-root", "."])
@@ -272,6 +161,28 @@ class ProjectMigrationCompletionBuildIRTests(
             (self.out_root / "completion" / "completion-receipt.json").exists(),
         )
 
+    def test_project_logic_mismatch_stops_completion_and_requests_repair(self) -> None:
+        semantic = {
+            "schema_version": 1,
+            "status": "repair-required",
+            "blockers": [],
+            "candidate_repair": {
+                "status": "repair-required", "affected_unit_ids": ["unit"],
+            },
+        }
+        result, runners = self._run_completion(
+            [VERIFIED], project_semantic_result=semantic,
+        )
+        self.assertEqual("waiting", result["status"])
+        self.assertEqual("project-final-semantic-repair-ready", result["stage"])
+        self.assertEqual(semantic, result["project_semantics"])
+        runners["build_ir"].assert_called_once()
+        runners["project_final"].assert_not_called()
+        runners["complete"].assert_not_called()
+        self.assertFalse(
+            (self.out_root / "completion" / "completion-receipt.json").exists(),
+        )
+
     def test_success_binds_both_build_ir_verification_artifacts(self) -> None:
         result, runners = self._run_completion([VERIFIED, VERIFIED])
         self.assertEqual(2, runners["build_ir"].call_count)
@@ -293,6 +204,26 @@ class ProjectMigrationCompletionBuildIRTests(
         self.assertEqual(
             "completion/project-final-build-ir-before-project-final.json",
             bindings["before_project_final"]["path"],
+        )
+        self.assertEqual(PROJECT_TEST_EVIDENCE, receipt["project_test_evidence"])
+        runners["evidence_reopen"].assert_called_once()
+
+    def test_oracle_evidence_drift_blocks_before_project_final_and_completion(self) -> None:
+        result, runners = self._run_completion(
+            [VERIFIED, VERIFIED],
+            evidence_reopen_error=ValueError("project_test_oracle_artifact_drifted"),
+        )
+        self.assertEqual("blocked", result["status"])
+        self.assertEqual(
+            "project-final-oracle-evidence-revalidation", result["stage"],
+        )
+        self.assertEqual(
+            ["project_test_oracle_artifact_drifted"], result["blockers"],
+        )
+        runners["project_final"].assert_not_called()
+        runners["complete"].assert_not_called()
+        self.assertFalse(
+            (self.out_root / "completion" / "completion-receipt.json").exists(),
         )
 
 

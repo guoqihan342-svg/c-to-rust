@@ -26,6 +26,7 @@ def build_bubblewrap_argv(
     tool_bindings: tuple[tuple[Path, str], ...],
     environment: tuple[tuple[str, str], ...],
     guest_command: tuple[str, ...],
+    guest_working_directory: str = "/workspace",
 ) -> list[str]:
     """Build the fixed isolation argv around an already validated command."""
     if (
@@ -34,6 +35,12 @@ def build_bubblewrap_argv(
         or any(type(item) is not str for item in guest_command)
     ):
         raise ValueError("sandbox guest command must be a non-empty string tuple")
+    working = PurePosixPath(guest_working_directory)
+    if (
+        not working.is_absolute() or working.parts[:2] != ("/", "workspace")
+        or any(part in {"", ".", ".."} for part in working.parts[1:])
+    ):
+        raise ValueError("sandbox guest working directory is invalid")
     argv = [
         str(launcher), "--die-with-parent", "--new-session",
         "--unshare-all", "--cap-drop", "ALL", "--clearenv",
@@ -54,7 +61,7 @@ def build_bubblewrap_argv(
     for host_path, guest_path in tool_bindings:
         argv.extend(("--ro-bind", str(host_path), guest_path))
     argv.extend(bubblewrap_environment_args(environment))
-    argv.extend(("--chdir", "/workspace", "--", *guest_command))
+    argv.extend(("--chdir", guest_working_directory, "--", *guest_command))
     return argv
 
 
@@ -91,6 +98,8 @@ def _system_file_bindings() -> list[tuple[str, str]]:
             result.append((value, value))
     if Path("/etc/ld.so.conf.d").is_dir():
         result.append(("/etc/ld.so.conf.d", "/etc/ld.so.conf.d"))
+    if Path("/etc/alternatives").is_dir():
+        result.append(("/etc/alternatives", "/etc/alternatives"))
     return result
 
 

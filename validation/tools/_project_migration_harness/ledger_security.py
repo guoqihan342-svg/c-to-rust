@@ -11,6 +11,10 @@ class LedgerError(RuntimeError):
     pass
 
 
+class AttemptLimitReached(LedgerError):
+    pass
+
+
 class LeaseConflict(LedgerError):
     pass
 

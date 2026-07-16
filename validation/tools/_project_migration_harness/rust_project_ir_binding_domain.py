@@ -16,7 +16,7 @@ _DAG_REQUIRED_KEYS = {"schema_version", "dag", "dag_order"}
 _DAG_ALLOWED_KEYS = _DAG_REQUIRED_KEYS | {
     "unsafe_policy", "generated_build_closure", "build_ir", "claim_boundary",
     "c_compilation_facts", "profile", PARENT_DAG_KEY,
-    "migration_graph", "target_scopes",
+    "migration_graph", "target_scopes", "project_test_inventory",
 }
 
 
@@ -65,10 +65,25 @@ def validate_bound_migration_dag(
             fail("bound migration DAG dependency closure is invalid")
     try:
         validate_dag_metadata(payload, artifact_identity)
+        _validate_project_test_inventory_binding(
+            payload.get("project_test_inventory")
+        )
         validate_cohort_dag(payload, artifact_root)
     except ValueError as error:
         raise RustProjectIRError(str(error)) from error
     return units
+
+
+def _validate_project_test_inventory_binding(value: Any) -> None:
+    if value is None:
+        return
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != {"status", "artifact"}
+        or value.get("status") != "bound"
+    ):
+        raise ValueError("project_test_inventory_manifest_binding_invalid")
+    artifact_identity(value.get("artifact"))
 
 
 def validate_embedded_build_ir(

@@ -18,6 +18,7 @@ from .migration_graph import build_migration_graph
 from . import orchestrator_native_link as native_link_stage
 from .orchestrator_context import ContextPortfolioError, build_context_portfolio
 from .orchestrator_finalize import finalize_project_plan
+from .project_test_inventory import collect_project_test_inventory
 from .orchestrator_stages import (
     blocked_plan as _blocked,
     contract_error,
@@ -102,6 +103,12 @@ def plan_project(
     native_link_context, artifacts["native_link_context"] = native_link_stage.prepare_native_link_plan(
         build_ir, artifacts["build_ir"], profile=profile, output=output,
     )
+    project_test_inventory = collect_project_test_inventory(
+        source, discovery, build_ir, output=output,
+    )
+    artifacts["project_test_inventory"] = write_json_artifact(
+        output, "plan/project-test-inventory.json", project_test_inventory,
+    )
 
     compilation_facts = _stage("c_compilation_facts", lambda: (
         collect_c_compilation_fact_bundle(
@@ -138,6 +145,7 @@ def plan_project(
         ],
         "c_compilation_fact_bundle_sha256": compilation_facts["bundle_sha256"],
         "c_index": artifacts["c_index"],
+        "project_test_inventory": artifacts["project_test_inventory"],
         "build_closure_policy": "required" if require_build_closure else "bounded-source",
         "profile": profile,
     })

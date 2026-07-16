@@ -95,12 +95,64 @@ class ProjectMigrationGateAuthorityTests(ProjectMigrationGateAuthorityCase):
         )
         self.assertEqual("failed", result["gate_status"])
         self.assertEqual(candidate_authority("compile"), result["authority_id"])
+        self.assertNotIn("transition_deferred", result)
         with self.ledger.connect() as connection:
             row = connection.execute(
                 "select status,verifier_id,gate_epoch,evidence_path from verifier_records"
             ).fetchone()
         self.assertEqual(("failed", candidate_authority("compile"), 1), tuple(row[:3]))
         self.assertTrue(str(row["evidence_path"]).endswith(f"/{result['evidence']['sha256']}.json"))
+
+    def test_deferred_failure_batch_rolls_back_every_unit_transition(self) -> None:
+        candidate_set = self.ledger.bind_verification_candidate_set(run_id="run")
+        result = record_candidate_gate(
+            ledger=self.ledger,
+            out_root=self.out_root,
+            out_root_rel="target/run",
+            run_id="run",
+            unit_id="unit",
+            candidate_artifact_id=self.candidate_id,
+            record_id="deferred-project-failure",
+            kind="verifier",
+            gate_family="oracle-replay-diff",
+            status="failed",
+            verifier_id="host-derived",
+            diagnostics=[{"code": "project-logic-mismatch", "stage": "project-oracle"}],
+            candidate_set_sha256=candidate_set,
+            project_record_id="host-project-oracle-record",
+            defer_transition=True,
+        )
+        self.assertIs(True, result["transition_deferred"])
+        failures = [{
+            "unit_id": "unit",
+            "candidate_artifact_id": self.candidate_id,
+            "failed_record_id": "deferred-project-failure",
+        }, {
+            "unit_id": "zzz-missing",
+            "candidate_artifact_id": "missing-candidate",
+            "failed_record_id": "missing-record",
+        }]
+        with self.assertRaisesRegex(
+            LedgerError, "latest failed host verification record",
+        ):
+            self.ledger.mark_verification_failures(
+                run_id="run",
+                failures=failures,
+                expected_candidate_set_sha256=candidate_set,
+            )
+        state = self.ledger.unit_states("run")[0]
+        self.assertEqual(("gate-pending", "awaiting_gate"), (
+            state["status"], state["resumable_status"],
+        ))
+        self.ledger.mark_verification_failures(
+            run_id="run",
+            failures=failures[:1],
+            expected_candidate_set_sha256=candidate_set,
+        )
+        state = self.ledger.unit_states("run")[0]
+        self.assertEqual(("retry-ready", "retryable"), (
+            state["status"], state["resumable_status"],
+        ))
 
     def test_duplicate_record_is_non_overwriting_and_latest_failure_invalidates_pass(self) -> None:
         first = self.record_candidate_host_gate("compile", "passed", "compile-pass")

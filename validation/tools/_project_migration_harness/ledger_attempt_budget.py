@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from .ledger_security import LedgerError
+from .ledger_security import AttemptLimitReached
 
 
 def consumed_attempt_count(
@@ -25,7 +25,9 @@ def next_attempt_ordinal(
         worker_id=worker_id, role=role,
     )
     if consumed >= max_attempts:
-        raise LedgerError(f"attempt limit reached for {run_id}/{unit_id}/{worker_id}")
+        raise AttemptLimitReached(
+            f"attempt limit reached for {run_id}/{unit_id}/{worker_id}"
+        )
     return int(connection.execute(
         """select coalesce(max(ordinal),0)+1 from attempts
            where run_id=? and unit_id=? and worker_id=? and role=?""",

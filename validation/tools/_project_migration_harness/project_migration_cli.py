@@ -162,6 +162,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     complete.add_argument("--timeout-seconds", type=int, default=300)
     complete.add_argument("--preflight-timeout-seconds", type=int, default=60)
 
+    run = commands.add_parser("run-to-completion")
+    run.add_argument("--plan", type=Path, required=True)
+    run.add_argument("--repo-root", type=Path, required=True)
+    run.add_argument("--logical-model", default="GLM-5.1")
+    run.add_argument("--resolved-model", default="zai/glm-5.1")
+    run.add_argument("--timeout-seconds", type=int, default=300)
+    run.add_argument("--preflight-timeout-seconds", type=int, default=60)
+    run.add_argument("--lease-ttl-seconds", type=int, default=900)
+    run.add_argument("--max-cycles", type=int, default=256)
+
     status = commands.add_parser("status")
     status.add_argument("--db", type=Path, required=True)
     status.add_argument("--run-id", required=True)

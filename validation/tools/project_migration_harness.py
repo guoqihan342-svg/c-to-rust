@@ -44,8 +44,8 @@ from validation.tools._project_migration_harness.project_migration_cli import (
 from validation.tools._project_migration_harness.project_preflight_runner import (
     run_project_worker_preflight,
 )
-from validation.tools._project_migration_harness.project_completion_coordinator import (
-    resume_project_completion,
+from validation.tools._project_migration_harness.project_completion_cli import (
+    run_completion_cli_command,
 )
 
 
@@ -273,17 +273,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             verifier_id=project_authority(args.gate_kind),
             source_evidence=load_array(args.source_evidence),
         )
-    elif command == "complete":
-        result = resume_project_completion(
-            ledger=_ledger(args.db),
-            run_id=args.run_id,
-            harness_root=REPO_ROOT,
-            repo_root=args.repo_root,
-            logical_model=args.logical_model,
-            resolved_model=args.resolved_model,
-            timeout_seconds=args.timeout_seconds,
-            preflight_timeout_seconds=args.preflight_timeout_seconds,
-        )
+    elif command in {"complete", "run-to-completion"}:
+        result = run_completion_cli_command(command, args, harness_root=REPO_ROOT)
     else:
         result = {
             "schema_version": 1,
@@ -293,7 +284,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         }
     displayed = project_cli_runtime.display_result(command, result)
     print(json.dumps(displayed, indent=2, sort_keys=True))
-    return project_cli_runtime.exit_code(result)
+    return project_cli_runtime.exit_code(result, command=command)
 
 
 if __name__ == "__main__":

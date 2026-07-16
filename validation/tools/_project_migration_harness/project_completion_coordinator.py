@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .artifacts import write_json_artifact
 from .candidate_compile_verifier import verify_candidate_compile
 from .candidate_final_verifier import verify_candidate_final
 from .controller_project_gates import complete_verified_project
@@ -11,6 +10,10 @@ from .gate_candidate_sets import candidate_set_members
 from .ledger import LedgerError, ProjectLedger
 from .ledger_run_contract import load_migration_contract
 from .project_cargo_verifier import verify_project_cargo
+from .project_candidate_gate_aggregation import (
+    record_project_candidate_aggregate_gates,
+)
+from .project_candidate_completion import advance_gate_pending_candidates
 from .project_completion_build_ir import (
     build_ir_allows_candidate_execution, build_ir_allows_completion,
     build_ir_blocker_kinds, record_build_ir_checkpoint,
@@ -21,18 +24,21 @@ from .project_completion_semantics import (
     semantic_runner as _semantic_runner,
 )
 from .project_completion_state import completion_paths, completion_result
+from .project_completion_finalize import finalize_verified_project
 from .project_completion_repair_phase import execute_project_repair_completion_step
 from .project_completion_verifier_phase import advance_project_verifier_phase
 from .project_host_gates import _record_host_project_final
 from .project_integration import integrate_verified_project
 from .project_integration_verifier import verify_integrated_project
+from .project_test_semantic_verifier import (
+    reopen_project_test_semantic_evidence, verify_project_test_semantics,
+)
 
 _write_build_ir_verification = record_build_ir_checkpoint
 _build_ir_allows_candidate_execution = build_ir_allows_candidate_execution
 _build_ir_allows_completion = build_ir_allows_completion
 _build_ir_blocker_kinds = build_ir_blocker_kinds
 _result = completion_result
-
 def resume_project_completion(
     *, ledger: ProjectLedger, run_id: str, harness_root: Path,
     repo_root: Path | None = None,
@@ -40,6 +46,23 @@ def resume_project_completion(
     logical_model: str = "GLM-5.1", resolved_model: str = "zai/glm-5.1",
 ) -> dict[str, Any]:
     paths = completion_paths(ledger, harness_root)
+    candidate_wave = advance_gate_pending_candidates(
+        ledger=ledger, run_id=run_id,
+        out_root=paths["out_root"], out_root_rel=paths["out_root_rel"],
+        quarantine_root=paths["quarantine_root"],
+        runtime_root=paths["runtime_root"], timeout_seconds=timeout_seconds,
+    )
+    if candidate_wave.get("status") in {
+        "waiting", "blocked", "failed", "repair-required",
+    }:
+        repair_ready = candidate_wave.get("status") == "repair-required"
+        return _result(
+            paths, run_id, "waiting" if repair_ready else str(
+                candidate_wave.get("status", "blocked")
+            ), str(candidate_wave.get("stage", "candidate-wave-verification")),
+            list(candidate_wave.get("blockers", [])),
+            candidate_wave=candidate_wave,
+        )
     try:
         candidate_set = ledger.bind_verification_candidate_set(
             run_id=run_id, scope="project-final",
@@ -47,6 +70,7 @@ def resume_project_completion(
     except LedgerError as error:
         return _result(
             paths, run_id, "waiting", "awaiting-all-last-good", [str(error)],
+            candidate_wave=candidate_wave,
         )
     with ledger.connect() as connection:
         members = candidate_set_members(connection, run_id, candidate_set)
@@ -209,6 +233,45 @@ def resume_project_completion(
             paths, run_id, str(cargo.get("status", "blocked")),
             "project-final-cargo", [], candidate_set,
         )
+    project_semantics = verify_project_test_semantics(
+        ledger=ledger, run_id=run_id, repo_root=repo_root,
+        artifact_root=paths["out_root"], out_root_rel=paths["out_root_rel"],
+        project_root=paths["project_root"], runtime_root=paths["runtime_root"],
+        migration_manifest=migration_manifest, candidate_members=members,
+        timeout_seconds=timeout_seconds,
+    )
+    if project_semantics.get("status") != "passed":
+        blockers = project_semantics.get("blockers")
+        repair_ready = project_semantics.get("status") == "repair-required"
+        return _result(
+            paths, run_id, "waiting" if repair_ready else str(
+                project_semantics.get("status", "blocked")
+            ),
+            "project-final-semantic-repair-ready" if repair_ready
+            else "project-final-oracle-replay",
+            list(blockers) if isinstance(blockers, list) else [], candidate_set,
+            project_semantics=project_semantics,
+        )
+    try:
+        project_candidate_gates = record_project_candidate_aggregate_gates(
+            ledger=ledger, run_id=run_id, out_root=paths["out_root"],
+            out_root_rel=paths["out_root_rel"],
+            candidate_set_sha256=candidate_set,
+            candidate_members=members,
+        )
+    except LedgerError as error:
+        return _result(
+            paths, run_id, "blocked",
+            "project-final-candidate-aggregate-gates", [str(error)],
+            candidate_set, project_semantics=project_semantics,
+        )
+    if project_candidate_gates.get("status") != "passed":
+        return _result(
+            paths, run_id, "failed",
+            "project-final-candidate-aggregate-gates", [], candidate_set,
+            project_semantics=project_semantics,
+            project_candidate_gates=project_candidate_gates,
+        )
     final_build_ir = verify_project_final_build_ir(
         migration_manifest=migration_manifest, repo_root=repo_root,
         artifact_root=paths["out_root"],
@@ -222,38 +285,16 @@ def resume_project_completion(
             _build_ir_blocker_kinds(final_build_ir), candidate_set,
             build_ir_verification=final_build_ir_ref,
         )
-    try:
-        project_final = _record_host_project_final(
-            ledger=ledger, out_root=paths["out_root"],
-            out_root_rel=paths["out_root_rel"], run_id=run_id,
-        )
-        completed = complete_verified_project(
-            ledger=ledger, run_id=run_id,
-            candidate_set_sha256=candidate_set,
-        )
-    except LedgerError as error:
-        return _result(
-            paths, run_id, "blocked", "project-final-semantic-project-gates",
-            [str(error)], candidate_set,
-        )
-    receipt = {
-        "schema_version": 1,
-        "artifact_kind": "project-completion-receipt",
-        "status": "completed",
-        "run_id": run_id,
-        "candidate_set_sha256": candidate_set,
-        "project_final_record_id": project_final["record_id"],
-        "project_final_evidence": project_final["evidence"],
-        "build_ir_verifications": {
-            "before_candidate_execution": initial_build_ir_ref,
-            "before_project_final": final_build_ir_ref,
-        },
-        "semantic_gate": True,
-    }
-    reference = write_json_artifact(
-        paths["out_root"], "completion/completion-receipt.json", receipt,
+    return finalize_verified_project(
+        paths=paths, ledger=ledger, run_id=run_id,
+        candidate_set_sha256=candidate_set,
+        project_semantics=project_semantics,
+        initial_build_ir_ref=initial_build_ir_ref,
+        final_build_ir_ref=final_build_ir_ref,
+        evidence_reopener=reopen_project_test_semantic_evidence,
+        project_final_recorder=_record_host_project_final,
+        project_completer=complete_verified_project,
     )
-    return {**completed, "completion_receipt": reference}
 
 
 __all__ = ["SEMANTIC_RUNNERS", "resume_project_completion"]

@@ -17,9 +17,9 @@
 | Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
-| 当前翻译任务 | P0-A19 项目级编排优先；P0-A18c/P0-A10 保留为有限回归与 held-out 验收 |
+| 当前翻译任务 | P0-A19 g4 独立 Cargo 重开与 h4 项目测试适配扩展；P0-A18c/P0-A10 保留为有限回归 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
-| P0-A19 有限门禁 | Windows 共 1001 项：全部通过、11 项平台条件跳过；WSL 同组 1001 项全部通过、6 项平台条件跳过 |
+| P0-A19 有限门禁 | Windows 全量 1157 项：1133 通过、24 项平台条件跳过；WSL 双沙箱项目逻辑 live 4/4 通过 |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | canonical roadmap + code/tests + harness evidence gates |
 
@@ -83,7 +83,9 @@ Cargo generation 现在强制经过 canonical RustProjectIR。wave-provisional �
 
 `CompletionCoordinator` 只从不可变 migration manifest 取得唯一 BuildIR 引用；competition 的 `complete` 必须用 `--repo-root` 提供原始 C 仓库作为重开 locator。它先在任何 project-final candidate compile/semantic/final work 前运行同一 BuildIR verifier；integration、Cargo 和下游 gate 完成后，在写入 host project-final 和发布 completed receipt 前再运行一次。两次内容寻址 verification receipt 都绑定进 completion receipt，任一次漂移都会终止后续工作。
 
-这一层尚未完成全部 A19d3：RustProjectIR 和 generation manifest 会固定写入 `interface_completeness.status=partial`，自动派生 signature 仍明确标为 unresolved；候选 cohort 和 full-project candidate generation 可继续用于隔离检查，但 CompletionCoordinator 会阻止它进入 project-final gate 和 completed receipt。当前权威生成只支持 flat library modules；完整 shared-type layout、ownership、init/destruction、native link、多 crate/bin/target 和嵌套模块仍需 host extractor 或受验证 AI interface proposal。
+RustProjectIR v3 已把 BuildIR 的 target scope 重建为确定性的多 package Cargo workspace，支持静态库、共享库和可执行目标，并按 package/target/module 身份隔离同源 variant。生成物会从绑定的 DAG、BuildIR、candidate source 和 target scope 逐字节重开；唯一入口、crate/module 命名、依赖方向或链接参数无法表达时 fail closed。`cargo metadata --locked --offline`、all-target 编译和 linker/ELF/archive 独立重开仍未全部进入生产完成门，shared-type layout、ownership、init/destruction、cfg/feature 和受证明的 native link 等价性也继续保持 blocker。
+
+项目逻辑验收已接入 `ProjectTestInventory v1` 的首个 CMake/CTest 适配器：规划期只在沙箱中读取内容绑定的 `ctest --show-only=json-v1`，把 CTest 可执行文件精确映射到 materialized BuildIR link target，并在完成期重采集和重算。RustProjectIR 中每个 executable target 都必须至少被一个清单测试覆盖，未注册的可执行目标会阻断整项目完成。argv/env 使用 `literal`、`repo-path` 或有界 path-template 结构表示；未声明外部路径、链接、特殊文件、隐式工作目录输入和包含原 C 可执行文件的 fixture 闭包均 fail closed。宿主只建立一次最小只读输入快照，随后在两个独立 bubblewrap 沙箱中运行原 C 与 Rust 目标；Rust 侧不挂载 C 可执行文件、C 源树、C 运行状态或 C 输出，最终由可信宿主比较 exit/signal/stdout/stderr。原 C baseline 必须成功，匹配的双端失败不能伪装通过。
 
 project repair queue 已接入 schema v7 TransitionAuthority ledger 和专属 AI repairer。CompletionCoordinator 首次只观察最新 receipt，不创建 attempt；隔离的零调用 preflight 通过后，host-issued permit 会绑定精确 receipt/queue/item 状态、模型、agent 和运行时输入，再允许一次 resume 最多启动一个 provider call。provider 完整结果先按哈希写入 ledger，摄取阶段崩溃时下一次 resume 只重开证据并摄取，不再调用模型；证据不全或结果未知仍进入人工对账。attempt 预算沿稳定 diagnostic lineage 跨 receipt epoch 单调继承，另有每 run 64 次 provider call 和 65 个 receipt epoch 的硬上限。
 
@@ -93,9 +95,9 @@ schema v7 还增加了不可变 project diagnostic intake：host 会重开当前
 
 只有在新 managed generation 上由同一 host gate 产生更高 epoch 的新 pass，才能写出内容寻址 revalidation receipt。结算事务会同时重开 source intake、当前 cohort、原始与新 project input、ledger gate record、raw observation/evidence、分类回执、候选 IR/interface 和当前 generation，然后注册 successor receipt、resolve 目标并取消已被 successor 取代的同队列项；复验失败则回滚旧候选、登记新诊断并继承 attempt 预算。该闭环已接入 Cargo compile/link 的严格分类路径；initialization、feature/cfg、ABI 专属 verifier、A19e7 独立进程 capability、A19e8 non-degrading SandboxBackend 和完整 project-final semantic acceptance 仍未完成，AI 候选不会增加 translator numerator。
 
-当前正向完成链仍未闭合：CLI 已有 host-owned integration/Cargo adapter 和失败诊断回投，但 candidate 的 oracle/negative/unsafe-alias/ABI/final 正向 runner 尚未全部接通。进程内 raw-output 引用、可复算 classification receipt 和 competition profile C toolchain input closure 已落地；A19e7 独立 verifier 进程/capability channel/一次性 nonce 与 A19e8 完整 sandbox capability/receipt/backend 等价性仍未落地。因此当前 host-issued receipt 只能证明 canonical 绑定与漂移拒绝，不能声明调用方不可伪造，也不能称为 `competition-exact`。真实 held-out 模式只重开只读 SQLite，复验 AI provider evidence、每个 candidate gate、不可变 candidate set、项目 final bundle 和原始 repository/build 绑定；任何自报 `semantic_gate=true` 的 JSON 都不能计入成功。
+正向完成链现在会自动推进 gate-pending candidate 的 compile、oracle-replay、negative、unsafe-alias、ABI-layout、final 和 promotion，再执行集成、Cargo、CTest C/Rust 项目 oracle 以及项目 gate 汇总。逻辑不一致会按 target/module/unit 归因并原子回到 AI repair，`run-to-completion` 会继续 dispatch repairer、reviewer 和复验，直至完成或产生稳定 blocker；attempt/cycle 上限不会再以异常中断。完整 oracle 使用内容寻址文件，host gate 和 completion receipt 绑定其 SHA，并在发布完成状态前重开 inventory、mapping、oracle、原始 observation、gate summary 和 SQLite gate record。当前仍只有 CMake/CTest direct-executable 适配；Meson/Make/Kconfig、自定义 runner、stdin、声明式/隐式 fixture、完整资源合同、zero-test/遗漏证明和真实 held-out 整项目验收未完成，因此不能称为任意 C 项目或 `competition-exact` 已通过。
 
-阶段入口如下；它只完成规划、模型预检和条件调度，不代表翻译验收结束：
+阶段入口如下。`run-to-completion` 是比赛外层 OpenCode 应优先调用的一键状态机；只有它返回 `completed` 且最终 receipt 全部重开通过才是项目完成，规划、预检或单个 gate 均不是验收结束：
 
 ```bash
 python3 -B validation/tools/project_migration_harness.py plan \
@@ -122,6 +124,11 @@ python3 -B validation/tools/project_migration_harness.py prepare-next-context-fr
 python3 -B validation/tools/project_migration_harness.py complete \
   --db target/project-migration/run-001/state/project-migration.sqlite3 \
   --run-id run-001 \
+  --repo-root /path/to/c-project \
+  --logical-model GLM-5.1 \
+  --resolved-model zai/glm-5.1
+python3 -B validation/tools/project_migration_harness.py run-to-completion \
+  --plan target/project-migration/run-001/project-migration-plan.json \
   --repo-root /path/to/c-project \
   --logical-model GLM-5.1 \
   --resolved-model zai/glm-5.1
@@ -214,7 +221,14 @@ flowchart TB
     SANDBOX -->|"same gate passes on new generation"| SETTLE["Atomic revalidation settlement"]
     SETTLE --> LEDGER
     SETTLE --> RUSTIR
-    SANDBOX -->|"no pending repair"| PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
+    SANDBOX -->|"Cargo passed"| TESTINV["Reopened ProjectTestInventory\nCTest -> exact BuildIR/Rust target mapping"]
+    TESTINV --> INPUTS["One hash-bound minimal read-only input snapshot"]
+    INPUTS --> CORACLE["Original C in isolated bubblewrap"]
+    INPUTS --> RREPLAY["Rust candidate in separate bubblewrap\nno C executable/source/state/output"]
+    CORACLE --> HOSTDIFF["Trusted-host exit/signal/stdout/stderr diff"]
+    RREPLAY --> HOSTDIFF
+    HOSTDIFF -->|"logic mismatch"| LEDGER
+    HOSTDIFF -->|"passed"| PROJECT["Aggregate negative / unsafe-alias / ABI project gates"]
     PROJECT -->|"same candidate set passed"| BIRFINAL["Same manifest-bound BuildIR reverify #2 + receipt\nbefore project-final / completed publication"]
     BIRFINAL --> COMPLETE["Completed receipt binds both verifications"]
     PROJECT -->|"unclosed verifier or failed gate"| BLOCKED
@@ -253,12 +267,18 @@ flowchart LR
     U --> R
     M -->|"fresh same-gate pass"| W["21. Atomic revalidation settlement"]
     W --> K
-    M --> X["22. Project semantic and safety gates"]
-    X --> V2["23. Same manifest-bound BuildIR reverify #2 before publication"]
-    V2 --> N["24. Completed receipt binds both verifications"]
+    M --> X["22. Reopen CTest inventory + exact source/Rust target mapping"]
+    X --> Y["23. One minimal input snapshot"]
+    Y --> C1["24a. Isolated original C baseline"]
+    Y --> R1["24b. Separate isolated Rust replay"]
+    C1 --> D1["25. Trusted-host logic diff"]
+    R1 --> D1
+    D1 -->|"mismatch -> unit repair"| R
+    D1 -->|"passed"| V2["26. Aggregate safety gates + BuildIR reverify #2"]
+    V2 --> N["27. Content-addressed oracle + completed receipt"]
 ```
 
-每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已处理已知 runtime/gate-authority 审查项，并补齐 CMake/Ninja/Meson 同源 BuildIR 收敛、multi-TU/静态归档/ranlib/多输入 link、competition profile C toolchain input closure、DAG 前 BuildIR admission 重开、CompletionCoordinator 双 checkpoint、CLI 与只读 held-out 证据约束。当前开放项仍包括受限 Meson/configure 生成、正向 candidate verifier、A19e7 独立进程 capability、A19e8 non-degrading sandbox、可用比赛等价环境和真实 held-out build/oracle semantic acceptance；这些 profile-bound 输入证据保持 `competition_exact=false`，该流程图是实现合同，不是整项目成功声明。
+每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已补齐 candidate 正向门禁推进、CTest direct-executable 清单、C/Rust 双沙箱宿主差分、逻辑失败回投 AI repair、内容寻址 oracle 和完成凭据重开。当前开放项仍包括受限 Meson/configure 生成、Meson/Make/Kconfig/custom-test 适配、stdin/fixture/resource 完整投影、A19e7 独立进程 capability、A19e8 完整后端等价性和真实 held-out 整项目验收；这些证据保持 `competition_exact=false`，该流程图是实现合同，不是任意 C 项目成功声明。
 
 ## 切片验证与发布架构
 

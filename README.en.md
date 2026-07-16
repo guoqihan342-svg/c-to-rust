@@ -13,9 +13,9 @@ real C source -> bounded Rust candidate -> executable equivalence evidence -> ac
 | Translator-generated semantic pass | `38` named slices, derived from `validation/translator-coverage-matrix.json` |
 | Accepted-evidence authoritative | `1`, reported separately from the translator numerator |
 | Latest development stage | P0-A19: unfamiliar-repository build closure, verification authority, and real held-out contract closure |
-| Active translator task | P0-A19 project orchestration first; P0-A18c/P0-A10 remain finite regression and held-out acceptance tracks |
+| Active translator task | P0-A19 g4 independent Cargo reopening and h4 project-test adapter expansion; P0-A18c/P0-A10 remain finite regressions |
 | Current environment proof | `wsl-local-simulation`, not `competition-exact` |
-| P0-A19 finite gate | Windows: 988 passed with 11 platform-conditional skips; WSL with explicit Cargo/Rustup bindings: 988 passed with six platform-conditional skips |
+| P0-A19 finite gate | Windows full suite: 1,133 passed and 24 platform-conditional skips out of 1,157; WSL dual-sandbox project-logic live gate: 4/4 passed |
 | FlashDB competition source pin | branch `competition`, commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | Development workflow | canonical roadmap, code/tests, and harness evidence gates |
 
@@ -73,7 +73,11 @@ Cargo generation is forced through canonical RustProjectIR. Wave-provisional gen
 
 `CompletionCoordinator` obtains the sole BuildIR reference from the immutable migration manifest. Competition `complete` must provide the original C repository through `--repo-root` as a reopen locator. It runs the same BuildIR verifier before any project-final candidate compile/semantic/final work, then runs it again after integration, Cargo, and downstream gates but before host project-final state and the completed receipt are published. Both content-addressed verification receipts are bound into the completion receipt, and either drift result stops later work.
 
-A19d3 is still open. RustProjectIR and generation manifests remain `interface_completeness.status=partial`, automatically derived signatures remain unresolved, and the authoritative generator currently supports flat library modules only. The schema v7 TransitionAuthority ledger and the dedicated AI repairer now persist and execute the project repair queue. Completion first observes the latest receipt without creating an attempt. After isolated zero-call preflight, a host-issued permit binds the exact receipt, queue, item state, model, agent, and runtime input, and one resume can launch at most one provider call. Complete provider results are hash-bound before ingest; after an ingest crash, the next resume reopens all evidence and performs ingest only. Incomplete or unknown results require manual reconciliation. Diagnostic-lineage budgets survive receipt epochs, with hard per-run caps of 64 provider calls and 65 receipt epochs.
+RustProjectIR v3 now reconstructs BuildIR target scopes as deterministic multi-package Cargo workspaces for static libraries, shared libraries, and executables while isolating same-source variants by package, target, and module identity. Generated output is reopened byte for byte from the bound DAG, BuildIR, candidate sources, and target scopes. Unrepresentable unique entrypoints, crate/module names, dependency directions, or link arguments fail closed. Production completion still lacks the complete independent `cargo metadata --locked --offline`, all-target, linker/ELF/archive reopen gate, and shared-type layout, ownership, init/destruction, cfg/feature, and proven native-link equivalence remain blockers.
+
+Project logic acceptance now has the first `ProjectTestInventory v1` adapter for CMake/CTest. Planning reads only content-bound `ctest --show-only=json-v1` in a sandbox, maps each CTest executable exactly to one materialized BuildIR link target, and recollects and rederives the inventory during completion. Every executable target in RustProjectIR must be covered by at least one inventory test; an unregistered executable blocks whole-project completion. argv and environment values use structured `literal`, `repo-path`, or bounded path-template bindings. Undeclared external paths, links, special files, implicit working-directory inputs, and fixture closures that contain the original C executable fail closed. The host creates one minimal read-only input snapshot and runs the original C executable and Rust target in separate bubblewrap sandboxes. The Rust side never mounts the C executable, C source tree, C runtime state, or C output; a trusted host compares exit, signal, stdout, and stderr. The original C baseline must succeed, so matching failures cannot impersonate equivalence.
+
+The schema v7 TransitionAuthority ledger and the dedicated AI repairer persist and execute the project repair queue. Completion first observes the latest receipt without creating an attempt. After isolated zero-call preflight, a host-issued permit binds the exact receipt, queue, item state, model, agent, and runtime input, and one resume can launch at most one provider call. Complete provider results are hash-bound before ingest; after an ingest crash, the next resume reopens all evidence and performs ingest only. Incomplete or unknown results require manual reconciliation. Diagnostic-lineage budgets survive receipt epochs, with hard per-run caps of 64 provider calls and 65 receipt epochs.
 
 Schema v7 also adds an immutable project-diagnostic intake. The host reopens the current candidate set, managed generation, and canonical RustProjectIR, then admits only structured rustc `error` diagnostics from a proven sandboxed Cargo execution. Cargo check/test freezes the complete candidate cohort and validates gate order, execution status, unique candidate identity/content ownership, and classification of every error before recording any repair. Bounded stdout/stderr for each gate is first stored as a private content-addressed artifact, and observation v3 binds a classification receipt that is recomputable from those raw references. The receipt cross-binds the run, cohort, project input, RustProjectIR/interface, unit partition, and admitted diagnostics. Unit ownership comes from the cross-binding between RustProjectIR module paths and the candidate set. The shared linker parser accepts only bounded GNU/lld/MSVC unresolved-symbol forms, and a symbol must map uniquely to one module in the current RustProjectIR. Unknown, ambiguous, or mixed errors, duplicate owners, stale unit paths, toolchain-sensitive rustc failures, environment failures, and diagnostic overflow block the complete repair batch. Only after whole-batch admission do uniquely owned errors become unit repairs. An `E####` compile error with a repository-relative project location or a unique project link symbol binds the cohort, IR/interface, generation input, raw observation, and verifier receipt. Warnings, generic Cargo failures, and environment or sandbox blockers produce zero intake and zero AI calls; private raw text never enters model context.
 
@@ -81,9 +85,9 @@ Validated intakes now enter a coordinator receipt v2 that remains compatible wit
 
 Closure requires a higher-epoch pass from the same host gate on a new managed generation and a content-addressed revalidation receipt. One settlement transaction reopens the source intake, current cohort, old and new project inputs, ledger gate record, raw observation/evidence, classification receipt, candidate IR/interface, and current generation before it registers the successor receipt, resolves the target, and cancels queue siblings superseded by that successor. A failed recheck rolls back the old candidate, records the new diagnostics, and inherits the attempt budget. This loop now accepts strictly classified Cargo compile/link diagnostics. Dedicated initialization, feature/cfg, and ABI verifiers, the A19e7 process capability boundary, the A19e8 non-degrading SandboxBackend, and complete project-final semantic acceptance remain open; AI candidates add nothing to the translator numerator.
 
-The positive completion path remains open. Host-owned integration/Cargo adapters and failure routing exist, but positive candidate compile/oracle/negative/unsafe-alias/ABI/final runners are not all connected. In-process raw-output references, a recomputable classification receipt, and competition-profile C-toolchain input closure now exist. The A19e7 independent verifier process/capability channel/one-time nonce and A19e8 complete sandbox capability/receipt/backend equivalence do not. The current host-issued receipt therefore proves canonical binding and drift rejection, not that the caller is unforgeable, and it is not `competition-exact`. Real held-out mode reopens SQLite read-only and revalidates AI provider evidence, every candidate gate, the immutable candidate set, the project final bundle, and original repository/build bindings. A self-reported JSON `semantic_gate=true` cannot contribute success.
+The positive completion path now advances gate-pending candidates through compile, oracle-replay, negative, unsafe-alias, ABI-layout, final, and promotion before integration, Cargo, the CTest C/Rust project oracle, and project-gate aggregation. A logic mismatch is attributed through target, module, and unit identities and atomically returns to AI repair. `run-to-completion` continues through repairer, reviewer, and revalidation until completion or a stable blocker; attempt and cycle limits become structured terminal results rather than exceptions. Full oracle output is content-addressed, its SHA is bound into the host gate and completion receipt, and finalization reopens the inventory, mapping, oracle, raw observation, gate summary, and SQLite gate row. Only the CMake/CTest direct-executable adapter exists today. Meson, Make, Kconfig, custom runners, stdin, declared or implicit fixtures, full resource contracts, zero-test/omission proof, and real held-out whole-project acceptance remain open, so this is not a claim that arbitrary C projects or `competition-exact` qualification already pass.
 
-These commands establish planning, model preflight, and conditional dispatch only; they are not a completed translation claim:
+The competition-side OpenCode should prefer the one-command `run-to-completion` state machine below. A project is complete only when it returns `completed` and every final receipt reopens successfully; planning, preflight, or an individual gate is not acceptance:
 
 ```bash
 python3 -B validation/tools/project_migration_harness.py plan \
@@ -110,6 +114,11 @@ python3 -B validation/tools/project_migration_harness.py prepare-next-context-fr
 python3 -B validation/tools/project_migration_harness.py complete \
   --db target/project-migration/run-001/state/project-migration.sqlite3 \
   --run-id run-001 \
+  --repo-root /path/to/c-project \
+  --logical-model GLM-5.1 \
+  --resolved-model zai/glm-5.1
+python3 -B validation/tools/project_migration_harness.py run-to-completion \
+  --plan target/project-migration/run-001/project-migration-plan.json \
   --repo-root /path/to/c-project \
   --logical-model GLM-5.1 \
   --resolved-model zai/glm-5.1
@@ -202,7 +211,14 @@ flowchart TB
     SANDBOX -->|"same gate passes on new generation"| SETTLE["Atomic revalidation settlement"]
     SETTLE --> LEDGER
     SETTLE --> RUSTIR
-    SANDBOX -->|"no pending repair"| PROJECT["Project oracle / negative / unsafe / ABI / final gates"]
+    SANDBOX -->|"Cargo passed"| TESTINV["Reopened ProjectTestInventory\nCTest -> exact BuildIR/Rust target mapping"]
+    TESTINV --> INPUTS["One hash-bound minimal read-only input snapshot"]
+    INPUTS --> CORACLE["Original C in isolated bubblewrap"]
+    INPUTS --> RREPLAY["Rust candidate in separate bubblewrap\nno C executable/source/state/output"]
+    CORACLE --> HOSTDIFF["Trusted-host exit/signal/stdout/stderr diff"]
+    RREPLAY --> HOSTDIFF
+    HOSTDIFF -->|"logic mismatch"| LEDGER
+    HOSTDIFF -->|"passed"| PROJECT["Aggregate negative / unsafe-alias / ABI project gates"]
     PROJECT -->|"same candidate set passed"| BIRFINAL["Same manifest-bound BuildIR reverify #2 + receipt\nbefore project-final / completed publication"]
     BIRFINAL --> COMPLETE["Completed receipt binds both verifications"]
     PROJECT -->|"unclosed verifier or failed gate"| BLOCKED
@@ -241,12 +257,18 @@ flowchart LR
     U --> R
     M -->|"fresh same-gate pass"| W["21. Atomic revalidation settlement"]
     W --> K
-    M --> X["22. Project semantic and safety gates"]
-    X --> V2["23. Same manifest-bound BuildIR reverify #2 before publication"]
-    V2 --> N["24. Completed receipt binds both verifications"]
+    M --> X["22. Reopen CTest inventory + exact source/Rust target mapping"]
+    X --> Y["23. One minimal input snapshot"]
+    Y --> C1["24a. Isolated original C baseline"]
+    Y --> R1["24b. Separate isolated Rust replay"]
+    C1 --> D1["25. Trusted-host logic diff"]
+    R1 --> D1
+    D1 -->|"mismatch -> unit repair"| R
+    D1 -->|"passed"| V2["26. Aggregate safety gates + BuildIR reverify #2"]
+    V2 --> N["27. Content-addressed oracle + completed receipt"]
 ```
 
-Every edge carries schema-bound artifacts with repository-relative paths and SHA-256, not chat conclusions. This stage adds same-source CMake/Ninja/Meson BuildIR convergence, multi-TU/static-archive/ranlib/multi-input-link facts, competition-profile C-toolchain input closure, a pre-DAG BuildIR admission reopen, two CompletionCoordinator checkpoints, CLI constraints, and read-only held-out evidence. Remaining work includes constrained Meson/configure generation, positive candidate verifiers, the A19e7 independent process capability, the A19e8 non-degrading sandbox, a usable competition-equivalent environment, and real held-out build/oracle semantic acceptance. This profile-bound input evidence keeps `competition_exact=false`; the diagram is an implementation contract, not a whole-project success claim.
+Every edge carries schema-bound artifacts with repository-relative paths and SHA-256, not chat conclusions. This stage connects positive candidate-gate advancement, the CTest direct-executable inventory, trusted-host C/Rust dual-sandbox comparison, logic-failure routing to AI repair, a content-addressed oracle, and completion-evidence reopening. Remaining work includes constrained Meson/configure generation, Meson/Make/Kconfig/custom-test adapters, complete stdin/fixture/resource projection, the A19e7 independent process capability, full A19e8 backend equivalence, and real held-out whole-project acceptance. These artifacts keep `competition_exact=false`; the diagram is an implementation contract, not an arbitrary-C-project success claim.
 
 ## Slice Verification and Publication Architecture
 

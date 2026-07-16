@@ -106,8 +106,16 @@ class ProjectMigrationCompletionCoordinatorTests(
         ], calls)
         self.assertEqual("project-final-semantic-runners", result["stage"])
 
-    def test_incomplete_units_wait_without_running_candidate_code(self) -> None:
+    def test_candidate_worker_requirement_waits_before_project_final_code(self) -> None:
+        waiting = {
+            "status": "waiting", "stage": "candidate-worker-required",
+            "blockers": [], "unit_ids": ["unit"],
+        }
         with mock.patch(
+            "validation.tools._project_migration_harness."
+            "project_completion_coordinator.advance_gate_pending_candidates",
+            return_value=waiting,
+        ), mock.patch(
             "validation.tools._project_migration_harness."
             "project_completion_coordinator.verify_candidate_compile",
         ) as compile_runner:
@@ -115,7 +123,8 @@ class ProjectMigrationCompletionCoordinatorTests(
                 ledger=self.ledger, run_id="run", harness_root=self.harness,
             )
         self.assertEqual("waiting", result["status"])
-        self.assertEqual("awaiting-all-last-good", result["stage"])
+        self.assertEqual("candidate-worker-required", result["stage"])
+        self.assertEqual(waiting, result["candidate_wave"])
         compile_runner.assert_not_called()
 
     def test_partial_rust_project_ir_blocks_project_final_publication(self) -> None:

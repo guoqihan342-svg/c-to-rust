@@ -127,10 +127,15 @@ class V3CargoFixture:
         )
 
 
-def direct_two_package_ir() -> tuple[dict, dict[str, bytes]]:
+def direct_two_package_ir(
+    *, second_package_executable: bool = False,
+) -> tuple[dict, dict[str, bytes]]:
     sources = {
         "unit-bin": b"fn main() {}\n",
-        "unit-lib": b"pub fn value() -> i32 { 7 }\n",
+        "unit-lib": (
+            b"fn main() { let _ = 1; }\n" if second_package_executable
+            else b"pub fn value() -> i32 { 7 }\n"
+        ),
     }
     shas = {key: hashlib.sha256(value).hexdigest() for key, value in sources.items()}
     builds = ["b" * 64]
@@ -150,10 +155,16 @@ def direct_two_package_ir() -> tuple[dict, dict[str, bytes]]:
             "evidence": _evidence(builds, [unit_id], [shas[unit_id]]),
         }
     packages, targets = [], []
-    for suffix, product, kind, crate_types in (
+    products = [
         ("bin", "executable", "bin", ["bin"]),
-        ("lib", "static-library", "lib", ["rlib", "staticlib"]),
-    ):
+        (
+            "lib",
+            "executable" if second_package_executable else "static-library",
+            "bin" if second_package_executable else "lib",
+            ["bin"] if second_package_executable else ["rlib", "staticlib"],
+        ),
+    ]
+    for suffix, product, kind, crate_types in products:
         module_id = modules[suffix]["module_id"]
         evidence = modules[suffix]["evidence"]
         packages.append({

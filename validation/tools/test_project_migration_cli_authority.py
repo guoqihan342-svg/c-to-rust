@@ -18,7 +18,7 @@ from validation.tools._project_migration_harness.project_migration_cli import (
 )
 from validation.tools._project_migration_harness.ledger_schema import SCHEMA_VERSION
 from validation.tools._project_migration_harness.project_cli_runtime import (
-    display_result, load_bound_portfolio,
+    display_result, exit_code, load_bound_portfolio,
 )
 
 
@@ -257,6 +257,24 @@ class ProjectMigrationCliAuthorityTests(unittest.TestCase):
                         "preflight", "--out-root", "target/run", "--run-id", "run",
                     ])
                 self.assertEqual(1, code)
+
+    def test_complete_exit_code_requires_actual_completion(self) -> None:
+        self.assertEqual(1, exit_code({"status": "waiting"}, command="complete"))
+        self.assertEqual(1, exit_code({"status": "passed"}, command="complete"))
+        self.assertEqual(0, exit_code({"status": "completed"}, command="complete"))
+        self.assertEqual(0, exit_code({"status": "waiting"}, command="dispatch"))
+        self.assertEqual(
+            1, exit_code({"status": "waiting"}, command="run-to-completion"),
+        )
+
+    def test_run_to_completion_keeps_worker_authority_fixed(self) -> None:
+        parsed = parse_args([
+            "run-to-completion", "--plan", "target/run/plan.json",
+            "--repo-root", ".",
+        ])
+        self.assertEqual(256, parsed.max_cycles)
+        for field in ("opencode_command", "agent", "variant", "status"):
+            self.assertFalse(hasattr(parsed, field))
 
 
 def _plan(ledger_path: str) -> dict[str, object]:

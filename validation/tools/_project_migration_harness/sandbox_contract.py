@@ -110,6 +110,13 @@ class SandboxBackend(Protocol):
         probe_receipt: object,
     ) -> SandboxRunResult: ...
 
+    def execute_project_test_process(
+        self, executable: Path, *, project_root: Path, runtime_root: Path,
+        arguments: Sequence[str], working_directory: str,
+        environment: Mapping[str, str], timeout_seconds: int,
+        input_sha256: str, probe_receipt: object,
+    ) -> dict[str, Any]: ...
+
 
 @dataclass(frozen=True)
 class SandboxDiscovery:

@@ -23,6 +23,7 @@ def record_candidate_gate(
     verifier_id: str, diagnostics: list[Mapping[str, Any]],
     candidate_set_sha256: str | None = None,
     project_record_id: str | None = None,
+    defer_transition: bool = False,
 ) -> dict[str, Any]:
     require_portable_id(record_id, "record_id")
     if project_record_id is not None:
@@ -81,7 +82,7 @@ def record_candidate_gate(
     )
     if state is None:
         raise LedgerError("migration unit does not exist")
-    if state["status"] != "retry-ready":
+    if state["status"] != "retry-ready" and not defer_transition:
         ledger.mark_verification_failed(
             run_id=run_id,
             unit_id=unit_id,
@@ -104,6 +105,7 @@ def record_candidate_gate(
         ),
         "evidence": {**reference, "path": evidence_path},
         "semantic_gate": False,
+        **({"transition_deferred": True} if defer_transition else {}),
         "proof_boundary": "fail-closed CLI path; passing verdicts require a host verifier adapter",
     }
 

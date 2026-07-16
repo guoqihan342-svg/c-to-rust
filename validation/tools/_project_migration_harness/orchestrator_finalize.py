@@ -93,6 +93,9 @@ def _integration_manifest(
         "c_compilation_facts": {
             "status": "bound", "artifact": artifacts["c_compilation_facts"],
         },
+        "project_test_inventory": {
+            "status": "bound", "artifact": artifacts["project_test_inventory"],
+        },
         "claim_boundary": {
             "semantic_gate": False, "translation_coverage_numerator": 0,
         },

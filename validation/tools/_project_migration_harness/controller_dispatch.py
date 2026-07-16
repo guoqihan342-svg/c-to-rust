@@ -8,6 +8,7 @@ from .artifacts import content_sha256, write_json_artifact
 from .context_frontier import materialize_scheduled_contexts
 from .context_frontier_overlay_runtime import resolve_schedule_context_overlays
 from .ledger import LeaseConflict, ProjectLedger
+from .ledger_security import AttemptLimitReached
 from .orchestration_facts import build_gate_facts, read_artifact_reference
 from .scheduler import schedule_portfolio
 from .worker_requests import bind_attempt_request, materialize_worker_requests
@@ -80,6 +81,11 @@ def dispatch_project_workers(
         except LeaseConflict:
             skipped.append({"worker_id": worker_id, "reason": "lease_not_available"})
             continue
+        except AttemptLimitReached:
+            skipped.append({
+                "worker_id": worker_id, "reason": "attempt_limit_reached",
+            })
+            continue
         attempt_id = str(begun["attempt_id"])
         token = int(begun["fencing_token"])
         try:
@@ -143,9 +149,15 @@ def dispatch_project_workers(
         launches.append({**launch, "launch_artifact": {
             **launch_ref, "path": f"{out_root_rel}/{launch_ref['path']}"
         }})
+    attempt_limit_reached = any(
+        item["reason"] == "attempt_limit_reached" for item in skipped
+    )
     report = {
         "schema_version": 1,
-        "status": "dispatched" if launches else schedule["status"],
+        "status": (
+            "dispatched" if launches else "blocked" if attempt_limit_reached
+            else schedule["status"]
+        ),
         "run_id": run_id,
         "recovered_attempt_ids": recovered,
         "launches": launches,

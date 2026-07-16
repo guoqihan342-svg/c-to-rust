@@ -149,7 +149,7 @@ class SccTargetScopeTests(unittest.TestCase):
             key: reference for key in (
                 "generated_build_closure", "generated_build_closure_verification",
                 "build_ir", "build_ir_verification", "build_ir_worker_admission",
-                "c_compilation_facts", "migration_graph",
+                "c_compilation_facts", "migration_graph", "project_test_inventory",
             )
         }
 
