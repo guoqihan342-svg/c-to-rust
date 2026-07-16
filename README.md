@@ -19,7 +19,7 @@
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
 | 当前翻译任务 | P0-A19 g4 独立 Cargo 重开与 h4 剩余项目测试适配扩展；P0-A18c/P0-A10 保留为有限回归 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
-| P0-A19 有限门禁 | Windows 项目迁移全量 1250 项：1224 通过、26 项平台条件跳过；WSL 双沙箱项目逻辑 live 4/4 通过 |
+| P0-A19 有限门禁 | Windows 项目迁移全量 1250 项：1224 通过、26 项平台条件跳过；WSL 项目迁移全量 1250 项：1238 通过、12 项显式 live 条件跳过 |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | canonical roadmap + code/tests + harness evidence gates |
 
@@ -552,6 +552,8 @@ python3 -B validation/tools/validate_auto_translation_evidence.py \
 ```
 
 ### 4. Harness before/after 展品
+
+评委 before/after 演示与产物说明见 [judge-demo.md](docs/c2rust-migration-agent/judge-demo.md)；demo 产物为 `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json`，该展品不增加 `translation_coverage_numerator`。
 
 ```bash
 python3 -B -m validation.tools.judge_demo \

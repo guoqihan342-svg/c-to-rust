@@ -157,6 +157,22 @@ python3 -B -m validation.tools.run_judge_entrypoints \
   --proof-class competition-exact
 ```
 
+评委 before/after 公开入口：
+
+```bash
+python3 -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
+python3 -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
+python3 -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --review-checklist target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
+```
+
+FlashDB 公开产物为 `target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json`、`target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json` 和 `target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json`。保底入口与产物为：
+
+```bash
+python3 -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/demo-store-add-one-before-after.json --run-id competition-demo-before-after-exhibit --out-root target/competition-out-demo-before-after-exhibit
+```
+
+`target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json` 与 `target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json` 仅展示 hash-bound before/after；`judge-demo-report.json.repair_summary` 只聚合已绑定 repair 事实，不替代 validator/oracle，也不增加 `translation_coverage_numerator`。
+
 运行完成后必须深校验本地产物：
 
 ```bash

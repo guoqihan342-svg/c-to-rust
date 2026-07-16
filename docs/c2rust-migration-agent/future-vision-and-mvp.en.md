@@ -155,6 +155,22 @@ python3 -B -m validation.tools.run_judge_entrypoints \
   --proof-class competition-exact
 ```
 
+Public judge before/after entrypoints:
+
+```bash
+python3 -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
+python3 -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
+python3 -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --review-checklist target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
+```
+
+The public FlashDB artifacts are `target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json`, `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`, and `target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json`. The fallback entrypoint and artifacts are:
+
+```bash
+python3 -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/demo-store-add-one-before-after.json --run-id competition-demo-before-after-exhibit --out-root target/competition-out-demo-before-after-exhibit
+```
+
+`target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json` and `target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json` are hash-bound exhibits only. `judge-demo-report.json.repair_summary` aggregates bound repair facts; it does not replace the validator/oracle or increase `translation_coverage_numerator`.
+
 After execution, deeply validate local artifacts:
 
 ```bash
