@@ -131,9 +131,15 @@ def run_negative_execution(
             rustc: "rustc",
             str(temp): "<translation-carrier-negative>",
         }
+        replay_candidate = bind_external_replay_context(
+            context,
+            draft_path,
+            mutated,
+            temp,
+        )
         same_source = temp / "mutated_same_replay.rs"
         same_exe = temp / "mutated_same_replay.exe"
-        same_source.write_bytes(mutated + b"\n" + replay_test)
+        same_source.write_bytes(replay_candidate + b"\n" + replay_test)
         same_compile = run_command(
             [rustc, "--edition=2021", "--test", "--error-format=json", str(same_source), "-o", str(same_exe)],
             aliases=command_aliases,
@@ -146,7 +152,11 @@ def run_negative_execution(
 
         partition_source = temp / "mutated_partition_replay.rs"
         partition_exe = temp / "mutated_partition_replay.exe"
-        partition_source.write_bytes(mutated + b"\n" + partition_probe_source(context).encode("utf-8"))
+        partition_source.write_bytes(
+            replay_candidate
+            + b"\n"
+            + partition_probe_source(context).encode("utf-8")
+        )
         partition_compile = run_command(
             [
                 rustc,
@@ -284,6 +294,34 @@ def run_negative_execution(
         },
         "artifacts": artifacts,
     }
+
+
+def bind_external_replay_context(
+    context: StaticContext,
+    draft_path: Path,
+    candidate: bytes,
+    temp: Path,
+) -> bytes:
+    from validation.tools.auto_migrate import (
+        external_direct_callee_context,
+        inject_external_callee_stubs,
+        load_plan_call_expressions,
+    )
+
+    call_expressions = load_plan_call_expressions(
+        draft_path.parent,
+        str(context.spec["slice_id"]),
+    )
+    external_context = external_direct_callee_context(context.spec, call_expressions)
+    if external_context["status"] == "blocked":
+        raise ReporterError("generated Rust replay external callee context is blocked")
+    if external_context["status"] != "recorded":
+        return candidate
+
+    candidate_path = temp / "mutated_external_replay_input.rs"
+    candidate_path.write_bytes(candidate)
+    inject_external_callee_stubs(candidate_path, external_context, context.spec)
+    return candidate_path.read_bytes()
 
 
 def partition_probe_source(context: StaticContext) -> str:
