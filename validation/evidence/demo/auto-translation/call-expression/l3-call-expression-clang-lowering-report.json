@@ -7,12 +7,11 @@
     "role": "diagnostic_only"
   },
   "diagnostics": [
-    "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable",
-    "clang AST JSON fixture replay used after clang AST dump was unavailable: crates/c2r-translator/fixtures/clang_ast/call_expression_chain_ast.json"
+    "clang AST JSON fixture replay selected from slice spec; external clang AST dump was not invoked: crates/c2r-translator/fixtures/clang_ast/call_expression_chain_ast.json"
   ],
   "durable_evidence": {
-    "clang_path": "",
-    "clang_version": "not_configured",
+    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+    "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
     "competition_environment": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
@@ -35,8 +34,7 @@
     ],
     "clang_path": null,
     "diagnostics": [
-      "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable",
-      "clang AST JSON fixture replay used after clang AST dump was unavailable: crates/c2r-translator/fixtures/clang_ast/call_expression_chain_ast.json"
+      "clang AST JSON fixture replay selected from slice spec; external clang AST dump was not invoked: crates/c2r-translator/fixtures/clang_ast/call_expression_chain_ast.json"
     ],
     "environment": {
       "diagnostics": [

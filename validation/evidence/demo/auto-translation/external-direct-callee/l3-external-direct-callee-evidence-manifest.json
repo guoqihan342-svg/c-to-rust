@@ -1,5 +1,6 @@
 {
   "claim_boundary": {
+    "accepted_evidence_authoritative": false,
     "accepted_metadata_differences": [],
     "alias_gate": {
       "complete_alias_safety": false,
@@ -20,10 +21,15 @@
     "external_callee_scope": {
       "blocked_count": 0,
       "declared_count": 1,
+      "declared_spec_count": 1,
+      "declared_spec_names": [
+        "helper_add_one"
+      ],
       "semantics_verified": false,
       "status": "compile_context_only",
       "stub_kind": "compile_only"
     },
+    "generated_draft_semantic_pass": false,
     "known_gaps": [
       "No arbitrary multi-function translation claim.",
       "No helper stub semantic equivalence claim.",
@@ -45,40 +51,45 @@
   "evidence": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-      "sha256": "3cec3d0c1b8eea85969ba9a3593937d78eb8b911b61940cf3522bc0dcfa85e15",
+      "sha256": "8167005071a9d661db83995ff9f567c32c87e83afabdb469c808f5d599d49804",
       "status": "skipped"
     },
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c-oracle-status.json",
-      "sha256": "b4fa0d7bfb618a49045861ddde02375ae58327454c27e88184ae8460e591b204",
+      "sha256": "06341df7bb59febee11e8f39fbbc1d19e08e9f22fbd727f2c5ba28a31e4f29dd",
       "status": "C_ORACLE_GENERATED"
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-auto-cache-metadata.json",
-      "sha256": "08c95c2097adb9c0a3d7da19d41fc16e6e62b46aa8fd064bd445dabf84a0cf4a",
+      "sha256": "c4c6f73f6fed8114aa59ea7dbe09207b7201f805fa1f2779cca246769d0367e7",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-clang-lowering-report.json",
+      "sha256": "2ec479a9c771cb5d83c30fe4f8b6d286be33c83498b3a78686fc7377294a3fd5",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-config-profile.json",
       "profile_id": "demo-external-direct-callee-wsl-gcc",
-      "sha256": "6e725af6736bb16a7d0220df3ff4f54afc9b1487760ed67fa779e311b6eeafd9",
+      "sha256": "016b5b8f9ed0ceb0316eec73bbd3fe034a1090faa6e0ba4b3ed2c3ec6a1e1b1a",
       "status": "recorded"
     },
     "context_pack": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-context-pack.json",
-      "sha256": "c2fbd85e75d0b2695d5123d92bd35102fff5adcc2bd05ac067a520e7a8d57017",
+      "sha256": "706b755f5e053cb0286dc8bfe8b2d90b294fc73cca2f6d43d983fe89720ca9c8",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-final-verification.json",
-      "sha256": "6d0aae9e0fa9181dca34566c9465a21fb78e124d08e6cd816361e1d4404de980",
+      "sha256": "73b7e5ec319e75bb65ff2e38e53f8b39962ecd597f7614442ed47c4faa26e56a",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-negative-diff.json",
-      "sha256": "65c561524ec09bde4f59d55d4e3184d1f8888ba1c49d69fb2e6c889367692938",
+      "sha256": "d4dfea35c64237ab3c8d093a7120db79fa8b2dc1888c26a05b6b7eb36cd680fa",
       "status": "expected_failed"
     },
     "performance_smoke": {
@@ -90,28 +101,28 @@
     "pointer_dependency_graph": {
       "not_applicable_reason": "slice has no pointer surface",
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-pointer-graph.json",
-      "sha256": "afb5709cac87d4390d2adfea62d912b09b60e5bcda3b12858a1b2b45569cb225",
+      "sha256": "6370c75d2e45f8c51f1e41b40cf877457642a595ffa5cb3a1c7a25c041d5f597",
       "status": "not_applicable"
     },
     "route_decision": {
       "level": "L0",
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-      "sha256": "75183246bb1b5e0498bd479ba49322f4a31169122ce3497ca8b84c2be1a9d85d",
+      "sha256": "00706c0f458c7a5a7c590417d90378722f9ed6615570304e6a66efccf2dc9728",
       "status": "recorded"
     },
     "rust_check": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/rust-check.json",
-      "sha256": "057172979b99f95f20f8e58bea675da368d6594952cb1663634a55e4461c7aa6",
+      "sha256": "8b9ad5babed4389c4620a58b1ea9660f564e4764ffd7f280532113630d11a921",
       "status": "passed"
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-rust-report.json",
-      "sha256": "56098fa5c7163a5762b1946f726e073dae16209f9a7fb4ff07c535ba9d91e1d7",
+      "sha256": "77ba8afb655d70ea1438d70a5395ac4c79d1ee5a5a77162778dde47a4a3a4db9",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-diff.json",
-      "sha256": "12d3f8454e0e906662a098c733945ba75b2db03568ae2008fa9f6e1f8aa3b21c",
+      "sha256": "e4077f7f1fad44299555688b1e58cd6a466fae26bcc8177c067bb1d48d0ee9a4",
       "status": "passed"
     },
     "slice_contract": {
@@ -121,44 +132,48 @@
     },
     "summary": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-summary.json",
-      "sha256": "721baeebeb3a1d767bfce24e06b88e9c5ff8ca0fd7e099508b096acf53822d85",
+      "sha256": "d9101e21e37b44370e1baa4cb91d1dcff7b200292a660d64fb6d853e8fa1de5e",
       "status": "passed"
     },
     "test_translation": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-test-translation-generated.json",
-      "sha256": "7f585d67e5f7b1f90c5ee5a2c3584a4b604e611608cf1060988f06ccb0d123cd",
+      "sha256": "3d856bc2295d01fbbd594f27f61af5220e58e5da9857edd1c886d7e364630fc7",
       "status": "recorded"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-unsafe-ledger.json",
-      "sha256": "e4d71479560314c66f1047ccf038ae9fac9d0097fe3a9341bc5f0ded84d089ba",
+      "sha256": "b8627a014197b79ffa53f90225b5f8c5ebae608f5092f5a97a7b1340146d700e",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-unsafe-scan.json",
-      "sha256": "6439b9ba95fbc74f1d66795a647d8708f57faa5dd99ea171ec9c72eceda06c49",
+      "sha256": "3ccf60eaad17bb4eae061251035b8635c0465d468b3a240d27918ef6d46ec723",
       "status": "passed"
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
       "profile": "L0-dev",
-      "sha256": "87751fdf4380e3b8fe976740ea9703a7af8b3f08be154389322ed1017ffb245f",
+      "sha256": "3d5df8fa878d83a8b6052a7f61657b38f788ba4469a7046749d044dbc037575f",
       "status": "passed"
+    },
+    "verified_unsafe_baseline": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-verified-unsafe-baseline.json",
+      "sha256": "0282075108be4b74de099fb4e3cad699e4cae18913a18bb838aaca34a1dddeba",
+      "status": "blocked"
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-version-manifest.json",
-      "sha256": "98d27761217cba903e3fede3ebc169505238665cf782f7bd092ec6d4da7e63f7",
+      "sha256": "ab6533d4a7d9adc35c7e4c559933fa72262154e6798d41531fc377e84aebd3c9",
       "status": "recorded"
     }
   },
   "fixture": {
     "hash": "external-direct-callee-fixture",
     "operation_count": 3,
-    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
-    "sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b"
+    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json"
   },
   "level": "L3",
-  "repo_commit": "7e97322e7ce2df2f309eaffda3f6d50f1e63f7e8",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "schema_version": 1,
   "slice_id": "external-direct-callee",
   "source_commit": "demo-external-direct-callee-20260625",

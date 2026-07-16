@@ -8,6 +8,14 @@
         "return"
       ],
       "direct_call_only": true,
+      "input_fixture_fields": {
+        "value": "input_value"
+      },
+      "source_calls": [
+        "int first = call_expression_chain(value - 1)",
+        "value = call_expression_chain(first - 1)",
+        "return call_expression_chain(value - 1)"
+      ],
       "unsupported": [
         "function_pointer_call",
         "member_call",

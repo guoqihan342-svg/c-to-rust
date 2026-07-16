@@ -16,6 +16,13 @@
     "target_triple": "x86_64-unknown-linux-gnu"
   },
   "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
     "pointer_contract": {
       "aliasing_proven": false,
       "input_buffers": [
@@ -50,7 +57,45 @@
           ]
         }
       ]
-    }
+    },
+    "signatures": [
+      {
+        "c_source": "int copy_i32_ptr_arith(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }",
+        "function": "copy_i32_ptr_arith",
+        "parameters": [
+          {
+            "buffer_length_parameter": "len",
+            "c_type": "const int*",
+            "direction": "input",
+            "name": "values"
+          },
+          {
+            "bounds": {
+              "maximum": "fixture-bound",
+              "minimum": 0
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "len"
+          },
+          {
+            "buffer_length_parameter": "len",
+            "c_type": "int*",
+            "direction": "output",
+            "name": "out"
+          }
+        ],
+        "return_type": "int",
+        "source_span": {
+          "byte_end": 136,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+          "line_end": 1,
+          "line_start": 1,
+          "sha256": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
+        }
+      }
+    ]
   },
   "c_source": "int copy_i32_ptr_arith(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }",
   "fixture_hash": "copy-i32-ptr-arith-fixture",

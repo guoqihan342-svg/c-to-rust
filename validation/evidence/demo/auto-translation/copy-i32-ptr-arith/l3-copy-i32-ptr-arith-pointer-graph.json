@@ -166,8 +166,23 @@
       "unsafe_expected": false
     },
     {
-      "decision": "bounded_pointer_arithmetic_output_write",
+      "decision": "bounded_pointer_index",
       "id": "pointer-decision-3",
+      "lvalue_kind": "bounded_pointer_index",
+      "pointer_node": "out",
+      "reason": "bounded translator pointer/lvalue decision",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "source_statement": "*(out + i)",
+      "translation_rule_id": "bounded-pointer-index-write",
+      "unsafe_expected": false
+    },
+    {
+      "decision": "bounded_pointer_arithmetic_output_write",
+      "id": "pointer-decision-4",
       "lvalue_kind": "bounded_pointer_arithmetic_output_buffer",
       "pointer_node": "out",
       "reason": "bounded translator pointer/lvalue decision",
@@ -187,9 +202,11 @@
         "bounded_input_buffer",
         "bounded_pointer_arithmetic_input_read"
       ],
+      "buffer_role": "input",
       "c_type": "const int *",
       "id": "values",
-      "kind": "raw_pointer",
+      "kind": "buffer",
+      "length_companion": "len",
       "mutability": "read_only",
       "nullability": "unknown",
       "ownership_role": "borrowed",
@@ -202,6 +219,7 @@
     },
     {
       "boundary_decisions": [
+        "bounded_pointer_index",
         "bounded_pointer_arithmetic_output_write"
       ],
       "buffer_role": "output",
@@ -220,7 +238,7 @@
       ]
     }
   ],
-  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "risk_summary": {
     "alias_gate": {
       "complete_alias_safety": true,

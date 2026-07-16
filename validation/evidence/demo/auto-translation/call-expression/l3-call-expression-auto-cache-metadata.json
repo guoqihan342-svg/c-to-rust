@@ -10,12 +10,12 @@
   },
   "build_profile_hash": "05410efef254acecefcf4bbda52bc0eec37b7602eca1b175b97b531e8858265c",
   "c2rust_baseline_identity": {
-    "sha256": "ca961a20905b2b03da123b94ae4ffdbb030ae6b78e30eba8b163981731de8e53",
+    "sha256": "7befc662179cc6cfe759d4cd5cb1a468b28cc3950eba9b48d44f6fdbb14846cc",
     "status": "skipped"
   },
   "c_oracle_harness_identity": {
     "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c-oracle-harness-draft.c",
-    "sha256": "c55ae18a7f0a64011f2ee39ea1f6d43519429ed93d2a0c47cf73dd946495aea3",
+    "sha256": "8a95f636013748312b0517fc6320993c8541556ca7cdb859143ab90169b654d9",
     "status": "draft"
   },
   "cache_input_fields": [
@@ -43,11 +43,11 @@
     "translator_feature_set",
     "clang_lowering_identity"
   ],
-  "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+  "cargo_lock_hash": "0d463cfaf506a76404644fba374d860aa6fffc2090f99837c3e7ebc6d8304675",
   "clang_lowering_identity": {
-    "clang_path": "",
-    "clang_path_status": "not_configured",
-    "clang_version": "not_configured",
+    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+    "clang_path_status": "configured",
+    "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
     "command": "clang -Xclang -ast-dump=json -fsyntax-only",
     "enabled": true,
     "features": [
@@ -80,19 +80,19 @@
   "dependent_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
-      "sha256": "c27c1cdf302f3e12b8be67b5e54e441c20054fba68e3d5777f9d62516ff315bc",
+      "sha256": "87e4512e4dd51ab27aee1f7f28389d4cf3141df89c437b877c05849325b92ad4",
       "status": "skipped"
     },
     "route_decision": {
       "level": "L0",
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-route-decision.json",
-      "sha256": "fc8cb9dcf7312fdecbc1aa73acc28222d1d2a172f378e9085b0b5a61d3885cef",
+      "sha256": "bea15f32e2dfcdb10bebfd5caf12cbad72f05f0493db30d61a445b26be40e07f",
       "status": "recorded"
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-validation-profile.json",
       "profile": "L0-dev",
-      "sha256": "0deeeb52e923379b5750eef43b552073f5449c679917366a2601cff18aafd887",
+      "sha256": "751f87c6c43f121dcd499942c1dd7d18c9b8e4abd979f179933dee281d8fc1de",
       "status": "passed"
     }
   },
@@ -137,7 +137,7 @@
     "status": "sufficient_for_semantic_pass"
   },
   "route_decision_identity": {
-    "sha256": "5635fb54a9ecdc559149c8e18d0158920fef3ba5038bc88f84345875d8d39edd",
+    "sha256": "fb1f6f87bf3c5ffbbbe5f58c5fc2f8cbb92953cc8e1bf8b837c6c2961be681df",
     "status": "recorded"
   },
   "scalar_ub_contract_identity": {
@@ -154,7 +154,7 @@
     "type_map": 1
   },
   "slice_id": "call-expression",
-  "slice_spec_sha256": "964ed8c30ac0e9f6d3241338b3e6160f67f3af7ce0fbfc5582bcb0cdc58c47bc",
+  "slice_spec_sha256": "73dfeff5798f4d2bc83a101ea013be00296fbe182b6fe7b79c4d9c803fa2e363",
   "source_commit": "demo-call-expression-20260625",
   "source_file_hashes": {
     "validation/l2_slices/fixtures/call-expression-c-oracle.json": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
@@ -169,10 +169,10 @@
   "translator_feature_set": [
     "clang-lowering-report"
   ],
-  "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
+  "translator_manifest_sha256": "21e13ae304600807d34aabf25a1aca08a615930e19de013eea9db5a609735876",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "46924ae12c01e09cebfe26f945e7cbbfeb4451de9a33310d4e4cbbbc98a6deab",
+    "sha256": "0e0b9a8ecf3fa928c3eac69868ac2db10d85248ed3a2fcb870939d2222795d07",
     "status": "passed"
   }
 }

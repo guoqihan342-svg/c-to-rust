@@ -7,7 +7,7 @@
   },
   "cache_invalidation_keys": [
     "source_commit=demo-call-expression-20260625",
-    "slice_spec_sha256=964ed8c30ac0e9f6d3241338b3e6160f67f3af7ce0fbfc5582bcb0cdc58c47bc",
+    "slice_spec_sha256=73dfeff5798f4d2bc83a101ea013be00296fbe182b6fe7b79c4d9c803fa2e363",
     "fixture_hash=call-expression-fixture",
     "build_profile_hash=05410efef254acecefcf4bbda52bc0eec37b7602eca1b175b97b531e8858265c",
     "translator_version=0.1.0",
@@ -19,7 +19,7 @@
   "context_pack_ref": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-context-pack.json",
   "level": "L3",
   "not_applicable_reason": "slice has no pointer surface",
-  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "schema_version": 2,
   "slice_id": "call-expression",
   "source_boundary": {

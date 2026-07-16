@@ -11,7 +11,7 @@
   "harness_draft": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c-oracle-harness-draft.c",
-    "sha256": "75ca200f45f3b8a4bac665c6158c1c02f5f4809e8ea9788a0787437efa59e984",
+    "sha256": "c0c95dfa9f105cb37397c56bce9d3b0dae1085844457ecfa8e1b8fd2d1368fd9",
     "status": "draft"
   },
   "schema_version": 1,

@@ -1,13 +1,8 @@
 {
   "ai_required_for_default_pipeline": false,
-  "c2rust_baseline": {
-    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
-    "sha256": "c27c1cdf302f3e12b8be67b5e54e441c20054fba68e3d5777f9d62516ff315bc",
-    "status": "skipped"
-  },
   "cache_invalidation_keys": [
     "source_commit=demo-call-expression-20260625",
-    "slice_spec_sha256=964ed8c30ac0e9f6d3241338b3e6160f67f3af7ce0fbfc5582bcb0cdc58c47bc",
+    "slice_spec_sha256=73dfeff5798f4d2bc83a101ea013be00296fbe182b6fe7b79c4d9c803fa2e363",
     "fixture_hash=call-expression-fixture",
     "build_profile_hash=05410efef254acecefcf4bbda52bc0eec37b7602eca1b175b97b531e8858265c",
     "translator_version=0.1.0",
@@ -17,18 +12,18 @@
   "route_decision": {
     "level": "L0",
     "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-route-decision.json",
-    "sha256": "fc8cb9dcf7312fdecbc1aa73acc28222d1d2a172f378e9085b0b5a61d3885cef",
+    "sha256": "bea15f32e2dfcdb10bebfd5caf12cbad72f05f0493db30d61a445b26be40e07f",
     "status": "recorded"
   },
   "schema_version": 1,
-  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "skipped_reason": "AI_SKIPPED: AI-first candidate generation was not requested",
   "slice_id": "call-expression",
   "status": "not_used",
   "target_id": "demo",
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-validation-profile.json",
     "profile": "L0-dev",
-    "sha256": "0deeeb52e923379b5750eef43b552073f5449c679917366a2601cff18aafd887",
+    "sha256": "751f87c6c43f121dcd499942c1dd7d18c9b8e4abd979f179933dee281d8fc1de",
     "status": "passed"
   }
 }

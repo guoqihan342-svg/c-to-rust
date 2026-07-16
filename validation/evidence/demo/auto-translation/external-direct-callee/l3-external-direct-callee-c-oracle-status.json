@@ -7,8 +7,13 @@
   "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
   "case_count": 6,
   "fixture": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
-  "fixture_sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
+  "fixture_sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
   "harness_draft": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c-oracle-harness-draft.c",
+    "sha256": "cb3777dc6db3af835c42f7fd78e10bfbb1156f66a93b363ca07f29ea8b68e0a0",
+    "status": "draft"
+  },
   "schema_version": 1,
   "semantic_pass": true,
   "slice_id": "external-direct-callee",

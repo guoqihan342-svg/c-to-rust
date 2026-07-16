@@ -16,6 +16,26 @@
     "target_triple": "x86_64-unknown-linux-gnu"
   },
   "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "pointer_contract": {
+      "aliasing_proven": false,
+      "noalias_required": [],
+      "output_pointers": [
+        {
+          "c_type": "int*",
+          "name": "out",
+          "write_effects": [
+            "out[0]"
+          ]
+        }
+      ]
+    },
     "scalar_arithmetic_contract": {
       "division_by_zero": "not_declared",
       "shift_count": "not_declared",
@@ -23,7 +43,34 @@
       "signed_overflow": "runtime_precondition_no_overflow",
       "signed_right_shift": "not_declared",
       "wrapping_profile": "not_declared"
-    }
+    },
+    "signatures": [
+      {
+        "c_source": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }",
+        "function": "store_add_one",
+        "parameters": [
+          {
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          },
+          {
+            "c_type": "int*",
+            "direction": "output",
+            "name": "out"
+          }
+        ],
+        "return_type": "int",
+        "source_span": {
+          "byte_end": 73,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/store-add-one.c",
+          "line_end": 1,
+          "line_start": 1,
+          "sha256": "60eb9506b984e9ba4580598d8d818358dbb25269edb56d854c340f3e9ebbd140"
+        }
+      }
+    ]
   },
   "c_source": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }",
   "fixture_hash": "store-add-one-fixture",

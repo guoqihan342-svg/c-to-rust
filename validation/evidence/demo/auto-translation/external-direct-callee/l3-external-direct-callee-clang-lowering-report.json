@@ -1,0 +1,373 @@
+{
+  "artifact_kind": "clang-lowering-report",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "diagnostics": [
+    "clang lowering used slice-spec c_source with preserved include and define arguments; compile_commands replay was not used"
+  ],
+  "durable_evidence": {
+    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+    "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+    "competition_environment": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "frontend": "clang_ast_dump_json",
+    "hash_algorithm": "sha256",
+    "rust_draft_sha256": "162e650b5f939448a11c6c4d6ee5b53ce7f43d7dd49dc541cbd60b89f2bb126f",
+    "typed_ir_sha256": "57d1d9b40bdfd44c022b2917ad9cb6888eceafba8035c8866bb04bb90eebac23"
+  },
+  "errors": [],
+  "fixture_hash": "external-direct-callee-fixture",
+  "frontend": "clang",
+  "function_name": "call_helper_chain",
+  "lowering_report": {
+    "arguments": [
+      "--slice-source-from-spec",
+      "<host>/c2r-slice-source-demo-external-direct-callee-15904.c",
+      "validation/l2_slices/tools/generate_external_direct_callee_oracle.py"
+    ],
+    "clang_path": "<host>/clang.exe",
+    "diagnostics": [
+      "clang lowering used slice-spec c_source with preserved include and define arguments; compile_commands replay was not used"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "errors": [],
+    "frontend": "clang_slice_source",
+    "function_ir": {
+      "body": [
+        {
+          "Decl": {
+            "init": {
+              "Call": {
+                "args": [
+                  {
+                    "LValueToRValue": {
+                      "expr": {
+                        "Var": {
+                          "name": "value",
+                          "source_span": null,
+                          "ty": {
+                            "canonical": "int",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": true,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "int",
+                            "width_bits": 32
+                          }
+                        }
+                      },
+                      "source_span": null,
+                      "target": {
+                        "canonical": "int",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": true,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "int",
+                        "width_bits": 32
+                      }
+                    }
+                  }
+                ],
+                "callee": "helper_add_one",
+                "source_span": null,
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            },
+            "name": "first",
+            "source_span": null,
+            "ty": {
+              "canonical": "int",
+              "is_const": false,
+              "kind": {
+                "Integer": {
+                  "signed": true,
+                  "width": 32
+                }
+              },
+              "source_span": null,
+              "spelled": "int",
+              "width_bits": 32
+            }
+          }
+        },
+        {
+          "Assign": {
+            "source_span": null,
+            "target": {
+              "Var": {
+                "name": "value",
+                "source_span": null,
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            },
+            "value": {
+              "Call": {
+                "args": [
+                  {
+                    "LValueToRValue": {
+                      "expr": {
+                        "Var": {
+                          "name": "first",
+                          "source_span": null,
+                          "ty": {
+                            "canonical": "int",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": true,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "int",
+                            "width_bits": 32
+                          }
+                        }
+                      },
+                      "source_span": null,
+                      "target": {
+                        "canonical": "int",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": true,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "int",
+                        "width_bits": 32
+                      }
+                    }
+                  }
+                ],
+                "callee": "helper_add_one",
+                "source_span": null,
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            }
+          }
+        },
+        {
+          "Return": {
+            "source_span": null,
+            "value": {
+              "Call": {
+                "args": [
+                  {
+                    "LValueToRValue": {
+                      "expr": {
+                        "Var": {
+                          "name": "value",
+                          "source_span": null,
+                          "ty": {
+                            "canonical": "int",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": true,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "int",
+                            "width_bits": 32
+                          }
+                        }
+                      },
+                      "source_span": null,
+                      "target": {
+                        "canonical": "int",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": true,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "int",
+                        "width_bits": 32
+                      }
+                    }
+                  }
+                ],
+                "callee": "helper_add_one",
+                "source_span": null,
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            }
+          }
+        }
+      ],
+      "name": "call_helper_chain",
+      "params": [
+        {
+          "name": "value",
+          "source_span": null,
+          "ty": {
+            "canonical": "int",
+            "is_const": false,
+            "kind": {
+              "Integer": {
+                "signed": true,
+                "width": 32
+              }
+            },
+            "source_span": null,
+            "spelled": "int",
+            "width_bits": 32
+          }
+        }
+      ],
+      "return_type": {
+        "canonical": "int",
+        "is_const": false,
+        "kind": {
+          "Integer": {
+            "signed": true,
+            "width": 32
+          }
+        },
+        "source_span": null,
+        "spelled": "int",
+        "width_bits": 32
+      },
+      "source_span": null
+    },
+    "function_name": "call_helper_chain",
+    "globals": [],
+    "record_layout_evidence": {
+      "ambiguous_records": [],
+      "arguments": [],
+      "compile_arguments_sha256": null,
+      "compile_database_sha256": null,
+      "diagnostics_sha256": null,
+      "dump_sha256": null,
+      "error": "record_layout_provenance_unavailable: record-layout lowering requires hash-bound compile database and target ABI",
+      "status": "unavailable",
+      "target_abi": null,
+      "used_layouts": []
+    },
+    "source_file": "<demo-slice>/validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+    "status": "lowered"
+  },
+  "metadata": {
+    "clang_ast_fixture": null,
+    "compile_commands": null,
+    "function_source_span": null,
+    "logical_source_file": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
+      "validation/l2_slices/tools/generate_external_direct_callee_oracle.py": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
+    },
+    "source_root": "<demo-slice>"
+  },
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "source_file": "<demo-slice>/validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+  "status": "lowered",
+  "target_id": "demo",
+  "typed_ir_candidate": {
+    "candidate_route": {
+      "candidate_generator": "GenericTypedIrEmitter",
+      "delete_when": [],
+      "deprecated": false,
+      "fallback": null,
+      "reasons": [
+        {
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
+        }
+      ],
+      "replacement": null,
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
+      "suggested_required_gates": [
+        "rustc_smoke",
+        "typed_ir_contract_tests"
+      ],
+      "token_cost": 0
+    },
+    "readonly_globals": [],
+    "runtime_preconditions": [],
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "162e650b5f939448a11c6c4d6ee5b53ce7f43d7dd49dc541cbd60b89f2bb126f",
+    "semantic_pass": false,
+    "status": "generated",
+    "typed_ir_sha256": "57d1d9b40bdfd44c022b2917ad9cb6888eceafba8035c8866bb04bb90eebac23"
+  }
+}

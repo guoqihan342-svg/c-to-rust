@@ -1,7 +1,7 @@
 {
   "accepted_performance_smoke": {
     "path": "validation/evidence/demo/l3-store-add-one-performance-smoke.json",
-    "sha256": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+    "sha256": "c390518858f320b7da1eb4933f77f7f7094e4b40ae9b2a8b01edf9292845669a",
     "status": "recorded"
   },
   "schema_version": 1,

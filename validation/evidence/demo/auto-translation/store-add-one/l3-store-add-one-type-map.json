@@ -1,12 +1,12 @@
 {
   "build_profile_ref": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translator-input.json",
-    "sha256": "5e0c165abd4c856c5884439cf0a683ed1f286020d8bf0f4222ff27d5b7c81d89",
+    "sha256": "a8359cb8896b40ea70583d26d194ea5aee5ee53395d2a8c506aae4ddea826e38",
     "status": "recorded"
   },
   "cache_invalidation_keys": [
     "source_commit=demo-store-add-one-20260625",
-    "slice_spec_sha256=00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
+    "slice_spec_sha256=4b17872a7f8563e3fcc4caf748be53f0d6fee068a5e30c06803ea9edb95a4b05",
     "fixture_hash=store-add-one-fixture",
     "build_profile_hash=ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
     "translator_version=0.1.0",
@@ -41,17 +41,17 @@
       "confidence": "proven",
       "id": "type-3",
       "kind": "pointer",
-      "rust_type": "*mut i32",
+      "rust_type": "&mut [i32]",
       "source": "translator_rule",
-      "translation_rule_id": "clang-lowered typed IR mapping"
+      "translation_rule_id": "pointer-contract safe Rust boundary"
     }
   ],
-  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "schema_version": 1,
   "slice_id": "store-add-one",
   "slice_spec_ref": {
     "path": "validation/slice-specs/demo-store-add-one.json",
-    "sha256": "00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
+    "sha256": "4b17872a7f8563e3fcc4caf748be53f0d6fee068a5e30c06803ea9edb95a4b05",
     "status": "ready"
   },
   "source_commit": "demo-store-add-one-20260625",

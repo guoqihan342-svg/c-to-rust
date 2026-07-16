@@ -9,7 +9,7 @@
       "diff": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
       "final_verification": "afd15baa820382ddb7c9957d68cd74d483505aec0bcdc752fc2b01b201351c32",
       "negative_diff": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
-      "performance_smoke": "b8842b777fe1510478a708a86a94417979fbe9f30ddd20566780782b7abbbbaf",
+      "performance_smoke": "8f2f33febc21e94858249f2eed5bdc67e00ac3301b50a08249acd2ead15a9249",
       "rust_report": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
       "unsafe_ledger": "36b74f0e644f02ece0f2ba8c5221402ff662a93682a6260587048689e11d2fb5",
       "unsafe_scan": "241e0df92cb003189d4c9984f0b80d2047a1b172886eb53ba924b646b4b725c3",
@@ -41,7 +41,7 @@
   ],
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
+    "sha256": "190db725f61b1ef6dfa0b9753802263576ae7106fbafadb23b7f2e6e1cf85007",
     "status": "skipped"
   },
   "c2rust_output": null,
@@ -70,7 +70,7 @@
   "gate_refs": {
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c-oracle-status.json",
-      "sha256": "6edfadb12c2d33c196c458a7c2537b9ef8ae45088f6ee425a1bb18a97a5ee12d",
+      "sha256": "72921bd625e1c0d14cf714fc2f25a9c0fcbd09b38f575ac60874749144c64e2b",
       "status": "C_ORACLE_GENERATED"
     },
     "final_verification": {
@@ -79,27 +79,27 @@
     },
     "negative_diff": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-negative-diff.json",
-      "sha256": "fb38bd70171d03efc11948bbd95a5c93706ea7041f937325e31bd6429fb0b8d4",
+      "sha256": "a3fac89b149ed9cbb1771600a14b9f6c2f19f5caaf4bc0461b0a73658c9f86f4",
       "status": "passed"
     },
     "rust_replay": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-rust-report.json",
-      "sha256": "feee2faff7581bc46382e196d227bd1ba86365c0b129e97f0c33c44dc5230a0e",
+      "sha256": "574ef43d5c2a20de7fcea2917345702fe991e1b86cf6dd873ffe9f5a7c80da76",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-diff.json",
-      "sha256": "20e57c014178205b522cca5c747a842ce87304942289fc7759f4edb58e85093e",
+      "sha256": "655a49a23c53d5b790e63f4c9a982b578ebaed296b9455ded6a2536e1fe52cc2",
       "status": "passed"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-unsafe-ledger.json",
-      "sha256": "7a10aa2cefd9ea257a49576bfc7a0c363d0aa810dbba6d23862837e0c157d267",
+      "sha256": "7814a7830c05a115a6d44925ed8812b46c7cb4a1586adbe08179e91a9d510044",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-unsafe-scan.json",
-      "sha256": "87afe3677a6c8e1162d8b7141bca34a6a0e82c0fb9ee0ef8664198ce0b00c895",
+      "sha256": "c9e85fffcf5fc11a1d5ca4dd4cbdd77393fdc350861e890e08f0c90fa4da718b",
       "status": "passed"
     }
   },
@@ -107,7 +107,7 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
-    "sha256": "471a2f35e147eeb785ff064b3b23b32e9f365990e789075c4777e8b98d9540b5",
+    "sha256": "35df793c56b5038252f13a12b46af727fd100123ee388caa87f1b8b7810975c4",
     "status": "recorded"
   },
   "same_output_gate_refs": null,
@@ -121,7 +121,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "8a486f81151ca38b10951c1e82b7d972e39367ff2dfe47ba861751b5cee9af9d",
+    "sha256": "af49abd65a8548852932a3f7edd8bebd408756d3e21687862bcd98ac285611dc",
     "status": "passed"
   }
 }

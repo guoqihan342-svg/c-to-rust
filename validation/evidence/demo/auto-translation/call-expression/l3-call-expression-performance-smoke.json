@@ -1,7 +1,7 @@
 {
   "accepted_performance_smoke": {
     "path": "validation/evidence/demo/l3-call-expression-performance-smoke.json",
-    "sha256": "76a50abac231902646f0cdb2d8dba59a0a1814f247e37172768fa4efc2548f9e",
+    "sha256": "45e2f0cd01ce4e27eb00732dbe308f64aa9ed346dedd275b29f87a7a015b64f8",
     "status": "recorded"
   },
   "schema_version": 1,

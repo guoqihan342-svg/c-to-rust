@@ -10,7 +10,7 @@
       "diff": "c3a0cb8240370b50eeefa5715df4b144deef40a840291c9e5032647307085c43",
       "final_verification": "a536b160cd60ad9e924640e3527fe06545699563a389fe48599a158f61d50fd1",
       "negative_diff": "b029ac2fb53d89b83b9a0c684232e6282713c7a63e9be82e3ab61b1f5ea1b3d6",
-      "performance_smoke": "b34e2540d923a257a6b56308d7d68152315f3e172c8f58e45e87a655e9302090",
+      "performance_smoke": "3b395157bd919a664279cfde882cd04abb706b9059adc42e3ad52f8461bc4f6a",
       "rust_report": "841bd73c29d2d7d4fb66e78baea53ca1cb2e907c78a0c720d8e0c4f951cfade5",
       "unsafe_ledger": "0c8131dd244961634f9cd5db31cfc91eabc768accb1a70d0e1ce2c5ed0ae0f53",
       "unsafe_scan": "ae27e61fd0032da3fac64d277dd48b5646e434e4a1cd62b5349abf75ebf47d16",
@@ -54,7 +54,7 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
-    "sha256": "733f134bb5303d17281371125f60bf4d447eeeeff8e46a0c8598ae56906e711e",
+    "sha256": "248591055ae0ed061bc87c464478140522ada09f3f6e0e37363bb15d4a50e7b1",
     "status": "skipped"
   },
   "c_oracle_status": "C_ORACLE_GENERATED",
@@ -82,7 +82,7 @@
         "diff": "c3a0cb8240370b50eeefa5715df4b144deef40a840291c9e5032647307085c43",
         "final_verification": "a536b160cd60ad9e924640e3527fe06545699563a389fe48599a158f61d50fd1",
         "negative_diff": "b029ac2fb53d89b83b9a0c684232e6282713c7a63e9be82e3ab61b1f5ea1b3d6",
-        "performance_smoke": "b34e2540d923a257a6b56308d7d68152315f3e172c8f58e45e87a655e9302090",
+        "performance_smoke": "3b395157bd919a664279cfde882cd04abb706b9059adc42e3ad52f8461bc4f6a",
         "rust_report": "841bd73c29d2d7d4fb66e78baea53ca1cb2e907c78a0c720d8e0c4f951cfade5",
         "unsafe_ledger": "0c8131dd244961634f9cd5db31cfc91eabc768accb1a70d0e1ce2c5ed0ae0f53",
         "unsafe_scan": "ae27e61fd0032da3fac64d277dd48b5646e434e4a1cd62b5349abf75ebf47d16",
@@ -143,16 +143,18 @@
     "generated_draft_replay_pass": true,
     "generated_draft_semantic_pass": true,
     "replay_execution": {
-      "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-ai2v435m/generated_replay.rs -o /tmp/c2r-generated-replay-ai2v435m/generated_replay.exe",
+      "compile_command": "rustc --edition=2021 --test --error-format=json --json=diagnostic-short <generated-replay.rs> -o <generated-replay-executable>",
       "compile_returncode": 0,
       "phase": "run",
-      "run_command": "/tmp/c2r-generated-replay-ai2v435m/generated_replay.exe --nocapture",
+      "run_command": "<generated-replay-executable> --nocapture",
       "run_returncode": 0,
       "status": "passed",
       "stderr_log": "validation/evidence/demo/auto-translation/sum-i32-buffer/generated-rust-replay.stderr.log",
       "stdout_log": "validation/evidence/demo/auto-translation/sum-i32-buffer/generated-rust-replay.stdout.log"
     },
     "rust_check": {
+      "binding_mode": "field_bound",
+      "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/rust-check.json",
       "status": "passed"
     },
@@ -162,6 +164,7 @@
       "status": "accepted_after_gates"
     },
     "schema_version": 1,
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
     "slice_id": "sum-i32-buffer",
     "source_commit": "demo-sum-i32-buffer-20260625",
     "status": "passed",
@@ -244,7 +247,7 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-route-decision.json",
-    "sha256": "6595bca101be564aba3099112b20de7600441c1d20bfeb43786c4ba6f58899af",
+    "sha256": "8f36e05b6e47df43ad1773193870f2be0857eba91a282ab07888acc574f28b1c",
     "status": "recorded"
   },
   "rust_check_status": "passed",
@@ -262,13 +265,13 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "66497bad567b9ef98bcf720462d94692d5394ad5e9e60c42c884b22077497fac",
+    "sha256": "9552e0067097932c768001dca5fcebef8e267dbf093a35ed67acd25a69c9bb41",
     "status": "passed"
   },
   "validation_profile_status": "passed",
   "verified_unsafe_baseline": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-verified-unsafe-baseline.json",
-    "sha256": "d16fc2ff5791c343da54433e524667ad78fb0243760774f75e5c2423b1a9e514",
+    "sha256": "52b13b2eb26033c74a0c4ab7b82749c6e166bda16c23f36e1797c0a7f2bbd026",
     "status": "blocked"
   },
   "version_config_status": "recorded"

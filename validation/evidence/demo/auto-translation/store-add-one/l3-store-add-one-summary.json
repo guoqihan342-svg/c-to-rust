@@ -9,7 +9,7 @@
       "diff": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
       "final_verification": "194b6067cb07c98dc5bd1dcff6ba400aa7dbb804f1f7736be67e323511a6ae94",
       "negative_diff": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
-      "performance_smoke": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+      "performance_smoke": "c390518858f320b7da1eb4933f77f7f7094e4b40ae9b2a8b01edf9292845669a",
       "rust_report": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
       "unsafe_ledger": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
       "unsafe_scan": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
@@ -43,7 +43,7 @@
         "diff": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
         "final_verification": "194b6067cb07c98dc5bd1dcff6ba400aa7dbb804f1f7736be67e323511a6ae94",
         "negative_diff": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
-        "performance_smoke": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+        "performance_smoke": "c390518858f320b7da1eb4933f77f7f7094e4b40ae9b2a8b01edf9292845669a",
         "rust_report": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
         "unsafe_ledger": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
         "unsafe_scan": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
@@ -104,16 +104,18 @@
     "generated_draft_replay_pass": true,
     "generated_draft_semantic_pass": true,
     "replay_execution": {
-      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe'",
+      "compile_command": "rustc --edition=2021 --test --error-format=json --json=diagnostic-short <generated-replay.rs> -o <generated-replay-executable>",
       "compile_returncode": 0,
       "phase": "run",
-      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe' --nocapture",
+      "run_command": "<generated-replay-executable> --nocapture",
       "run_returncode": 0,
       "status": "passed",
       "stderr_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stderr.log",
       "stdout_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stdout.log"
     },
     "rust_check": {
+      "binding_mode": "field_bound",
+      "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
       "path": "validation/evidence/demo/auto-translation/store-add-one/rust-check.json",
       "status": "passed"
     },
@@ -123,6 +125,7 @@
       "status": "accepted_after_gates"
     },
     "schema_version": 1,
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
     "slice_id": "store-add-one",
     "source_commit": "demo-store-add-one-20260625",
     "status": "passed",

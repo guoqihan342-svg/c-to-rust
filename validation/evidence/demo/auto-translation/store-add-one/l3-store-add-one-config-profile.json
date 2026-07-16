@@ -9,7 +9,7 @@
       "diff": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
       "final_verification": "194b6067cb07c98dc5bd1dcff6ba400aa7dbb804f1f7736be67e323511a6ae94",
       "negative_diff": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
-      "performance_smoke": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+      "performance_smoke": "c390518858f320b7da1eb4933f77f7f7094e4b40ae9b2a8b01edf9292845669a",
       "rust_report": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
       "unsafe_ledger": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
       "unsafe_scan": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
@@ -37,7 +37,7 @@
   },
   "cache_invalidation_keys": [
     "source_commit=demo-store-add-one-20260625",
-    "slice_spec_sha256=00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
+    "slice_spec_sha256=4b17872a7f8563e3fcc4caf748be53f0d6fee068a5e30c06803ea9edb95a4b05",
     "fixture_hash=store-add-one-fixture",
     "build_profile_hash=ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
     "translator_version=0.1.0",
@@ -54,7 +54,7 @@
   "config_header": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "5e0c165abd4c856c5884439cf0a683ed1f286020d8bf0f4222ff27d5b7c81d89"
+    "sha256": "a8359cb8896b40ea70583d26d194ea5aee5ee53395d2a8c506aae4ddea826e38"
   },
   "feature_matrix": {
     "auto_translation_candidate": true
@@ -72,7 +72,7 @@
     "No support for out[i], pointer arithmetic, aliasing, or struct field writes."
   ],
   "profile_id": "demo-store-add-one-wsl-gcc",
-  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

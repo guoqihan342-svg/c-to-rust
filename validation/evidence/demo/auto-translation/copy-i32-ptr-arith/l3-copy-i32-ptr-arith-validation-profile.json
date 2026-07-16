@@ -1,10 +1,21 @@
 {
   "accepted_evidence_authoritative": false,
   "candidate_generation": {
+    "ai": {
+      "candidate_id": "opencode-ai:unavailable",
+      "kind": "opencode-ai",
+      "role": "ai_primary_rust_draft",
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-ai-candidate-manifest.json",
+        "status": "not_used"
+      },
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-        "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+        "sha256": "fdf0b0bf44a7bc3d014781aa843df6fe6ad15491c971bb03c1d72d1b1bfcee64",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -19,6 +30,17 @@
     },
     "candidate_set": [
       {
+        "candidate_id": "opencode-ai:unavailable",
+        "kind": "opencode-ai",
+        "role": "ai_primary_rust_draft",
+        "semantic_pass": false,
+        "source_artifact": {
+          "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-ai-candidate-manifest.json",
+          "status": "not_used"
+        },
+        "status": "not_used"
+      },
+      {
         "candidate_id": "primary:clang-lowered-typed-ir",
         "kind": "clang-lowered-typed-ir",
         "role": "primary_rust_draft",
@@ -30,13 +52,14 @@
         "kind": "typed-ir",
         "role": "typed_ir_candidate_signal",
         "rust_draft_generated": true,
+        "rust_draft_sha256": "2f3dd7a1e6a488679de030887ced8bd695f8aff8dd2a31f613f9b91b530df09d",
         "semantic_pass": false,
         "status": "generated"
       },
       {
         "baseline_manifest": {
           "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-          "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+          "sha256": "fdf0b0bf44a7bc3d014781aa843df6fe6ad15491c971bb03c1d72d1b1bfcee64",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -187,7 +210,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-clang-lowering-report.json",
-        "sha256": "c2c85f104dd07b93cbc4f7be9817bb59064e559a3b72b7f1066751cdbfd87b75",
+        "sha256": "1896f8279d08404613395faa8cb9955fcf23d7ae70af9280432db8c61e18e573",
         "status": "lowered"
       },
       "status": "generated",
@@ -208,13 +231,13 @@
       "path_sha256": {
         "c_oracle": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
         "diff": "782a8ff94e21677c4525ea8c047b4ed622aab2ee8c79ea636f7b0bc731c37c69",
-        "final_verification": "fc4e92f3d7d2686c538777c4114f002a5755a9c849717e8d9960e8fe7f275871",
+        "final_verification": "126dfbfac3ea7119f0955f3eba2d703191fadbbb370362e222121aedfc66154a",
         "negative_diff": "2ae4f879166a400db0c3ffbdcc87a5ccf6bf66c32b1edd324aa4e085f8f39762",
-        "performance_smoke": "e4fcb41585026c19f0781d2ff25c8219819a4e4d2e3dff0f87b6da75e02fc887",
+        "performance_smoke": "ff7c12124bb2e158938e683d8e7e15d23346c820eeaeb39a109424c7fbd97325",
         "rust_report": "27a83dfb7029f7d9ca160aa2c307b584498507cd6c9a627c9f0fea48c1715910",
         "unsafe_ledger": "3d1467cf416ac4f402a1f3455d5725de027be17464acaac04a7496fd80f8bdea",
         "unsafe_scan": "e2ba4f62a0e3e80108dbab95c4d812679055b7a12daea8cc45312707aa1354eb",
-        "version_manifest": "94f71e2c12d9cacbd8b00a88607e8440ccdc9bf1cc9f4bc06f3b9fb3fe3b916a"
+        "version_manifest": "d73509af1a9e6bb8edb122e8ceee84e40e0ab2a8812a8eb8cf00dc554914cc5f"
       },
       "paths": {
         "c_oracle": "validation/evidence/demo/l3-copy-i32-ptr-arith-c-oracle.json",
@@ -271,16 +294,18 @@
     "generated_draft_replay_pass": true,
     "generated_draft_semantic_pass": true,
     "replay_execution": {
-      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-74vfbgt8\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-74vfbgt8\\generated_replay.exe'",
+      "compile_command": "rustc --edition=2021 --test --error-format=json --json=diagnostic-short <generated-replay.rs> -o <generated-replay-executable>",
       "compile_returncode": 0,
       "phase": "run",
-      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-74vfbgt8\\generated_replay.exe' --nocapture",
+      "run_command": "<generated-replay-executable> --nocapture",
       "run_returncode": 0,
       "status": "passed",
       "stderr_log": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/generated-rust-replay.stderr.log",
       "stdout_log": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/generated-rust-replay.stdout.log"
     },
     "rust_check": {
+      "binding_mode": "field_bound",
+      "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/rust-check.json",
       "status": "passed"
     },
@@ -290,6 +315,7 @@
       "status": "accepted_after_gates"
     },
     "schema_version": 1,
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
     "slice_id": "copy-i32-ptr-arith",
     "source_commit": "demo-copy-i32-ptr-arith-20260625",
     "status": "passed",

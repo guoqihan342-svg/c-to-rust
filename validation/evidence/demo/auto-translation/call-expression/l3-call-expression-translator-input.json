@@ -16,6 +16,18 @@
     "target_triple": "x86_64-unknown-linux-gnu"
   },
   "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      },
+      {
+        "kind": "callee",
+        "name": "call_expression_chain",
+        "source": "self-recursive direct call"
+      }
+    ],
     "scalar_arithmetic_contract": {
       "division_by_zero": "not_declared",
       "shift_count": "not_declared",
@@ -24,7 +36,33 @@
       "signed_overflow": "runtime_precondition_no_overflow",
       "signed_right_shift": "not_declared",
       "wrapping_profile": "not_declared"
-    }
+    },
+    "signatures": [
+      {
+        "c_source": "int call_expression_chain(int value) { if (value <= 0) { return -value; } int first = call_expression_chain(value - 1); value = call_expression_chain(first - 1); return call_expression_chain(value - 1); }",
+        "function": "call_expression_chain",
+        "parameters": [
+          {
+            "bounds": {
+              "maximum": 4,
+              "minimum": -2
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          }
+        ],
+        "return_type": "int",
+        "source_span": {
+          "byte_end": 233,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/call-expression-chain.c",
+          "line_end": 8,
+          "line_start": 1,
+          "sha256": "9e824f82f94f00b95905cf367f42cdd80cb2e1a8a8089913841a127e54862864"
+        }
+      }
+    ]
   },
   "c_source": "int call_expression_chain(int value) { if (value <= 0) { return -value; } int first = call_expression_chain(value - 1); value = call_expression_chain(first - 1); return call_expression_chain(value - 1); }",
   "fixture_hash": "call-expression-fixture",

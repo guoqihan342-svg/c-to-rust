@@ -11,7 +11,7 @@
   "harness_draft": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c-oracle-harness-draft.c",
-    "sha256": "fd9dae47ed71926afa382abdd5d5f981d2f06efc56aeb314b583ff80bfaa7925",
+    "sha256": "bcfb3fdba7ba22c16d3d7e5604e97fbfdc873e697e65745676382ad8efead7cb",
     "status": "draft"
   },
   "schema_version": 1,

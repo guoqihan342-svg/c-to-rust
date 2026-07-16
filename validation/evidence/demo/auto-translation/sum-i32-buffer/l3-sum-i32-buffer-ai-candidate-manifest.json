@@ -1,10 +1,5 @@
 {
   "ai_required_for_default_pipeline": false,
-  "c2rust_baseline": {
-    "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
-    "sha256": "733f134bb5303d17281371125f60bf4d447eeeeff8e46a0c8598ae56906e711e",
-    "status": "skipped"
-  },
   "cache_invalidation_keys": [
     "source_commit=demo-sum-i32-buffer-20260625",
     "slice_spec_sha256=00cd9f5abff8de94eca869ba982867cbdadf44754ffdf97592d96cc9caf956f6",
@@ -17,18 +12,18 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-route-decision.json",
-    "sha256": "6595bca101be564aba3099112b20de7600441c1d20bfeb43786c4ba6f58899af",
+    "sha256": "8f36e05b6e47df43ad1773193870f2be0857eba91a282ab07888acc574f28b1c",
     "status": "recorded"
   },
   "schema_version": 1,
-  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "skipped_reason": "AI_SKIPPED: AI-first candidate generation was not requested",
   "slice_id": "sum-i32-buffer",
   "status": "not_used",
   "target_id": "demo",
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "66497bad567b9ef98bcf720462d94692d5394ad5e9e60c42c884b22077497fac",
+    "sha256": "9552e0067097932c768001dca5fcebef8e267dbf093a35ed67acd25a69c9bb41",
     "status": "passed"
   }
 }

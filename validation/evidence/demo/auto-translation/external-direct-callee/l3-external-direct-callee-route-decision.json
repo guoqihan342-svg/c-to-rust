@@ -1,4 +1,193 @@
 {
+  "candidate_generation": {
+    "ai": {
+      "candidate_id": "opencode-ai:unavailable",
+      "kind": "opencode-ai",
+      "role": "ai_primary_rust_draft",
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-ai-candidate-manifest.json",
+        "status": "not_used"
+      },
+      "status": "not_used"
+    },
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
+        "sha256": "8167005071a9d661db83995ff9f567c32c87e83afabdb469c808f5d599d49804",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "opencode-ai:unavailable",
+        "kind": "opencode-ai",
+        "role": "ai_primary_rust_draft",
+        "semantic_pass": false,
+        "source_artifact": {
+          "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-ai-candidate-manifest.json",
+          "status": "not_used"
+        },
+        "status": "not_used"
+      },
+      {
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": true,
+        "rust_draft_sha256": "162e650b5f939448a11c6c4d6ee5b53ce7f43d7dd49dc541cbd60b89f2bb126f",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
+          "sha256": "8167005071a9d661db83995ff9f567c32c87e83afabdb469c808f5d599d49804",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": true,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L0",
+        "status": "not_refused"
+      },
+      "route_level": "L0",
+      "route_status": "recorded",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:clang-lowered-typed-ir",
+      "fallback": false,
+      "selected": "clang-lowered-typed-ir",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [],
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "162e650b5f939448a11c6c4d6ee5b53ce7f43d7dd49dc541cbd60b89f2bb126f",
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 0,
+        "status": "not_applicable",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-clang-lowering-report.json",
+        "sha256": "2ec479a9c771cb5d83c30fe4f8b6d286be33c83498b3a78686fc7377294a3fd5",
+        "status": "lowered"
+      },
+      "status": "generated",
+      "typed_ir_sha256": "57d1d9b40bdfd44c022b2917ad9cb6888eceafba8035c8866bb04bb90eebac23"
+    }
+  },
   "level": "L0",
   "misroute": null,
   "policy": {
@@ -8,38 +197,84 @@
   },
   "rationale": [
     {
-      "feature": "scalar_only",
-      "weight": "low"
+      "feature": "typed_ir_zero_token_deterministic",
+      "route": "GenericTypedIr",
+      "token_cost": 0,
+      "weight": "deterministic_typed_ir"
     }
   ],
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "whole-program call graph semantic proof",
+        "helper stub semantic equivalence",
+        "function pointer or nested call expression support",
+        "signed overflow equivalence"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "not_declared",
+      "covers_overflow_boundaries": false,
+      "parameters": []
+    },
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "external-direct-callee",
   "source_artifacts": {
+    "ai_candidate_manifest": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-ai-candidate-manifest.json",
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-      "sha256": "3cec3d0c1b8eea85969ba9a3593937d78eb8b911b61940cf3522bc0dcfa85e15",
+      "sha256": "8167005071a9d661db83995ff9f567c32c87e83afabdb469c808f5d599d49804",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-cfg.json",
-      "sha256": "048be6f7a12ee06927182bfffdc7cf847a8c0baf4702e1d893556d4b036211fb",
+      "sha256": "decc85d8291610ffd93a01bcd0a4c86bf50f246fb6952f84a420552cdda77cde",
       "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-clang-lowering-report.json",
+      "sha256": "2ec479a9c771cb5d83c30fe4f8b6d286be33c83498b3a78686fc7377294a3fd5",
+      "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-pointer-graph.json",
-      "sha256": "afb5709cac87d4390d2adfea62d912b09b60e5bcda3b12858a1b2b45569cb225",
+      "sha256": "6370c75d2e45f8c51f1e41b40cf877457642a595ffa5cb3a1c7a25c041d5f597",
       "status": "not_applicable"
     },
     "translation_plan": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-auto-translation-plan.json",
-      "sha256": "a300ed4f6cad3a56df84a1efaeafa7ea290ce02b615dc17a533dd593962ae1dc",
       "status": "draft_generated"
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-type-map.json",
-      "sha256": "a494508d343624c3bbb703f318e29057aff5b0e0d47e97404019a96ad67909a6",
+      "sha256": "834626c9e66207a01dc07ff2839366dddf7bf3d466dee9d26703b551cd9da1c1",
       "status": "recorded"
     }
+  },
+  "source_commit": "demo-external-direct-callee-20260625",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-external-direct-callee-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/tools/generate_external_direct_callee_oracle.py": "generated-at-validation"
+    },
+    "source_root": "<demo-slice>"
   },
   "status": "recorded",
   "target_id": "demo",

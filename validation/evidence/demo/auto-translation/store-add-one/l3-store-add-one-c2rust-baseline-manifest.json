@@ -46,7 +46,7 @@
   "slice_id": "store-add-one",
   "slice_spec": {
     "path": "validation/slice-specs/demo-store-add-one.json",
-    "sha256": "00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4"
+    "sha256": "4b17872a7f8563e3fcc4caf748be53f0d6fee068a5e30c06803ea9edb95a4b05"
   },
   "source_commit": "demo-store-add-one-20260625",
   "status": "skipped",
@@ -64,7 +64,7 @@
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-07-07T19:26:56Z"
+    "probed_at": "2026-07-16T14:19:53Z"
   },
   "toolchain_repair": {
     "competition_environment": {

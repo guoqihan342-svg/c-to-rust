@@ -21,6 +21,19 @@
     "functions": [
       "store_add_one"
     ],
+    "pointer_contract": {
+      "aliasing_proven": false,
+      "noalias_required": [],
+      "output_pointers": [
+        {
+          "c_type": "int*",
+          "name": "out",
+          "write_effects": [
+            "out[0]"
+          ]
+        }
+      ]
+    },
     "scalar_arithmetic_contract": {
       "division_by_zero": "not_declared",
       "shift_count": "not_declared",

@@ -11,7 +11,7 @@
   "harness_draft": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-harness-draft.c",
-    "sha256": "34930cea1c35e9c618c8ed7b045127d90dfc696e1e7d4fb0efc0901c6d8e9193",
+    "sha256": "1728a992aa9b5e1f2a4e78103cd45a55f0af144abebf3341b961806ed80aff76",
     "status": "draft"
   },
   "schema_version": 1,

@@ -76,7 +76,7 @@
       "translation_rule_id": "clang-lowered typed IR mapping"
     }
   ],
-  "repo_commit": "8f0930bc628e771473419152723f185d9f00e90b",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "schema_version": 1,
   "slice_id": "sum-i32-ptr-arith",
   "slice_spec_ref": {

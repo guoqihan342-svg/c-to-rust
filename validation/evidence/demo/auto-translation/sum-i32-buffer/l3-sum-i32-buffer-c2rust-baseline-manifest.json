@@ -59,12 +59,12 @@
     },
     "diagnostic_only": true,
     "environment_profile_hash": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160",
-    "os_name": "posix",
+    "os_name": "nt",
     "path_search": [
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-07-08T14:23:39Z"
+    "probed_at": "2026-07-16T14:16:08Z"
   },
   "toolchain_repair": {
     "competition_environment": {

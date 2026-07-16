@@ -10,8 +10,8 @@
     "clang AST JSON fixture replay selected from slice spec; external clang AST dump was not invoked: crates/c2r-translator/fixtures/clang_ast/copy_i32_ptr_arith_ast.json"
   ],
   "durable_evidence": {
-    "clang_path": "",
-    "clang_version": "not_configured",
+    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+    "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
     "competition_environment": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",

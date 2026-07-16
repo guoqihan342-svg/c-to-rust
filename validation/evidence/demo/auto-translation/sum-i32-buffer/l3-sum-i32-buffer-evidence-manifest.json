@@ -49,7 +49,7 @@
           "diff": "c3a0cb8240370b50eeefa5715df4b144deef40a840291c9e5032647307085c43",
           "final_verification": "a536b160cd60ad9e924640e3527fe06545699563a389fe48599a158f61d50fd1",
           "negative_diff": "b029ac2fb53d89b83b9a0c684232e6282713c7a63e9be82e3ab61b1f5ea1b3d6",
-          "performance_smoke": "b34e2540d923a257a6b56308d7d68152315f3e172c8f58e45e87a655e9302090",
+          "performance_smoke": "3b395157bd919a664279cfde882cd04abb706b9059adc42e3ad52f8461bc4f6a",
           "rust_report": "841bd73c29d2d7d4fb66e78baea53ca1cb2e907c78a0c720d8e0c4f951cfade5",
           "unsafe_ledger": "0c8131dd244961634f9cd5db31cfc91eabc768accb1a70d0e1ce2c5ed0ae0f53",
           "unsafe_scan": "ae27e61fd0032da3fac64d277dd48b5646e434e4a1cd62b5349abf75ebf47d16",
@@ -110,16 +110,18 @@
       "generated_draft_replay_pass": true,
       "generated_draft_semantic_pass": true,
       "replay_execution": {
-        "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-ai2v435m/generated_replay.rs -o /tmp/c2r-generated-replay-ai2v435m/generated_replay.exe",
+        "compile_command": "rustc --edition=2021 --test --error-format=json --json=diagnostic-short <generated-replay.rs> -o <generated-replay-executable>",
         "compile_returncode": 0,
         "phase": "run",
-        "run_command": "/tmp/c2r-generated-replay-ai2v435m/generated_replay.exe --nocapture",
+        "run_command": "<generated-replay-executable> --nocapture",
         "run_returncode": 0,
         "status": "passed",
         "stderr_log": "validation/evidence/demo/auto-translation/sum-i32-buffer/generated-rust-replay.stderr.log",
         "stdout_log": "validation/evidence/demo/auto-translation/sum-i32-buffer/generated-rust-replay.stdout.log"
       },
       "rust_check": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
         "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/rust-check.json",
         "status": "passed"
       },
@@ -129,6 +131,7 @@
         "status": "accepted_after_gates"
       },
       "schema_version": 1,
+      "selected_candidate_id": "primary:clang-lowered-typed-ir",
       "slice_id": "sum-i32-buffer",
       "source_commit": "demo-sum-i32-buffer-20260625",
       "status": "passed",
@@ -157,45 +160,45 @@
   "evidence": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
-      "sha256": "733f134bb5303d17281371125f60bf4d447eeeeff8e46a0c8598ae56906e711e",
+      "sha256": "248591055ae0ed061bc87c464478140522ada09f3f6e0e37363bb15d4a50e7b1",
       "status": "skipped"
     },
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c-oracle-status.json",
-      "sha256": "ca62fc78454690d4d5eb0f94ef6058cd13ebe6e132319eccc5794664db9a8dda",
+      "sha256": "127eb0a8dadd2e6cdf9faa512c8f4fe73699852451a203f8809f2c140d4ac89a",
       "status": "C_ORACLE_GENERATED"
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-auto-cache-metadata.json",
-      "sha256": "0ea7c4a2bbb2acf2e516ee27945645f25c4e7a0ea1e9e9bf3e630b3f88c5ea2d",
+      "sha256": "3d2ec633972c0074beddc1267a6b3c77720b95c42638c2b5c31914f36e785893",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-clang-lowering-report.json",
-      "sha256": "64261b994e546bd9e9ecb87cb0d41a06ca8105323c6d93edb085f2a22502a504",
+      "sha256": "2df712843cfbc9ab9f868a6714fb3075bf23223adbaf5f56c1d1367dffbaff5d",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-config-profile.json",
       "profile_id": "demo-sum-i32-buffer-wsl-gcc",
-      "sha256": "de509428afd692831bc549b7b124ea33d8310aba46f56df46c4bea171911779e",
+      "sha256": "28251245eb28cc01690440aa161abf2517efe3742c3aeffc7181050550521cb9",
       "status": "recorded"
     },
     "context_pack": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-context-pack.json",
-      "sha256": "4431883c4a4a4a5e90c2b81aaa29c31eb694668cdd0d1f32cfe536f7cd52554f",
+      "sha256": "d255b30373450ec730b1e94f43b10658a435b1d50d6c7ed71b30b4970f26342b",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-final-verification.json",
-      "sha256": "d4d748950d305592b0a9d6dc849ba4be972beac5bbfa8a52ad8c237a626e418a",
+      "sha256": "48f8bbee6c1045b445eb82934f9222cc55cf92e0d29a6fe7997de43579a01f6a",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-negative-diff.json",
-      "sha256": "8ebe56425e042454e8fc9e7fb54f1154d6665a2ffa124f31823c13dbc0896ff8",
+      "sha256": "ca8751cce5064041cf8a4acb486099aab500d01d81aafaa22e4d715b018a26a4",
       "status": "expected_failed"
     },
     "performance_smoke": {
@@ -206,28 +209,28 @@
     },
     "pointer_dependency_graph": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-pointer-graph.json",
-      "sha256": "28cb54a14c7e195abf354666d50b6d57539e1d245b235bebdc7fa062aa40c9b1",
+      "sha256": "b1edf9ac76299e1567487186f860d35d1b10cc187b3380197be11e490029657d",
       "status": "recorded"
     },
     "route_decision": {
       "level": "L1",
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-route-decision.json",
-      "sha256": "6595bca101be564aba3099112b20de7600441c1d20bfeb43786c4ba6f58899af",
+      "sha256": "8f36e05b6e47df43ad1773193870f2be0857eba91a282ab07888acc574f28b1c",
       "status": "recorded"
     },
     "rust_check": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/rust-check.json",
-      "sha256": "1d63021e68211c7542627e9064beef74cc09b838199310591679adc052f168c9",
+      "sha256": "9fa02cea539c06f84c6e9af6de47c8dc46528d934d4682a3353f4fc59d991336",
       "status": "passed"
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-rust-report.json",
-      "sha256": "719ef8e3c242698d120f54a0a3ce9d299504a979515ecf65dbf2723e3791aece",
+      "sha256": "5e7f83fa91d8bf9a68e55a3be623ea0130d8739c80cddd429a3514b10e912662",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-diff.json",
-      "sha256": "bb29305d25548178c4804f8ade27bbb83dda579a8e352f088379cf921c89cac8",
+      "sha256": "bc427da1622c7286cde0d4cfcce9ca2bc499f8e3480405e43111f67b78926e3c",
       "status": "passed"
     },
     "slice_contract": {
@@ -237,38 +240,38 @@
     },
     "summary": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-summary.json",
-      "sha256": "d5a160f3ad260289854c3d3182e93404f17b9459fe4bda845b8183a0b1f59947",
+      "sha256": "d74b3d965914a0df47ee4d791bf317866643cb9c168040d4299f7d62e40e028d",
       "status": "passed"
     },
     "test_translation": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-test-translation-generated.json",
-      "sha256": "8af84b1ae8bdc2572a19c934a37b9d3f5810d6c77b36088ff8dbe705322a400d",
+      "sha256": "667d4372ae09d125357d761055285d93f677ec881b3ae259a0ed507f5e036885",
       "status": "recorded"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-unsafe-ledger.json",
-      "sha256": "8ec68877ae4a1c851779219b3517dcf7b818799f315879ec0f6f3ab348b4cf9d",
+      "sha256": "f5068c309b8acae203cbad5fa7676f42164f0aee52e398693f5d79c86af40a67",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-unsafe-scan.json",
-      "sha256": "a08a2d547c52b642e1672132ad16414abc442dfc1af5817e4771fd3d208b52e4",
+      "sha256": "dc0dc3973dd3948fd1b3ac565ab6f4915b39b4c50d1b5b6b28b7927300a0582e",
       "status": "passed"
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-validation-profile.json",
       "profile": "L1-dev",
-      "sha256": "66497bad567b9ef98bcf720462d94692d5394ad5e9e60c42c884b22077497fac",
+      "sha256": "9552e0067097932c768001dca5fcebef8e267dbf093a35ed67acd25a69c9bb41",
       "status": "passed"
     },
     "verified_unsafe_baseline": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-verified-unsafe-baseline.json",
-      "sha256": "f5e0535f04ea9f651fb601bf6757680eacab0a7fd68b20fd8d32b07e7d9ac8a6",
+      "sha256": "52b13b2eb26033c74a0c4ab7b82749c6e166bda16c23f36e1797c0a7f2bbd026",
       "status": "blocked"
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-version-manifest.json",
-      "sha256": "92fb93d7928ed49586321cefa8acab1e3b61d79c72cdc1c4543829327a4d8045",
+      "sha256": "2556ea4f421f67f4179f28bd98dd9ee80e52c73b60bf9eedadbe09a0a092720a",
       "status": "recorded"
     }
   },
@@ -278,7 +281,7 @@
     "path": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json"
   },
   "level": "L3",
-  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "schema_version": 1,
   "slice_id": "sum-i32-buffer",
   "source_commit": "demo-sum-i32-buffer-20260625",

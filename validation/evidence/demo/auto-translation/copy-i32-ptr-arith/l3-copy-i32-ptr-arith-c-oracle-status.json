@@ -11,7 +11,7 @@
   "harness_draft": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c-oracle-harness-draft.c",
-    "sha256": "cecb181a69ab7689c85b4483889b04c5304068f91371dbdc675c8e13cab00b37",
+    "sha256": "e69de94c1572ed025557ba658e595ec8af372f14af5e22c19cd93c3588ddabfd",
     "status": "draft"
   },
   "schema_version": 1,

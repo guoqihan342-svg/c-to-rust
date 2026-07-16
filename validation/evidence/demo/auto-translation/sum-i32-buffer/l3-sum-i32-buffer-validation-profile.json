@@ -1,10 +1,21 @@
 {
   "accepted_evidence_authoritative": false,
   "candidate_generation": {
+    "ai": {
+      "candidate_id": "opencode-ai:unavailable",
+      "kind": "opencode-ai",
+      "role": "ai_primary_rust_draft",
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-ai-candidate-manifest.json",
+        "status": "not_used"
+      },
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
-        "sha256": "733f134bb5303d17281371125f60bf4d447eeeeff8e46a0c8598ae56906e711e",
+        "sha256": "248591055ae0ed061bc87c464478140522ada09f3f6e0e37363bb15d4a50e7b1",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -19,6 +30,17 @@
     },
     "candidate_set": [
       {
+        "candidate_id": "opencode-ai:unavailable",
+        "kind": "opencode-ai",
+        "role": "ai_primary_rust_draft",
+        "semantic_pass": false,
+        "source_artifact": {
+          "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-ai-candidate-manifest.json",
+          "status": "not_used"
+        },
+        "status": "not_used"
+      },
+      {
         "candidate_id": "primary:clang-lowered-typed-ir",
         "kind": "clang-lowered-typed-ir",
         "role": "primary_rust_draft",
@@ -30,13 +52,14 @@
         "kind": "typed-ir",
         "role": "typed_ir_candidate_signal",
         "rust_draft_generated": true,
+        "rust_draft_sha256": "eb61ae031fa0977db13f578739af77cbd9caf9463b71515c583c72452b5d4964",
         "semantic_pass": false,
         "status": "generated"
       },
       {
         "baseline_manifest": {
           "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
-          "sha256": "733f134bb5303d17281371125f60bf4d447eeeeff8e46a0c8598ae56906e711e",
+          "sha256": "248591055ae0ed061bc87c464478140522ada09f3f6e0e37363bb15d4a50e7b1",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -208,7 +231,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-clang-lowering-report.json",
-        "sha256": "64261b994e546bd9e9ecb87cb0d41a06ca8105323c6d93edb085f2a22502a504",
+        "sha256": "2df712843cfbc9ab9f868a6714fb3075bf23223adbaf5f56c1d1367dffbaff5d",
         "status": "lowered"
       },
       "status": "generated",
@@ -231,7 +254,7 @@
         "diff": "c3a0cb8240370b50eeefa5715df4b144deef40a840291c9e5032647307085c43",
         "final_verification": "a536b160cd60ad9e924640e3527fe06545699563a389fe48599a158f61d50fd1",
         "negative_diff": "b029ac2fb53d89b83b9a0c684232e6282713c7a63e9be82e3ab61b1f5ea1b3d6",
-        "performance_smoke": "b34e2540d923a257a6b56308d7d68152315f3e172c8f58e45e87a655e9302090",
+        "performance_smoke": "3b395157bd919a664279cfde882cd04abb706b9059adc42e3ad52f8461bc4f6a",
         "rust_report": "841bd73c29d2d7d4fb66e78baea53ca1cb2e907c78a0c720d8e0c4f951cfade5",
         "unsafe_ledger": "0c8131dd244961634f9cd5db31cfc91eabc768accb1a70d0e1ce2c5ed0ae0f53",
         "unsafe_scan": "ae27e61fd0032da3fac64d277dd48b5646e434e4a1cd62b5349abf75ebf47d16",
@@ -292,16 +315,18 @@
     "generated_draft_replay_pass": true,
     "generated_draft_semantic_pass": true,
     "replay_execution": {
-      "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-ai2v435m/generated_replay.rs -o /tmp/c2r-generated-replay-ai2v435m/generated_replay.exe",
+      "compile_command": "rustc --edition=2021 --test --error-format=json --json=diagnostic-short <generated-replay.rs> -o <generated-replay-executable>",
       "compile_returncode": 0,
       "phase": "run",
-      "run_command": "/tmp/c2r-generated-replay-ai2v435m/generated_replay.exe --nocapture",
+      "run_command": "<generated-replay-executable> --nocapture",
       "run_returncode": 0,
       "status": "passed",
       "stderr_log": "validation/evidence/demo/auto-translation/sum-i32-buffer/generated-rust-replay.stderr.log",
       "stdout_log": "validation/evidence/demo/auto-translation/sum-i32-buffer/generated-rust-replay.stdout.log"
     },
     "rust_check": {
+      "binding_mode": "field_bound",
+      "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/rust-check.json",
       "status": "passed"
     },
@@ -311,6 +336,7 @@
       "status": "accepted_after_gates"
     },
     "schema_version": 1,
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
     "slice_id": "sum-i32-buffer",
     "source_commit": "demo-sum-i32-buffer-20260625",
     "status": "passed",

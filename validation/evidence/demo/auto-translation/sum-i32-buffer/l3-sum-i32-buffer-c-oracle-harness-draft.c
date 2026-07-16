@@ -3,7 +3,10 @@
 /* Draft only: fixture values and oracle assertions must be reviewed before acceptance. */
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdio.h>
+#include <limits.h>
+#include <string.h>
 
 /* slice: demo/sum-i32-buffer */
 /* function: sum_i32_buffer */

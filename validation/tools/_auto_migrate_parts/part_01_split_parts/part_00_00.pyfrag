@@ -97,22 +97,31 @@ def pointer_contract_lvalue_kinds(spec: dict[str, Any]) -> list[str]:
         return []
     kinds: list[str] = []
     for item in pointer_contract.get("input_buffers", []):
-        if isinstance(item, dict) and list_of_strings(item.get("read_effects")):
-            kinds.append("bounded_input_buffer")
+        if not isinstance(item, dict) or not list_of_strings(item.get("read_effects")):
+            continue
+        kinds.append("bounded_input_buffer")
+        if item.get("translation_rule_id") == "bounded-pointer-arithmetic-input-read":
+            kinds.append("bounded_pointer_arithmetic_input_buffer")
     for item in pointer_contract.get("output_pointers", []):
-        if isinstance(item, dict) and list_of_strings(item.get("write_effects")):
-            kinds.append("bounded_pointer_index")
+        if not isinstance(item, dict) or not list_of_strings(item.get("write_effects")):
+            continue
+        kinds.append("bounded_pointer_index")
+        if item.get("translation_rule_id") == "bounded-pointer-arithmetic-output-write":
+            kinds.append("bounded_pointer_arithmetic_output_buffer")
     return stable_unique_strings(kinds)
 
 
 def pointer_contract_statement_kinds(spec: dict[str, Any]) -> list[str]:
-    return [
-        {
-            "bounded_input_buffer": "bounded_input_buffer_read",
-            "bounded_pointer_index": "bounded_pointer_index_write",
-        }.get(kind, kind)
-        for kind in pointer_contract_lvalue_kinds(spec)
-    ]
+    statement_kinds: list[str] = []
+    mappings = {
+        "bounded_input_buffer": ["bounded_input_buffer_read"],
+        "bounded_pointer_index": ["pointer_write", "bounded_pointer_index_write"],
+        "bounded_pointer_arithmetic_input_buffer": ["bounded_pointer_arithmetic_input_read"],
+        "bounded_pointer_arithmetic_output_buffer": ["bounded_pointer_arithmetic_output_write"],
+    }
+    for kind in pointer_contract_lvalue_kinds(spec):
+        statement_kinds.extend(mappings.get(kind, [kind]))
+    return stable_unique_strings(statement_kinds)
 
 
 def normalized_pointer_mutability(value: Any, default: str) -> str:

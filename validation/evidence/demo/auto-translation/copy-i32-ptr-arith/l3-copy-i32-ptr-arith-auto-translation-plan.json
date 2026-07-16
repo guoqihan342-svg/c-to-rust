@@ -1,7 +1,7 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+    "sha256": "fdf0b0bf44a7bc3d014781aa843df6fe6ad15491c971bb03c1d72d1b1bfcee64",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
@@ -116,11 +116,11 @@
     }
   },
   "level": "L3",
-  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-    "sha256": "1eb65b237d3ff5948284f434debf9e0ef43bd063b98e670c1bfa28c666f3497d",
+    "sha256": "67d824cf18e350da098383f9431c001260732230bc782f6795ecbc084ec6ee11",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -144,15 +144,25 @@
     "external_direct_callee_blocks": [],
     "external_direct_callee_declarations": [],
     "external_direct_callees": [],
-    "lvalue_decision_counts": {},
+    "lvalue_decision_counts": {
+      "bounded_input_buffer": 1,
+      "bounded_pointer_arithmetic_input_read": 1,
+      "bounded_pointer_arithmetic_output_write": 1,
+      "bounded_pointer_index": 1
+    },
     "pointer_boundary_decision_counts": {
       "bounded_input_buffer": 1,
       "bounded_pointer_arithmetic_input_read": 1,
-      "bounded_pointer_arithmetic_output_write": 1
+      "bounded_pointer_arithmetic_output_write": 1,
+      "bounded_pointer_index": 1
     },
     "safe_public_api": true,
     "translation_rule_ids": [
-      "clang-lowered-typed-ir"
+      "clang-lowered-typed-ir",
+      "bounded-input-buffer-read",
+      "bounded-pointer-arithmetic-input-read",
+      "bounded-pointer-index-write",
+      "bounded-pointer-arithmetic-output-write"
     ],
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
@@ -161,7 +171,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "edec5dd2ef7e3e4b4b001a77b73ef0516b40e771b1f163dee76d8b3784ce6eff",
+    "sha256": "ac8fed2ec1dccdad004aac1f276dd6083b857ea709a2a7cceab1004b44a4da6c",
     "status": "passed"
   },
   "verification_plan": [

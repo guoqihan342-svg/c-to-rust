@@ -1,10 +1,16 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+    "sha256": "fdf0b0bf44a7bc3d014781aa843df6fe6ad15491c971bb03c1d72d1b1bfcee64",
     "status": "skipped"
   },
-  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-eqc2hhfr validation\\evidence\\demo\\auto-translation\\copy-i32-ptr-arith\\l3-copy-i32-ptr-arith-rust-draft.rs",
+  "candidate_external_resolution": {
+    "declared_spec_names": [],
+    "required_names": [],
+    "source": "rustc_unresolved_function_diagnostics",
+    "status": "not_applicable"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --json=diagnostic-short --out-dir <rust-check-output> <draft>",
   "error_count": 0,
   "errors": [],
   "external_callee_context": {
@@ -16,14 +22,18 @@
     "declared_spec_names": [],
     "status": "not_applicable"
   },
+  "external_callee_stub_contract": {
+    "reason": null,
+    "status": "passed"
+  },
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-    "sha256": "1eb65b237d3ff5948284f434debf9e0ef43bd063b98e670c1bfa28c666f3497d",
+    "sha256": "67d824cf18e350da098383f9431c001260732230bc782f6795ecbc084ec6ee11",
     "status": "recorded"
   },
   "rust_check_harness_only_bindings": {
-    "allowed_use": "rustc_compile_only",
+    "allowed_use": "mixed",
     "bindings": [],
     "semantics_verified": false,
     "status": "none"
@@ -38,7 +48,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "edec5dd2ef7e3e4b4b001a77b73ef0516b40e771b1f163dee76d8b3784ce6eff",
+    "sha256": "ac8fed2ec1dccdad004aac1f276dd6083b857ea709a2a7cceab1004b44a4da6c",
     "status": "passed"
   }
 }

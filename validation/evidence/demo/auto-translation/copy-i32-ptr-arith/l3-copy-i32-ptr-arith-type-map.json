@@ -1,7 +1,7 @@
 {
   "build_profile_ref": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-translator-input.json",
-    "sha256": "c15eb7145a05752cff9cf668bef6f5c03658857234758167d2aaee773df99679",
+    "sha256": "781fa6711c33c3d0406a2054481b6ca2ae550a8bb4664b40b5da24b665269f20",
     "status": "recorded"
   },
   "cache_invalidation_keys": [
@@ -31,9 +31,9 @@
       "confidence": "proven",
       "id": "type-2",
       "kind": "pointer",
-      "rust_type": "*const i32",
+      "rust_type": "&[i32]",
       "source": "translator_rule",
-      "translation_rule_id": "clang-lowered typed IR mapping"
+      "translation_rule_id": "pointer-contract safe Rust boundary"
     },
     {
       "c_name": "len",
@@ -51,9 +51,9 @@
       "confidence": "proven",
       "id": "type-4",
       "kind": "pointer",
-      "rust_type": "*mut i32",
+      "rust_type": "&mut [i32]",
       "source": "translator_rule",
-      "translation_rule_id": "clang-lowered typed IR mapping"
+      "translation_rule_id": "pointer-contract safe Rust boundary"
     },
     {
       "c_name": "i",
@@ -66,7 +66,7 @@
       "translation_rule_id": "clang-lowered typed IR mapping"
     }
   ],
-  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "schema_version": 1,
   "slice_id": "copy-i32-ptr-arith",
   "slice_spec_ref": {

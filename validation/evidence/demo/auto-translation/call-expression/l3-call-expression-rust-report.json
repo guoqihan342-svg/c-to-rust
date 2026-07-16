@@ -25,7 +25,7 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=demo-call-expression-20260625",
-      "slice_spec_sha256=964ed8c30ac0e9f6d3241338b3e6160f67f3af7ce0fbfc5582bcb0cdc58c47bc",
+      "slice_spec_sha256=73dfeff5798f4d2bc83a101ea013be00296fbe182b6fe7b79c4d9c803fa2e363",
       "fixture_hash=call-expression-fixture",
       "build_profile_hash=05410efef254acecefcf4bbda52bc0eec37b7602eca1b175b97b531e8858265c",
       "translator_version=0.1.0",
@@ -82,7 +82,7 @@
           "diff": "54e7ea433c24739d1fba61dbec60d9d15e838026b9f428f3216069e5ff8590a2",
           "final_verification": "42b90752cd933cc87cbef992d9202f808b4c554566052e4576ef68727bbb8647",
           "negative_diff": "4e2eb6f5b75e59c9ab49af18becf23a5f1f5abda51fbdd8bc8149d3016d00860",
-          "performance_smoke": "76a50abac231902646f0cdb2d8dba59a0a1814f247e37172768fa4efc2548f9e",
+          "performance_smoke": "45e2f0cd01ce4e27eb00732dbe308f64aa9ed346dedd275b29f87a7a015b64f8",
           "rust_report": "5c632d222ac3aced346b4298ca7316ce1762673c5326781b5a583903f9723fb1",
           "unsafe_ledger": "d8cff6fe591f03d41e4a619191b4aefe33fb43e0aff10771bf9f95c3631f659b",
           "unsafe_scan": "3746850af2c68dc03f1a84615bf8e4afb02ef71acc92b1bff41cb74c8c98923b",
@@ -143,16 +143,18 @@
       "generated_draft_replay_pass": true,
       "generated_draft_semantic_pass": true,
       "replay_execution": {
-        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-hnsklfb_\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-hnsklfb_\\generated_replay.exe'",
+        "compile_command": "rustc --edition=2021 --test --error-format=json --json=diagnostic-short <generated-replay.rs> -o <generated-replay-executable>",
         "compile_returncode": 0,
         "phase": "run",
-        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-hnsklfb_\\generated_replay.exe' --nocapture",
+        "run_command": "<generated-replay-executable> --nocapture",
         "run_returncode": 0,
         "status": "passed",
         "stderr_log": "validation/evidence/demo/auto-translation/call-expression/generated-rust-replay.stderr.log",
         "stdout_log": "validation/evidence/demo/auto-translation/call-expression/generated-rust-replay.stdout.log"
       },
       "rust_check": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
         "path": "validation/evidence/demo/auto-translation/call-expression/rust-check.json",
         "status": "passed"
       },
@@ -162,6 +164,7 @@
         "status": "accepted_after_gates"
       },
       "schema_version": 1,
+      "selected_candidate_id": "primary:clang-lowered-typed-ir",
       "slice_id": "call-expression",
       "source_commit": "demo-call-expression-20260625",
       "status": "passed",
@@ -172,16 +175,16 @@
     "known_gaps": [],
     "level": "L3",
     "replay_execution": {
-      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-hnsklfb_\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-hnsklfb_\\generated_replay.exe'",
+      "compile_command": "rustc --edition=2021 --test --error-format=json --json=diagnostic-short <generated-replay.rs> -o <generated-replay-executable>",
       "compile_returncode": 0,
       "phase": "run",
-      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-hnsklfb_\\generated_replay.exe' --nocapture",
+      "run_command": "<generated-replay-executable> --nocapture",
       "run_returncode": 0,
       "status": "passed",
       "stderr_log": "validation/evidence/demo/auto-translation/call-expression/generated-rust-replay.stderr.log",
       "stdout_log": "validation/evidence/demo/auto-translation/call-expression/generated-rust-replay.stdout.log"
     },
-    "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+    "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml call_expression",

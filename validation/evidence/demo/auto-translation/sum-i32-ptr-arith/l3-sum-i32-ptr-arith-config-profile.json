@@ -9,7 +9,7 @@
       "diff": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
       "final_verification": "afd15baa820382ddb7c9957d68cd74d483505aec0bcdc752fc2b01b201351c32",
       "negative_diff": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
-      "performance_smoke": "b8842b777fe1510478a708a86a94417979fbe9f30ddd20566780782b7abbbbaf",
+      "performance_smoke": "8f2f33febc21e94858249f2eed5bdc67e00ac3301b50a08249acd2ead15a9249",
       "rust_report": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
       "unsafe_ledger": "36b74f0e644f02ece0f2ba8c5221402ff662a93682a6260587048689e11d2fb5",
       "unsafe_scan": "241e0df92cb003189d4c9984f0b80d2047a1b172886eb53ba924b646b4b725c3",
@@ -74,7 +74,7 @@
     "No whole-program alias safety proof beyond the declared values/out noalias precondition."
   ],
   "profile_id": "demo-sum-i32-ptr-arith-wsl-gcc",
-  "repo_commit": "8f0930bc628e771473419152723f185d9f00e90b",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

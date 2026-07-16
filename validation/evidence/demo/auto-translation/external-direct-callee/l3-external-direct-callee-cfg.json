@@ -1,7 +1,7 @@
 {
   "cache_invalidation_keys": [
     "source_commit=demo-external-direct-callee-20260625",
-    "slice_spec_sha256=d1cfb0ab00ec4dc555c59ab9710c587acd005d0e42755bf0d1f9a86846e16974",
+    "slice_spec_sha256=0968143ea11d4e302e2ad53d93b4f981a8e6c38238abc3cf19dde9fe0690b0e1",
     "fixture_hash=external-direct-callee-fixture",
     "build_profile_hash=011f0aa789d06886a2559b46e88827476b8bca4dc8611fbda56fa7cbf6f50ec3",
     "translator_version=0.1.0",
@@ -13,24 +13,8 @@
         {
           "id": "entry",
           "kind": "entry",
-          "lvalue_decisions": [
-            {
-              "decision": "value_assignment",
-              "lvalue_kind": "simple_identifier",
-              "source_span": {
-                "file": "slice-spec",
-                "line_end": 1,
-                "line_start": 1
-              },
-              "source_statement": "value = helper_add_one(first)",
-              "statement_index": 1,
-              "translation_rule_id": "assignment"
-            }
-          ],
-          "lvalue_kinds": [
-            "none",
-            "simple_identifier"
-          ],
+          "lvalue_decisions": [],
+          "lvalue_kinds": [],
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -38,15 +22,16 @@
           },
           "statement_kinds": [
             "primitive_declaration",
-            "call_expression",
             "assignment",
-            "return"
+            "return",
+            "call_expression"
           ],
           "statements": [
-            "int first = helper_add_one(value)",
-            "value = helper_add_one(first)",
-            "return helper_add_one(value)"
-          ]
+            "decl first",
+            "assign value",
+            "return"
+          ],
+          "terminator": "return"
         }
       ],
       "branches": [],
@@ -59,7 +44,7 @@
             "line_end": 1,
             "line_start": 1
           },
-          "to": "return"
+          "to": "return-2"
         }
       ],
       "entry_block": "entry",
@@ -70,7 +55,7 @@
       "returns": [
         {
           "block": "entry",
-          "expression": "helper_add_one(value)",
+          "expression": "",
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -89,12 +74,16 @@
         "has_switch": false,
         "if_count": 0,
         "loop_count": 0,
-        "relooper_required": false
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
       }
     }
   ],
   "level": "L3",
-  "repo_commit": "7e97322e7ce2df2f309eaffda3f6d50f1e63f7e8",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "schema_version": 1,
   "slice_id": "external-direct-callee",
   "slice_spec_ref": {

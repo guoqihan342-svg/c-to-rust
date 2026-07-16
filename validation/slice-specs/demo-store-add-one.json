@@ -77,6 +77,19 @@
       "signed_division_overflow": "not_declared",
       "shift_count": "not_declared",
       "signed_right_shift": "not_declared"
+    },
+    "pointer_contract": {
+      "output_pointers": [
+        {
+          "name": "out",
+          "c_type": "int*",
+          "write_effects": [
+            "out[0]"
+          ]
+        }
+      ],
+      "noalias_required": [],
+      "aliasing_proven": false
     }
   },
   "build_profile": {

@@ -1,15 +1,16 @@
 {
+  "accepted_evidence_authoritative": false,
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
-    "fixture_sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
+    "fixture_sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
       "c_oracle": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
       "diff": "25b25cd3c8c06c52aff6257b4d0fdc39ee6a62dce282ed714a36f062cd7855fd",
       "final_verification": "f6951d5a898457af0ec94ad99100833ef2adf0107ed1d50369f1734cc6d216d9",
       "negative_diff": "666613c9f2a097a36d636b55dba3eb292b7307d8c739c7e77e37dfd006623288",
-      "performance_smoke": "86e73951ca1d24c63bf426c2abbfa49ec85209b464fd3ff172a21a42215596ef",
+      "performance_smoke": "503ccf8f675d18e1ded9a94fb391ed066263add47b22b05ab52e757aa2c9ca93",
       "rust_report": "9b2e743b35e7e9bc3a38c74abcd4c191d147e48fda0d55e16202f494f870cfed",
       "unsafe_ledger": "2fe75734941305cbc1a7ad536d868127a0872280bb2a5f9854791bdfdaaf35d5",
       "unsafe_scan": "587e4cf9d97b84ded264c3314b8c02525882c66e694b1cb7dbe6893f9c07f73e",
@@ -42,13 +43,17 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-    "sha256": "3cec3d0c1b8eea85969ba9a3593937d78eb8b911b61940cf3522bc0dcfa85e15",
+    "sha256": "8167005071a9d661db83995ff9f567c32c87e83afabdb469c808f5d599d49804",
     "status": "skipped"
   },
   "c_oracle_status": "C_ORACLE_GENERATED",
   "external_callee_scope": {
     "blocked_count": 0,
     "declared_count": 1,
+    "declared_spec_count": 1,
+    "declared_spec_names": [
+      "helper_add_one"
+    ],
     "semantics_verified": false,
     "status": "compile_context_only",
     "stub_kind": "compile_only"
@@ -62,6 +67,7 @@
   "oracle_boundary_contract": {
     "compiler": {
       "command_source": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+      "compile_commands": null,
       "defines": [],
       "flags": [],
       "include_paths": [],
@@ -73,7 +79,7 @@
     "fixture_representativeness": {
       "accepted_oracle_case_count": 6,
       "case_source": "fixture_contract",
-      "declared_case_count": 6,
+      "declared_case_count": 3,
       "fixture_hash": "external-direct-callee-fixture",
       "fixture_path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
       "limitations": [],
@@ -107,10 +113,20 @@
     "schema_version": 1,
     "status": "sufficient_for_semantic_pass",
     "target": {
+      "char_align": "unknown",
+      "char_width": "unknown",
       "endianness": "little",
+      "int_align": "unknown",
       "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
+      "long_long_width": "unknown",
       "long_width": 64,
+      "plain_char_signed": "unknown",
+      "pointer_align": "unknown",
       "pointer_width": 64,
+      "short_align": "unknown",
+      "short_width": "unknown",
       "triple_or_abi": "x86_64-unknown-linux-gnu",
       "word_size_bits": 64
     },
@@ -123,7 +139,7 @@
   "route_decision": {
     "level": "L0",
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-    "sha256": "75183246bb1b5e0498bd479ba49322f4a31169122ce3497ca8b84c2be1a9d85d",
+    "sha256": "00706c0f458c7a5a7c590417d90378722f9ed6615570304e6a66efccf2dc9728",
     "status": "recorded"
   },
   "rust_check_status": "passed",
@@ -141,9 +157,14 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
     "profile": "L0-dev",
-    "sha256": "87751fdf4380e3b8fe976740ea9703a7af8b3f08be154389322ed1017ffb245f",
+    "sha256": "3d5df8fa878d83a8b6052a7f61657b38f788ba4469a7046749d044dbc037575f",
     "status": "passed"
   },
   "validation_profile_status": "passed",
+  "verified_unsafe_baseline": {
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-verified-unsafe-baseline.json",
+    "sha256": "0282075108be4b74de099fb4e3cad699e4cae18913a18bb838aaca34a1dddeba",
+    "status": "blocked"
+  },
   "version_config_status": "recorded"
 }

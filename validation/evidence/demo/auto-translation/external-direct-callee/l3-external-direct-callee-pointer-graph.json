@@ -7,18 +7,20 @@
   },
   "cache_invalidation_keys": [
     "source_commit=demo-external-direct-callee-20260625",
-    "slice_spec_sha256=d1cfb0ab00ec4dc555c59ab9710c587acd005d0e42755bf0d1f9a86846e16974",
+    "slice_spec_sha256=0968143ea11d4e302e2ad53d93b4f981a8e6c38238abc3cf19dde9fe0690b0e1",
     "fixture_hash=external-direct-callee-fixture",
     "build_profile_hash=011f0aa789d06886a2559b46e88827476b8bca4dc8611fbda56fa7cbf6f50ec3",
     "translator_version=0.1.0",
     "schema_version=1",
-    "alias_gate=not_applicable"
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
   ],
   "context_pack_ref": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-context-pack.json",
   "level": "L3",
   "not_applicable_reason": "slice has no pointer surface",
-  "repo_commit": "7e97322e7ce2df2f309eaffda3f6d50f1e63f7e8",
-  "schema_version": 1,
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
+  "schema_version": 2,
   "slice_id": "external-direct-callee",
   "source_boundary": {
     "direct_call_edges": [],

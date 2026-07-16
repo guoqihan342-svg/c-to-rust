@@ -9,7 +9,7 @@
       "diff": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
       "final_verification": "194b6067cb07c98dc5bd1dcff6ba400aa7dbb804f1f7736be67e323511a6ae94",
       "negative_diff": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
-      "performance_smoke": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+      "performance_smoke": "c390518858f320b7da1eb4933f77f7f7094e4b40ae9b2a8b01edf9292845669a",
       "rust_report": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
       "unsafe_ledger": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
       "unsafe_scan": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
@@ -34,7 +34,7 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-    "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
+    "sha256": "6a0e8616f3099c6d84f5530b12c9ee61d7971ef4cc9754244352bef361876a8d",
     "status": "skipped"
   },
   "cache": {
@@ -49,12 +49,12 @@
     },
     "build_profile_hash": "ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
     "c2rust_baseline_identity": {
-      "sha256": "d0bbe6d4f521fcc2694249f2ea0c6d09ec8a29e3966863cbd421025c4a6df5cc",
+      "sha256": "513732737af31e9413cb11959bacdc63bb229b5a74d02ea4d996d4ce69dc5f88",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-harness-draft.c",
-      "sha256": "34930cea1c35e9c618c8ed7b045127d90dfc696e1e7d4fb0efc0901c6d8e9193",
+      "sha256": "1728a992aa9b5e1f2a4e78103cd45a55f0af144abebf3341b961806ed80aff76",
       "status": "draft"
     },
     "cache_input_fields": [
@@ -82,11 +82,11 @@
       "translator_feature_set",
       "clang_lowering_identity"
     ],
-    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "cargo_lock_hash": "0d463cfaf506a76404644fba374d860aa6fffc2090f99837c3e7ebc6d8304675",
     "clang_lowering_identity": {
-      "clang_path": "",
-      "clang_path_status": "not_configured",
-      "clang_version": "not_configured",
+      "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+      "clang_path_status": "configured",
+      "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
       "command": "clang -Xclang -ast-dump=json -fsyntax-only",
       "enabled": true,
       "features": [
@@ -119,19 +119,19 @@
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-        "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
+        "sha256": "6a0e8616f3099c6d84f5530b12c9ee61d7971ef4cc9754244352bef361876a8d",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L1",
         "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
-        "sha256": "4600babf58a579381b3e75237fa498d4b51ec64153072e84d26f3ca503696e3e",
+        "sha256": "9513722e35afe958a0213b5c60be7cbb9b5208f05b7250e782f3008abc13f0b0",
         "status": "recorded"
       },
       "validation_profile": {
         "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
         "profile": "L1-dev",
-        "sha256": "8057145f63880562b2005ce0d7bc03203a8045e6ba493bc1020fff726d8926a6",
+        "sha256": "73a5d3659c592da2833fd659b14728599a4db068ef185d29d2852e1ad0ef8e39",
         "status": "passed"
       }
     },
@@ -141,9 +141,11 @@
       "read_effect_count": 0,
       "read_nodes": [],
       "schema_version": 2,
-      "sha256": "896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63",
-      "write_effect_count": 0,
-      "write_nodes": []
+      "sha256": "9969f7f5f3b3240243369e39316848a0b699e71d4e388a5e4314212b68c311bc",
+      "write_effect_count": 1,
+      "write_nodes": [
+        "out"
+      ]
     },
     "fixture_hash": "store-add-one-fixture",
     "global_dependency_identity": {
@@ -176,7 +178,7 @@
       "status": "sufficient_for_semantic_pass"
     },
     "route_decision_identity": {
-      "sha256": "26a4c2d690865eed37de1f9040529839f34a533d1ef79543670dcf00d3b6ac69",
+      "sha256": "0912100c42fdea5562b1317efc4c2b8aca241e7f82a4fb3f042f49c96cb4a261",
       "status": "recorded"
     },
     "scalar_ub_contract_identity": {
@@ -193,7 +195,7 @@
       "type_map": 1
     },
     "slice_id": "store-add-one",
-    "slice_spec_sha256": "00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
+    "slice_spec_sha256": "4b17872a7f8563e3fcc4caf748be53f0d6fee068a5e30c06803ea9edb95a4b05",
     "source_commit": "demo-store-add-one-20260625",
     "source_file_hashes": {
       "validation/l2_slices/fixtures/store-add-one-c-oracle.json": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
@@ -208,10 +210,10 @@
     "translator_feature_set": [
       "clang-lowering-report"
     ],
-    "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
+    "translator_manifest_sha256": "21e13ae304600807d34aabf25a1aca08a615930e19de013eea9db5a609735876",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "c791e2b50a396060572207c15e44933067d4962974a06704ed2c96ee2285f071",
+      "sha256": "2fb98c5b769a66971d06ff22f1d7cee9491d1560f6cfa9a68c74b516e6e12da1",
       "status": "passed"
     }
   },
@@ -245,7 +247,7 @@
           "diff": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
           "final_verification": "194b6067cb07c98dc5bd1dcff6ba400aa7dbb804f1f7736be67e323511a6ae94",
           "negative_diff": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
-          "performance_smoke": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+          "performance_smoke": "c390518858f320b7da1eb4933f77f7f7094e4b40ae9b2a8b01edf9292845669a",
           "rust_report": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
           "unsafe_ledger": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
           "unsafe_scan": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
@@ -306,16 +308,18 @@
       "generated_draft_replay_pass": true,
       "generated_draft_semantic_pass": true,
       "replay_execution": {
-        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe'",
+        "compile_command": "rustc --edition=2021 --test --error-format=json --json=diagnostic-short <generated-replay.rs> -o <generated-replay-executable>",
         "compile_returncode": 0,
         "phase": "run",
-        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe' --nocapture",
+        "run_command": "<generated-replay-executable> --nocapture",
         "run_returncode": 0,
         "status": "passed",
         "stderr_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stderr.log",
         "stdout_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stdout.log"
       },
       "rust_check": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
         "path": "validation/evidence/demo/auto-translation/store-add-one/rust-check.json",
         "status": "passed"
       },
@@ -325,6 +329,7 @@
         "status": "accepted_after_gates"
       },
       "schema_version": 1,
+      "selected_candidate_id": "primary:clang-lowered-typed-ir",
       "slice_id": "store-add-one",
       "source_commit": "demo-store-add-one-20260625",
       "status": "passed",
@@ -364,7 +369,7 @@
     "harness_draft": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-harness-draft.c",
     "harness_draft_ref": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-harness-draft.c",
-      "sha256": "34930cea1c35e9c618c8ed7b045127d90dfc696e1e7d4fb0efc0901c6d8e9193",
+      "sha256": "1728a992aa9b5e1f2a4e78103cd45a55f0af144abebf3341b961806ed80aff76",
       "status": "draft"
     },
     "schema_version": 1,
@@ -393,7 +398,7 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=demo-store-add-one-20260625",
-      "slice_spec_sha256=00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
+      "slice_spec_sha256=4b17872a7f8563e3fcc4caf748be53f0d6fee068a5e30c06803ea9edb95a4b05",
       "fixture_hash=store-add-one-fixture",
       "build_profile_hash=ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
       "translator_version=0.1.0",
@@ -448,7 +453,7 @@
           "diff": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
           "final_verification": "194b6067cb07c98dc5bd1dcff6ba400aa7dbb804f1f7736be67e323511a6ae94",
           "negative_diff": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
-          "performance_smoke": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+          "performance_smoke": "c390518858f320b7da1eb4933f77f7f7094e4b40ae9b2a8b01edf9292845669a",
           "rust_report": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
           "unsafe_ledger": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
           "unsafe_scan": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
@@ -509,16 +514,18 @@
       "generated_draft_replay_pass": true,
       "generated_draft_semantic_pass": true,
       "replay_execution": {
-        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe'",
+        "compile_command": "rustc --edition=2021 --test --error-format=json --json=diagnostic-short <generated-replay.rs> -o <generated-replay-executable>",
         "compile_returncode": 0,
         "phase": "run",
-        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe' --nocapture",
+        "run_command": "<generated-replay-executable> --nocapture",
         "run_returncode": 0,
         "status": "passed",
         "stderr_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stderr.log",
         "stdout_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stdout.log"
       },
       "rust_check": {
+        "binding_mode": "field_bound",
+        "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
         "path": "validation/evidence/demo/auto-translation/store-add-one/rust-check.json",
         "status": "passed"
       },
@@ -528,6 +535,7 @@
         "status": "accepted_after_gates"
       },
       "schema_version": 1,
+      "selected_candidate_id": "primary:clang-lowered-typed-ir",
       "slice_id": "store-add-one",
       "source_commit": "demo-store-add-one-20260625",
       "status": "passed",
@@ -538,16 +546,16 @@
     "known_gaps": [],
     "level": "L3",
     "replay_execution": {
-      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe'",
+      "compile_command": "rustc --edition=2021 --test --error-format=json --json=diagnostic-short <generated-replay.rs> -o <generated-replay-executable>",
       "compile_returncode": 0,
       "phase": "run",
-      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe' --nocapture",
+      "run_command": "<generated-replay-executable> --nocapture",
       "run_returncode": 0,
       "status": "passed",
       "stderr_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stderr.log",
       "stdout_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stdout.log"
     },
-    "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+    "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml store_add_one",
@@ -649,11 +657,17 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
-    "sha256": "4600babf58a579381b3e75237fa498d4b51ec64153072e84d26f3ca503696e3e",
+    "sha256": "9513722e35afe958a0213b5c60be7cbb9b5208f05b7250e782f3008abc13f0b0",
     "status": "recorded"
   },
   "rust_check": {
-    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-b7r453gr validation\\evidence\\demo\\auto-translation\\store-add-one\\l3-store-add-one-rust-draft.rs",
+    "candidate_external_resolution": {
+      "declared_spec_names": [],
+      "required_names": [],
+      "source": "rustc_unresolved_function_diagnostics",
+      "status": "not_applicable"
+    },
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --json=diagnostic-short --out-dir <rust-check-output> <draft>",
     "error_count": 0,
     "errors": [],
     "external_callee_context": {
@@ -665,8 +679,12 @@
       "declared_spec_names": [],
       "status": "not_applicable"
     },
+    "external_callee_stub_contract": {
+      "reason": null,
+      "status": "passed"
+    },
     "rust_check_harness_only_bindings": {
-      "allowed_use": "rustc_compile_only",
+      "allowed_use": "mixed",
       "bindings": [],
       "semantics_verified": false,
       "status": "none"
@@ -705,12 +723,12 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "8057145f63880562b2005ce0d7bc03203a8045e6ba493bc1020fff726d8926a6",
+    "sha256": "73a5d3659c592da2833fd659b14728599a4db068ef185d29d2852e1ad0ef8e39",
     "status": "passed"
   },
   "verified_unsafe_baseline": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-verified-unsafe-baseline.json",
-    "sha256": "ffd26b21624273c7161575414e252a1e20a252897f5ba673f555f91a6bea3269",
+    "sha256": "5d33120605f5b548ff186504ee35babfb03ec312a099c29323f9aca35eaefbc1",
     "status": "blocked"
   }
 }

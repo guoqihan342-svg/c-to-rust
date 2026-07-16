@@ -1,9 +1,20 @@
 {
   "candidate_generation": {
+    "ai": {
+      "candidate_id": "opencode-ai:unavailable",
+      "kind": "opencode-ai",
+      "role": "ai_primary_rust_draft",
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-ai-candidate-manifest.json",
+        "status": "not_used"
+      },
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
-        "sha256": "c27c1cdf302f3e12b8be67b5e54e441c20054fba68e3d5777f9d62516ff315bc",
+        "sha256": "87e4512e4dd51ab27aee1f7f28389d4cf3141df89c437b877c05849325b92ad4",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -18,6 +29,17 @@
     },
     "candidate_set": [
       {
+        "candidate_id": "opencode-ai:unavailable",
+        "kind": "opencode-ai",
+        "role": "ai_primary_rust_draft",
+        "semantic_pass": false,
+        "source_artifact": {
+          "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-ai-candidate-manifest.json",
+          "status": "not_used"
+        },
+        "status": "not_used"
+      },
+      {
         "candidate_id": "primary:clang-lowered-typed-ir",
         "kind": "clang-lowered-typed-ir",
         "role": "primary_rust_draft",
@@ -29,13 +51,14 @@
         "kind": "typed-ir",
         "role": "typed_ir_candidate_signal",
         "rust_draft_generated": true,
+        "rust_draft_sha256": "432b1f7c02ea9ec337cb29807ebce0d9165ce517cc86e817d19edc74e624d394",
         "semantic_pass": false,
         "status": "generated"
       },
       {
         "baseline_manifest": {
           "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
-          "sha256": "c27c1cdf302f3e12b8be67b5e54e441c20054fba68e3d5777f9d62516ff315bc",
+          "sha256": "87e4512e4dd51ab27aee1f7f28389d4cf3141df89c437b877c05849325b92ad4",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -249,7 +272,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-clang-lowering-report.json",
-        "sha256": "0f6207278225a582bc57fd708781246dc9e584e0f35fcd3eb033296191ac6bc2",
+        "sha256": "d068b97596519c7363e28c472460a57a1bb2ab3d486ea6dfa82748e5bbbce5a4",
         "status": "lowered"
       },
       "status": "generated",
@@ -310,24 +333,28 @@
   "schema_version": 1,
   "slice_id": "call-expression",
   "source_artifacts": {
+    "ai_candidate_manifest": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-ai-candidate-manifest.json",
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
-      "sha256": "c27c1cdf302f3e12b8be67b5e54e441c20054fba68e3d5777f9d62516ff315bc",
+      "sha256": "87e4512e4dd51ab27aee1f7f28389d4cf3141df89c437b877c05849325b92ad4",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-cfg.json",
-      "sha256": "aff77727f695aecbd0b2d2c81e7bb8e2ac667d754deccb0b146e927d7da1a26b",
+      "sha256": "ff7314465ce427173b9a1820558ebeb27fd51715908e57f74f7a7778049030ce",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-clang-lowering-report.json",
-      "sha256": "0f6207278225a582bc57fd708781246dc9e584e0f35fcd3eb033296191ac6bc2",
+      "sha256": "d068b97596519c7363e28c472460a57a1bb2ab3d486ea6dfa82748e5bbbce5a4",
       "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-pointer-graph.json",
-      "sha256": "420c6c652ab3cbbce9fc41d739f5bf3fdb76016fda6d244a3fec9b5b065eec79",
+      "sha256": "11571469bbab414279ca2e98d98044c3425a42426a022e89049afd58c2d66ee4",
       "status": "not_applicable"
     },
     "translation_plan": {
@@ -336,7 +363,7 @@
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-type-map.json",
-      "sha256": "c517ffee2dcbd9250aed6304c2aba619630290584b1522cd6dc30505af29af95",
+      "sha256": "0eeb8f95f6efa71a3255b72c58d189e74ccb5d304368562279e213a8504edabf",
       "status": "recorded"
     }
   },

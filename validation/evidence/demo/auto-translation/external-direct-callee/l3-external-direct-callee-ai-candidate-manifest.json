@@ -2,16 +2,28 @@
   "ai_required_for_default_pipeline": false,
   "cache_invalidation_keys": [
     "source_commit=demo-external-direct-callee-20260625",
-    "slice_spec_sha256=d1cfb0ab00ec4dc555c59ab9710c587acd005d0e42755bf0d1f9a86846e16974",
+    "slice_spec_sha256=0968143ea11d4e302e2ad53d93b4f981a8e6c38238abc3cf19dde9fe0690b0e1",
     "fixture_hash=external-direct-callee-fixture",
     "build_profile_hash=011f0aa789d06886a2559b46e88827476b8bca4dc8611fbda56fa7cbf6f50ec3",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
   "candidates": [],
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
+    "sha256": "00706c0f458c7a5a7c590417d90378722f9ed6615570304e6a66efccf2dc9728",
+    "status": "recorded"
+  },
   "schema_version": 1,
-  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "skipped_reason": "AI_SKIPPED: AI-first candidate generation was not requested",
   "slice_id": "external-direct-callee",
   "status": "not_used",
-  "target_id": "demo"
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "3d5df8fa878d83a8b6052a7f61657b38f788ba4469a7046749d044dbc037575f",
+    "status": "passed"
+  }
 }

@@ -16,11 +16,19 @@
       "version_status": "NOT_FOUND"
     }
   ],
+  "compile": null,
   "correctness_role": "candidate_context_only",
   "diagnostics": [
     "no executable c2rust-transpile or c2rust command found on PATH"
   ],
   "fallback_oracle": "original_c_oracle_required",
+  "generation": {
+    "command": null,
+    "compile_commands": null,
+    "enabled": false,
+    "enabled_by": "",
+    "generated_files": []
+  },
   "must_not_claim": [
     "C2Rust output proves semantic equivalence",
     "C2Rust baseline was generated"
@@ -28,9 +36,10 @@
   "output": null,
   "reason": "blocked_by_missing_tools",
   "reference_tree": {
-    "cargo_toml": "F:\\agent\\c2rust-master\\Cargo.toml",
-    "path": "F:\\agent\\c2rust-master",
-    "status": "present"
+    "cargo_toml": "",
+    "diagnostic_only": true,
+    "path": "tools/c2rust-reference",
+    "status": "missing"
   },
   "schema_version": 1,
   "selected_command": null,
@@ -42,5 +51,57 @@
   "source_commit": "demo-external-direct-callee-20260625",
   "status": "skipped",
   "target_id": "demo",
+  "tool_probe": {
+    "competition_environment_identity": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "diagnostic_only": true,
+    "environment_profile_hash": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160",
+    "os_name": "nt",
+    "path_search": [
+      "c2rust-transpile",
+      "c2rust"
+    ],
+    "probed_at": "2026-07-16T14:16:02Z"
+  },
+  "toolchain_repair": {
+    "competition_environment": {
+      "profile": "config/competition-env/environment.json",
+      "proof_class": "local_or_wsl_until_competition_run",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "correctness_role": "candidate_context_only",
+    "must_not_claim": [
+      "toolchain repair proves C2Rust generated output",
+      "compile-only C2Rust output proves semantic equivalence"
+    ],
+    "reason": "blocked_by_missing_tools",
+    "required_commands": [
+      "c2rust-transpile",
+      "c2rust"
+    ],
+    "required_dependencies": [
+      "rustc",
+      "cargo",
+      "clang",
+      "libclang"
+    ],
+    "rerun_command": [
+      "python3",
+      "-B",
+      "-m",
+      "validation.tools.auto_migrate",
+      "--slice-spec",
+      "validation/slice-specs/demo-external-direct-callee.json",
+      "--out-root",
+      "validation/evidence"
+    ],
+    "rerun_env": {
+      "C2RUST_BASELINE_GENERATION": "1"
+    },
+    "status": "required"
+  },
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
 }

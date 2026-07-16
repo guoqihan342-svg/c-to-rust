@@ -1,5 +1,20 @@
 {
-  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-ux2itw__ C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\external-direct-callee\\l3-external-direct-callee-rust-draft.rs",
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
+    "sha256": "8167005071a9d661db83995ff9f567c32c87e83afabdb469c808f5d599d49804",
+    "status": "skipped"
+  },
+  "candidate_external_resolution": {
+    "declared_spec_names": [
+      "helper_add_one"
+    ],
+    "required_names": [
+      "helper_add_one"
+    ],
+    "source": "rustc_unresolved_function_diagnostics",
+    "status": "recorded"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --json=diagnostic-short --out-dir <rust-check-output> <draft>",
   "error_count": 0,
   "errors": [],
   "external_callee_context": {
@@ -7,6 +22,7 @@
     "blocked_count": 0,
     "declared_callees": [
       {
+        "binding_status": "generated_compile_only",
         "name": "helper_add_one",
         "semantics_verified": false,
         "signature_ref": "sig-helper-add-one",
@@ -14,7 +30,35 @@
       }
     ],
     "declared_count": 1,
+    "declared_spec_count": 1,
+    "declared_spec_names": [
+      "helper_add_one"
+    ],
     "status": "recorded"
+  },
+  "external_callee_stub_contract": {
+    "reason": null,
+    "status": "passed"
+  },
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
+    "sha256": "00706c0f458c7a5a7c590417d90378722f9ed6615570304e6a66efccf2dc9728",
+    "status": "recorded"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "rustc_compile_only",
+    "bindings": [
+      {
+        "allowed_use": "rustc_compile_only",
+        "name": "helper_add_one",
+        "semantics_verified": false,
+        "signature": "fn helper_add_one(value: i32) -> i32",
+        "status": "generated_compile_only"
+      }
+    ],
+    "semantics_verified": false,
+    "status": "emitted"
   },
   "schema_version": 1,
   "self_healing": {
@@ -22,5 +66,11 @@
     "patch_events": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-patch-events.jsonl",
     "status": "none"
   },
-  "status": "passed"
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "3d5df8fa878d83a8b6052a7f61657b38f788ba4469a7046749d044dbc037575f",
+    "status": "passed"
+  }
 }

@@ -1,10 +1,5 @@
 {
   "ai_required_for_default_pipeline": false,
-  "c2rust_baseline": {
-    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
-    "status": "skipped"
-  },
   "cache_invalidation_keys": [
     "source_commit=demo-copy-i32-ptr-arith-20260625",
     "slice_spec_sha256=c27b44d8a292374dff9040398708c7c005df2c5d3053be072114567ffa5f58ec",
@@ -17,18 +12,18 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-    "sha256": "2d60a32d45f5cdb3e9a9d2cc3edd15de957e399839606e1c01b79e5cd356c368",
+    "sha256": "67d824cf18e350da098383f9431c001260732230bc782f6795ecbc084ec6ee11",
     "status": "recorded"
   },
   "schema_version": 1,
-  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "skipped_reason": "AI_SKIPPED: AI-first candidate generation was not requested",
   "slice_id": "copy-i32-ptr-arith",
   "status": "not_used",
   "target_id": "demo",
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "edec5dd2ef7e3e4b4b001a77b73ef0516b40e771b1f163dee76d8b3784ce6eff",
+    "sha256": "ac8fed2ec1dccdad004aac1f276dd6083b857ea709a2a7cceab1004b44a4da6c",
     "status": "passed"
   }
 }

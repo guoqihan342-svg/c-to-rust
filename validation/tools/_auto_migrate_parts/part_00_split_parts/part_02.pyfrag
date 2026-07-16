@@ -160,12 +160,16 @@ def structured_control_flow_recovery_evidence(
 
 
 def cfg_basic_blocks_with_pointer_contract(
-    raw_blocks: list[Any], spec: dict[str, Any]
+    raw_blocks: list[Any],
+    spec: dict[str, Any],
+    call_expressions: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     blocks = cfg_basic_blocks(raw_blocks)
     if not blocks:
         return blocks
     statement_kinds = pointer_contract_statement_kinds(spec)
+    if call_expressions:
+        statement_kinds.append("call_expression")
     lvalue_kinds = pointer_contract_lvalue_kinds(spec)
     if not statement_kinds and not lvalue_kinds:
         return blocks
@@ -252,6 +256,8 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
     )
 
     raw_cfg = read_json(evidence_dir / f"{prefix}-cfg.json")
+    raw_plan = read_json(evidence_dir / f"{prefix}-auto-translation-plan.json")
+    raw_call_expressions = raw_plan.get("plan", {}).get("call_expressions", [])
     raw_functions = raw_cfg.get("cfg", {}).get("functions", [])
     unsupported_cf = []
     functions = []
@@ -277,7 +283,11 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 "source_span": source_span(),
                 "entry_block": "entry",
                 "exit_blocks": ["return"] if blocks and blocks[0].get("terminator") == "return" else ["exit"],
-                "basic_blocks": cfg_basic_blocks_with_pointer_contract(blocks, spec),
+                "basic_blocks": cfg_basic_blocks_with_pointer_contract(
+                    blocks,
+                    spec,
+                    raw_call_expressions,
+                ),
                 "edges": cfg_edges(blocks),
                 "branches": [],
                 "returns": [
@@ -424,9 +434,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
         pointer_payload["not_applicable_reason"] = "slice has no pointer surface"
     write_json(evidence_dir / f"{prefix}-pointer-graph.json", pointer_payload)
 
-    raw_plan = read_json(evidence_dir / f"{prefix}-auto-translation-plan.json")
     translation_source = translation_source_from_plan(raw_plan)
-    raw_call_expressions = raw_plan.get("plan", {}).get("call_expressions", [])
     external_callee_context = external_direct_callee_context(spec, raw_call_expressions)
     call_expressions = bind_external_callee_context(raw_call_expressions, external_callee_context)
     lvalue_decision_counts = count_occurrences(

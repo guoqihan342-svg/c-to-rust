@@ -46,7 +46,7 @@
   "slice_id": "call-expression",
   "slice_spec": {
     "path": "validation/slice-specs/demo-call-expression.json",
-    "sha256": "964ed8c30ac0e9f6d3241338b3e6160f67f3af7ce0fbfc5582bcb0cdc58c47bc"
+    "sha256": "73dfeff5798f4d2bc83a101ea013be00296fbe182b6fe7b79c4d9c803fa2e363"
   },
   "source_commit": "demo-call-expression-20260625",
   "status": "skipped",
@@ -64,7 +64,7 @@
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-07-07T18:59:53Z"
+    "probed_at": "2026-07-16T14:15:54Z"
   },
   "toolchain_repair": {
     "competition_environment": {

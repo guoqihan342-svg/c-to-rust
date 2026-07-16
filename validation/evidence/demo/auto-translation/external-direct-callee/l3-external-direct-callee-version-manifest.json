@@ -2,14 +2,14 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
-    "fixture_sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
+    "fixture_sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
       "c_oracle": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
       "diff": "25b25cd3c8c06c52aff6257b4d0fdc39ee6a62dce282ed714a36f062cd7855fd",
       "final_verification": "f6951d5a898457af0ec94ad99100833ef2adf0107ed1d50369f1734cc6d216d9",
       "negative_diff": "666613c9f2a097a36d636b55dba3eb292b7307d8c739c7e77e37dfd006623288",
-      "performance_smoke": "86e73951ca1d24c63bf426c2abbfa49ec85209b464fd3ff172a21a42215596ef",
+      "performance_smoke": "503ccf8f675d18e1ded9a94fb391ed066263add47b22b05ab52e757aa2c9ca93",
       "rust_report": "9b2e743b35e7e9bc3a38c74abcd4c191d147e48fda0d55e16202f494f870cfed",
       "unsafe_ledger": "2fe75734941305cbc1a7ad536d868127a0872280bb2a5f9854791bdfdaaf35d5",
       "unsafe_scan": "587e4cf9d97b84ded264c3314b8c02525882c66e694b1cb7dbe6893f9c07f73e",
@@ -43,33 +43,117 @@
       "risk_level": "none"
     },
     "build_profile_hash": "011f0aa789d06886a2559b46e88827476b8bca4dc8611fbda56fa7cbf6f50ec3",
+    "c2rust_baseline_identity": {
+      "sha256": "2880352e4f5324c8977cbb0b5486130369039dde8eec682b10a48e1101c650c5",
+      "status": "skipped"
+    },
+    "c_oracle_harness_identity": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c-oracle-harness-draft.c",
+      "sha256": "cb3777dc6db3af835c42f7fd78e10bfbb1156f66a93b363ca07f29ea8b68e0a0",
+      "status": "draft"
+    },
     "cache_input_fields": [
       "source_commit",
       "source_file_hashes",
       "slice_spec_sha256",
       "fixture_hash",
       "build_profile_hash",
+      "competition_environment_identity",
       "cargo_lock_hash",
       "tool_versions",
       "schema_versions",
       "translator_version",
       "translator_manifest_sha256",
       "command_arguments",
-      "alias_gate_identity"
+      "alias_gate_identity",
+      "effect_graph_identity",
+      "scalar_ub_contract_identity",
+      "oracle_boundary_contract_identity",
+      "c2rust_baseline_identity",
+      "route_decision_identity",
+      "validation_profile_identity",
+      "global_dependency_identity",
+      "c_oracle_harness_identity",
+      "translator_feature_set",
+      "clang_lowering_identity"
     ],
-    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "cargo_lock_hash": "0d463cfaf506a76404644fba374d860aa6fffc2090f99837c3e7ebc6d8304675",
+    "clang_lowering_identity": {
+      "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+      "clang_path_status": "configured",
+      "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+      "enabled": true,
+      "features": [
+        "clang-lowering-report"
+      ],
+      "frontend": "clang_ast_dump_json",
+      "ignored_env_for_ast_dump": {
+        "LIBCLANG_PATH": {
+          "reason": "ignored_for_ast_dump",
+          "status": "not_configured",
+          "value": ""
+        }
+      },
+      "requires_env": [
+        "CLANG_PATH"
+      ]
+    },
     "command_arguments": [
       "auto_migrate.py",
       "--slice-spec",
       "validation/slice-specs/demo-external-direct-callee.json",
-      "--accept-existing-evidence"
+      "--accept-existing-evidence",
+      "--emit-clang-lowering-report"
     ],
+    "competition_environment_identity": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "dependent_artifacts": {
+      "c2rust_baseline": {
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
+        "sha256": "8167005071a9d661db83995ff9f567c32c87e83afabdb469c808f5d599d49804",
+        "status": "skipped"
+      },
+      "route_decision": {
+        "level": "L0",
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
+        "sha256": "00706c0f458c7a5a7c590417d90378722f9ed6615570304e6a66efccf2dc9728",
+        "status": "recorded"
+      },
+      "validation_profile": {
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
+        "profile": "L0-dev",
+        "sha256": "3d5df8fa878d83a8b6052a7f61657b38f788ba4469a7046749d044dbc037575f",
+        "status": "passed"
+      }
+    },
+    "effect_graph_identity": {
+      "alias_gate_decision": "not_applicable",
+      "alias_sensitive": false,
+      "read_effect_count": 0,
+      "read_nodes": [],
+      "schema_version": 2,
+      "sha256": "896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63",
+      "write_effect_count": 0,
+      "write_nodes": []
+    },
     "fixture_hash": "external-direct-callee-fixture",
+    "global_dependency_identity": {
+      "count": 0,
+      "names": [],
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
     "invalidates": [
       "context_pack",
       "type_map",
       "cfg",
       "pointer_graph",
+      "c2rust_baseline",
+      "route_decision",
+      "validation_profile",
       "rust_draft",
       "patch_plan",
       "ai_candidate",
@@ -79,22 +163,35 @@
       "negative_diff",
       "unsafe_ledger",
       "final_verification",
+      "auto_translation_manifest",
       "summary"
     ],
+    "oracle_boundary_contract_identity": {
+      "sha256": "c6034e492a37b339e5ebbb27d6b3d8bf373909099b4e4c1addd95727effc3f42",
+      "status": "sufficient_for_semantic_pass"
+    },
+    "route_decision_identity": {
+      "sha256": "af7e2a75467a4df1047a92b587ce7b2ac6d0464e30ce64d3469c738ba8bc401b",
+      "status": "recorded"
+    },
+    "scalar_ub_contract_identity": {
+      "sha256": "6cf584adcc4e81b241691d43be4c08623d90c9fa73c8d77ad7a4e3b5b7d10061",
+      "status": "recorded"
+    },
     "schema_version": 1,
     "schema_versions": {
       "auto_cache_metadata": 1,
       "auto_translation_plan": 1,
       "cfg": 1,
       "evidence_manifest": 1,
-      "pointer_graph": 1,
+      "pointer_graph": 2,
       "type_map": 1
     },
     "slice_id": "external-direct-callee",
-    "slice_spec_sha256": "d1cfb0ab00ec4dc555c59ab9710c587acd005d0e42755bf0d1f9a86846e16974",
+    "slice_spec_sha256": "0968143ea11d4e302e2ad53d93b4f981a8e6c38238abc3cf19dde9fe0690b0e1",
     "source_commit": "demo-external-direct-callee-20260625",
     "source_file_hashes": {
-      "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
+      "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
       "validation/l2_slices/tools/generate_external_direct_callee_oracle.py": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
     },
     "target_id": "demo",
@@ -103,10 +200,17 @@
       "python": "Python 3.14.2",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
-    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
-    "translator_version": "0.1.0"
+    "translator_feature_set": [
+      "clang-lowering-report"
+    ],
+    "translator_manifest_sha256": "21e13ae304600807d34aabf25a1aca08a615930e19de013eea9db5a609735876",
+    "translator_version": "0.1.0",
+    "validation_profile_identity": {
+      "sha256": "a36ebc354c707667b8ba0bcc47f7fc820b357eabc1fc3182fbd5e354a35ae6e8",
+      "status": "passed"
+    }
   },
-  "repo_commit": "7e97322e7ce2df2f309eaffda3f6d50f1e63f7e8",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
   "schema_version": 1,
   "semantic_pass": true,

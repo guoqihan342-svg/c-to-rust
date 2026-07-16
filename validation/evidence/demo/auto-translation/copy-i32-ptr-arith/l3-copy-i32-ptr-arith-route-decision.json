@@ -1,9 +1,20 @@
 {
   "candidate_generation": {
+    "ai": {
+      "candidate_id": "opencode-ai:unavailable",
+      "kind": "opencode-ai",
+      "role": "ai_primary_rust_draft",
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-ai-candidate-manifest.json",
+        "status": "not_used"
+      },
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-        "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+        "sha256": "fdf0b0bf44a7bc3d014781aa843df6fe6ad15491c971bb03c1d72d1b1bfcee64",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -18,6 +29,17 @@
     },
     "candidate_set": [
       {
+        "candidate_id": "opencode-ai:unavailable",
+        "kind": "opencode-ai",
+        "role": "ai_primary_rust_draft",
+        "semantic_pass": false,
+        "source_artifact": {
+          "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-ai-candidate-manifest.json",
+          "status": "not_used"
+        },
+        "status": "not_used"
+      },
+      {
         "candidate_id": "primary:clang-lowered-typed-ir",
         "kind": "clang-lowered-typed-ir",
         "role": "primary_rust_draft",
@@ -29,13 +51,14 @@
         "kind": "typed-ir",
         "role": "typed_ir_candidate_signal",
         "rust_draft_generated": true,
+        "rust_draft_sha256": "2f3dd7a1e6a488679de030887ced8bd695f8aff8dd2a31f613f9b91b530df09d",
         "semantic_pass": false,
         "status": "generated"
       },
       {
         "baseline_manifest": {
           "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-          "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+          "sha256": "fdf0b0bf44a7bc3d014781aa843df6fe6ad15491c971bb03c1d72d1b1bfcee64",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -186,7 +209,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-clang-lowering-report.json",
-        "sha256": "c2c85f104dd07b93cbc4f7be9817bb59064e559a3b72b7f1066751cdbfd87b75",
+        "sha256": "1896f8279d08404613395faa8cb9955fcf23d7ae70af9280432db8c61e18e573",
         "status": "lowered"
       },
       "status": "generated",
@@ -243,24 +266,28 @@
   "schema_version": 1,
   "slice_id": "copy-i32-ptr-arith",
   "source_artifacts": {
+    "ai_candidate_manifest": {
+      "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-ai-candidate-manifest.json",
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-      "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+      "sha256": "fdf0b0bf44a7bc3d014781aa843df6fe6ad15491c971bb03c1d72d1b1bfcee64",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-cfg.json",
-      "sha256": "2046d7ad1f6dfe16599ffc07a5abb370aadcc4bda2aa2a48218127347e535d97",
+      "sha256": "a7752d34b247b6eaa3b3835c1eb686179d137a393b058482bd8f87e933f9a4d3",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-clang-lowering-report.json",
-      "sha256": "c2c85f104dd07b93cbc4f7be9817bb59064e559a3b72b7f1066751cdbfd87b75",
+      "sha256": "1896f8279d08404613395faa8cb9955fcf23d7ae70af9280432db8c61e18e573",
       "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-pointer-graph.json",
-      "sha256": "32c4656b1b6487bc695a2b0683cf488c479d45bf4ebf0b00925dafb5624539cc",
+      "sha256": "6c784a4f49248f4870b3a09d747e474ead376dcb14ba59e4f77921e11f3ad3d8",
       "status": "recorded"
     },
     "translation_plan": {
@@ -269,7 +296,7 @@
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-type-map.json",
-      "sha256": "d5426010e9c321e8a315e9c8ba06fcdf246de25df68fa4615d177dea9fd43b3c",
+      "sha256": "ef9ffe2d6b837b088ba7ccfa1fac8214603cb0488817955ed29a7908a7f0b707",
       "status": "recorded"
     }
   },

@@ -6,7 +6,7 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-    "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
+    "sha256": "6a0e8616f3099c6d84f5530b12c9ee61d7971ef4cc9754244352bef361876a8d",
     "status": "skipped"
   },
   "entries": [],
@@ -15,7 +15,7 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
-    "sha256": "4600babf58a579381b3e75237fa498d4b51ec64153072e84d26f3ca503696e3e",
+    "sha256": "9513722e35afe958a0213b5c60be7cbb9b5208f05b7250e782f3008abc13f0b0",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -25,7 +25,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "8057145f63880562b2005ce0d7bc03203a8045e6ba493bc1020fff726d8926a6",
+    "sha256": "73a5d3659c592da2833fd659b14728599a4db068ef185d29d2852e1ad0ef8e39",
     "status": "passed"
   }
 }

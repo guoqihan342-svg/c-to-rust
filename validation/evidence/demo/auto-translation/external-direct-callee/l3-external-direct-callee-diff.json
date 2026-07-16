@@ -8,7 +8,7 @@
   "blocked_by": [],
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-    "sha256": "3cec3d0c1b8eea85969ba9a3593937d78eb8b911b61940cf3522bc0dcfa85e15",
+    "sha256": "8167005071a9d661db83995ff9f567c32c87e83afabdb469c808f5d599d49804",
     "status": "skipped"
   },
   "compared_fields": [
@@ -25,6 +25,7 @@
     "c_oracle_actual_status": "C_ORACLE_GENERATED",
     "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
     "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_replay_actual_status": "recorded",
     "rust_report_actual_status": "passed",
     "rust_report_required_status": "passed",
     "schema_diff_actual_status": "passed"
@@ -32,7 +33,7 @@
   "route_decision": {
     "level": "L0",
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-    "sha256": "75183246bb1b5e0498bd479ba49322f4a31169122ce3497ca8b84c2be1a9d85d",
+    "sha256": "00706c0f458c7a5a7c590417d90378722f9ed6615570304e6a66efccf2dc9728",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -43,7 +44,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
     "profile": "L0-dev",
-    "sha256": "87751fdf4380e3b8fe976740ea9703a7af8b3f08be154389322ed1017ffb245f",
+    "sha256": "3d5df8fa878d83a8b6052a7f61657b38f788ba4469a7046749d044dbc037575f",
     "status": "passed"
   }
 }

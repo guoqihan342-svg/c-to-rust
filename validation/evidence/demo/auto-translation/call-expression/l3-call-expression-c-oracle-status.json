@@ -11,7 +11,7 @@
   "harness_draft": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c-oracle-harness-draft.c",
-    "sha256": "c55ae18a7f0a64011f2ee39ea1f6d43519429ed93d2a0c47cf73dd946495aea3",
+    "sha256": "8a95f636013748312b0517fc6320993c8541556ca7cdb859143ab90169b654d9",
     "status": "draft"
   },
   "schema_version": 1,

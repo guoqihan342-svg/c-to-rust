@@ -7,13 +7,13 @@
     "path_sha256": {
       "c_oracle": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
       "diff": "782a8ff94e21677c4525ea8c047b4ed622aab2ee8c79ea636f7b0bc731c37c69",
-      "final_verification": "fc4e92f3d7d2686c538777c4114f002a5755a9c849717e8d9960e8fe7f275871",
+      "final_verification": "126dfbfac3ea7119f0955f3eba2d703191fadbbb370362e222121aedfc66154a",
       "negative_diff": "2ae4f879166a400db0c3ffbdcc87a5ccf6bf66c32b1edd324aa4e085f8f39762",
-      "performance_smoke": "e4fcb41585026c19f0781d2ff25c8219819a4e4d2e3dff0f87b6da75e02fc887",
+      "performance_smoke": "ff7c12124bb2e158938e683d8e7e15d23346c820eeaeb39a109424c7fbd97325",
       "rust_report": "27a83dfb7029f7d9ca160aa2c307b584498507cd6c9a627c9f0fea48c1715910",
       "unsafe_ledger": "3d1467cf416ac4f402a1f3455d5725de027be17464acaac04a7496fd80f8bdea",
       "unsafe_scan": "e2ba4f62a0e3e80108dbab95c4d812679055b7a12daea8cc45312707aa1354eb",
-      "version_manifest": "94f71e2c12d9cacbd8b00a88607e8440ccdc9bf1cc9f4bc06f3b9fb3fe3b916a"
+      "version_manifest": "d73509af1a9e6bb8edb122e8ceee84e40e0ab2a8812a8eb8cf00dc554914cc5f"
     },
     "paths": {
       "c_oracle": "validation/evidence/demo/l3-copy-i32-ptr-arith-c-oracle.json",
@@ -41,7 +41,7 @@
   ],
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+    "sha256": "fdf0b0bf44a7bc3d014781aa843df6fe6ad15491c971bb03c1d72d1b1bfcee64",
     "status": "skipped"
   },
   "c2rust_output": null,
@@ -70,7 +70,7 @@
   "gate_refs": {
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c-oracle-status.json",
-      "sha256": "2fb917261e2488840c8be4b116391b29ba951ac4bba266a73143ffeb684041cd",
+      "sha256": "503e61bfbd0fd810f4420cb94f262aa08d1802003d3ffa97ec246e364df19f45",
       "status": "C_ORACLE_GENERATED"
     },
     "final_verification": {
@@ -79,27 +79,27 @@
     },
     "negative_diff": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-negative-diff.json",
-      "sha256": "dc5c36e9614ac4616a77840edff6639a411c1873d259ddff6c2ac4f9d9db0061",
+      "sha256": "f6e12aea02c49c5cfc89f83b22e5eac8f3dd61cc6bad081027e0591ef6035d62",
       "status": "passed"
     },
     "rust_replay": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-rust-report.json",
-      "sha256": "15b755fa1fd5988a81f596ebea23133cea122b81940110be2cab163af0949c9a",
+      "sha256": "427647c1179a16d7e3307ea38b4d5c84d7cbfc0cebf09278551e31a16deff572",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-diff.json",
-      "sha256": "0c4edc994ecbcf1a31d241637004eaa751d1c20852e44defca8750a528ff07f9",
+      "sha256": "37a0e6a6ed7653cb1ca57e06a9346901c0b6c555de2fc3298a467c2dfb52584d",
       "status": "passed"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-unsafe-ledger.json",
-      "sha256": "bc901561e6a152b2fcaf112040b2dbed14a7776efb9159fd1d0653a60636a6bf",
+      "sha256": "dbda41ff8b22b5ccf8a73538061595a49e3c57ba36a7d9718a4571d2db2c666b",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-unsafe-scan.json",
-      "sha256": "f4af2c35c826b85a8127e32b90436c96f5201366f33c6bbacd5a677fa720dd85",
+      "sha256": "d96b7ff79ad1605dba2d08ba6f856c75d3b5127bbff49c367afc4ad351876671",
       "status": "passed"
     }
   },
@@ -107,7 +107,7 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-    "sha256": "2d60a32d45f5cdb3e9a9d2cc3edd15de957e399839606e1c01b79e5cd356c368",
+    "sha256": "67d824cf18e350da098383f9431c001260732230bc782f6795ecbc084ec6ee11",
     "status": "recorded"
   },
   "same_output_gate_refs": null,
@@ -121,7 +121,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "edec5dd2ef7e3e4b4b001a77b73ef0516b40e771b1f163dee76d8b3784ce6eff",
+    "sha256": "ac8fed2ec1dccdad004aac1f276dd6083b857ea709a2a7cceab1004b44a4da6c",
     "status": "passed"
   }
 }

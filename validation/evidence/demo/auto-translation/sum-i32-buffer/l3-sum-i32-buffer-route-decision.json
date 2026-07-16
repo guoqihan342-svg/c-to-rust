@@ -1,9 +1,20 @@
 {
   "candidate_generation": {
+    "ai": {
+      "candidate_id": "opencode-ai:unavailable",
+      "kind": "opencode-ai",
+      "role": "ai_primary_rust_draft",
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-ai-candidate-manifest.json",
+        "status": "not_used"
+      },
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
-        "sha256": "733f134bb5303d17281371125f60bf4d447eeeeff8e46a0c8598ae56906e711e",
+        "sha256": "248591055ae0ed061bc87c464478140522ada09f3f6e0e37363bb15d4a50e7b1",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -18,6 +29,17 @@
     },
     "candidate_set": [
       {
+        "candidate_id": "opencode-ai:unavailable",
+        "kind": "opencode-ai",
+        "role": "ai_primary_rust_draft",
+        "semantic_pass": false,
+        "source_artifact": {
+          "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-ai-candidate-manifest.json",
+          "status": "not_used"
+        },
+        "status": "not_used"
+      },
+      {
         "candidate_id": "primary:clang-lowered-typed-ir",
         "kind": "clang-lowered-typed-ir",
         "role": "primary_rust_draft",
@@ -29,13 +51,14 @@
         "kind": "typed-ir",
         "role": "typed_ir_candidate_signal",
         "rust_draft_generated": true,
+        "rust_draft_sha256": "eb61ae031fa0977db13f578739af77cbd9caf9463b71515c583c72452b5d4964",
         "semantic_pass": false,
         "status": "generated"
       },
       {
         "baseline_manifest": {
           "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
-          "sha256": "733f134bb5303d17281371125f60bf4d447eeeeff8e46a0c8598ae56906e711e",
+          "sha256": "248591055ae0ed061bc87c464478140522ada09f3f6e0e37363bb15d4a50e7b1",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -207,7 +230,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-clang-lowering-report.json",
-        "sha256": "64261b994e546bd9e9ecb87cb0d41a06ca8105323c6d93edb085f2a22502a504",
+        "sha256": "2df712843cfbc9ab9f868a6714fb3075bf23223adbaf5f56c1d1367dffbaff5d",
         "status": "lowered"
       },
       "status": "generated",
@@ -263,24 +286,28 @@
   "schema_version": 1,
   "slice_id": "sum-i32-buffer",
   "source_artifacts": {
+    "ai_candidate_manifest": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-ai-candidate-manifest.json",
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
-      "sha256": "733f134bb5303d17281371125f60bf4d447eeeeff8e46a0c8598ae56906e711e",
+      "sha256": "248591055ae0ed061bc87c464478140522ada09f3f6e0e37363bb15d4a50e7b1",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-cfg.json",
-      "sha256": "9e4b83c718b7579c79d556129aeb25a429c651f583d15c398fa3389e43457989",
+      "sha256": "5cda344375140d0408fba97afabdb2fe02f5b3a7a1c846e89afa5a991e41347f",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-clang-lowering-report.json",
-      "sha256": "64261b994e546bd9e9ecb87cb0d41a06ca8105323c6d93edb085f2a22502a504",
+      "sha256": "2df712843cfbc9ab9f868a6714fb3075bf23223adbaf5f56c1d1367dffbaff5d",
       "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-pointer-graph.json",
-      "sha256": "28cb54a14c7e195abf354666d50b6d57539e1d245b235bebdc7fa062aa40c9b1",
+      "sha256": "b1edf9ac76299e1567487186f860d35d1b10cc187b3380197be11e490029657d",
       "status": "recorded"
     },
     "translation_plan": {
@@ -289,7 +316,7 @@
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-type-map.json",
-      "sha256": "796ca86722c04fc5fc314e9e11bbe0b9464c5b88c52b65aee21de25f5d7caf90",
+      "sha256": "c33b225d8cb5aede688ad28c4ad6ad3b7018ad3da5b24d19076701c893e81720",
       "status": "recorded"
     }
   },

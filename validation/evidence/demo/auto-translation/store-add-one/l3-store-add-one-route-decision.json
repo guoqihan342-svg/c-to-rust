@@ -1,9 +1,20 @@
 {
   "candidate_generation": {
+    "ai": {
+      "candidate_id": "opencode-ai:unavailable",
+      "kind": "opencode-ai",
+      "role": "ai_primary_rust_draft",
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-ai-candidate-manifest.json",
+        "status": "not_used"
+      },
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-        "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
+        "sha256": "6a0e8616f3099c6d84f5530b12c9ee61d7971ef4cc9754244352bef361876a8d",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -18,6 +29,17 @@
     },
     "candidate_set": [
       {
+        "candidate_id": "opencode-ai:unavailable",
+        "kind": "opencode-ai",
+        "role": "ai_primary_rust_draft",
+        "semantic_pass": false,
+        "source_artifact": {
+          "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-ai-candidate-manifest.json",
+          "status": "not_used"
+        },
+        "status": "not_used"
+      },
+      {
         "candidate_id": "primary:clang-lowered-typed-ir",
         "kind": "clang-lowered-typed-ir",
         "role": "primary_rust_draft",
@@ -29,13 +51,14 @@
         "kind": "typed-ir",
         "role": "typed_ir_candidate_signal",
         "rust_draft_generated": true,
+        "rust_draft_sha256": "48c5db9e63b8a209326718eaaf964712c5ff08ec4e202fdfe330f77197b1c42f",
         "semantic_pass": false,
         "status": "generated"
       },
       {
         "baseline_manifest": {
           "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-          "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
+          "sha256": "6a0e8616f3099c6d84f5530b12c9ee61d7971ef4cc9754244352bef361876a8d",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -186,7 +209,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-clang-lowering-report.json",
-        "sha256": "2b626c01fe41194b49a75a692b6dc079fa797556bf9e5bcfc248ee45996c1180",
+        "sha256": "5365eeb2288a8b19ab549766ca960824522634a1ae52260b887a084cc2b180df",
         "status": "lowered"
       },
       "status": "generated",
@@ -245,24 +268,28 @@
   "schema_version": 1,
   "slice_id": "store-add-one",
   "source_artifacts": {
+    "ai_candidate_manifest": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-ai-candidate-manifest.json",
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-      "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
+      "sha256": "6a0e8616f3099c6d84f5530b12c9ee61d7971ef4cc9754244352bef361876a8d",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-cfg.json",
-      "sha256": "2bb734e38079fa8e216f5def27ee2755268c81bcf4c80f96b2203293d93a3ba2",
+      "sha256": "3bd9dfed9a60a757ca2f0b8d8c4099b6b02de95e8d601894b755ed4f4bf7606c",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-clang-lowering-report.json",
-      "sha256": "2b626c01fe41194b49a75a692b6dc079fa797556bf9e5bcfc248ee45996c1180",
+      "sha256": "5365eeb2288a8b19ab549766ca960824522634a1ae52260b887a084cc2b180df",
       "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-pointer-graph.json",
-      "sha256": "5d7b5a14867495e5dd9fc47e764b56fcb2952c9827cdef3697e756bef5e3af02",
+      "sha256": "d72ccf665769f7c01353a7c4f50a77a1233860dde55891e5c92a6eeb8b82bc58",
       "status": "recorded"
     },
     "translation_plan": {
@@ -271,7 +298,7 @@
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-type-map.json",
-      "sha256": "50c197bfc4d1ed78cc608aca08a2971ddcf9899b173f4dd709c6ae724f5f0fa5",
+      "sha256": "a75df81b2d0ad1689efe862b12f59fda2936357484e448950710230bde0d9d5d",
       "status": "recorded"
     }
   },

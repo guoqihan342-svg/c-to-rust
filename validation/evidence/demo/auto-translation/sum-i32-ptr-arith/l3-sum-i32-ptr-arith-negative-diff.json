@@ -8,7 +8,7 @@
   "blocked_by": [],
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
+    "sha256": "190db725f61b1ef6dfa0b9753802263576ae7106fbafadb23b7f2e6e1cf85007",
     "status": "skipped"
   },
   "expected_failure": true,
@@ -33,7 +33,7 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
-    "sha256": "471a2f35e147eeb785ff064b3b23b32e9f365990e789075c4777e8b98d9540b5",
+    "sha256": "35df793c56b5038252f13a12b46af727fd100123ee388caa87f1b8b7810975c4",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -43,7 +43,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "8a486f81151ca38b10951c1e82b7d972e39367ff2dfe47ba861751b5cee9af9d",
+    "sha256": "af49abd65a8548852932a3f7edd8bebd408756d3e21687862bcd98ac285611dc",
     "status": "passed"
   }
 }

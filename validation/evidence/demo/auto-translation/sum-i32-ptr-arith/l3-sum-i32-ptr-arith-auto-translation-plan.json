@@ -1,7 +1,7 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
+    "sha256": "190db725f61b1ef6dfa0b9753802263576ae7106fbafadb23b7f2e6e1cf85007",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
@@ -116,11 +116,11 @@
     }
   },
   "level": "L3",
-  "repo_commit": "8f0930bc628e771473419152723f185d9f00e90b",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
-    "sha256": "03f9f45a30bee2a67e788e5c6005bdeed5ae2b8d43bc3f1e6e12bd0fbf6fc6e3",
+    "sha256": "35df793c56b5038252f13a12b46af727fd100123ee388caa87f1b8b7810975c4",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -146,6 +146,7 @@
     "external_direct_callees": [],
     "lvalue_decision_counts": {
       "bounded_input_buffer": 1,
+      "bounded_pointer_arithmetic_input_read": 1,
       "bounded_pointer_index": 1
     },
     "pointer_boundary_decision_counts": {
@@ -157,6 +158,7 @@
     "translation_rule_ids": [
       "clang-lowered-typed-ir",
       "bounded-input-buffer-read",
+      "bounded-pointer-arithmetic-input-read",
       "bounded-pointer-index-write"
     ],
     "unsafe_candidate_count": 0,
@@ -166,7 +168,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "8a486f81151ca38b10951c1e82b7d972e39367ff2dfe47ba861751b5cee9af9d",
+    "sha256": "af49abd65a8548852932a3f7edd8bebd408756d3e21687862bcd98ac285611dc",
     "status": "passed"
   },
   "verification_plan": [

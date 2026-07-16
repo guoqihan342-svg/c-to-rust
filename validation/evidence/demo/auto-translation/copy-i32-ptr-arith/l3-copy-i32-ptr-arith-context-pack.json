@@ -30,7 +30,7 @@
   "fixture": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
   "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "schema_version": 1,
   "signature_bindings": [],
   "slice_id": "copy-i32-ptr-arith",

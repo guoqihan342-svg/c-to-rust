@@ -10,12 +10,12 @@
   },
   "build_profile_hash": "bbf11aeeaa75221e633e8d13d10532fc612ad5c88ff87b6198f836a504bc293b",
   "c2rust_baseline_identity": {
-    "sha256": "fa70e36e2b6f2650416f7fb1fc7a9919191e6e49b4879f43f6dfd634784ced26",
+    "sha256": "375763f6a415b7878c7c03346367f6ef9432aae1f45827312f2cc8685a5d67b5",
     "status": "skipped"
   },
   "c_oracle_harness_identity": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c-oracle-harness-draft.c",
-    "sha256": "cecb181a69ab7689c85b4483889b04c5304068f91371dbdc675c8e13cab00b37",
+    "sha256": "e69de94c1572ed025557ba658e595ec8af372f14af5e22c19cd93c3588ddabfd",
     "status": "draft"
   },
   "cache_input_fields": [
@@ -43,11 +43,11 @@
     "translator_feature_set",
     "clang_lowering_identity"
   ],
-  "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+  "cargo_lock_hash": "0d463cfaf506a76404644fba374d860aa6fffc2090f99837c3e7ebc6d8304675",
   "clang_lowering_identity": {
-    "clang_path": "",
-    "clang_path_status": "not_configured",
-    "clang_version": "not_configured",
+    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+    "clang_path_status": "configured",
+    "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
     "command": "clang -Xclang -ast-dump=json -fsyntax-only",
     "enabled": true,
     "features": [
@@ -80,19 +80,19 @@
   "dependent_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-      "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+      "sha256": "fdf0b0bf44a7bc3d014781aa843df6fe6ad15491c971bb03c1d72d1b1bfcee64",
       "status": "skipped"
     },
     "route_decision": {
       "level": "L1",
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-      "sha256": "2d60a32d45f5cdb3e9a9d2cc3edd15de957e399839606e1c01b79e5cd356c368",
+      "sha256": "67d824cf18e350da098383f9431c001260732230bc782f6795ecbc084ec6ee11",
       "status": "recorded"
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json",
       "profile": "L1-dev",
-      "sha256": "edec5dd2ef7e3e4b4b001a77b73ef0516b40e771b1f163dee76d8b3784ce6eff",
+      "sha256": "ac8fed2ec1dccdad004aac1f276dd6083b857ea709a2a7cceab1004b44a4da6c",
       "status": "passed"
     }
   },
@@ -141,7 +141,7 @@
     "status": "sufficient_for_semantic_pass"
   },
   "route_decision_identity": {
-    "sha256": "d14e42201992a0357c607d40456e69ba32943a18d1b9f1e931649fbeecda3aff",
+    "sha256": "8602a708d19fd356365ebbd2dee1daf69166954c565435aaf73c85890c782f1a",
     "status": "recorded"
   },
   "scalar_ub_contract_identity": {
@@ -173,10 +173,10 @@
   "translator_feature_set": [
     "clang-lowering-report"
   ],
-  "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
+  "translator_manifest_sha256": "21e13ae304600807d34aabf25a1aca08a615930e19de013eea9db5a609735876",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "00d8f65c6d0f17e476fdbda5e97c7a3dcb2115f8ed67fe33dcde89e7888363ea",
+    "sha256": "9bfadd79855eed231b96bc55a7ad5a17b062fd492ad20f80695e056c8e05427c",
     "status": "passed"
   }
 }

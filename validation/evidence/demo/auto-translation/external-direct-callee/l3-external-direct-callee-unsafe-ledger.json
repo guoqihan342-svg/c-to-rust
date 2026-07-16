@@ -4,11 +4,28 @@
     "sha256": "2fe75734941305cbc1a7ad536d868127a0872280bb2a5f9854791bdfdaaf35d5",
     "status": "passed"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
+    "sha256": "8167005071a9d661db83995ff9f567c32c87e83afabdb469c808f5d599d49804",
+    "status": "skipped"
+  },
   "entries": [],
   "first_party_non_test_unsafe_count": 0,
   "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
+    "sha256": "00706c0f458c7a5a7c590417d90378722f9ed6615570304e6a66efccf2dc9728",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "external-direct-callee",
   "status": "passed",
-  "target_id": "demo"
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "3d5df8fa878d83a8b6052a7f61657b38f788ba4469a7046749d044dbc037575f",
+    "status": "passed"
+  }
 }

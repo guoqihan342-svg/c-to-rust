@@ -13,8 +13,62 @@
         {
           "id": "entry",
           "kind": "entry",
-          "lvalue_decisions": [],
-          "lvalue_kinds": [],
+          "lvalue_decisions": [
+            {
+              "decision": "bounded_input_buffer",
+              "lvalue_kind": "bounded_input_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "for",
+              "statement_index": 0,
+              "translation_rule_id": "bounded-input-buffer-read"
+            },
+            {
+              "decision": "bounded_pointer_arithmetic_input_read",
+              "lvalue_kind": "bounded_pointer_arithmetic_input_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "return",
+              "statement_index": 1,
+              "translation_rule_id": "bounded-pointer-arithmetic-input-read"
+            },
+            {
+              "decision": "bounded_pointer_index",
+              "lvalue_kind": "bounded_pointer_index",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "",
+              "statement_index": 2,
+              "translation_rule_id": "bounded-pointer-index-write"
+            },
+            {
+              "decision": "bounded_pointer_arithmetic_output_write",
+              "lvalue_kind": "bounded_pointer_arithmetic_output_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "",
+              "statement_index": 3,
+              "translation_rule_id": "bounded-pointer-arithmetic-output-write"
+            }
+          ],
+          "lvalue_kinds": [
+            "bounded_input_buffer",
+            "bounded_pointer_arithmetic_input_buffer",
+            "bounded_pointer_index",
+            "bounded_pointer_arithmetic_output_buffer"
+          ],
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -22,7 +76,12 @@
           },
           "statement_kinds": [
             "for",
-            "return"
+            "return",
+            "bounded_input_buffer_read",
+            "bounded_pointer_arithmetic_input_read",
+            "pointer_write",
+            "bounded_pointer_index_write",
+            "bounded_pointer_arithmetic_output_write"
           ],
           "statements": [
             "for",
@@ -90,7 +149,7 @@
     }
   ],
   "level": "L3",
-  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "repo_commit": "c7f4e5fbd261edce5be0019c5313750d91df1ede",
   "schema_version": 1,
   "slice_id": "copy-i32-ptr-arith",
   "slice_spec_ref": {

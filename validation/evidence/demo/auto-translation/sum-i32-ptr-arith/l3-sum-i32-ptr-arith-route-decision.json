@@ -1,9 +1,20 @@
 {
   "candidate_generation": {
+    "ai": {
+      "candidate_id": "opencode-ai:unavailable",
+      "kind": "opencode-ai",
+      "role": "ai_primary_rust_draft",
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-ai-candidate-manifest.json",
+        "status": "not_used"
+      },
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
-        "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
+        "sha256": "190db725f61b1ef6dfa0b9753802263576ae7106fbafadb23b7f2e6e1cf85007",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -18,6 +29,17 @@
     },
     "candidate_set": [
       {
+        "candidate_id": "opencode-ai:unavailable",
+        "kind": "opencode-ai",
+        "role": "ai_primary_rust_draft",
+        "semantic_pass": false,
+        "source_artifact": {
+          "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-ai-candidate-manifest.json",
+          "status": "not_used"
+        },
+        "status": "not_used"
+      },
+      {
         "candidate_id": "primary:clang-lowered-typed-ir",
         "kind": "clang-lowered-typed-ir",
         "role": "primary_rust_draft",
@@ -29,13 +51,14 @@
         "kind": "typed-ir",
         "role": "typed_ir_candidate_signal",
         "rust_draft_generated": true,
+        "rust_draft_sha256": "2cf90428365a256106aaf276c772789b266f6dba4d6fc0cb9d093fd4f335dd89",
         "semantic_pass": false,
         "status": "generated"
       },
       {
         "baseline_manifest": {
           "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
-          "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
+          "sha256": "190db725f61b1ef6dfa0b9753802263576ae7106fbafadb23b7f2e6e1cf85007",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -207,7 +230,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-clang-lowering-report.json",
-        "sha256": "d6e4937d8528d1a5708679f37d8d6ca9c20023e7c0b2196c9f8eeea12f956301",
+        "sha256": "c5da16c158b6900c138db2abf6804ff7b57b10408c6be3513226298932a33ae9",
         "status": "lowered"
       },
       "status": "generated",
@@ -263,24 +286,28 @@
   "schema_version": 1,
   "slice_id": "sum-i32-ptr-arith",
   "source_artifacts": {
+    "ai_candidate_manifest": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-ai-candidate-manifest.json",
+      "status": "not_used"
+    },
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
-      "sha256": "d9140be91078de6b17d2e8ef893957a478917170e30276f7a92173724fa737b1",
+      "sha256": "190db725f61b1ef6dfa0b9753802263576ae7106fbafadb23b7f2e6e1cf85007",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-cfg.json",
-      "sha256": "d87533d82be944dab95a1bd7f0ca7704555ccc1036e050b3186c74169c59502e",
+      "sha256": "e874a5c906da68f7cf31a96225f9694679c160f30b3fb1da4d76df8765f2533f",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-clang-lowering-report.json",
-      "sha256": "d6e4937d8528d1a5708679f37d8d6ca9c20023e7c0b2196c9f8eeea12f956301",
+      "sha256": "c5da16c158b6900c138db2abf6804ff7b57b10408c6be3513226298932a33ae9",
       "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-pointer-graph.json",
-      "sha256": "edd9b0080f51cf03194ef0e38681da3edbee8c8a9ce34d4b55aef40139058402",
+      "sha256": "4a1090dbfd923fb5d64d05db1b93200d203acefa209176a2d84d14c9798040fe",
       "status": "recorded"
     },
     "translation_plan": {
@@ -289,7 +316,7 @@
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-type-map.json",
-      "sha256": "e7a363f060c2dd60fa1824d02f118759da0a23af122b5a9769d07b0c80432f94",
+      "sha256": "897d7c90f1f4ac5d1d8b433d94f29a8ae4d2e7bfd866ce4049866a505ca1df7b",
       "status": "recorded"
     }
   },

@@ -5,12 +5,117 @@
     "compiler_command_source": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
     "defines": [],
     "include_paths": [],
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
     "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      },
+      {
+        "kind": "callee",
+        "name": "helper_add_one",
+        "source": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one"
+      }
+    ],
+    "external_direct_callees": [
+      {
+        "call_sites": [
+          "declaration_initializer",
+          "assignment",
+          "return"
+        ],
+        "definition_status": "real_source_bound",
+        "name": "helper_add_one",
+        "observable_effects": [
+          "return_value",
+          "external_callee_call_count",
+          "external_callee_contexts",
+          "external_callee_bindings"
+        ],
+        "signature_ref": "sig-helper-add-one",
+        "source_files": [
+          {
+            "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+            "sha256": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
+          }
+        ],
+        "source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
+        "stub_boundary": "compile_only"
+      }
+    ],
+    "signatures": [
+      {
+        "c_source": "int call_helper_chain(int value) { int first = helper_add_one(value); value = helper_add_one(first); return helper_add_one(value); }",
+        "function": "call_helper_chain",
+        "id": "sig-call-helper-chain",
+        "parameters": [
+          {
+            "bounds": {
+              "maximum": 2147483000,
+              "minimum": -2
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          }
+        ],
+        "return_type": "int"
+      },
+      {
+        "c_source": "int helper_add_one(int value) { return value + 1; }",
+        "definition_status": "real_source_bound",
+        "function": "helper_add_one",
+        "id": "sig-helper-add-one",
+        "parameters": [
+          {
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          }
+        ],
+        "return_type": "int",
+        "role": "external_direct_callee",
+        "signature_sha256": "helper-add-one-int-int",
+        "source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one"
+      }
+    ]
   },
   "c_source": "int call_helper_chain(int value) { int first = helper_add_one(value); value = helper_add_one(first); return helper_add_one(value); }",
   "fixture_hash": "external-direct-callee-fixture",
   "function_name": "call_helper_chain",
   "slice_id": "external-direct-callee",
   "source_commit": "demo-external-direct-callee-20260625",
+  "source_file": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
+    "validation/l2_slices/tools/generate_external_direct_callee_oracle.py": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
+  },
+  "source_files": [
+    {
+      "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+      "role": "source",
+      "sha256": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
+    },
+    {
+      "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+      "role": "source",
+      "sha256": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
+    },
+    {
+      "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+      "role": "fixture"
+    }
+  ],
+  "source_root": "<demo-slice>",
   "target_id": "demo"
 }

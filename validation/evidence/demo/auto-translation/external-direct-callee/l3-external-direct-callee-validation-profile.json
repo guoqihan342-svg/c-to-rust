@@ -1,4 +1,291 @@
 {
+  "accepted_evidence_authoritative": false,
+  "candidate_generation": {
+    "ai": {
+      "candidate_id": "opencode-ai:unavailable",
+      "kind": "opencode-ai",
+      "role": "ai_primary_rust_draft",
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-ai-candidate-manifest.json",
+        "status": "not_used"
+      },
+      "status": "not_used"
+    },
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
+        "sha256": "8167005071a9d661db83995ff9f567c32c87e83afabdb469c808f5d599d49804",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "opencode-ai:unavailable",
+        "kind": "opencode-ai",
+        "role": "ai_primary_rust_draft",
+        "semantic_pass": false,
+        "source_artifact": {
+          "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-ai-candidate-manifest.json",
+          "status": "not_used"
+        },
+        "status": "not_used"
+      },
+      {
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": true,
+        "rust_draft_sha256": "162e650b5f939448a11c6c4d6ee5b53ce7f43d7dd49dc541cbd60b89f2bb126f",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
+          "sha256": "8167005071a9d661db83995ff9f567c32c87e83afabdb469c808f5d599d49804",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": true,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L0",
+        "status": "not_refused"
+      },
+      "route_level": "L0",
+      "route_status": "recorded",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:clang-lowered-typed-ir",
+      "fallback": false,
+      "selected": "clang-lowered-typed-ir",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [],
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "162e650b5f939448a11c6c4d6ee5b53ce7f43d7dd49dc541cbd60b89f2bb126f",
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 0,
+        "status": "not_applicable",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-clang-lowering-report.json",
+        "sha256": "2ec479a9c771cb5d83c30fe4f8b6d286be33c83498b3a78686fc7377294a3fd5",
+        "status": "lowered"
+      },
+      "status": "generated",
+      "typed_ir_sha256": "57d1d9b40bdfd44c022b2917ad9cb6888eceafba8035c8866bb04bb90eebac23"
+    }
+  },
+  "competition_environment": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+      "fixture_path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+      "fixture_sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
+        "diff": "25b25cd3c8c06c52aff6257b4d0fdc39ee6a62dce282ed714a36f062cd7855fd",
+        "final_verification": "f6951d5a898457af0ec94ad99100833ef2adf0107ed1d50369f1734cc6d216d9",
+        "negative_diff": "666613c9f2a097a36d636b55dba3eb292b7307d8c739c7e77e37dfd006623288",
+        "performance_smoke": "503ccf8f675d18e1ded9a94fb391ed066263add47b22b05ab52e757aa2c9ca93",
+        "rust_report": "9b2e743b35e7e9bc3a38c74abcd4c191d147e48fda0d55e16202f494f870cfed",
+        "unsafe_ledger": "2fe75734941305cbc1a7ad536d868127a0872280bb2a5f9854791bdfdaaf35d5",
+        "unsafe_scan": "587e4cf9d97b84ded264c3314b8c02525882c66e694b1cb7dbe6893f9c07f73e",
+        "version_manifest": "bc208abbae000a08cb7ed3fd7d825b8bc4b9e41f34e118d93718f0edd3f8edfe"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json",
+        "diff": "validation/evidence/demo/l3-external-direct-callee-diff.json",
+        "final_verification": "validation/evidence/demo/l3-external-direct-callee-final-verification.json",
+        "negative_diff": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+        "performance_smoke": "validation/evidence/demo/l3-external-direct-callee-performance-smoke.json",
+        "rust_report": "validation/evidence/demo/l3-external-direct-callee-rust-report.json",
+        "unsafe_ledger": "validation/evidence/demo/l3-external-direct-callee-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/demo/l3-external-direct-callee-unsafe-scan.json",
+        "version_manifest": "validation/evidence/demo/l3-external-direct-callee-version-manifest.json"
+      },
+      "slice_id": "external-direct-callee",
+      "source_commit": "demo-external-direct-callee-20260625",
+      "status": "accepted",
+      "target_id": "demo",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json",
+        "sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+        "sha256": "666613c9f2a097a36d636b55dba3eb292b7307d8c739c7e77e37dfd006623288",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-external-direct-callee-rust-report.json",
+        "sha256": "9b2e743b35e7e9bc3a38c74abcd4c191d147e48fda0d55e16202f494f870cfed",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-external-direct-callee-diff.json",
+        "sha256": "25b25cd3c8c06c52aff6257b4d0fdc39ee6a62dce282ed714a36f062cd7855fd",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/demo/l3-external-direct-callee-unsafe-ledger.json",
+        "sha256": "2fe75734941305cbc1a7ad536d868127a0872280bb2a5f9854791bdfdaaf35d5",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/demo/l3-external-direct-callee-unsafe-scan.json",
+        "sha256": "587e4cf9d97b84ded264c3314b8c02525882c66e694b1cb7dbe6893f9c07f73e",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [
+      "generated_replay_not_passed"
+    ],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "blocked_generated_draft_acceptance",
+    "generated_draft_replay_pass": false,
+    "generated_draft_semantic_pass": false,
+    "replay_execution": {},
+    "rust_check": {
+      "binding_mode": "field_bound",
+      "cycle_boundary": "rust-check is field-bound because final route and validation-profile refs are added after generated-draft acceptance is computed",
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-rust-draft.rs",
+      "sha256": "162e650b5f939448a11c6c4d6ee5b53ce7f43d7dd49dc541cbd60b89f2bb126f",
+      "status": "candidate"
+    },
+    "schema_version": 1,
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "slice_id": "external-direct-callee",
+    "source_commit": "demo-external-direct-callee-20260625",
+    "status": "blocked",
+    "target_id": "demo"
+  },
   "generated_draft_semantic_pass": false,
   "goal": "dev",
   "loop_policy": {
@@ -7,6 +294,7 @@
     "stress_loops": null
   },
   "optional_gates": [
+    "negative_diff",
     "evidence_cleanliness",
     "fuzz_property",
     "miri",
@@ -15,6 +303,7 @@
   "oracle_boundary_contract": {
     "compiler": {
       "command_source": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+      "compile_commands": null,
       "defines": [],
       "flags": [],
       "include_paths": [],
@@ -26,7 +315,7 @@
     "fixture_representativeness": {
       "accepted_oracle_case_count": 6,
       "case_source": "fixture_contract",
-      "declared_case_count": 6,
+      "declared_case_count": 3,
       "fixture_hash": "external-direct-callee-fixture",
       "fixture_path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
       "limitations": [],
@@ -60,10 +349,20 @@
     "schema_version": 1,
     "status": "sufficient_for_semantic_pass",
     "target": {
+      "char_align": "unknown",
+      "char_width": "unknown",
       "endianness": "little",
+      "int_align": "unknown",
       "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
+      "long_long_width": "unknown",
       "long_width": 64,
+      "plain_char_signed": "unknown",
+      "pointer_align": "unknown",
       "pointer_width": 64,
+      "short_align": "unknown",
+      "short_width": "unknown",
       "triple_or_abi": "x86_64-unknown-linux-gnu",
       "word_size_bits": 64
     },
@@ -76,26 +375,52 @@
   "profile": "L0-dev",
   "required_gate_status": {
     "c_oracle_diff": "C_ORACLE_GENERATED",
-    "compile": "passed",
-    "final_verification": "passed",
-    "negative_diff": "expected_failed",
-    "schema_diff": "passed",
-    "unsafe_ledger": "passed",
-    "unsafe_scan": "passed"
+    "compile": "passed"
   },
   "required_gates": [
     "compile",
-    "c_oracle_diff",
-    "schema_diff",
-    "negative_diff",
-    "unsafe_scan",
-    "unsafe_ledger",
-    "final_verification"
+    "c_oracle_diff"
   ],
   "route_level": "L0",
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "whole-program call graph semantic proof",
+        "helper stub semantic equivalence",
+        "function pointer or nested call expression support",
+        "signed overflow equivalence"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "not_declared",
+      "covers_overflow_boundaries": false,
+      "parameters": []
+    },
+    "status": "recorded"
+  },
   "schema_version": 1,
   "skipped_gates": [],
   "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-external-direct-callee-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/tools/generate_external_direct_callee_oracle.py": "generated-at-validation"
+    },
+    "source_root": "<demo-slice>"
+  },
   "status": "passed",
   "target_id": "demo",
   "tool_boundaries": {
