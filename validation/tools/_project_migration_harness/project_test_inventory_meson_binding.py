@@ -140,7 +140,7 @@ def _validate_tests_information(root: Path, build: Path) -> None:
         not isinstance(tests, Mapping)
         or set(tests) != {"file", "updated"}
         or tests.get("file") != "intro-tests.json"
-        or not isinstance(tests.get("updated"), bool)
+        or tests.get("updated") is not True
     ):
         raise ValueError("project_test_meson_tests_information_invalid")
 

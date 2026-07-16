@@ -175,6 +175,17 @@ class MesonProjectTestInventoryTests(MesonInventoryTestCase):
         ):
             capture_meson_test_build_binding(self.root, self.database)
 
+    def test_stale_intro_tests_manifest_declaration_fails_closed(self) -> None:
+        info = self.info / "meson-info.json"
+        payload = json.loads(info.read_text(encoding="utf-8"))
+        payload["introspection"]["information"]["tests"]["updated"] = False
+        info.write_text(json.dumps(payload), encoding="utf-8")
+
+        with self.assertRaisesRegex(
+            ValueError, "project_test_meson_build_binding_invalid",
+        ):
+            capture_meson_test_build_binding(self.root, self.database)
+
     def current_observation(self, tests: list[dict]) -> dict:
         self.tests = tests
         self.write_tests(tests)
