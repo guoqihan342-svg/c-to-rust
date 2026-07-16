@@ -13,6 +13,7 @@ from .project_test_inventory_validation import (
     manifest_project_test_inventory_reference,
     reopen_manifest_project_test_inventory,
 )
+from .project_test_completeness import derive_project_test_completeness
 from .project_test_mapping import derive_project_test_mapping
 from .project_test_semantic_evidence import (
     bound_project_test_gate_observation,
@@ -57,10 +58,25 @@ def verify_project_test_semantics(
                 _first_blocker(mapping, "project_test_mapping_blocked"),
                 inventory_receipt=inventory_receipt, mapping=mapping_ref,
             )
+        completeness = derive_project_test_completeness(
+            inventory, mapping, rust_project_ir,
+        )
+        completeness_ref = write_json_artifact(
+            artifact_root, "completion/project-test-completeness.json",
+            completeness,
+        )
+        if completeness.get("status") != "ready":
+            return _blocked(
+                _first_blocker(
+                    completeness, "project_test_completeness_blocked",
+                ),
+                inventory_receipt=inventory_receipt, mapping=mapping_ref,
+                completeness=completeness_ref,
+            )
         oracle = _run_project_test_oracle(
             repo_root=repo_root, generation_root=context["generation_root"],
             runtime_root=runtime_root, rust_project_ir=rust_project_ir,
-            inventory=inventory, mapping=mapping,
+            inventory=inventory, mapping=mapping, completeness=completeness,
             excludes=(artifact_root, project_root, runtime_root),
             timeout_seconds=timeout_seconds,
         )
@@ -72,6 +88,7 @@ def verify_project_test_semantics(
             return _blocked(
                 str(oracle.get("reason_code") or "project_test_oracle_blocked"),
                 inventory_receipt=inventory_receipt, mapping=mapping_ref,
+                completeness=completeness_ref,
                 oracle=oracle_ref,
             )
         gate_observation = bound_project_test_gate_observation(
@@ -107,7 +124,8 @@ def verify_project_test_semantics(
             "reason_code": None if passed else "project_test_logic_mismatch",
             "blockers": [] if passed or repair_ready else ["project_test_logic_mismatch"],
             "inventory": inventory_ref, "inventory_receipt": inventory_receipt,
-            "mapping": mapping_ref, "oracle": oracle_ref,
+            "mapping": mapping_ref, "completeness": completeness_ref,
+            "oracle": oracle_ref,
             "gate_observation": gate_observation, "project_gate_record": record,
             **({"candidate_repair": repair} if repair is not None else {}),
             "semantic_gate": False,

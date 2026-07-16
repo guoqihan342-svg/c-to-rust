@@ -8,7 +8,7 @@ from validation.tools._project_migration_harness.project_test_invocation_commitm
 )
 
 
-def semantic_payloads() -> tuple[dict, dict, dict]:
+def semantic_payloads() -> tuple[dict, dict, dict, dict]:
     inventory = {
         "schema_version": 1,
         "artifact_kind": "project-test-inventory",
@@ -18,7 +18,10 @@ def semantic_payloads() -> tuple[dict, dict, dict]:
             "size_bytes": 80,
         },
         "build_directory": "build",
-        "tests": [{"test_id": "test-1"}], "blockers": [],
+        "tests": [{
+            "test_id": "test-1", "source_target_id": "source",
+            "source_executable": {"path": "build/test"},
+        }], "blockers": [],
         "claim_boundary": {
             "semantic_gate": False, "translation_coverage_numerator": 0,
         },
@@ -30,13 +33,47 @@ def semantic_payloads() -> tuple[dict, dict, dict]:
         "status": "ready",
         "inventory_sha256": inventory["inventory_sha256"],
         "rust_project_ir_sha256": "a" * 64,
-        "mappings": [{"source_target_id": "source", "test_ids": ["test-1"]}],
+        "mappings": [{
+            "source_target_id": "source", "test_ids": ["test-1"],
+            "source_executable_paths": ["build/test"],
+            "rust_package_id": "rust-package",
+            "rust_package_name": "rust_package",
+            "rust_target_id": "rust-target",
+            "rust_target_name": "rust_target",
+        }],
         "blockers": [],
         "claim_boundary": {
             "semantic_gate": False, "translation_coverage_numerator": 0,
         },
     }
     mapping["mapping_sha256"] = content_sha256(mapping)
+    completeness = {
+        "schema_version": 1,
+        "artifact_kind": "project-test-completeness",
+        "status": "ready",
+        "inventory_sha256": inventory["inventory_sha256"],
+        "mapping_sha256": mapping["mapping_sha256"],
+        "rust_project_ir_sha256": "a" * 64,
+        "case_ids": ["test-1"], "source_target_ids": ["source"],
+        "counts": {
+            "inventory_case_count": 1, "mapped_case_count": 1,
+            "inventory_target_count": 1, "mapped_target_count": 1,
+            "silent_skip_count": 0, "zero_test_mapping_count": 0,
+            "required_test_omission_count": 0,
+            "extra_mapped_test_count": 0,
+            "duplicate_mapped_test_count": 0,
+            "required_target_omission_count": 0,
+            "extra_mapped_target_count": 0,
+            "duplicate_source_target_binding_count": 0,
+            "source_target_binding_drift_count": 0,
+            "duplicate_rust_target_binding_count": 0,
+        },
+        "blockers": [],
+        "claim_boundary": {
+            "semantic_gate": False, "translation_coverage_numerator": 0,
+        },
+    }
+    completeness["completeness_sha256"] = content_sha256(completeness)
     snapshot = {
         "schema_version": 1,
         "artifact_kind": "project-test-input-snapshot",
@@ -53,10 +90,11 @@ def semantic_payloads() -> tuple[dict, dict, dict]:
         _raw_invocation("c" * 64, snapshot["snapshot_sha256"]),
     )
     evidence = {
-        "schema_version": 3,
+        "schema_version": 4,
         "artifact_kind": "project-test-oracle-evidence",
         "inventory_sha256": inventory["inventory_sha256"],
         "mapping_sha256": mapping["mapping_sha256"],
+        "completeness_sha256": completeness["completeness_sha256"],
         "case_count": 1, "mismatch_count": 0, "crash_count": 0,
         "cases": [{
             "test_id": "test-1",
@@ -74,12 +112,16 @@ def semantic_payloads() -> tuple[dict, dict, dict]:
     workspace = {
         "schema_version": 1,
         "artifact_kind": "project-test-candidate-workspace",
+        "inventory_sha256": inventory["inventory_sha256"],
+        "mapping_sha256": mapping["mapping_sha256"],
+        "completeness_sha256": completeness["completeness_sha256"],
         "adapter_source_sha256": "d" * 64,
     }
     workspace["workspace_sha256"] = content_sha256(workspace)
     oracle_input_sha = content_sha256({
         "inventory_sha256": inventory["inventory_sha256"],
         "mapping_sha256": mapping["mapping_sha256"],
+        "completeness_sha256": completeness["completeness_sha256"],
         "input_snapshot_sha256": snapshot["snapshot_sha256"],
         "workspace_sha256": workspace["workspace_sha256"],
         "evidence_sha256": evidence["evidence_sha256"],
@@ -92,6 +134,7 @@ def semantic_payloads() -> tuple[dict, dict, dict]:
             "case_count": 1, "mismatch_count": 0, "crash_count": 0,
             "oracle_sha256": oracle_input_sha,
             "evidence_sha256": evidence["evidence_sha256"],
+            "completeness_sha256": completeness["completeness_sha256"],
             "input_snapshot_sha256": snapshot["snapshot_sha256"],
             "candidate_sha256": "a" * 64,
             "execution_isolation": "independent-oracle-and-replay-sandboxes",
@@ -107,7 +150,7 @@ def semantic_payloads() -> tuple[dict, dict, dict]:
         },
         "cleanup_verified": True, "semantic_gate": False,
     }
-    return inventory, mapping, oracle
+    return inventory, mapping, completeness, oracle
 
 
 def _raw_invocation(executable_sha256: str, input_sha256: str) -> dict:

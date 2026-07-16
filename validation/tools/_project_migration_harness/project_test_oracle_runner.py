@@ -9,6 +9,7 @@ from typing import Any
 
 from .artifacts import content_sha256
 from .project_test_input_snapshot import materialize_project_test_input_snapshot
+from .project_test_completeness import validate_project_test_completeness
 from .project_test_inventory_paths import expand_input_binding
 from .project_test_oracle_binaries import (
     candidate_binaries, copy_oracle_binaries, tests_by_id,
@@ -27,7 +28,8 @@ from .sandbox_probe import SandboxProbeReceipt
 def run_project_test_oracle(
     *, repo_root: Path, generation_root: Path, runtime_root: Path,
     rust_project_ir: Mapping[str, Any], inventory: Mapping[str, Any],
-    mapping: Mapping[str, Any], excludes: Sequence[Path] = (),
+    mapping: Mapping[str, Any], completeness: Mapping[str, Any],
+    excludes: Sequence[Path] = (),
     timeout_seconds: int = 300,
 ) -> dict[str, Any]:
     del excludes  # The minimal input closure never snapshots unrelated repository paths.
@@ -37,6 +39,12 @@ def run_project_test_oracle(
         return _blocked("project_test_oracle_inputs_not_ready")
     if mapping.get("rust_project_ir_sha256") != rust_project_ir.get("ir_sha256"):
         return _blocked("project_test_oracle_ir_binding_drifted")
+    try:
+        validate_project_test_completeness(completeness, inventory, mapping)
+    except (TypeError, ValueError):
+        return _blocked("project_test_oracle_completeness_invalid")
+    if completeness.get("rust_project_ir_sha256") != rust_project_ir.get("ir_sha256"):
+        return _blocked("project_test_oracle_completeness_ir_drifted")
     try:
         cargo = _cargo_binary()
         discovery = discover_sandbox_backend(cargo, Path(generation_root))
@@ -58,7 +66,8 @@ def run_project_test_oracle(
             repo_root=Path(repo_root), generation_root=Path(generation_root),
             workspace=workspace, execution=execution,
             rust_project_ir=rust_project_ir, inventory=inventory,
-            mapping=mapping, timeout_seconds=timeout_seconds,
+            mapping=mapping, completeness=completeness,
+            timeout_seconds=timeout_seconds,
         )
     except (KeyError, OSError, TypeError, ValueError) as error:
         result = _blocked(str(error)[:96] or "project_test_oracle_execution_invalid")
@@ -73,7 +82,8 @@ def _execute_oracle(
     *, cargo: Path, backend: Any, probe_receipt: SandboxProbeReceipt,
     repo_root: Path, generation_root: Path, workspace: Path, execution: Path,
     rust_project_ir: Mapping[str, Any], inventory: Mapping[str, Any],
-    mapping: Mapping[str, Any], timeout_seconds: int,
+    mapping: Mapping[str, Any], completeness: Mapping[str, Any],
+    timeout_seconds: int,
 ) -> dict[str, Any]:
     input_snapshot = materialize_project_test_input_snapshot(
         repo_root, execution / "input", inventory,
@@ -81,6 +91,7 @@ def _execute_oracle(
     workspace_evidence = materialize_project_oracle_workspace(
         generation_root=generation_root, workspace_root=workspace,
         rust_project_ir=rust_project_ir, inventory=inventory, mapping=mapping,
+        completeness=completeness,
     )
     build_runtime = execution / "build-runtime"
     for name in ("cargo-home", "target"):
@@ -142,6 +153,7 @@ def _execute_oracle(
         replay_results[test_id] = result
     evidence = build_project_oracle_evidence(
         inventory=inventory, mapping=mapping,
+        completeness=completeness,
         oracle_results=oracle_results, replay_results=replay_results,
     )
     mismatch_count = int(evidence["mismatch_count"])
@@ -152,11 +164,13 @@ def _execute_oracle(
         "oracle_sha256": content_sha256({
             "inventory_sha256": inventory["inventory_sha256"],
             "mapping_sha256": mapping["mapping_sha256"],
+            "completeness_sha256": completeness["completeness_sha256"],
             "input_snapshot_sha256": input_snapshot["snapshot_sha256"],
             "workspace_sha256": workspace_evidence["workspace_sha256"],
             "evidence_sha256": evidence["evidence_sha256"],
         }),
         "evidence_sha256": evidence["evidence_sha256"],
+        "completeness_sha256": completeness["completeness_sha256"],
         "input_snapshot_sha256": input_snapshot["snapshot_sha256"],
         "candidate_sha256": str(rust_project_ir["ir_sha256"]),
         "execution_isolation": "independent-oracle-and-replay-sandboxes",

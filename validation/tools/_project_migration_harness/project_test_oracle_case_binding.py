@@ -21,6 +21,7 @@ _EVIDENCE_KEYS = {
     "case_count", "mismatch_count", "crash_count", "cases",
     "failure_details", "details_truncated", "semantic_gate", "evidence_sha256",
 }
+_EVIDENCE_V4_KEYS = _EVIDENCE_KEYS | {"completeness_sha256"}
 _CASE_V2_KEYS = {
     "test_id", "oracle_invocation_sha256", "replay_invocation_sha256",
     "matched", "crashed",
@@ -35,17 +36,27 @@ _EMPTY_STDIN_SHA256 = hashlib.sha256(b"").hexdigest()
 
 def validate_passed_project_oracle_evidence(
     evidence: Mapping[str, Any], inventory: Mapping[str, Any],
-    snapshot: Mapping[str, Any],
+    snapshot: Mapping[str, Any], completeness: Mapping[str, Any] | None = None,
 ) -> None:
     schema_version = evidence.get("schema_version")
     cases = evidence.get("cases")
     tests = _tests_by_id(inventory)
     if (
-        set(evidence) != _EVIDENCE_KEYS
-        or schema_version not in {2, 3}
+        set(evidence) != (
+            _EVIDENCE_V4_KEYS if schema_version == 4 else _EVIDENCE_KEYS
+        )
+        or schema_version not in {2, 3, 4}
         or evidence.get("artifact_kind") != "project-test-oracle-evidence"
         or evidence.get("inventory_sha256") != inventory.get("inventory_sha256")
         or not is_sha256(evidence.get("mapping_sha256"))
+        or (
+            schema_version == 4
+            and (
+                not isinstance(completeness, Mapping)
+                or evidence.get("completeness_sha256")
+                != completeness.get("completeness_sha256")
+            )
+        )
         or not isinstance(cases, list) or len(cases) != len(tests)
         or evidence.get("case_count") != len(tests)
         or evidence.get("mismatch_count") != 0
@@ -63,7 +74,9 @@ def validate_passed_project_oracle_evidence(
         test.get("stdin") is not None for test in tests.values()
     ):
         raise ValueError("project_test_oracle_legacy_stdin_unbound")
-    files, required = _snapshot_files(snapshot) if schema_version == 3 else ({}, set())
+    files, required = (
+        _snapshot_files(snapshot) if schema_version in {3, 4} else ({}, set())
+    )
     normalized = []
     for case in cases:
         if not isinstance(case, Mapping):
@@ -77,7 +90,7 @@ def validate_passed_project_oracle_evidence(
             or case.get("matched") is not True or case.get("crashed") is not False
         ):
             raise ValueError("project_test_oracle_case_invalid")
-        if schema_version == 3:
+        if schema_version in {3, 4}:
             expected_sha256, expected_size = _stdin_binding(
                 tests[str(test_id)], files, required,
             )

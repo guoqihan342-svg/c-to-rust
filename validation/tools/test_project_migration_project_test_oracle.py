@@ -9,6 +9,9 @@ from validation.tools._project_migration_harness.artifacts import content_sha256
 from validation.tools._project_migration_harness.project_test_input_snapshot import (
     materialize_project_test_input_snapshot,
 )
+from validation.tools._project_migration_harness.project_test_completeness import (
+    derive_project_test_completeness,
+)
 from validation.tools._project_migration_harness.project_test_mapping import (
     derive_project_test_mapping,
 )
@@ -32,6 +35,10 @@ class ProjectTestOracleTests(unittest.TestCase):
         self.inventory = _inventory()
         self.mapping = derive_project_test_mapping(self.inventory, self.ir)
         self.assertEqual("ready", self.mapping["status"])
+        self.completeness = derive_project_test_completeness(
+            self.inventory, self.mapping, self.ir,
+        )
+        self.assertEqual("ready", self.completeness["status"])
 
     def test_host_comparison_accepts_exact_success(self) -> None:
         oracle = _process(stdout=b"logic-ok\n")
@@ -39,6 +46,7 @@ class ProjectTestOracleTests(unittest.TestCase):
 
         evidence = build_project_oracle_evidence(
             inventory=self.inventory, mapping=self.mapping,
+            completeness=self.completeness,
             oracle_results={"test-a": oracle}, replay_results={"test-a": replay},
         )
 
@@ -48,6 +56,7 @@ class ProjectTestOracleTests(unittest.TestCase):
     def test_host_comparison_reports_bounded_logic_mismatch(self) -> None:
         evidence = build_project_oracle_evidence(
             inventory=self.inventory, mapping=self.mapping,
+            completeness=self.completeness,
             oracle_results={"test-a": _process(stdout=b"a")},
             replay_results={"test-a": _process(stdout=b"b", invocation="b" * 64)},
         )
@@ -61,6 +70,7 @@ class ProjectTestOracleTests(unittest.TestCase):
         blocked = _process(stdout=b"logic-ok\n", status="blocked")
         evidence = build_project_oracle_evidence(
             inventory=self.inventory, mapping=self.mapping,
+            completeness=self.completeness,
             oracle_results={"test-a": _process(stdout=b"logic-ok\n")},
             replay_results={"test-a": blocked},
         )

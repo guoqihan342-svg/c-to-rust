@@ -13,7 +13,7 @@ from .rust_project_cargo_v3_toml import package_root, render_cargo_lock
 def materialize_project_oracle_workspace(
     *, generation_root: Path, workspace_root: Path,
     rust_project_ir: Mapping[str, Any], inventory: Mapping[str, Any],
-    mapping: Mapping[str, Any],
+    mapping: Mapping[str, Any], completeness: Mapping[str, Any],
 ) -> dict[str, Any]:
     root = Path(workspace_root)
     if root.exists():
@@ -35,6 +35,7 @@ def materialize_project_oracle_workspace(
         "artifact_kind": "project-test-candidate-workspace",
         "inventory_sha256": str(inventory["inventory_sha256"]),
         "mapping_sha256": str(mapping["mapping_sha256"]),
+        "completeness_sha256": str(completeness["completeness_sha256"]),
         "rust_project_ir_sha256": str(rust_project_ir["ir_sha256"]),
         "package_snapshot": copied,
         "members": members,

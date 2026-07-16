@@ -174,7 +174,10 @@ def _target_table(
     if kind == "bin":
         if crate_types != ["bin"]:
             raise ValueError("rust_project_cargo_v3_bin_crate_type_invalid")
-        return ["[[bin]]", f"name = {_toml_string(name)}", f"path = {_toml_string(path)}"]
+        return [
+            "[[bin]]", f"name = {_toml_string(name)}",
+            f"path = {_toml_string(path)}", "test = false", "bench = false",
+        ]
     if kind == "cdylib":
         if crate_types != ["cdylib"]:
             raise ValueError("rust_project_cargo_v3_cdylib_crate_type_invalid")
@@ -188,7 +191,8 @@ def _target_table(
     quoted = ", ".join(_toml_string(item) for item in crate_types)
     return [
         "[lib]", f"name = {_toml_string(name)}", f"path = {_toml_string(path)}",
-        f"crate-type = [{quoted}]",
+        f"crate-type = [{quoted}]", "test = false", "doctest = false",
+        "bench = false",
     ]
 
 

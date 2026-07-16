@@ -153,6 +153,13 @@ class RustProjectCargoV3Tests(unittest.TestCase):
         self.assertIn("packages/package-bin/Cargo.toml", files)
         self.assertIn("packages/package-lib/Cargo.toml", files)
         self.assertEqual(4, files["Cargo.toml"].count(b'"packages/package-'))
+        bin_manifest = files["packages/package-bin/Cargo.toml"]
+        lib_manifest = files["packages/package-lib/Cargo.toml"]
+        self.assertIn(b"test = false", bin_manifest)
+        self.assertIn(b"bench = false", bin_manifest)
+        self.assertIn(b"test = false", lib_manifest)
+        self.assertIn(b"doctest = false", lib_manifest)
+        self.assertIn(b"bench = false", lib_manifest)
 
     @unittest.skipUnless(shutil.which("cargo"), "cargo is unavailable")
     def test_two_package_workspace_passes_locked_offline_cargo(self) -> None:

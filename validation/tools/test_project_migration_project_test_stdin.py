@@ -195,6 +195,7 @@ class ProjectTestStdinTests(unittest.TestCase):
 
         evidence = build_project_oracle_evidence(
             inventory=inventory, mapping={"mapping_sha256": "3" * 64},
+            completeness={"completeness_sha256": "5" * 64},
             oracle_results={test_id: oracle}, replay_results={test_id: replay},
         )
 

@@ -12,6 +12,9 @@ from validation.tools._project_migration_harness.artifacts import content_sha256
 from validation.tools._project_migration_harness.project_test_mapping import (
     derive_project_test_mapping,
 )
+from validation.tools._project_migration_harness.project_test_completeness import (
+    derive_project_test_completeness,
+)
 from validation.tools._project_migration_harness.project_test_oracle_runner import (
     run_project_test_oracle,
 )
@@ -66,11 +69,15 @@ class ProjectTestOracleLiveTests(unittest.TestCase):
             inventory = _inventory(source, binary, stdin_path="fixture.bin")
             mapping = derive_project_test_mapping(inventory, ir)
             self.assertEqual("ready", mapping["status"])
+            completeness = derive_project_test_completeness(
+                inventory, mapping, ir,
+            )
 
             result = run_project_test_oracle(
                 repo_root=source, generation_root=generation,
                 runtime_root=runtime, rust_project_ir=ir,
                 inventory=inventory, mapping=mapping, timeout_seconds=120,
+                completeness=completeness,
             )
 
             self.assertEqual("passed", result["status"], result)
@@ -105,11 +112,15 @@ class ProjectTestOracleLiveTests(unittest.TestCase):
             inventory = _inventory(source, binary)
             mapping = derive_project_test_mapping(inventory, ir)
             self.assertEqual("ready", mapping["status"])
+            completeness = derive_project_test_completeness(
+                inventory, mapping, ir,
+            )
 
             result = run_project_test_oracle(
                 repo_root=source, generation_root=generation,
                 runtime_root=runtime, rust_project_ir=ir,
                 inventory=inventory, mapping=mapping, timeout_seconds=120,
+                completeness=completeness,
             )
 
             self.assertEqual("failed", result["status"], result)
@@ -138,11 +149,15 @@ class ProjectTestOracleLiveTests(unittest.TestCase):
             _write_generation(generation, binary_source="fn main() { std::process::exit(7); }\n")
             inventory = _inventory(source, binary)
             mapping = derive_project_test_mapping(inventory, ir)
+            completeness = derive_project_test_completeness(
+                inventory, mapping, ir,
+            )
 
             result = run_project_test_oracle(
                 repo_root=source, generation_root=generation,
                 runtime_root=runtime, rust_project_ir=ir,
                 inventory=inventory, mapping=mapping, timeout_seconds=120,
+                completeness=completeness,
             )
 
             self.assertEqual("blocked", result["status"], result)
@@ -179,11 +194,15 @@ class ProjectTestOracleLiveTests(unittest.TestCase):
             )
             inventory = _inventory(source, binary)
             mapping = derive_project_test_mapping(inventory, ir)
+            completeness = derive_project_test_completeness(
+                inventory, mapping, ir,
+            )
 
             result = run_project_test_oracle(
                 repo_root=source, generation_root=generation,
                 runtime_root=runtime, rust_project_ir=ir,
                 inventory=inventory, mapping=mapping, timeout_seconds=120,
+                completeness=completeness,
             )
 
             self.assertEqual("failed", result["status"], result)

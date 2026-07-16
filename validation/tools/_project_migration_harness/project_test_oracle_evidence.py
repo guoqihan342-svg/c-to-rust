@@ -18,6 +18,7 @@ MAX_DETAILS = 32
 PREFIX_BYTES = 64
 def build_project_oracle_evidence(
     *, inventory: Mapping[str, Any], mapping: Mapping[str, Any],
+    completeness: Mapping[str, Any],
     oracle_results: Mapping[str, Mapping[str, Any]],
     replay_results: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
@@ -60,10 +61,11 @@ def build_project_oracle_evidence(
                 "oracle": _observation(oracle), "replay": _observation(replay),
             })
     payload = {
-        "schema_version": 3,
+        "schema_version": 4,
         "artifact_kind": "project-test-oracle-evidence",
         "inventory_sha256": str(inventory["inventory_sha256"]),
         "mapping_sha256": str(mapping["mapping_sha256"]),
+        "completeness_sha256": str(completeness["completeness_sha256"]),
         "case_count": len(expected), "mismatch_count": mismatch_count,
         "crash_count": crash_count, "cases": case_records,
         "failure_details": failures,

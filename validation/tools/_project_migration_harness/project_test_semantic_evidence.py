@@ -9,9 +9,8 @@ from .build_ir import is_sha256
 from .gate_authority import project_authority, project_summary_payload
 from .gate_evidence import require_content_addressed_reference
 from .ledger import LedgerError, ProjectLedger
-from .project_test_oracle_case_binding import (
-    validate_passed_project_oracle_evidence,
-)
+from .project_test_completeness import validate_project_test_completeness
+from .project_test_semantic_oracle import validate_passed_project_test_oracle
 from .rust_project_ir_binding_io import artifact_identity, read_reference, strict_json
 
 
@@ -24,6 +23,9 @@ def reopen_project_test_semantic_evidence(
         raise LedgerError("project_test_semantic_verification_not_passed")
     inventory_ref = _reference(verification.get("inventory"), "inventory")
     mapping_ref = _reference(verification.get("mapping"), "mapping")
+    completeness_ref = _reference(
+        verification.get("completeness"), "completeness",
+    )
     oracle_ref = _reference(verification.get("oracle"), "oracle")
     require_content_addressed_reference(oracle_ref)
     if PurePosixPath(oracle_ref["path"]).parts != (
@@ -32,10 +34,22 @@ def reopen_project_test_semantic_evidence(
         raise LedgerError("project_test_oracle_artifact_scope_invalid")
     inventory = _read_json(artifact_root, inventory_ref, "inventory")
     mapping = _read_json(artifact_root, mapping_ref, "mapping")
+    completeness = _read_json(
+        artifact_root, completeness_ref, "completeness",
+    )
     oracle = _read_json(artifact_root, oracle_ref, "oracle")
     _validate_inventory(inventory)
     _validate_mapping(mapping, inventory)
-    expected_observation = _validate_oracle(oracle, oracle_ref, inventory, mapping)
+    try:
+        validate_project_test_completeness(completeness, inventory, mapping)
+    except (TypeError, ValueError) as error:
+        raise LedgerError("project_test_completeness_summary_invalid") from error
+    oracle_observation = validate_passed_project_test_oracle(
+        oracle, inventory, mapping, completeness,
+    )
+    expected_observation = bound_project_test_gate_observation(
+        oracle_observation, oracle_ref,
+    )
     if verification.get("gate_observation") != expected_observation:
         raise LedgerError("project_test_gate_observation_binding_drifted")
     record = verification.get("project_gate_record")
@@ -52,6 +66,7 @@ def reopen_project_test_semantic_evidence(
         "crash_count": expected_observation["crash_count"],
         "inventory_sha256": inventory["inventory_sha256"],
         "mapping_sha256": mapping["mapping_sha256"],
+        "completeness_sha256": completeness["completeness_sha256"],
         "oracle_artifact_sha256": oracle_ref["sha256"],
         "candidate_sha256": expected_observation["candidate_sha256"],
     }
@@ -60,7 +75,8 @@ def reopen_project_test_semantic_evidence(
         "schema_version": 1,
         "artifact_kind": "project-test-semantic-evidence-binding",
         "status": "verified", "inventory": inventory_ref,
-        "mapping": mapping_ref, "oracle": oracle_ref, "summary": summary,
+        "mapping": mapping_ref, "completeness": completeness_ref,
+        "oracle": oracle_ref, "summary": summary,
         "project_gate_record_id": str(record["record_id"]),
         "semantic_gate": False,
     }
@@ -76,7 +92,10 @@ def bound_project_test_gate_observation(
     v2 = required | {
         "evidence_sha256", "input_snapshot_sha256", "execution_isolation",
     }
-    if frozenset(observation) not in {frozenset(required), frozenset(v2)}:
+    v3 = v2 | {"completeness_sha256"}
+    if frozenset(observation) not in {
+        frozenset(required), frozenset(v2), frozenset(v3),
+    }:
         raise LedgerError("project_test_oracle_observation_schema_invalid")
     return {
         "case_count": observation["case_count"],
@@ -115,77 +134,6 @@ def _validate_mapping(
         })
     ):
         raise LedgerError("project_test_mapping_summary_invalid")
-
-
-def _validate_oracle(
-    oracle: Mapping[str, Any], oracle_ref: Mapping[str, Any],
-    inventory: Mapping[str, Any], mapping: Mapping[str, Any],
-) -> dict[str, Any]:
-    observation, evidence = oracle.get("observation"), oracle.get("evidence")
-    if (
-        oracle.get("artifact_kind") != "project-test-oracle-result"
-        or oracle.get("status") != "passed" or oracle.get("reason_code") is not None
-        or oracle.get("cleanup_verified") is not True
-        or oracle.get("semantic_gate") is not False
-        or not isinstance(observation, Mapping) or not isinstance(evidence, Mapping)
-        or evidence.get("inventory_sha256") != inventory.get("inventory_sha256")
-        or evidence.get("mapping_sha256") != mapping.get("mapping_sha256")
-        or evidence.get("evidence_sha256") != content_sha256({
-            key: value for key, value in evidence.items() if key != "evidence_sha256"
-        })
-        or observation.get("case_count") != len(inventory["tests"])
-        or observation.get("mismatch_count") != 0 or observation.get("crash_count") != 0
-        or observation.get("candidate_sha256") != mapping.get("rust_project_ir_sha256")
-    ):
-        raise LedgerError("project_test_oracle_summary_invalid")
-    if oracle.get("schema_version") == 2:
-        _validate_oracle_v2(oracle, observation, evidence, inventory, mapping)
-    elif oracle.get("schema_version") != 1:
-        raise LedgerError("project_test_oracle_schema_version_invalid")
-    return bound_project_test_gate_observation(observation, oracle_ref)
-
-
-def _validate_oracle_v2(
-    oracle: Mapping[str, Any], observation: Mapping[str, Any],
-    evidence: Mapping[str, Any], inventory: Mapping[str, Any],
-    mapping: Mapping[str, Any],
-) -> None:
-    snapshot, workspace, isolation = (
-        oracle.get("input_snapshot"), oracle.get("workspace"), oracle.get("isolation")
-    )
-    expected_isolation = {
-        "shared_read_only_input_snapshot": True, "shared_runtime_state": False,
-        "source_executable_visible_to_replay": False,
-        "comparison_authority": "trusted-host",
-    }
-    if (
-        evidence.get("schema_version") not in {2, 3}
-        or evidence.get("artifact_kind") != "project-test-oracle-evidence"
-        or not isinstance(snapshot, Mapping) or not isinstance(workspace, Mapping)
-        or snapshot.get("snapshot_sha256") != content_sha256({
-            key: value for key, value in snapshot.items() if key != "snapshot_sha256"
-        })
-        or workspace.get("workspace_sha256") != content_sha256({
-            key: value for key, value in workspace.items() if key != "workspace_sha256"
-        })
-        or observation.get("evidence_sha256") != evidence.get("evidence_sha256")
-        or observation.get("input_snapshot_sha256") != snapshot.get("snapshot_sha256")
-        or observation.get("execution_isolation")
-        != "independent-oracle-and-replay-sandboxes"
-        or isolation != expected_isolation
-        or observation.get("oracle_sha256") != content_sha256({
-            "inventory_sha256": inventory["inventory_sha256"],
-            "mapping_sha256": mapping["mapping_sha256"],
-            "input_snapshot_sha256": snapshot["snapshot_sha256"],
-            "workspace_sha256": workspace["workspace_sha256"],
-            "evidence_sha256": evidence["evidence_sha256"],
-        })
-    ):
-        raise LedgerError("project_test_oracle_v2_binding_invalid")
-    try:
-        validate_passed_project_oracle_evidence(evidence, inventory, snapshot)
-    except (KeyError, TypeError, ValueError) as error:
-        raise LedgerError("project_test_oracle_case_binding_invalid") from error
 
 
 def _validate_gate_record(

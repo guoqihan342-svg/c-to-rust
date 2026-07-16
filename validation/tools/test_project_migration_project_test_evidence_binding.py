@@ -37,7 +37,7 @@ class ProjectTestSemanticVerifierArtifactTests(unittest.TestCase):
         root = Path(temporary.name)
         artifacts = root / "target" / "run"
         artifacts.mkdir(parents=True)
-        inventory, mapping, oracle = semantic_payloads()
+        inventory, mapping, completeness, oracle = semantic_payloads()
         inventory_ref = write_json_artifact(
             artifacts, "plan/project-test-inventory.json", inventory,
         )
@@ -61,6 +61,10 @@ class ProjectTestSemanticVerifierArtifactTests(unittest.TestCase):
                 return_value=inventory,
             ),
             mock.patch(MODULE + "derive_project_test_mapping", return_value=mapping),
+            mock.patch(
+                MODULE + "derive_project_test_completeness",
+                return_value=completeness,
+            ),
             mock.patch(MODULE + "_run_project_test_oracle", return_value=oracle),
             mock.patch(
                 MODULE + "record_host_project_observation", return_value=record,
@@ -95,12 +99,18 @@ class ProjectTestSemanticEvidenceReopenTests(ProjectMigrationGateAuthorityCase):
         super().setUp()
         self.promote_current_candidate()
         self.candidate_set = self.ledger.bind_current_candidate_set(run_id="run")
-        self.inventory, self.mapping, self.oracle = semantic_payloads()
+        (
+            self.inventory, self.mapping, self.completeness, self.oracle,
+        ) = semantic_payloads()
         self.inventory_ref = write_json_artifact(
             self.out_root, "plan/project-test-inventory.json", self.inventory,
         )
         self.mapping_ref = write_json_artifact(
             self.out_root, "completion/project-test-mapping.json", self.mapping,
+        )
+        self.completeness_ref = write_json_artifact(
+            self.out_root, "completion/project-test-completeness.json",
+            self.completeness,
         )
         self.oracle_ref = write_content_addressed_json(
             self.out_root, "project-test/oracle", self.oracle,
@@ -122,6 +132,7 @@ class ProjectTestSemanticEvidenceReopenTests(ProjectMigrationGateAuthorityCase):
             "artifact_kind": "project-test-semantic-verification",
             "status": "passed", "reason_code": None, "blockers": [],
             "inventory": self.inventory_ref, "mapping": self.mapping_ref,
+            "completeness": self.completeness_ref,
             "oracle": self.oracle_ref,
             "gate_observation": self.gate_observation,
             "project_gate_record": self.record,
@@ -133,6 +144,7 @@ class ProjectTestSemanticEvidenceReopenTests(ProjectMigrationGateAuthorityCase):
         self.assertEqual("verified", result["status"])
         self.assertEqual(self.inventory_ref, result["inventory"])
         self.assertEqual(self.mapping_ref, result["mapping"])
+        self.assertEqual(self.completeness_ref, result["completeness"])
         self.assertEqual(self.oracle_ref, result["oracle"])
         summary = result["summary"]
         expected = {
@@ -166,6 +178,15 @@ class ProjectTestSemanticEvidenceReopenTests(ProjectMigrationGateAuthorityCase):
         )
         with self.assertRaisesRegex(
             LedgerError, "project_test_mapping_artifact_drifted",
+        ):
+            self._reopen(self.verification)
+
+    def test_overwritten_completeness_artifact_fails_closed(self) -> None:
+        (self.out_root / self.completeness_ref["path"]).write_text(
+            "{}\n", encoding="utf-8",
+        )
+        with self.assertRaisesRegex(
+            LedgerError, "project_test_completeness_artifact_drifted",
         ):
             self._reopen(self.verification)
 
