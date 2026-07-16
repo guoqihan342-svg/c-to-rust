@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from validation.tools._project_migration_harness.artifacts import content_sha256
 from validation.tools._project_migration_harness.candidate_semantic_backend_contract import (
     parse_scalar_function,
 )
@@ -9,7 +10,7 @@ from validation.tools._project_migration_harness.candidate_semantic_integer_lite
     source_integer_magnitudes,
 )
 from validation.tools._project_migration_harness.candidate_semantic_stimuli import (
-    HELD_OUT_CASE_COUNT, held_out_scalar_cases,
+    HELD_OUT_CASE_COUNT, held_out_scalar_cases, stimulus_binding,
 )
 
 
@@ -50,6 +51,45 @@ class CandidateSemanticStimuliTests(unittest.TestCase):
         self.assertNotIn(((1 << 31) - 1,), ordinary)
         self.assertIn((-(1 << 31),), wrapping)
         self.assertIn(((1 << 31) - 1,), wrapping)
+
+    def test_macro_extrema_do_not_reintroduce_signed_overflow_ub_cases(self) -> None:
+        function = parse_scalar_function(
+            "scalar_probe", "int scalar_probe(int value) { return value + 1; }",
+        )
+        magnitude = (1 << 31) - 1
+
+        ordinary = held_out_scalar_cases(
+            function, b"a" * 32, macro_magnitudes=(magnitude,),
+        )
+        wrapping = held_out_scalar_cases(
+            function, b"a" * 32, macro_magnitudes=(magnitude,),
+            signed_wrapping=True,
+        )
+
+        self.assertNotIn((-(1 << 31),), ordinary)
+        self.assertNotIn(((1 << 31) - 1,), ordinary)
+        self.assertIn((-(1 << 31),), wrapping)
+        self.assertIn(((1 << 31) - 1,), wrapping)
+
+    def test_stimulus_receipt_content_binds_integer_macro_evidence(self) -> None:
+        macro_binding = {"schema_version": 1, "status": "ready"}
+        macro_binding["binding_sha256"] = content_sha256(macro_binding)
+
+        receipt = stimulus_binding(
+            b"a" * 32, ((100_000,),),
+            integer_macro_binding=macro_binding,
+        )
+
+        self.assertEqual(macro_binding, receipt["integer_macro_binding"])
+        self.assertEqual(
+            content_sha256(macro_binding),
+            receipt["integer_macro_binding_sha256"],
+        )
+        with self.assertRaisesRegex(ValueError, "binding drifted"):
+            stimulus_binding(
+                b"a" * 32, ((100_000,),),
+                integer_macro_binding={**macro_binding, "status": "blocked"},
+            )
 
 
 if __name__ == "__main__":

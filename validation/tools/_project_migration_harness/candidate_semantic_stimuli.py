@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 
 from .artifacts import content_sha256
 from .candidate_semantic_backend_contract import ScalarFunction, ScalarType
@@ -17,17 +18,27 @@ _TYPE_BITS = {
     "i32": 32, "u32": 32,
     "i64": 64, "u64": 64,
 }
+_MAX_MACRO_MAGNITUDES = 32
 
 
 def held_out_scalar_cases(
     function: ScalarFunction, verifier_nonce: bytes,
     function_source: str | bytes | None = None,
-    *, signed_wrapping: bool = False,
+    *, macro_magnitudes: tuple[int, ...] = (), signed_wrapping: bool = False,
 ) -> tuple[tuple[int, ...], ...]:
     if not isinstance(verifier_nonce, bytes) or len(verifier_nonce) != 32:
         raise ValueError("semantic verifier nonce must be 32 bytes")
     if type(signed_wrapping) is not bool:
         raise ValueError("semantic signed wrapping mode must be boolean")
+    if (
+        not isinstance(macro_magnitudes, tuple)
+        or len(macro_magnitudes) > _MAX_MACRO_MAGNITUDES
+        or any(
+            type(value) is not int or not 0 <= value < (1 << 64)
+            for value in macro_magnitudes
+        )
+    ):
+        raise ValueError("semantic macro magnitudes are invalid")
     if not function.parameters:
         return ((),)
 
@@ -42,7 +53,7 @@ def held_out_scalar_cases(
             rows.append(row)
             seen.add(row)
 
-    magnitudes = _prioritized_magnitudes(function_source)
+    magnitudes = _prioritized_magnitudes(function_source, macro_magnitudes)
     signed_parameter = any(kind.signed for kind in function.parameters)
     for magnitude in magnitudes[:3]:
         signs = (1, -1) if signed_parameter and magnitude else (1,)
@@ -50,6 +61,7 @@ def held_out_scalar_cases(
             for delta in (0, -1, 1):
                 _append_source_boundary(
                     rows, seen, function.parameters, sign * magnitude + delta,
+                    signed_wrapping,
                 )
     for boundary_index in range(4):
         _append_row(rows, seen, tuple(
@@ -80,17 +92,30 @@ def held_out_scalar_cases(
 
 def stimulus_binding(
     verifier_nonce: bytes, cases: tuple[tuple[int, ...], ...],
-    *, signed_wrapping: bool = False,
+    *, integer_macro_binding: Mapping[str, object] | None = None,
+    signed_wrapping: bool = False,
 ) -> dict[str, object]:
     if type(signed_wrapping) is not bool:
         raise ValueError("semantic signed wrapping mode must be boolean")
+    if integer_macro_binding is None:
+        macro_binding = {"schema_version": 1, "status": "not_provided"}
+    elif isinstance(integer_macro_binding, Mapping):
+        macro_binding = dict(integer_macro_binding)
+        claimed = macro_binding.pop("binding_sha256", None)
+        if claimed != content_sha256(macro_binding):
+            raise ValueError("semantic integer macro binding drifted")
+        macro_binding["binding_sha256"] = claimed
+    else:
+        raise ValueError("semantic integer macro binding is invalid")
     return {
         "schema_version": 1,
-        "strategy": "source-boundaries-plus-host-nonce-v2",
+        "strategy": "source-and-macro-boundaries-plus-host-nonce-v3",
         "nonce_sha256": hashlib.sha256(verifier_nonce).hexdigest(),
         "cases_sha256": content_sha256([list(row) for row in cases]),
         "case_count": len(cases),
         "signed_extrema_enabled": signed_wrapping,
+        "integer_macro_binding": macro_binding,
+        "integer_macro_binding_sha256": content_sha256(macro_binding),
     }
 
 
@@ -117,24 +142,32 @@ def _anchor(kind: ScalarType, index: int) -> int:
     return values[index % len(values)]
 
 
-def _prioritized_magnitudes(source: str | bytes | None) -> tuple[int, ...]:
+def _prioritized_magnitudes(
+    source: str | bytes | None, macro_magnitudes: tuple[int, ...],
+) -> tuple[int, ...]:
     anchors = set(_SIGNED_ANCHORS) | set(_UNSIGNED_ANCHORS)
-    values = source_integer_magnitudes(source)
-    return tuple(sorted(
-        (value for value in values if value not in anchors),
-        key=lambda value: (-value.bit_length(), -value),
+    macro_values = tuple(dict.fromkeys(
+        value for value in macro_magnitudes if value not in anchors
     ))
+    source_values = sorted(
+        {value for value in source_integer_magnitudes(source) if value not in anchors},
+        key=lambda value: (-value.bit_length(), -value),
+    )
+    return tuple(dict.fromkeys((*macro_values, *source_values)))
 
 
 def _append_source_boundary(
     rows: list[tuple[int, ...]], seen: set[tuple[int, ...]],
-    parameters: tuple[ScalarType, ...], value: int,
+    parameters: tuple[ScalarType, ...], value: int, signed_wrapping: bool,
 ) -> None:
     row = []
     accepted = False
     for index, kind in enumerate(parameters):
         lower, upper = _type_range(kind)
-        if lower <= value <= upper:
+        exact_signed_extreme = (
+            kind.signed and not signed_wrapping and value in {lower, upper}
+        )
+        if lower <= value <= upper and not exact_signed_extreme:
             row.append(value)
             accepted = True
         else:

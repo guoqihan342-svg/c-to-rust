@@ -5,12 +5,17 @@ import re
 
 MAX_FUNCTION_SOURCE_BYTES = 1024 * 1024
 MAX_INTEGER_MAGNITUDES = 64
+_INTEGER_BODY = r"0[xX][0-9A-Fa-f]+|0[bB][01]+|0[0-7]*|[1-9][0-9]*"
+_INTEGER_SUFFIX = r"[uU](?:ll|LL|l|L)?|(?:ll|LL|l|L)[uU]?"
 _INTEGER = re.compile(
     r"(?<![A-Za-z0-9_.])"
-    r"(?P<number>0[xX][0-9A-Fa-f]+|0[bB][01]+|0[0-7]*|[1-9][0-9]*)"
-    r"(?:[uU](?:ll|LL|l|L)?|(?:ll|LL|l|L)[uU]?)?"
+    rf"(?P<number>{_INTEGER_BODY})"
+    rf"(?:{_INTEGER_SUFFIX})?"
     r"(?![A-Za-z0-9_.])",
     re.ASCII,
+)
+_INTEGER_LITERAL = re.compile(
+    rf"(?P<number>{_INTEGER_BODY})(?:{_INTEGER_SUFFIX})?\Z", re.ASCII,
 )
 
 
@@ -41,6 +46,21 @@ def source_integer_magnitudes(source: str | bytes | None) -> tuple[int, ...]:
     return tuple(values)
 
 
+def parse_c_integer_literal(value: str) -> int:
+    if not isinstance(value, str):
+        raise ValueError("C integer literal must be text")
+    matched = _INTEGER_LITERAL.fullmatch(value)
+    if matched is None:
+        raise ValueError("unsupported C integer literal")
+    return _parse_magnitude(matched.group("number"))
+
+
+def macro_expression_text(value: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError("C macro expression must be text")
+    return _mask_comments_and_literals(value, quote_marker="\x00")
+
+
 def _parse_magnitude(value: str) -> int:
     lowered = value.lower()
     if lowered.startswith("0x"):
@@ -52,7 +72,9 @@ def _parse_magnitude(value: str) -> int:
     return int(lowered, 10)
 
 
-def _mask_comments_and_literals(value: str) -> str:
+def _mask_comments_and_literals(
+    value: str, *, quote_marker: str | None = None,
+) -> str:
     output = list(value)
     index = 0
     while index < len(value):
@@ -67,13 +89,18 @@ def _mask_comments_and_literals(value: str) -> str:
             _mask(output, index, end)
             index = end
         elif value[index] in {'"', "'"}:
-            index = _mask_quoted(value, output, index, value[index])
+            index = _mask_quoted(
+                value, output, index, value[index], quote_marker=quote_marker,
+            )
         else:
             index += 1
     return "".join(output)
 
 
-def _mask_quoted(value: str, output: list[str], start: int, quote: str) -> int:
+def _mask_quoted(
+    value: str, output: list[str], start: int, quote: str,
+    *, quote_marker: str | None,
+) -> int:
     index = start + 1
     while index < len(value):
         if value[index] == "\\":
@@ -84,6 +111,8 @@ def _mask_quoted(value: str, output: list[str], start: int, quote: str) -> int:
             break
         index += 1
     _mask(output, start, min(index, len(value)))
+    if quote_marker is not None and start < len(output):
+        output[start] = quote_marker
     return min(index, len(value))
 
 
@@ -93,4 +122,7 @@ def _mask(output: list[str], start: int, end: int) -> None:
             output[index] = " "
 
 
-__all__ = ["source_integer_magnitudes"]
+__all__ = [
+    "macro_expression_text", "parse_c_integer_literal",
+    "source_integer_magnitudes",
+]

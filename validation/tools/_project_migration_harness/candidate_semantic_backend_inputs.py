@@ -10,6 +10,7 @@ from typing import Any
 from .artifacts import canonical_json_bytes, content_sha256
 from .candidate_semantic_plan import fixed_adapter_plan, require_semantic_family
 from .candidate_semantic_schema import CONTEXT_KEYS
+from . import candidate_semantic_macro_inputs as macro_inputs
 from .candidate_semantic_backend_contract import (
     ScalarFunction,
     ScalarType,
@@ -28,6 +29,7 @@ class BackendInputs:
     source_bytes: bytes
     function_source: bytes
     headers: tuple[tuple[str, bytes], ...]
+    integer_macros: macro_inputs.IntegerMacroBoundaries
     function: ScalarFunction
     compile_arguments: tuple[str, ...]
     compiler_basename: str
@@ -82,13 +84,17 @@ def load_backend_inputs(
     compile_arguments_value = compile_arguments(facts, str(node["unit_id"]))
     compiler_identity = _compiler_identity(facts, str(node["unit_id"]))
     headers = _header_sources(repository_root, facts)
-    function = parse_scalar_function(
-        str(node["symbol"]), function_source.decode("utf-8"),
+    integer_macros = macro_inputs.macro_boundaries_from_context(
+        facts=facts, node=node, function_source=function_source,
+        source_path=source_path, source_bytes=source_bytes,
+        source_reference=source_ref, headers=headers,
+        compile_arguments=compile_arguments_value,
     )
+    function = parse_scalar_function(str(node["symbol"]), function_source.decode("utf-8"))
     return BackendInputs(
         candidate_source=candidate, source_path=source_path,
         source_bytes=source_bytes, function_source=function_source,
-        headers=headers, function=function,
+        headers=headers, integer_macros=integer_macros, function=function,
         compile_arguments=compile_arguments_value,
         compiler_basename=compiler_identity[0],
         compiler_binary_sha256=compiler_identity[1],
@@ -97,6 +103,7 @@ def load_backend_inputs(
         input_sha256=content_sha256({
             "request": request, "c_source_sha256": hashlib.sha256(source_bytes).hexdigest(),
             "candidate_sha256": hashlib.sha256(candidate).hexdigest(),
+            "integer_macro_binding_sha256": integer_macros.binding["binding_sha256"],
         }),
     )
 

@@ -27,6 +27,7 @@ def materialize_behavior_project(
     signed_wrapping = "-fwrapv" in inputs.compile_arguments
     cases = held_out_scalar_cases(
         inputs.function, verifier_nonce, inputs.function_source,
+        macro_magnitudes=inputs.integer_macros.magnitudes,
         signed_wrapping=signed_wrapping,
     )
     wrapper = _c_behavior_wrapper(inputs.function, inputs.source_path, cases)
@@ -41,7 +42,8 @@ def materialize_behavior_project(
     return _manifest(inputs, "behavior", {
         "case_count": len(cases),
         "stimulus": stimulus_binding(
-            verifier_nonce, cases, signed_wrapping=signed_wrapping,
+            verifier_nonce, cases, integer_macro_binding=inputs.integer_macros.binding,
+            signed_wrapping=signed_wrapping,
         ),
     })
 
