@@ -25,28 +25,31 @@ from validation.tools.project_migration_runtime_test_support import RuntimeHarne
 
 class ModelSafeTestContractTests(unittest.TestCase):
     def test_contract_withholds_values_and_filters_by_target_scope(self) -> None:
-        inventory = test_inventory()
-        contract = build_model_safe_test_contract(
-            inventory,
-            group_id="unit-a",
-            target_scope=target_scope("target-a"),
-        )
+        for adapter in ("ctest-json-v1", "make-dry-run-v1"):
+            with self.subTest(adapter=adapter):
+                inventory = test_inventory(adapter=adapter)
+                contract = build_model_safe_test_contract(
+                    inventory,
+                    group_id="unit-a",
+                    target_scope=target_scope("target-a"),
+                )
 
-        encoded = json.dumps(contract, sort_keys=True)
-        self.assertNotIn("literal-secret", encoded)
-        self.assertNotIn("environment-secret", encoded)
-        self.assertNotIn("unrelated-secret", encoded)
-        self.assertEqual(1, contract["test_count"])
-        projected = contract["tests"][0]
-        self.assertEqual(
-            ["literal-option", "literal-positional", "repo-path"],
-            projected["argument_shape"],
-        )
-        self.assertEqual(["MODE"], projected["environment_keys"])
-        self.assertEqual(["tests/input.bin"], projected["input_paths"])
-        self.assertEqual(contract, validate_model_safe_test_contract(
-            contract, group_id="unit-a",
-        ))
+                encoded = json.dumps(contract, sort_keys=True)
+                self.assertNotIn("literal-secret", encoded)
+                self.assertNotIn("environment-secret", encoded)
+                self.assertNotIn("unrelated-secret", encoded)
+                self.assertEqual(adapter, contract["adapter"])
+                self.assertEqual(1, contract["test_count"])
+                projected = contract["tests"][0]
+                self.assertEqual(
+                    ["literal-option", "literal-positional", "repo-path"],
+                    projected["argument_shape"],
+                )
+                self.assertEqual(["MODE"], projected["environment_keys"])
+                self.assertEqual(["tests/input.bin"], projected["input_paths"])
+                self.assertEqual(contract, validate_model_safe_test_contract(
+                    contract, group_id="unit-a",
+                ))
 
     def test_materialization_is_content_bound_and_portfolio_scoped(self) -> None:
         with tempfile.TemporaryDirectory(prefix="model-safe-test-contract-") as raw:
@@ -121,7 +124,7 @@ class ModelSafeTestContractPromptTests(RuntimeHarnessCase):
         self.assertNotIn("environment-secret", encoded)
 
 
-def test_inventory() -> dict:
+def test_inventory(adapter: str = "ctest-json-v1") -> dict:
     tests = [
         {
             "test_id": "test-a",
@@ -150,7 +153,7 @@ def test_inventory() -> dict:
         "schema_version": 1,
         "artifact_kind": "project-test-inventory",
         "status": "ready",
-        "adapter": "ctest-json-v1",
+        "adapter": adapter,
         "tests": tests,
     }
     return {**payload, "inventory_sha256": content_sha256(payload)}

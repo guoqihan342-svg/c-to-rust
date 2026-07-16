@@ -10,6 +10,7 @@ from .runtime_security import assert_model_payload_safe
 
 MAX_BOUND_TESTS = 128
 MAX_INPUT_PATHS = 128
+SUPPORTED_TEST_ADAPTERS = frozenset({"ctest-json-v1", "make-dry-run-v1"})
 WITHHELD_FIELDS = [
     "argument_literals", "environment_values", "expected", "actual",
     "oracle_values", "raw_output",
@@ -90,7 +91,7 @@ def validate_model_safe_test_contract(
         or group_id is not None and value.get("group_id") != group_id
         or not is_sha256(value.get("target_scope_sha256"))
         or not is_sha256(value.get("inventory_sha256"))
-        or value.get("adapter") != "ctest-json-v1"
+        or value.get("adapter") not in SUPPORTED_TEST_ADAPTERS
         or not isinstance(tests, list) or len(tests) > MAX_BOUND_TESTS
         or value.get("included_test_count") != len(tests)
         or not _nonnegative_int(value.get("test_count"))
@@ -224,7 +225,7 @@ def _nonnegative_int(value: Any) -> bool:
 
 
 __all__ = [
-    "WITHHELD_FIELDS", "build_model_safe_test_contract",
+    "SUPPORTED_TEST_ADAPTERS", "WITHHELD_FIELDS", "build_model_safe_test_contract",
     "validate_model_safe_test_contract", "validate_test_contract_reference",
     "validate_test_inventory_binding",
 ]

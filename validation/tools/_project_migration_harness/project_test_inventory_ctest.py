@@ -11,6 +11,9 @@ from typing import Any
 
 from .artifacts import content_sha256
 from .sandbox_bubblewrap_argv import build_bubblewrap_argv
+from .project_test_inventory_sandbox import (
+    canonical_project_tool_environment, restrict_project_tool_environment,
+)
 
 
 MAX_CTEST_OUTPUT_BYTES = 16 * 1024 * 1024
@@ -44,13 +47,11 @@ def collect_ctest_json(
     argv = build_bubblewrap_argv(
         launcher=bwrap, workspace=root, runtime=runtime,
         tool_bindings=((ctest, "/toolchain/bin/ctest"),),
-        environment=(("HOME", "/home/sandbox"), ("LANG", "C.UTF-8"),
-                     ("LC_ALL", "C.UTF-8"), ("PATH", "/toolchain/bin:/usr/bin:/bin"),
-                     ("TMPDIR", "/tmp")),
+        environment=canonical_project_tool_environment(),
         guest_command=command,
+        guest_working_directory=guest_build,
     )
-    boundary = argv.index("--chdir")
-    argv[boundary + 1] = guest_build
+    argv = restrict_project_tool_environment(argv)
     try:
         completed = subprocess.run(
             argv, cwd=runtime, env={"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},

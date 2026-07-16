@@ -225,6 +225,8 @@ def _legacy_system_files() -> list[tuple[str, str]]:
             result.append((value, value))
     if Path("/etc/ld.so.conf.d").is_dir():
         result.append(("/etc/ld.so.conf.d", "/etc/ld.so.conf.d"))
+    if Path("/etc/alternatives").is_dir():
+        result.append(("/etc/alternatives", "/etc/alternatives"))
     return result
 
 

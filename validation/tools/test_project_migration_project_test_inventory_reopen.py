@@ -108,6 +108,43 @@ class ProjectTestInventoryReopenTests(BuildIRHostBindingTestCase):
                 migration_manifest=self._manifest(),
             )
 
+    def test_make_inventory_reopens_with_the_same_adapter(self) -> None:
+        inventory = copy.deepcopy(self.inventory)
+        inventory["adapter"] = "make-dry-run-v1"
+        inventory["inventory_sha256"] = content_sha256({
+            key: value for key, value in inventory.items()
+            if key != "inventory_sha256"
+        })
+        inventory_ref = write_json_artifact(
+            self.artifacts, "plan/project-tests-make.json", inventory,
+        )
+        module = (
+            "validation.tools._project_migration_harness."
+            "project_test_inventory_validation."
+        )
+        self.collector.reset_mock()
+        with (
+            mock.patch(
+                module + "collect_make_test_dry_run",
+                return_value={
+                    "status": "collected", "observation": self.observation,
+                },
+            ) as make_collector,
+            mock.patch(
+                module + "inventory_from_make_observation",
+                return_value=inventory,
+            ) as make_deriver,
+        ):
+            reopened = reopen_manifest_project_test_inventory(
+                repo_root=self.project_root, artifact_root=self.artifacts,
+                migration_manifest=self._manifest(inventory_ref),
+            )
+
+        self.assertEqual(inventory, reopened)
+        make_collector.assert_called_once()
+        make_deriver.assert_called_once()
+        self.collector.assert_not_called()
+
     def _manifest(self, inventory_ref: dict | None = None) -> dict:
         return {
             "build_ir": {"status": "bound", "artifact": self.build_ref},

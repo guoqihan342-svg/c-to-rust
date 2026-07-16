@@ -8,6 +8,9 @@ from typing import Any
 from .artifacts import checked_relative_path, content_sha256
 from .build_facts import is_linklike, resolve_repository_path
 from .project_test_inventory_ctest import collect_ctest_json
+from .project_test_inventory_make import (
+    collect_make_test_dry_run, inventory_from_make_observation,
+)
 from .rust_project_ir_binding_domain import validate_bound_build_ir
 from .rust_project_ir_binding_io import (
     artifact_identity, read_reference, strict_json,
@@ -67,7 +70,15 @@ def reopen_manifest_project_test_inventory(
     build_directory = resolve_repository_path(
         root, str(inventory["build_directory"]),
     )
-    recollected = collect_ctest_json(root, build_directory)
+    adapter = inventory["adapter"]
+    if adapter == "ctest-json-v1":
+        recollected = collect_ctest_json(root, build_directory)
+        derive = inventory_from_ctest_observation
+    elif adapter == "make-dry-run-v1":
+        recollected = collect_make_test_dry_run(root, build_directory)
+        derive = inventory_from_make_observation
+    else:
+        raise ValueError("project_test_inventory_adapter_invalid")
     current_observation = recollected.get("observation")
     if (
         recollected.get("status") != "collected"
@@ -76,7 +87,7 @@ def reopen_manifest_project_test_inventory(
         raise ValueError("project_test_inventory_recollection_failed")
     if dict(current_observation) != observation:
         raise ValueError("project_test_inventory_observation_drifted")
-    expected = inventory_from_ctest_observation(
+    expected = derive(
         root, build_ir, observation, source_observation=observation_ref,
     )
     if expected != inventory:
@@ -116,7 +127,7 @@ def _validate_inventory_shape(value: Mapping[str, Any]) -> None:
     ):
         raise ValueError("project_test_inventory_schema_invalid")
     if value["status"] == "ready" and (
-        value["adapter"] != "ctest-json-v1"
+        value["adapter"] not in {"ctest-json-v1", "make-dry-run-v1"}
         or not value["tests"] or value["blockers"]
         or not isinstance(value["source_observation"], Mapping)
     ):
