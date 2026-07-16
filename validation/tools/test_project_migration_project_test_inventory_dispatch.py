@@ -37,40 +37,39 @@ class ProjectTestInventoryDispatchTests(unittest.TestCase):
             "compile_database": {"path": "build/compile_commands.json"},
         }
 
-    def test_make_system_selects_make_collector_and_deriver(self) -> None:
-        observation = {"artifact_kind": "make-dry-run-v1-observation"}
-        expected = {"status": "ready", "adapter": "make-dry-run-v1"}
+    def test_make_system_requires_ai_target_proposal_before_collection(self) -> None:
         with (
-            mock.patch(
-                MODULE + "collect_make_test_dry_run",
-                return_value={"status": "collected", "observation": observation},
-            ) as make_collector,
-            mock.patch(
-                MODULE + "inventory_from_make_observation", return_value=expected,
-            ) as make_deriver,
+            mock.patch(MODULE + "collect_static_make_test_recipes") as make_collector,
             mock.patch(MODULE + "collect_ctest_json") as ctest_collector,
         ):
             actual = collect_project_test_inventory(
                 self.root, self.discovery, {}, output=self.output,
             )
 
-        self.assertEqual(expected, actual)
-        make_collector.assert_called_once()
-        collector_root, collector_build = make_collector.call_args.args
-        self.assertTrue(Path(collector_root).samefile(self.root))
-        self.assertTrue(Path(collector_build).samefile(self.build))
-        make_deriver.assert_called_once()
+        self.assertEqual("blocked", actual["status"])
+        self.assertEqual(
+            "project_test_make_ai_target_proposal_required",
+            actual["blockers"][0]["code"],
+        )
+        make_collector.assert_not_called()
         ctest_collector.assert_not_called()
-        source = make_deriver.call_args.kwargs["source_observation"]
-        self.assertEqual("plan/project-test-make-observation.json", source["path"])
 
     def test_make_collection_failure_preserves_generic_blocker(self) -> None:
-        with mock.patch(
-            MODULE + "collect_make_test_dry_run",
-            return_value={"status": "blocked", "blocker": {"code": "no-test-target"}},
+        with (
+            mock.patch(
+                MODULE + "load_project_test_target_proposal",
+                return_value={"proposal": "bound"},
+            ),
+            mock.patch(
+                MODULE + "collect_static_make_test_recipes",
+                return_value={
+                    "status": "blocked", "blocker": {"code": "no-test-target"},
+                },
+            ),
         ):
             inventory = collect_project_test_inventory(
                 self.root, self.discovery, {}, output=self.output,
+                target_proposal=mock.Mock(),
             )
 
         self.assertEqual("blocked", inventory["status"])
@@ -93,7 +92,7 @@ class ProjectTestInventoryDispatchTests(unittest.TestCase):
             mock.patch(
                 MODULE + "inventory_from_ctest_observation", return_value=expected,
             ),
-            mock.patch(MODULE + "collect_make_test_dry_run") as make_collector,
+            mock.patch(MODULE + "collect_static_make_test_recipes") as make_collector,
         ):
             actual = collect_project_test_inventory(
                 self.root, self.discovery, build_ir, output=self.output,
@@ -108,26 +107,20 @@ class ProjectTestInventoryDispatchTests(unittest.TestCase):
             "cc", "-c", "unit.c", "-MF", ".deps/unit.Tpo", "-o", "unit.o",
         ])
         self.discovery["build_system_facts"]["systems"] = ["cmake", "make"]
-        expected = {"status": "ready", "adapter": "make-dry-run-v1"}
         with (
-            mock.patch(
-                MODULE + "collect_make_test_dry_run",
-                return_value={
-                    "status": "collected",
-                    "observation": {"artifact_kind": "make-dry-run-v1-observation"},
-                },
-            ) as make_collector,
-            mock.patch(
-                MODULE + "inventory_from_make_observation", return_value=expected,
-            ),
+            mock.patch(MODULE + "collect_static_make_test_recipes") as make_collector,
             mock.patch(MODULE + "collect_ctest_json") as ctest_collector,
         ):
             actual = collect_project_test_inventory(
                 self.root, self.discovery, build_ir, output=self.output,
             )
 
-        self.assertEqual(expected, actual)
-        make_collector.assert_called_once()
+        self.assertEqual("blocked", actual["status"])
+        self.assertEqual(
+            "project_test_make_ai_target_proposal_required",
+            actual["blockers"][0]["code"],
+        )
+        make_collector.assert_not_called()
         ctest_collector.assert_not_called()
 
     def test_mixed_system_without_unique_evidence_fails_closed(self) -> None:
@@ -142,7 +135,7 @@ class ProjectTestInventoryDispatchTests(unittest.TestCase):
                 build_ir = self.bind_compile_database(arguments)
                 self.discovery["build_system_facts"]["systems"] = ["cmake", "make"]
                 with (
-                    mock.patch(MODULE + "collect_make_test_dry_run") as make,
+                    mock.patch(MODULE + "collect_static_make_test_recipes") as make,
                     mock.patch(MODULE + "collect_ctest_json") as ctest,
                 ):
                     result = collect_project_test_inventory(
@@ -184,26 +177,20 @@ class ProjectTestInventoryDispatchTests(unittest.TestCase):
             "targets": [],
             "build_metadata": [{"path": "Makefile"}],
         }
-        expected = {"status": "ready", "adapter": "make-dry-run-v1"}
         with (
-            mock.patch(
-                MODULE + "collect_make_test_dry_run",
-                return_value={
-                    "status": "collected",
-                    "observation": {"artifact_kind": "make-dry-run-v1-observation"},
-                },
-            ) as make_collector,
-            mock.patch(
-                MODULE + "inventory_from_make_observation", return_value=expected,
-            ),
+            mock.patch(MODULE + "collect_static_make_test_recipes") as make_collector,
             mock.patch(MODULE + "collect_ctest_json") as ctest_collector,
         ):
             actual = collect_project_test_inventory(
                 self.root, self.discovery, build_ir, output=self.output,
             )
 
-        self.assertEqual(expected, actual)
-        self.assertTrue(make_collector.call_args.args[1].samefile(self.root))
+        self.assertEqual("blocked", actual["status"])
+        self.assertEqual(
+            "project_test_make_ai_target_proposal_required",
+            actual["blockers"][0]["code"],
+        )
+        make_collector.assert_not_called()
         ctest_collector.assert_not_called()
 
     def bind_compile_database(self, arguments: list[str]) -> dict:

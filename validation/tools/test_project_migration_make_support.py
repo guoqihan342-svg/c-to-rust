@@ -23,6 +23,9 @@ from validation.tools._project_migration_harness.make_dry_run_runner import (
     canonical_make_dry_run_plan_bytes, create_make_dry_run_plan,
     run_make_dry_run,
 )
+from validation.tools._project_migration_harness.project_test_target_proposal import (
+    ProjectTestTargetProposalSelection,
+)
 
 
 class ControlledMakeBackend:
@@ -262,7 +265,32 @@ class MakeBundleFactory:
         return path
 
 
+def make_test_target_proposal(
+    harness_root: Path, target: str = "all",
+) -> ProjectTestTargetProposalSelection:
+    payload = {
+        "schema_version": 1,
+        "artifact_kind": "project-test-target-proposal-v1",
+        "build_system": "make", "target": target,
+        "producer": {
+            "kind": "ai-candidate", "provider": "test-provider",
+            "model": "test-model", "prompt_sha256": "a" * 64,
+            "response_sha256": "b" * 64,
+        },
+        "claim_boundary": {
+            "semantic_gate": False, "translation_coverage_numerator": 0,
+        },
+    }
+    data = canonical_json_bytes(payload)
+    path = MakeBundleFactory.write_bytes(
+        harness_root, "evidence/project-test-target-proposal.json", data,
+    )
+    return ProjectTestTargetProposalSelection(
+        path, hashlib.sha256(data).hexdigest(), len(data),
+    )
+
+
 __all__ = [
     "ControlledCollectorBackend", "MakeBundleFactory", "artifact_ref",
-    "controlled_success",
+    "controlled_success", "make_test_target_proposal",
 ]

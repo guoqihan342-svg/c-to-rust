@@ -22,7 +22,9 @@ from validation.tools._project_migration_harness.make_build_ir_adapter import (
 )
 from validation.tools._project_migration_harness.orchestrator import plan_project
 from validation.tools._project_migration_harness.project_migration_cli import parse_args
-from validation.tools.test_project_migration_make_support import MakeBundleFactory
+from validation.tools.test_project_migration_make_support import (
+    MakeBundleFactory, make_test_target_proposal,
+)
 
 
 class MakeVerticalClosureTests(unittest.TestCase):
@@ -54,6 +56,7 @@ class MakeVerticalClosureTests(unittest.TestCase):
     def test_cli_report_to_build_ir_plan_and_worker_admission(self) -> None:
         bundle = self.bundle("vertical")
         selection = bundle["selection"]
+        proposal = make_test_target_proposal(bundle["harness"])
         argv = [
             "plan", "--repo-root", str(bundle["root"]),
             "--profile", "development",
@@ -62,6 +65,9 @@ class MakeVerticalClosureTests(unittest.TestCase):
             "--make-report-sha256", selection.sha256,
             "--make-report-size-bytes", str(selection.size_bytes),
             "--build-closure-policy", "bounded-source",
+            "--project-test-target-proposal", str(proposal.path),
+            "--project-test-target-proposal-sha256", proposal.sha256,
+            "--project-test-target-proposal-size-bytes", str(proposal.size_bytes),
         ]
         with patch.object(
             project_migration_harness, "REPO_ROOT", bundle["harness"],
@@ -124,6 +130,9 @@ class MakeVerticalClosureTests(unittest.TestCase):
             bundle["root"], harness_root=bundle["harness"],
             out_root="target/run", make_report=bundle["selection"],
             require_build_closure=True,
+            project_test_target_proposal=make_test_target_proposal(
+                bundle["harness"],
+            ),
         )
         self.assertEqual("planned", plan["status"], plan)
         self.assertFalse(plan["execution"]["build_closure_ready"])

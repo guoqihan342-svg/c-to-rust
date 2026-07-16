@@ -26,7 +26,7 @@ from validation.tools._project_migration_harness.project_migration_cli import (
     parse_args,
 )
 from validation.tools.test_project_migration_make_support import (
-    ControlledCollectorBackend,
+    ControlledCollectorBackend, make_test_target_proposal,
 )
 
 
@@ -126,6 +126,7 @@ class MakeCollectorTests(unittest.TestCase):
             make_report=selection,
             require_build_closure=True,
             profile="development",
+            project_test_target_proposal=make_test_target_proposal(self.harness),
         )
         self.assertEqual("planned", plan["status"], plan)
         self.assertFalse(plan["execution"]["build_closure_ready"])

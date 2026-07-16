@@ -11,6 +11,7 @@ from .project_migration_plan_binding import (
     load_next_frontier_bindings,
     output_binding,
 )
+from .project_test_target_proposal import ProjectTestTargetProposalSelection
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -21,6 +22,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     add_collect_make_parser(commands)
     add_c2rust_baseline_parser(commands)
+
+    proposal = commands.add_parser("prepare-make-test-target-proposal")
+    proposal.add_argument("--target", required=True)
+    proposal.add_argument("--provider", required=True)
+    proposal.add_argument("--model", required=True)
+    proposal.add_argument("--prompt-sha256", required=True)
+    proposal.add_argument("--response-sha256", required=True)
+    proposal.add_argument(
+        "--out-root", default="target/project-test-target-proposal",
+    )
 
     plan = commands.add_parser("plan")
     _add_plan_arguments(plan)
@@ -172,6 +183,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                 )
             except ValueError as error:
                 parser.error(str(error))
+        proposal_values = (
+            parsed.project_test_target_proposal,
+            parsed.project_test_target_proposal_sha256,
+            parsed.project_test_target_proposal_size_bytes,
+        )
+        if any(value is not None for value in proposal_values):
+            if any(value is None for value in proposal_values):
+                parser.error(
+                    "--project-test-target-proposal, "
+                    "--project-test-target-proposal-sha256, and "
+                    "--project-test-target-proposal-size-bytes must be used together"
+                )
+            try:
+                parsed.project_test_target_proposal = (
+                    ProjectTestTargetProposalSelection(*proposal_values)
+                )
+            except ValueError as error:
+                parser.error(str(error))
     return parsed
 
 
@@ -185,6 +214,9 @@ def _add_plan_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--make-report", type=Path)
     parser.add_argument("--make-report-sha256")
     parser.add_argument("--make-report-size-bytes", type=int)
+    parser.add_argument("--project-test-target-proposal", type=Path)
+    parser.add_argument("--project-test-target-proposal-sha256")
+    parser.add_argument("--project-test-target-proposal-size-bytes", type=int)
     parser.add_argument("--out-root", default="target/project-migration")
     parser.add_argument("--run-id")
     parser.add_argument("--source-commit", default="unversioned")

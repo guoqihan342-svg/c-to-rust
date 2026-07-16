@@ -10,7 +10,9 @@ from .runtime_security import assert_model_payload_safe
 
 MAX_BOUND_TESTS = 128
 MAX_INPUT_PATHS = 128
-SUPPORTED_TEST_ADAPTERS = frozenset({"ctest-json-v1", "make-dry-run-v1"})
+SUPPORTED_TEST_ADAPTERS = frozenset({
+    "ctest-json-v1", "make-dry-run-v1", "make-static-direct-v1",
+})
 LEGACY_WITHHELD_FIELDS = [
     "argument_literals", "environment_values", "expected", "actual",
     "oracle_values", "raw_output",

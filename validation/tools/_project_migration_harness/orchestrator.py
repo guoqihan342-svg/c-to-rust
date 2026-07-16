@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,10 @@ from . import orchestrator_native_link as native_link_stage
 from .orchestrator_context import ContextPortfolioError, build_context_portfolio
 from .orchestrator_finalize import finalize_project_plan
 from .project_test_inventory import collect_project_test_inventory
+from .project_test_target_proposal import (
+    ProjectTestTargetProposalSelection,
+    resolve_project_test_target_proposal_selection,
+)
 from .orchestrator_stages import (
     blocked_plan as _blocked,
     contract_error,
@@ -46,8 +51,12 @@ def plan_project(
     context_group_pages: int = 32,
     require_build_closure: bool = False,
     profile: str = "development",
+    project_test_target_proposal: ProjectTestTargetProposalSelection | None = None,
 ) -> dict[str, Any]:
     harness = Path(harness_root).resolve(strict=True)
+    project_test_target_proposal = resolve_project_test_target_proposal_selection(
+        project_test_target_proposal, harness_root=harness,
+    )
     source_input = Path(repo_root)
     out_rel = checked_relative_path(out_root.rstrip("/"))
     output = (harness / Path(*Path(out_rel).parts)).resolve()
@@ -105,10 +114,15 @@ def plan_project(
     )
     project_test_inventory = collect_project_test_inventory(
         source, discovery, build_ir, output=output,
+        target_proposal=project_test_target_proposal,
     )
     artifacts["project_test_inventory"] = write_json_artifact(
         output, "plan/project-test-inventory.json", project_test_inventory,
     )
+    if _requires_make_target_proposal(project_test_inventory):
+        return _blocked(
+            output, artifacts, "project_test_make_ai_target_proposal_required",
+        )
 
     compilation_facts = _stage("c_compilation_facts", lambda: (
         collect_c_compilation_fact_bundle(
@@ -226,6 +240,19 @@ def plan_project(
         compilation_facts=compilation_facts,
         generated_closure=generated_closure,
         closure_verification=closure_verification,
+    )
+
+
+def _requires_make_target_proposal(value: Any) -> bool:
+    blockers = value.get("blockers") if isinstance(value, Mapping) else None
+    return bool(
+        isinstance(blockers, list)
+        and any(
+            isinstance(item, Mapping)
+            and item.get("code")
+            == "project_test_make_ai_target_proposal_required"
+            for item in blockers
+        )
     )
 
 

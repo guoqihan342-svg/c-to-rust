@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from validation.tools._project_migration_harness.orchestrator import plan_project
 from validation.tools._project_migration_harness.artifacts import content_sha256
@@ -134,6 +135,36 @@ class ProjectMigrationOrchestratorTests(unittest.TestCase):
         self.assertFalse(result["execution"]["model_launched"])
         self.assertFalse((
             self.harness / "target/blocked/state/project-migration.sqlite3"
+        ).exists())
+
+    def test_make_without_ai_target_stops_before_context_ledger_and_workers(self) -> None:
+        database = self.write_project("int unit(void) { return 1; }\n")
+        (self.source / "Makefile").write_text(
+            "verify: build/unit.o\n\t./build/unit.o\n", encoding="ascii",
+        )
+        module = "validation.tools._project_migration_harness.orchestrator."
+        with (
+            mock.patch(module + "collect_c_compilation_fact_bundle") as facts,
+            mock.patch(module + "build_context_portfolio") as portfolio,
+        ):
+            result = plan_project(
+                self.source,
+                harness_root=self.harness,
+                out_root="target/make-no-proposal",
+                compile_database=database,
+            )
+
+        self.assertEqual("blocked", result["status"])
+        self.assertEqual(
+            ["project_test_make_ai_target_proposal_required"],
+            result["blockers"],
+        )
+        self.assertFalse(result["execution"]["model_launched"])
+        facts.assert_not_called()
+        portfolio.assert_not_called()
+        self.assertFalse((
+            self.harness
+            / "target/make-no-proposal/state/project-migration.sqlite3"
         ).exists())
 
 

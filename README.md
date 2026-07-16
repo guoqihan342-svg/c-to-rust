@@ -17,9 +17,9 @@
 | Translator-generated semantic pass | `37` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
 | Accepted-evidence authoritative | `2` 个，单独统计，不进入 translator numerator |
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
-| 当前翻译任务 | P0-A19 g4 独立 Cargo 重开与 h4 剩余项目测试适配扩展；h4d 受限 Make 单文件 stdin 与 h4e 已发现测试清单双向全等已闭合，P0-A18c/P0-A10 保留为有限回归 |
+| 当前翻译任务 | P0-A19 g4 独立 Cargo 重开与 h4 剩余项目测试适配扩展；h4d stdin、h4e 已发现清单双向全等及 h4f AI 候选/宿主静态 Make direct-leaf target 已闭合，下一步是递归 Make、custom runner 与完整资源闭包 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
-| P0-A19 有限门禁 | Windows 项目迁移全量 1273 项：1247 通过、26 项平台条件跳过；WSL 项目迁移全量 1273 项：1261 通过、12 项显式环境条件跳过；WSL 真实 C/Rust 双沙箱 oracle 4/4 通过 |
+| P0-A19 有限门禁 | Windows 仓库级全量 3161 项：3130 通过、31 项平台条件跳过；其中 Windows 项目迁移全量 1295 项：1269 通过、26 项平台条件跳过。WSL 本地比赛模拟项目迁移全量 1295 项：1283 通过、12 项显式环境条件跳过；全部零失败，证明类仍为 `wsl-local-simulation` |
 | FlashDB 比赛源码 pin | `competition` 分支，commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe` |
 | 开发工作流 | canonical roadmap + code/tests + harness evidence gates |
 
@@ -65,7 +65,7 @@ AI candidate manifest v9 的 `prompt_scope` 由实际 ContextPack 计算，并�
 
 ## 整项目 AI 编排
 
-比赛平台上的外层 OpenCode 不需要逐函数编写 spec。仓库根 `AGENTS.md` 指示它只调用 `project_migration_harness.py migrate` 并提供目标 C 仓库；该入口内部固定衔接 plan 与 `run-to-completion`，只有返回 `completed` 且 `semantic_gate=true` 才算结束，绝不能在 `plan`、`preflight`、`dispatch` 或单个 gate 后停止。harness 会发现 compile database、CMake/Ninja/Meson/Make 构建事实、编译输出、静态归档和链接边，生成 SCC/DAG、内容寻址 ContextPack catalog/frontier、角色组合和 SQLite 状态。`migrate` 默认使用 `--profile competition` 和 `--build-closure-policy required`；`--profile development` 只是必须显式选择的非比赛兼容路径。BuildIR 已验证但 required 闭包仍不完整时，调度器只放行原本条件满足的当前前沿，并把 assignment、request 和 Rust artifact 全部绑定为 `candidate-only` 隔离候选；SQLite 最低层晋升权威会拒绝其成为 `last-good`，后续依赖、项目集成、semantic gate 和翻译计数仍保持阻塞。`bounded-source` 同样只能生成 `semantic_gate=false` 的调查候选，不能进入项目完成路径。
+比赛平台上的外层 OpenCode 不需要逐函数编写 spec。仓库根 `AGENTS.md` 指示它以 `project_migration_harness.py migrate` 作为唯一迁移状态机并提供目标 C 仓库；Make 项目允许先调用不产生语义结论的 `prepare-make-test-target-proposal`，随后仍必须进入 `migrate`。该入口内部固定衔接 plan 与 `run-to-completion`，只有返回 `completed` 且 `semantic_gate=true` 才算结束，绝不能在 proposal、`plan`、`preflight`、`dispatch` 或单个 gate 后停止。harness 会发现 compile database、CMake/Ninja/Meson/Make 构建事实、编译输出、静态归档和链接边，生成 SCC/DAG、内容寻址 ContextPack catalog/frontier、角色组合和 SQLite 状态。`migrate` 默认使用 `--profile competition` 和 `--build-closure-policy required`；`--profile development` 只是必须显式选择的非比赛兼容路径。BuildIR 已验证但 required 闭包仍不完整时，调度器只放行原本条件满足的当前前沿，并把 assignment、request 和 Rust artifact 全部绑定为 `candidate-only` 隔离候选；SQLite 最低层晋升权威会拒绝其成为 `last-good`，后续依赖、项目集成、semantic gate 和翻译计数仍保持阻塞。`bounded-source` 同样只能生成 `semantic_gate=false` 的调查候选，不能进入项目完成路径。
 
 competition profile 在发现完成后、任何 worker/AI 启动前，从发现到的 compiler driver/wrapper、linker driver/linker、archiver 和 ranlib 构造 `c-toolchain-evidence`。证据绑定 `config/competition-env/environment.json` 的 path/SHA/size/profile id、环境白名单与 PATH 快照哈希、host/WSL 指纹、绝对解析路径和 binary SHA/size，并只运行固定且有界的 version、target、sysroot、resource-dir 和 derived-linker 探针。每个探针的原始 stdout/stderr 以有界 base64、SHA-256 和 size 保存在 BuildIR 哈希绑定的内容寻址 attachment；工具缺失、探针失败或漂移、平台不符以及 competition GCC 版本不符都会在调度前 fail closed。
 
@@ -85,7 +85,7 @@ Cargo generation 现在强制经过 canonical RustProjectIR。wave-provisional �
 
 RustProjectIR v3 已把 BuildIR 的 target scope 重建为确定性的多 package Cargo workspace，支持静态库、共享库和可执行目标，并按 package/target/module 身份隔离同源 variant。生成物会从绑定的 DAG、BuildIR、candidate source 和 target scope 逐字节重开；唯一入口、crate/module 命名、依赖方向或链接参数无法表达时 fail closed。`cargo metadata --locked --offline`、all-target 编译和 linker/ELF/archive 独立重开仍未全部进入生产完成门，shared-type layout、ownership、init/destruction、cfg/feature 和受证明的 native link 等价性也继续保持 blocker。
 
-项目逻辑验收已有 `ProjectTestInventory v1` 的 CMake/CTest 与受限 Make 显式配方适配器。CTest 只在沙箱中读取内容绑定的 `ctest --show-only=json-v1`。Make 目标由仓库内容选择：存在根 `Makefile.am` 且扫描到 `TESTS/check_PROGRAMS` 时执行固定 `make -n --no-builtin-rules --no-builtin-variables check`，否则保留固定 `test` 兼容目标；两者都只在只读、无网络且带资源上限的 bubblewrap 中 dry-run，不执行测试配方。全部 `Makefile.am` 路径/SHA/大小/声明集合进入 target binding，完成期重新扫描；混合 CMake/Make 只在 BuildIR 与 compile database 证据唯一时选择 adapter，歧义直接阻断。Make 输出只接受无 shell 控制的直接 argv；`echo/printf` 之外的未映射命令一律阻断，清单声明的每个测试可执行文件必须精确且唯一地映射到 materialized BuildIR link target。普通应用/CLI executable 仍由 Cargo all-target 门编译，但不会被误塞进测试清单，也不会仅因不是测试而阻断；真正发现的测试不允许遗漏、合并或额外猜测。argv/env 使用 `literal`、`repo-path` 或有界 path-template 结构表示；未声明外部路径、链接、特殊文件、隐式工作目录输入和包含原 C 可执行文件的 fixture 闭包均 fail closed。宿主只建立一次最小只读输入快照，随后在两个独立 bubblewrap 沙箱中运行原 C 与 Rust 目标；Rust 侧不挂载 C 可执行文件、C 源树、C 运行状态或 C 输出，最终由可信宿主比较 exit/signal/stdout/stderr。原 C baseline 必须成功，匹配的双端失败不能伪装通过。
+项目逻辑验收已有 `ProjectTestInventory v1` 的 CMake/CTest、有界 Meson direct-executable 和 AI-first Make direct-leaf 适配器。CTest/Meson 只在受限沙箱中读取内容绑定的项目元数据。Make 路径先由外层 OpenCode/AI 提出 target 候选；`prepare-make-test-target-proposal` 生成 canonical、路径/SHA/大小绑定的候选工件，`plan/migrate` 再由宿主按真实 Makefile 优先级重建仓库内字面 include 闭包、唯一目标声明、直接 recipe、内容绑定的 direct-leaf prerequisite 和 content-addressed candidate id。prerequisite 必须是仓库内无链接真实文件，SHA/大小与 materialized BuildIR output 一致，且不得命中 phony、显式/分组/模式/后缀、GNU 内建或 RCS/SCCS 中间源规则。该路径不启动 GNU Make 或任何子进程，固定 `subprocess_executed=false`，拒绝全部未建模变量/导出、递归/动态/条件 Make、`info/shell/eval/load`、自定义 recipe prefix、`+`/`-` 配方及 stdout 注入；没有 AI proposal 时明确返回 `project_test_make_ai_target_proposal_required`，并在 compilation facts、ContextPack/portfolio、ledger 和 worker/AI 之前停止，不猜 `test/check`。早期 `make -n test/check` 仅保留历史工件完成期重开兼容，不再作为新计划权威。混合构建系统只在 BuildIR 与 compile database 证据唯一时选择 adapter，歧义直接阻断。直接命令仍必须无 shell 控制，`echo/printf` 之外的未映射命令一律阻断，每个测试 executable 精确且唯一映射到 materialized BuildIR link target。普通应用/CLI executable 仍由 Cargo all-target 门编译但不会冒充测试；已发现测试不允许遗漏、合并或额外猜测。argv/env 使用 `literal`、`repo-path` 或有界 path-template；未声明外部路径、链接、特殊文件、隐式工作目录输入和包含原 C executable 的 fixture 闭包均 fail closed。宿主建立一次最小只读输入快照，随后在两个独立 bubblewrap 中运行原 C 与 Rust 目标，由可信宿主比较 exit/signal/stdout/stderr；原 C baseline 必须成功，匹配的双端失败不能伪装通过。
 
 project repair queue 已接入 schema v7 TransitionAuthority ledger 和专属 AI repairer。CompletionCoordinator 首次只观察最新 receipt，不创建 attempt；隔离的零调用 preflight 通过后，host-issued permit 会绑定精确 receipt/queue/item 状态、模型、agent 和运行时输入，再允许一次 resume 最多启动一个 provider call。provider 完整结果先按哈希写入 ledger，摄取阶段崩溃时下一次 resume 只重开证据并摄取，不再调用模型；证据不全或结果未知仍进入人工对账。attempt 预算沿稳定 diagnostic lineage 跨 receipt epoch 单调继承，另有每 run 64 次 provider call 和 65 个 receipt epoch 的硬上限。
 
@@ -95,9 +95,9 @@ schema v7 还增加了不可变 project diagnostic intake：host 会重开当前
 
 只有在新 managed generation 上由同一 host gate 产生更高 epoch 的新 pass，才能写出内容寻址 revalidation receipt。结算事务会同时重开 source intake、当前 cohort、原始与新 project input、ledger gate record、raw observation/evidence、分类回执、候选 IR/interface 和当前 generation，然后注册 successor receipt、resolve 目标并取消已被 successor 取代的同队列项；复验失败则回滚旧候选、登记新诊断并继承 attempt 预算。该闭环已接入 Cargo compile/link 的严格分类路径；initialization、feature/cfg、ABI 专属 verifier、A19e7 独立进程 capability、A19e8 non-degrading SandboxBackend 和完整 project-final semantic acceptance 仍未完成，AI 候选不会增加 translator numerator。
 
-正向完成链现在会自动推进 gate-pending candidate 的 compile、oracle-replay、negative、unsafe-alias、ABI-layout、final 和 promotion，再执行集成、Cargo、C/Rust 项目 oracle 以及项目 gate 汇总。逻辑不一致会按 target/module/unit 归因并原子回到 AI repair，且会包含失败测试可执行包的传递 Rust package 依赖单元；`run-to-completion` 会继续 dispatch repairer、reviewer 和复验，直至完成或产生稳定 blocker。数据库侧已增加单调 `completion_epoch` 与 `active -> finalizing -> completed`：进入 finalizing 会冻结并重开同一 cohort/generation/gate/invariant，拒绝新 lease、attempt、repair、project gate 和 provider start；完成 receipt v2 先原子落盘并 fsync，随后单个 SQLite 事务把 unit/run 完成 transition 绑定到 receipt SHA。重启会复用同一 epoch 并重开全部绑定，缺失或漂移只能 blocked。现有 `CURRENT` 仍未实现绑定 epoch/cohort/generation/receipt 的 prepare/commit 两阶段发布，所以完整完成协议尚未关闭。当前支持 CMake/CTest direct executable、内容绑定的 Automake `check`、受限 Make `test` 与有界 Meson direct-executable inventory；对已经发现的 direct-executable 清单，`project-test-completeness-v1` 会拒绝 zero-case、遗漏、额外、重复或多目标合并，并把 completeness SHA 绑定进 oracle evidence v4。任意显式 target、递归 Make、自定义 runner、Kconfig、其余 stdin、声明式/隐式 fixture、完整资源合同、额外显式 Rust test 发现和真实 held-out 整项目验收仍未完成，因此不能称为任意 C 项目或 `competition-exact` 已通过。
+正向完成链现在会自动推进 gate-pending candidate 的 compile、oracle-replay、negative、unsafe-alias、ABI-layout、final 和 promotion，再执行集成、Cargo、C/Rust 项目 oracle 以及项目 gate 汇总。逻辑不一致会按 target/module/unit 归因并原子回到 AI repair，且会包含失败测试 executable 的传递 Rust package 依赖单元；`run-to-completion` 会继续 dispatch repairer、reviewer 和复验，直至完成或产生稳定 blocker。数据库侧已增加单调 `completion_epoch` 与 `active -> finalizing -> completed`：进入 finalizing 会冻结并重开同一 cohort/generation/gate/invariant，拒绝新 lease、attempt、repair、project gate 和 provider start；完成 receipt v2 先原子落盘并 fsync，随后单个 SQLite 事务把 unit/run 完成 transition 绑定到 receipt SHA。重启会复用同一 epoch 并重开全部绑定，缺失或漂移只能 blocked。现有 `CURRENT` 仍未实现绑定 epoch/cohort/generation/receipt 的 prepare/commit 两阶段发布，所以完整完成协议尚未关闭。当前支持 CMake/CTest direct executable、有界 Meson direct-executable 以及 AI 候选/宿主静态验证的 Make direct-leaf target；对已经发现的清单，`project-test-completeness-v1` 会拒绝 zero-case、遗漏、额外、重复或多目标合并，并把 completeness SHA 绑定进 oracle evidence v4。递归/动态/条件 Make、自定义 runner、Kconfig、其余 stdin、声明式/隐式 fixture、完整资源合同、额外显式 Rust test 发现和真实 held-out 整项目验收仍未完成，因此不能称为任意 C 项目或 `competition-exact` 已通过。
 
-比赛入口如下。`migrate` 是外层 OpenCode 唯一应调用的状态机；它在同一命令内规划并运行到完成或稳定 blocker。`plan`、`preflight`、`dispatch`、`complete` 和 `run-to-completion` 保留为内部诊断/恢复工具，不能作为比赛验收成功点：
+比赛入口如下。`migrate` 是外层 OpenCode 唯一迁移状态机；它在同一命令内规划并运行到完成或稳定 blocker。Make proposal materializer 只是候选准备器；`plan`、`preflight`、`dispatch`、`complete` 和 `run-to-completion` 保留为内部诊断/恢复工具，都不能作为比赛验收成功点：
 
 ```bash
 python3 -B validation/tools/project_migration_harness.py migrate \
@@ -109,6 +109,19 @@ python3 -B validation/tools/project_migration_harness.py migrate \
   --build-closure-policy required \
   --logical-model GLM-5.1 \
   --resolved-model zai/glm-5.1
+```
+
+Make 项目先由外层 OpenCode 选择一个项目声明的测试 target，并让宿主生成 canonical proposal；命令输出的 `migrate_arguments` 必须原样追加到上面的 `migrate`，AI 不直接提供 Make argv、recipe、路径或权威哈希：
+
+```bash
+python3 -B validation/tools/project_migration_harness.py \
+  prepare-make-test-target-proposal \
+  --target verify-core \
+  --provider zai \
+  --model glm-5.1 \
+  --prompt-sha256 <sha256-of-bound-prompt> \
+  --response-sha256 <sha256-of-model-response> \
+  --out-root target/project-test-target-proposal/run-001
 ```
 
 ### 可执行的整项目 C2Rust 基线
@@ -198,7 +211,7 @@ flowchart TB
     SANDBOX -->|"same gate passes on new generation"| SETTLE["Atomic revalidation settlement"]
     SETTLE --> LEDGER
     SETTLE --> RUSTIR
-    SANDBOX -->|"Cargo passed"| TESTINV["Reopened ProjectTestInventory\nCTest / bounded Make -> exact BuildIR/Rust target mapping"]
+    SANDBOX -->|"Cargo passed"| TESTINV["Reopened ProjectTestInventory\nCTest / Meson / host-static Make -> exact BuildIR/Rust target mapping"]
     TESTINV --> INPUTS["One hash-bound minimal read-only input snapshot"]
     INPUTS --> CORACLE["Original C in isolated bubblewrap"]
     INPUTS --> RREPLAY["Rust candidate in separate bubblewrap\nno C executable/source/state/output"]
@@ -255,7 +268,7 @@ flowchart LR
     V2 --> N["27. Content-addressed oracle + completed receipt"]
 ```
 
-每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已补齐 candidate 正向门禁推进、CTest direct-executable、内容绑定的 Automake `check`、受限 Make `test` 与有界 Meson direct-executable 清单、已发现测试 case 双向全等、C/Rust 双沙箱宿主差分、逻辑失败回投 AI repair、内容寻址 oracle 和完成凭据崩溃恢复。当前开放项仍包括受限 Meson/configure 构建生成、任意 target/递归 Make/Kconfig/custom-test 适配、其余 stdin/fixture/resource 完整投影、项目测试元数据发现完整性、A19e7 独立进程 capability、A19e8 完整后端等价性和真实 held-out 整项目验收；这些证据保持 `competition_exact=false`，该流程图是实现合同，不是任意 C 项目成功声明。
+每个箭头传递的都是受 schema、repo-relative path 和 SHA-256 约束的 artifact，不传递聊天结论。本阶段已补齐 candidate 正向门禁推进、CTest/Meson direct-executable、AI 候选/宿主静态 Make direct-leaf target、已发现测试 case 双向全等、C/Rust 双沙箱宿主差分、逻辑失败回投 AI repair、内容寻址 oracle 和完成凭据崩溃恢复。当前开放项仍包括受限 Meson/configure 构建生成、递归/动态 Make、Kconfig/custom runner、其余 stdin/fixture/resource 完整投影、项目测试元数据发现完整性、A19e7 独立进程 capability、A19e8 完整后端等价性和真实 held-out 整项目验收；这些证据保持 `competition_exact=false`，该流程图是实现合同，不是任意 C 项目成功声明。
 
 ## 切片验证与发布架构
 

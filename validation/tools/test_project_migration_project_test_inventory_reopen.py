@@ -14,6 +14,9 @@ from validation.tools._project_migration_harness.project_test_inventory import (
 from validation.tools._project_migration_harness.project_test_inventory_validation import (
     reopen_manifest_project_test_inventory,
 )
+from validation.tools._project_migration_harness.project_test_inventory_automake import (
+    select_make_test_command,
+)
 from validation.tools.project_migration_build_ir_host_test_support import (
     BuildIRHostBindingTestCase,
 )
@@ -109,8 +112,16 @@ class ProjectTestInventoryReopenTests(BuildIRHostBindingTestCase):
             )
 
     def test_make_inventory_reopens_with_the_same_adapter(self) -> None:
+        make_observation = copy.deepcopy(self.observation)
+        make_observation["target_binding"] = select_make_test_command(
+            self.project_root,
+        )["target_binding"]
+        make_observation_ref = write_json_artifact(
+            self.artifacts, "plan/make.json", make_observation,
+        )
         inventory = copy.deepcopy(self.inventory)
         inventory["adapter"] = "make-dry-run-v1"
+        inventory["source_observation"] = make_observation_ref
         inventory["inventory_sha256"] = content_sha256({
             key: value for key, value in inventory.items()
             if key != "inventory_sha256"
@@ -127,7 +138,7 @@ class ProjectTestInventoryReopenTests(BuildIRHostBindingTestCase):
             mock.patch(
                 module + "collect_make_test_dry_run",
                 return_value={
-                    "status": "collected", "observation": self.observation,
+                    "status": "collected", "observation": make_observation,
                 },
             ) as make_collector,
             mock.patch(
@@ -141,7 +152,10 @@ class ProjectTestInventoryReopenTests(BuildIRHostBindingTestCase):
             )
 
         self.assertEqual(inventory, reopened)
-        make_collector.assert_called_once()
+        make_collector.assert_called_once_with(
+            self.project_root.resolve(), self.build_directory.resolve(),
+            expected_target_binding=make_observation["target_binding"],
+        )
         make_deriver.assert_called_once()
         self.collector.assert_not_called()
 

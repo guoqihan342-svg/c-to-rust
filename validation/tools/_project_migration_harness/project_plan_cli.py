@@ -5,6 +5,9 @@ from typing import Any
 
 from . import project_cli_runtime
 from .orchestrator import plan_project
+from .project_test_target_proposal import (
+    resolve_project_test_target_proposal_selection,
+)
 
 
 def run_plan_cli_command(args: Any, *, harness_root: Path) -> dict[str, Any]:
@@ -27,6 +30,9 @@ def run_plan_cli_command(args: Any, *, harness_root: Path) -> dict[str, Any]:
         context_group_pages=args.context_group_pages,
         require_build_closure=args.build_closure_policy == "required",
         profile=args.profile,
+        project_test_target_proposal=resolve_project_test_target_proposal_selection(
+            args.project_test_target_proposal, harness_root=harness_root,
+        ),
     )
 
 

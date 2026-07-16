@@ -12,21 +12,12 @@ from .project_test_inventory_automake import (
     AUTOMAKE_CHECK_COMMAND, MAKE_TEST_COMMAND, command_for_target_binding,
     verify_make_target_binding,
 )
-from .project_test_inventory_make_command import parse_direct_make_test_command
-from .project_test_inventory_paths import (
-    build_output_index, normalize_argument, normalize_command_path,
-    normalize_environment,
+from .project_test_inventory_make_records import (
+    blocked_inventory, derive_make_command_inventory,
 )
-from .project_test_stdin import normalize_stdin_file
 
 MAX_STDOUT_BYTES, MAX_STDERR_BYTES = 4 * 1024 * 1024, 1024 * 1024
-MAX_LINE_BYTES, MAX_COMMANDS = 64 * 1024, 4_096
 MAKE_COMMAND = list(MAKE_TEST_COMMAND)
-_ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
-_PRESENTATION_COMMANDS = frozenset({
-    "echo", "printf", "/bin/echo", "/bin/printf",
-    "/usr/bin/echo", "/usr/bin/printf",
-})
 _OBSERVATION_KEYS = frozenset({
     "schema_version", "artifact_kind", "command", "target_binding",
     "build_directory", "tool", "sandbox_launcher", "timeout_seconds",
@@ -40,149 +31,24 @@ def derive_make_inventory(
     repo_root: Path, build_ir: Mapping[str, Any], observation: Mapping[str, Any],
     *, source_observation: Mapping[str, Any],
 ) -> dict[str, Any]:
-    if (
-        not _valid_observation(observation)
-        or not verify_make_target_binding(
-            repo_root, observation.get("target_binding"),
-        )
-    ):
-        return _blocked_inventory("project_test_make_schema_invalid")
+    if not _valid_observation(observation):
+        return blocked_inventory("project_test_make_schema_invalid")
     try:
         root = Path(repo_root).resolve(strict=True)
         build = resolve_repository_path(root, str(observation["build_directory"]))
         if not root.is_dir() or not build.is_dir():
             raise ValueError("project test build directory is invalid")
-        outputs = build_output_index(build_ir)
+        if not verify_make_target_binding(
+            root, observation.get("target_binding"),
+        ):
+            return blocked_inventory("project_test_make_schema_invalid")
     except (KeyError, OSError, TypeError, ValueError):
-        return _blocked_inventory("project_test_build_binding_invalid")
-    tests: list[dict[str, Any]] = []
-    signatures: dict[str, int] = {}
-    command_count = 0
-    for line_number, raw_line in enumerate(str(observation["stdout"]).splitlines(), 1):
-        line = raw_line.strip()
-        if not line:
-            continue
-        command_count += 1
-        if command_count > MAX_COMMANDS or len(line.encode("utf-8")) > MAX_LINE_BYTES:
-            return _inventory(
-                root, build, source_observation, [],
-                [{"code": "project_test_make_output_invalid"}],
-            )
-        try:
-            argv, stdin_path = parse_direct_make_test_command(line)
-            record = _test_record(
-                argv, stdin_path=stdin_path, index=line_number - 1,
-                root=root, build=build, outputs=outputs,
-            )
-        except (OSError, TypeError, ValueError) as error:
-            blocker = {
-                "code": str(error)[:96] or "project_test_make_command_invalid",
-                "source_index": line_number - 1,
-            }
-            return _inventory(root, build, source_observation, [], [blocker])
-        if record is None:
-            continue
-        signature = content_sha256({
-            key: value for key, value in record.items()
-            if key not in {"source_index", "name", "test_id"}
-        })
-        if signature in signatures:
-            blocker = {
-                "code": "project_test_make_command_duplicate",
-                "source_index": line_number - 1,
-                "first_source_index": signatures[signature],
-            }
-            return _inventory(root, build, source_observation, [], [blocker])
-        signatures[signature] = line_number - 1
-        tests.append(record)
-    if not tests:
-        return _inventory(
-            root, build, source_observation, [],
-            [{"code": "project_test_inventory_empty"}],
-        )
-    return _inventory(root, build, source_observation, tests, [])
-
-
-def _test_record(
-    argv: list[str], *, stdin_path: str | None, index: int,
-    root: Path, build: Path,
-    outputs: Mapping[str, Mapping[str, Any]],
-) -> dict[str, Any] | None:
-    environment, command = _split_environment(argv)
-    if not command:
-        raise ValueError("project_test_make_command_invalid")
-    try:
-        executable_path, _ = normalize_command_path(
-            _host_path(command[0], root), repo_root=root, base=build,
-        )
-    except (OSError, ValueError):
-        return _unmapped_command(command[0])
-    target = outputs.get(executable_path)
-    if target is None:
-        return _unmapped_command(command[0])
-    binding = target.get("binding")
-    if not isinstance(binding, Mapping) or binding.get("materialized") is not True:
-        raise ValueError("project_test_executable_unmaterialized")
-    record = {
-        "source_index": index, "name": f"make-test-{index + 1}",
-        "source_target_id": target["target_id"], "source_executable": dict(binding),
-        "arguments": [
-            normalize_argument(_host_path(item, root), repo_root=root, base=build)
-            for item in command[1:]
-        ],
-        "working_directory": build.relative_to(root).as_posix() or ".",
-        "environment": normalize_environment(
-            [_host_assignment(item, root) for item in environment],
-            repo_root=root, base=build,
-        ),
-        "timeout_seconds": 120,
-    }
-    if stdin_path is not None:
-        record["stdin"] = normalize_stdin_file(
-            _host_stdin_path(stdin_path, root), repo_root=root, base=build,
-        )
-    record["test_id"] = "test-" + content_sha256(record)[:24]
-    return record
-
-
-def _split_environment(argv: list[str]) -> tuple[list[str], list[str]]:
-    offset = 0
-    for item in argv:
-        name, separator, _ = item.partition("=")
-        if not separator or _ENVIRONMENT_NAME.fullmatch(name) is None:
-            break
-        offset += 1
-    return argv[:offset], argv[offset:]
-
-
-def _unmapped_command(executable: str) -> None:
-    if executable in _PRESENTATION_COMMANDS:
-        return None
-    raise ValueError("project_test_make_command_unmapped")
-
-
-def _host_assignment(value: str, root: Path) -> str:
-    name, separator, assigned = value.partition("=")
-    return name + separator + _host_path(assigned, root)
-
-
-def _host_path(value: str, root: Path) -> str:
-    guest, host = "/workspace", root.as_posix().rstrip("/")
-    if value == guest or value.startswith(guest + "/"):
-        return host + value.removeprefix(guest)
-    marker = "=" + guest
-    if value.count(marker) == 1:
-        prefix, suffix = value.split(marker, 1)
-        if not suffix or suffix.startswith("/"):
-            return prefix + "=" + host + suffix
-    return value
-
-
-def _host_stdin_path(value: str, root: Path) -> str:
-    guest = "/workspace"
-    if value == guest or value.startswith(guest + "/"):
-        return root.as_posix().rstrip("/") + value.removeprefix(guest)
-    return value
+        return blocked_inventory("project_test_build_binding_invalid")
+    return derive_make_command_inventory(
+        root, build, build_ir, str(observation["stdout"]).splitlines(),
+        source_observation=source_observation,
+        adapter="make-dry-run-v1",
+    )
 
 
 def _valid_observation(value: Any) -> bool:
@@ -216,34 +82,6 @@ def _valid_observation(value: Any) -> bool:
             key: item for key, item in value.items() if key != "observation_sha256"
         })
     )
-
-
-def _inventory(
-    root: Path, build: Path, source: Mapping[str, Any],
-    tests: list[dict[str, Any]], blockers: list[dict[str, Any]],
-) -> dict[str, Any]:
-    value = {
-        "schema_version": 1, "artifact_kind": "project-test-inventory",
-        "status": "blocked" if blockers else "ready",
-        "adapter": "make-dry-run-v1", "source_observation": dict(source),
-        "build_directory": build.relative_to(root).as_posix() or ".",
-        "tests": sorted(tests, key=lambda item: item["test_id"]),
-        "blockers": blockers,
-        "claim_boundary": {"semantic_gate": False, "translation_coverage_numerator": 0},
-    }
-    value["inventory_sha256"] = content_sha256(value)
-    return value
-
-
-def _blocked_inventory(code: str) -> dict[str, Any]:
-    value = {
-        "schema_version": 1, "artifact_kind": "project-test-inventory",
-        "status": "blocked", "adapter": None, "source_observation": None,
-        "build_directory": None, "tests": [], "blockers": [{"code": code}],
-        "claim_boundary": {"semantic_gate": False, "translation_coverage_numerator": 0},
-    }
-    value["inventory_sha256"] = content_sha256(value)
-    return value
 
 
 def _identity_valid(value: Any) -> bool:

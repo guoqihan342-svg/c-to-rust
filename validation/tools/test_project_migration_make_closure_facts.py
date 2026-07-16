@@ -36,12 +36,11 @@ from validation.tools._project_migration_harness.make_dry_run_report_io import (
     reopen_make_dry_run_report,
 )
 from validation.tools.test_project_migration_make_support import (
-    ControlledCollectorBackend,
+    ControlledCollectorBackend, make_test_target_proposal,
 )
 from validation.tools.project_migration_build_ir_host_test_support import (
     BuildIRHostBindingTestCase,
 )
-
 
 class MakeClosureFactTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -102,6 +101,7 @@ class MakeClosureFactTests(unittest.TestCase):
         plan = plan_project(
             self.root, harness_root=self.harness, out_root="target/run",
             make_report=selection, require_build_closure=True,
+            project_test_target_proposal=make_test_target_proposal(self.harness),
         )
         self.assertEqual("planned", plan["status"], plan)
         self.assertFalse(plan["execution"]["build_closure_ready"])

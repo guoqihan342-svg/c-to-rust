@@ -10,6 +10,7 @@
 
 1. 从用户提示取得目标 C 仓库路径。不要把本 harness 仓库误当成待翻译项目，也不要按项目名、文件名、测试名或已知测试身份选择翻译规则。
 2. 优先使用目标仓库已有且唯一的 `compile_commands.json`。若缺失或有多个候选，只依据目标项目自己的构建元数据生成或显式选择 BuildIR 输入；不得猜测编译参数、测试答案或绕过 `required` 构建闭包。
+   对 Make 项目，先从项目自己的 Makefile 元数据选择一个字面测试 target，再调用 `prepare-make-test-target-proposal`；把其 JSON 输出中的 `migrate_arguments` 原样追加到下方 `migrate`。AI 只选择 target，不得提供 Make argv、recipe、工作目录、测试答案或权威哈希。若宿主返回 `project_test_make_ai_target_proposal_required`，必须完成这一步，禁止回退到猜测的 `test/check` 或自行执行 `make -n` 冒充测试清单。
 3. 从 harness 仓库根执行唯一比赛入口：
 
 ```bash

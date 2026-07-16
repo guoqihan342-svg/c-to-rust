@@ -11,6 +11,10 @@ from .project_test_inventory_ctest import collect_ctest_json
 from .project_test_inventory_make import (
     collect_make_test_dry_run, inventory_from_make_observation,
 )
+from .project_test_inventory_make_static import (
+    MAKE_STATIC_ADAPTER, collect_static_make_test_recipes,
+    inventory_from_static_make_observation,
+)
 from .project_test_inventory_meson import collect_meson_test_introspection
 from .project_test_inventory_meson_binding import MESON_TEST_ADAPTER
 from .project_test_inventory_meson_parse import inventory_from_meson_observation
@@ -78,8 +82,23 @@ def reopen_manifest_project_test_inventory(
         recollected = collect_ctest_json(root, build_directory)
         derive = inventory_from_ctest_observation
     elif adapter == "make-dry-run-v1":
-        recollected = collect_make_test_dry_run(root, build_directory)
+        target_binding = observation.get("target_binding")
+        if not isinstance(target_binding, Mapping):
+            raise ValueError("project_test_make_target_binding_invalid")
+        recollected = collect_make_test_dry_run(
+            root, build_directory,
+            expected_target_binding=target_binding,
+        )
         derive = inventory_from_make_observation
+    elif adapter == MAKE_STATIC_ADAPTER:
+        target_binding = observation.get("target_binding")
+        if not isinstance(target_binding, Mapping):
+            raise ValueError("project_test_make_static_binding_invalid")
+        recollected = collect_static_make_test_recipes(
+            root, build_directory,
+            expected_target_binding=target_binding,
+        )
+        derive = inventory_from_static_make_observation
     elif adapter == MESON_TEST_ADAPTER:
         binding = observation.get("build_binding")
         database = binding.get("compile_database") if isinstance(
@@ -147,6 +166,7 @@ def _validate_inventory_shape(value: Mapping[str, Any]) -> None:
     if value["status"] == "ready" and (
         value["adapter"] not in {
             "ctest-json-v1", "make-dry-run-v1", MESON_TEST_ADAPTER,
+            MAKE_STATIC_ADAPTER,
         }
         or not value["tests"] or value["blockers"]
         or not isinstance(value["source_observation"], Mapping)

@@ -52,6 +52,9 @@ from validation.tools._project_migration_harness.project_migrate_cli import (
 from validation.tools._project_migration_harness.project_plan_cli import (
     run_plan_cli_command,
 )
+from validation.tools._project_migration_harness.project_test_target_proposal_cli import (
+    run_prepare_make_test_target_proposal,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -85,6 +88,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     command = args.command
     if command == "collect-make-facts":
         result = run_collect_make_command(args)
+    elif command == "prepare-make-test-target-proposal":
+        result = run_prepare_make_test_target_proposal(
+            args, harness_root=REPO_ROOT,
+        )
     elif command == "c2rust-baseline":
         result = run_c2rust_baseline_command(args, harness_root=REPO_ROOT)
     elif command == "migrate":

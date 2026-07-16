@@ -8,8 +8,9 @@ from .artifacts import content_sha256, write_json_artifact
 from .build_facts import resolve_repository_path
 from .project_test_inventory_adapter import select_project_test_adapter
 from .project_test_inventory_ctest import collect_ctest_json
-from .project_test_inventory_make import (
-    collect_make_test_dry_run, inventory_from_make_observation,
+from .project_test_inventory_make_static import (
+    MAKE_STATIC_ADAPTER, collect_static_make_test_recipes,
+    inventory_from_static_make_observation,
 )
 from .project_test_inventory_meson import collect_meson_test_introspection
 from .project_test_inventory_meson_binding import MESON_TEST_ADAPTER
@@ -17,6 +18,10 @@ from .project_test_inventory_meson_parse import inventory_from_meson_observation
 from .project_test_inventory_paths import (
     build_output_index, normalize_argument, normalize_command_path,
     normalize_environment,
+)
+from .project_test_target_proposal import (
+    ProjectTestTargetProposalSelection,
+    load_project_test_target_proposal,
 )
 
 
@@ -33,6 +38,7 @@ _SUPPORTED_PROPERTIES = frozenset({
 def collect_project_test_inventory(
     repo_root: Path, discovery: Mapping[str, Any], build_ir: Mapping[str, Any],
     *, output: Path,
+    target_proposal: ProjectTestTargetProposalSelection | None = None,
 ) -> dict[str, Any]:
     selection = select_project_test_adapter(repo_root, discovery, build_ir)
     if selection.get("status") != "selected":
@@ -40,6 +46,8 @@ def collect_project_test_inventory(
         code = blocker.get("code") if isinstance(blocker, Mapping) else None
         return _blocked(str(code or "project_test_adapter_unavailable"))
     adapter = selection.get("adapter")
+    if target_proposal is not None and adapter != "make-dry-run-v1":
+        return _blocked("project_test_target_proposal_adapter_mismatch")
     database = discovery.get("compile_database")
     path = database.get("path") if isinstance(database, Mapping) else None
     if not isinstance(path, str) and adapter == "make-dry-run-v1":
@@ -57,7 +65,16 @@ def collect_project_test_inventory(
     if adapter == "ctest-json-v1":
         collected = collect_ctest_json(repo_root, build_directory)
     elif adapter == "make-dry-run-v1":
-        collected = collect_make_test_dry_run(repo_root, build_directory)
+        if target_proposal is None:
+            return _blocked("project_test_make_ai_target_proposal_required")
+        try:
+            proposal = load_project_test_target_proposal(target_proposal)
+        except ValueError:
+            return _blocked("project_test_target_proposal_invalid")
+        collected = collect_static_make_test_recipes(
+            repo_root, build_directory, target_proposal=proposal,
+        )
+        adapter = MAKE_STATIC_ADAPTER
     elif adapter == MESON_TEST_ADAPTER:
         collected = collect_meson_test_introspection(
             repo_root, build_directory, input_path,
@@ -71,7 +88,7 @@ def collect_project_test_inventory(
         return _blocked(str(code or f"project_test_{adapter}_collection_failed"))
     observation_name = {
         "ctest-json-v1": "project-test-ctest-observation.json",
-        "make-dry-run-v1": "project-test-make-observation.json",
+        MAKE_STATIC_ADAPTER: "project-test-make-static-observation.json",
         MESON_TEST_ADAPTER: "project-test-meson-observation.json",
     }[adapter]
     reference = write_json_artifact(
@@ -79,7 +96,7 @@ def collect_project_test_inventory(
     )
     derive = {
         "ctest-json-v1": inventory_from_ctest_observation,
-        "make-dry-run-v1": inventory_from_make_observation,
+        MAKE_STATIC_ADAPTER: inventory_from_static_make_observation,
         MESON_TEST_ADAPTER: inventory_from_meson_observation,
     }[adapter]
     return derive(repo_root, build_ir, observation, source_observation=reference)

@@ -26,6 +26,7 @@ from .project_test_inventory_sandbox import (
 
 def collect_make_test_dry_run(
     repo_root: Path, build_directory: Path, timeout_seconds: int = 30,
+    *, expected_target_binding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Observe a content-selected Make test target in a read-only sandbox."""
     if (
@@ -46,6 +47,9 @@ def collect_make_test_dry_run(
         bwrap = Path(bwrap_value).resolve(strict=True)
         tool, launcher = _file_identity(make), _file_identity(bwrap)
         contract = _sandbox_contract(tool, launcher, timeout_seconds)
+        if expected_target_binding is not None:
+            if not isinstance(expected_target_binding, Mapping):
+                raise ValueError("invalid expected Make target binding")
         selected = select_make_test_command(root)
         if selected.get("status") != "selected":
             blocker = selected.get("blocker")
@@ -53,6 +57,11 @@ def collect_make_test_dry_run(
             return _blocked(str(code or "project_test_make_target_unbound"))
         command = selected["command"]
         target_binding = selected["target_binding"]
+        if (
+            expected_target_binding is not None
+            and target_binding != expected_target_binding
+        ):
+            return _blocked("project_test_make_target_binding_drifted")
     except (OSError, TypeError, ValueError):
         return _blocked("project_test_make_input_invalid")
     temporary = Path(tempfile.mkdtemp(prefix="project-test-make-"))
@@ -99,6 +108,13 @@ def collect_make_test_dry_run(
         return _blocked(failure or "project_test_make_execution_unavailable")
     if completed.returncode != 0:
         return _blocked("project_test_make_execution_failed")
+    current = select_make_test_command(root)
+    if (
+        current.get("status") != "selected"
+        or current.get("target_binding") != target_binding
+        or current.get("command") != command
+    ):
+        return _blocked("project_test_make_target_binding_drifted")
     try:
         text = stdout.decode("utf-8", errors="strict")
     except UnicodeError:
