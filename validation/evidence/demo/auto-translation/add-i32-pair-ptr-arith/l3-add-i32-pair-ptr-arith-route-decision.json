@@ -28,7 +28,7 @@
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-pointer-graph.json",
-      "sha256": "f2101790215395089d952347c16b8da79364f90be7d0a997e6b984d4bb9858a9",
+      "sha256": "12c563537c296f9b5a674996b7a8134ff1f9ab99207c6415a8f1d6ca9496dc72",
       "status": "recorded"
     },
     "translation_plan": {

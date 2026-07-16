@@ -40,7 +40,7 @@
     },
     "build_profile_hash": "94c414cf2b321782b1f3fd2e3fb44419c1fbb6260e8dde3a4d41345363987848",
     "c2rust_baseline_identity": {
-      "sha256": "7863948f587fe2d148baa9b519485307fe0d500da342f284ce2e115d670d08e6",
+      "sha256": "113ad157f26c2c8d9071357d7a60960fc8211b401c3c4040696587b33656ea60",
       "status": "skipped"
     },
     "cache_input_fields": [
@@ -77,7 +77,7 @@
       "route_decision": {
         "level": "L2",
         "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-route-decision.json",
-        "sha256": "7284dcbdd7696aeac0ee76fb2e0c2ace6162254d4061c6079a85f4fd58e440f1",
+        "sha256": "6066eec0ff9bfedd01ab56b21f425276436ffc49483c2a5a03e208f3a0ee8639",
         "status": "recorded"
       },
       "validation_profile": {
@@ -112,7 +112,7 @@
       "status": "sufficient_for_semantic_pass"
     },
     "route_decision_identity": {
-      "sha256": "4adcbc363673eeb82202c139b7a8aeee82585ebaf8e5c1e97a8be6a16aa2a064",
+      "sha256": "5710f969c21bb4e223fba12b3f053cf83bfb13685dfa16577122916d4f83fda6",
       "status": "recorded"
     },
     "schema_version": 1,

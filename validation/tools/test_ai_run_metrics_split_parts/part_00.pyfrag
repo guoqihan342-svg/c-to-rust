@@ -16,6 +16,9 @@ from validation.tools._ai_candidate_harness_parts.candidate_cache import (
     cache_key_payload,
     cache_key_sha256,
 )
+from validation.tools._ai_candidate_harness_parts.context_callees import (
+    build_external_callee_source_context,
+)
 from validation.tools._ai_candidate_harness_parts.prompt_transport import (
     prompt_transport_contract,
 )
@@ -107,6 +110,15 @@ def write_generated_ai_chain(
     candidate_path = base / f"l3-{slice_id}-ai-rust-candidate.rs"
     draft = base / f"l3-{slice_id}-rust-draft.rs"
     c_source = "int sum_values(int a, int b) { return a + b; }"
+    callee_context = build_external_callee_source_context(
+        {
+            "function_name": "sum_values",
+            "c_source": c_source,
+            "c_boundary": {},
+        },
+        source_root=None,
+        known_roots=(),
+    )
     replay_source = "#[test]\nfn replay() { let _ = sum_values(1, 2); }\n"
     replay_path = base / f"l3-{slice_id}-rust-replay-test-draft.rs"
     replay_sha = write_text(replay_path, replay_source)
@@ -131,6 +143,7 @@ def write_generated_ai_chain(
             "required_callee_sections": [],
             "missing_required_callee_sections": [],
         },
+        "external_callee_source_context": callee_context,
         "rust_boundary": {
             "sha256": "c" * 64,
             "truncated": False,
@@ -142,6 +155,12 @@ def write_generated_ai_chain(
             "function_name": "sum_values",
             "status": "bound",
             "call_count": 1,
+            "model_input_policy": {
+                "replay_source_content": "withheld_oracle_bearing",
+                "oracle_values": "withheld",
+                "call_plan": "included",
+                "required_candidate_api": "included_when_bound",
+            },
             "source": {
                 "path": replay_path.name,
                 "sha256": replay_sha,

@@ -110,7 +110,7 @@
   "route_decision": {
     "level": "L2",
     "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-route-decision.json",
-    "sha256": "7284dcbdd7696aeac0ee76fb2e0c2ace6162254d4061c6079a85f4fd58e440f1",
+    "sha256": "6066eec0ff9bfedd01ab56b21f425276436ffc49483c2a5a03e208f3a0ee8639",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -120,7 +120,7 @@
   "target_id": "demo",
   "translation_summary": {
     "alias_gate": {
-      "complete_alias_safety": false,
+      "complete_alias_safety": true,
       "decision": "requires_noalias_contract",
       "evidence_source": "c_boundary.pointer_contract.aliasing_proven=false",
       "requires_noalias": true,
