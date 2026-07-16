@@ -14,11 +14,7 @@ from .ninja_link_facts import discover_ninja_link_commands
 from .link_response import expand_link_response_files, take_link_output
 from .link_fact_paths import link_fact_working_directory
 from .link_ranlib import bind_ranlib_commands
-from .link_external_libraries import external_native_library
-from .link_input_paths import bind_positional_link_input
-from .link_system_arguments import (
-    contains_external_link_option_path, normalize_system_link_argument,
-)
+from .link_ordered_occurrences import split_ordered_link_arguments
 
 
 MAX_LINK_ARGUMENTS = 16_384
@@ -174,82 +170,21 @@ def _parse_link_argv(
     if output_value is None:
         blockers.append({"kind": "link_target_output_missing", "fact": fact_path})
     output = _bind(root, base, output_value, "link_target", blockers)
-    inputs: list[dict[str, Any]] = []
-    search_roots: list[dict[str, Any]] = []
-    system_args: list[str] = []
-    external_libraries: list[dict[str, Any]] = []
-    index = 0
-    while index < len(arguments):
-        argument = arguments[index]
-        if argument == "-L" and index + 1 < len(arguments):
-            bound = _bind(root, base, arguments[index + 1], "link_search_root", blockers,
-                          kind="directory")
-            if bound is not None:
-                search_roots.append(bound)
-            index += 2
-            continue
-        if argument.startswith("-L") and len(argument) > 2:
-            bound = _bind(root, base, argument[2:], "link_search_root", blockers,
-                          kind="directory")
-            if bound is not None:
-                search_roots.append(bound)
-            index += 1
-            continue
-        if argument.startswith("/LIBPATH:"):
-            bound = _bind(root, base, argument[9:], "link_search_root", blockers,
-                          kind="directory")
-            if bound is not None:
-                search_roots.append(bound)
-            index += 1
-            continue
-        normalized_system_arg = normalize_system_link_argument(root, base, argument)
-        if normalized_system_arg is not None:
-            system_args.append(normalized_system_arg)
-            index += 1
-            continue
-        external_library = external_native_library(
-            root, base, argument, argument_index=index,
-        )
-        if external_library is not None:
-            external_libraries.append(external_library)
-            index += 1
-            continue
-        if argument.startswith("-") or argument.upper().startswith("/DEFAULTLIB:"):
-            kind = (
-                "external_link_argument"
-                if contains_external_link_option_path(argument)
-                else "link_argument_unsupported"
-            )
-            blockers.append({
-                "kind": kind,
-                "fact": fact_path,
-                "argument_sha256": json_sha256(argument),
-            })
-            index += 1
-            continue
-        handled, bound = bind_positional_link_input(
-            root, base, argument, blockers,
-        )
-        if handled:
-            if bound is not None:
-                inputs.append(bound)
-        else:
-            blockers.append({
-                "kind": "link_argument_unsupported",
-                "fact": fact_path,
-                "argument_sha256": json_sha256(argument),
-            })
-        index += 1
+    split = split_ordered_link_arguments(
+        root, base, fact_path, arguments, blockers,
+    )
     target = {
         "fact_file": fact,
         "driver": compiler_name(argv[0]).lower(),
         "argv_sha256": json_sha256(argv),
         "output": output,
-        "inputs": inputs,
-        "search_roots": search_roots,
+        "inputs": split["inputs"],
+        "search_roots": split["search_roots"],
         "response_files": response_files or [],
-        "ordered_system_link_args": system_args,
+        "ordered_system_link_args": split["ordered_system_link_args"],
+        "ordered_link_occurrences": split["ordered_link_occurrences"],
     }
+    external_libraries = split["external_native_libraries"]
     if external_libraries:
         target["external_native_libraries"] = external_libraries
     return target, blockers

@@ -6,6 +6,7 @@ from typing import Any
 
 from .build_facts import compiler_name, json_sha256
 from .closure_paths import bind_repository_artifact, path_error_blocker
+from .link_ordered_occurrences import append_ordered_link_occurrence
 
 
 _ARCHIVER = re.compile(
@@ -41,11 +42,15 @@ def parse_archive_command(
         return None, [{"kind": str(error), "path": fact_path}]
     blockers: list[dict[str, Any]] = []
     output = _bind(root, base, output_value, "archive_target", blockers)
-    inputs = []
-    for value in input_values:
+    inputs: list[dict[str, Any]] = []
+    occurrences: list[dict[str, int | str]] = []
+    for argument_index, value in input_values:
         bound = _bind(root, base, value, "archive_input", blockers)
         if bound is not None:
-            inputs.append(bound)
+            append_ordered_link_occurrence(
+                occurrences, inputs, bound, kind="input",
+                argument_index=argument_index,
+            )
     if not inputs:
         blockers.append({"kind": "archive_inputs_missing", "fact": fact_path})
     return {
@@ -57,6 +62,7 @@ def parse_archive_command(
         "search_roots": [],
         "response_files": response_files or [],
         "ordered_system_link_args": [],
+        "ordered_link_occurrences": occurrences,
         "archive_operation": operation,
     }, blockers
 
@@ -69,14 +75,14 @@ def ranlib_output(argv: list[str]) -> str | None:
 
 def _arguments(
     driver: str, arguments: list[str],
-) -> tuple[str, str, list[str]]:
+) -> tuple[str, str, list[tuple[int, str]]]:
     if driver in {"lib", "lib.exe"}:
         output = next(
             (item[5:] for item in arguments if item.upper().startswith("/OUT:")),
             None,
         )
         inputs = [
-            item for item in arguments
+            (index, item) for index, item in enumerate(arguments)
             if not item.startswith("/") and not item.startswith("-")
         ]
         if output is None:
@@ -90,8 +96,8 @@ def _arguments(
     ):
         raise ValueError("archive_operation_unsupported")
     output = arguments[1]
-    inputs = arguments[2:]
-    if any(value.startswith("-") for value in inputs):
+    inputs = list(enumerate(arguments[2:], start=2))
+    if any(value.startswith("-") for _index, value in inputs):
         raise ValueError("archive_input_argument_unsupported")
     return operation, output, inputs
 
