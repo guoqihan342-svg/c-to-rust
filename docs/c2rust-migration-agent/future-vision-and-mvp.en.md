@@ -21,8 +21,8 @@ input.c + compile context
 
 | Item | Current value | Exact meaning |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 38 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
-| `accepted_evidence_semantic_pass_count` | 1 | Accepted-evidence-ledger-derived count; the only slice is still blocked by historical SHA drift |
+| `translator_generated_semantic_pass_count` | 37 | Coverage-ledger-derived count; it does not mean the current strict full regression is green or that whole-project translation is complete |
+| `accepted_evidence_semantic_pass_count` | 2 | Accepted-evidence-ledger-derived count; both remain separate from the translator numerator and do not make generated candidates semantic passes |
 | Current AI candidate state | `GLM 0 / fixed auxiliary 6/12 / libuv AI-first 0/1 exact` | Competition GLM still has no candidate because balance is unavailable, and the fixed 12 cases have not been rerun as a full suite after A18c8a. The fresh libuv DeepSeek auxiliary run completes one initial call plus three repairs, is provider-ready, but does not pass exact gates and is competition-ineligible |
 | Active translator track | P0-A19 / P0-A10 / P0-A18c | h5a-h5d close compiler, runtime, and ABI repair facts plus compiler-header declaration-only classification. Next move to unfamiliar-repository whole-project discovery, decomposition, parallel candidates, Cargo integration, and project-level repair instead of extending syntax around one known slice |
 | External parallel track | P0-H9 | Revalidate the exact OpenCode + GLM-5.1 contract on the real competition host |

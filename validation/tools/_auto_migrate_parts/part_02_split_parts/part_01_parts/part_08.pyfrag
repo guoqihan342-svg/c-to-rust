@@ -1,8 +1,40 @@
+def process_path_alias_variants(source: str) -> set[str]:
+    variants = {source, source.replace("\\", "/"), source.replace("/", "\\")}
+    if os.name != "nt" or not source:
+        return variants
+    try:
+        import ctypes
+
+        source_path = Path(source)
+        for ancestor in (source_path, *source_path.parents):
+            buffer = ctypes.create_unicode_buffer(32768)
+            length = ctypes.windll.kernel32.GetShortPathNameW(
+                str(ancestor), buffer, len(buffer)
+            )
+            if not 0 < length < len(buffer):
+                continue
+            short_path = str(Path(buffer.value) / source_path.relative_to(ancestor))
+            variants.update(
+                {
+                    short_path,
+                    short_path.replace("\\", "/"),
+                    short_path.replace("/", "\\"),
+                }
+            )
+    except (AttributeError, OSError, ValueError):
+        pass
+    variants.update(
+        variant.replace("\\", "\\\\")
+        for variant in list(variants)
+        if "\\" in variant
+    )
+    return variants
+
+
 def stable_process_text(text: str, aliases: dict[str, str]) -> str:
     stable = text
     for source, replacement in sorted(aliases.items(), key=lambda item: len(item[0]), reverse=True):
-        variants = {source, source.replace("\\", "/"), source.replace("/", "\\")}
-        for variant in variants:
+        for variant in process_path_alias_variants(source):
             if variant:
                 stable = stable.replace(variant, replacement)
     return stable.rstrip("\r\n") + ("\n" if stable else "")

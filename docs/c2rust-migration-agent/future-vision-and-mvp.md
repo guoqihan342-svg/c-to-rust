@@ -23,8 +23,8 @@ input.c + compile context
 
 | 项目 | 当前值 | 准确含义 |
 | --- | ---: | --- |
-| `translator_generated_semantic_pass_count` | 38 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
-| `accepted_evidence_semantic_pass_count` | 1 | accepted-evidence ledger 派生计数；当前唯一切片仍受历史 SHA 漂移阻塞 |
+| `translator_generated_semantic_pass_count` | 37 | coverage ledger 派生计数；不代表当前全量严格回归全绿，也不代表全项目翻译完成 |
+| `accepted_evidence_semantic_pass_count` | 2 | accepted-evidence ledger 派生计数；两项均独立于 translator numerator，不代表生成候选已获语义通过 |
 | 当前 AI 候选状态 | `GLM 0 / fixed auxiliary 6/12 / libuv AI-first 0/1 exact` | 比赛 GLM 仍因余额不足没有 candidate；固定 12 项尚未在 A18c8a 后整套复跑。新 libuv DeepSeek 辅助实跑完成 1 次 initial + 3 次 repair，provider-ready 但 exact 未通过，明确不具备比赛资格 |
 | 当前翻译主线 | P0-A19 / P0-A10 / P0-A18c | h5a-h5d 已闭合 compiler/runtime/ABI repair facts 与 compiler-header declaration-only 分类；下一步进入陌生仓库整项目发现、拆解、并行候选、Cargo 集成与项目级 repair，不再围绕单个已知切片扩语法 |
 | 外部并行项 | P0-H9 | 在真实比赛主机完成 OpenCode + GLM-5.1 精确合同复验 |

@@ -14,8 +14,8 @@
 
 | 项目 | 当前状态 |
 | --- | --- |
-| Translator-generated semantic pass | `38` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
-| Accepted-evidence authoritative | `1` 个，单独统计，不进入 translator numerator |
+| Translator-generated semantic pass | `37` 个 named slices，由 `validation/translator-coverage-matrix.json` 派生 |
+| Accepted-evidence authoritative | `2` 个，单独统计，不进入 translator numerator |
 | 最近开发阶段 | P0-A19：陌生仓库构建闭包、验证权威与真实 held-out 合同收口 |
 | 当前翻译任务 | P0-A19 g4 独立 Cargo 重开与 h4 剩余项目测试适配扩展；P0-A18c/P0-A10 保留为有限回归 |
 | 当前环境证明 | `wsl-local-simulation`，不是 `competition-exact` |
