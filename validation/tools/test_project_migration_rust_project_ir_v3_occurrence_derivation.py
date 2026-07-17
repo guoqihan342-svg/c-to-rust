@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from validation.tools._project_migration_harness.artifacts import content_sha256
-from validation.tools.test_project_migration_rust_project_ir_v3_topology import (
+from validation.tools.project_migration_rust_project_ir_v3_topology_test_support import (
     _build, _candidate, _derive, _product, _unit,
 )
 
@@ -27,8 +27,6 @@ class RustProjectIRV3OccurrenceDerivationTests(unittest.TestCase):
 
     def test_object_input_ambiguities_fail_closed(self) -> None:
         cases = [
-            ("duplicate", ["obj-unit", "obj-unit"], [_unit("unit")],
-             "object_occurrence_duplicate"),
             ("reverse-scc", ["obj-right", "obj-left"],
              [_unit("left"), _unit("right")], "object_occurrence_order_invalid"),
             ("missing", [], [_unit("unit")], "object_occurrence_closure_drift"),
@@ -47,6 +45,24 @@ class RustProjectIRV3OccurrenceDerivationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, error):
                     _derive([_build(units, [product])], {"group": scope},
                             [_candidate("group")])
+
+    def test_repeated_object_occurrences_bind_one_module_without_loss(self) -> None:
+        product = _product(
+            "product", "archive", ["obj-unit", "obj-unit"], [],
+        )
+        topology = _derive(
+            [_build([_unit("unit")], [product])],
+            {"group": _multi_scope(["unit"], ["product"])},
+            [_candidate("group")],
+        )
+
+        target = topology["targets"][0]
+        self.assertEqual(2, len(target["input_occurrences"]))
+        self.assertEqual(1, len({item["module_id"]
+                                for item in target["input_occurrences"]}))
+        self.assertEqual(2, len({item["occurrence_id"]
+                                for item in target["input_occurrences"]}))
+        self.assertEqual(2, len(target["link_expectation"]["occurrences"]))
 
 
 def _multi_scope(unit_ids, reachable):

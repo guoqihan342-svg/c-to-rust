@@ -9,6 +9,12 @@ from .build_ir import stable_build_id
 from .build_ir_external_dependencies import NATIVE_DEPENDENCY_KIND
 
 
+def native_link_requirement_id(name: str, library_format: str) -> str:
+    return stable_build_id("native-link-requirement", {
+        "portable_name": name, "library_format": library_format,
+    })
+
+
 def project_native_link_requirements(
     build_irs: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -40,7 +46,7 @@ def project_native_link_requirements(
         consumers = sorted(members["consumers"])
         identity = {"portable_name": name, "library_format": library_format}
         result.append({
-            "requirement_id": stable_build_id("native-link-requirement", identity),
+            "requirement_id": native_link_requirement_id(name, library_format),
             **identity,
             "dependency_count": len(dependencies),
             "dependency_set_sha256": content_sha256(dependencies),
@@ -50,4 +56,4 @@ def project_native_link_requirements(
     return sorted(result, key=lambda item: item["requirement_id"])
 
 
-__all__ = ["project_native_link_requirements"]
+__all__ = ["native_link_requirement_id", "project_native_link_requirements"]

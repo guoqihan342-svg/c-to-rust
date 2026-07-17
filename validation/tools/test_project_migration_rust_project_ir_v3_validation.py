@@ -14,6 +14,9 @@ from validation.tools._project_migration_harness.rust_project_ir_v3_validation i
     module_id_for_target_candidate,
     validate_rust_project_ir_v3,
 )
+from validation.tools.project_migration_rust_project_ir_v3_link_test_support import (
+    attach_link_expectation, rehash_link_expectation,
+)
 
 
 def _sha(label: str) -> str:
@@ -68,6 +71,7 @@ def _payload(
             "input_occurrences": occurrences if index == 0 and occurrences else [],
             "ordered_link_arguments": [], "evidence": evidence,
         })
+        attach_link_expectation(targets[-1])
     module_ids = sorted(item["module_id"] for item in modules)
     all_evidence = _evidence(str(build["sha256"]), units, [candidate_sha])
     return build_rust_project_ir_v3(
@@ -149,14 +153,13 @@ class RustProjectIRV3ValidationTests(unittest.TestCase):
             validate_rust_project_ir_v3(payload)
 
     def test_repeated_occurrences_preserve_ordinals_and_order(self) -> None:
-        digest = _sha("same-input")
-        occurrences = [{
-            "ordinal": ordinal, "role": "archive-member", "dependency_target_id": None,
-            "binding_sha256": digest,
-        } for ordinal in range(2)]
-        payload = _payload(occurrences=occurrences)
-        self.assertEqual([0, 1], [item["ordinal"]
-                                 for item in payload["targets"][0]["input_occurrences"]])
+        payload = _payload()
+        target = payload["targets"][0]
+        target["ordered_link_arguments"] = ["-pthread", "-pthread"]
+        attach_link_expectation(target)
+        _rehash(payload)
+        self.assertEqual([0, 1], [item["ordinal"] for item in
+                                 target["link_expectation"]["occurrences"]])
         validate_rust_project_ir_v3(payload)
         for label, mutate in (
             ("out-of-order", lambda items: items.reverse()),
@@ -164,9 +167,11 @@ class RustProjectIRV3ValidationTests(unittest.TestCase):
         ):
             with self.subTest(label=label):
                 drifted = copy.deepcopy(payload)
-                mutate(drifted["targets"][0]["input_occurrences"])
+                changed_target = drifted["targets"][0]
+                mutate(changed_target["link_expectation"]["occurrences"])
+                rehash_link_expectation(changed_target)
                 _rehash(drifted)
-                with self.assertRaisesRegex(ValueError, "occurrences are not canonical"):
+                with self.assertRaisesRegex(ValueError, "link occurrence order"):
                     validate_rust_project_ir_v3(drifted)
 
     def test_bidirectional_topology_drift_is_rejected(self) -> None:

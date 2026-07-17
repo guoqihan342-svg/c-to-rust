@@ -70,7 +70,8 @@ class BuildIRLinkOccurrenceTests(unittest.TestCase):
             [{"target_id": "target-bin", "kind": "link",
               "ordered_inputs": self.inputs, "ordered_link_arguments": ["-lm"],
               "ordered_link_occurrences": projected,
-              "ordered_link_search_roots": project_link_search_roots(self.raw)}],
+              "ordered_link_search_roots": project_link_search_roots(self.raw),
+              "link_response_files": []}],
             self.external,
         )
 
@@ -92,7 +93,8 @@ class BuildIRLinkOccurrenceTests(unittest.TestCase):
                   "ordered_inputs": self.inputs,
                   "ordered_link_arguments": ["-lm"],
                   "ordered_link_occurrences": projected,
-                  "ordered_link_search_roots": project_link_search_roots(self.raw)}],
+                  "ordered_link_search_roots": project_link_search_roots(self.raw),
+                  "link_response_files": []}],
                 self.external,
             )
 
@@ -106,7 +108,8 @@ class BuildIRLinkOccurrenceTests(unittest.TestCase):
                   "ordered_inputs": self.inputs,
                   "ordered_link_arguments": ["-lm"],
                   "ordered_link_occurrences": projected,
-                  "ordered_link_search_roots": project_link_search_roots(self.raw)}],
+                  "ordered_link_search_roots": project_link_search_roots(self.raw),
+                  "link_response_files": []}],
                 self.external,
             )
 
@@ -121,7 +124,8 @@ class BuildIRLinkOccurrenceTests(unittest.TestCase):
                   "ordered_inputs": self.inputs,
                   "ordered_link_arguments": ["-lm"],
                   "ordered_link_occurrences": projected,
-                  "ordered_link_search_roots": project_link_search_roots(self.raw)}],
+                  "ordered_link_search_roots": project_link_search_roots(self.raw),
+                  "link_response_files": []}],
                 self.external,
             )
 
@@ -134,7 +138,7 @@ class BuildIRLinkOccurrenceTests(unittest.TestCase):
                   "ordered_inputs": self.inputs,
                   "ordered_link_arguments": ["-lm"],
                   "ordered_link_occurrences": projected,
-                  "ordered_link_search_roots": []}],
+                  "ordered_link_search_roots": [], "link_response_files": []}],
                 self.external,
             )
 
@@ -174,6 +178,7 @@ class BuildIRLinkOccurrenceTests(unittest.TestCase):
             "ordered_inputs": inputs, "ordered_link_arguments": [],
             "ordered_link_occurrences": projected,
             "ordered_link_search_roots": project_link_search_roots(raw),
+            "link_response_files": [],
         }
         validate_link_occurrence_authority([target], [])
 

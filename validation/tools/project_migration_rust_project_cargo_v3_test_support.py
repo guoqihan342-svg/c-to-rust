@@ -34,6 +34,9 @@ from validation.tools._project_migration_harness.rust_project_ir_v3_validation i
 from validation.tools._project_migration_harness.rust_project_ir_v3_topology_products import (
     input_occurrence_id,
 )
+from validation.tools.project_migration_rust_project_ir_v3_link_test_support import (
+    attach_link_expectation,
+)
 
 
 class V3CargoFixture:
@@ -189,6 +192,7 @@ def direct_two_package_ir(
             }],
             "ordered_link_arguments": [], "evidence": evidence,
         })
+        attach_link_expectation(targets[-1])
     metadata = derive_rust_metadata(sources["unit-lib"].decode())
     facts = derive_bound_candidate_source_facts(
         sources["unit-lib"].decode(), metadata["public_symbols"],

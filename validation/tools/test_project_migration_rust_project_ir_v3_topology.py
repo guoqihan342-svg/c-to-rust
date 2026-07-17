@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import unittest
 
-from validation.tools._project_migration_harness.artifacts import content_sha256
 from validation.tools._project_migration_harness.rust_project_ir_v3 import (
     build_rust_project_ir_v3,
 )
@@ -15,10 +14,10 @@ from validation.tools._project_migration_harness.rust_project_ir_v3_topology_pro
 from validation.tools._project_migration_harness.rust_project_ir_v3_validation import (
     module_id_for_target_candidate,
 )
-
-
-SEMANTIC = "1" * 64
-ARTIFACT = "a" * 64
+from validation.tools.project_migration_rust_project_ir_v3_topology_test_support import (
+    ARTIFACT, SEMANTIC, _build, _candidate, _codes, _derive, _product, _ref,
+    _scope, _unit,
+)
 
 
 class RustProjectIRV3TopologyTests(unittest.TestCase):
@@ -26,7 +25,7 @@ class RustProjectIRV3TopologyTests(unittest.TestCase):
         archive = _product("archive", "archive", ["obj-lib"], [])
         binary = _product(
             "application", "link", ["archive", "obj-main"],
-            ["-Wl,--as-needed"], name="lib-misleading.so",
+            ["-pthread"], name="lib-misleading.so",
         )
         build = _build([_unit("lib"), _unit("main")], [archive, binary])
         scopes = {
@@ -74,7 +73,13 @@ class RustProjectIRV3TopologyTests(unittest.TestCase):
         )))
         self.assertEqual("obj-main", application_inputs[1]["object_target_id"])
         self.assertEqual(
-            ["-Wl,--as-needed"], targets["application"]["ordered_link_arguments"],
+            ["-pthread"], targets["application"]["ordered_link_arguments"],
+        )
+        self.assertEqual(
+            ["cargo-package-product", "module-dep-info-commitment",
+             "system-link-argument"],
+            [item["representation_layer"] for item in
+             targets["application"]["link_expectation"]["occurrences"]],
         )
         module = next(item for item in topology["modules"]
                       if item["unit_id"] == "group-lib")
@@ -118,8 +123,8 @@ class RustProjectIRV3TopologyTests(unittest.TestCase):
 
     def test_candidate_is_duplicated_across_proven_namespaces(self) -> None:
         products = [
-            _product("left", "link", ["obj-unit"], ["-Wl,left"]),
-            _product("right", "link", ["obj-unit"], ["-Wl,right"]),
+            _product("left", "link", ["obj-unit"], ["-pthread"]),
+            _product("right", "link", ["obj-unit"], ["-s"]),
         ]
         build = _build([_unit("unit")], products)
         topology = _derive(
@@ -223,76 +228,6 @@ class RustProjectIRV3TopologyTests(unittest.TestCase):
                 [build, second], args[1], args[2],
                 build_ir_binding_sha256s={SEMANTIC: ARTIFACT, "2" * 64: ARTIFACT},
             )
-
-
-def _derive(builds, scopes, candidates):
-    return derive_rust_project_ir_v3_topology(
-        builds, scopes, candidates,
-        build_ir_binding_sha256s={item["semantic_sha256"]: ARTIFACT for item in builds},
-    )
-
-
-def _unit(unit_id, *, source=None, index=0, count=1):
-    source = source or {"path": f"src/{unit_id}.c", "sha256": content_sha256(unit_id)}
-    return {"unit_id": unit_id, "variant_index": index, "variant_count": count,
-            "source": dict(source)}
-
-
-def _product(target_id, kind, inputs, arguments, *, name=None):
-    occurrences = [{
-        "ordinal": index, "role": "link-input", "dependency_target_id": dependency,
-        "binding": {"path": f"build/{dependency}", "kind": "file",
-                    "materialized": True, "sha256": content_sha256(dependency),
-                    "size_bytes": 1},
-    } for index, dependency in enumerate(inputs)]
-    return {
-        "target_id": target_id, "name": name or target_id, "kind": kind,
-        "dependency_target_ids": list(dict.fromkeys(inputs)),
-        "ordered_inputs": occurrences, "ordered_link_arguments": list(arguments),
-        "toolchain_id": "link-driver" if kind == "link" else "archiver",
-    }
-
-
-def _build(units, products, *, semantic=SEMANTIC, driver=True):
-    objects = [{"target_id": f"obj-{item['unit_id']}", "name": item["unit_id"],
-                "kind": "object", "dependency_target_ids": [],
-                "ordered_inputs": [], "ordered_link_arguments": []}
-               for item in units]
-    toolchains = ([{"toolchain_id": "link-driver", "role": "linker-driver"}]
-                  if driver else [])
-    return {"semantic_sha256": semantic, "translation_units": units,
-            "targets": [*objects, *products], "toolchains": toolchains}
-
-
-def _scope(unit_id, reachable, terminal, index=0, count=1):
-    record = {"unit_id": unit_id, "variant": {"key": unit_id, "index": index,
-                                               "count": count},
-              "object_owner_target_id": f"obj-{unit_id}",
-              "reachable_target_ids": sorted(reachable),
-              "terminal_target_ids": sorted(terminal)}
-    status = "object-only-conservative" if not reachable else "target-bound"
-    payload = {"schema_version": 1, "scope_kind": "scc-build-target-scope",
-               "source_unit_ids": [unit_id], "unit_scopes": [record],
-               "object_target_ids": [f"obj-{unit_id}"],
-               "reachable_target_ids": sorted(reachable),
-               "terminal_target_ids": sorted(terminal),
-               "shared_reachable_target_ids": sorted(reachable),
-               "domain_status": status}
-    return {**payload, "scope_sha256": content_sha256(payload)}
-
-
-def _candidate(unit_id, sha=None):
-    sha = sha or content_sha256({"candidate": unit_id})
-    return {"unit_id": unit_id, "artifact_id": f"candidate-{unit_id}",
-            "source": _ref(f"candidates/{unit_id}.rs", sha)}
-
-
-def _ref(path, sha):
-    return {"path": path, "sha256": sha, "size_bytes": 1}
-
-
-def _codes(topology):
-    return {item["code"] for item in topology["topology_blockers"]}
 
 
 if __name__ == "__main__":

@@ -30,7 +30,8 @@ def occurrence_module_order(
         return None
     if shapes != {EXPLICIT_OCCURRENCE_KEYS}:
         raise ValueError("rust_project_cargo_v3_input_occurrence_schema_invalid")
-    occurrence_ids, object_ids = set(), set()
+    occurrence_ids = set()
+    object_bindings = {}
     object_records: list[tuple[int, str, str]] = []
     order = []
     for ordinal, item in enumerate(occurrences):
@@ -52,10 +53,14 @@ def occurrence_module_order(
             raise ValueError("rust_project_cargo_v3_input_occurrence_mapping_invalid")
         if not object_input:
             continue
-        if object_id in object_ids:
-            raise ValueError("rust_project_cargo_v3_object_occurrence_duplicate")
-        object_ids.add(object_id)
-        object_records.append((ordinal, str(module_id), str(source_id)))
+        binding = (str(module_id), str(source_id), str(item["binding_sha256"]))
+        previous = object_bindings.get(object_id)
+        if previous is not None:
+            if previous != binding:
+                raise ValueError("rust_project_cargo_v3_object_occurrence_binding_drift")
+            continue
+        object_bindings[object_id] = binding
+        object_records.append((len(object_records), str(module_id), str(source_id)))
         if module_id not in order:
             order.append(str(module_id))
     if module_sources is not None:

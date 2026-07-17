@@ -118,6 +118,13 @@ def _target_expectation(target, packages, modules) -> dict[str, Any]:
         for item in occurrences if item["dependency_target_id"] is not None
     ):
         raise ValueError("occurrence_mapping_invalid")
+    unique_object_rows = []
+    seen_objects = set()
+    for item in object_rows:
+        if item["object_target_id"] in seen_objects:
+            continue
+        seen_objects.add(item["object_target_id"])
+        unique_object_rows.append(item)
     owned = {str(item): modules[str(item)] for item in target["module_ids"]}
     expected_pairs = {
         (module_id, str(source_unit))
@@ -125,19 +132,18 @@ def _target_expectation(target, packages, modules) -> dict[str, Any]:
         for source_unit in module["source_unit_ids"]
     }
     actual_pairs = {(str(item["module_id"]), str(item["source_unit_id"]))
-                    for item in object_rows}
-    if actual_pairs != expected_pairs \
-            or len({item["object_target_id"] for item in object_rows}) != len(object_rows):
+                    for item in unique_object_rows}
+    if actual_pairs != expected_pairs:
         raise ValueError("occurrence_mapping_closure_invalid")
     module_order = []
-    for item in object_rows:
+    for item in unique_object_rows:
         module_id = str(item["module_id"])
         if not module_order or module_order[-1] != module_id:
             if module_id in module_order:
                 raise ValueError("occurrence_module_not_contiguous")
             module_order.append(module_id)
     for module_id in module_order:
-        actual = [str(item["source_unit_id"]) for item in object_rows
+        actual = [str(item["source_unit_id"]) for item in unique_object_rows
                   if item["module_id"] == module_id]
         if actual != list(owned[module_id]["source_unit_ids"]):
             raise ValueError("occurrence_module_source_order_invalid")

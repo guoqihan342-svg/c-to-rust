@@ -4,12 +4,10 @@ import hashlib
 import json
 
 from validation.tools._project_migration_harness.artifacts import content_sha256
-from validation.tools._project_migration_harness.rust_project_ir_v3 import (
-    build_rust_project_ir_v3,
-)
-from validation.tools._project_migration_harness.rust_project_ir_v3_validation import (
-    module_id_for_target_candidate,
-)
+from validation.tools._project_migration_harness.rust_project_ir_v3 import build_rust_project_ir_v3
+from validation.tools._project_migration_harness.rust_project_ir_v3_validation import module_id_for_target_candidate
+from validation.tools._project_migration_harness.rust_project_ir_v3_topology_products import input_occurrence_id
+from validation.tools.project_migration_rust_project_ir_v3_link_test_support import attach_link_expectation
 
 
 BUILD_SHA = "b" * 64
@@ -71,6 +69,30 @@ def rust_project_ir(*, static_only: bool = False) -> dict:
             "module_ids": [module["module_id"]],
             "evidence": module["evidence"],
         })
+        occurrences = [{
+            "ordinal": 0,
+            "occurrence_id": input_occurrence_id(
+                BUILD_SHA, f"build-target-{key}", 0,
+            ),
+            "role": "link-input", "dependency_target_id": None,
+            "object_target_id": f"object-target-{key}",
+            "source_unit_id": f"source-{key}", "module_id": module["module_id"],
+            "binding_sha256": _sha(f"binding-object-{key}"),
+        }]
+        occurrences.extend(
+            {
+                "ordinal": ordinal,
+                "occurrence_id": input_occurrence_id(
+                    BUILD_SHA, f"build-target-{key}", ordinal,
+                ),
+                "role": "link-input",
+                "dependency_target_id": f"target-{dependency}",
+                "object_target_id": None, "source_unit_id": None,
+                "module_id": None,
+                "binding_sha256": _sha(f"binding-{dependency}"),
+            }
+            for ordinal, dependency in enumerate(dependencies, start=1)
+        )
         targets.append({
             "target_id": f"target-{key}",
             "package_id": f"package-{key}",
@@ -79,17 +101,12 @@ def rust_project_ir(*, static_only: bool = False) -> dict:
             "crate_types": crate_types,
             "build_ir_target_id": f"build-target-{key}",
             "module_ids": [module["module_id"]],
-            "input_occurrences": [
-                {
-                    "ordinal": ordinal,
-                    "role": "link-input",
-                    "dependency_target_id": f"target-{dependency}",
-                    "binding_sha256": _sha(f"binding-{dependency}"),
-                }
-                for ordinal, dependency in enumerate(dependencies)
-            ],
+            "input_occurrences": occurrences,
             "ordered_link_arguments": [],
             "evidence": module["evidence"],
+        })
+        attach_link_expectation(targets[-1], package_by_target={
+            f"target-{item}": f"package-{item}" for item in dependencies
         })
     candidate_refs = [
         {

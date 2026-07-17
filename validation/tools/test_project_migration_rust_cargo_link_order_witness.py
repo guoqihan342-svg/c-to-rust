@@ -101,6 +101,16 @@ class RustCargoLinkOrderWitnessTests(unittest.TestCase):
             "rust_cargo_link_dependency_unexpected", _codes(result),
         )
 
+    def test_repeated_dependency_artifact_fails_exact_count_check(self) -> None:
+        result = self.witness(cargo_stream(
+            diagnostics=(("app", ("alpha", "alpha", "beta")),),
+        ))
+
+        self.assertEqual("blocked", result["status"])
+        self.assertIn(
+            "rust_cargo_link_dependency_occurrence_count_mismatch", _codes(result),
+        )
+
     def test_trace_and_compiler_sources_must_be_the_same_capture(self) -> None:
         compiler_source = cargo_stream()
         trace_source = cargo_stream(noise="untrusted source drift")

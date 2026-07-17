@@ -183,7 +183,7 @@ def _command_coverage_complete(
                 target.get(key) != expected.get(key)
                 for key in (
                     "ordered_link_arguments", "ordered_link_occurrences",
-                    "ordered_link_search_roots",
+                    "ordered_link_search_roots", "link_response_files",
                 )
             ):
                 return False

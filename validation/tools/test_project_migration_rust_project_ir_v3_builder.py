@@ -9,8 +9,14 @@ from validation.tools._project_migration_harness.rust_project_ir_v3 import (
 from validation.tools._project_migration_harness.rust_project_ir_v3_validation import (
     module_id_for_target_candidate,
 )
+from validation.tools._project_migration_harness.rust_project_ir_v3_topology_products import (
+    input_occurrence_id,
+)
 from validation.tools._project_migration_harness.rust_project_ir_validation import (
     validate_rust_project_ir,
+)
+from validation.tools.project_migration_rust_project_ir_v3_link_test_support import (
+    attach_link_expectation,
 )
 
 
@@ -59,12 +65,13 @@ def _input(**changes: object) -> dict:
             "name": "target_a", "kind": "lib",
             "crate_types": ["staticlib", "rlib"],
             "build_ir_target_id": "archive-a", "module_ids": [module_id],
-            "input_occurrences": [
-                {"ordinal": 0, "role": "archive-input",
-                 "dependency_target_id": None, "binding_sha256": BINDING_SHA},
-                {"ordinal": 1, "role": "archive-input",
-                 "dependency_target_id": None, "binding_sha256": BINDING_SHA},
-            ],
+            "input_occurrences": [{
+                "ordinal": 0,
+                "occurrence_id": input_occurrence_id(BUILD_SHA, "archive-a", 0),
+                "role": "archive-input", "dependency_target_id": None,
+                "object_target_id": "object-a", "source_unit_id": "source-a",
+                "module_id": module_id, "binding_sha256": BINDING_SHA,
+            }],
             "ordered_link_arguments": ["-lm", "-lm"], "evidence": _evidence(),
         }],
         "modules": [{
@@ -76,6 +83,7 @@ def _input(**changes: object) -> dict:
             "evidence": _evidence(),
         }],
     }
+    attach_link_expectation(values["targets"][0])
     values.update(changes)
     return values
 
@@ -84,15 +92,17 @@ class RustProjectIRV3BuilderTests(unittest.TestCase):
     def test_builder_preserves_occurrence_and_link_argument_order(self) -> None:
         value = build_rust_project_ir_v3(**_input())
 
-        self.assertEqual([0, 1], [
+        self.assertEqual([0], [
             item["ordinal"] for item in value["targets"][0]["input_occurrences"]
         ])
         self.assertEqual(
-            [BINDING_SHA, BINDING_SHA],
+            [BINDING_SHA],
             [item["binding_sha256"]
              for item in value["targets"][0]["input_occurrences"]],
         )
         self.assertEqual(["-lm", "-lm"], value["targets"][0]["ordered_link_arguments"])
+        self.assertEqual([0, 1, 2], [item["ordinal"] for item in
+                                    value["targets"][0]["link_expectation"]["occurrences"]])
         self.assertEqual("ready", value["topology_status"])
         self.assertFalse(value["claim_boundary"]["semantic_gate"])
         self.assertEqual(0, value["claim_boundary"]["translation_coverage_numerator"])
@@ -113,9 +123,9 @@ class RustProjectIRV3BuilderTests(unittest.TestCase):
 
     def test_invalid_occurrence_order_fails_closed(self) -> None:
         values = _input()
-        values["targets"][0]["input_occurrences"][1]["ordinal"] = 2
+        values["targets"][0]["input_occurrences"][0]["ordinal"] = 1
 
-        with self.assertRaisesRegex(ValueError, "occurrences are not canonical"):
+        with self.assertRaisesRegex(ValueError, "occurrence identity"):
             build_rust_project_ir_v3(**values)
 
     def test_structured_blocker_sets_blocked_without_semantic_credit(self) -> None:
@@ -130,7 +140,7 @@ class RustProjectIRV3BuilderTests(unittest.TestCase):
     def test_hash_drift_is_rejected(self) -> None:
         value = build_rust_project_ir_v3(**_input())
         forged = copy.deepcopy(value)
-        forged["targets"][0]["ordered_link_arguments"].append("-lpthread")
+        forged["targets"][0]["name"] = "target_changed"
 
         with self.assertRaisesRegex(ValueError, "interface hash drifted"):
             validate_rust_project_ir(forged)

@@ -12,6 +12,9 @@ from validation.tools._project_migration_harness.rust_project_ir_v3_validation i
 from validation.tools.test_project_migration_rust_project_ir_v3_validation import (
     _payload, _rehash, _sha,
 )
+from validation.tools.project_migration_rust_project_ir_v3_link_test_support import (
+    attach_link_expectation,
+)
 
 
 class RustProjectIRV3OccurrenceValidationTests(unittest.TestCase):
@@ -33,9 +36,9 @@ class RustProjectIRV3OccurrenceValidationTests(unittest.TestCase):
             ("identity", "occurrence_id", "input-occurrence-forged",
              "occurrence identity"),
             ("source", "source_unit_id", "source-forged",
-             "occurrence_order_invalid"),
+             "link object mapping"),
             ("module", "module_id", "module-forged",
-             "occurrence_closure_drift"),
+             "link object mapping"),
         ]
         for label, field, replacement, error in cases:
             with self.subTest(label=label):
@@ -45,16 +48,16 @@ class RustProjectIRV3OccurrenceValidationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, error):
                     validate_rust_project_ir_v3(payload)
 
-    def test_explicit_object_occurrence_duplicates_and_gaps_are_rejected(self) -> None:
+    def test_explicit_object_occurrence_repeats_are_kept_but_gaps_rejected(self) -> None:
         duplicate = _explicit_payload(["source-a"])
         target = duplicate["targets"][0]
         repeated = copy.deepcopy(target["input_occurrences"][0])
         repeated["ordinal"] = 1
         repeated["occurrence_id"] = _occurrence_id(target, 1)
         target["input_occurrences"].append(repeated)
+        attach_link_expectation(target)
         _rehash(duplicate)
-        with self.assertRaisesRegex(ValueError, "object_occurrence_duplicate"):
-            validate_rust_project_ir_v3(duplicate)
+        validate_rust_project_ir_v3(duplicate)
 
         gap = _explicit_payload(["source-a", "source-b"])
         target = gap["targets"][0]
@@ -68,7 +71,7 @@ class RustProjectIRV3OccurrenceValidationTests(unittest.TestCase):
             "binding_sha256": _sha("package-input"),
         })
         _rehash(gap)
-        with self.assertRaisesRegex(ValueError, "occurrence_order_invalid"):
+        with self.assertRaisesRegex(ValueError, "link input mapping"):
             validate_rust_project_ir_v3(gap)
 
 
@@ -89,6 +92,7 @@ def _explicit_payload(source_units: list[str]) -> dict:
         "object_target_id": f"object-{source}", "source_unit_id": source,
         "module_id": module_id, "binding_sha256": _sha(f"binding-{source}"),
     } for ordinal, source in enumerate(source_units)]
+    attach_link_expectation(target)
     _rehash(payload)
     return payload
 

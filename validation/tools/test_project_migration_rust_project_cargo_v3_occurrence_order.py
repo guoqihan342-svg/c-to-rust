@@ -27,6 +27,9 @@ from validation.tools._project_migration_harness.rust_project_ir_v3_topology_pro
 from validation.tools._project_migration_harness.rust_project_ir_v3_validation import (
     module_id_for_target_candidate,
 )
+from validation.tools.project_migration_rust_project_ir_v3_link_test_support import (
+    attach_link_expectation,
+)
 
 
 class RustProjectCargoV3OccurrenceOrderTests(unittest.TestCase):
@@ -122,6 +125,12 @@ def _ordered_binary_ir() -> tuple[dict, dict[str, bytes], list[str]]:
         "unit_id": unit_id, "artifact_id": f"candidate-{unit_id}",
         "source": ref(f"candidates/{unit_id}.rs", shas[unit_id], len(sources[unit_id])),
     } for unit_id in sorted(sources)]
+    target = {"target_id": "target-bin", "package_id": "package-bin",
+              "name": "target_bin", "kind": "bin", "crate_types": ["bin"],
+              "build_ir_target_id": build_target, "module_ids": module_order,
+              "input_occurrences": occurrences, "ordered_link_arguments": [],
+              "evidence": evidence}
+    attach_link_expectation(target)
     ir = build_rust_project_ir_v3(
         migration_dag_ref=ref("plan/dag.json", "a" * 64),
         migration_graph_ref=ref("plan/graph.json", "b" * 64),
@@ -133,11 +142,7 @@ def _ordered_binary_ir() -> tuple[dict, dict[str, bytes], list[str]]:
                    "build_ir_target_id": build_target, "product_kind": "executable",
                    "dependency_package_ids": [], "target_ids": ["target-bin"],
                    "module_ids": module_order, "evidence": evidence}],
-        targets=[{"target_id": "target-bin", "package_id": "package-bin",
-                  "name": "target_bin", "kind": "bin", "crate_types": ["bin"],
-                  "build_ir_target_id": build_target, "module_ids": module_order,
-                  "input_occurrences": occurrences, "ordered_link_arguments": [],
-                  "evidence": evidence}],
+        targets=[target],
         modules=list(modules.values()),
     )
     return ir, sources, module_order

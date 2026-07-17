@@ -5,13 +5,9 @@ from typing import Any
 
 from .artifacts import content_sha256
 from .build_ir import normalize_binding
-from .build_ir_external_dependencies import (
-    NATIVE_DEPENDENCY_KIND,
-    ORDERED_LINK_ARGUMENT_KIND,
-)
-from .build_ir_link_search_roots import (
-    project_link_search_roots, validate_link_search_roots,
-)
+from .build_ir_external_dependencies import NATIVE_DEPENDENCY_KIND, ORDERED_LINK_ARGUMENT_KIND
+from .build_ir_link_search_roots import project_link_search_roots, validate_link_search_roots
+from .build_ir_link_response_files import project_link_response_files, validate_link_response_files
 
 _KINDS = {
     "input", "search-root", "system-argument", "external-native-library",
@@ -40,6 +36,7 @@ def project_link_authority(
     return {
         "ordered_link_occurrences": occurrences,
         "ordered_link_search_roots": project_link_search_roots(raw),
+        "link_response_files": project_link_response_files(raw),
     }
 
 
@@ -140,7 +137,8 @@ def validate_link_occurrence_authority(
         target_id = target.get("target_id")
         has_occurrences = "ordered_link_occurrences" in target
         has_search_roots = "ordered_link_search_roots" in target
-        if has_occurrences is not has_search_roots:
+        has_response_files = "link_response_files" in target
+        if len({has_occurrences, has_search_roots, has_response_files}) != 1:
             raise ValueError("build_ir_link_occurrence_authority_incomplete")
         if authority_target_ids is not None and (
             target_id in authority_target_ids
@@ -159,6 +157,7 @@ def validate_link_occurrence_authority(
         _validate_positions(normalized)
         _validate_inputs(target, normalized)
         validate_link_search_roots(target, normalized)
+        validate_link_response_files(target)
         _validate_external(target, normalized, dependencies)
 
 

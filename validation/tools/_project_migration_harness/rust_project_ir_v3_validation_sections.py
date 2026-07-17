@@ -5,7 +5,9 @@ from typing import Any
 
 from .artifacts import checked_relative_path, content_sha256
 from .rust_project_cargo_v3_link_semantics import occurrence_module_order
-from .rust_project_ir_v3_topology_products import input_occurrence_id
+from .rust_project_ir_v3_link_validation import (
+    validate_link_target_closure, validate_target_occurrences,
+)
 from .rust_project_ir_validation import (
     RustProjectIRError, _FIELDS as _V2_FIELDS, _evidence, _record_shape, _sha,
     _string_list, _text,
@@ -18,7 +20,8 @@ _PACKAGE_KEYS = {
     "dependency_package_ids", "target_ids", "module_ids", "evidence"}
 _TARGET_KEYS = {
     "target_id", "package_id", "name", "kind", "crate_types", "build_ir_target_id",
-    "module_ids", "input_occurrences", "ordered_link_arguments", "evidence"}
+    "module_ids", "input_occurrences", "link_expectation",
+    "ordered_link_arguments", "evidence"}
 _MODULE_KEYS = {
     "module_id", "package_id", "target_id", "target_namespace_id", "rust_path",
     "unit_id", "source_unit_ids", "candidate_sha256", "visibility", "evidence"}
@@ -81,6 +84,11 @@ def _topology(
             _string_list(package.get(key), f"package.{key}")
         _evidence(package.get("evidence"), candidates, builds)
     targets = _indexed(value.get("targets"), "targets", "target_id", _TARGET_KEYS)
+    raw_native = value.get("native_link_requirements")
+    native_ids = {
+        str(item.get("requirement_id")) for item in raw_native
+        if isinstance(item, Mapping)
+    } if isinstance(raw_native, list) else set()
     for target in targets.values():
         for key in ("package_id", "name", "build_ir_target_id"):
             _text(target.get(key), f"target.{key}")
@@ -90,7 +98,10 @@ def _topology(
         _string_list(target.get("module_ids"), "target.module_ids")
         _ordered_strings(target.get("ordered_link_arguments"), "ordered_link_arguments")
         _evidence(target.get("evidence"), candidates, builds)
-        _occurrences(target)
+        try:
+            validate_target_occurrences(target, native_ids)
+        except ValueError as error:
+            _fail(str(error))
     modules = _indexed(value.get("modules"), "modules", "module_id", _MODULE_KEYS)
     for module in modules.values():
         for key in ("package_id", "target_id", "target_namespace_id",
@@ -175,6 +186,10 @@ def _topology_closure(workspace: Mapping[str, Any], packages: Mapping[str, Mappi
                item["dependency_target_id"] not in target_ids
                for item in target["input_occurrences"]):
             _fail("RustProjectIR v3 input occurrence target is unknown")
+        try:
+            validate_link_target_closure(target, targets, modules)
+        except ValueError as error:
+            _fail(str(error))
 
 
 def _interface_sections(value: Mapping[str, Any], modules: Mapping[str, Mapping[str, Any]],
@@ -255,35 +270,6 @@ def _owner_evidence(owner: Mapping[str, Any], module_ids: set[str],
            modules[key]["candidate_sha256"] not in evidence["candidate_sha256s"]
            for key in module_ids):
         _fail("RustProjectIR v3 owner evidence does not cover its modules")
-
-
-def _occurrences(target: Mapping[str, Any]) -> None:
-    value = target.get("input_occurrences")
-    if not isinstance(value, list):
-        _fail("RustProjectIR v3 input_occurrences must be an array")
-    try:
-        explicit_order = occurrence_module_order(target)
-    except ValueError as error:
-        _fail(str(error))
-    build_shas = target["evidence"]["build_ir_sha256s"]
-    if explicit_order is not None and len(build_shas) != 1:
-        _fail("RustProjectIR v3 occurrence BuildIR binding is ambiguous")
-    ordinals = []
-    for item in value:
-        ordinal = item.get("ordinal")
-        if isinstance(ordinal, bool) or not isinstance(ordinal, int) or ordinal < 0:
-            _fail("RustProjectIR v3 input occurrence ordinal is invalid")
-        _text(item.get("role"), "input occurrence role")
-        if item.get("dependency_target_id") is not None:
-            _text(item["dependency_target_id"], "input occurrence dependency_target_id")
-        if explicit_order is not None and item["occurrence_id"] != input_occurrence_id(
-            build_shas[0], target["build_ir_target_id"], ordinal,
-        ):
-            _fail("RustProjectIR v3 occurrence identity is invalid")
-        _sha(item.get("binding_sha256"), "input occurrence binding_sha256")
-        ordinals.append(ordinal)
-    if ordinals != list(range(len(value))):
-        _fail("RustProjectIR v3 input occurrences are not canonical")
 
 
 def _ordered_strings(value: Any, label: str) -> None:

@@ -5,14 +5,14 @@ from typing import Any
 
 from .artifacts import content_sha256
 from .migration_target_scope import validate_scc_target_scope
+from .rust_project_ir_v3_link_expectation import project_layered_link_expectation
 from .rust_project_ir_v3_topology_products import (
     derive_product_topology, project_input_occurrences, stable_topology_id,
 )
 from .rust_project_ir_v3_validation import module_id_for_target_candidate
 
 def derive_rust_project_ir_v3_topology(
-    build_irs: Sequence[Mapping[str, Any]], target_scopes: Mapping[str, Mapping[str, Any]],
-    candidate_refs: Sequence[Mapping[str, Any]], *,
+    build_irs: Sequence[Mapping[str, Any]], target_scopes: Mapping[str, Mapping[str, Any]], candidate_refs: Sequence[Mapping[str, Any]], *,
     build_ir_binding_sha256s: Mapping[str, str],
 ) -> dict[str, Any]:
     """Derive only topology fields from reopened BuildIR and target scopes."""
@@ -131,6 +131,10 @@ def derive_rust_project_ir_v3_topology(
             "crate_types": list(product["crate_types"]),
             "build_ir_target_id": raw_id, "module_ids": module_ids,
             "input_occurrences": input_occurrences,
+            "link_expectation": project_layered_link_expectation(
+                product["build"], product["raw"], products, input_occurrences,
+                rust_target_id=product["target_id"], build_ir_artifact_sha256=product["evidence_sha256"],
+            ),
             "ordered_link_arguments": list(product["raw"].get(
                 "ordered_link_arguments", [])),
             "evidence": evidence,
@@ -171,9 +175,8 @@ def _builds(values: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
         raise ValueError("rust_project_ir_v3_topology_build_irs_invalid")
     return result
 
-def _build_bindings(
-    builds: Sequence[Mapping[str, Any]], values: Mapping[str, str],
-) -> dict[str, str]:
+def _build_bindings(builds: Sequence[Mapping[str, Any]],
+                    values: Mapping[str, str]) -> dict[str, str]:
     semantics = {str(item["semantic_sha256"]) for item in builds}
     if (
         not isinstance(values, Mapping) or set(values) != semantics
@@ -286,10 +289,8 @@ def _evidence(build_shas, unit_ids, candidate_shas) -> dict[str, list[str]]:
             "dag_unit_ids": sorted(set(unit_ids)),
             "candidate_sha256s": sorted(set(candidate_shas))}
 
-def _block(
-    blockers: set[tuple[str, str, str]], code: str, entity_id: str, *,
-    entity_kind: str = "workspace",
-) -> None:
+def _block(blockers: set[tuple[str, str, str]], code: str, entity_id: str, *,
+           entity_kind: str = "workspace") -> None:
     blockers.add((code, entity_kind, entity_id))
 
 def _sha(value: Any) -> bool:

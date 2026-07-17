@@ -61,6 +61,7 @@ class BuildIRLinkAuthorityTests(unittest.TestCase):
         target = next(item for item in build_ir["targets"] if item["kind"] == "link")
         self.assertIn("ordered_link_occurrences", target)
         self.assertEqual(1, len(target["ordered_link_search_roots"]))
+        self.assertEqual([], target["link_response_files"])
         validate_build_ir(build_ir)
 
         stripped = copy.deepcopy(build_ir)
@@ -69,6 +70,7 @@ class BuildIRLinkAuthorityTests(unittest.TestCase):
         )
         stripped_target.pop("ordered_link_occurrences")
         stripped_target.pop("ordered_link_search_roots")
+        stripped_target.pop("link_response_files")
         with self.assertRaisesRegex(BuildIRValidationError, "authority_scope"):
             validate_build_ir(finalize_build_ir(stripped))
 
@@ -109,6 +111,22 @@ class BuildIRLinkAuthorityTests(unittest.TestCase):
             item["ordinal"] = ordinal
         with self.assertRaisesRegex(BuildIRValidationError, "search_root_closure"):
             validate_build_ir(finalize_build_ir(drifted))
+
+    def test_response_file_presence_is_content_bound_in_current_authority(self) -> None:
+        self._write("build/link.rsp", "unit.o -L lib -lm\n")
+        self._write(
+            "build/CMakeFiles/sample.dir/link.txt",
+            "clang @link.rsp -o program\n",
+        )
+
+        _root, _output, build_ir, _reference = self._materialize("response")
+
+        target = next(item for item in build_ir["targets"] if item["kind"] == "link")
+        self.assertEqual(1, len(target["link_response_files"]))
+        self.assertEqual(
+            {"ordinal", "binding_sha256"}, set(target["link_response_files"][0]),
+        )
+        self.assertNotIn("path", target["link_response_files"][0])
 
     def test_explicit_v1_closure_projects_v2_but_runtime_rejects_it(self) -> None:
         discovery = discover_project(self.root, compile_database=self.database)

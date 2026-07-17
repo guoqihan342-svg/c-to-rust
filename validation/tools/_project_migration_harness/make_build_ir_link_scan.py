@@ -207,6 +207,7 @@ def _raw_authority(
         "search_roots": search_roots,
         "ordered_system_link_args": system,
         "external_native_libraries": [],
+        "response_files": [],
         "ordered_link_occurrences": occurrences,
     }
 

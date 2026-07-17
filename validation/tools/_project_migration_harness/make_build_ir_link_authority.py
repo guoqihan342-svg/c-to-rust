@@ -68,6 +68,9 @@ def project_make_link_authority(
             "ordered_link_search_roots": copy.deepcopy(
                 target["ordered_link_search_roots"]
             ),
+            "link_response_files": copy.deepcopy(
+                target["link_response_files"]
+            ),
         }
     return {
         "authority_dependencies": sorted(

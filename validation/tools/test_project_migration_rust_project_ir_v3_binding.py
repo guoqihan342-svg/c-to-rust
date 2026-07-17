@@ -113,12 +113,12 @@ class RustProjectIRV3BindingTests(unittest.TestCase):
         self.assertEqual([self.build_ref["sha256"]], evidence)
         self.assertNotEqual(self.build_ir["semantic_sha256"], evidence[0])
 
-    def test_ordered_input_drift_rehashes_but_fails_recomputation(self) -> None:
+    def test_ordered_link_argument_drift_fails_before_recomputation(self) -> None:
         forged = copy.deepcopy(self.ir)
         forged["targets"][0]["ordered_link_arguments"].append("-lforged")
         self._rehash(forged)
 
-        with self.assertRaisesRegex(ValueError, "topology drifted"):
+        with self.assertRaisesRegex(ValueError, "link system argument order"):
             reopen_rust_project_ir_bindings(forged, self.root)
 
     def test_explicit_graph_binding_must_match_manifest(self) -> None:

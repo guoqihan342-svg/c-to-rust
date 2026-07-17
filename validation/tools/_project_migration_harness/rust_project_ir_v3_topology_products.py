@@ -29,6 +29,7 @@ def derive_product_topology(
         }
         products[raw_id] = {
             "raw": raw,
+            "build": entry["build"],
             "semantic_sha256": entry["semantic_sha256"],
             "evidence_sha256": entry["evidence_sha256"],
             "package_id": stable_topology_id("package", identity),
@@ -78,10 +79,6 @@ def project_input_occurrences(
         if dependency in products:
             occurrence["dependency_target_id"] = products[dependency]["target_id"]
         elif dependency in object_bindings:
-            if dependency in seen_objects:
-                raise ValueError(
-                    "rust_project_ir_v3_topology_object_occurrence_duplicate"
-                )
             seen_objects.add(dependency)
             owner = object_bindings[dependency]
             occurrence.update({
@@ -122,11 +119,17 @@ def _validate_object_order(
 ) -> None:
     by_module: dict[str, list[tuple[int, str]]] = {}
     expected: dict[str, list[str]] = {}
-    for ordinal, item in enumerate(occurrences):
+    seen_objects = set()
+    for item in occurrences:
         module_id = item["module_id"]
         if module_id is None:
             continue
-        by_module.setdefault(module_id, []).append((ordinal, item["source_unit_id"]))
+        object_id = item["object_target_id"]
+        if object_id in seen_objects:
+            continue
+        seen_objects.add(object_id)
+        values = by_module.setdefault(module_id, [])
+        values.append((len(values), item["source_unit_id"]))
     for owner in bindings.values():
         module_id = str(owner["module_id"])
         sources = list(owner["module_source_unit_ids"])

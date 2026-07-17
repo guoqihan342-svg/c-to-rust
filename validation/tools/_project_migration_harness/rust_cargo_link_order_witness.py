@@ -137,6 +137,10 @@ def _dependency_order(target, diagnostic, artifacts, products):
         if not positions:
             blockers.append(_block("rust_cargo_link_dependency_not_observed", dep_identity))
             continue
+        if len(positions) != 1:
+            blockers.append(_block(
+                "rust_cargo_link_dependency_occurrence_count_mismatch", dep_identity,
+            ))
         observed_hashes = sorted({
             item["guest_path_sha256"] for item in entries
             if item["guest_path_sha256"] in hashes
