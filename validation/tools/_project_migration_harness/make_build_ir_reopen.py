@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from .build_ir import BUILD_IR_SCHEMA_VERSION
 from .make_build_ir_adapter import reproject_make_build_ir
 from .make_build_ir_projection import MAKE_RAW_ROLE
 from .build_ir_toolchains import make_tool_requests, merge_tool_requests
@@ -48,6 +49,9 @@ def reproject_bound_make_build_ir(
             evidence,
         )
         toolchain_reference = references_by_role.get(C_TOOLCHAIN_RAW_ROLE)
+    schema_version = payload.get("schema_version")
+    if schema_version != BUILD_IR_SCHEMA_VERSION:
+        raise ValueError("build_ir_schema_version_invalid")
     return reproject_make_build_ir(
         repo_root,
         attachments[MAKE_RAW_ROLE],

@@ -5,18 +5,14 @@ import json
 
 from validation.tools._project_migration_harness.artifacts import content_sha256
 from validation.tools._project_migration_harness.build_ir import (
-    finalize_build_ir,
+    BUILD_IR_EXTRACTOR, BUILD_IR_SCHEMA_VERSION, finalize_build_ir,
     stable_build_id,
 )
 from validation.tools._project_migration_harness.build_ir_host_toolchains import (
     HostToolchainProjection,
 )
-from validation.tools._project_migration_harness.build_ir_projection import (
-    project_build_ir,
-)
-from validation.tools._project_migration_harness.build_ir_validation import (
-    validate_build_ir,
-)
+from validation.tools._project_migration_harness.build_ir_projection import project_build_ir
+from validation.tools._project_migration_harness.build_ir_validation import validate_build_ir
 from validation.tools._project_migration_harness.c_toolchain_schema import (
     C_TOOLCHAIN_RAW_ROLE,
 )
@@ -25,6 +21,7 @@ from validation.tools._project_migration_harness.clang_fact_commands import (
     build_clang_fact_plans,
     validate_clang_fact_plan,
 )
+from validation.tools._project_migration_harness.link_closure_schema import LINK_CLOSURE_SCHEMA_VERSION
 from validation.tools.project_migration_build_ir_host_test_support import (
     BuildIRHostBindingTestCase,
     artifact_reference,
@@ -38,7 +35,10 @@ class ClangFactCommandTests(BuildIRHostBindingTestCase):
         closure = {
             "status": "ready",
             "compile_outputs": [output],
-            "target_link_closure": {"targets": []},
+            "target_link_closure": {
+                "schema_version": LINK_CLOSURE_SCHEMA_VERSION,
+                "targets": [],
+            },
             "generated_include_roots": [],
             "generated_stage_facts": {},
             "blockers": [],
@@ -88,6 +88,8 @@ class ClangFactCommandTests(BuildIRHostBindingTestCase):
              **artifact_reference("facts/c-toolchain.json", evidence)},
         ]
         result = project_build_ir(discovery, closure, verification, refs, evidence)
+        self.assertEqual(BUILD_IR_SCHEMA_VERSION, result["schema_version"])
+        self.assertEqual(BUILD_IR_EXTRACTOR, result["extractor"])
         validate_build_ir(result)
         return result
 

@@ -150,7 +150,7 @@ def _run_managed_cargo(
     structure_probes: dict[str, dict[str, Any]] = {}
     captured_products: list[dict[str, Any]] = []
     captured_dep_info: list[dict[str, Any]] = []
-    product_capture_error = False
+    product_capture_error: str | None = None
     target_anchor = None
     try:
         for name in ("cargo-home", "target"):
@@ -158,8 +158,8 @@ def _run_managed_cargo(
         if capture_cargo_structure:
             try:
                 target_anchor = open_directory_anchor(execution_root / "target")
-            except ValueError:
-                product_capture_error = True
+            except ValueError as error:
+                product_capture_error = str(error) or type(error).__name__
         if capture_cargo_facts:
             fact_probes["cargo-metadata"] = _run(
                 cargo, list(CARGO_METADATA_ARGS), source, execution_root,
@@ -187,8 +187,8 @@ def _run_managed_cargo(
                         structure_probes["cargo-build"], execution_root,
                         target_anchor=target_anchor,
                     )
-                except (KeyError, OSError, TypeError, ValueError):
-                    product_capture_error = True
+                except (KeyError, OSError, TypeError, ValueError) as error:
+                    product_capture_error = str(error) or type(error).__name__
         commands = [
             (["check", "--all-targets", "--all-features", "--offline", "--locked",
               "--message-format=json"], False),
@@ -264,6 +264,7 @@ def _run_managed_cargo(
             "code": "cargo_build_product_capture_invalid",
             "stage": "cargo-build-products",
             "message": "Cargo build products could not be captured safely",
+            "detail_code": product_capture_error[:96],
         })
     result = {
         "schema_version": 1,

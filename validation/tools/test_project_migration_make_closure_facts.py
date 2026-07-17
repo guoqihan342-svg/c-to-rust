@@ -103,38 +103,12 @@ class MakeClosureFactTests(unittest.TestCase):
             make_report=selection, require_build_closure=True,
             project_test_target_proposal=make_test_target_proposal(self.harness),
         )
-        self.assertEqual("planned", plan["status"], plan)
-        self.assertFalse(plan["execution"]["build_closure_ready"])
-        self.assertTrue(plan["scheduler"]["ready_worker_ids"])
-        self.assertEqual("candidate-only", plan["execution"]["candidate_admission_scope"])
-        self.assertFalse(plan["execution"]["candidate_promotion_allowed"])
-        build_ir = self.read("target/run/plan/build-ir.json")
-        claim = build_ir["claim_boundary"]
-        self.assertTrue(claim["command_graph_complete"])
-        self.assertTrue(claim["repository_input_closure_complete"])
-        self.assertFalse(claim["external_dependencies_complete"])
-        self.assertFalse(claim["closure_complete"])
-        self.assertGreater(claim["link_argument_classification_error_count"], 0)
-        broken_targets = copy.deepcopy(build_ir["targets"])
-        link = next(item for item in broken_targets if item["kind"] == "link")
-        link["ordered_inputs"][0]["dependency_target_id"] = None
-        broken = project_make_closure(
-            report, broken_targets, [], link_classification_error_count=0,
-            report_inputs_verified=True,
-        )
-        self.assertFalse(broken["claim_boundary"]["command_graph_complete"])
-        self.assertFalse(
-            broken["claim_boundary"]["generated_output_graph_complete"]
-        )
-        self.assertIn(
-            "make_generated_output_graph_incomplete",
-            {item["kind"] for item in broken["boundaries"]},
-        )
-        closure = self.read("target/run/plan/make-target-closure.json")
-        self.assertEqual("ready_with_boundaries", closure["status"])
-        self.assertIn(
-            "make_link_argument_classification_incomplete",
-            {item["kind"] for item in closure["blockers"]},
+        self.assertEqual("blocked", plan["status"], plan)
+        self.assertEqual(["build_ir_contract_invalid"], plan["blockers"])
+        self.assertFalse(plan["execution"]["model_launched"])
+        error = self.read("target/run/plan/build-ir-contract-error.json")
+        self.assertEqual(
+            "make_build_ir_link_argument_unrepresentable", error["kind"],
         )
     def write(self, relative: str, content: str) -> None:
         path = self.root / relative

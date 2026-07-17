@@ -174,7 +174,7 @@ def validate_make_dry_run_report(value: Any) -> dict[str, Any]:
         or set(parser) != {"name", "version"}
         or parser.get("name") != PARSER_NAME
         or type(parser.get("version")) is not int
-        or parser.get("version") != PARSER_VERSION
+        or parser.get("version") not in {2, PARSER_VERSION}
     ):
         _fail("make_dry_run_report_parser_invalid")
     raw = value.get("raw_stdout")

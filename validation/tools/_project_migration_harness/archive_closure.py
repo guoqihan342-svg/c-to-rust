@@ -18,7 +18,7 @@ _RANLIB = re.compile(
     re.IGNORECASE,
 )
 _GNU_OPERATION = re.compile(r"^-?[A-Za-z]{1,16}$")
-_GNU_CREATE_OPERATIONS = frozenset({"qc", "rc", "rcs"})
+_GNU_CREATE_FLAGS = frozenset("rqcsDSv")
 _MSVC_DISPLAY_OPTIONS = frozenset({"/NOLOGO"})
 
 
@@ -104,7 +104,13 @@ def _arguments(
     if _GNU_OPERATION.fullmatch(arguments[0]) is None:
         raise ValueError("archive_operation_unsupported")
     operation = arguments[0].lstrip("-")
-    if operation not in _GNU_CREATE_OPERATIONS:
+    flags = set(operation)
+    if (
+        not operation or len(flags) != len(operation)
+        or len(flags & {"r", "q"}) != 1
+        or not flags <= _GNU_CREATE_FLAGS
+        or {"s", "S"} <= flags
+    ):
         raise ValueError("archive_operation_unsupported")
     output = arguments[1]
     if not output or output.startswith("-"):

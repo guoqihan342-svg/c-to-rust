@@ -6,21 +6,21 @@ from typing import Any
 
 from .artifacts import content_sha256
 from .build_ir import (
-    BUILD_IR_EXTRACTOR, BUILD_IR_KIND, BUILD_IR_SCHEMA_VERSION,
-    finalize_build_ir, list_value, normalize_binding, stable_build_id,
-    string_list, target_record,
+    BUILD_IR_KIND, finalize_build_ir, list_value, normalize_binding,
+    stable_build_id, string_list, target_record,
 )
+from .build_ir_link_authority import extractor_for_generated_closure, link_authority_claim, schema_for_extractor
 from .build_ir_meson import merge_meson_targets
 from .build_ir_host_toolchains import HostToolchainProjection
 from .build_ir_external_dependencies import (
     NATIVE_DEPENDENCY_KIND, project_link_external_dependencies,
 )
 from .build_ir_projection_inputs import generated_inputs, source_inputs
+from .build_ir_link_occurrences import project_link_authority
 from .build_ir_projection_legacy import (
     ABI_PREFIXES, abi_facts, legacy_toolchains,
 )
 from .c_toolchain_schema import C_TOOLCHAIN_RAW_ROLE
-
 
 RAW_ROLES = {
     "discovery",
@@ -46,7 +46,8 @@ def project_build_ir(
         HostToolchainProjection(toolchain_evidence)
         if toolchain_evidence is not None else None
     )
-    units = _translation_units(discovery.get("translation_units"), projector)
+    extractor = extractor_for_generated_closure(closure)
+    units = _translation_units(discovery.get("translation_units"), projector, extractor)
     metadata = normalize_binding(discovery.get("compile_database"), materialized=True)
     targets, external, boundaries = _targets(units, closure, projector)
     sources = source_inputs(units, targets)
@@ -60,13 +61,13 @@ def project_build_ir(
         and closure_verification.get("status") == "verified"
     )
     payload = {
-        "schema_version": BUILD_IR_SCHEMA_VERSION,
+        "schema_version": schema_for_extractor(extractor),
         "artifact_kind": BUILD_IR_KIND,
         "status": (
             "ready" if closure_complete and not boundaries
             else "ready_with_boundaries"
         ),
-        "extractor": dict(BUILD_IR_EXTRACTOR),
+        "extractor": extractor,
         "raw_fact_refs": refs,
         "build_metadata": [metadata],
         "translation_units": units,
@@ -89,13 +90,14 @@ def project_build_ir(
             "unresolved_native_dependency_count": unresolved_native,
             "semantic_gate": False,
             "translation_coverage_numerator": 0,
+            **link_authority_claim(extractor, targets, units),
         },
     }
     return finalize_build_ir(payload)
 
 
 def _translation_units(
-    value: Any, projector: HostToolchainProjection | None,
+    value: Any, projector: HostToolchainProjection | None, extractor: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
     if not isinstance(value, list) or not value:
         raise ValueError("build_ir_translation_units_missing")
@@ -143,7 +145,7 @@ def _translation_units(
                 "raw_fact_role": "discovery",
                 "entry_index": entry.get("index"),
                 "entry_sha256": entry.get("sha256"),
-                "extractor": dict(BUILD_IR_EXTRACTOR),
+                "extractor": dict(extractor),
             },
         }
         result.append(item)
@@ -214,6 +216,11 @@ def _targets(
             [output], inputs, dependencies, [], arguments,
             {"raw_fact_role": "generated-build-closure", "fact_path": fact.get("path")},
         )
+        authority = project_link_authority(
+            raw, target_id, inputs, current_external,
+        )
+        if authority is not None:
+            target.update(authority)
         if kind == "archive":
             target["archive_semantics"] = {
                 "operation": raw.get("archive_operation"),

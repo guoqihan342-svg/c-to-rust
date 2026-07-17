@@ -15,6 +15,7 @@ from .link_response import expand_link_response_files, take_link_output
 from .link_fact_paths import link_fact_working_directory
 from .link_ranlib import bind_ranlib_commands
 from .link_ordered_occurrences import split_ordered_link_arguments
+from .link_closure_schema import LINK_CLOSURE_SCHEMA_VERSION
 
 
 MAX_LINK_ARGUMENTS = 16_384
@@ -87,7 +88,7 @@ def discover_link_closure(
             })
     blockers = _unique_blockers(blockers)
     return {
-        "schema_version": 1,
+        "schema_version": LINK_CLOSURE_SCHEMA_VERSION,
         "status": "ready" if targets and not blockers else "blocked",
         "fact_files": fact_files,
         "support_files": _canonical_binding_set(support_files),

@@ -16,8 +16,11 @@ MAKE_EXTERNAL_KINDS = {"library-name", "library-search-path"}
 
 
 def project_link_external_dependencies(
-    raw: Mapping[str, Any], target_id: str,
+    raw: Mapping[str, Any], target_id: str, *,
+    provenance_role: str = "generated-build-closure",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if provenance_role not in {"generated-build-closure", "make-dry-run-report"}:
+        raise ValueError("build_ir_external_dependency_provenance_invalid")
     dependencies = [
         {
             "dependency_id": stable_build_id("external", {
@@ -27,7 +30,7 @@ def project_link_external_dependencies(
             "name": argument,
             "consumer_target_ids": [target_id],
             "ordinal": ordinal,
-            "provenance": {"raw_fact_role": "generated-build-closure"},
+            "provenance": {"raw_fact_role": provenance_role},
         }
         for ordinal, argument in enumerate(
             string_list(raw.get("ordered_system_link_args"))
@@ -162,8 +165,12 @@ def _validate_ordered_link_argument(
         "dependency_id", "kind", "name", "consumer_target_ids", "ordinal",
         "provenance",
     }
+    provenance = value.get("provenance")
+    role = provenance.get("raw_fact_role") if isinstance(provenance, Mapping) else None
+    if role not in {"generated-build-closure", "make-dry-run-report"}:
+        raise ValueError("build_ir_external_dependency_invalid")
     consumer, ordinal, name = _common_dependency(
-        value, fields, target_ids, "generated-build-closure",
+        value, fields, target_ids, role,
     )
     expected = stable_build_id("external", {
         "target": consumer, "ordinal": ordinal, "argument": name,

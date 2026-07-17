@@ -17,8 +17,18 @@ def project_make_closure(
     report_inputs_verified: bool,
     external_dependency_resolution_records: list[dict[str, Any]] | None = None,
     toolchains: list[dict[str, Any]] | None = None,
+    link_target_contracts: Mapping[int, Mapping[str, Any]] | None = None,
+    unmaterialized_search_root_count: int = 0,
 ) -> dict[str, Any]:
-    generated, graph_facts = _project_generated_graph(report, targets)
+    if (
+        isinstance(unmaterialized_search_root_count, bool)
+        or not isinstance(unmaterialized_search_root_count, int)
+        or unmaterialized_search_root_count < 0
+    ):
+        raise ValueError("make_link_search_root_count_invalid")
+    generated, graph_facts = _project_generated_graph(
+        report, targets, link_target_contracts,
+    )
     snapshot_present = report.get("repository_snapshot_ref") is not None
     snapshot_verified = snapshot_present and report_inputs_verified
     repository_complete = (
@@ -41,6 +51,7 @@ def project_make_closure(
             repository_complete,
             external_complete,
             resolution["complete"],
+            unmaterialized_search_root_count == 0,
         )),
         "command_graph_complete": graph_facts["command_graph_complete"],
         "generated_output_graph_complete": graph_facts[
@@ -62,6 +73,9 @@ def project_make_closure(
         "link_argument_classification_error_count": (
             link_classification_error_count
         ),
+        "unmaterialized_link_search_root_count": (
+            unmaterialized_search_root_count
+        ),
         "unresolved_external_dependency_count": len(
             resolution["unresolved_dependency_ids"]
         ),
@@ -73,6 +87,7 @@ def project_make_closure(
         claim, snapshot_present=snapshot_present,
         report_inputs_verified=report_inputs_verified,
         resolution=resolution,
+        unmaterialized_search_root_count=unmaterialized_search_root_count,
     )
     return {
         "generated_inputs": generated,
@@ -83,6 +98,7 @@ def project_make_closure(
 
 def _project_generated_graph(
     report: Mapping[str, Any], targets: list[dict[str, Any]],
+    link_target_contracts: Mapping[int, Mapping[str, Any]] | None,
 ) -> tuple[list[dict[str, Any]], dict[str, bool]]:
     owners: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
     graph_complete = True
@@ -125,7 +141,9 @@ def _project_generated_graph(
         for path, (target, output) in owners.items()
     ]
     generated.sort(key=lambda item: item["binding"]["path"])
-    command_complete = _command_coverage_complete(report, targets)
+    command_complete = _command_coverage_complete(
+        report, targets, link_target_contracts,
+    )
     try:
         target_closure(targets)
     except ValueError:
@@ -139,6 +157,7 @@ def _project_generated_graph(
 
 def _command_coverage_complete(
     report: Mapping[str, Any], targets: list[dict[str, Any]],
+    link_target_contracts: Mapping[int, Mapping[str, Any]] | None,
 ) -> bool:
     commands = {command["ordinal"]: command for command in report["commands"]}
     if len(commands) != len(report["commands"]):
@@ -158,10 +177,20 @@ def _command_coverage_complete(
         ):
             return False
         observed.append(ordinal)
+        if link_target_contracts is not None and kind in {"archive", "link"}:
+            expected = link_target_contracts.get(ordinal)
+            if not isinstance(expected, Mapping) or any(
+                target.get(key) != expected.get(key)
+                for key in (
+                    "ordered_link_arguments", "ordered_link_occurrences",
+                    "ordered_link_search_roots",
+                )
+            ):
+                return False
         if kind == "link":
-            if (
-                target["compile_argument_sets"]
-                or target["ordered_link_arguments"] != command["argv"][1:]
+            if target["compile_argument_sets"] or (
+                link_target_contracts is None
+                and target["ordered_link_arguments"] != command["argv"][1:]
             ):
                 return False
             continue
@@ -193,6 +222,13 @@ def _command_coverage_complete(
             "ranlib_passes"
         ] != ranlib_count:
             return False
+    if link_target_contracts is not None:
+        expected_contracts = {
+            command["ordinal"] for command in commands.values()
+            if command["kind"] in {"archive", "link"}
+        }
+        if set(link_target_contracts) != expected_contracts:
+            return False
     return sorted(observed) == sorted(commands)
 
 
@@ -214,6 +250,7 @@ def _report_kind(target: Mapping[str, Any]) -> str:
 def _boundaries(
     claim: Mapping[str, Any], *, snapshot_present: bool,
     report_inputs_verified: bool, resolution: Mapping[str, Any],
+    unmaterialized_search_root_count: int,
 ) -> list[dict[str, Any]]:
     result = [{"kind": "make_dry_run_nonsemantic_fact_collection"}]
     if not claim["command_graph_complete"]:
@@ -233,6 +270,11 @@ def _boundaries(
         })
     if not claim["generated_outputs_materialized"]:
         result.append({"kind": "make_generated_outputs_not_materialized"})
+    if unmaterialized_search_root_count:
+        result.append({
+            "kind": "make_link_search_roots_not_materialized",
+            "count": unmaterialized_search_root_count,
+        })
     if not claim["external_dependency_resolution_complete"]:
         result.append({
             "kind": "make_external_dependency_resolution_unverified",

@@ -18,6 +18,9 @@ from validation.tools._project_migration_harness.make_dry_run_parser import (
     MakeDryRunParseError,
     parse_make_dry_run_stdout,
 )
+from validation.tools._project_migration_harness.make_dry_run_report_io import (
+    MakeDryRunReopenError, verify_make_dry_run_report_inputs,
+)
 from validation.tools._project_migration_harness.make_dry_run_runner import (
     canonical_make_dry_run_plan_bytes, create_make_dry_run_plan,
 )
@@ -116,6 +119,17 @@ class MakeDryRunParserTests(unittest.TestCase):
             hashlib.sha256(self.stdout().encode("utf-8")).hexdigest(),
             parsed["raw_stdout"]["sha256"],
         )
+        self.assertEqual(3, parsed["parser"]["version"])
+
+    def test_legacy_v2_reopen_replays_current_archive_grammar(self) -> None:
+        for index, option in ((2, "--thin"), (3, "--plugin=evil.so")):
+            report = self.report()
+            report["parser"]["version"] = 2
+            report["commands"][1]["argv"][index] = option
+            with self.subTest(option=option), self.assertRaisesRegex(
+                MakeDryRunReopenError, "command_binding_invalid",
+            ):
+                verify_make_dry_run_report_inputs(".", report)
 
     def test_preserves_absolute_tool_selection_without_executing_it(self) -> None:
         tool = "C:/toolchains/clang"

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import copy
 import hashlib
 from pathlib import Path
 
 from validation.tools.project_migration_build_ir_host_test_support import (
     BuildIRHostBindingTestCase,
 )
+from validation.tools.project_migration_rust_project_build_ir_v3_test_support import (
+    scope_build_ir_fixture,
+)
 from validation.tools._project_migration_harness.artifacts import write_json_artifact
-from validation.tools._project_migration_harness.build_ir import finalize_build_ir
-from validation.tools._project_migration_harness.build_ir_projection import target_closure
 from validation.tools._project_migration_harness.migration_target_scope import (
     derive_build_ir_target_scopes,
 )
@@ -54,18 +54,10 @@ class V3CargoFixture:
     ) -> dict:
         if product not in {"archive", "link"}:
             raise ValueError("unsupported fixture product")
-        build_ir = copy.deepcopy(self.host.standard_build_ir())
-        build_ir["targets"] = [
-            item for item in build_ir["targets"]
-            if item["kind"] in {"object", product}
-        ]
-        if product == "link":
-            for target in build_ir["targets"]:
-                if target["kind"] == "link":
-                    target["ordered_link_arguments"] = list(link_arguments)
-        build_ir["external_dependencies"] = []
-        build_ir["target_closure"] = target_closure(build_ir["targets"])
-        build_ir = finalize_build_ir(build_ir)
+        build_ir = scope_build_ir_fixture(
+            self.host.standard_build_ir(), product=product,
+            link_arguments=link_arguments,
+        )
         build_ref = write_json_artifact(
             self.root, f"plan/{product}-build-ir.json", build_ir,
         )

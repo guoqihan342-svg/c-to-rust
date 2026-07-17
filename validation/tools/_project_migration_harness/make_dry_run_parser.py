@@ -4,16 +4,11 @@ import hashlib
 import re
 import shlex
 from typing import Any
-
 from .artifacts import content_sha256
-from .make_dry_run_binding import (
-    normalize_repository_path, validated_working_directory,
-)
+from .make_dry_run_binding import normalize_repository_path, validated_working_directory
 from .make_dry_run_tools import classify_make_tool
-
-
 PARSER_NAME = "project-migration-make-dry-run-direct-argv"
-PARSER_VERSION = 2
+PARSER_VERSION = 3
 MAX_STDOUT_BYTES = 4 * 1024 * 1024
 MAX_LINE_BYTES = 64 * 1024
 MAX_COMMANDS = 4_096
@@ -143,7 +138,7 @@ def _record(
     if tool_kind == "compiler":
         kind, inputs, outputs = _compiler(argv, line, working_directory)
     elif tool_kind == "archive":
-        kind, inputs, outputs = _archive(argv, line, working_directory)
+        kind, inputs, outputs = validate_make_archive_argv(argv, line, working_directory)
     elif tool_kind == "ranlib":
         kind, inputs, outputs = _ranlib(argv, line, working_directory)
     else:
@@ -213,18 +208,23 @@ def _compiler(
     if not objects and not libraries:
         _fail("link_input_missing", line)
     return "link", objects, outputs
-def _archive(
+def validate_make_archive_argv(
     argv: list[str], line: int, working_directory: str,
 ) -> tuple[str, list[str], list[str]]:
     if len(argv) < 3:
         _fail("archive_argv_invalid", line)
     mode = argv[1].removeprefix("-")
-    if not mode or any(char not in "DPUcqrsuv" for char in mode) or not set(mode) & {"q", "r", "s"}:
+    if (not mode or len(mode) != len(set(mode)) or any(char not in "DScqrsv" for char in mode)
+            or mode.count("r") + mode.count("q") != 1 or {"s", "S"} <= set(mode)):
         _fail("archive_mode_unsupported", line)
+    if argv[2].startswith("-"):
+        _fail("archive_output_unsupported", line)
+    if len(argv) == 3:
+        _fail("archive_member_missing", line)
+    if any(item.startswith("-") for item in argv[3:]):
+        _fail("archive_member_unsupported", line)
     archive = _path(argv[2], line, working_directory)
     members = [_path(item, line, working_directory) for item in argv[3:]]
-    if set(mode) & {"q", "r"} and not members:
-        _fail("archive_member_missing", line)
     if any(not _link_input(item) for item in members):
         _fail("archive_member_unsupported", line)
     return "archive", members, [archive]
@@ -296,5 +296,5 @@ def _fail(reason: str, line: int | None = None) -> None:
 __all__ = [
     "MAX_COMMANDS", "MAX_LINE_BYTES", "MAX_STDOUT_BYTES", "MakeDryRunParseError",
     "PARSER_NAME", "PARSER_VERSION", "parse_make_dry_run_stdout",
-    "validate_make_dry_run_commands",
+    "validate_make_archive_argv", "validate_make_dry_run_commands",
 ]

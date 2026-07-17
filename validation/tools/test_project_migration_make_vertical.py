@@ -101,14 +101,18 @@ class MakeVerticalClosureTests(unittest.TestCase):
         self.assertTrue(boundary["external_dependencies_complete"])
         self.assertEqual(
             [["-Lbuild"], ["-lunit"]],
-            sorted(item["arguments"] for item in build_ir["external_dependencies"]),
+            sorted(
+                item["arguments"] for item in build_ir["external_dependencies"]
+                if "arguments" in item
+            ),
         )
         link = next(item for item in build_ir["targets"] if item["kind"] == "link")
+        self.assertEqual(["-lunit"], link["ordered_link_arguments"])
         self.assertEqual(
-            ["build/unit.o", "vendor/prebuilt.a", "-Lbuild", "-lunit",
-             "-o", "build/program"],
-            link["ordered_link_arguments"],
+            ["input", "input", "search-root", "system-argument"],
+            [item["kind"] for item in link["ordered_link_occurrences"]],
         )
+        self.assertEqual(1, len(link["ordered_link_search_roots"]))
         self.assertTrue(all(
             output_binding["materialized"] is False
             for target in build_ir["targets"]

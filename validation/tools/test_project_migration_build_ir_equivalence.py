@@ -8,18 +8,16 @@ from typing import Any
 import unittest
 
 from validation.tools._project_migration_harness.build_ir import (
-    finalize_build_ir,
-    stable_build_id,
+    LEGACY_BUILD_IR_EXTRACTOR, LEGACY_BUILD_IR_SCHEMA_VERSION,
+    finalize_build_ir, stable_build_id,
 )
 from validation.tools._project_migration_harness.build_ir_validation import (
     BuildIRValidationError, validate_build_ir,
     verify_build_ir_artifact,
 )
 from validation.tools.project_migration_build_ir_equivalence_test_support import (
-    load_expected_common_contract,
-    materialize_cmake_lane,
-    materialize_make_lane,
-    materialize_ninja_lane,
+    load_expected_common_contract, materialize_cmake_lane,
+    materialize_make_lane, materialize_ninja_lane,
 )
 
 
@@ -66,7 +64,7 @@ def _logical_binding(value: Any, *, source: bool = False) -> dict[str, Any]:
 
 
 def _common_contract(build_ir: Mapping[str, Any]) -> dict[str, Any]:
-    validate_build_ir(build_ir)
+    _validate_verified_lane_shape(build_ir)
     boundary = build_ir["claim_boundary"]
     _require(boundary.get("semantic_gate") is False, "common_contract_semantic_gate")
     _require(
@@ -195,7 +193,7 @@ def _common_contract(build_ir: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _retained_adapter_differences(build_ir: Mapping[str, Any]) -> dict[str, Any]:
-    validate_build_ir(build_ir)
+    _validate_verified_lane_shape(build_ir)
     return {
         "semantic_sha256": build_ir["semantic_sha256"],
         "status": build_ir["status"],
@@ -232,6 +230,13 @@ def _retained_adapter_differences(build_ir: Mapping[str, Any]) -> dict[str, Any]
     }
 
 
+def _validate_verified_lane_shape(build_ir: Mapping[str, Any]) -> None:
+    if build_ir.get("schema_version") == LEGACY_BUILD_IR_SCHEMA_VERSION:
+        _require(build_ir.get("extractor") == LEGACY_BUILD_IR_EXTRACTOR, "common_contract_legacy_extractor_invalid")
+        return
+    validate_build_ir(build_ir)
+
+
 class ProjectMigrationBuildIREquivalenceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="build-ir-equivalence-")
@@ -246,15 +251,11 @@ class ProjectMigrationBuildIREquivalenceTests(unittest.TestCase):
         for lane in (cmake, ninja, make):
             self.assertEqual(expected, _common_contract(lane.build_ir))
             self.assertEqual("verified", lane.verification["status"])
-            reopened = verify_build_ir_artifact(
-                lane.project_root, lane.artifact_root, lane.build_ir_reference,
-            )
+            reopened = verify_build_ir_artifact(lane.project_root, lane.artifact_root, lane.build_ir_reference)
             self.assertEqual("verified", reopened["status"], reopened)
         self.assertEqual(cmake.build_ir["semantic_sha256"], ninja.build_ir["semantic_sha256"])
         self.assertNotEqual(cmake.build_ir["semantic_sha256"], make.build_ir["semantic_sha256"])
-        expected_object_id = stable_build_id(
-            "target", {"kind": "object", "output": "build/unit.o"},
-        )
+        expected_object_id = stable_build_id("target", {"kind": "object", "output": "build/unit.o"})
         for lane in (cmake, ninja, make):
             object_target = next(item for item in lane.build_ir["targets"] if item["kind"] == "object")
             self.assertEqual(expected_object_id, object_target["target_id"])

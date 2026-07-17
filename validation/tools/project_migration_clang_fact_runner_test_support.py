@@ -8,7 +8,14 @@ from collections.abc import Iterator
 from unittest import mock
 
 from validation.tools._project_migration_harness.artifacts import content_sha256
+from validation.tools._project_migration_harness.build_ir import (
+    BUILD_IR_EXTRACTOR,
+    BUILD_IR_SCHEMA_VERSION,
+)
 from validation.tools._project_migration_harness.build_ir_projection import project_build_ir
+from validation.tools._project_migration_harness.build_ir_validation import (
+    validate_build_ir,
+)
 from validation.tools._project_migration_harness.c_toolchain_probe import ProbeExecution
 from validation.tools._project_migration_harness.c_toolchain_schema import C_TOOLCHAIN_RAW_ROLE
 from validation.tools._project_migration_harness.clang_fact_commands import build_clang_fact_plans
@@ -20,6 +27,9 @@ from validation.tools._project_migration_harness.clang_fact_runner_process impor
 )
 from validation.tools._project_migration_harness.clang_toolchain_binding import (
     persist_clang_toolchain_binding,
+)
+from validation.tools._project_migration_harness.link_closure_schema import (
+    LINK_CLOSURE_SCHEMA_VERSION,
 )
 from validation.tools._project_migration_harness.sandbox_contract import SandboxContract
 from validation.tools._project_migration_harness.sandbox_probe import make_probe_receipt
@@ -122,7 +132,11 @@ class ClangFactRunnerTestCase(BuildIRHostBindingTestCase):
         outputs = [binding("build/unit.o", b"unit"), binding("build/other.o", b"other")]
         closure = {
             "status": "ready", "compile_outputs": outputs,
-            "target_link_closure": {"targets": []}, "generated_include_roots": [],
+            "target_link_closure": {
+                "schema_version": LINK_CLOSURE_SCHEMA_VERSION,
+                "targets": [],
+            },
+            "generated_include_roots": [],
             "generated_stage_facts": {}, "blockers": [],
         }
         units = [
@@ -145,7 +159,11 @@ class ClangFactRunnerTestCase(BuildIRHostBindingTestCase):
             {"role": C_TOOLCHAIN_RAW_ROLE,
              **artifact_reference("facts/c-toolchain.json", evidence)},
         ]
-        return project_build_ir(discovery, closure, verification, refs, evidence)
+        result = project_build_ir(discovery, closure, verification, refs, evidence)
+        self.assertEqual(BUILD_IR_SCHEMA_VERSION, result["schema_version"])
+        self.assertEqual(BUILD_IR_EXTRACTOR, result["extractor"])
+        validate_build_ir(result)
+        return result
 
     @staticmethod
     def _unit(unit_id: str, path: str, data: bytes, output: str, index: int) -> dict:

@@ -18,6 +18,9 @@ from validation.tools._project_migration_harness.build_ir_host_toolchains import
 from validation.tools._project_migration_harness.build_ir_projection import (
     project_build_ir,
 )
+from validation.tools._project_migration_harness.link_closure_schema import (
+    LINK_CLOSURE_SCHEMA_VERSION,
+)
 from validation.tools._project_migration_harness.c_toolchain_probe import (
     ProbeExecution,
 )
@@ -163,20 +166,41 @@ class BuildIRHostBindingTestCase(unittest.TestCase):
             "status": "ready",
             "compile_outputs": [object_output],
             "target_link_closure": {
+                "schema_version": LINK_CLOSURE_SCHEMA_VERSION,
                 "targets": [
                     {
                         "output": archive_output,
                         "inputs": [object_output],
+                        "search_roots": [],
                         "driver": "ar",
                         "archive_operation": "create",
                         "ranlib_drivers": ["ranlib"],
                         "ordered_system_link_args": [],
+                        "ordered_link_occurrences": [{
+                            "ordinal": 0, "argument_index": 1,
+                            "argument_count": 1, "kind": "input",
+                            "reference_ordinal": 0,
+                        }],
                     },
                     {
                         "output": link_output,
                         "inputs": [object_output],
+                        "search_roots": [],
                         "driver": "gcc",
                         "ordered_system_link_args": ["-lm"],
+                        "ordered_link_occurrences": [
+                            {
+                                "ordinal": 0, "argument_index": 0,
+                                "argument_count": 1, "kind": "input",
+                                "reference_ordinal": 0,
+                            },
+                            {
+                                "ordinal": 1, "argument_index": 1,
+                                "argument_count": 1,
+                                "kind": "system-argument",
+                                "reference_ordinal": 0,
+                            },
+                        ],
                     },
                 ],
             },

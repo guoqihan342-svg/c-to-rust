@@ -6,19 +6,17 @@ from pathlib import Path
 from typing import Any
 
 from .build_ir import (
-    BUILD_IR_EXTRACTOR, BUILD_IR_KIND, BUILD_IR_SCHEMA_VERSION,
-    finalize_build_ir, normalize_binding, stable_build_id, target_record,
+    BUILD_IR_EXTRACTOR,
+    normalize_binding, stable_build_id, target_record,
 )
 from .build_ir_host_toolchains import HostToolchainProjection
-from .build_ir_projection import target_closure
 from .build_ir_toolchains import make_command_tool_role
 from .compile_database import parse_compile_entry
 from .discovery_variants import finalize_variants
 from .make_build_ir_closure import project_make_closure
-from .make_build_ir_external import project_make_external_dependencies
-from .make_build_ir_toolchains import (
-    abi_facts, legacy_toolchain_id, legacy_toolchains,
-)
+from .make_build_ir_link_authority import project_make_link_authority
+from .make_build_ir_payload import assemble_make_build_ir
+from .make_build_ir_toolchains import legacy_toolchain_id, legacy_toolchains
 from .make_dry_run_binding import repository_path_argument
 
 
@@ -84,47 +82,31 @@ def project_make_build_ir(
         raise ValueError("make_build_ir_toolchain_binding_invalid")
     projected_units = _project_units(units, report, projector)
     targets = _project_targets(report, projected_units, projector)
-    external, classification_errors = project_make_external_dependencies(
-        report, targets,
-    )
+    link_projection = project_make_link_authority(repo_root, report, targets)
+    resolution_external = link_projection["resolution_dependencies"]
+    authority_external = link_projection["authority_dependencies"]
     toolchains = projector.records() if projector else legacy_toolchains(report)
     closure = project_make_closure(
-        report, targets, external,
-        link_classification_error_count=classification_errors,
+        report, targets, resolution_external,
+        link_classification_error_count=0,
         report_inputs_verified=report_inputs_verified,
         toolchains=toolchains,
+        link_target_contracts=link_projection["target_contracts"],
+        unmaterialized_search_root_count=link_projection[
+            "unmaterialized_search_root_count"
+        ],
     )
-    sources = _unique_bindings([unit["source"] for unit in projected_units])
-    raw_refs = [{"role": MAKE_RAW_ROLE, **dict(report_reference)}]
-    if toolchain_reference is not None:
-        raw_refs.append({
-            "role": "c-toolchain-evidence", **dict(toolchain_reference),
-        })
-    payload = {
-        "schema_version": BUILD_IR_SCHEMA_VERSION,
-        "artifact_kind": BUILD_IR_KIND,
-        "status": "ready_with_boundaries",
-        "extractor": dict(BUILD_IR_EXTRACTOR),
-        "raw_fact_refs": sorted(raw_refs, key=lambda item: item["role"]),
-        "build_metadata": [normalize_binding(report["makefile_ref"], materialized=True)],
-        "translation_units": projected_units,
-        "source_inputs": sources,
-        "generated_inputs": closure["generated_inputs"],
-        "targets": targets,
-        "target_closure": target_closure(targets),
-        "toolchains": toolchains,
-        "external_dependencies": external,
-        "abi_facts": abi_facts(projected_units),
-        "boundaries": closure["boundaries"],
-        "claim_boundary": {
-            **closure["claim_boundary"],
-            "host_toolchain_bound": projector is not None,
-            "toolchain_profile": projector.profile if projector else None,
-            "semantic_gate": False,
-            "translation_coverage_numerator": 0,
-        },
-    }
-    return finalize_build_ir(payload)
+    external = sorted(
+        [*resolution_external, *authority_external],
+        key=lambda item: item["dependency_id"],
+    )
+    return assemble_make_build_ir(
+        report, report_reference, projected_units, targets, external,
+        toolchains, closure, BUILD_IR_EXTRACTOR,
+        toolchain_reference=toolchain_reference,
+        host_toolchain_bound=projector is not None,
+        toolchain_profile=projector.profile if projector else None,
+    )
 
 
 def _project_units(
@@ -206,10 +188,9 @@ def _project_targets(
                 "dependency_target_id": None,
             }]
         argument_sets = [] if kind == "link" else [_command_arguments(command)]
-        link_arguments = list(command["argv"][1:]) if kind == "link" else []
         target = target_record(
             target_id, output_path, "object" if kind == "compile" else kind,
-            [output], inputs, dependencies, argument_sets, link_arguments,
+            [output], inputs, dependencies, argument_sets, [],
             {"raw_fact_role": MAKE_RAW_ROLE, "command_ordinal": command["ordinal"]},
         )
         if kind == "archive":
@@ -272,13 +253,6 @@ def _command_arguments(command: Mapping[str, Any]) -> dict[str, Any]:
         "arguments": list(command["argv"][1:]),
         "argv_sha256": command["argv_sha256"],
     }
-
-
-def _unique_bindings(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    keyed = {item["path"]: copy.deepcopy(item) for item in values}
-    if len(keyed) != len(values):
-        raise ValueError("make_build_ir_source_binding_duplicate")
-    return [keyed[path] for path in sorted(keyed)]
 
 
 __all__ = [

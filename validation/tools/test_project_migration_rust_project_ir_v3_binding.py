@@ -9,11 +9,12 @@ import unittest
 from validation.tools.project_migration_build_ir_host_test_support import (
     BuildIRHostBindingTestCase,
 )
+from validation.tools.project_migration_rust_project_build_ir_v3_test_support import (
+    scope_build_ir_fixture,
+)
 from validation.tools._project_migration_harness.artifacts import (
     content_sha256, write_json_artifact,
 )
-from validation.tools._project_migration_harness.build_ir import finalize_build_ir
-from validation.tools._project_migration_harness.build_ir_projection import target_closure
 from validation.tools._project_migration_harness.migration_target_scope import (
     derive_build_ir_target_scopes,
 )
@@ -134,13 +135,15 @@ class RustProjectIRV3BindingTests(unittest.TestCase):
             reopen_rust_project_ir_bindings(forged, self.root)
 
     def test_object_only_blocked_topology_can_be_reopened_without_credit(self) -> None:
-        build_ir = copy.deepcopy(self.build_ir)
-        build_ir["targets"] = [
-            item for item in build_ir["targets"] if item["kind"] == "object"
-        ]
-        build_ir["target_closure"] = target_closure(build_ir["targets"])
-        build_ir["external_dependencies"] = []
-        build_ir = finalize_build_ir(build_ir)
+        build_ir = scope_build_ir_fixture(self.build_ir, product=None)
+        self.assertNotIn(
+            "link_occurrence_authority", build_ir["claim_boundary"],
+        )
+        self.assertTrue(all(
+            "ordered_link_occurrences" not in target
+            and "ordered_link_search_roots" not in target
+            for target in build_ir["targets"]
+        ))
         build_ref = write_json_artifact(
             self.root, "plan/object-only-build-ir.json", build_ir,
         )

@@ -13,9 +13,8 @@ from validation.tools._project_migration_harness.artifacts import (
     content_sha256, write_json_artifact,
 )
 from validation.tools._project_migration_harness.build_ir import (
-    finalize_build_ir, stable_build_id, target_record,
+    stable_build_id, target_record,
 )
-from validation.tools._project_migration_harness.build_ir_projection import target_closure
 from validation.tools._project_migration_harness.rust_project_cargo import (
     reconstruct_cargo_project_from_ir,
 )
@@ -27,6 +26,9 @@ from validation.tools._project_migration_harness.rust_project_ir_validation impo
 )
 from validation.tools.project_migration_rust_project_test_support import (
     descriptor, valid_build_ir,
+)
+from validation.tools.project_migration_rust_project_build_ir_v3_test_support import (
+    rebuild_build_ir_fixture_authority,
 )
 from validation.tools.test_project_migration_c_compilation_facts import (
     valid_compilation_bundle,
@@ -40,7 +42,11 @@ def targeted_build_ir(*, link_count: int = 1) -> dict:
         "raw_fact_role": "discovery", "entry_index": 0,
         "entry_sha256": "3" * 64,
     }
-    object_output = dict(unit["output"])
+    object_output = {
+        **unit["output"], "materialized": True,
+        "sha256": content_sha256("object-output"), "size_bytes": 6,
+    }
+    unit["output"] = dict(object_output)
     object_id = stable_build_id(
         "target", {"kind": "object", "output": object_output["path"]},
     )
@@ -52,7 +58,8 @@ def targeted_build_ir(*, link_count: int = 1) -> dict:
         {"raw_fact_role": "discovery", "unit_id": unit["unit_id"]},
     )
     archive_output = {
-        "path": "build/library-output", "kind": "file", "materialized": False,
+        "path": "build/library-output", "kind": "file", "materialized": True,
+        "sha256": content_sha256("archive-output"), "size_bytes": 7,
     }
     archive_id = stable_build_id(
         "target", {"kind": "archive", "output": archive_output["path"]},
@@ -78,8 +85,7 @@ def targeted_build_ir(*, link_count: int = 1) -> dict:
             [archive_id], [], [], {"raw_fact_role": "generated-build-closure"},
         ))
     payload["targets"] = sorted(targets, key=lambda item: item["target_id"])
-    payload["target_closure"] = target_closure(payload["targets"])
-    return finalize_build_ir(payload)
+    return rebuild_build_ir_fixture_authority(payload)
 
 
 def targeted_ir(

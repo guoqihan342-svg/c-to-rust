@@ -59,8 +59,13 @@ def verify_make_dry_run_report_inputs(
             opened["raw_stdout_ref"],
             working_directory=report["working_directory"],
         )
+        parser = report["parser"]
+        parser_compatible = (
+            parsed["parser"]["name"] == parser["name"]
+            and parser["version"] in {2, parsed["parser"]["version"]}
+        )
         if (
-            parsed["parser"] != report["parser"]
+            not parser_compatible
             or parsed["raw_stdout"] != report["raw_stdout"]
             or parsed["commands"] != report["commands"]
         ):

@@ -11,6 +11,7 @@ from .closure_paths import (
     verify_repository_artifact,
 )
 from .link_closure import discover_link_closure
+from .link_closure_schema import reopen_discovered_link_closure
 from .meson_introspection import verify_meson_introspection
 
 
@@ -141,7 +142,8 @@ def verify_generated_build_closure(
                 current_link = discover_link_closure(
                     root, resolve_repository_path(root, database_path), generated,
                 )
-                if current_link != link:
+                reopened_link = reopen_discovered_link_closure(current_link, link)
+                if reopened_link != link:
                     blockers.append({"kind": "target_link_closure_drift"})
             except (OSError, TypeError, ValueError):
                 blockers.append({"kind": "target_link_closure_reopen_failed"})

@@ -3,7 +3,9 @@ from __future__ import annotations
 import copy
 import unittest
 
-from validation.tools._project_migration_harness.build_ir import finalize_build_ir
+from validation.tools._project_migration_harness.build_ir import (
+    BUILD_IR_EXTRACTOR, BUILD_IR_SCHEMA_VERSION, finalize_build_ir,
+)
 from validation.tools._project_migration_harness.build_ir_host_toolchains import (
     HostToolchainProjection,
     validate_host_bound_toolchains,
@@ -178,7 +180,15 @@ class ProjectMigrationBuildIRHostBindingTests(BuildIRHostBindingTestCase):
             toolchain_evidence=evidence,
             toolchain_reference=artifact_reference("facts/c-toolchain.json", evidence),
         )
+        self.assertEqual(BUILD_IR_SCHEMA_VERSION, build_ir["schema_version"])
+        self.assertEqual(BUILD_IR_EXTRACTOR, build_ir["extractor"])
         validate_build_ir(build_ir)
+        self.assertEqual(
+            2,
+            len(build_ir["claim_boundary"]["link_occurrence_authority"][
+                "target_ids"
+            ]),
+        )
 
         records = {
             item["toolchain_id"]: item for item in build_ir["toolchains"]

@@ -10,9 +10,14 @@ from .artifacts import canonical_json_bytes, content_sha256
 from .build_ir_index_targets import index_target_contexts
 
 
-BUILD_IR_SCHEMA_VERSION = 2
+BUILD_IR_SCHEMA_VERSION = 3
+LEGACY_BUILD_IR_SCHEMA_VERSION = 2
 BUILD_IR_KIND = "c2r-canonical-build-ir"
 BUILD_IR_EXTRACTOR = {
+    "name": "project-migration-build-ir",
+    "version": "3",
+}
+LEGACY_BUILD_IR_EXTRACTOR = {
     "name": "project-migration-build-ir",
     "version": "2",
 }
@@ -129,7 +134,9 @@ def finalize_build_ir(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def canonical_build_ir_bytes(value: Mapping[str, Any]) -> bytes:
-    if value.get("schema_version") != BUILD_IR_SCHEMA_VERSION:
+    if value.get("schema_version") not in {
+        LEGACY_BUILD_IR_SCHEMA_VERSION, BUILD_IR_SCHEMA_VERSION,
+    }:
         raise ValueError("build_ir_schema_version_invalid")
     if value.get("artifact_kind") != BUILD_IR_KIND:
         raise ValueError("build_ir_artifact_kind_invalid")
@@ -190,8 +197,10 @@ def _without_provenance(value: Any) -> Any:
 
 __all__ = [
     "BUILD_IR_EXTRACTOR",
+    "LEGACY_BUILD_IR_EXTRACTOR",
     "BUILD_IR_KIND",
     "BUILD_IR_SCHEMA_VERSION",
+    "LEGACY_BUILD_IR_SCHEMA_VERSION",
     "canonical_build_ir_bytes",
     "finalize_build_ir",
     "list_value",

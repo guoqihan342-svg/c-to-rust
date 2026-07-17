@@ -7,6 +7,9 @@ import tempfile
 import unittest
 
 from validation.tools._project_migration_harness.discovery import discover_project
+from validation.tools._project_migration_harness.link_system_arguments import (
+    normalize_system_link_argument,
+)
 
 
 class ProjectMigrationLinkArgumentTests(unittest.TestCase):
@@ -38,6 +41,11 @@ class ProjectMigrationLinkArgumentTests(unittest.TestCase):
         return discover_project(
             self.root, compile_database=database,
         )["generated_build_closure"]
+
+    def normalize(self, argument: str) -> str | None:
+        base = self.root / "build"
+        base.mkdir(exist_ok=True)
+        return normalize_system_link_argument(self.root, base, argument)
 
     def test_safe_driver_flags_and_repository_rpath_are_normalized(self) -> None:
         compiler_token = "C:/toolchains/cc"
@@ -86,7 +94,10 @@ class ProjectMigrationLinkArgumentTests(unittest.TestCase):
         self.assertTrue(obj.is_file())
 
     def test_library_selectors_accept_only_portable_names(self) -> None:
-        for argument in ("-lz", "-l:libalpha.so.1", "/DEFAULTLIB:alpha.lib"):
+        for argument in (
+            "-lz", "-l:libalpha.so.1", "/DEFAULTLIB:alpha.lib",
+            "-Wl,-lalpha",
+        ):
             with self.subTest(argument=argument):
                 closure = self.link_closure(argument)
                 self.assertEqual("ready", closure["status"], closure)
@@ -102,6 +113,21 @@ class ProjectMigrationLinkArgumentTests(unittest.TestCase):
             "-plugin@/outside/private/plugin.so",
             "-Wl,@/outside/private/link.rsp",
             "-Wl,-T/outside/private/script.ld",
+            "-Wl,@config/link.rsp",
+            "-Wl,-T,config/link.ld",
+            "-Wl,--script=config/link.ld",
+            "-Wl,--version-script=config/exports.map",
+            "-Wl,--dynamic-list,config/exports.list",
+            "-Wl,-Map=build/app.map",
+            "-Wl,-L,build/private-lib",
+            "-Wl,-rpath-link,build/private-lib",
+            "-Wl,-plugin,plugin.so",
+            "-Wl,-plugin=plugin.so",
+            "-Wl,-plugin-opt,plugin.so",
+            "-Wl,hidden.o",
+            "-Wl,--start-group,-lfoo,--end-group",
+            "-Wl,-o,other",
+            "-Wl,--output=other",
         ):
             with self.subTest(argument=argument):
                 closure = self.link_closure(argument)
@@ -110,6 +136,58 @@ class ProjectMigrationLinkArgumentTests(unittest.TestCase):
                 self.assertTrue({
                     "external_link_argument", "link_argument_unsupported",
                 } & {item["kind"] for item in closure["blockers"]})
+
+    def test_forwarded_linker_whitelist_accepts_bounded_forms(self) -> None:
+        repository_rpath = (self.root / "build/lib").as_posix()
+        cases = {
+            "-Wl,--as-needed": "-Wl,--as-needed",
+            "-Wl,--as-needed,--gc-sections": (
+                "-Wl,--as-needed,--gc-sections"
+            ),
+            "-Wl,-lalpha": "-Wl,-lalpha",
+            "-Wl,-z,relro": "-Wl,-z,relro",
+            "-Wl,-z,max-page-size=16384": "-Wl,-z,max-page-size=16384",
+            "-Wl,--soname,libalpha.so.1": "-Wl,--soname,libalpha.so.1",
+            "-Wl,--entry,_start": "-Wl,--entry,_start",
+            "-Wl,-e,0x401000": "-Wl,-e,0x401000",
+            "-Wl,-m,elf_x86_64": "-Wl,-m,elf_x86_64",
+            "-Wl,--emulation,elf_x86_64": "-Wl,--emulation,elf_x86_64",
+            "-Wl,--build-id=sha1": "-Wl,--build-id=sha1",
+            "-Wl,--hash-style=gnu": "-Wl,--hash-style=gnu",
+            f"-Wl,-rpath,{repository_rpath}": (
+                "-Wl,-rpath,<repository>/build/lib"
+            ),
+            "-Wl,-rpath,$ORIGIN/lib": "-Wl,-rpath,$ORIGIN/lib",
+        }
+        for argument, expected in cases.items():
+            with self.subTest(argument=argument):
+                self.assertEqual(expected, self.normalize(argument))
+
+    def test_forwarded_linker_whitelist_rejects_hidden_semantics(self) -> None:
+        for argument in (
+            "-Wl,hidden.o",
+            "-Wl,--start-group,-lfoo,--end-group",
+            "-Wl,-o,other",
+            "-Wl,--output=other",
+            "-Wl,--unknown-option",
+            "-Wl,@config/link.rsp",
+            "-Wl,--script=config/link.ld",
+            "-Wl,--version-script,config/exports.map",
+            "-Wl,--plugin=plugin.so",
+            "-Wl,-plugin-opt,plugin.so",
+            "-Wl,-lalpha,--as-needed",
+            "-Wl,-z,unproven-mode",
+            "-Wl,--soname,../libescape.so",
+            "-Wl,--entry,/outside/start",
+            "-Wl,-m,../../outside",
+            "-Wl,-rpath,$ORIGIN/../../outside",
+            "-Wl,-rpath,${ORIGIN}/../outside",
+            "-Wl,-rpath,$HOME/lib",
+            "-Wl,-rpath,../outside",
+            "-Wl",
+        ):
+            with self.subTest(argument=argument):
+                self.assertIsNone(self.normalize(argument))
 
     def test_existing_nontraditional_inputs_are_content_bound_in_order(self) -> None:
         versioned = b"versioned-shared-library"

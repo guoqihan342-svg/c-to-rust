@@ -156,8 +156,6 @@ def _bound_target_command(
         or command.get("argv_sha256") != content_sha256(argv)
     ):
         reasons.add("external_dependency_report_command_drift")
-    elif target.get("ordered_link_arguments") != link_arguments:
-        reasons.add("external_dependency_target_argument_drift")
     argument_ordinal = dependency.get("ordinal")
     arguments = dependency.get("arguments")
     if (

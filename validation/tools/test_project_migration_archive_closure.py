@@ -104,7 +104,8 @@ class ProjectMigrationArchiveClosureTests(unittest.TestCase):
         self.write("build/unit.o", b"object")
         self.write("build/libsample.a", b"archive")
         for token, operation in (
-            ("qc", "qc"), ("rc", "rc"), ("rcs", "rcs"), ("-rcs", "rcs"),
+            ("qc", "qc"), ("cq", "cq"), ("rc", "rc"), ("cr", "cr"),
+            ("rcs", "rcs"), ("-rcs", "rcs"), ("rcsD", "rcsD"),
         ):
             with self.subTest(token=token):
                 target, blockers = self.parse_archive(
@@ -123,7 +124,7 @@ class ProjectMigrationArchiveClosureTests(unittest.TestCase):
             ("N-count", ["ar", "rN", "1", "libsample.a", "unit.o"]),
             ("T-thin", ["ar", "rcsT", "libsample.a", "unit.o"]),
             ("thin-long", ["ar", "--thin", "rc", "libsample.a", "unit.o"]),
-            ("unmodeled", ["ar", "rD", "libsample.a", "unit.o"]),
+            ("unmodeled", ["ar", "ru", "libsample.a", "unit.o"]),
         )
         for name, argv in cases:
             with self.subTest(name=name):

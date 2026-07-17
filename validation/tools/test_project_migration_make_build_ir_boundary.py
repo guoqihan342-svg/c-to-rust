@@ -55,7 +55,7 @@ label = "__import__"
 compile = label
 loader_name = "import_module"
 """
-        self.assertEqual([], audit_source(module_name("make_build_ir_external"), source))
+        self.assertEqual([], audit_source(module_name("make_build_ir_payload"), source))
 
     def test_facade_and_private_edges_reject_escape_forms(self) -> None:
         discovery = module_name("discovery")

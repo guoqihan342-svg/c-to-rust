@@ -6,9 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from .build_ir import (
-    BUILD_IR_EXTRACTOR, BUILD_IR_KIND, BUILD_IR_SCHEMA_VERSION,
-    canonical_build_ir_bytes, is_sha256,
+    BUILD_IR_KIND, canonical_build_ir_bytes, is_sha256,
     validate_artifact_reference, validate_materialized_binding,
+)
+from .build_ir_link_authority import (
+    validate_link_authority_claim, validate_schema_extractor,
 )
 from .build_ir_validation_io import (
     MAX_BUILD_IR_ARTIFACT_BYTES, attachments, read_bound,
@@ -24,6 +26,8 @@ from .build_ir_external_dependencies import (
 from .build_ir_toolchain_validation import validate_toolchain_references
 from .build_ir_target_extensions import validate_target_extensions
 from .build_ir_occurrence_validation import validate_target_occurrences
+from .build_ir_link_occurrences import validate_link_occurrence_authority
+from .build_ir_make_claim_validation import validate_make_build_ir_claims
 from .build_ir_projection import target_closure
 from .build_ir_verification_result import build_ir_verification_result
 from .c_toolchain_schema import C_TOOLCHAIN_RAW_ROLE
@@ -34,8 +38,6 @@ TOP_LEVEL_KEYS = {
     "schema_version", "semantic_sha256", "source_inputs", "status",
     "target_closure", "targets", "toolchains", "translation_units",
 }
-
-
 class BuildIRValidationError(ValueError):
     pass
 def verify_build_ir_artifact(
@@ -78,17 +80,18 @@ def verify_build_ir_artifact(
     return build_ir_verification_result(
         payload, reference, blockers, verified_bindings,
     )
-
-
 def validate_build_ir(value: Mapping[str, Any]) -> None:
     if set(value) != TOP_LEVEL_KEYS:
         raise BuildIRValidationError("build_ir_top_level_schema_invalid")
-    if value.get("schema_version") != BUILD_IR_SCHEMA_VERSION:
-        raise BuildIRValidationError("build_ir_schema_version_invalid")
+    try:
+        validate_schema_extractor(
+            value.get("schema_version"), value.get("extractor"),
+            allow_legacy=False,
+        )
+    except ValueError as error:
+        raise BuildIRValidationError(str(error)) from error
     if value.get("artifact_kind") != BUILD_IR_KIND:
         raise BuildIRValidationError("build_ir_artifact_kind_invalid")
-    if value.get("extractor") != BUILD_IR_EXTRACTOR:
-        raise BuildIRValidationError("build_ir_extractor_invalid")
     if value.get("status") not in {"ready", "ready_with_boundaries"}:
         raise BuildIRValidationError("build_ir_status_invalid")
     claim_boundary = _object(
@@ -163,6 +166,23 @@ def validate_build_ir(value: Mapping[str, Any]) -> None:
             validate_external_dependency(dependency, set(target_ids))
         except ValueError as error:
             raise BuildIRValidationError(str(error)) from error
+    boundaries = _objects(value.get("boundaries"), "build_ir_boundaries_invalid")
+    try:
+        validate_make_build_ir_claims(
+            value, raw_roles, units, generated, targets,
+            arrays["external_dependencies"], boundaries,
+        )
+    except ValueError as error:
+        raise BuildIRValidationError(str(error)) from error
+    try:
+        authority_target_ids = validate_link_authority_claim(
+            value.get("extractor"), claim_boundary, targets, units,
+        )
+        validate_link_occurrence_authority(
+            targets, arrays["external_dependencies"], authority_target_ids,
+        )
+    except ValueError as error:
+        raise BuildIRValidationError(str(error)) from error
     abi = arrays["abi_facts"]
     if [item.get("unit_id") for item in abi] != unit_ids:
         raise BuildIRValidationError("build_ir_abi_unit_order_invalid")
@@ -174,12 +194,6 @@ def validate_build_ir(value: Mapping[str, Any]) -> None:
         raise BuildIRValidationError(str(error)) from error
     for item in [*value["toolchains"], *value["external_dependencies"], *abi]:
         _require_provenance(item)
-    boundaries = value.get("boundaries")
-    if (
-        not isinstance(boundaries, list)
-        or not all(isinstance(item, Mapping) for item in boundaries)
-    ):
-        raise BuildIRValidationError("build_ir_boundaries_invalid")
     try:
         validate_native_dependency_summary(
             arrays["external_dependencies"], boundaries, claim_boundary,

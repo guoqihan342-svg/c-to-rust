@@ -140,7 +140,13 @@ class FlashDbL3SelfHealingTests(unittest.TestCase):
                 source_path = Path(tmp) / f"{label}.rs"
                 source_path.write_text(source, encoding="utf-8")
                 result = subprocess.run(
-                    [rustc, "--edition=2021", "--crate-type=lib", str(source_path)],
+                    [
+                        rustc,
+                        "--edition=2021",
+                        "--crate-type=lib",
+                        "--error-format=short",
+                        str(source_path),
+                    ],
                     cwd=tmp,
                     text=True,
                     capture_output=True,
