@@ -18,6 +18,8 @@ _RANLIB = re.compile(
     re.IGNORECASE,
 )
 _GNU_OPERATION = re.compile(r"^-?[A-Za-z]{1,16}$")
+_GNU_CREATE_OPERATIONS = frozenset({"qc", "rc", "rcs"})
+_MSVC_DISPLAY_OPTIONS = frozenset({"/NOLOGO"})
 
 
 def is_archiver_command(argv: list[str]) -> bool:
@@ -77,26 +79,38 @@ def _arguments(
     driver: str, arguments: list[str],
 ) -> tuple[str, str, list[tuple[int, str]]]:
     if driver in {"lib", "lib.exe"}:
-        output = next(
-            (item[5:] for item in arguments if item.upper().startswith("/OUT:")),
-            None,
-        )
-        inputs = [
-            (index, item) for index, item in enumerate(arguments)
-            if not item.startswith("/") and not item.startswith("-")
-        ]
-        if output is None:
+        outputs: list[str] = []
+        inputs: list[tuple[int, str]] = []
+        semantic_index = 0
+        for item in arguments:
+            upper = item.upper()
+            if upper.startswith("/OUT:"):
+                outputs.append(item[5:])
+                continue
+            if upper in _MSVC_DISPLAY_OPTIONS:
+                semantic_index += 1
+                continue
+            if item.startswith(("/", "-")):
+                raise ValueError("archive_option_unsupported")
+            inputs.append((semantic_index, item))
+            semantic_index += 1
+        if not outputs or (len(outputs) == 1 and not outputs[0]):
             raise ValueError("archive_target_output_missing")
-        return "msvc-lib", output, inputs
-    if len(arguments) < 3 or _GNU_OPERATION.fullmatch(arguments[0]) is None:
+        if len(outputs) != 1:
+            raise ValueError("archive_target_output_duplicate")
+        return "msvc-lib", outputs[0], inputs
+    if len(arguments) < 3:
         raise ValueError("archive_arguments_invalid")
+    if _GNU_OPERATION.fullmatch(arguments[0]) is None:
+        raise ValueError("archive_operation_unsupported")
     operation = arguments[0].lstrip("-")
-    if not ({"r", "q"} & set(operation)) or any(
-        char not in "abcDdfilmNPoqrSTsuvVx" for char in operation
-    ):
+    if operation not in _GNU_CREATE_OPERATIONS:
         raise ValueError("archive_operation_unsupported")
     output = arguments[1]
-    inputs = list(enumerate(arguments[2:], start=2))
+    if not output or output.startswith("-"):
+        raise ValueError("archive_target_argument_unsupported")
+    # The operation remains at index 0; the archive output token is elided.
+    inputs = list(enumerate(arguments[2:], start=1))
     if any(value.startswith("-") for _index, value in inputs):
         raise ValueError("archive_input_argument_unsupported")
     return operation, output, inputs

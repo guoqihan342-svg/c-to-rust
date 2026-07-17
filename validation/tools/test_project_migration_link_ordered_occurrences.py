@@ -138,7 +138,7 @@ class ArchiveOrderedOccurrenceTests(unittest.TestCase):
             (self.base / name).write_bytes(name.encode("ascii"))
         self.fact = {"path": "build/archive-command.txt"}
 
-    def test_gnu_archive_occurrences_preserve_repeated_member_order(self) -> None:
+    def test_gnu_archive_indexes_elide_output_and_preserve_member_order(self) -> None:
         target, blockers = parse_archive_command(
             self.root,
             self.base,
@@ -150,16 +150,16 @@ class ArchiveOrderedOccurrenceTests(unittest.TestCase):
         self.assertIsNotNone(target)
         assert target is not None
         self.assertEqual([
-            _occurrence(0, 2, 1, "input", 0),
-            _occurrence(1, 3, 1, "input", 1),
-            _occurrence(2, 4, 1, "input", 2),
+            _occurrence(0, 1, 1, "input", 0),
+            _occurrence(1, 2, 1, "input", 1),
+            _occurrence(2, 3, 1, "input", 2),
         ], target["ordered_link_occurrences"])
         self.assertEqual(
             ["build/right.o", "build/left.o", "build/right.o"],
             [item["path"] for item in target["inputs"]],
         )
 
-    def test_msvc_archive_occurrences_keep_input_positions_only(self) -> None:
+    def test_msvc_archive_indexes_elide_out_but_retain_nologo_gap(self) -> None:
         target, blockers = parse_archive_command(
             self.root,
             self.base,
@@ -176,8 +176,8 @@ class ArchiveOrderedOccurrenceTests(unittest.TestCase):
         self.assertEqual("msvc-lib", target["archive_operation"])
         self.assertEqual([
             _occurrence(0, 1, 1, "input", 0),
-            _occurrence(1, 3, 1, "input", 1),
-            _occurrence(2, 4, 1, "input", 2),
+            _occurrence(1, 2, 1, "input", 1),
+            _occurrence(2, 3, 1, "input", 2),
         ], target["ordered_link_occurrences"])
         self.assertEqual(
             ["build/left.obj", "build/right.obj", "build/left.obj"],

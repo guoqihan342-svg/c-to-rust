@@ -5,6 +5,9 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from validation.tools._project_migration_harness.archive_closure import (
+    parse_archive_command,
+)
 from validation.tools._project_migration_harness.discovery import discover_project
 
 
@@ -57,6 +60,76 @@ class ProjectMigrationArchiveClosureTests(unittest.TestCase):
             ],
             "output": "build/unit.o",
         }]))
+
+    def parse_archive(
+        self, argv: list[str],
+    ) -> tuple[dict | None, list[dict]]:
+        return parse_archive_command(
+            self.root,
+            self.root / "build",
+            {"path": "build/archive-command.txt"},
+            argv,
+        )
+
+    def assert_archive_rejected(self, argv: list[str], kind: str) -> None:
+        target, blockers = self.parse_archive(argv)
+        self.assertIsNone(target)
+        self.assertEqual({kind}, {item["kind"] for item in blockers})
+
+    def test_msvc_lib_requires_exactly_one_non_empty_out(self) -> None:
+        cases = (
+            ("missing", ["lib.exe", "unit.obj"],
+             "archive_target_output_missing"),
+            ("empty", ["lib.exe", "/OUT:", "unit.obj"],
+             "archive_target_output_missing"),
+            ("duplicate", [
+                "lib.exe", "/OUT:sample.lib", "/OUT:other.lib", "unit.obj",
+            ], "archive_target_output_duplicate"),
+        )
+        for name, argv, blocker in cases:
+            with self.subTest(name=name):
+                self.assert_archive_rejected(argv, blocker)
+
+    def test_msvc_lib_rejects_semantic_and_unknown_options(self) -> None:
+        for option in (
+            "/DEF:exports.def", "/MACHINE:X64", "/UNKNOWN", "-UNKNOWN",
+        ):
+            with self.subTest(option=option):
+                self.assert_archive_rejected(
+                    ["lib.exe", "/OUT:sample.lib", option, "unit.obj"],
+                    "archive_option_unsupported",
+                )
+
+    def test_gnu_ar_accepts_only_modeled_create_operations(self) -> None:
+        self.write("build/unit.o", b"object")
+        self.write("build/libsample.a", b"archive")
+        for token, operation in (
+            ("qc", "qc"), ("rc", "rc"), ("rcs", "rcs"), ("-rcs", "rcs"),
+        ):
+            with self.subTest(token=token):
+                target, blockers = self.parse_archive(
+                    ["ar", token, "libsample.a", "unit.o"]
+                )
+                self.assertEqual([], blockers)
+                self.assertIsNotNone(target)
+                assert target is not None
+                self.assertEqual(operation, target["archive_operation"])
+
+    def test_gnu_ar_rejects_operand_consuming_and_unmodeled_modifiers(self) -> None:
+        cases = (
+            ("a-anchor", ["ar", "ra", "anchor.o", "libsample.a", "unit.o"]),
+            ("b-anchor", ["ar", "rb", "anchor.o", "libsample.a", "unit.o"]),
+            ("i-anchor", ["ar", "ri", "anchor.o", "libsample.a", "unit.o"]),
+            ("N-count", ["ar", "rN", "1", "libsample.a", "unit.o"]),
+            ("T-thin", ["ar", "rcsT", "libsample.a", "unit.o"]),
+            ("thin-long", ["ar", "--thin", "rc", "libsample.a", "unit.o"]),
+            ("unmodeled", ["ar", "rD", "libsample.a", "unit.o"]),
+        )
+        for name, argv in cases:
+            with self.subTest(name=name):
+                self.assert_archive_rejected(
+                    argv, "archive_operation_unsupported"
+                )
 
     def test_cmake_archive_and_ranlib_are_one_bound_target(self) -> None:
         closure = discover_project(
